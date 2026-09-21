@@ -18,7 +18,7 @@ PROFILE = "Regulated Utility"
 
 def _value(row, monkeypatch, coe=0.085, scenario="base", tgr=0.02, method="P/Rate Base"):
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
-    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, doc=None: coe)
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: coe)
     return dcf_agent._compute_method_value(
         method_name=method, most_recent=row, revenue_base=2.5e10, shares=2e9, net_debt=9e10,
         market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=tgr,
@@ -33,10 +33,36 @@ def _row(**over):
     return row
 
 
-def test_the_leg_is_the_justified_multiple_on_the_equity_layer(monkeypatch):
+J = (0.108 - 0.02) / (0.085 - 0.02)          # the justified multiple used throughout
+
+
+def test_the_regulated_layer_takes_the_justified_multiple_and_the_rest_of_book_the_peer_pb(monkeypatch):
+    """Book equity 50bn; equity rate base 71bn x 59.6% = 42.3bn; the 7.7bn the
+    regulator sets no return on keeps the proxy's basis, book x peer P/B (2.0)."""
     v = _value(_row(), monkeypatch)
-    equity_rate_base_ps = 7.1e10 * 0.596 / 2e9
-    assert v == pytest.approx(equity_rate_base_ps * (0.108 - 0.02) / (0.085 - 0.02))
+    eq_rb = 7.1e10 * 0.596
+    assert v == pytest.approx((eq_rb * J + (5e10 - eq_rb) * 2.0) / 2e9)
+
+
+def test_a_pure_utility_is_the_planned_formula_exactly(monkeypatch):
+    """Equity rate base >= book equity: nothing is left over, and the leg is
+    equity rate base / shares x (allowed ROE - g) / (CoE - g)."""
+    row = _row(total_equity=4e10)
+    assert _value(row, monkeypatch) == pytest.approx(7.1e10 * 0.596 / 2e9 * J)
+
+
+def test_the_trace_is_one_multiple_on_book_so_the_workbook_rebuilds_it(monkeypatch):
+    monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: 0.085)
+    v, tr = dcf_agent._traced_method_value(
+        method_name="P/Rate Base", most_recent=_row(), revenue_base=2.5e10, shares=2e9, net_debt=9e10,
+        market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02,
+        fcf_floor=0.0, sector="Energy", scenario="bull", profile_name=PROFILE)
+    parts = tr["multiple_parts"]
+    numeric = {k: x for k, x in parts.items() if isinstance(x, (int, float))}
+    assert set(numeric) == {"peer_multiple", "scenario_band"}      # nothing else may multiply
+    assert tr["per_share_metric"] * parts["peer_multiple"] * parts["scenario_band"] == pytest.approx(v)
+    assert tr["rate_base_inputs"]["justified_multiple"] == pytest.approx(J)
 
 
 def test_net_debt_is_not_subtracted(monkeypatch):
@@ -44,7 +70,7 @@ def test_net_debt_is_not_subtracted(monkeypatch):
     a = _value(_row(), monkeypatch)
     monkeypatch.undo()
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
-    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, doc=None: 0.085)
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: 0.085)
     b = dcf_agent._compute_method_value(
         method_name="P/Rate Base", most_recent=_row(), revenue_base=2.5e10, shares=2e9, net_debt=0.0,
         market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02,
@@ -71,7 +97,8 @@ def test_it_is_no_longer_book_value_under_another_name(monkeypatch):
 def test_no_authorised_equity_ratio_falls_to_the_book_capital_structure(monkeypatch):
     row = _row(_rate_base_detail={"value": 7.1e10, "allowed_roe": 0.108, "equity_ratio": None})
     v = _value(row, monkeypatch)
-    assert v == pytest.approx(7.1e10 * (5e10 / (5e10 + 9e10)) / 2e9 * (0.108 - 0.02) / (0.085 - 0.02))
+    eq_rb = 7.1e10 * (5e10 / (5e10 + 9e10))
+    assert v == pytest.approx((eq_rb * J + (5e10 - eq_rb) * 2.0) / 2e9)
 
 
 def test_an_allowed_roe_at_or_below_growth_declines(monkeypatch):
@@ -84,12 +111,21 @@ def test_the_scenarios_stay_ordered(monkeypatch):
     assert bear <= base <= bull
 
 
-def test_the_real_method_is_requested_beside_its_proxy_and_no_cost_of_equity_is_authored_yet():
+def test_the_real_method_is_requested_beside_its_proxy():
     assert "P/Rate Base" in dcf_agent._PER_TICKER_METHODS
     assert dcf_agent._LOOKTHROUGH_METHODS <= dcf_agent._PER_TICKER_METHODS
-    # Owner-set, and not set: the leg is inert in production until it is.
-    assert vc.cost_of_equity(PROFILE) is None
-    assert vc.cost_of_equity(None) is None
+
+
+def test_the_cost_of_equity_is_owner_set_per_market_at_the_midpoint_of_its_band():
+    """Owner, 2026-09-21: USD models 7.0-7.5%; RMB/HKD Asian regulated power
+    5.8-6.2%. The rate follows the currency of the cash flows."""
+    doc = vc.load()["cost_of_equity"]["profiles"][PROFILE]
+    for market, band in (("US", (0.070, 0.075)), ("HKSE", (0.058, 0.062))):
+        v = vc.cost_of_equity(PROFILE, market)
+        assert tuple(doc[market]["band"]) == band and v == pytest.approx(sum(band) / 2)
+    assert vc.cost_of_equity(PROFILE, "SES") is None          # none authored: the leg declines
+    assert vc.cost_of_equity("Merchant Power", "US") is None
+    assert [vc.market_key(t) for t in ("NEE", "00002.HK", "U96.SI", None)] == ["US", "HKSE", "SES", "US"]
 
 
 def test_the_profile_still_declares_the_proxy_so_no_weight_is_lost():
@@ -116,3 +152,107 @@ def test_car_makers_and_defence_names_are_still_reached_by_what_they_are():
     from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as pins
     assert {pins[t][1] for t in ("GM", "F", "TM")} == {"Automotive (OEM)"}
     assert {pins[t][1] for t in ("LMT", "RTX", "BA", "GE")} == {"Aerospace & Defense"}
+
+
+# -- the owner-confirmed tables, routing and pins (2026-09-21) ----------------
+
+OEM = "Clean Tech / Power Equipment OEM"
+
+#: (method, weight, anchor) per profile, as confirmed.
+TABLE = {
+    "Regulated Utility": [("P/Rate Base", 0.35, False), ("P/E", 0.30, True), ("DDM", 0.25, False), ("DCF", 0.10, False)],
+    "Merchant Power": [("EV/EBITDA", 0.45, True), ("FCF Yield", 0.25, False), ("Forward P/E", 0.15, False),
+                       ("Power Price DCF", 0.15, False)],
+    "IPP": [("PPA-backed DCF", 0.40, True), ("EV/EBITDA", 0.35, False), ("P/BV", 0.15, False), ("DDM", 0.10, False)],
+    OEM: [("EV/EBITDA (norm)", 0.35, True), ("Forward P/E", 0.25, False), ("DCF", 0.25, False),
+          ("EV/Revenue", 0.15, False)],
+}
+
+#: FMP industry label -> profile, measured live 2026-09-21
+#: (docs/waves_2_5_stage2_probe.md): NEE DUK SO 00002.HK | 00006.HK VST CEG NRG
+#: 01816.HK | ENPH FSLR NXT.
+WAVE_ROWS = {"Regulated Electric": ("Energy", "Regulated Utility"),
+             "Independent Power Producers": ("Energy", "IPP"),
+             "Solar": ("Energy", OEM)}
+
+
+@pytest.mark.parametrize("profile", sorted(TABLE))
+def test_each_profile_is_the_confirmed_table_leg_by_leg(profile):
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    got = [(m["name"], m["weight"], bool(m.get("anchor"))) for m in P["Energy"][profile]["methods"]]
+    assert got == TABLE[profile]
+    assert sum(w for _, w, _ in got) == pytest.approx(1.0)
+
+
+def test_no_wave_two_anchor_resolves_to_a_proxy_or_routing_would_decline_the_profile():
+    """The flag on P/Rate Base sent CLP back to Mature SaaS: industry routing
+    refuses a profile whose anchor is not implementable, and it is right to."""
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    for profile in TABLE:
+        anchors = [m for m in P["Energy"][profile]["methods"] if m.get("anchor")]
+        assert len(anchors) == 1 and anchors[0]["implementable"] is True, profile
+
+
+def test_the_measured_labels_route_and_are_in_scope_and_the_shared_labels_are_not():
+    from src.data import industry_profile_map as m
+    for label, target in WAVE_ROWS.items():
+        assert m.profile_for_industry(label) == target and label in m.routing_scope()
+    # Bloom, NuScale and GE Vernova share these with hundreds of unrelated industrials.
+    assert not {"Electrical Equipment & Parts", "Industrial - Machinery"} & m.routing_scope()
+    assert m.profile_for_industry("Uranium") is None       # no profile yet: P/NAV needs inputs
+
+
+def test_the_pins_agree_with_the_owner_decisions():
+    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as pins
+    want = {"ENPH": OEM, "FSLR": OEM, "BE": OEM, "VST": "Merchant Power", "CEG": "Merchant Power",
+            "NRG": "Merchant Power", "00006.HK": "Regulated Utility", "01816.HK": "Regulated Utility",
+            "GEV": "Capital Goods", "SMR": "Energy Tech Licensor"}
+    assert {t: pins[t][1] for t in want} == want
+
+
+def test_bloom_is_never_a_licensor_and_the_oem_profile_is_cyclical_at_its_own_rate():
+    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as pins, _ENERGY_PROFILE_WACC
+    assert pins["BE"][1] != "Energy Tech Licensor"
+    assert OEM in dcf_agent._CYCLICAL_PROFILES
+    assert _ENERGY_PROFILE_WACC[OEM] == pytest.approx(0.090)   # Damodaran Jan 2026 Electrical Equipment 8.99%
+
+
+def test_utility_pe_no_longer_exists_as_an_ev_multiple_under_a_pe_label():
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    assert "Utility P/E" not in dcf_agent._EV_MULTIPLE_METHODS
+    assert not [m for prof in P["Energy"].values() for m in prof["methods"] if m["name"] == "Utility P/E"]
+
+
+def test_a_ticker_pinned_against_its_label_takes_the_basket_of_the_business_it_is():
+    from src.data.industry_profile_map import comps_industry_for
+    assert comps_industry_for("01816.HK") == comps_industry_for("00006.HK") == "Regulated Electric"
+    assert comps_industry_for("00002.HK") is None and comps_industry_for("NEE") is None
+
+
+def test_cgn_power_takes_the_owner_discount_as_its_own_part_and_nobody_else_does(monkeypatch):
+    assert vc.ticker_multiple_discount("01816.HK") == pytest.approx(0.875)
+    lo, hi = vc.load()["ticker_multiple_discounts"]["tickers"]["01816.HK"]["band"]
+    assert (lo, hi) == (0.85, 0.90) and vc.ticker_multiple_discount("00002.HK") == 1.0
+    monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pe": 13.0, "pb": 0.9})
+    kw = dict(most_recent={"net_income": 1e10, "book_value_per_share": 2.5}, revenue_base=8e10, shares=5e10,
+              net_debt=3e11, market_cap=1.5e11, wacc=0.06, growth_base=0.04, fcf_margin_base=0.1, tgr=0.02,
+              fcf_floor=0.0, sector="Energy", scenario="base", profile_name=PROFILE, is_hk=True)
+    v, tr = dcf_agent._traced_method_value(method_name="P/E", ticker="01816.HK", **kw)
+    assert v == pytest.approx(0.2 * 13.0 * 0.875)
+    assert tr["multiple_parts"]["peer_multiple"] == 13.0                  # the basket median is untouched
+    assert tr["multiple_parts"]["owner_multiple_discount"] == 0.875
+    v2, tr2 = dcf_agent._traced_method_value(method_name="P/E", ticker="00002.HK", **kw)
+    assert v2 == pytest.approx(0.2 * 13.0) and "owner_multiple_discount" not in tr2["multiple_parts"]
+    pb, _ = dcf_agent._traced_method_value(method_name="P/BV", ticker="01816.HK", **kw)
+    assert pb == pytest.approx(2.5 * 0.9 * 0.875)
+
+
+def test_every_quoted_peak_line_is_guarded_against_a_name_with_no_profitable_year():
+    """`_peak['max_line']` is None when no year had positive EPS. e07002b guarded
+    the diagnostic; the forward flag formatted it regardless and crashed the whole
+    run for Bloom Energy the moment Wave 2 put it on a cyclical profile."""
+    import inspect
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    quoted = src.count("_peak['max_line']:.2f")
+    guarded = src.count('_peak["max_line"] is not None')
+    assert quoted >= 2 and guarded == quoted, (quoted, guarded)

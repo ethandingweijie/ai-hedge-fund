@@ -46,6 +46,20 @@ def ticker_overrides() -> dict[str, tuple[str, str]]:
     return {k: (v[0], v[1]) for k, v in (_load().get("ticker_overrides") or {}).items()}
 
 
+def comps_industry_for(ticker: str | None) -> Optional[str]:
+    """The FMP industry whose peer basket this ticker takes, when it is pinned
+    against its own FMP label; None for everyone else (the label stands).
+
+    00006.HK and 01816.HK are labelled `Independent Power Producers` and pinned
+    to Regulated Utility. Without this they would be priced on a Regulated
+    Utility method table at Chinese coal-IPP medians (P/E 7.4x).
+    """
+    if not ticker:
+        return None
+    from src.tools.ticker_canonical import canonical_ticker
+    return (_load().get("comps_industry_overrides") or {}).get(canonical_ticker(ticker))
+
+
 def routing_scope() -> frozenset:
     """Industries routed by this map whatever FEATURE_INDUSTRY_ROUTING says.
 

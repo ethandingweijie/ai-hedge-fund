@@ -60,12 +60,15 @@ def test_each_industry_row_routes_to_its_profile(industry, pair):
     assert P[pair[0]][pair[1]]
 
 
-def test_the_scope_is_exactly_the_wave_one_industries():
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS)
+def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it():
+    """Scope grows a wave at a time. Wave 2 (tests/test_power_wave2.py) added
+    exactly these three; anything else appearing here is unreviewed routing."""
+    wave2 = {"Regulated Electric", "Independent Power Producers", "Solar"}
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2
 
 
 def test_scope_does_not_reach_other_industries():
-    for other in ("Software - Application", "Regulated Electric", "Solar", "Banks - Diversified"):
+    for other in ("Software - Application", "Electrical Equipment & Parts", "Uranium", "Banks - Diversified"):
         assert not ipm.in_routing_scope("XYZ", other)
 
 

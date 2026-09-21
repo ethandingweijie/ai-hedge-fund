@@ -319,6 +319,7 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Airlines",
     "Automotive (OEM)",
     "Digital Asset Mining",
+    "Clean Tech / Power Equipment OEM",
 })
 
 #: Phase 1.2B — peak-consensus trigger. Forward consensus EPS above EITHER
@@ -395,6 +396,10 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Mining (Major)",
     "Memory / DRAM-NAND",
     "Digital Asset Mining",
+    # Wave 2: a policy-cycle hardware maker. Every cyclical gets the fade
+    # (tests/test_growth_convergence.py) -- a one-year consensus jump on an
+    # IRA-credit or tariff swing is not a decade's growth.
+    "Clean Tech / Power Equipment OEM",
 })
 
 #: Fraction of the gap to the long-run rate retained each year. 0.5 halves the
@@ -5511,7 +5516,7 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
 #: + Rev DCF. `tests/test_profile_method_names_are_dispatched.py` pins the
 #: general invariant over every profile in the table, not just these two.
 _EV_MULTIPLE_METHODS: frozenset[str] = frozenset({
-    "EV/EBITDA", "EV/EBIT", "EV/EBIT (Pre-bonus)", "Utility P/E", "EV/EBITDAR",
+    "EV/EBITDA", "EV/EBIT", "EV/EBIT (Pre-bonus)", "EV/EBITDAR",
 })
 
 #: The subset of the above whose metric is EBIT rather than EBITDA. Named
@@ -5574,6 +5579,15 @@ def _compute_method_value(
     """
     peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
                                      ticker=ticker, market_cap=market_cap)
+    # Owner-set discount on PEER multiples for one ticker (valuation_constants
+    # `ticker_multiple_discounts`), 1.0 for everyone else. Applied where the
+    # multiple is applied and recorded as its own part, so the peer median a
+    # reader sees is still the basket's and the workbook rebuilds the product.
+    try:
+        from src.data import valuation_constants as _vc_disc
+        _own_disc = _vc_disc.ticker_multiple_discount(ticker)
+    except Exception:                                      # noqa: BLE001
+        _own_disc = 1.0
     ebitda = most_recent.get("ebitda")
     net_income = most_recent.get("net_income")
     ebit = most_recent.get("ebit")
@@ -5719,6 +5733,7 @@ def _compute_method_value(
         # Change 7: apply Chinese ADR multiple haircut for CNY-reporting US-listed companies
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
+        mult *= _own_disc
         metric = ebit if method_name in _EV_EBIT_METHODS else ebitda
         if metric and metric > 0 and shares > 0:
             ev = metric * mult
@@ -5734,7 +5749,8 @@ def _compute_method_value(
                                                     and is_tech_sector(sector)
                                                     and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
                            "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
-                                              if reported_currency == "CNY" else 1.0)})
+                                              if reported_currency == "CNY" else 1.0),
+                           **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
             return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
@@ -6149,7 +6165,7 @@ def _compute_method_value(
     # this branch — they differ only in documentation intent, not earnings
     # source. For the TRUE cycle-normalized path use "P/E (norm)" below.
     if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:
-        mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
+        mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount * _own_disc
         eps = (net_income / shares) if (net_income is not None and shares > 0) else None
         if eps and eps > 0:
             _leg_trace(kind="equity_multiple", metric="Net income (TTM)",
@@ -6158,7 +6174,8 @@ def _compute_method_value(
                        multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
                                        "peer_source": "peer median pe", "scenario_band": sm,
                                        "growth_premium": growth_premium,
-                                       "sbc_pe_discount": sbc_pe_discount})
+                                       "sbc_pe_discount": sbc_pe_discount,
+                                       **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
             return eps * mult
         return None
 
@@ -6224,7 +6241,7 @@ def _compute_method_value(
         eps_fwd = forward_consensus.get("eps", {}).get(scenario)
         if eps_fwd is None or eps_fwd <= 0:
             return None
-        mult = peer.get("pe", 18.0) * growth_premium * sbc_pe_discount
+        mult = peer.get("pe", 18.0) * growth_premium * sbc_pe_discount * _own_disc
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         _leg_trace(kind="equity_multiple", metric=f"EPS (NTM consensus, {scenario})",
@@ -6235,7 +6252,8 @@ def _compute_method_value(
                                    "growth_premium": growth_premium,
                                    "sbc_pe_discount": sbc_pe_discount,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
-                                                      if reported_currency == "CNY" else 1.0)})
+                                                      if reported_currency == "CNY" else 1.0),
+                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
         return eps_fwd * mult
 
     # ── Forward EV/EBITDA (consensus EBITDA × peer EV/EBITDA) ──────────────
@@ -6357,7 +6375,17 @@ def _compute_method_value(
     # P/BV set below and priced book value x peer P/B under a rate-base label.
     #
     #   equity rate base = rate base x authorised equity ratio
-    #   value per share  = equity rate base / shares x multiple x scenario band
+    #   equity value     = equity rate base x justified multiple
+    #                      + max(book equity - equity rate base, 0) x peer P/B
+    #   value per share  = equity value / shares x scenario band
+    #
+    # The second term is the part of the company no regulator sets a return on.
+    # NextEra's accepted rate base is 0.44x of its net plant: the rest is NextEra
+    # Energy Resources, and pricing the whole company off Florida Power & Light's
+    # rate base alone would value it at half. That remainder keeps the basis the
+    # proxy had -- book at peer P/B -- so the leg is exact where the regulator
+    # speaks and unchanged where it does not. It is expressed as ONE multiple on
+    # book equity, which is the shape the workbook rebuilds.
     #
     # No net-debt bridge: the equity layer is already the equity-funded slice,
     # and subtracting net debt would deduct the debt layer twice. No growth
@@ -6374,8 +6402,9 @@ def _compute_method_value(
         _rb = most_recent.get("rate_base_accepted")
         _rb_d = most_recent.get("_rate_base_detail") or {}
         _roe = _rb_d.get("allowed_roe")
-        _coe = _vc.cost_of_equity(profile_name)
-        if not (_rb and _rb > 0 and _roe and _coe and shares > 0):
+        _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker))
+        if not (_rb and _rb > 0 and _roe and _coe and shares > 0
+                and total_equity and total_equity > 0):
             return None
         _g = min(float(tgr or 0.0), _coe - 0.01)
         if _roe <= _g:
@@ -6388,23 +6417,35 @@ def _compute_method_value(
             _eq_ratio = total_equity / (total_equity + _debt)
             _eq_src = "book equity / (book equity + debt): no authorised ratio stated"
         _just = (_roe - _g) / (_coe - _g)
-        mult = _just * sm
         _eq_rb = _rb * _eq_ratio
+        _rest = max(float(total_equity) - _eq_rb, 0.0)
+        _pb = float(peer.get("pb", 2.0)) * _own_disc
+        _on_book = (_eq_rb * _just + _rest * _pb) / float(total_equity)
+        mult = _on_book * sm
+        # multiple_parts holds ONLY what multiplies: the workbook rebuilds the leg
+        # as peer_multiple x band x every other numeric part. The inputs behind
+        # the multiple go beside it, not inside it.
         _leg_trace(kind="equity_multiple", rate_base_audit=_rb_d,
-                   metric=f"Equity rate base: rate base x {_eq_src}",
-                   metric_value=float(_eq_rb), shares=float(shares),
-                   per_share_metric=float(_eq_rb / shares), multiple=float(mult),
-                   multiple_parts={"justified_multiple": float(_just), "allowed_roe": float(_roe),
-                                   "cost_of_equity": float(_coe), "g": float(_g),
-                                   "equity_ratio": float(_eq_ratio), "scenario_band": sm,
-                                   "peer_source": f"(allowed ROE - g) / (CoE - g); CoE owner-set ({profile_name})"})
-        return (_eq_rb / shares) * mult
+                   rate_base_inputs={"rate_base": float(_rb), "equity_ratio": float(_eq_ratio),
+                                     "equity_ratio_source": _eq_src, "equity_rate_base": float(_eq_rb),
+                                     "allowed_roe": float(_roe), "cost_of_equity": float(_coe),
+                                     "g": float(_g), "justified_multiple": float(_just),
+                                     "unregulated_book_equity": float(_rest), "peer_pb_on_remainder": _pb},
+                   metric="Book equity (regulated layer at the justified multiple, remainder at peer P/B)",
+                   metric_value=float(total_equity), shares=float(shares),
+                   per_share_metric=float(total_equity / shares), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(_on_book), "scenario_band": sm,
+                                   "peer_source": (f"[equity rate base x (allowed ROE - g)/(CoE - g) + "
+                                                   f"remaining book x peer P/B] / book equity; "
+                                                   f"CoE owner-set ({profile_name})")})
+        return (float(total_equity) / shares) * mult
 
     if method_name in {"P/BV", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
-        mult = peer.get("pb", 2.0) * sm * growth_premium
+        mult = peer.get("pb", 2.0) * sm * growth_premium * _own_disc
         _pb_parts = {"peer_multiple": float(peer.get("pb", 2.0)), "peer_source": "peer median pb",
-                     "scenario_band": sm, "growth_premium": growth_premium}
+                     "scenario_band": sm, "growth_premium": growth_premium,
+                     **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})}
         if bvps and bvps > 0:
             _leg_trace(kind="equity_multiple", metric="Book value per share",
                        per_share_metric=float(bvps), multiple=float(mult),
@@ -12976,10 +13017,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 "mid-cycle legs " + ", ".join(
                                     f"{_s['from']}→{_s['to']}" for _s in _swaps))
                         if _peak is not None and _peak_fired:
+                            # `max_line` is None for a cyclical with no profitable
+                            # year: the trigger then fired through its other arm and
+                            # there is no multiple-of-max line to quote. e07002b fixed
+                            # the diagnostic above; this flag formatted it regardless,
+                            # and Bloom Energy was the first name to reach it (Wave 2
+                            # put a loss-making hardware maker on a cyclical profile).
                             _flag_bits.append(
                                 f"peak trigger fired ({'+'.join(_peak['arms'])}, "
                                 f"fwd EPS {_peak['eps_forward']:.2f} vs "
-                                f"{_peak['max_line']:.2f})")
+                                + (f"{_peak['max_line']:.2f})" if _peak["max_line"] is not None
+                                   else "no profitable year to draw a line from)"))
                         if _flag_bits:
                             # `forward_flags`, NOT `ticker_forward_flags`. The
                             # ticker-level list is snapshotted per scenario at

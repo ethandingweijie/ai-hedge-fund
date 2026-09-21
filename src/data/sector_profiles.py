@@ -127,6 +127,10 @@ _ENERGY_PROFILE_WACC: dict[str, float] = {
     "Regulated Utility": 0.045,  # fully regulated; predictable allowed RoE; Damo 4.36%
     "IPP":               0.060,  # PPA-backed; semi-regulated visible cash flows; Damo 6.04%
     "Merchant Power":    0.065,  # investment-grade IPPs w/ nuclear+PPA: 7.5-8.2% per Gemini; base 6.5% + overlays
+    # Wave 2. Damodaran Jan 2026 (file read 2026-09-21): Electrical Equipment
+    # 8.99%, D/(D+E)=10.7%. NOT Green & Renewable Energy (6.04%, 53% debt):
+    # that row is generators, and a manufacturer does not carry their leverage.
+    "Clean Tech / Power Equipment OEM": 0.090,
     "EPC Contractor":    0.087,  # project execution risk; Damo Eng/Construction 8.69%
     # Wave 1 oil & gas (owner-approved 2026-09-20). Damodaran Jan 2026:
     #   Oil/Gas Distribution 5.78% D/(D+E)=36.9%; Oilfield Svcs/Equip. 7.04%
@@ -1779,33 +1783,75 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Energy": {
         "Regulated Utility": {
             "methods": [
-                {"name": "DCF",           "weight": 0.60, "anchor": True,  "implementable": True},
-                {"name": "P/Rate Base",   "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "Utility P/E",   "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "DDM",           "weight": 0.05, "anchor": False, "implementable": True},
+                # Wave 2 (owner-confirmed 2026-09-21). A free-cash-flow DCF cannot
+                # anchor a utility that is growing its rate base: capex exceeds
+                # operating cash flow every year by design, and the 0.60 DCF leg
+                # dropped as non-positive on NEE, DUK and SO alike. The anchor is
+                # what the regulator sets. P/Rate Base prices as P/BV until a rate
+                # base is accepted (dcf_agent._PER_TICKER_METHODS), so its weight
+                # is never lost. "Utility P/E" was EBITDA x EV/EBITDA under a P/E
+                # label; it is now a P/E.
+                #
+                # The ANCHOR FLAG sits on P/E, not on the heaviest leg. Industry
+                # routing declines a profile whose anchor resolves to a proxy
+                # (dcf_agent: declined_anchor_not_implementable) and that guard is
+                # right: with the flag on P/Rate Base, CLP (00002.HK) was refused
+                # the profile and fell back to Mature SaaS. P/Rate Base is exact
+                # only for a ticker with an accepted rate base; P/E is computable
+                # for every utility. The weights are the owner's, unchanged.
+                {"name": "P/Rate Base",   "weight": 0.35, "anchor": False, "implementable": False, "proxy": "P/BV"},
+                {"name": "P/E",           "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "DDM",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",           "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Returns are capped by regulators on the Rate Base, making DCF highly predictable.",
+            "rationale": "Returns are set by the regulator on the equity layer of the rate base; earnings and the dividend follow from it. Free cash flow is structurally negative while the rate base grows.",
         },
         "Merchant Power": {
             "methods": [
-                {"name": "EV/EBITDA",       "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "FCF Yield",       "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "Power Price DCF", "weight": 0.20, "anchor": False, "implementable": True,  "note": "proxied by DCF"},
-                {"name": "LBO Floor",       "weight": 0.10, "anchor": False, "implementable": True},
+                # Wave 2: LBO Floor was uncomputable on every name that carried it
+                # (VST, CEG, NRG) and renormalised silently onto the others.
+                # Forward P/E carries what trailing EBITDA cannot: the nuclear
+                # PTC floor and the contracted data-centre load.
+                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "FCF Yield",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Power Price DCF", "weight": 0.15, "anchor": False, "implementable": True,  "note": "proxied by DCF"},
             ],
             "excluded": [],
             "rationale": "High operational leverage and cyclical commodity prices necessitate EBITDA and FCF focus.",
         },
         "IPP": {
             "methods": [
-                {"name": "PPA-backed DCF", "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by DCF"},
-                {"name": "NAV (Project)",  "weight": 0.30, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "EV/EBITDA",      "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "DDM",            "weight": 0.05, "anchor": False, "implementable": True},
+                # Wave 2: "NAV (Project)" was P/BV at 0.30 under a NAV label. It is
+                # named for what it computes and carries less.
+                {"name": "PPA-backed DCF", "weight": 0.40, "anchor": True,  "implementable": True,  "note": "proxied by DCF"},
+                {"name": "EV/EBITDA",      "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "P/BV",           "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "DDM",            "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Long-term contracts (PPAs) provide visibility for project-level cash flow modeling.",
+        },
+        # Wave 2 (owner, 2026-09-21). Solar, wind and fuel-cell HARDWARE makers:
+        # Enphase, First Solar, Nextracker, Bloom. They had been pinned to IPP
+        # and priced on a PPA-backed DCF, a generator's method. The owner's test
+        # is the cost structure, not the end market: 20-28% gross margins,
+        # manufacturing capex, inventory and warranty reserves -- an OEM, whether
+        # the product feeds a utility-scale array or a data centre behind the
+        # meter. Not a licensor: grouping Bloom with IP licensors "introduces
+        # multiple inflation and distorts return-on-capital benchmarks".
+        # Cyclical (dcf_agent._CYCLICAL_PROFILES): the policy cycle moves the
+        # whole basket's margins together, so the anchor is through-cycle.
+        "Clean Tech / Power Equipment OEM": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",              "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",       "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["PPA-backed DCF", "Licensing NPV"],
+            "rationale": "Hardware OEM economics: through-cycle margins on current revenue, forward earnings, and a DCF; never a generator's contracted-cash-flow model and never a licensor's multiple.",
         },
         "Midstream / Pipelines": {
             "methods": [
@@ -3103,7 +3149,17 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # capital-intensive reinvestment cycle (capex > depreciation for rate base growth).
     "Regulated Utility":   {"ev_ebitda": 12.5, "pe": 18.0, "ev_revenue": 3.0,  "pb": 2.0,  "fcf_yield": 0.045, "growth_avg": 0.04},
     # IPP / Merchant Power: riskier than regulated; closer to generic Energy
-    "IPP":                 {"ev_ebitda": 9.0,  "pe": 14.0, "ev_revenue": 2.0,  "pb": 1.5,  "fcf_yield": 0.060, "growth_avg": 0.06},
+    # Wave 2, derived 2026-09-21 and shown to the owner first. Fallbacks only:
+    # live comps win every field they resolve. Basis: US industry medians,
+    # trailing (TTM), beside the through-cycle table. The owner's rule is NTM
+    # EV/EBITDA and FY1/FY2 P/E with a +/-15% / 30-day re-peg trigger; the comps
+    # store carries no NTM median yet, so these are dated TTM readings to be
+    # re-derived when it does.
+    #   IPP basket        live EV/EBITDA 12.07x (n=7), through-cycle 11.05x, P/B 2.90x
+    #   Solar basket      live 22.22x / 20.22x P/E / 2.78x EV/Rev (n=5-8), through-cycle 18.13x / 22.25x
+    "IPP":                 {"ev_ebitda": 11.0, "pe": 14.0, "ev_revenue": 2.0,  "pb": 2.0,  "fcf_yield": 0.060, "growth_avg": 0.06},
+    "Merchant Power":      {"ev_ebitda": 11.0, "pe": 18.0, "ev_revenue": 2.5,  "pb": 2.9,  "fcf_yield": 0.050, "growth_avg": 0.06},
+    "Clean Tech / Power Equipment OEM": {"ev_ebitda": 18.0, "pe": 21.0, "ev_revenue": 2.8, "pb": 2.1, "fcf_yield": 0.050, "growth_avg": 0.10},
     "Financials":          {"ev_ebitda": 12.0, "pe": 12.0, "ev_revenue": 2.0,  "pb": 1.4,  "fcf_yield": 0.065, "growth_avg": 0.06},
     # Financials sub-profile overrides — keyed on profile_name for dcf_agent lookup
     # Banks use P/E and P/TBV; EV/EBITDA is not applicable
@@ -3314,6 +3370,11 @@ HK_SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Telco":        {"ev_ebitda":  6.5, "pe": 13.0, "ev_revenue": 1.4, "pb": 1.2, "fcf_yield": 0.070, "growth_avg": 0.03},
     "Crypto":       {"ev_ebitda": 20.0, "pe": 35.0, "ev_revenue": 8.0, "pb": 3.0, "fcf_yield": 0.030, "growth_avg": 0.20},
     "Energy":       {"ev_ebitda":  7.5, "pe": 18.0, "ev_revenue": 1.3, "pb": 1.1, "fcf_yield": 0.055, "growth_avg": 0.04},
+    # Wave 2, HKSE industry medians 2026-09-19 (TTM) beside the through-cycle
+    # table: Regulated Electric 9.80x / 13.18x / 0.92x (through-cycle 10.47x /
+    # 15.60x); Independent Power Producers 8.34x / 7.38x / 0.80x (8.28x / 10.39x).
+    "Regulated Utility": {"ev_ebitda": 10.0, "pe": 14.0, "ev_revenue": 3.0, "pb": 0.95, "fcf_yield": 0.060, "growth_avg": 0.03},
+    "IPP":               {"ev_ebitda":  8.3, "pe":  9.0, "ev_revenue": 2.9, "pb": 0.80, "fcf_yield": 0.060, "growth_avg": 0.04},
     "Financials":   {"ev_ebitda":  8.5, "pe":  7.7, "ev_revenue": 1.4, "pb": 0.7, "fcf_yield": 0.090, "growth_avg": 0.05},
     "Industrials":  {"ev_ebitda":  8.0, "pe": 14.0, "ev_revenue": 1.2, "pb": 1.5, "fcf_yield": 0.060, "growth_avg": 0.05},
     "RealEstate":   {"ev_ebitda":  8.0, "pe":  7.5, "ev_revenue": 2.0, "pb": 0.6, "fcf_yield": 0.080, "growth_avg": 0.04},
@@ -3511,7 +3572,13 @@ def _regional_peer_multiples(
     if (not exchange or not industry) and ticker:
         info = get_fmp_classification(ticker)
         exchange = exchange or info.get("exchange", "")
-        industry = industry or info.get("industry", "")
+        # A ticker pinned AGAINST its FMP label takes the basket of the business
+        # it is, or the pin changes the methods and leaves the multiples behind.
+        try:
+            from src.data.industry_profile_map import comps_industry_for
+            industry = industry or comps_industry_for(ticker) or info.get("industry", "")
+        except Exception:                                  # noqa: BLE001
+            industry = industry or info.get("industry", "")
         # The FMP sector string ("Financial Services") is what keys the
         # comps table, not the repo's internal profile name ("Financials").
         fmp_sector = info.get("sector", "") or sector
@@ -4900,15 +4967,23 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Energy ────────────────────────────────────────────────────────────────
     "VST":   ("Energy",    "Merchant Power", "Power",                    "Vistra Energy — competitive power gen; NOT regulated utility"),
+    # Wave 2: FMP gives one label, `Independent Power Producers`, to contracted
+    # generators and merchants alike. The row keeps the contracted default; the
+    # US merchants are named.
+    "CEG":   ("Energy",    "Merchant Power", "Power",                    "Constellation Energy — merchant nuclear fleet; PTC floor + data-centre contracts"),
+    "NRG":   ("Energy",    "Merchant Power", "Power",                    "NRG Energy — integrated merchant generation + retail"),
     "NEE":   ("Energy",    "Regulated Utility", "Utility (General)",     "NextEra Energy"),
     "DUK":   ("Energy",    "Regulated Utility", "Utility (General)",     "Duke Energy"),
     "SO":    ("Energy",    "Regulated Utility", "Utility (General)",     "Southern Company"),
     "XEL":   ("Energy",    "Regulated Utility", "Utility (General)",     "Xcel Energy"),
     "AWK":   ("Energy",    "Regulated Utility", "Utility (Water)",       "American Water Works"),
     "PCG":   ("Energy",    "Regulated Utility", "Utility (General)",     "PG&E"),
-    "ENPH":  ("Energy",    "IPP",            "Green & Renewable Energy", "Enphase Energy — solar microinverters"),
-    "FSLR":  ("Energy",    "IPP",            "Green & Renewable Energy", "First Solar"),
-    "BE":    ("Energy",    "IPP",            "Green & Renewable Energy", "Bloom Energy — fuel cell power generation (hydrogen/natural gas)"),
+    "ENPH":  ("Energy",    "Clean Tech / Power Equipment OEM", "Green & Renewable Energy", "Enphase Energy — solar microinverters"),
+    "FSLR":  ("Energy",    "Clean Tech / Power Equipment OEM", "Green & Renewable Energy", "First Solar"),
+    # FMP labels Bloom `Electrical Equipment & Parts`, shared with hundreds of
+    # unrelated industrials, so it is reached by pin. Owner, 2026-09-21: a
+    # hardware OEM and solutions provider, not a licensor.
+    "BE":    ("Energy",    "Clean Tech / Power Equipment OEM", "Green & Renewable Energy", "Bloom Energy — SOFC fuel-cell OEM; equipment, installation and long-term service"),
 
     # ── Industrials ───────────────────────────────────────────────────────────
     "LMT":   ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "Lockheed Martin"),
@@ -4917,7 +4992,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "CAT":   ("Industrials", "",  "Machinery",          "Caterpillar"),
     "DE":    ("Industrials", "",  "Machinery",          "Deere & Company"),
     "GE":    ("Industrials", "Aerospace & Defense",  "Electrical Equipment", "GE Aerospace (post-Vernova spin-off)"),
-    "GEV":   ("Industrials", "",  "Electrical Equipment", "GE Vernova — wind/gas turbine OEM + grid electrification; book-to-bill driven"),
+    "GEV":   ("Industrials", "Capital Goods",  "Electrical Equipment", "GE Vernova — wind/gas turbine OEM + grid electrification; book-to-bill driven"),
     "HON":   ("Industrials", "",  "Electrical Equipment", "Honeywell"),
     "UPS":   ("Transportation", "", "Transportation",   "United Parcel Service"),
     "FDX":   ("Transportation", "", "Transportation",   "FedEx"),
@@ -4963,7 +5038,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # SMR: NuScale Power — pre-revenue nuclear SMR designer; sells reactor modules
     #      NOT a power generator → Industrials (Capital Goods), not Energy/Regulated Utility
-    "SMR":   ("Industrials", "",       "Electrical Equipment",       "NuScale Power — SMR technology vendor; pre-revenue; Industrials not Energy"),
+    "SMR":   ("Energy", "Energy Tech Licensor", "Electrical Equipment", "NuScale Power — reactor DESIGN licensor; pre-revenue, so every earnings leg is uncomputable"),
 
     # PONY: Pony.AI — AV software platform; revenue from robotaxi licences + software
     #       Damodaran would put in Transportation, but business model is software-first
@@ -5016,7 +5091,16 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "00857.HK": ("Energy",      "",  "Oil & Gas",                "PetroChina"),
     "00386.HK": ("Energy",      "",  "Oil & Gas",                "Sinopec"),
     "00991.HK": ("Energy",      "",  "Power Generation",         "Datang International Power"),
-    "01816.HK": ("Energy",      "",  "Nuclear Power",            "CGN Power"),
+    # Wave 2 (owner, 2026-09-21). Baseload, priority dispatch, stable payout: a
+    # utility, though 40-55% of volume clears through market-based trading, so
+    # its multiples take the owner-set discount in valuation_constants.json.
+    # Its EV-based legs went NEGATIVE on the IPP/Merchant tables (base IV -3.24):
+    # net debt of HK$391bn funds reactors under construction that earn no
+    # EBITDA yet. The Regulated Utility table is equity-based throughout.
+    "01816.HK": ("Energy",      "Regulated Utility",  "Nuclear Power",  "CGN Power — NDRC-tariff nuclear operator"),
+    # FMP labels Power Assets `Independent Power Producers`; it is a holding
+    # company of regulated networks (UK, Australia, HK Electric).
+    "00006.HK": ("Energy",      "Regulated Utility",  "Utility (General)", "Power Assets — regulated network holdings"),
 
     # Financials
     "00005.HK": ("Financials",  "Money Center Bank (EU)",  "Banking",  "HSBC Holdings"),

@@ -1104,7 +1104,9 @@ class TestTheOpsSpellingsAreInTheSwap:
                         anchors.append((sec, pn, m["name"], m["weight"]))
                         if sec == "Consumer":
                             consumer_anchors.append((pn, m["name"], m["weight"]))
-        assert (tot, trail, elig, anchored) == (104, 37, 37, 13)
+        # Wave 2 (2026-09-21): +1 profile, and Regulated Utility's new trailing P/E anchor
+        # (see the same census in test_consumer_discretionary_gates.py).
+        assert (tot, trail, elig, anchored) == (105, 38, 38, 14)
         assert sorted(consumer_anchors) == [
             ("Food & Beverage", "P/E", 0.5),
             ("Household / Personal", "P/E", 0.4),

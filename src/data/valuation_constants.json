@@ -385,5 +385,95 @@
     }
    }
   }
+ },
+ "cost_of_equity": {
+  "_doc": "Owner-set cost of equity by profile and market, CAPM-built. The value is the midpoint of the owner's application range; the range is a flag band, never a clamp. Keyed by the market of the cash flows because the risk-free rate must match their denomination.",
+  "reviewed": {
+   "last_reviewed": "2026-09-21",
+   "reviewer": "owner"
+  },
+  "profiles": {
+   "Regulated Utility": {
+    "US": {
+     "value": 0.0725,
+     "band": [
+      0.07,
+      0.075
+     ],
+     "capm": {
+      "risk_free": [
+       0.04,
+       0.043
+      ],
+      "risk_free_basis": "10Y US Treasury",
+      "levered_beta": [
+       0.55,
+       0.65
+      ],
+      "equity_risk_premium": [
+       0.0475,
+       0.0525
+      ],
+      "company_specific": [
+       0.0,
+       0.0
+      ],
+      "capm_range": [
+       0.068,
+       0.077
+      ]
+     },
+     "rationale": "Low operational volatility, protected volume dispatch."
+    },
+    "HKSE": {
+     "value": 0.06,
+     "band": [
+      0.058,
+      0.062
+     ],
+     "capm": {
+      "risk_free": [
+       0.021,
+       0.023
+      ],
+      "risk_free_basis": "10Y China CGB",
+      "levered_beta": [
+       0.5,
+       0.6
+      ],
+      "equity_risk_premium": [
+       0.055,
+       0.06
+      ],
+      "company_specific": [
+       0.005,
+       0.01
+      ],
+      "capm_range": [
+       0.055,
+       0.064
+      ]
+     },
+     "rationale": "RMB/HKD cash flows of Asian regulated power assets; sovereign/market liquidity premium in the ERP; company-specific premium for nuclear tail risk and marketised tariffs."
+    }
+   }
+  }
+ },
+ "ticker_multiple_discounts": {
+  "_doc": "Owner-set factor on PEER multiples for one ticker. Applied where a peer multiple is applied and recorded as its own part (`owner_multiple_discount`); the basket median is never edited.",
+  "reviewed": {
+   "last_reviewed": "2026-09-21",
+   "reviewer": "owner"
+  },
+  "tickers": {
+   "01816.HK": {
+    "factor": 0.875,
+    "band": [
+     0.85,
+     0.9
+    ],
+    "rationale": "CGN Power fits a baseload utility (>7,000 operating hours, priority dispatch, stable payout) but is not a pure cost-of-service one: historically 40-55%+ of volume in coastal provinces clears through market-based trading, exposing realised tariffs to bilateral discounts. 10-15% off developed-market utility multiples for marketised tariff variability and nuclear decommissioning / project execution risk; midpoint 12.5%."
+   }
+  }
  }
 }

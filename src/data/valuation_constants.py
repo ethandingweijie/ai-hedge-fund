@@ -71,16 +71,39 @@ def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Opti
     return float(v) if isinstance(v, (int, float)) and v > 0 else None
 
 
-def cost_of_equity(profile: Optional[str], doc: Optional[dict] = None) -> Optional[float]:
-    """The owner-set cost of equity for this profile, or None when none is authored.
+def market_key(ticker: Optional[str]) -> str:
+    """The market a constant is keyed by: HKSE, SES or US (the comps store's keys)."""
+    t = (ticker or "").upper()
+    return "HKSE" if t.endswith(".HK") else ("SES" if t.endswith(".SI") else "US")
+
+
+def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
+                   doc: Optional[dict] = None) -> Optional[float]:
+    """The owner-set cost of equity for this profile IN THIS MARKET, or None.
 
     Read by the P/Rate Base leg, whose justified multiple is
-    (allowed ROE - g) / (CoE - g). None means the leg declines and its declared
-    proxy prices the weight: a cost of equity is never inferred from a sector
-    WACC, which is a blended rate on a different basis.
+    (allowed ROE - g) / (CoE - g). The rate must match the currency of the cash
+    flows (owner, 2026-09-21): a USD utility discounts at a Treasury-based rate,
+    an HKD/RMB one at a CGB-based rate, and neither borrows the other's. None
+    means the leg declines and its declared proxy prices the weight: a cost of
+    equity is never inferred from a sector WACC, a blended rate on another basis.
     """
-    v = (entry(profile, doc) or {}).get("cost_of_equity")
+    e = ((((doc or load()).get("cost_of_equity") or {}).get("profiles") or {})
+         .get(profile or "") or {}).get(market or "US") or {}
+    v = e.get("value")
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
+
+
+def ticker_multiple_discount(ticker: Optional[str], doc: Optional[dict] = None) -> float:
+    """The owner-set factor on PEER multiples for one ticker; 1.0 for everyone else.
+
+    A discount is a statement about one company against its basket (CGN Power:
+    a utility whose tariffs are 40-55% marketised), so it lives with the ticker,
+    is recorded as its own part of the multiple, and never edits the basket.
+    """
+    e = (((doc or load()).get("ticker_multiple_discounts") or {}).get("tickers") or {}).get((ticker or "").upper())
+    v = (e or {}).get("factor")
+    return float(v) if isinstance(v, (int, float)) and 0.5 <= v <= 1.0 else 1.0
 
 
 def detail(profile: Optional[str], doc: Optional[dict] = None,

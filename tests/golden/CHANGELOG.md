@@ -1426,3 +1426,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Refiner audit (owner, 2026-09-20), four changes: (1) valuations divide by the CURRENT share count scaled by the filing's diluted/basic ratio, not the trailing weighted-average diluted count -- Valero was dividing by 309.0mn against 287.9mn outstanding; (2) the FCF Yield leg on a cyclical profile uses the same 5y normalisation as the EV/EBITDA and P/E legs instead of raw TTM; (3) segment SOTP identifies the business and prices it on owner-set through-cycle EV/EBITDA bands, with segment EBITDA reconciled to the company's normalised EBITDA -- it previously multiplied segment REVENUE by a multiple keyed off the segment's NAME, valuing Marathon's refining arm as ADVERTISING at 6.5x revenue; (4) accounting lines such as 'Consolidation, Eliminations' are no longer valued as businesses. Share count moves every per-share leg, so every fixture moves.
 
+## 2026-09-21T14:36:31+00:00
+
+- regenerated at HEAD: `714b36c`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 2: owner-confirmed method tables for Regulated Utility, Merchant Power and IPP plus the new Clean Tech / Power Equipment OEM profile change the profile-weights digest in param_version; no valuation leaf moved on any fixture
+

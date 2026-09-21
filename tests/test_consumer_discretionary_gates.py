@@ -1361,8 +1361,10 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
                 if m.get("name") in norm_ev:
                     users.append((sector, pname, m["name"]))
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20) added five users, none of them Consumer.
+    # Wave 2 power & transition (owner-confirmed 2026-09-21) added one, the hardware OEM profile.
     assert sorted(users) == [
         ("Crypto", "Digital Asset Mining", "EV/EBITDA (norm)"),
+        ("Energy", "Clean Tech / Power Equipment OEM", "EV/EBITDA (norm)"),
         ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
         ("Energy", "Refining & Marketing", "EV/EBITDA (norm)"),
         ("Materials", "Steel / Metals", "EV/EBITDA (Norm)"),
@@ -1670,7 +1672,8 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
             if any("norm" in n.lower() for n in names):
                 with_norm += 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 profiles, all five with a normalised leg.
-    assert (total, with_norm) == (104, 33), (total, with_norm)
+    # Wave 2 power & transition (owner-confirmed 2026-09-21): +1 profile, with a normalised anchor.
+    assert (total, with_norm) == (105, 34), (total, with_norm)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1694,7 +1697,7 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 8, spellings
+    assert spellings.get("EV/EBITDA (norm)") == 9, spellings      # +1: Wave 2 hardware OEM profile
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
     assert spellings.get("P/E (norm)") == 26, spellings
     assert len(spellings) == 3, spellings
@@ -2034,7 +2037,11 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
                         consumer_anchors.append((pn, m["name"], m["weight"]))
                     if m["name"] in ("P/E (ops)", "P/E (Ops)"):
                         added_anchors.append((sec, pn, m["name"], m["weight"]))
-    assert (tot, trail, elig, anchored) == (104, 37, 37, 13)
+    # Wave 2 (2026-09-21): +1 profile; and Regulated Utility's mislabelled "Utility P/E"
+    # (EBITDA x EV/EBITDA) became a real trailing "P/E" carrying the anchor flag, so it
+    # joins the swap population and its anchors: a utility in a depressed year is
+    # priced on normalised earnings like every other trailing-P/E profile.
+    assert (tot, trail, elig, anchored) == (105, 38, 38, 14)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2789,7 +2796,8 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     hk = [k for k in TICKER_SECTOR_LOOKUP if k.endswith(".HK")]
     missing = [k for k in hk
                if k.split(".")[0].zfill(5) not in _REPORTING_CURRENCY]
-    assert len(hk) == 162 and len(missing) == 121, (len(hk), len(missing))
+    # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
+    assert len(hk) == 163 and len(missing) == 122, (len(hk), len(missing))
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")
