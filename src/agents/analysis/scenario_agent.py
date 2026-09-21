@@ -121,7 +121,17 @@ def run_scenario_agent(state: AgentState) -> AgentState:
 
         # DCF Engine anchors (Phase 4.5) — per-share intrinsic values
         dcf_ticker = state["data"].get("dcf_range", {}).get(ticker, {})
-        if dcf_ticker and dcf_ticker.get("base"):
+        # Unrated / Pre-Revenue (owner, 2026-09-21): the engine published no
+        # intrinsic value and no target. Nothing below may manufacture one.
+        _unrated = ((dcf_ticker or {}).get("rating_state") or {})
+        _unrated = _unrated if _unrated.get("state") == "unrated" else None
+        if _unrated:
+            dcf_anchors_str = (
+                f"UNRATED -- {_unrated.get('label')}: {_unrated.get('reason')}. The valuation engine "
+                "published no intrinsic value and no price target for this company. Describe the "
+                "scenarios qualitatively; any fair value you give is a narrative illustration and "
+                "will NOT be presented as a valuation or a target.")
+        elif dcf_ticker and dcf_ticker.get("base"):
             dcf_anchors_str = (
                 f"Bear IV: ${dcf_ticker['bear']['intrinsic_value']:.2f}  "
                 f"Base IV: ${dcf_ticker['base']['intrinsic_value']:.2f}  "
@@ -258,7 +268,15 @@ def run_scenario_agent(state: AgentState) -> AgentState:
         _12m_bull = _12m_raw.get("bull")
         _12m_base = _12m_raw.get("base")
         _12m_bear = _12m_raw.get("bear")
-        if _12m_bull and _12m_base and _12m_bear:
+        if _unrated:
+            # NOT the fallback below. That branch rebuilds a target from the
+            # LLM's scenario fair values whenever the engine's are missing, which
+            # is exactly how a withheld valuation would come back as a number.
+            scenario_dict["12m_price_target"] = None
+            scenario_dict["12m_targets_by_scenario"] = {"bear": None, "base": None, "bull": None}
+            scenario_dict["12m_pt_method"] = "unrated: no target published"
+            scenario_dict["unrated"] = {k: _unrated.get(k) for k in ("code", "label", "reason")}
+        elif _12m_bull and _12m_base and _12m_bear:
             _12m_pt = (_12m_bull * _bull_p + _12m_base * _base_p + _12m_bear * _bear_p)
             scenario_dict["12m_price_target"]       = round(_12m_pt, 2)
             scenario_dict["12m_targets_by_scenario"] = {
@@ -307,6 +325,8 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             )
         else:
             _blended_iv = _base_iv_raw or None  # fallback to base if any scenario missing
+        if _unrated:
+            _blended_iv = None
         if _cp > 0:
             scenario_dict["reconciliation"] = {
                 "current_price":   _cp,
@@ -316,9 +336,11 @@ def run_scenario_agent(state: AgentState) -> AgentState:
                 "upside_to_pt_pct":   round((_pt - _cp) / _cp * 100, 1) if _pt and _cp else None,
                 "upside_to_iv_pct":   round((_blended_iv - _cp) / _cp * 100, 1) if _blended_iv and _cp else None,
                 "bear_iv":         dcf_ticker.get("bear", {}).get("intrinsic_value") if dcf_ticker else None,
+                # `or _cp`, not a .get default: an unrated name carries the key
+                # with a None value, and None - float raises.
                 "downside_to_bear_pct": round(
-                    (dcf_ticker.get("bear", {}).get("intrinsic_value", _cp) - _cp) / _cp * 100, 1
-                ) if dcf_ticker and _cp else None,
+                    ((dcf_ticker.get("bear", {}).get("intrinsic_value") or _cp) - _cp) / _cp * 100, 1
+                ) if dcf_ticker and _cp and not _unrated else None,
             }
             _down = scenario_dict["reconciliation"].get("downside_to_bear_pct") or -1
             _up   = scenario_dict["reconciliation"].get("upside_to_pt_pct") or 0

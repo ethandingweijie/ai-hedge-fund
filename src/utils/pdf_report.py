@@ -1857,6 +1857,11 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
     return out
 
 
+def _p_of(scen: dict, s: str) -> str:
+    v = (scen.get(s) or {}).get("probability")
+    return f"{float(v):.0%}" if isinstance(v, (int, float)) else "—"
+
+
 def _scenario_block(scen: dict, dcf_t: dict, styles, width: float) -> list:
     """Page 1, left column: bear / base / bull value, probability, 12m target."""
     if not scen:
@@ -1864,6 +1869,19 @@ def _scenario_block(scen: dict, dcf_t: dict, styles, width: float) -> list:
     by12 = scen.get("12m_targets_by_scenario") or {}
     pb = (dcf_t.get("pt_bridge") or {}).get("scenarios") or {}
     names = ("bear", "base", "bull")
+    # Unrated / Pre-Revenue: the scenarios are qualitative. The LLM's per-scenario
+    # fair values and its expected value are illustrations, and printing them
+    # under "Fair value (IV)" would publish the number the engine withheld.
+    _rs = (dcf_t or {}).get("rating_state") or {}
+    if _rs.get("state") == "unrated":
+        out = [Paragraph(f"<b>{_strip(_rs.get('label') or 'Unrated')}</b>. No intrinsic value or 12-month "
+                         f"target is published: {_strip(_rs.get('reason') or 'no valuation could be formed')}. "
+                         "The scenarios below are qualitative.", styles["RptBody"]), Spacer(1, 4)]
+        for s in names:
+            a = _strip((scen.get(s) or {}).get("assumptions") or "")
+            if a:
+                out.append(Paragraph(f"<b>{s.title()}</b> ({_p_of(scen, s)}): {a}", styles["RptBody"]))
+        return out
 
     def _p(s):
         v = (scen.get(s) or {}).get("probability")

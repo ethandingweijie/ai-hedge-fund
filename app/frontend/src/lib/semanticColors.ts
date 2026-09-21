@@ -275,6 +275,11 @@ const ACTION_TONES: Record<string, Record<ActionVariant, string>> = {
     pill: 'bg-transparent text-content-high border border-[var(--hairline)]',
     text: 'text-content-high',
   },
+  // No valuation published. Outlined and dashed: visibly a state, not a view.
+  UNRATED: {
+    pill: 'bg-transparent text-content-medium border border-dashed border-[var(--hairline)]',
+    text: 'text-content-medium',
+  },
 };
 
 export function actionTone(

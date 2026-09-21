@@ -436,8 +436,16 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     a count alone cannot tell "eleven gates" from "eleven gates, two of which
     moved a number nobody named".
     """
+    # Thirteen since 2026-09-21, both named rather than left to a count:
+    #   GATE_BACKLOG_VISIBILITY  says whether a backlog-coverage DCF leg was bounded
+    #       by an ACCEPTED backlog (applied) or ran the core projection (not applied);
+    #   GATE_MARGIN_TURNAROUND   is live: when the FCF margin window opens
+    #       cash-burning and improves every year, the base is the last two audited
+    #       years instead of a mean that describes the company it was (GE Vernova:
+    #       1.4% -> 7.3%). Neither fires on any of the golden fixtures.
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
+        "GATE_BACKLOG_VISIBILITY",
         "GATE_BALANCE_SHEET_FINANCIAL",
         "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
         "GATE_CASH_CONVERSION",
@@ -445,6 +453,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_GROWTH_CAGR_DIVERGENCE",
         "GATE_GROWTH_REINVESTMENT",
         "GATE_INVENTORY_STRESS",
+        "GATE_MARGIN_TURNAROUND",
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
         "GATE_SCENARIO_ORDERING",
@@ -473,7 +482,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 5, src.count('"applied": True,')
+    assert src.count('"applied": True,') == 6   # +GATE_MARGIN_TURNAROUND, live since 2026-09-21, src.count('"applied": True,')
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose

@@ -9,6 +9,12 @@ from src.decisions import ratings as r
 class TestMapping:
     def test_rating_and_action_map_one_to_one(self):
         for rating, action in r.RATING_TO_ACTION_MAP.items():
+            if rating is r.ResearchRating.UNRATED:
+                # The absence of an opinion. It executes as HOLD at zero weight,
+                # but NO action maps back to it: a HOLD is Neutral, never Unrated.
+                assert action is r.TradeAction.HOLD
+                assert rating not in r.ACTION_TO_RATING_MAP.values()
+                continue
             assert r.ACTION_TO_RATING_MAP[action] is rating
             assert r.to_action(rating) is action
             assert r.to_rating(action) is rating

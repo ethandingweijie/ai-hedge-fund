@@ -1446,6 +1446,48 @@ _DEEP_CUT_OBSERVATION_FRACTION = 0.40
 _CONSENSUS_DIVERGENCE_MULT = 3.0
 
 
+#: A structural turnaround is recognised only when the latest margin clears the
+#: window mean by at least this much. Below it the mean and the recent figure
+#: tell the same story and there is nothing to correct.
+_TURNAROUND_MIN_GAP = 0.03
+
+
+def _turnaround_margin(series: list[dict], field: str = "free_cash_flow") -> Optional[dict]:
+    """{mean_window, recent_two_year, margins} when the window describes a company
+    that no longer exists, else None.
+
+    The mirror of `_historical_cagr`'s recency guard, for margins. A five-year
+    MEAN is the right base for a business whose margin wanders around a level.
+    It is the wrong one for a one-directional turnaround: GE Vernova's FCF margin
+    ran -6.8%, -2.1%, +1.3%, +4.9%, +9.75% across a window whose first three
+    years are pre-spin carve-out financials, and the mean of that is 1.4% -- a
+    DCF of $87 a share, about 2x the free cash flow management guides to
+    (owner, 2026-09-21: "anchoring the model to distressed historical carve-out
+    margins"). Averaging a trend reports where the company was.
+
+    Deliberately narrow. ALL of:
+      * at least four years in the window;
+      * the window OPENS cash-burning (first margin < 0) and CLOSES cash-generative;
+      * every year improves on the one before -- a single step back and the
+        mean stands, because that is a wandering margin, not a turnaround;
+      * the latest margin clears the mean by `_TURNAROUND_MIN_GAP`.
+    The base then becomes the mean of the last TWO years: audited, recent, and
+    still not the single best year. Guidance is never a baseline (owner,
+    2026-09-20); a guided 25% is an overlay with its own acceptance, not this.
+    """
+    margins = [row[field] / row["revenue"] for row in series[-5:]
+               if row.get(field) is not None and row.get("revenue")]
+    if len(margins) < 4 or not (margins[0] < 0 < margins[-1]):
+        return None
+    if any(b <= a for a, b in zip(margins, margins[1:])):
+        return None
+    mean_w = statistics.mean(margins)
+    if margins[-1] - mean_w < _TURNAROUND_MIN_GAP:
+        return None
+    return {"mean_window": mean_w, "recent_two_year": statistics.mean(margins[-2:]),
+            "margins": [round(m, 6) for m in margins]}
+
+
 def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optional[float]:
     """Compute 5-year average FCF margin with outlier exclusion.
 
@@ -9104,6 +9146,13 @@ def _run_backward_gate(
             fcf_margin_t1, _t1_field = _oe_t1, "fcf_owner_earnings"
         else:
             fcf_margin_t1, _t1_field = (_mean_fcf_margin(_hist) or 0.0), "free_cash_flow"
+        # The same structural-turnaround guard the live margin takes, on the
+        # window as it stood at T-1 -- or the backtest tests a different method
+        # from the one that produces today's number (the MELI lesson above).
+        _turn_t1 = _turnaround_margin(_hist, field=_t1_field)
+        if _turn_t1:
+            fcf_margin_t1 = _turn_t1["recent_two_year"]
+            record["fcf_margin_turnaround"] = True
         if fcf_margin_t1 <= 0:
             _pos_t1 = _median_positive_fcf_margin(_hist, field=_t1_field)
             if _pos_t1 is not None:
@@ -10342,6 +10391,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _oe_basis_label = "reported-FCF"
             _oe_basis_field = "free_cash_flow"
 
+        # ── Structural turnaround: the window mean describes a company that no
+        #     longer exists (see `_turnaround_margin`). On the basis just chosen.
+        _turn = _turnaround_margin(series, field=_oe_basis_field)
+        if _turn:
+            _turn_pre = fcf_margin_base
+            fcf_margin_base = _turn["recent_two_year"]
+            ticker_forward_flags.append(
+                f"Structural turnaround: FCF margin improved every year of the window from "
+                f"{_turn['margins'][0]:+.1%} to {_turn['margins'][-1]:+.1%}, so its {_turn_pre:.1%} mean "
+                f"describes the company it was. Base margin is the last two audited years, "
+                f"{fcf_margin_base:.1%}; management guidance is an overlay, never the base.")
+            gate_evaluations.append({
+                "gate_id": "GATE_MARGIN_TURNAROUND",
+                "metric": "fcf_margin_base",
+                "raw_input_path_a": round(float(_turn_pre), 6),
+                "gated_output_path_b": round(float(fcf_margin_base), 6),
+                "basis": (f"{_oe_basis_label} margins {_turn['margins']}: window opens cash-burning, "
+                          f"improves every year, latest clears the mean by "
+                          f">= {_TURNAROUND_MIN_GAP:.0%}; base = mean of the last two years"),
+                "applied": True,
+            })
+
         # ── SW50 cascade: owner-earnings basis ≤ 0 (task #18) ─────────────
         # Reference: src/research_ideas/sw46/iv15.py::_resolve_base_oe.
         # A non-positive trailing owner-earnings margin used to flow into
@@ -10512,8 +10583,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # nothing" and stays silent, which is the safe direction. It is a data
         # question and not a gate question, so it is recorded rather than
         # patched around with a heuristic nobody chose.
+        # The markdown premise is "units in the channel sell at a discount". It
+        # does not hold for inventory built against CONTRACTED work: GE Vernova's
+        # inventory days rose 30 while it built turbines for a $176bn order book,
+        # and the gate took 15% off its margin as if they were unsold trainers.
+        # Exempt when an owner-ACCEPTED backlog covers at least a year of revenue
+        # -- a filing figure, review-gated like every other; a pending one exempts
+        # nothing. Not a profile exemption: Capital Goods also holds dealer-channel
+        # names (Caterpillar, Deere) for whom the gate is exactly right.
+        _inv_backlog_cov = None
+        try:
+            from src.data import industry_inputs as _ii_inv
+            _inv_bl = _ii_inv.accepted_detail(
+                ticker, "backlog", most_recent.get("_values_currency") or reported_currency)
+            if _inv_bl and _inv_bl.get("value") and revenue_base and revenue_base > 0:
+                _inv_backlog_cov = _inv_bl["value"] / revenue_base
+        except Exception:                                  # noqa: BLE001
+            _inv_backlog_cov = None
+        _inv_contracted = _inv_backlog_cov is not None and _inv_backlog_cov >= 1.0
         if not _dcf_family_disabled and fcf_margin_base > 0:
             _inv_days = _inventory_stress_days(series[::-1])
+            # The exemption is a PRECONDITION of the one gate below, not a second
+            # gate: still one site that turns inventory into days, still one
+            # record, and its `applied` stays the literal its comment insists on.
+            if (_inv_contracted and _inv_days is not None
+                    and _inv_days > _INVENTORY_STRESS_TRIGGER_DAYS):
+                ticker_forward_flags.append(
+                    f"Inventory days {_inv_days:+.1f} over the prior 3y median, NOT marked down: "
+                    f"accepted backlog covers {_inv_backlog_cov:.2f}x of revenue, so the build is "
+                    f"work-in-process against contracted orders, not unsold channel stock.")
+                _inv_days = None
             if _inv_days is not None and _inv_days > _INVENTORY_STRESS_TRIGGER_DAYS:
                 _inv_haircut = fcf_margin_base * _INVENTORY_MARKDOWN_HAIRCUT
                 _inv_pre = fcf_margin_base
@@ -12134,7 +12233,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Backlog-coverage DCF: the accepted figure rides on `most_recent` to
             # the leg. Resolved for any profile that DECLARES such a leg, whether
             # or not it also takes the bear-only floor above.
-            _bl_legs = [m.get("name") for m in ((profile_data or {}).get("methods") or [])
+            _bl_legs = [m.get("name") for m in _pe_norm_methods
                         if m.get("name") in _BACKLOG_BOUNDED_METHODS | _CONTRACTED_BACKLOG_METHODS]
             if _bl_legs:
                 _bl_leg_d = _backlog_d or _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
@@ -14676,8 +14775,46 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception:                       # never fail a run on a flag
             pass
 
+        # ── Unrated / Pre-Revenue (owner, 2026-09-21) ─────────────────────────
+        # Decided HERE, after the reserve floor, the scenario ordering clamp and
+        # the consensus check have all run on real numbers, and applied by
+        # REMOVING the headline figures rather than flagging them: a number that
+        # is published gets quoted. The computed figures move to `indicative_iv`,
+        # named for what they are. Leg-level detail (method_iv_table, leg_inputs,
+        # legs_dropped) stays, because it is the evidence for the verdict.
+        _rating_state = {"state": "rated"}
+        try:
+            from src.data import valuation_constants as _vc_unr
+            _base_sr = scenario_results.get("base") or {}
+            _verdict = _vc_unr.unrated_verdict(
+                revenue_base=revenue_base, base_iv=_base_sr.get("intrinsic_value"),
+                weight_surviving=_base_sr.get("weight_surviving"))
+            if _verdict:
+                _rating_state = {
+                    "state": "unrated", **_verdict,
+                    "weight_surviving": _base_sr.get("weight_surviving"),
+                    "methods_surviving": _base_sr.get("methods_surviving"),
+                    "indicative_iv": {s: (scenario_results.get(s) or {}).get("intrinsic_value")
+                                      for s in ("bear", "base", "bull")},
+                    "indicative_12m_targets": dict(_12m_targets or {}),
+                    "note": ("Indicative figures are what the surviving legs produced. They are kept for "
+                             "audit and are NOT a valuation, a target or a rating."),
+                }
+                for _s in ("bear", "base", "bull"):
+                    if isinstance(scenario_results.get(_s), dict):
+                        scenario_results[_s]["intrinsic_value"] = None
+                        scenario_results[_s].setdefault("forward_flags", []).insert(
+                            0, f"{_verdict['label']}: {_verdict['reason']}. No intrinsic value, "
+                               f"12-month target or rating is published.")
+                _12m_targets = {"bear": None, "base": None, "bull": None}
+                _12m_pt_method_label = "unrated: no target published"
+                _pt_bridge = None
+        except Exception:                       # a verdict must never fail a run
+            _rating_state = {"state": "rated"}
+
         dcf_range[ticker] = {
             **scenario_results,
+            "rating_state":       _rating_state,
             "wacc":               round(wacc, 4),
             "c_macro":            round(c_macro, 4),
             "profile":            profile_name,
@@ -14805,7 +14942,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         cal_tag = " ⚠ CALIBRATION ERROR" if calibration_error else ""
         progress.update_status(
             agent_id, ticker,
-            f"IV base ${base_iv:.2f} | profile: {profile_name} | C_macro {c_macro:+.2f} "
+            (f"IV base ${base_iv:.2f}" if base_iv is not None
+             else f"{_rating_state.get('label', 'Unrated')}")
+            + f" | profile: {profile_name} | C_macro {c_macro:+.2f} "
             f"| source: {data_source}{cal_tag}"
         )
 

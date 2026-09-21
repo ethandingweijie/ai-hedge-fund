@@ -1197,7 +1197,9 @@ def run_advanced_pipeline(
                 cal_tag = " ⚠ CALIBRATION ERROR" if dcf.get("calibration_error") else ""
                 methods = dcf["base"].get("methods_used", [])
                 fwd_flags = dcf["base"].get("forward_flags", [])
-                print(f"  {ticker}: base IV ${base_iv:.2f} | WACC {wacc:.1%} | "
+                _iv_txt = (f"base IV ${base_iv:.2f}" if isinstance(base_iv, (int, float))
+                           else (dcf.get("rating_state") or {}).get("label", "Unrated"))
+                print(f"  {ticker}: {_iv_txt} | WACC {wacc:.1%} | "
                       f"C_macro {c_macro:+.2f} | profile: {profile} | source: {src}{cal_tag}")
                 if methods:
                     print(f"    methods: {', '.join(methods)}")

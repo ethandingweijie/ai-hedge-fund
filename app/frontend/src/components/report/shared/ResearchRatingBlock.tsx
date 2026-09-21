@@ -12,7 +12,8 @@ import type { ResearchView } from '@/lib/reportTypes';
 import { actionTone, priceTone } from '@/lib/semanticColors';
 import { currencySymbol } from '@/lib/utils';
 
-const pct = (x: number) => `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
+const pct = (x: number | null | undefined) =>
+  (x == null ? '—' : `${x >= 0 ? '+' : ''}${(x * 100).toFixed(1)}%`);
 const title = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '—');
 
 export function RatingPill({ view, className = '' }: { view: ResearchView; className?: string }) {
@@ -34,11 +35,43 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
   const small = compact ? 'text-[10.5px]' : 'text-xs';
   const diverges = view.structural_rating && view.structural_rating !== view.tactical_rating;
 
+  // Unrated / Pre-Revenue: no target, no upside, no TSR, no benchmark. The
+  // block shows the state and WHY, and nothing that reads like a valuation.
+  if (view.research_rating === 'UNRATED') {
+    return (
+      <div className={`flex flex-col gap-3 ${text}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <RatingPill view={view} />
+          <span className={`${small} text-content-muted`}>· no recommendation</span>
+        </div>
+        {view.price != null && (
+          <dl className={`grid grid-cols-2 gap-3 ${small}`}>
+            <div>
+              <dt className="uppercase tracking-wider text-content-muted">Price</dt>
+              <dd className="font-semibold tabular-nums text-content-high">{sym}{view.price.toFixed(2)}</dd>
+              {view.price_as_of && <dd className="text-content-muted">close {view.price_as_of.slice(0, 10)}</dd>}
+            </div>
+            <div>
+              <dt className="uppercase tracking-wider text-content-muted">12M Target</dt>
+              <dd className="font-semibold text-content-medium">Not published</dd>
+            </div>
+          </dl>
+        )}
+        <div className="rounded-lg border border-dashed border-[var(--hairline)] bg-surface-2 px-3 py-2 text-content-high leading-relaxed">
+          {view.callout}
+        </div>
+        <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-content-muted leading-relaxed`}>
+          {view.rating_definition} {view.disclaimer}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col gap-3 ${text}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <RatingPill view={view} />
-        <span className="text-content-medium">vs {view.benchmark.name}</span>
+        {view.benchmark && <span className="text-content-medium">vs {view.benchmark.name}</span>}
         <span className={`${small} text-content-muted`}>· trade action {view.trade_action}</span>
       </div>
 
@@ -46,12 +79,12 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
       <dl className={`grid grid-cols-2 sm:grid-cols-5 gap-3 ${small}`}>
         <div>
           <dt className="uppercase tracking-wider text-content-muted">Price</dt>
-          <dd className="font-semibold tabular-nums text-content-high">{sym}{view.price.toFixed(2)}</dd>
+          <dd className="font-semibold tabular-nums text-content-high">{view.price != null ? `${sym}${view.price.toFixed(2)}` : '—'}</dd>
           {view.price_as_of && <dd className="text-content-muted">close {view.price_as_of.slice(0, 10)}</dd>}
         </div>
         <div>
           <dt className="uppercase tracking-wider text-content-muted">12M Target</dt>
-          <dd className="font-semibold tabular-nums text-content-high">{sym}{view.target_12m.toFixed(2)}</dd>
+          <dd className="font-semibold tabular-nums text-content-high">{view.target_12m != null ? `${sym}${view.target_12m.toFixed(2)}` : '—'}</dd>
         </div>
         <div>
           <dt className="uppercase tracking-wider text-content-muted">Implied upside</dt>
@@ -66,9 +99,11 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
         <div>
           <dt className="uppercase tracking-wider text-content-muted">12M TSR</dt>
           <dd className={`font-semibold tabular-nums ${priceTone(view.tsr_12m)}`}>{pct(view.tsr_12m)}</dd>
-          <dd className="text-content-muted tabular-nums">
-            {view.excess_return_bps >= 0 ? '+' : ''}{view.excess_return_bps} bps vs {view.benchmark.code}
-          </dd>
+          {view.excess_return_bps != null && view.benchmark && (
+            <dd className="text-content-muted tabular-nums">
+              {view.excess_return_bps >= 0 ? '+' : ''}{view.excess_return_bps} bps vs {view.benchmark.code}
+            </dd>
+          )}
         </div>
       </dl>
 
@@ -96,8 +131,9 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
       )}
 
       <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-content-muted leading-relaxed`}>
-        {view.rating_definition} Benchmark expected return {(view.benchmark.expected_return * 100).toFixed(1)}%
-        ({view.benchmark.basis}). {view.disclaimer}
+        {view.rating_definition}{view.benchmark
+          ? ` Benchmark expected return ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).`
+          : ''} {view.disclaimer}
       </p>
     </div>
   );

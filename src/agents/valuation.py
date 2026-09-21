@@ -111,7 +111,12 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         # Converts per-share IV × shares to total equity value for comparability.
         # Falls back to internal trailing multi-stage DCF if dcf_range absent.
         dcf_engine = state["data"].get("dcf_range", {}).get(ticker, {})
-        if dcf_engine and dcf_engine.get("base") and dcf_engine.get("shares_outstanding"):
+        # An unrated name carries its scenario keys with a None intrinsic value;
+        # None x shares raises. It falls to the trailing DCF below like any name
+        # with no engine valuation.
+        if (dcf_engine and dcf_engine.get("base") and dcf_engine.get("shares_outstanding")
+                and all(isinstance((dcf_engine.get(_s) or {}).get("intrinsic_value"), (int, float))
+                        for _s in ("bear", "base", "bull"))):
             _shares = dcf_engine["shares_outstanding"]
             dcf_results = {
                 'scenarios': {

@@ -492,6 +492,8 @@ export interface DcfRange {
   // Wall Street analyst consensus 12m PT (FMP /stable/price-target-consensus).
   // null when ticker is HK/SG (FMP n/a) or when fetch fails. Used by V2 hero
   // card to render "vs Wall St $XXX" sanity line below the model PT.
+  /** Present on runs since 2026-09-21. `unrated` = no IV, target or rating published. */
+  rating_state?: RatingState | null;
   consensus_pt?: {
     high?:      number | null;
     low?:       number | null;
@@ -718,29 +720,49 @@ export interface DecisionInputs {
  *  relative to a benchmark over 12 months; `trade_action` is its executable
  *  translation. Absent on runs before the rating layer and on runs with no
  *  12-month target. */
+/** Why a valuation was withheld (dcf_range.rating_state, ratings.build_unrated_view). */
+export interface UnratedReason {
+  code?: 'pre_revenue' | 'no_valuation' | 'insufficient_methods' | null;
+  label?: string | null;
+  reason?: string | null;
+  weight_surviving?: number | null;
+}
+
+/** dcf_range[ticker].rating_state. "unrated" means the engine published NO
+ *  intrinsic value, target or rating; `indicative_iv` is audit detail only and
+ *  must never be rendered as a valuation. */
+export interface RatingState extends UnratedReason {
+  state: 'rated' | 'unrated';
+  indicative_iv?: { bear?: number | null; base?: number | null; bull?: number | null } | null;
+  note?: string | null;
+}
+
 export interface ResearchView {
-  research_rating: 'OVERWEIGHT' | 'NEUTRAL' | 'UNDERWEIGHT';
-  rating_label: string;              // "Overweight" … or "Under Review"
+  /** UNRATED is the absence of an opinion, not a fourth one: every figure
+   *  below that depends on a target is then null. */
+  research_rating: 'OVERWEIGHT' | 'NEUTRAL' | 'UNDERWEIGHT' | 'UNRATED';
+  rating_label: string;              // "Overweight" … "Under Review" … "Unrated — pre-revenue"
   under_review: boolean;
   trade_action: 'BUY' | 'HOLD' | 'SELL';
-  tactical_rating: string;
+  tactical_rating: string | null;
   structural_rating: string | null;
-  benchmark: { code: string; name: string; market: string; expected_return: number; basis: string };
-  price: number;
+  benchmark: { code: string; name: string; market: string; expected_return: number; basis: string } | null;
+  price: number | null;
   price_as_of: string | null;
-  target_12m: number;
+  target_12m: number | null;
   intrinsic_value: number | null;
-  capital_gain_12m: number;
-  dividend_yield: number;
+  capital_gain_12m: number | null;
+  dividend_yield: number | null;
   dividend_known: boolean;
   projected_dps: number | null;
-  tsr_12m: number;
-  excess_return_bps: number;
+  tsr_12m: number | null;
+  excess_return_bps: number | null;
+  unrated?: UnratedReason | null;
   callout: string;
   rating_definition: string;
   disclaimer: string;
   compliance: {
-    status: 'clean' | 'explained_divergence' | 'under_review' | 'holdco_disclosure';
+    status: 'clean' | 'explained_divergence' | 'under_review' | 'holdco_disclosure' | 'unrated';
     notes: string[];
   };
 }

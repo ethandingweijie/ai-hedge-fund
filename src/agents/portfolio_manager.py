@@ -745,11 +745,18 @@ def _research_view_for(ticker: str, state, scenario: dict,
     Everything is in the listing currency: the 12m target and spot come from
     the scenario, dividends per share and the SOTP per-share value from
     dcf_range after its FX block."""
-    from src.decisions.ratings import build_research_view
+    from src.decisions.ratings import build_research_view, build_unrated_view
 
     data = state["data"]
     pt = scenario.get("12m_price_target")
     price = scenario.get("current_price") or 0.0
+    # Unrated first: it has no target by construction, and returning None here
+    # would make it indistinguishable from a run that predates the rating layer
+    # -- and would hand the decision to the intrinsic-value band and the legacy
+    # directional guards, both of which can manufacture a target.
+    _rs = ((data.get("dcf_range") or {}).get(ticker) or {}).get("rating_state") or {}
+    if _rs.get("state") == "unrated":
+        return build_unrated_view(_rs, price=price or None, price_as_of=scenario.get("price_as_of"))
     if not (isinstance(pt, (int, float)) and pt > 0 and price > 0):
         return None
     dcf = (data.get("dcf_range") or {}).get(ticker) or {}
@@ -821,6 +828,10 @@ def _gate_rated_action(view: dict, trap_verdict: str,
 
 
 def _rating_block_text(view: dict | None) -> str:
+    if view and view.get("research_rating") == "UNRATED":
+        return (f"Research rating: {view['rating_label']}. {view['callout']} Do NOT state or imply a "
+                "fair value, a price target, an upside or a recommendation anywhere in the rationale; "
+                "explain what would have to become measurable for the company to be rated.")
     if not view:
         return ("Research rating: not available (no 12-month target); the "
                 "action comes from the intrinsic-value band.")
@@ -952,7 +963,11 @@ def run_advanced_portfolio_manager(state) -> dict:
         # as the catalyst that explains any gap rather than moving the rating
         # away from its own definition. Without a target the ladder stands.
         research_view = _research_view_for(ticker, state, scenario, _delta)
-        if research_view is not None:
+        if research_view is not None and research_view.get("research_rating") == "UNRATED":
+            # No rating to gate. HOLD at zero weight, as the no-valuation path.
+            action, _size_zero = "HOLD", True
+            _band_flag = f"{research_view['rating_label']}: no valuation published; HOLD at zero weight"
+        elif research_view is not None:
             action, _gate_notes = _gate_rated_action(
                 research_view, trap_verdict, _research_is_stale(state))
 
@@ -1368,6 +1383,28 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["rating_label"] = research_view["rating_label"] if research_view else None
         d["research_view"] = research_view
 
+        # ── Unrated / Pre-Revenue: the LAST word on this decision ─────────────
+        # Owner, 2026-09-21. Applied here rather than threaded through the band,
+        # the gates, the conviction multiplier and the target fallback chain,
+        # because every one of those can still produce a number: the chain above
+        # falls from the 12m target to the scenario's expected value to a
+        # bull/bear fair value, and would print an LLM illustration as a target.
+        _rs = ((state["data"].get("dcf_range") or {}).get(ticker) or {}).get("rating_state") or {}
+        _is_unrated = _rs.get("state") == "unrated"
+        if _is_unrated:
+            from src.decisions.ratings import build_unrated_view
+            research_view = build_unrated_view(_rs, price=current_price or None,
+                                               price_as_of=scenario.get("price_as_of"))
+            size_pct = 0.0
+            d["action"] = "HOLD"
+            d["position_size_pct"] = 0.0
+            d["stop_loss"] = None
+            d["price_target"] = None
+            d["entry_range"] = None
+            d["research_rating"] = research_view["research_rating"]
+            d["rating_label"] = research_view["rating_label"]
+            d["research_view"] = research_view
+
         # Entry range is the one actionable field still left to the LLM, and
         # it is emitted without the spot price being in the prompt at all
         # (now fixed in _quant_block_text). A live MU run returned
@@ -1432,13 +1469,17 @@ def run_advanced_portfolio_manager(state) -> dict:
                                 if isinstance(research_view, dict) else None,
                 "research_rating": (research_view or {}).get("rating_label")
                                    if isinstance(research_view, dict) else None,
-                "rating_basis": ("tsr_vs_benchmark" if research_view
+                "rating_basis": ("unrated" if _is_unrated
+                                 else "tsr_vs_benchmark" if research_view
                                  else "intrinsic_value_band"),
-                "upside_to_iv_pct": _upside_iv,
-                "blended_iv": recon.get("blended_iv"),
-                "expected_value": expected_value or None,
-                "price_target_12m": scenario.get("12m_price_target"),
-                "ev_upside_pct": ev_upside,
+                # An unrated name has no anchor: the LLM scenario's expected value
+                # is an illustration, and publishing it here would put a number
+                # back beside a rating that says there is none.
+                "upside_to_iv_pct": None if _is_unrated else _upside_iv,
+                "blended_iv": None if _is_unrated else recon.get("blended_iv"),
+                "expected_value": None if _is_unrated else (expected_value or None),
+                "price_target_12m": None if _is_unrated else scenario.get("12m_price_target"),
+                "ev_upside_pct": None if _is_unrated else ev_upside,
                 "vgpm_grades": {
                     dim: (_vgpm_t.get(dim) or {}).get("grade")
                     for dim in ("valuation", "growth", "profitability", "momentum")

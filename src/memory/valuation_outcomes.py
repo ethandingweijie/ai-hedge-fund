@@ -176,10 +176,21 @@ def _content_hash(dcf_entry: dict) -> str:
     return hashlib.sha1(blob.encode()).hexdigest()
 
 
+def is_unrated(dr: Optional[dict]) -> bool:
+    """True when the engine withheld this valuation (Unrated / Pre-Revenue)."""
+    return ((dr or {}).get("rating_state") or {}).get("state") == "unrated"
+
+
 def _prediction(row, ticker: str, dr: dict) -> Optional[dict]:
     try:
         run_date = date.fromisoformat(str(row["run_at"])[:10])
     except (TypeError, ValueError):
+        return None
+    # An unrated name made no prediction. Tested BEFORE the three figures,
+    # because a row written by an older portfolio manager can still carry a
+    # `price_target` beside an unrated valuation, and scoring that would judge the
+    # model on a number it declined to publish.
+    if is_unrated(dr):
         return None
     scenario = _loads(row["scenario_json"]) or {}
     iv = _pos((dr.get("base") or {}).get("intrinsic_value"))
@@ -325,7 +336,7 @@ def score_matured(*, today: Optional[date] = None,
     existing = {r["outcome_key"]
                 for r in _db.query("SELECT outcome_key FROM valuation_outcomes")}
 
-    report = {k: 0 for k in ("runs_seen", "skipped_no_prediction",
+    report = {k: 0 for k in ("runs_seen", "skipped_no_prediction", "skipped_unrated",
                              "skipped_cache_copy", "skipped_mis_scaled",
                              "no_consensus", "not_matured", "no_price")}
     out: list[dict] = []
@@ -353,6 +364,10 @@ def score_matured(*, today: Optional[date] = None,
             continue
         seen[ticker].add(digest)
         pred = _prediction(row, ticker, dr)
+        if pred is None and is_unrated(dr):
+            # Counted apart: a withheld valuation is a decision, not missing data.
+            report["skipped_unrated"] += 1
+            continue
         if pred is None:
             report["skipped_no_prediction"] += 1
             continue

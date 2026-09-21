@@ -94,6 +94,52 @@ def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
 
 
+#: Reason codes, in the order they are tested. The label is what a reader sees.
+UNRATED_REASONS = {
+    "pre_revenue": "Unrated — pre-revenue",
+    "no_valuation": "Unrated — no method could value it",
+    "insufficient_methods": "Unrated — too little of the method set could be computed",
+}
+
+
+def unrated_verdict(*, revenue_base: Optional[float], base_iv: Optional[float],
+                    weight_surviving: Optional[float], doc: Optional[dict] = None) -> Optional[dict]:
+    """{code, label, reason} when a valuation must be withheld, else None.
+
+    Three tests, any one sufficient, thresholds owner-set in `unrated`:
+
+      pre_revenue           revenue below the floor: there is no operating
+                            business for an earnings or cash-flow method to value
+      no_valuation          every leg dropped, or what survived is not positive
+                            (CGN Power once published -3.24 this way: with the
+                            blend empty the raw DCF was published in its place)
+      insufficient_methods  less than `min_weight_surviving` of the profile's
+                            intended weight could be computed
+
+    A missing `weight_surviving` is NOT a reason: older profiles do not record
+    it, and absence of a measurement must not withhold a valuation.
+    """
+    cfg = (doc or load()).get("unrated") or {}
+    floor = cfg.get("pre_revenue_below")
+    min_w = cfg.get("min_weight_surviving")
+    code = reason = None
+    if isinstance(floor, (int, float)) and isinstance(revenue_base, (int, float)) and revenue_base < floor:
+        code = "pre_revenue"
+        reason = f"revenue of {revenue_base / 1e6:,.1f}m is below the {floor / 1e6:,.0f}m pre-revenue floor"
+    elif base_iv is None or not isinstance(base_iv, (int, float)) or base_iv <= 0:
+        code = "no_valuation"
+        reason = ("every valuation leg dropped" if base_iv is None
+                  else f"the only figure the method set produced is not positive ({base_iv:,.2f})")
+    elif (isinstance(min_w, (int, float)) and isinstance(weight_surviving, (int, float))
+          and weight_surviving < min_w):
+        code = "insufficient_methods"
+        reason = (f"only {weight_surviving:.0%} of the profile's intended method weight could be computed "
+                  f"(minimum {min_w:.0%})")
+    if not code:
+        return None
+    return {"code": code, "label": UNRATED_REASONS[code], "reason": reason}
+
+
 def regime_deviation(ticker: Optional[str], doc: Optional[dict] = None) -> Optional[dict]:
     """The owner-recorded structural regime deviation this ticker belongs to, or None.
 

@@ -51,6 +51,11 @@ class ResearchRating(str, Enum):
     OVERWEIGHT = "OVERWEIGHT"
     NEUTRAL = "NEUTRAL"
     UNDERWEIGHT = "UNDERWEIGHT"
+    #: No valuation was published (pre-revenue, or too little of the method set
+    #: could be computed), so there is no target and no total return to rate.
+    #: NOT a fourth opinion: it is the absence of one, and it is never derived
+    #: from an action -- ACTION_TO_RATING_MAP deliberately has no route to it.
+    UNRATED = "UNRATED"
 
 
 class TradeAction(str, Enum):
@@ -63,6 +68,9 @@ RATING_TO_ACTION_MAP: dict[ResearchRating, TradeAction] = {
     ResearchRating.OVERWEIGHT: TradeAction.BUY,
     ResearchRating.NEUTRAL: TradeAction.HOLD,
     ResearchRating.UNDERWEIGHT: TradeAction.SELL,
+    # No recommendation: nothing is bought or sold on it. The decision carries
+    # HOLD at a zero weight, the same instruction the no-valuation path gives.
+    ResearchRating.UNRATED: TradeAction.HOLD,
 }
 
 ACTION_TO_RATING_MAP: dict[TradeAction, ResearchRating] = {
@@ -78,7 +86,13 @@ RATING_LABELS = {
     ResearchRating.OVERWEIGHT: "Overweight",
     ResearchRating.NEUTRAL: "Neutral",
     ResearchRating.UNDERWEIGHT: "Underweight",
+    ResearchRating.UNRATED: "Unrated",
 }
+
+UNRATED_DEFINITION = (
+    "Unrated: no intrinsic value or 12-month target is published for this company, so no "
+    "rating applies. It is not a Neutral view and carries no recommendation."
+)
 
 RATING_DEFINITION = (
     "Overweight: expected 12-month total shareholder return exceeds the "
@@ -100,6 +114,39 @@ def to_action(rating: ResearchRating | str) -> TradeAction:
 def to_rating(action: TradeAction | str) -> ResearchRating:
     a = str(getattr(action, "value", action) or "").upper()
     return ACTION_TO_RATING_MAP[_LEGACY_ACTIONS.get(a) or TradeAction(a)]
+
+
+def build_unrated_view(rating_state: dict, *, price: Optional[float] = None,
+                       price_as_of: Optional[str] = None) -> dict:
+    """The research view of a name whose valuation was withheld.
+
+    Same keys as `build_research_view`, so every reader that handles a view
+    handles this one, with the figures that do not exist set to None. Returned
+    instead of None on purpose: None means "a run from before the rating layer",
+    and the two must not look alike.
+    """
+    rs = rating_state or {}
+    label = rs.get("label") or RATING_LABELS[ResearchRating.UNRATED]
+    reason = rs.get("reason") or "no valuation was published"
+    return {
+        "research_rating": ResearchRating.UNRATED.value,
+        "rating_label": label,
+        "under_review": False,
+        "trade_action": TradeAction.HOLD.value,
+        "tactical_rating": None,
+        "structural_rating": None,
+        "benchmark": None,
+        "price": round(float(price), 4) if price else None, "price_as_of": price_as_of,
+        "target_12m": None,
+        "intrinsic_value": None,
+        "capital_gain_12m": None, "dividend_yield": None, "dividend_known": False,
+        "projected_dps": None, "tsr_12m": None, "excess_return_bps": None,
+        "callout": f"{label}: {reason}. No intrinsic value, 12-month target or rating is published.",
+        "rating_definition": UNRATED_DEFINITION,
+        "disclaimer": "An unrated company carries no Buy, Hold or Sell recommendation.",
+        "compliance": {"status": "unrated", "notes": [reason]},
+        "unrated": {k: rs.get(k) for k in ("code", "label", "reason", "weight_surviving")},
+    }
 
 
 def normalize_legacy_rating(row: dict) -> dict:

@@ -501,5 +501,15 @@
     "review": "Revisit when the through-cycle multiple itself re-rates (the quarterly dynamic multiples update moves it at most 20% a quarter), or when Wave 3's backlog-coverage DCF prices the contracted part of the order books."
    }
   }
+ },
+ "unrated": {
+  "_doc": "When a valuation is withheld instead of published (owner, 2026-09-21: pre-revenue names 'urgently require an explicit Unrated / Pre-Revenue state rather than outputting distorted fractional-weight numbers like $3.90'). An unrated name publishes no intrinsic value, no 12-month target and no rating; the figure the engine computed is kept as `indicative_iv` for audit only.",
+  "reviewed": {
+   "last_reviewed": "2026-09-21",
+   "reviewer": "owner"
+  },
+  "pre_revenue_below": 10000000,
+  "min_weight_surviving": 0.35,
+  "min_weight_rationale": "Below about a third of the profile's intended weight the published number is one or two side legs standing in for a method set that could not be computed: NuScale priced at $3.90 on 0.20 of its weight, from a forward-revenue multiple alone. Bloom (0.65, anchor dropped) stays rated and says so."
  }
 }

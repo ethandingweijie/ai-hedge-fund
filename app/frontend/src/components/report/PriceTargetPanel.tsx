@@ -30,6 +30,27 @@ interface PriceTargetPanelProps {
 export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: PriceTargetPanelProps) {
   const sym = currencySymbol(ticker);
 
+  // Unrated / Pre-Revenue. Returned BEFORE anything below is read, because the
+  // fallbacks there are exactly what must not happen: a missing engine IV falls
+  // back to the LLM scenario's fair value, and a missing target to the
+  // decision's. Either would put a number back beside a rating that says there
+  // is none.
+  const ratingState = dcfRange?.rating_state;
+  if (ratingState?.state === 'unrated') {
+    return (
+      <Card className="p-4">
+        <p className="text-sm font-semibold text-content-high">{ratingState.label ?? 'Unrated'}</p>
+        <p className="mt-1 text-sm text-content-medium leading-relaxed">
+          No intrinsic value or 12-month target is published for {ticker}
+          {ratingState.reason ? `: ${ratingState.reason}.` : '.'}
+        </p>
+        <p className="mt-2 text-xs text-content-muted leading-relaxed">
+          The valuation methodology panel below shows which methods could and could not be computed.
+        </p>
+      </Card>
+    );
+  }
+
   const target = scenario?.['12m_price_target'] ?? decision?.price_target ?? null;
   const current = scenario?.current_price ?? null;
   const upside = (target != null && current != null && current > 0)
@@ -90,11 +111,13 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
               vs current {sym}{current.toFixed(2)}
             </div>
           )}
-          {decision?.research_view && (
+          {decision?.research_view && decision.research_view.tsr_12m != null
+            && decision.research_view.benchmark && (
             /* Same target, read as the rating reads it: price return plus
-               dividend, against the benchmark. */
+               dividend, against the benchmark. Absent for an unrated view,
+               which has no target to return anything on. */
             <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-              {decision.research_view.dividend_known
+              {decision.research_view.dividend_known && decision.research_view.dividend_yield != null
                 ? `+ ${(decision.research_view.dividend_yield * 100).toFixed(1)}% dividend = `
                 : ''}
               {(decision.research_view.tsr_12m * 100 >= 0 ? '+' : '')}
