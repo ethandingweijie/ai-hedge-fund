@@ -183,6 +183,9 @@ GATED = {
     # W2 — weekly exchange-comp refresh (US/HK/SG). Gated so a run that dies
     # partway through is retried rather than skipped for the week.
     "regional_comps_refresh",
+    # Phase 2 — quarterly through-cycle comps history. Gated so a run killed
+    # partway (it takes about two hours) is retried within its quarter.
+    "comps_history_backfill",
     "screener_cache_refresh",
     # News ingest, both tiers. Gated for the same reason as the others: a
     # sweep that dies halfway must be retried within its slot, not dropped
@@ -277,5 +280,5 @@ def test_run_maintenance_task(monkeypatch, caplog):
 
 def test_maintenance_registered_in_worker_settings():
     from app.backend import worker
-    names = {f.__name__ for f in worker.WorkerSettings.functions}
+    names = {getattr(f, "__name__", None) or f.name for f in worker.WorkerSettings.functions}
     assert "run_maintenance_task" in names

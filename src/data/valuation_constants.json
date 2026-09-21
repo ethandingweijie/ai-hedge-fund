@@ -11,7 +11,10 @@
     "coverage_factor": 1.4,
     "formula": "target_dcf_yield = index distribution yield x sector coverage factor"
    },
-   "tolerance_band": [0.085, 0.11],
+   "tolerance_band": [
+    0.085,
+    0.11
+   ],
    "inertia_bps": 50,
    "review_cadence": "quarterly",
    "macro_triggers": {
@@ -26,6 +29,215 @@
    "effective_until": "2026-11-15",
    "reviewer": "owner",
    "note": "Distributable cash flow is capitalised at this yield, NOT at the peer free-cash-flow yield: peer FCF is net of total capex while distributable CF is net of maintenance capex only, and mixing the two priced Energy Transfer at 2.3x spot once its audited maintenance capex replaced the D&A stand-in."
+  }
+ },
+ "segment_multiples": {
+  "refining": {
+   "multiple": 4.5,
+   "accepted_at": "2026-09-21",
+   "reviewer": "owner",
+   "basis": "owner starting point 2026-09-21: the crack-rule trough (3-2-1 crack +175% above its long-run mean)",
+   "derivation": {
+    "segment_type": "refining",
+    "mode": "calibrated",
+    "baseline": 5.5,
+    "band": [
+     4.5,
+     6.5
+    ],
+    "basket": "Oil & Gas Refining & Marketing",
+    "basket_is_proxy": false,
+    "market_multiple_now": 5.536454,
+    "real_rate": {
+     "now": 0.024686363636363638,
+     "mean_5y": 0.014485036202735318,
+     "delta": 0.01020132743362832,
+     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+    },
+    "roic": {
+     "now": 0.049849,
+     "window_mean": 0.0888048,
+     "delta": -0.038955800000000006
+    },
+    "betas": {
+     "b1": -0.45187653081304635,
+     "b2": 1.7599250616008948,
+     "n": 5,
+     "shrink_weight": 0.3333333333333333,
+     "prior": {
+      "b1": -4.0,
+      "b2": 2.0
+     },
+     "ols": {
+      "b1": 6.644370407560863,
+      "b2": 1.2797751848026842,
+      "a": 1.6191647159230826,
+      "n": 5,
+      "r2": 0.7421262874571031
+     },
+     "note": "prior-dominated: the history is too short to overrule it",
+     "cohort": "large",
+     "years": [
+      "2021",
+      "2022",
+      "2023",
+      "2024",
+      "2025"
+     ],
+     "regressor_corr": -0.1253654053217254
+    },
+    "terms": {
+     "rate": -0.004609740450395923,
+     "roic": -0.06855928871471215
+    },
+    "crack": {
+     "now": 64.9412956521739,
+     "long_run_mean": 23.580135612950166,
+     "spike": 1.7540679459242918
+    },
+    "rules": [
+     "crack spread +175% above its long-run mean (>25%): forced to the trough multiple 4.50x"
+    ],
+    "raw": 4.5,
+    "proposed": 4.5,
+    "flags": [],
+    "as_of": "2026-09-21",
+    "owner_set": true
+   }
+  },
+  "midstream": {
+   "multiple": 14.1,
+   "accepted_at": "2026-09-21",
+   "reviewer": "owner",
+   "basis": "owner starting point 2026-09-21: the market's through-cycle multiple (14.14x, 2025, large cohort)",
+   "derivation": {
+    "segment_type": "midstream",
+    "mode": "calibrated",
+    "baseline": 14.1,
+    "band": [
+     11.28,
+     16.92
+    ],
+    "basket": "Oil & Gas Midstream",
+    "basket_is_proxy": false,
+    "market_multiple_now": 14.139903,
+    "real_rate": {
+     "now": 0.024686363636363638,
+     "mean_5y": 0.014485036202735318,
+     "delta": 0.01020132743362832,
+     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+    },
+    "roic": {
+     "now": 0.078925,
+     "window_mean": 0.08193639999999999,
+     "delta": -0.0030113999999999974
+    },
+    "betas": {
+     "b1": -8.0,
+     "b2": 2.0,
+     "n": 5,
+     "shrink_weight": 0.3333333333333333,
+     "prior": {
+      "b1": -8.0,
+      "b2": 2.0
+     },
+     "ols": {
+      "b1": 14.201781900441583,
+      "b2": -4.255129134979418,
+      "a": 2.3624491250950306,
+      "n": 5,
+      "r2": 0.7298500107251809
+     },
+     "note": "regressors collinear (corr -0.91): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
+     "cohort": "large",
+     "years": [
+      "2021",
+      "2022",
+      "2023",
+      "2024",
+      "2025"
+     ],
+     "regressor_corr": -0.911124054945489
+    },
+    "terms": {
+     "rate": -0.08161061946902656,
+     "roic": -0.006022799999999995
+    },
+    "crack": null,
+    "rules": [],
+    "raw": 12.916962601014756,
+    "proposed": 12.917,
+    "flags": [],
+    "as_of": "2026-09-21",
+    "owner_set": true
+   }
+  },
+  "chemicals": {
+   "multiple": 5.2,
+   "accepted_at": "2026-09-21",
+   "reviewer": "owner",
+   "basis": "owner starting point 2026-09-21: the market's through-cycle multiple (5.17x, 2025, large cohort)",
+   "derivation": {
+    "segment_type": "chemicals",
+    "mode": "calibrated",
+    "baseline": 5.2,
+    "band": [
+     4.16,
+     6.24
+    ],
+    "basket": "Chemicals",
+    "basket_is_proxy": false,
+    "market_multiple_now": 5.170582,
+    "real_rate": {
+     "now": 0.024686363636363638,
+     "mean_5y": 0.014485036202735318,
+     "delta": 0.01020132743362832,
+     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+    },
+    "roic": {
+     "now": 0.0218,
+     "window_mean": 0.0602982,
+     "delta": -0.0384982
+    },
+    "betas": {
+     "b1": -4.0,
+     "b2": 2.0,
+     "n": 5,
+     "shrink_weight": 0.3333333333333333,
+     "prior": {
+      "b1": -4.0,
+      "b2": 2.0
+     },
+     "ols": {
+      "b1": 41.94230408167704,
+      "b2": 19.356891916506985,
+      "a": 2.007100035944201,
+      "n": 5,
+      "r2": 0.9950627288177801
+     },
+     "note": "regressors collinear (corr -0.98): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
+     "cohort": "large",
+     "years": [
+      "2021",
+      "2022",
+      "2023",
+      "2024",
+      "2025"
+     ],
+     "regressor_corr": -0.9778810290272917
+    },
+    "terms": {
+     "rate": -0.04080530973451328,
+     "roic": -0.0769964
+    },
+    "crack": null,
+    "rules": [],
+    "raw": 4.622135907289239,
+    "proposed": 4.6221,
+    "flags": [],
+    "as_of": "2026-09-21",
+    "owner_set": true
+   }
   }
  }
 }

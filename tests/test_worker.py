@@ -18,7 +18,7 @@ from app.backend import worker
 
 def test_worker_settings_shape():
     ws = worker.WorkerSettings
-    names = {f.__name__ for f in ws.functions}
+    names = {getattr(f, "__name__", None) or f.name for f in ws.functions}  # arq Function wrappers carry .name
     assert names == {
         "run_analysis_pipeline_task",
         "run_research_job_task",
@@ -33,6 +33,8 @@ def test_worker_settings_shape():
         "run_hundred_q_backstop_task",
         # W2 — weekly US/HK/SG exchange-comp refresh
         "run_regional_comps_refresh_task",
+        # Phase 2 — quarterly through-cycle comps history (own 4h timeout)
+        "run_comps_history_backfill_task",
         # Weekly screener cache warm (parallel workstream)
         "run_screener_refresh_task",
         # R2 — daily housekeeping (stale-checkpoint prune)

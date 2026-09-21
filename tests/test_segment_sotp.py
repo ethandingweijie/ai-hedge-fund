@@ -83,7 +83,12 @@ class TestValuation:
         # and the result is nothing like a 3x revenue multiple
         assert p["ev"] < 100e9
 
-    def test_the_multiple_sits_at_the_owner_s_chosen_end_of_the_band(self):
+    def test_the_multiple_sits_at_the_owner_s_chosen_end_of_the_band(self, monkeypatch):
+        """The STATIC path. An owner-accepted dynamic multiple overrides it
+        (refining is at 4.50x since 2026-09-21); that path is covered in
+        tests/test_dynamic_multiples.py, so it is switched off here."""
+        from src.data import dynamic_multiples as dm
+        monkeypatch.setattr(dm, "accepted", lambda t: None)
         p = d._sotp_parts({"Refining": 100e9})[0]
         lo, hi = p["band"]
         assert p["multiple"] == pytest.approx(d._band_multiple((lo, hi)))

@@ -629,14 +629,33 @@ def save_comps(exchange: str, rows: list[dict], computed_at: str) -> int:
     return len(rows)
 
 
-def save_history(exchange: str, rows: list[dict], as_of: str, source: str) -> int:
-    """Append medians to the history table. Idempotent per (as_of, source)."""
+_HISTORY_REPLACE_SQL = """
+INSERT INTO regional_comps_history
+    (exchange, level, key, cohort, field, value, peer_count, as_of, source, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(exchange, level, key, cohort, field, as_of, source) DO UPDATE SET
+    value = excluded.value,
+    peer_count = excluded.peer_count,
+    recorded_at = excluded.recorded_at
+"""
+
+
+def save_history(exchange: str, rows: list[dict], as_of: str, source: str,
+                 replace: bool = False) -> int:
+    """Append medians to the history table. Idempotent per (as_of, source).
+
+    `replace=True` overwrites an existing row for the same (as_of, source) --
+    the quarterly backfill uses it, because a late filer changes a past year's
+    median and the latest reconstruction is the best one. It can only ever
+    replace a row with the SAME source, so a measured "refresh" row is never
+    touched by a backfill.
+    """
     if not rows:
         return 0
     _ensure_table()
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    _db.executemany(_HISTORY_SQL, [
+    _db.executemany(_HISTORY_REPLACE_SQL if replace else _HISTORY_SQL, [
         [exchange, r["level"], r["key"], r.get("cohort", "all"), r["field"],
          float(r["value"]), int(r["peer_count"]), as_of, source, now]
         for r in rows

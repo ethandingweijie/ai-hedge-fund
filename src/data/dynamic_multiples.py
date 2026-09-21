@@ -71,7 +71,10 @@ CRACK_SPIKE = 0.25
 SEGMENT_BASELINES: dict[str, dict] = {
     "refining":        {"baseline": 5.5,  "band": (4.5, 6.5),
                         "basket": "Oil & Gas Refining & Marketing", "crack_rule": True},
-    "midstream":       {"baseline": 10.5, "band": (9.0, 12.0),
+    # Owner, 2026-09-21: re-based on the market's through-cycle multiple
+    # (14.14x, 2025, large cohort), which had re-rated above the original
+    # 9-12x band. Band = the owner's +/-20% outlier guard around it.
+    "midstream":       {"baseline": 14.1, "band": (11.28, 16.92),
                         "basket": "Oil & Gas Midstream"},
     "fuel_marketing":  {"baseline": 7.0,  "band": (6.0, 8.0),
                         "basket": "Oil & Gas Refining & Marketing", "proxy": True},
@@ -79,7 +82,10 @@ SEGMENT_BASELINES: dict[str, dict] = {
                         "basket": "Oil & Gas Refining & Marketing", "proxy": True},
     "ethanol":         {"baseline": 5.0,  "band": (4.0, 6.0),
                         "basket": "Oil & Gas Refining & Marketing", "proxy": True},
-    "chemicals":       {"baseline": 8.0,  "band": (7.0, 9.0), "basket": "Chemicals"},
+    # Owner, 2026-09-21: re-based on the market's through-cycle multiple
+    # (5.17x, 2025, large cohort), which had de-rated below the original 7-9x
+    # band. Band = +/-20% around it.
+    "chemicals":       {"baseline": 5.2,  "band": (4.16, 6.24), "basket": "Chemicals"},
     # E&P is valued on the ASC 932 standardized measure as an unblended bear
     # floor (owner spec), not on a dynamic multiple: no baseline here.
 }
@@ -264,12 +270,19 @@ def fit_betas(basket: str, exchange: str = "US", prior_key: str = "default",
     hist_m = {}
     hist_r = {}
     cohort = "large"
+    # Only COMPLETE years. The backfill buckets a company by the calendar year
+    # its fiscal year ends, so the current year holds only the early filers
+    # (June year ends) until December filers report -- a thin, skewed median
+    # that must not be fitted on or quoted as "the market now".
+    this_year = date.today().year
     for c in ("large", "all"):
-        hm = {r["as_of"][:4]: r["value"] for r in rc.load_history(exchange, basket, field, c)}
+        hm = {r["as_of"][:4]: r["value"] for r in rc.load_history(exchange, basket, field, c)
+              if int(r["as_of"][:4]) < this_year}
         if len(hm) >= 3:
             hist_m, cohort = hm, c
             hist_r = {r["as_of"][:4]: r["value"]
-                      for r in rc.load_history(exchange, basket, "roic", c)}
+                      for r in rc.load_history(exchange, basket, "roic", c)
+                      if int(r["as_of"][:4]) < this_year}
             break
     rr = annual_mean(real_rate_series()["series"])
     years = sorted(y for y in hist_m if y in hist_r and y in rr and hist_m[y] > 0)
@@ -348,7 +361,8 @@ def propose(segment_type: str, exchange: str = "US") -> dict:
     from src.data import regional_comps as rc
     roic_now = None
     for c in (betas["cohort"], "all"):
-        rows = rc.load_history(exchange, basket, "roic", c)
+        rows = [r for r in rc.load_history(exchange, basket, "roic", c)
+                if int(r["as_of"][:4]) < date.today().year]
         if rows:
             roic_now = rows[-1]["value"]
             break
@@ -454,6 +468,35 @@ def accepted(segment_type: str) -> Optional[dict]:
     """The owner-accepted dynamic multiple for a segment type, or None."""
     from src.data import valuation_constants as vc
     return ((vc.load().get("segment_multiples") or {}).get(segment_type))
+
+
+def accept_value(segment_type: str, value: float, reviewer: str, basis: str) -> dict:
+    """Record an owner-SET multiple rather than an engine proposal.
+
+    The owner may take a starting point the engine did not propose (the market
+    level itself, say). The proposal as it stood is still attached, so the
+    record shows both what the engine said and what the owner chose.
+    """
+    from src.data import valuation_constants as vc
+    cfg = SEGMENT_BASELINES.get(segment_type)
+    if not cfg:
+        raise KeyError(segment_type)
+    lo, hi = cfg.get("band") or (None, None)
+    if lo is not None and not (lo - 1e-9 <= value <= hi + 1e-9):
+        raise ValueError(f"{segment_type}: {value} is outside its band {lo}-{hi}; "
+                         f"move the band first")
+    try:
+        context = propose(segment_type)
+    except Exception as exc:                                   # noqa: BLE001
+        context = {"error": str(exc)[:200]}
+    doc = vc.load()
+    entry = {"multiple": float(value), "accepted_at": date.today().isoformat(),
+             "reviewer": reviewer, "basis": basis,
+             "derivation": {**context, "band": [lo, hi] if lo is not None else None,
+                            "owner_set": True}}
+    doc.setdefault("segment_multiples", {})[segment_type] = entry
+    vc.save(doc)
+    return entry
 
 
 def accept(proposal: dict, reviewer: str) -> dict:

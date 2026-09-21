@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from arq.connections import RedisSettings
+from arq.worker import func as _arq_func
 
 from app.backend.services import progress_bus
 
@@ -734,6 +735,36 @@ async def run_hundred_q_backstop_task(ctx: dict) -> dict:
     return {"ran": ran}
 
 
+async def run_comps_history_backfill_task(ctx: dict) -> dict:
+    """Quarterly through-cycle comps history backfill (Phase 2, owner 2026-09-21).
+
+    The weekly comps refresh records each week's measured medians, but it sees
+    only one year of every member's earnings, so it cannot form the
+    through-cycle multiples the dynamic multiples engine fits on. This rebuilds
+    them from annual filings for US, HKSE and SES. It takes about two hours,
+    so it carries its own timeout (see WorkerSettings.functions) rather than
+    raising the 60-minute cap every other job lives under. Self-gates on an
+    80-day window.
+    """
+    from src.data import comps_history_backfill as _bf
+    out = None
+    try:
+        out = await asyncio.to_thread(_bf.run_quarterly_backfill)
+    except Exception as exc:
+        logger.warning("[sched] comps_history_backfill raised %s: %s", type(exc).__name__, exc)
+    if out is not None:
+        return {"ran": True, "markets": out}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "comps_history_backfill", _bf.already_ran_this_quarter)
+    return {"ran": ran}
+
+
+#: The backfill's own timeout. US took ~70 minutes, HK ~50 and SG ~5 on the
+#: first run; four hours covers a slow FMP day without letting a hung run sit
+#: forever.
+COMPS_HISTORY_BACKFILL_TIMEOUT_S = 4 * 3600
+
+
 async def run_maintenance_task(ctx: dict) -> dict:
     """R2 — daily housekeeping: prune abandoned web_runs checkpoint rows.
 
@@ -846,6 +877,10 @@ class WorkerSettings:
         run_hundred_q_daily_sweep_task,
         run_hundred_q_weekly_batch_task,
         run_hundred_q_backstop_task,
+        # Phase 2 — quarterly through-cycle comps history. Registered with its
+        # own timeout: at ~2h it would be killed by the 60-minute job_timeout.
+        _arq_func(run_comps_history_backfill_task,
+                  timeout=COMPS_HISTORY_BACKFILL_TIMEOUT_S),
         # R2 — daily housekeeping (stale-checkpoint prune etc.)
         run_maintenance_task,
         # R1.e — analyst-report Drive folder sync (also manual via

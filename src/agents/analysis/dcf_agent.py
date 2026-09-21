@@ -2008,9 +2008,13 @@ def _band_multiple(band: tuple[float, float], position: str = _SEGMENT_BAND_POSI
 _SEGMENT_EBITDA_MULTIPLES: dict[str, dict] = {
     "refining":        {"band": (5.0, 6.5),  "margin": 0.0886,
                         "margin_source": "Oil & Gas Refining & Marketing (US, large, n=8)"},
-    "midstream":       {"band": (9.0, 12.0), "margin": 0.3595,
+    # Re-based by the owner 2026-09-21 on the market's through-cycle multiple
+    # (14.1x); was 9-12x. Kept in step with src/data/dynamic_multiples.py.
+    "midstream":       {"band": (11.28, 16.92), "margin": 0.3595,
                         "margin_source": "Oil & Gas Midstream (US, large, n=10)"},
-    "chemicals":       {"band": (7.0, 9.0),  "margin": 0.0683,
+    # Re-based by the owner 2026-09-21 on the market's through-cycle multiple
+    # (5.2x); was 7-9x.
+    "chemicals":       {"band": (4.16, 6.24), "margin": 0.0683,
                         "margin_source": "Chemicals (US, large, n=7)"},
     # Owner-set 2026-09-20. Above refining because the cash flows are steadier,
     # below midstream because none of them is fee-based infrastructure. The

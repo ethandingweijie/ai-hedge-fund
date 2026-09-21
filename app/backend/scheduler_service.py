@@ -205,6 +205,24 @@ def _quarterly_slot(now: Optional[datetime] = None) -> str:
     return f"{now.year}-Q{(now.month - 1) // 3 + 1}"
 
 
+#: Quarterly through-cycle comps history backfill (Phase 2, owner 2026-09-21):
+#: the 2nd of each quarter month at 05:00 UTC. Clear of the Saturday 01:00
+#: comps/screener refresh, the 03:10 maintenance prune and the 100-Q backstop on
+#: the 1st, and a quarter start picks up the annual filings that landed during
+#: the quarter before it (most December year ends report by March).
+COMPS_HISTORY_FIRE_DAY = 2
+COMPS_HISTORY_FIRE_HOUR_UTC = 5
+_QUARTER_START_MONTHS = (1, 4, 7, 10)
+
+
+def _seconds_until_comps_history_fire() -> float:
+    now = datetime.now(timezone.utc)
+    candidates = [datetime(y, m, COMPS_HISTORY_FIRE_DAY, COMPS_HISTORY_FIRE_HOUR_UTC,
+                           tzinfo=timezone.utc)
+                  for y in (now.year, now.year + 1) for m in _QUARTER_START_MONTHS]
+    return (min(t for t in candidates if t > now) - now).total_seconds()
+
+
 def _seconds_until_vgpm_fire() -> float:
     """Seconds until the next 09:00 UTC boundary."""
     now = datetime.now(timezone.utc)
@@ -301,6 +319,11 @@ class ScheduleSpec:
     recheck_ok: Optional[Callable[[], bool]] = None
 
 
+def _comps_history_gate() -> bool:
+    from src.data import comps_history_backfill as _bf
+    return _bf.already_ran_this_quarter()
+
+
 def build_schedules() -> list[ScheduleSpec]:
     """The 10 fire schedules. Next-fire math is delegated to the existing
     scheduler modules so their HOUR_UTC / WEEKDAY overrides keep working."""
@@ -386,6 +409,15 @@ def build_schedules() -> list[ScheduleSpec]:
             lock_ttl_s=_TTL_WEEKLY_S,
             is_disabled=lambda: _env_flag("REGIONAL_COMPS_SCHEDULER_DISABLED"),
             gate_fn=_rc.already_ran_this_week,
+        ),
+        ScheduleSpec(
+            name="comps_history_backfill",
+            task="run_comps_history_backfill_task",
+            next_fire_fn=_seconds_until_comps_history_fire,
+            slot_fn=_quarterly_slot,
+            lock_ttl_s=_TTL_QUARTERLY_S,
+            is_disabled=lambda: _env_flag("COMPS_HISTORY_BACKFILL_DISABLED"),
+            gate_fn=_comps_history_gate,
         ),
         ScheduleSpec(
             name="screener_cache_refresh",

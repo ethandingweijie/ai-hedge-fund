@@ -94,12 +94,13 @@ class TestProposal:
         monkeypatch.setitem(dm.PRIORS, "midstream", {"b1": 400.0, "b2": 0.0})
         world["rate"]["2025"] = 0.08
         p = dm.propose("midstream")
-        assert p["proposed"] <= 12.0 + 1e-9
+        assert p["proposed"] <= dm.SEGMENT_BASELINES["midstream"]["band"][1] + 1e-9
 
     def test_a_market_outside_the_band_is_a_band_decision_not_a_clamp(self, world):
-        """Midstream's through-cycle multiple ran to 14.14x against a 9-12x
-        band. That is flagged as a question for the owner."""
-        world["mult"]["2025"] = 14.14
+        """Midstream's through-cycle multiple ran to 14.14x against the original
+        9-12x band, was flagged, and the owner re-based the band on it. Any
+        market reading above the band is still a question for the owner."""
+        world["mult"]["2025"] = dm.SEGMENT_BASELINES["midstream"]["band"][1] + 3.0
         p = dm.propose("midstream")
         assert any("above the owner band" in f for f in p["flags"])
 
@@ -203,3 +204,45 @@ class TestTheGuardsTheDataForced:
         assert p["market_multiple_now"] is None
         assert not any("below the owner band" in f for f in p["flags"])
         assert any("no basket of its own" in f for f in p["flags"])
+
+
+class TestOwnerSetValues:
+    """The owner may take a starting point the engine did not propose
+    (2026-09-21: refining 4.50x, midstream 14.1x, chemicals 5.2x)."""
+
+    def _store(self, monkeypatch):
+        from src.data import valuation_constants as vc
+        store = {"version": 1, "profiles": {}}
+        monkeypatch.setattr(vc, "load", lambda *a, **k: store)
+        monkeypatch.setattr(vc, "save", lambda doc, *a, **k: store.update(doc))
+        return store
+
+    def test_an_owner_value_is_recorded_with_the_proposal_beside_it(self, world, monkeypatch):
+        store = self._store(monkeypatch)
+        e = dm.accept_value("midstream", 14.1, reviewer="owner", basis="market level")
+        rec = store["segment_multiples"]["midstream"]
+        assert rec["multiple"] == 14.1 and rec["basis"] == "market level"
+        assert rec["derivation"]["owner_set"] is True
+        assert "proposed" in rec["derivation"], "the engine's own view is kept for the audit"
+        assert e["reviewer"] == "owner"
+
+    def test_a_value_outside_its_band_is_refused(self, world, monkeypatch):
+        """Move the band first -- a value the band would clamp is not recorded."""
+        self._store(monkeypatch)
+        with pytest.raises(ValueError):
+            dm.accept_value("refining", 9.0, reviewer="owner", basis="x")
+
+    def test_the_rebased_bands_hold_the_owner_starting_points(self):
+        for t, v in (("refining", 4.50), ("midstream", 14.1), ("chemicals", 5.2)):
+            lo, hi = dm.SEGMENT_BASELINES[t]["band"]
+            assert lo <= v <= hi, t
+        assert dm.SEGMENT_BASELINES["midstream"]["baseline"] == 14.1
+        assert dm.SEGMENT_BASELINES["chemicals"]["baseline"] == 5.2
+        assert dm.SEGMENT_BASELINES["refining"]["baseline"] == 5.5
+
+    def test_the_shipped_record_carries_the_three_starting_points(self):
+        from src.data import valuation_constants as vc
+        sm = vc.load().get("segment_multiples") or {}
+        assert {k: v["multiple"] for k, v in sm.items()} == {
+            "refining": 4.5, "midstream": 14.1, "chemicals": 5.2}
+        assert all(v["reviewer"] == "owner" for v in sm.values())

@@ -33,7 +33,9 @@ def test_every_scheduled_task_is_registered_in_worker():
     from app.backend.scheduler_service import build_schedules
     from app.backend.worker import WorkerSettings
 
-    registered = {fn.__name__ for fn in WorkerSettings.functions}
+    # A task registered with its own timeout is an arq `Function` wrapper, which
+    # carries `.name` rather than `__name__` (the comps history backfill).
+    registered = {getattr(fn, "__name__", None) or fn.name for fn in WorkerSettings.functions}
     for spec in build_schedules():
         assert spec.task in registered, (
             f"schedule '{spec.name}' enqueues '{spec.task}', which is not "
@@ -50,10 +52,11 @@ def test_registry_shape():
     # sector tables after its 14-day staleness window) and the weekly
     # screener cache warm. Plus the two news-ingest tiers and the daily
     # valuation outcome labels, and the weekly calibration fit.
-    assert len(specs) == 14
+    # 15 since 2026-09-21: the quarterly through-cycle comps history backfill.
+    assert len(specs) == 15
 
     names = [s.name for s in specs]
-    assert len(set(names)) == 14  # unique lock/job-id namespaces
+    assert len(set(names)) == 15  # unique lock/job-id namespaces
 
     catch_up = {s.name for s in specs if s.catch_up}
     # Only these two had startup catch-up in the web-era code — preserved.
