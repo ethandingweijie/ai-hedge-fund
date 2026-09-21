@@ -1,7 +1,14 @@
-"""IV with the dynamic multiples OFF vs ON, for a list of tickers (local only,
-no writes except the usage record a valuation makes). See docs/dynamic_multiples_handoff.md.
+"""IV with the dynamic multiples OFF vs ON, for a list of tickers. No writes
+except the usage record a valuation makes. See docs/dynamic_multiples_handoff.md.
 
     python scripts/measure_dynamic_multiples_impact.py AAPL V MU VLO PSX
+    python scripts/measure_dynamic_multiples_impact.py --prod AAPL V MU VLO PSX
+
+Without --prod, DATABASE_URL is dropped so the run reads the LOCAL store: the
+default is the safe one. With --prod it is kept, for a run inside a Railway
+container where DATABASE_URL is the internal host -- the only place production
+Postgres is reachable from a cloud session. The usage record then lands in
+production, which is what the Model Accuracy "reached valuations" count reads.
 """
 import json
 import os
@@ -12,19 +19,23 @@ from pathlib import Path
 ROOT = Path.cwd()
 sys.path.insert(0, str(ROOT))
 os.environ["PYTHONUTF8"] = "1"
-os.environ.pop("DATABASE_URL", None)
+PROD = "--prod" in sys.argv
+if not PROD:
+    os.environ.pop("DATABASE_URL", None)
 from dotenv import load_dotenv  # noqa: E402
 
-load_dotenv(ROOT / ".env.local", override=True)
-os.environ.pop("DATABASE_URL", None)
+# Never let a .env.local DATABASE_URL override the one the container was given.
+load_dotenv(ROOT / ".env.local", override=not PROD)
+if not PROD:
+    os.environ.pop("DATABASE_URL", None)
 
 from src.agents.analysis import dcf_agent as d  # noqa: E402
 from src.memory.golden_state import build_state_from_lookups  # noqa: E402
 
 KEY = os.environ.get("FMP_API_KEY")
 END = date.today().isoformat()
-TICKERS = sys.argv[1:] or ["AAPL", "MSFT", "NVDA", "COST", "V", "MU", "LMT", "JPM", "VLO", "PSX",
-                           "00700.HK", "D05.SI"]
+TICKERS = [a for a in sys.argv[1:] if not a.startswith("--")] or [
+    "AAPL", "MSFT", "NVDA", "COST", "V", "MU", "LMT", "JPM", "VLO", "PSX", "00700.HK", "D05.SI"]
 out = {}
 for t in TICKERS:
     rec = {}

@@ -157,6 +157,51 @@ On the old (wrong) basis the measured impact was: VLO −14.7%, PSX −13.4%,
 MU −3.0%, V +7.3%, and zero for AAPL, MSFT, NVDA, COST, LMT, Tencent, JPM and
 DBS. **Re-measure.** The V figure was mostly the §3.1 artefact.
 
+### From a cloud session (Claude Code on the web)
+
+Added 2026-09-21, after the work moved to a cloud environment. Measured there:
+the egress proxy inspects TLS, and Postgres opens in plaintext before its TLS
+upgrade, so **raw Postgres to the public proxy host can never pass from the
+sandbox** -- a CONNECT to `tokaido.proxy.rlwy.net:25751` is accepted and then
+carries no bytes, whatever the allowlist says. Everything that touches the
+database therefore runs *inside* a Railway container, where `DATABASE_URL` is
+the internal host, `scripts/` is in the image (`COPY . /app/`) and the deps are
+installed system-wide. The Railway CLI (`npm i -g @railway/cli`, a project
+token in `RAILWAY_TOKEN`, and `*.railway.app` on the environment's allowlist)
+is the way in:
+
+```bash
+R="railway -p 050389fd-bcb9-490c-899d-e6a32214ab3e -e 51c55952-3eaa-4827-a1ed-308b771e8a25"
+$R status
+$R ssh -s worker -- python -c "from src.data import db; print(db.is_postgres())"   # True
+
+# Step A, detached, one exchange at a time; poll the log with a second ssh
+$R ssh -s worker -- sh -c 'DYNAMIC_MULTIPLES_AUTO_DISABLED=true nohup python scripts/backfill_comps_history.py --exchange US --commit > /tmp/bf_US.log 2>&1 &'
+$R ssh -s worker -- tail -3 /tmp/bf_US.log
+
+# Steps B-D
+$R ssh -s worker -- python scripts/calibrate_dynamic_multiples.py --backtest
+$R ssh -s worker -- python scripts/run_dynamic_multiples_update.py            # dry run
+$R ssh -s worker -- python scripts/run_dynamic_multiples_update.py --commit --trigger "initial (owner: switch on straight away)"
+$R ssh -s worker -- python scripts/measure_dynamic_multiples_impact.py --prod AAPL MSFT NVDA COST V MU LMT JPM VLO PSX 00700.HK D05.SI
+
+# Scripts that read ~/.railway_pg_url (patch pass 3, prod_verify_gate): create it
+# from the container's own DATABASE_URL first. Their host swap to the public
+# proxy still resolves from inside Railway.
+$R ssh -s worker -- sh -c 'echo "$DATABASE_URL" > ~/.railway_pg_url && python scripts/patch_prod_weighted_pt.py'
+```
+
+Steps that need only FMP -- the live industry-string probe, engine baselines,
+consensus reads -- run in the session itself once `FMP_API_KEY` is an
+environment variable and `financialmodelingprep.com` is allowlisted. Never set
+`DATABASE_URL` session-wide: it would point every local engine run at
+production (`tests/conftest.py` strips it for pytest, nothing strips it for a
+script).
+
+Deploys need none of this. All three Railway services and the Vercel project
+build from `main` of this repository, so a deploy is a push to `main` through
+the session's GitHub proxy -- gated, as before, on the owner's word.
+
 ---
 
 ## 5. Decision waiting on the owner: coverage
