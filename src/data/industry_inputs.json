@@ -26,6 +26,122 @@
   }
  },
  "tickers": {
+  "00002.HK": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:27:45+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "rate_base / net_ppe",
+      "detail": "0.84x (plausible 0.25x to 1.5x)",
+      "ok": true,
+      "ratio": 0.8369
+     },
+     {
+      "check": "allowed_roe",
+      "detail": "no allowed roe stated; the method falls back without it",
+      "ok": null
+     },
+     {
+      "check": "equity_ratio",
+      "detail": "no equity ratio stated; the method falls back without it",
+      "ok": null
+     }
+    ],
+    "company": "CLP Holdings Limited",
+    "data": {
+     "allowed_roe": null,
+     "basis": "Combined net assets employed - fixed assets of CLP Power Hong Kong Limited and Castle Peak Power Company Limited under the Scheme of Control Agreement",
+     "equity_ratio": null,
+     "jurisdiction": "Hong Kong Scheme of Control",
+     "value": {
+      "currency": "HKD",
+      "period": "FY2025",
+      "quote": "Combined Balance Sheet, HK$M Net assets employed Fixed assets 147,397",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0324/2026032400392.pdf",
+      "value": 147397.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "CLP Holdings Limited",
+     "depreciation_and_amortization": 1238753460.0,
+     "market_cap": 25071332026.25625,
+     "net_ppe": 22451036160.0,
+     "operating_cash_flow": 3107463660.0,
+     "period": "2025-12-31",
+     "revenue": 11219654460.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 45.2,
+    "value_usd": 18788695590.0
+   }
+  },
+  "00006.HK": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:29:08+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "rate_base / net_ppe",
+      "detail": "4069.19x (plausible 0.25x to 1.5x)",
+      "ok": false,
+      "ratio": 4069.1875
+     },
+     {
+      "check": "allowed_roe",
+      "detail": "no allowed roe stated; the method falls back without it",
+      "ok": null
+     },
+     {
+      "check": "equity_ratio",
+      "detail": "no equity ratio stated; the method falls back without it",
+      "ok": null
+     }
+    ],
+    "company": "Power Assets Holdings Limited",
+    "data": {
+     "allowed_roe": null,
+     "basis": "average net fixed assets under the Scheme of Control",
+     "equity_ratio": null,
+     "jurisdiction": "Hong Kong Government under the Scheme of Control Agreement",
+     "value": {
+      "currency": "HKD",
+      "period": "FY2024",
+      "quote": "Average Net Fixed Assets of the Year 65,107",
+      "scale": "mn",
+      "source_url": "https://www.hkelectric.com/en/our-operations/scheme-of-control/corporate-information-brochure",
+      "value": 65107.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Power Assets Holdings Limited",
+     "depreciation_and_amortization": 509880.0,
+     "market_cap": 16367031432.38163,
+     "net_ppe": 2039520.0,
+     "operating_cash_flow": 112683480.0,
+     "period": "2025-12-31",
+     "revenue": 98279370.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 78.4,
+    "value_usd": 8299189290.0
+   }
+  },
   "00883.HK": {
    "pv10": {
     "basis": "actual",
@@ -86,6 +202,64 @@
     "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
+  "01816.HK": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:31:49+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "rate_base / net_ppe",
+      "detail": "0.69x (plausible 0.25x to 1.5x)",
+      "ok": true,
+      "ratio": 0.6892
+     },
+     {
+      "check": "allowed_roe",
+      "detail": "no allowed roe stated; the method falls back without it",
+      "ok": null
+     },
+     {
+      "check": "equity_ratio",
+      "detail": "no equity ratio stated; the method falls back without it",
+      "ok": null
+     }
+    ],
+    "company": "CGN Power Co., Ltd.",
+    "data": {
+     "allowed_roe": null,
+     "basis": "Fixed assets",
+     "equity_ratio": null,
+     "jurisdiction": "NDRC",
+     "value": {
+      "currency": "CNY",
+      "period": "FY2024",
+      "quote": "Fixed assets 261,803,462,602.03",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2025/0326/2025032600645.pdf",
+      "value": 261803462602.03
+     }
+    },
+    "fmp_context_usd": {
+     "company": "CGN Power Co., Ltd.",
+     "depreciation_and_amortization": 2033653293.64,
+     "market_cap": 25308333393.67935,
+     "net_ppe": 56832910276.62,
+     "operating_cash_flow": 4655084418.3,
+     "period": "2025-12-31",
+     "revenue": 11325719157.58
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 157.7,
+    "value_usd": 39171034074.51573
+   }
+  },
   "02883.HK": {},
   "03337.HK": {
    "backlog": {
@@ -132,6 +306,52 @@
    }
   },
   "5WH.SI": {},
+  "BE": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:34:30+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "9.88x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 9.8815
+     }
+    ],
+    "company": "Bloom Energy Corporation",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Total current backlog of ~$20 billion; current product backlog of ~$6 billion, up ~2.5x YoY1,2,3.",
+      "scale": "bn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1664703/000162828026005798/ex991_q42025financialresul.htm",
+      "value": 20.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Bloom Energy Corporation",
+     "depreciation_and_amortization": 58813999.0,
+     "market_cap": 79911065640.0,
+     "net_ppe": 507048000.0,
+     "operating_cash_flow": 113949000.0,
+     "period": "2025-12-31",
+     "revenue": 2023994000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 70.8,
+    "value_usd": 20000000000.0
+   }
+  },
   "BKR": {
    "backlog": {
     "basis": "actual",
@@ -179,6 +399,52 @@
     "ok": false,
     "source": "sec_10q",
     "value_usd": 40100000000.0
+   }
+  },
+  "CCJ": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:32:32+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "2.11x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 2.1072
+     }
+    ],
+    "company": "Cameco Corporation",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "value": {
+      "currency": "CAD",
+      "period": "FY2025",
+      "quote": "Total $ 7,329,566. The sales contracts are denominated largely in US dollars and converted from US dollars to Canadian dollars at the rate of $1.33. The amounts in the table represent the consideration the Company will be entitled to receive when it satisfies the remaining performance obligations in the contracts.",
+      "scale": "thousands",
+      "source_url": "https://www.cameco.com",
+      "value": 7329566.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Cameco Corporation",
+     "depreciation_and_amortization": 209066881.14,
+     "market_cap": 40245426865.0,
+     "net_ppe": 2369877805.21011,
+     "operating_cash_flow": 1004648629.92,
+     "period": "2025-12-31",
+     "revenue": 2481673577.57943
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 37.5,
+    "value_usd": 5229498749.68
    }
   },
   "COP": {
@@ -232,6 +498,64 @@
     "source": "sec_10k",
     "value_usd": 55962000000.0,
     "verified_at": "2026-09-20T02:52:51+00:00"
+   }
+  },
+  "DUK": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:16:28+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "rate_base / net_ppe",
+      "detail": "0.87x (plausible 0.25x to 1.5x)",
+      "ok": true,
+      "ratio": 0.8689
+     },
+     {
+      "check": "allowed_roe",
+      "detail": "no allowed roe stated; the method falls back without it",
+      "ok": null
+     },
+     {
+      "check": "equity_ratio",
+      "detail": "no equity ratio stated; the method falls back without it",
+      "ok": null
+     }
+    ],
+    "company": "Duke Energy Corporation",
+    "data": {
+     "allowed_roe": null,
+     "basis": "Illustrative earnings base for presentation purposes only and includes retail and wholesale; Amounts as of the end of each year shown; Projected earnings base = prior period earnings base + capex - D&A - deferred taxes (including production tax credits) - securitized assets. Amounts presented gross of minority investments and exclude Piedmont Tennessee gas.",
+     "equity_ratio": null,
+     "jurisdiction": "North Carolina Utilities Commission (NCUC), Public Service Commission of South Carolina (PSCSC), Florida Public Service Commission (FPSC), Indiana Utility Regulatory Commission (IURC), Public Utilities Commission of Ohio (PUCO), Kentucky Public Service Commission (KPSC), and Federal Energy Regulatory Commission (FERC)",
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "2025A 2026 2027 2028 2029 2030 $114B $124B $137B $152B $167B $180B",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHZ2u6DNKlU1oeZxBSyKC-pruCajn_05OIMwckBBMyD86kwyszOuZDWDq8iNKUHIznV5QuZBoxDWcpWxJx7JIb6O64-AFB2Us7eA6cuVhlmAjnk4o85WntQBaWtVwWKBp05nF5CLs-2Q92lQuzFlu1yiSXRRrm04dy-6SR7W6Uyasd6bI3chBh1EK7nNCSw6jC_S7WfPNH9Z59-Let_Ci4=",
+      "value": 114.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Duke Energy Corporation",
+     "depreciation_and_amortization": 6324000000.0,
+     "market_cap": 91664976429.0,
+     "net_ppe": 131200000000.0,
+     "operating_cash_flow": 12352000000.0,
+     "period": "2025-12-31",
+     "revenue": 32237000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 58.2,
+    "value_usd": 114000000000.0
    }
   },
   "DVN": {
@@ -385,6 +709,52 @@
     "value_usd": 1316000000.0
    }
   },
+  "GEV": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:43:51+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "4.63x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 4.6308
+     }
+    ],
+    "company": "GE Vernova Inc.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "As of June 30, 2026, the aggregate amount of the contracted revenues allocated to our unsatisfied (or partially unsatisfied) performance obligations were $ 176,284 million.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1996810/000199681026000148/gev-20260630.htm",
+      "value": 176284.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "GE Vernova Inc.",
+     "depreciation_and_amortization": 853000000.0,
+     "market_cap": 255701562688.0,
+     "net_ppe": 6006000000.0,
+     "operating_cash_flow": 4988000000.0,
+     "period": "2025-12-31",
+     "revenue": 38068000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 23.5,
+    "value_usd": 176284000000.0
+   }
+  },
   "HAL": {},
   "KMI": {
    "maintenance_capex": {
@@ -448,6 +818,120 @@
     },
     "source": "sec_10k",
     "value_usd": 951000000.0
+   }
+  },
+  "LEU": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:43:22+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "10.03x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 10.029
+     }
+    ],
+    "company": "Centrus Energy Corp.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "The Company's backlog across both segments is $4.5 billion as of June 30, 2026 and extends to 2040.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFPKpWJHeTb8j8nQNGBa_OevoLQimxsKvFaipEiQLQOLiI6NceGjzjVsxy4aTv0u3cogZKlNXHhnOLopTTpIgMzz8e5NPcgiPq3d9H1HYirA6Py0vNQ1Dr8OFOHmv_o6c8NerLYbE7RV0jNY_gvOovuuCXaJaZZKwa-tOC4G1glPHVwJmDWa0USCh9iyx6J0oubIoa3ShIS4yI=",
+      "value": 4.5
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Centrus Energy Corp.",
+     "depreciation_and_amortization": 9900000.0,
+     "market_cap": 2869574132.0,
+     "net_ppe": 29500000.0,
+     "operating_cash_flow": 51000000.0,
+     "period": "2025-12-31",
+     "revenue": 448700000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 19.7,
+    "value_usd": 4500000000.0
+   }
+  },
+  "NEE": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:15:25+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "rate_base / net_ppe",
+      "detail": "0.44x (plausible 0.25x to 1.5x)",
+      "ok": true,
+      "ratio": 0.4353
+     },
+     {
+      "check": "allowed_roe",
+      "detail": "10.95% (plausible 6% to 14%)",
+      "ok": true
+     },
+     {
+      "check": "equity_ratio",
+      "detail": "59.60% (plausible 30% to 65%)",
+      "ok": true
+     }
+    ],
+    "company": "NextEra Energy, Inc.",
+    "data": {
+     "allowed_roe": {
+      "period": "2026-2029",
+      "quote": "FPL's authorized regulatory ROE is 10.95%, with a range of 9.95% to 11.95%.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/37634/000075330826000015/nee-20251231.htm",
+      "value": 0.1095
+     },
+     "basis": "13-month average; includes retail rate base, wholesale rate base, clause-related investments and AFUDC projects; excludes accumulated deferred income taxes",
+     "equity_ratio": {
+      "period": "2026-2029",
+      "quote": "FPL's authorized regulatory capital structure reflects a 59.6% equity ratio, consistent with prior base rate cases.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/37634/000075330826000015/nee-20251231.htm",
+      "value": 0.596
+     },
+     "jurisdiction": "Florida Public Service Commission (FPSC)",
+     "value": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "Regulatory Capital Employed Growth3 ($B) $23.5 $68.0 2014 2024 ~11.2% CAGR",
+      "scale": "bn",
+      "source_url": "https://www.nexteraenergy.com/content/dam/nee/us/en/pdf/2025%20March%20Investor%20Deck.pdf",
+      "value": 68.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "NextEra Energy, Inc.",
+     "depreciation_and_amortization": 6941000000.0,
+     "market_cap": 167024273994.0,
+     "net_ppe": 156197000000.0,
+     "operating_cash_flow": 12485000000.0,
+     "period": "2025-12-31",
+     "revenue": 27476000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 82.2,
+    "value_usd": 68000000000.0
    }
   },
   "OKE": {
@@ -647,6 +1131,48 @@
     "ok": false,
     "source": "sec_10q",
     "value_usd": 6400000000.0
+   }
+  },
+  "SO": {
+   "rate_base": {
+    "basis": "actual",
+    "built_at": "2026-09-21T14:26:55+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "no cited amount of known scale and convertible currency",
+      "ok": false
+     }
+    ],
+    "company": "The Southern Company",
+    "data": {
+     "allowed_roe": null,
+     "basis": "",
+     "equity_ratio": null,
+     "jurisdiction": "",
+     "value": {
+      "currency": "",
+      "period": "",
+      "quote": "",
+      "scale": "units",
+      "source_url": "",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "The Southern Company",
+     "depreciation_and_amortization": 6030000000.0,
+     "market_cap": 98574348400.0,
+     "net_ppe": 116441000000.0,
+     "operating_cash_flow": 9802000000.0,
+     "period": "2025-12-31",
+     "revenue": 29553000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 623.4,
+    "value_usd": null
    }
   },
   "WMB": {}

@@ -189,7 +189,13 @@ def reconcile(kind: str, value: Optional[float], context: dict,
     checks: list[dict] = []
     y, latest = _year(period), _year(context.get("period"))
     if y and latest:
-        checks.append({"check": "latest reported period", "ok": latest - 1 <= y <= latest,
+        # A backlog is a BALANCE at the latest period end, and that period is
+        # usually a quarter past the last annual statement (LEU and GEV, Wave 2:
+        # "Q2 2026" beside FY2025 annuals). That is the latest report, not
+        # guidance. Flows -- capex, and a rate base projected for a future year
+        # -- stay bound to years that have ended.
+        hi = latest + 1 if kind == "backlog" else latest
+        checks.append({"check": "latest reported period", "ok": latest - 1 <= y <= hi,
                        "detail": f"figure is {y}; FMP's latest reported year is {latest}"})
     if value is None:
         return [{"check": "cited_amount", "ok": False,

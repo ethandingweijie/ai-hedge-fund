@@ -262,3 +262,14 @@ def test_a_regime_with_no_allowed_roe_is_reported_not_failed(store):
     ii.set_review("NEE", "rate_base", "accepted", "owner", doc=doc)
     d = ii.accepted_detail("NEE", "rate_base", "USD", doc=doc, fx=USD)
     assert d["allowed_roe"] is None and d["equity_ratio"] is None
+
+
+def test_a_backlog_dated_a_quarter_past_the_last_annual_is_the_latest_report_not_guidance():
+    """LEU and GEV, Wave 2 pre-fill: 'Q2 2026' beside FY2025 annuals. A flow for a
+    year that has not ended is still guidance."""
+    ctx = {"period": "2025-12-31", "revenue": 4e10, "depreciation_and_amortization": 2e9}
+    period = lambda kind, p: [c["ok"] for c in ii.reconcile(kind, 1e9 if kind != "backlog" else 1e11, ctx, period=p)
+                              if c["check"] == "latest reported period"]
+    assert period("backlog", "Q2 2026") == [True]
+    assert period("backlog", "FY2027") == [False]
+    assert period("maintenance_capex", "FY2026E") == [False]
