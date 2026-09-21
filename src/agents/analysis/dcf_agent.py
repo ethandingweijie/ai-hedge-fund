@@ -6241,14 +6241,15 @@ def _compute_method_value(
         eps_fwd = forward_consensus.get("eps", {}).get(scenario)
         if eps_fwd is None or eps_fwd <= 0:
             return None
-        mult = peer.get("pe", 18.0) * growth_premium * sbc_pe_discount * _own_disc
+        _fwd_pe, _fwd_pe_src = _forward_peer_multiple(peer, "pe", 18.0)
+        mult = _fwd_pe * growth_premium * sbc_pe_discount * _own_disc
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         _leg_trace(kind="equity_multiple", metric=f"EPS (NTM consensus, {scenario})",
                    metric_value=float(eps_fwd), per_share_metric=float(eps_fwd),
                    multiple=float(mult),
-                   multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
-                                   "peer_source": "peer median pe",
+                   multiple_parts={"peer_multiple": _fwd_pe,
+                                   "peer_source": _fwd_pe_src,
                                    "growth_premium": growth_premium,
                                    "sbc_pe_discount": sbc_pe_discount,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
@@ -6265,14 +6266,15 @@ def _compute_method_value(
         ebitda_fwd = forward_consensus.get("ebitda", {}).get(scenario)
         if ebitda_fwd is None or ebitda_fwd <= 0 or shares <= 0:
             return None
-        mult = peer.get("ev_ebitda", 12.0) * growth_premium
+        _fwd_ev, _fwd_ev_src = _forward_peer_multiple(peer, "ev_ebitda", 12.0)
+        mult = _fwd_ev * growth_premium
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebitda_fwd * mult
         _leg_trace(kind="ev_multiple", metric=f"EBITDA (NTM consensus, {scenario})",
                    metric_value=float(ebitda_fwd), multiple=float(mult),
-                   multiple_parts={"peer_multiple": float(peer.get("ev_ebitda", 12.0)),
-                                   "peer_source": "peer median ev_ebitda",
+                   multiple_parts={"peer_multiple": _fwd_ev,
+                                   "peer_source": _fwd_ev_src,
                                    "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
@@ -7119,6 +7121,34 @@ _LOOKTHROUGH_ANCHORS = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)"})
 #: profile quietly ran on 0.80 of its stated weight. Profiles without a
 #: template are unaffected -- the method returns None and the proxy stands.
 _LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
+
+#: Forward legs on forward multiples (owner rule 2026-09-21: "default to NTM
+#: EV/EBITDA or FY1/FY2 blended P/E rather than trailing LTM figures"). OFF by
+#: default: it re-prices every Forward P/E and Forward EV/EBITDA leg in the book,
+#: downward for any growing basket, and ships only once that has been measured.
+NTM_FORWARD_FLAG = "NTM_FORWARD_MULTIPLES_ENABLED"
+
+
+def _ntm_forward_enabled() -> bool:
+    return os.getenv(NTM_FORWARD_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _forward_peer_multiple(peer: dict, field: str, default: float) -> tuple[float, str]:
+    """(multiple, source) for a leg whose METRIC is an NTM consensus figure.
+
+    Consensus NTM EPS x a TRAILING peer P/E pairs next year's earnings with last
+    year's multiple. For a basket whose earnings are growing the trailing
+    multiple is the higher of the two, so the pairing overstates the leg -- the
+    same class of defect as the through-cycle basis fix (75b797f): a multiple and
+    the figure it multiplies must be stated on one basis. With the flag on, and
+    a measured or authored `<field>_ntm` present, the forward multiple is used
+    and the trace names it; otherwise the trailing one, exactly as before.
+    """
+    ntm = peer.get(f"{field}_ntm")
+    if _ntm_forward_enabled() and isinstance(ntm, (int, float)) and ntm > 0:
+        return float(ntm), f"peer median {field}_ntm (forward basis)"
+    return float(peer.get(field, default)), f"peer median {field}"
+
 
 #: The same idea, generalised: a method declared `implementable: False` with a
 #: proxy, that becomes exact for a ticker once its review-gated input has been
@@ -9963,6 +9993,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"{_mc_d['baseline'] / 1e6:,.0f}m actual ({_mc_d.get('period')}) "
                         f"{_mc_d.get('delta_pct', 0):+.1%} guidance = "
                         f"{_mc_d['value'] / 1e6:,.0f}m")
+            # Owner-recorded structural regime deviation (valuation_constants
+            # `regime_deviations`): a note, never a number. Appended HERE, before
+            # the scenario loop, because `ticker_forward_flags` is snapshotted into
+            # each scenario's flags -- a later append reaches no payload.
+            try:
+                from src.data import valuation_constants as _vc_reg
+                _regime = _vc_reg.regime_deviation(ticker)
+                if _regime:
+                    ticker_forward_flags.append(f"{_regime.get('label')}: {_regime.get('note')}")
+            except Exception:                              # noqa: BLE001
+                pass
             # Wave 2: an owner-accepted regulated rate base, with the rate
             # order's allowed ROE and equity layer, feeds the P/Rate Base leg.
             _rb_d = _ii.accepted_detail(ticker, "rate_base", _mc_ccy)

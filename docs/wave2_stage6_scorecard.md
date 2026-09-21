@@ -80,3 +80,27 @@ that does not ship live on its scorecard. The decision is the owner's.
   layer is about 1.8x, close to the 2.0x proxy it replaces.
 - **No HK consensus**: CLP, Power Assets and CGN return no usable target (see
   `consensus_target_unusable_rules`), so they are outside the 14.
+
+## Owner decision, 2026-09-21: ship the structural fixes; the scorecard gate is overridden
+
+> "Accept the Structural Fixes, Override the Scorecard Gate: the architectural cleaning of profiles, removal
+> of software templates for utilities, and cleaner blend weights are massive quality improvements."
+
+Wave 2 ships live. The consensus bar was not cleared and is not claimed to have been.
+
+**The AI-power trade is isolated as a structural regime deviation**, recorded in
+`valuation_constants.json` (`regime_deviations.ai_power`): VST, CEG, NRG, BE, GEV, CCJ, LEU, SMR. It changes no
+number. Every run of those names carries the note on all three scenarios -- through-cycle by design, gap recorded
+and not tuned away -- and the scorecard counts the regime once instead of eight times:
+
+| | Before | After |
+|---|---|---|
+| Within +/-30% of consensus, all names | 4 of 14 | 3 of 14 |
+| The AI-power regime (8 names) | 0 of 8 | 0 of 8 |
+| **Ex regime** (NEE, DUK, SO, ENPH, FSLR, NXT) | 4 of 6 | 3 of 6 |
+
+Ex regime the wave still sits below the 70% bar: SO (-31%) and ENPH (-33%) are just outside the band and NEE
+(-42%) well outside, for the reasons above. That is stated rather than rounded away.
+
+**Carried forward, at the owner's priority:** GEV's backlog-coverage DCF (its $176.3bn backlog is pre-filled and
+pending review), and an explicit Unrated / Pre-Revenue state so SMR stops publishing a fractional-weight number.

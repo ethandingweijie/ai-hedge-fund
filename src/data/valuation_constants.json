@@ -475,5 +475,31 @@
     "rationale": "CGN Power fits a baseload utility (>7,000 operating hours, priority dispatch, stable payout) but is not a pure cost-of-service one: historically 40-55%+ of volume in coastal provinces clears through market-based trading, exposing realised tariffs to bilateral discounts. 10-15% off developed-market utility multiples for marketised tariff variability and nuclear decommissioning / project execution risk; midpoint 12.5%."
    }
   }
+ },
+ "regime_deviations": {
+  "_doc": "Owner-recorded structural regime deviations. A regime changes no valuation: it puts a note on each member's run and separates the members in a wave scorecard, so a deliberate through-cycle stance is not mistaken for a defect or counted once per name.",
+  "reviewed": {
+   "last_reviewed": "2026-09-21",
+   "reviewer": "owner"
+  },
+  "regimes": {
+   "ai_power": {
+    "label": "AI-power re-rating",
+    "tickers": [
+     "VST",
+     "CEG",
+     "NRG",
+     "BE",
+     "GEV",
+     "CCJ",
+     "LEU",
+     "SMR"
+    ],
+    "recorded": "2026-09-21",
+    "note": "Structural regime deviation (owner, 2026-09-21): the market has re-rated this name on data-centre load growth. Consensus 12-month targets carry that regime; this valuation is through-cycle by design and does not chase it. The gap to consensus is recorded, not tuned away.",
+    "evidence": "Wave 2 Stage 6, base IV vs consensus: VST -53%, CEG -65%, NRG -39%, BE -84%, GEV -75%, CCJ -88%, LEU -71%, SMR -65% -- 8 of the wave's 11 misses. US Independent Power Producers basket: normalised EV/EBITDA 18.1x market-now against an 11.1x through-cycle.",
+    "review": "Revisit when the through-cycle multiple itself re-rates (the quarterly dynamic multiples update moves it at most 20% a quarter), or when Wave 3's backlog-coverage DCF prices the contracted part of the order books."
+   }
+  }
  }
 }

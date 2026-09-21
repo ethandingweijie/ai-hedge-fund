@@ -69,7 +69,7 @@ import re
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from src.data import db as _db
@@ -207,7 +207,25 @@ _BANDS: dict[str, tuple[float, float]] = {
     # Market cap over the member's mean net income: the through-cycle P/E, for
     # industries that anchor on earnings rather than EBITDA. Backfill-only.
     "pe_norm":    (1.0, 200.0),
+    # Forward (next-twelve-months) multiples, on analyst consensus -- owner rule
+    # 2026-09-21: "default to NTM EV/EBITDA or FY1/FY2 blended P/E rather than
+    # trailing LTM figures to remove non-recurring restructuring or impairment
+    # noise". They exist so a FORWARD leg can be priced on a forward multiple:
+    # consensus NTM EPS x a trailing peer P/E pairs next year's earnings with
+    # last year's multiple, and overstates every growing basket. Same bands as
+    # their trailing counterparts. One extra FMP call per name (see `ntm_blend`).
+    "pe_ntm":        (1.0, 200.0),
+    "ev_ebitda_ntm": (0.5, 100.0),
 }
+
+#: A consensus figure resting on fewer analysts than this is one broker's model,
+#: not a consensus. The basket median dampens it, but thin HK/SG coverage would
+#: otherwise let a single estimate stand for a company.
+MIN_NTM_ANALYSTS = 2
+
+#: With no second fiscal year estimated, the first stands in for the next twelve
+#: months only when it covers at least this much of them.
+_NTM_FY1_ALONE_MIN_WEIGHT = 0.75
 
 #: Same-market pools for industries whose individual baskets are too thin.
 #: Hong Kong carries 4 integrated oil names, 2 E&P and 1 midstream; Singapore
@@ -388,18 +406,115 @@ def build_baskets(rows: list[dict]) -> tuple[dict, dict, list[str]]:
 
 # ── Per-name metrics ────────────────────────────────────────────────────────
 
-def fetch_name_multiples(symbol: str) -> Optional[dict]:
-    """TTM multiples plus mean revenue growth for one name.
+def ntm_blend(estimates: list[dict], key: str, today: Optional[date] = None,
+              analysts_key: Optional[str] = None) -> Optional[float]:
+    """Next-twelve-months consensus for one line, time-weighted across FY1 and FY2.
 
-    Three calls: key-metrics-ttm (EV multiples, FCF yield), ratios-ttm (P/E,
-    P/B) and financial-growth (revenue growth, averaged over the available
-    years). Returns None only when every field came back empty.
+    `estimates` are FMP annual analyst-estimate rows ({date, epsAvg, ebitdaAvg,
+    numAnalystsEps, ...}). FY1 is the first fiscal year ending AFTER today; a
+    year that has ended is history whether or not it has been reported, and FMP
+    keeps serving its row (D05.SI still carried FY2025 in September 2026).
+
+        w   = days from today to the FY1 year end / 365, capped at 1
+        NTM = w x FY1 + (1 - w) x FY2
+
+    None when the line is missing or not positive in a year that is needed, or
+    rests on fewer than MIN_NTM_ANALYSTS: a multiple of a non-positive forward
+    figure is not a cheap stock, and the name simply leaves that median.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    future = []
+    for r in estimates or []:
+        try:
+            d = date.fromisoformat(str(r.get("date"))[:10])
+        except (TypeError, ValueError):
+            continue
+        if d > today:
+            future.append((d, r))
+    future.sort(key=lambda x: x[0])
+    if not future:
+        return None
+
+    def _val(row: dict) -> Optional[float]:
+        v = _safe_float(row.get(key))
+        if v is None or v <= 0:
+            return None
+        if analysts_key is not None:
+            n = _safe_float(row.get(analysts_key))
+            if n is None or n < MIN_NTM_ANALYSTS:
+                return None
+        return v
+
+    (d1, r1) = future[0]
+    w = min(max((d1 - today).days / 365.0, 0.0), 1.0)
+    v1 = _val(r1)
+    if v1 is None:
+        return None
+    v2 = _val(future[1][1]) if len(future) > 1 else None
+    if v2 is None:
+        return v1 if w >= _NTM_FY1_ALONE_MIN_WEIGHT else None
+    return w * v1 + (1.0 - w) * v2
+
+
+def ntm_multiples(km: dict, rt: dict, estimates: list[dict],
+                  today: Optional[date] = None) -> dict:
+    """{pe_ntm, ev_ebitda_ntm} for one name, each present only when it can be formed.
+
+    No FX step, by measurement and not by assumption (2026-09-21): FMP states
+    its TTM key metrics in the REPORTING currency, the same one the estimates
+    are in. Tencent's key-metrics `marketCap` is CNY 3.30tn against an HKD
+    3.87tn quote, and its `priceToEarningsRatioTTM` x `netIncomePerShareTTM`
+    returns the CNY price. So:
+
+        price (reporting ccy) = P/E (TTM) x EPS (TTM)      -- both from ratios-ttm
+        P/E (NTM)             = price / NTM EPS
+        EV/EBITDA (NTM)       = enterpriseValueTTM / NTM EBITDA
+
+    Pairing a listing-currency quote with reporting-currency estimates instead
+    would have inflated every CNY reporter in Hong Kong by the HKD/CNY rate.
+    """
+    out: dict = {}
+    eps = ntm_blend(estimates, "epsAvg", today, analysts_key="numAnalystsEps")
+    pe_ttm = _safe_float((rt or {}).get("priceToEarningsRatioTTM"))
+    eps_ttm = _safe_float((rt or {}).get("netIncomePerShareTTM"))
+    price = pe_ttm * eps_ttm if (pe_ttm is not None and eps_ttm is not None) else None
+    if eps and price and price > 0:
+        out["pe_ntm"] = price / eps
+    elif eps:
+        # A loss-making trailing year gives FMP no usable P/E; the market cap
+        # over NTM net income is the same ratio reached from the other side.
+        mcap = _safe_float((km or {}).get("marketCap"))
+        ni = ntm_blend(estimates, "netIncomeAvg", today, analysts_key="numAnalystsEps")
+        if mcap and mcap > 0 and ni:
+            out["pe_ntm"] = mcap / ni
+    ev = _safe_float((km or {}).get("enterpriseValueTTM"))
+    ebitda = ntm_blend(estimates, "ebitdaAvg", today, analysts_key="numAnalystsEps")
+    if ev and ev > 0 and ebitda:
+        out["ev_ebitda_ntm"] = ev / ebitda
+    return out
+
+
+def ntm_enabled() -> bool:
+    """COMPS_NTM_DISABLED=true drops the fourth call per name (about 6,000 FMP
+    calls a week across US, HKSE and SES) and the two NTM fields with it."""
+    return os.environ.get("COMPS_NTM_DISABLED", "").strip().lower() not in ("1", "true", "yes", "on")
+
+
+def fetch_name_multiples(symbol: str) -> Optional[dict]:
+    """TTM multiples, mean revenue growth and NTM multiples for one name.
+
+    Four calls: key-metrics-ttm (EV multiples, FCF yield), ratios-ttm (P/E,
+    P/B), financial-growth (revenue growth, averaged over the available years)
+    and analyst-estimates (the NTM multiples; skipped under COMPS_NTM_DISABLED).
+    Returns None only when every field came back empty.
     """
     out: dict = {"symbol": symbol}
+    _km_row: dict = {}
+    _rt_row: dict = {}
 
     km = _fmp_get(f"{_STABLE}/key-metrics-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(km, list) and km:
-        row = km[0]
+        row = _km_row = km[0]
         out["ev_ebitda"] = _safe_float(row.get("evToEBITDATTM"))
         out["ev_revenue"] = _safe_float(row.get("evToSalesTTM"))
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))
@@ -408,7 +523,7 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
 
     rt = _fmp_get(f"{_STABLE}/ratios-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(rt, list) and rt:
-        row = rt[0]
+        row = _rt_row = rt[0]
         out["pe"] = _safe_float(row.get("priceToEarningsRatioTTM"))
         out["pb"] = _safe_float(row.get("priceToBookRatioTTM"))
 
@@ -419,6 +534,12 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
                 if v is not None]
         if vals:
             out["growth_avg"] = sum(vals) / len(vals)
+
+    if ntm_enabled() and (_km_row or _rt_row):
+        est = _fmp_get(f"{_STABLE}/analyst-estimates",
+                       {"symbol": symbol, "period": "annual", "limit": 6}, api_key=None)
+        if isinstance(est, list) and est:
+            out.update(ntm_multiples(_km_row, _rt_row, est))
 
     if not any(out.get(f) is not None for f in FIELDS):
         return None

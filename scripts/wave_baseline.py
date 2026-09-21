@@ -37,6 +37,11 @@ load_dotenv(ROOT / ".env.local", override=True)
 os.environ.pop("DATABASE_URL", None)
 
 
+def _regime(ticker):
+    from src.data import valuation_constants as vc
+    return vc.regime_deviation(ticker)
+
+
 def _pct(a, b):
     return (a / b - 1.0) if (a and b) else None
 
@@ -93,6 +98,9 @@ def baseline_one(ticker: str, end: str, key: str) -> dict:
         "backtest_forward_verdict": fwd.get("verdict"),
         "backtest_note": dr.get("calibration_note"),
         "currency": dr.get("reported_currency"),
+        # Owner-recorded structural regime deviation, if any: counted apart in
+        # the scorecard, because one decision is not eight misses.
+        "regime": (_regime(ticker) or {}).get("key"),
     }
 
 
@@ -141,7 +149,11 @@ def main() -> int:
     withc = [r for _, r in rows if r["iv_vs_consensus"] is not None]
     within = sum(1 for r in withc if abs(r["iv_vs_consensus"]) <= 0.30)
     passed = sum(1 for _, r in rows if r["backtest_status"] == "passed")
-    print(f"\nwithin +/-30% of consensus: {within} of {len(withc)}   "
+    core = [r for r in withc if not r.get("regime")]
+    print(f"\nex recorded regime deviations: {sum(1 for r in core if abs(r['iv_vs_consensus']) <= 0.30)} "
+          f"of {len(core)} within +/-30%   "
+          f"(regime names: {', '.join(t for t, r in rows if r.get('regime')) or 'none'})")
+    print(f"within +/-30% of consensus: {within} of {len(withc)}   "
           f"backtest passed: {passed} of {len(rows)}   "
           f"anchor missing from blend: {sum(1 for _, r in rows if not r['anchor_in_blend'])}   "
           f"errors: {len(out['tickers']) - len(rows)}")

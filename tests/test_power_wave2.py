@@ -256,3 +256,31 @@ def test_every_quoted_peak_line_is_guarded_against_a_name_with_no_profitable_yea
     quoted = src.count("_peak['max_line']:.2f")
     guarded = src.count('_peak["max_line"] is not None')
     assert quoted >= 2 and guarded == quoted, (quoted, guarded)
+
+
+# -- the AI-power trade: a recorded regime deviation, never a number ----------
+
+AI_POWER = ["VST", "CEG", "NRG", "BE", "GEV", "CCJ", "LEU", "SMR"]
+
+
+def test_the_ai_power_names_carry_the_owner_recorded_regime_and_nobody_else_does():
+    for t in AI_POWER:
+        r = vc.regime_deviation(t)
+        assert r and r["key"] == "ai_power" and "through-cycle by design" in r["note"], t
+    for t in ("NEE", "DUK", "SO", "ENPH", "FSLR", "NXT", "00002.HK", "01816.HK", None, ""):
+        assert vc.regime_deviation(t) is None, t
+
+
+def test_a_regime_is_a_note_and_changes_no_constant_any_leg_reads():
+    """It must never become a lever: no multiple, discount or rate may hang off it."""
+    e = vc.load()["regime_deviations"]["regimes"]["ai_power"]
+    assert set(e) == {"label", "tickers", "recorded", "note", "evidence", "review"}
+    assert all(vc.ticker_multiple_discount(t) == 1.0 for t in AI_POWER)
+
+
+def test_the_note_is_appended_before_the_scenario_loop_so_it_reaches_every_scenario():
+    import inspect
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    note_at = src.index("_vc_reg.regime_deviation(ticker)")
+    snapshot_at = src.index("forward_flags = list(ticker_forward_flags)")
+    assert note_at < snapshot_at

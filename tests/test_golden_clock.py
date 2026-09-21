@@ -330,9 +330,11 @@ def test_unfreeze_restores_the_real_classes_in_first_party_modules():
     gr.unfreeze_clock()
     assert gr.frozen_now() is None
     assert rc.datetime is datetime
-    assert not hasattr(rc, "date"), (
-        "regional_comps gained a `date` import; assert it is restored too"
-    )
+    # regional_comps imports `date` since the NTM blend (2026-09-21), which dates
+    # each analyst-estimate row against today. `_rebind_module` freezes and
+    # restores it alongside `datetime`; this is the assertion the old guard
+    # ("gained a `date` import; assert it is restored too") asked for.
+    assert rc.date is date
 
 
 def test_unfreeze_hands_back_a_live_clock():
@@ -485,3 +487,17 @@ def test_moving_the_wall_clock_moves_only_the_clock_field(tmp_path):
             f"{k}: {a.get(k)!r} -> {b.get(k)!r}" for k in moved[:20])
     )
     assert baseline["base_iv"] == shifted["base_iv"]
+
+
+def test_the_ntm_blend_dates_estimates_against_the_frozen_day_not_the_wall_clock():
+    """A replayed refresh must weight FY1/FY2 by the fixture's date. Frozen at
+    2026-09-16, a 31 December year end is 106 days out; on the wall clock it
+    would drift a day at a time and move every NTM multiple with it."""
+    rows = [{"date": "2026-12-31", "epsAvg": 10.0}, {"date": "2027-12-31", "epsAvg": 20.0}]
+    gr.freeze_clock(_INSTANT)
+    try:
+        assert rc.date.today() == date(2026, 9, 16)
+        w = 106 / 365.0
+        assert rc.ntm_blend(rows, "epsAvg") == pytest.approx(w * 10.0 + (1 - w) * 20.0)
+    finally:
+        gr.unfreeze_clock()

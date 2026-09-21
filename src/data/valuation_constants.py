@@ -94,6 +94,24 @@ def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
 
 
+def regime_deviation(ticker: Optional[str], doc: Optional[dict] = None) -> Optional[dict]:
+    """The owner-recorded structural regime deviation this ticker belongs to, or None.
+
+    A deviation is a named, dated statement that the market is pricing a group
+    of names on a regime the engine's through-cycle methods do not, and should
+    not, chase. It changes NO number. It says on the valuation, and in the
+    wave scorecard, that the gap to consensus is known, why it exists, and that
+    it was recorded rather than tuned away -- so a reader does not take a
+    deliberate through-cycle stance for a broken model, and a scorecard does not
+    count one decision eight times.
+    """
+    t = (ticker or "").upper()
+    for key, e in (((doc or load()).get("regime_deviations") or {}).get("regimes") or {}).items():
+        if t in {str(x).upper() for x in (e.get("tickers") or [])}:
+            return {"key": key, **e}
+    return None
+
+
 def ticker_multiple_discount(ticker: Optional[str], doc: Optional[dict] = None) -> float:
     """The owner-set factor on PEER multiples for one ticker; 1.0 for everyone else.
 

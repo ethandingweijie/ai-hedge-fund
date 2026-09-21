@@ -37,7 +37,7 @@ from src.data import db as _db  # noqa: E402
 from src.data.industry_profile_map import industry_map  # noqa: E402
 from src.data.sector_profiles import HK_SECTOR_PEER_MULTIPLES, SECTOR_PEER_MULTIPLES  # noqa: E402
 
-FIELDS = ("ev_ebitda", "pe", "ev_revenue", "pb", "fcf_yield")
+FIELDS = ("ev_ebitda", "pe", "ev_revenue", "pb", "fcf_yield", "ev_ebitda_ntm", "pe_ntm")
 TABLES = {"US": SECTOR_PEER_MULTIPLES, "HKSE": HK_SECTOR_PEER_MULTIPLES}
 
 
