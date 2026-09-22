@@ -2696,12 +2696,15 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "rationale": "Proprietary aftermarket parts with near-monopoly pricing power command structural 30x+ P/Es; growth-adjusted earnings and free cash flow price them, and ROIC checks the debt-funded bolt-on record.",
         },
         # Defence tech and space: pre-profit hardware priced on forward revenue.
-        # EV/Backlog waits on an owner-set constant (never derived from
-        # EV/Revenue, which would vote twice on one opinion).
+        # Owner rule 1 (2026-09-23): the projection leg is the target-margin
+        # revenue DCF, the explicit unprofitability fallback that the OE<=0 gate
+        # does not disable, so the family's 0.35 is never lost to the multiples.
+        # No EV/Backlog: conversion timing differs too much between a prime
+        # subcontractor and a launch manufacturer for one constant.
         "Defense Tech & Space": {
             "methods": [
                 {"name": "EV/Fwd Rev",           "weight": 0.45, "anchor": True,  "implementable": True},
-                {"name": "Rev DCF",              "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "Rev DCF (Target Margin)", "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "EV/Revenue",           "weight": 0.20, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/E", "EV/EBITDA"],

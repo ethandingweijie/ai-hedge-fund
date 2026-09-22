@@ -38,8 +38,13 @@
    ],
    "derivation": "NTM P/E over consensus FY2/FY1 EPS growth on the niche basket, 2026-09-22: TDG 1.47, HWM 1.67, WWD 2.23, CW 2.87, HEI 3.17; median 2.23. Band = the basket's range.",
    "last_reviewed": "2026-09-22",
-   "reviewer": "derived from the market; owner to confirm",
-   "note": "Owner framework 2026-09-22: niche high-margin components (TransDigm, HEICO, Howmet) on PEG and EV/FCF, 'high structural P/E ratios (often 30x+) due to proprietary aftermarket parts with near-monopoly pricing power'. The PEG turns that growth into a fair P/E rather than borrowing a basket median that would price a 15%-grower and a 22%-grower alike."
+   "reviewer": "owner, 2026-09-23: keep 2.2 as the active baseline under [OWNER_OVERRIDE_PENDING]; append a +/-0.3x sensitivity flag until signed off",
+   "note": "Owner framework 2026-09-22: niche high-margin components (TransDigm, HEICO, Howmet) on PEG and EV/FCF, 'high structural P/E ratios (often 30x+) due to proprietary aftermarket parts with near-monopoly pricing power'. The PEG turns that growth into a fair P/E rather than borrowing a basket median that would price a 15%-grower and a 22%-grower alike.",
+   "status": "OWNER_OVERRIDE_PENDING",
+   "sensitivity_interval": [
+    1.9,
+    2.5
+   ]
   }
  },
  "segment_multiples": {
@@ -601,5 +606,34 @@
    0.145,
    0.155
   ]
+ },
+ "target_margins": {
+  "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
+  "reviewed": {
+   "last_reviewed": "2026-09-23",
+   "reviewer": "owner"
+  },
+  "profiles": {
+   "Defense Tech & Space": {
+    "ebit_margin": 0.13,
+    "band": [
+     0.12,
+     0.14
+    ],
+    "ramp_years": 5,
+    "tax_rate": 0.21,
+    "basis": "mature defence/aerospace peers, 12-14% EBIT (Kratos)"
+   }
+  },
+  "tickers": {
+   "RKLB": {
+    "ebit_margin": 0.165,
+    "band": [
+     0.15,
+     0.18
+    ],
+    "basis": "Rocket Lab Space Systems at scale, 15-18% EBIT (owner)"
+   }
+  }
  }
 }

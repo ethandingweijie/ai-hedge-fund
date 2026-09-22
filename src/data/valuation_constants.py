@@ -231,6 +231,39 @@ def ticker_multiple_discount(ticker: Optional[str], doc: Optional[dict] = None) 
     return float(v) if isinstance(v, (int, float)) and 0.5 <= v <= 1.0 else 1.0
 
 
+def peg_detail(profile: Optional[str], doc: Optional[dict] = None) -> Optional[dict]:
+    """{ratio, status, interval} for the PEG leg, or None when no ratio is recorded.
+
+    Owner rule 2 (2026-09-23): a ratio tagged OWNER_OVERRIDE_PENDING still
+    runs as the active baseline -- the engine never halts on it -- and the
+    leg carries a sensitivity over the interval until it is signed off.
+    """
+    e = entry(profile, doc) or {}
+    r = peg_ratio(profile, doc)
+    if r is None:
+        return None
+    iv = e.get("sensitivity_interval")
+    return {"ratio": r, "status": e.get("status") or "owner-set",
+            "interval": [float(iv[0]), float(iv[1])] if isinstance(iv, list) and len(iv) == 2 else None}
+
+
+def target_margin(ticker: Optional[str], profile: Optional[str],
+                  doc: Optional[dict] = None) -> Optional[dict]:
+    """The terminal EBIT margin for `Rev DCF (Target Margin)`: the ticker's own
+    figure over the profile's, or None when neither is recorded."""
+    cfg = (doc or load()).get("target_margins") or {}
+    base = dict((cfg.get("profiles") or {}).get(profile or "") or {})
+    own = (cfg.get("tickers") or {}).get((ticker or "").upper()) or {}
+    merged = {**base, **own}
+    m = merged.get("ebit_margin")
+    if not isinstance(m, (int, float)) or not 0.0 < m < 0.6:
+        return None
+    return {"ebit_margin": float(m), "band": merged.get("band"),
+            "ramp_years": int(merged.get("ramp_years") or 5),
+            "tax_rate": float(merged.get("tax_rate") if isinstance(merged.get("tax_rate"), (int, float)) else 0.21),
+            "basis": merged.get("basis"), "source": "ticker" if own.get("ebit_margin") else "profile"}
+
+
 def peg_ratio(profile: Optional[str], doc: Optional[dict] = None) -> Optional[float]:
     """The profile's PEG ratio for the PEG leg, or None when none is recorded."""
     v = (entry(profile, doc) or {}).get("peg_ratio")

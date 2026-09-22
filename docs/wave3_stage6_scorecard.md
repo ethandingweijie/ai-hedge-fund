@@ -84,3 +84,17 @@ The local US refresh (1,917 names, 25 minutes) now carries `ev_ebit`; the A&D in
 EBIT is negative, so the SOTP from the accepted inputs carries the most weight ($157 a share) and the blend
 stays at **$133 (−51%)**. Both are in `docs/baselines/after_wave3.json`. Production's basket gains the field
 on Saturday 26 September.
+
+## Addendum: the three engine rules (owner, 2026-09-23), re-measured
+
+| Rule | Name | Before | After |
+|---|---|---|---|
+| 1 — `Rev DCF (Target Margin)` is the OE≤0 fallback, exempt from the gate; EBIT margin ramps over 5 years to 13% (KTOS, profile) / 16.5% (RKLB, ticker), taxed at 21%, floor lifted for the ramp; no EV/Backlog | KTOS | $49.28, surviving 0.65 | **$44.22, surviving 1.00** (−55%) |
+| | RKLB | $10.85, surviving 0.65 | **$16.35, surviving 1.00** (−85%) |
+| 2 — PEG 2.2 locked under `OWNER_OVERRIDE_PENDING`; runs as the active baseline; the leg at 1.9x and 2.5x rides on the trace, the base-scenario flag and the workbook's Summary sheet ("Owner overrides pending") | TDG | $1,229.88 | $1,228.12 (−16%), flagged |
+| 3 — analyst SOTP over look-through: once promoted, the look-through leg is computed, published as an unweighted cross-check with its variance against the analyst figure (`GATE_SOTP_PRECEDENCE`), never blended | 02357.HK | two SOTPs: analyst 0.38 + look-through→P/BV 0.46 | **one SOTP** at 0.70, DCF 0.16, Forward P/E 0.14; look-through shadow-only |
+
+Rule 1 does what it was asked to: the projection family's 0.35 is no longer lost on an unprofitable name, and it
+does not lift either name toward consensus -- a 13-16% terminal margin on today's revenue base is a small
+number against a market that prices a re-rated growth path (RKLB at 30x sales). That gap is the AI/space
+regime, not the plumbing, and it is now measured on a full method set.

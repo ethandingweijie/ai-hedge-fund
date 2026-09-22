@@ -32,7 +32,7 @@ TABLE = {
              ("P/E", 0.20, False)],
     NICHE:  [("PEG", 0.30, True), ("FCF Yield", 0.30, False), ("ROIC vs WACC", 0.20, False),
              ("Forward P/E", 0.20, False)],
-    DTS:    [("EV/Fwd Rev", 0.45, True), ("Rev DCF", 0.35, False), ("EV/Revenue", 0.20, False)],
+    DTS:    [("EV/Fwd Rev", 0.45, True), ("Rev DCF (Target Margin)", 0.35, False), ("EV/Revenue", 0.20, False)],
     HOLDCO: [("DCF", 0.35, True), ("SOTP / NAV (look-through)", 0.35, False), ("Forward P/E", 0.30, False)],
     GA:     [("Forward P/E", 0.35, True), ("EV/Revenue", 0.25, False), ("Backlog-coverage DCF", 0.25, False),
              ("EV/EBITDA", 0.15, False)],
@@ -192,7 +192,8 @@ def test_peg_declines_without_a_constant_or_without_growth(monkeypatch):
 def test_the_peg_constant_is_recorded_with_its_market_derivation_for_the_owner_to_confirm():
     e = vc.entry(NICHE)
     assert vc.peg_ratio(NICHE) == 2.2 and e["peg_band"] == [1.5, 3.2]
-    assert "TDG 1.47" in e["derivation"] and "owner to confirm" in e["reviewer"]
+    assert "TDG 1.47" in e["derivation"] and e["status"] == "OWNER_OVERRIDE_PENDING"
+    assert vc.peg_detail(NICHE) == {"ratio": 2.2, "status": "OWNER_OVERRIDE_PENDING", "interval": [1.9, 2.5]}
     assert vc.peg_ratio(PRIMES) is None
 
 
@@ -263,3 +264,67 @@ def test_the_owners_bands_moved_with_the_split():
 def test_commercial_aerospace_is_cyclical_with_the_fade_and_the_backlog_profiles_take_the_bear_floor():
     assert COMM in dcf_agent._CYCLICAL_PROFILES and COMM in dcf_agent._CONVERGENCE_ALPHA_PROFILES
     assert {PRIMES, DTS, GA} <= dcf_agent._BACKLOG_VISIBILITY_PROFILES
+
+
+# ── the three engine rules (owner, 2026-09-23) ───────────────────────────────
+
+def test_rule_1_the_target_margin_dcf_survives_the_oe_gate_and_ramps_to_the_owners_margin(monkeypatch):
+    """A loss-maker keeps the projection family's 0.35: the leg ramps from
+    today's margin to an owner-set terminal EBIT margin and is exempt from the
+    OE<=0 gate. No EV/Backlog: one constant cannot serve KTOS and RKLB."""
+    assert "Rev DCF (Target Margin)" in dcf_agent._OE_GATE_EXEMPT <= dcf_agent._DCF_PROJECTION_FAMILY
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    assert "and method_name not in _OE_GATE_EXEMPT" in src
+    assert vc.target_margin("RKLB", DTS)["ebit_margin"] == 0.165 and vc.target_margin("KTOS", DTS)["ebit_margin"] == 0.13
+    assert vc.target_margin("KTOS", DTS)["band"] == [0.12, 0.14] and vc.target_margin("XYZ", "Tech") is None
+    monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {})
+    row = {"ebit": -1.0e8}                                       # loss-making today
+    v, tr = dcf_agent._traced_method_value(
+        method_name="Rev DCF (Target Margin)", most_recent=row, revenue_base=1.2e9, shares=1.5e8, net_debt=-2e8,
+        market_cap=1.0e10, wacc=0.09, growth_base=0.15, fcf_margin_base=-0.05, tgr=0.025, fcf_floor=0.02,
+        sector="Industrials", scenario="base", profile_name=DTS, ticker="KTOS",
+        projection={"growth_schedule": [0.15] * 10})
+    assert v is not None and v > 0
+    path = tr["target_margin"]["ebit_margin_path"]
+    assert path[0] == pytest.approx(-1e8 / 1.2e9 + (0.13 + 1e8 / 1.2e9) / 5, abs=1e-6)   # the trace rounds to 6 dp
+    assert path[4] == pytest.approx(0.13)
+    assert path[9] == pytest.approx(0.13) and tr["fcf_floor"] == -1.0    # the floor is lifted for the ramp
+    assert tr["projection_rows"][0]["fcf_margin"] < 0 < tr["projection_rows"][-1]["fcf_margin"]
+    assert "EV/Backlog" not in {m["name"] for m in P["Industrials"][DTS]["methods"]}
+
+
+def test_rule_2_the_peg_runs_as_the_active_baseline_and_carries_its_sensitivity(monkeypatch):
+    monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pe": 39.0})
+    row = {"_eps_growth_fy2": 0.174, "net_income": 2e9}
+    v, tr = dcf_agent._traced_method_value(
+        method_name="PEG", most_recent=row, profile_name=NICHE, forward_consensus={"eps": {"base": 8.0}}, **KW)
+    assert v == pytest.approx(8.0 * 2.2 * 17.4)                 # never halted: 2.2 is the baseline
+    o = tr["owner_override"]
+    assert o["status"] == "OWNER_OVERRIDE_PENDING" and o["interval"] == [1.9, 2.5]
+    assert o["leg_at_low"] == pytest.approx(8.0 * 1.9 * 17.4) and o["leg_at_high"] == pytest.approx(8.0 * 2.5 * 17.4)
+    assert "OWNER_OVERRIDE_PENDING" in tr["multiple_parts"]["peer_source"]
+    # ...and the Summary sheet states it (workbook), the run flags it (engine).
+    from src.utils import valuation_workbook as wb
+    assert "Owner overrides pending" in inspect.getsource(wb)
+    assert "[OWNER_OVERRIDE_PENDING]: active baseline" in inspect.getsource(dcf_agent.run_dcf_agent)
+
+
+def test_rule_3_the_analyst_sotp_takes_precedence_and_the_lookthrough_goes_shadow():
+    profile = {"methods": [{"name": "DCF", "weight": 0.35, "anchor": True, "implementable": True},
+                           {"name": "SOTP / NAV (look-through)", "weight": 0.35, "anchor": False,
+                            "implementable": False, "proxy": "P/BV"},
+                           {"name": "Forward P/E", "weight": 0.30, "anchor": False, "implementable": True}]}
+    out = dcf_agent._promote_sotp_analyst_profile(profile, True, shadow_lookthrough=True)
+    names = [m["name"] for m in out["methods"]]
+    assert "SOTP (analyst)" in names and "SOTP / NAV (look-through)" not in names
+    assert out["shadow_methods"] == ["SOTP / NAV (look-through)"]
+    # Scoped: a look-through that COMPLETES keeps the earlier decision that the
+    # SOTP family shares the promoted weight (test_valuation_fixes_0916.py).
+    kept = dcf_agent._promote_sotp_analyst_profile(profile, True, shadow_lookthrough=False)
+    assert "SOTP / NAV (look-through)" in [m["name"] for m in kept["methods"]] and "shadow_methods" not in kept
+    assert "shadow_lookthrough=not _lt_completes" in inspect.getsource(dcf_agent.run_dcf_agent)
+    assert profile["methods"][1]["name"] == "SOTP / NAV (look-through)"     # copy-on-write: the table is untouched
+    assert dcf_agent._promote_sotp_analyst_profile(profile, False) is profile  # no assumptions, no change
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    assert 'for _shadow in (profile_data.get("shadow_methods") or []):' in src
+    assert '"gate_id": "GATE_SOTP_PRECEDENCE"' in src and "holding-company spread), unweighted" in src

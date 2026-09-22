@@ -417,7 +417,7 @@ class TestTheInvariantsAreNotDuplicated:
         # added without a record.
         # FIVE since 2026-09-19: GATE_DETERMINISTIC_KPI_PRECEDENCE was retired
         # with the composite it measured.
-        assert src.count('"applied": True,') == 6   # +GATE_MARGIN_TURNAROUND, live since 2026-09-21
+        assert src.count('"applied": True,') == 7   # +GATE_MARGIN_TURNAROUND (2026-09-21), +GATE_SOTP_PRECEDENCE (2026-09-23)
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):
         """Out-of-scope names get one sentence; in-scope names get the paragraph.

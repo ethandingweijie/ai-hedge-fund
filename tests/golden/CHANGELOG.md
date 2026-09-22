@@ -1458,3 +1458,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles, the SG aerospace table rebuilt with DCF as anchor; the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
 
+## 2026-09-22T23:31:04+00:00
+
+- regenerated at HEAD: `24f6456`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner rules 1-3 (2026-09-23): Defense Tech & Space's projection leg renamed Rev DCF (Target Margin); the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
+

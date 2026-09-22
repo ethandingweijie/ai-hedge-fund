@@ -1548,6 +1548,20 @@ class _Book:
             sh.label(r, 1, lab, indent=1)
             sh.put(r, 2, v, fmt)
             r += 1
+        # Owner rule 2 (2026-09-23): a constant running under
+        # OWNER_OVERRIDE_PENDING is stated here with the leg's sensitivity.
+        pend = [(leg, tr["owner_override"]) for leg, tr in ((self.dr.get("base") or {}).get("leg_inputs") or {}).items()
+                if isinstance(tr, dict) and isinstance(tr.get("owner_override"), dict)]
+        if pend:
+            r += 1
+            sh.section(r, "Owner overrides pending", 6); r += 1
+            for leg, o in pend:
+                lo, hi = o.get("interval") or (None, None)
+                sh.label(r, 1, f"{leg}: PEG {o.get('peg')} [{o.get('status')}]", indent=1)
+                sh.put(r, 2, o.get("leg_at_low"), NUM)
+                sh.put(r, 3, o.get("leg_at_high"), NUM)
+                sh.note(r, 4, f"leg at {lo}x / {hi}x; baseline runs at {o.get('peg')}x until signed off")
+                r += 1
         sh.widths({"A": 44, "B": 16, "C": 18, "D": 12, "E": 12})
 
 

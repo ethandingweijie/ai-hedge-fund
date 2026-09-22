@@ -5684,6 +5684,46 @@ def _compute_method_value(
     scenario_mult = {"bear": 0.75, "base": 1.00, "bull": 1.25}
     sm = scenario_mult.get(scenario, 1.0)
 
+    # ── Rev DCF (Target Margin) ────────────────────────────────────────────
+    # Owner rule 1 (2026-09-23). Revenue on the run's growth path; the EBIT
+    # margin ramped linearly from today's (negative is allowed: that is the
+    # point) to the owner-set terminal margin over `ramp_years`, then held;
+    # taxed at the recorded rate; discounted at the firm's WACC through the
+    # same projector as every DCF. The sector FCF floor is lifted for this leg
+    # so the ramp's early years are what they are. Declines with no target.
+    if method_name == "Rev DCF (Target Margin)":
+        from src.data import valuation_constants as _vc_tm
+        _tm = _vc_tm.target_margin(ticker, profile_name)
+        if not _tm or not revenue_base or revenue_base <= 0 or shares <= 0:
+            return None
+        _m0 = (float(ebit) / float(revenue_base)) if isinstance(ebit, (int, float)) else 0.0
+        _m0 = max(min(_m0, _tm["ebit_margin"]), -0.5)
+        _n, _tgt, _tax = _tm["ramp_years"], _tm["ebit_margin"], _tm["tax_rate"]
+        _ebit_path = [(_m0 + (_tgt - _m0) * min(t, _n) / _n) for t in range(1, _PROJECTION_YEARS + 1)]
+        _pj = projection or {}
+        _md = _pj.get("margin_delta_absolute") or 0.0
+        _sched = [m * (1.0 - _tax) + _md for m in _ebit_path]
+        iv, _pv_fcf, _pv_tv, _rows = _project_dcf(
+            revenue_base, _tgt * (1.0 - _tax), growth_base, 0.0,
+            wacc, tgr, -1.0, net_debt, shares,
+            growth_schedule=_pj.get("growth_schedule"),
+            wacc_schedule=_pj.get("wacc_schedule"),
+            margin_schedule=_sched,
+        )
+        _leg_trace(kind="dcf", revenue_base=float(revenue_base),
+                   fcf_margin_base=float(_tgt * (1.0 - _tax)), growth_base=float(growth_base),
+                   growth_schedule=_pj.get("growth_schedule"), margin_delta_absolute=_md,
+                   wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
+                   tgr=float(tgr), fcf_floor=-1.0,
+                   net_debt=float(net_debt or 0.0), shares=float(shares),
+                   pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
+                   projection_rows=_rows,
+                   target_margin={"ebit_margin_start": float(_m0), "ebit_margin_terminal": float(_tgt),
+                                  "band": _tm.get("band"), "ramp_years": _n, "tax_rate": _tax,
+                                  "basis": _tm.get("basis"), "source": _tm.get("source"),
+                                  "ebit_margin_path": [round(m, 6) for m in _ebit_path]})
+        return iv
+
     # ── Backlog-coverage DCF ───────────────────────────────────────────────
     # Wins by BRANCH ORDER: these names stay in _DCF_PROJECTION_FAMILY, because
     # that set is what the OE<=0 disable gate knocks out, and a bounded
@@ -6402,7 +6442,8 @@ def _compute_method_value(
     # No growth premium: the growth is already the multiplier.
     if method_name in _PEG_METHODS:
         from src.data import valuation_constants as _vc_peg
-        _peg = _vc_peg.peg_ratio(profile_name)
+        _peg_d = _vc_peg.peg_detail(profile_name)
+        _peg = _peg_d["ratio"] if _peg_d else None
         if not _peg:
             return None
         _g_peg = most_recent.get("_eps_growth_fy2")
@@ -6420,13 +6461,23 @@ def _compute_method_value(
         else:
             return None
         mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc
+        # Owner rule 2 (2026-09-23): a PEG under OWNER_OVERRIDE_PENDING runs as
+        # the active baseline and carries the leg's value at both ends of the
+        # sensitivity interval until it is signed off.
+        _peg_sens = None
+        if _peg_d.get("status") == "OWNER_OVERRIDE_PENDING" and _peg_d.get("interval"):
+            _lo, _hi = _peg_d["interval"]
+            _per_peg = _eps_peg * float(_g_peg) * 100.0 * _sm_peg * sbc_pe_discount * _own_disc
+            _peg_sens = {"status": "OWNER_OVERRIDE_PENDING", "peg": float(_peg), "interval": [_lo, _hi],
+                         "leg_at_low": _per_peg * _lo, "leg_at_high": _per_peg * _hi}
         _leg_trace(kind="equity_multiple", metric=_eps_label,
                    metric_value=float(_eps_peg), per_share_metric=float(_eps_peg), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(_fair_pe),
                                    "peer_source": f"PEG {float(_peg):.2f} x EPS growth {float(_g_peg):.1%} "
-                                                  f"(owner-set PEG; {_g_src})",
+                                                  f"({_peg_d.get('status')}; {_g_src})",
                                    "scenario_band": _sm_peg, "sbc_pe_discount": sbc_pe_discount,
-                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
+                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})},
+                   **({"owner_override": _peg_sens} if _peg_sens else {}))
         return _eps_peg * mult
 
     if method_name in {"Forward P/E", "Fwd P/E", "NTM P/E"}:
@@ -7246,6 +7297,10 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
     "Backlog-coverage DCF", "Contracted-backlog DCF",
     "Unit Econ DCF", "Power Price DCF", "Reverse DCF",
     "DCF (Levered)", "Rev DCF (Mkt Sh)",
+    # Owner rule 1 (2026-09-23): a DCF by bucket, exempt from the OE<=0 gate
+    # (see _OE_GATE_EXEMPT), because its margin path is a ramp to an owner-set
+    # target and not today's negative owner earnings.
+    "Rev DCF (Target Margin)",
     # These four project cash flows through `_project_dcf` exactly like the
     # names above, but were missing here, so `_blend_methods` bucketed them as
     # multiples (which then took the since-retired sentiment composite). On
@@ -7331,6 +7386,13 @@ _CONTRACTED_BACKLOG_METHODS: frozenset[str] = frozenset({"Contracted-backlog DCF
 #: EBIT. "PEG": the niche-components anchor -- fair P/E = owner-set PEG x
 #: consensus EPS growth, on NTM EPS.
 _EV_EBIT_NORM_METHODS: frozenset[str] = frozenset({"EV/EBIT (norm)"})
+
+#: Projection-family legs the OE<=0 gate must NOT disable. The gate exists
+#: because a negative owner-earnings margin cannot be projected; this leg
+#: projects a RAMP to an owner-set terminal margin instead (owner rule 1,
+#: 2026-09-23), so the gate's reason does not apply and the DCF bucket keeps
+#: its weight on an unprofitable name.
+_OE_GATE_EXEMPT: frozenset[str] = frozenset({"Rev DCF (Target Margin)"})
 _PEG_METHODS: frozenset[str] = frozenset({"PEG"})
 _BACKLOG_BOUND_YEARS = 3
 
@@ -8505,7 +8567,8 @@ def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
 
 
 def _promote_sotp_analyst_profile(profile_data: Optional[dict],
-                                  has_assumptions: bool) -> Optional[dict]:
+                                  has_assumptions: bool,
+                                  shadow_lookthrough: bool = False) -> Optional[dict]:
     """Promote "SOTP (analyst)" into the resolved valuation profile.
 
     When the ticker carries extractor-built ``sotp_assumptions`` and the
@@ -8542,8 +8605,22 @@ def _promote_sotp_analyst_profile(profile_data: Optional[dict],
         if m.get("name") in _SOTP_LED_METHODS else m
         for m in methods
     ]
+    # Owner rule 3 (2026-09-23): analyst SOTP over look-through. Two SOTPs in
+    # one blend drift against each other, so once the analyst SOTP is in, the
+    # look-through leg is computed but carries no weight -- published as a
+    # cross-check with its variance against the analyst figure -- and its
+    # weight renormalises onto the rest. SCOPED to the look-through that has no
+    # template and would price as its P/BV proxy (AviChina, the case raised):
+    # a look-through that COMPLETES (S08.SI, BN4.SI, U96.SI, 02020.HK) keeps
+    # the earlier owner decision that the SOTP family SHARES the promoted
+    # weight (tests/test_valuation_fixes_0916.py). Whether the precedence rule
+    # should reach a completing look-through too is recorded as open.
+    shadow = ([m["name"] for m in kept if m.get("name") in _LOOKTHROUGH_ANCHORS]
+              if shadow_lookthrough else [])
+    kept = [m for m in kept if m.get("name") not in shadow]
     return {
         **profile_data,
+        **({"shadow_methods": shadow} if shadow else {}),
         "methods": kept + [{
             "name": "SOTP (analyst)",
             "weight": share,
@@ -11522,8 +11599,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(agent_id, ticker,
                                    "SOTP (segments) promoted from the filing")
 
+        _lt_completes = False
+        try:
+            from src.agents.analysis import holdco_sotp as _hs
+            _lt_completes = bool(_hs.enabled_for(ticker) and _hs.can_value(
+                ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker)))
+        except Exception:                                  # noqa: BLE001
+            _lt_completes = False
         profile_data = _promote_sotp_analyst_profile(
-            profile_data, bool(most_recent.get("sotp_assumptions")))
+            profile_data, bool(most_recent.get("sotp_assumptions")),
+            shadow_lookthrough=not _lt_completes)
 
         # v3.21 (Fix D) — write the locally-resolved profile_name back to state
         # so late-pipeline consumers (sector_card render, reextract path, audit
@@ -13010,6 +13095,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         # the proxy already requested here stands, unchanged.
                         if m["name"] in _PER_TICKER_METHODS:
                             methods_to_compute.add(m["name"])
+                # Shadow legs (owner rule 3): computed, published as
+                # cross-checks, never blended.
+                for _shadow in (profile_data.get("shadow_methods") or []):
+                    methods_to_compute.add(_shadow)
 
                 # ── Growth premium: growth-vs-sector, quality-gated by ROIC ──
                 # v3.20 — the v3.19 PEG-style "growth vs sector avg" heuristic
@@ -13180,7 +13269,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 for method_name in methods_to_compute:
                     if method_name not in method_values:
                         if (_dcf_family_disabled
-                                and method_name in _DCF_PROJECTION_FAMILY):
+                                and method_name in _DCF_PROJECTION_FAMILY
+                                and method_name not in _OE_GATE_EXEMPT):
                             # OE≤0 cascade (task #18): no positive
                             # owner-earnings year to anchor a projection —
                             # DCF-family methods return None and
@@ -15011,6 +15101,43 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"{_cons:,.0f} — review before relying on this"
                     )
         except Exception:                       # never fail a run on a flag
+            pass
+
+        # ── Owner rules 2 and 3 (2026-09-23), stated on the base scenario ────
+        try:
+            _b_sr = scenario_results.get("base") or {}
+            _b_li = _b_sr.get("leg_inputs") or {}
+            _b_tbl = _b_sr.get("method_iv_table") or {}
+            _peg_o = ((_b_li.get("PEG") or {}).get("owner_override")) or None
+            if _peg_o:
+                _b_sr.setdefault("forward_flags", []).append(
+                    f"PEG {_peg_o['peg']:.1f} [OWNER_OVERRIDE_PENDING]: active baseline; leg "
+                    f"{_peg_o['leg_at_low']:,.2f} at {_peg_o['interval'][0]:.1f}x to "
+                    f"{_peg_o['leg_at_high']:,.2f} at {_peg_o['interval'][1]:.1f}x until signed off")
+            _shadow_names = (profile_data or {}).get("shadow_methods") or []
+            if _shadow_names:
+                _an = _b_tbl.get("SOTP (analyst)")
+                for _sn in _shadow_names:
+                    _sv = _b_tbl.get(_sn)
+                    if isinstance(_an, (int, float)) and _an > 0 and isinstance(_sv, (int, float)):
+                        _spread = _sv / _an - 1.0
+                        _b_sr.setdefault("forward_flags", []).append(
+                            f"SOTP precedence: analyst SOTP blended; {_sn} shadow-only at {_sv:,.2f}, "
+                            f"{_spread:+.1%} vs the analyst SOTP ({_spread * 10000:+,.0f} bps "
+                            f"holding-company spread), unweighted")
+                    else:
+                        _b_sr.setdefault("forward_flags", []).append(
+                            f"SOTP precedence: analyst SOTP blended; {_sn} shadow-only and "
+                            f"{'unavailable (no look-through template)' if _sv is None else 'not comparable'}")
+                    gate_evaluations.append({
+                        "gate_id": "GATE_SOTP_PRECEDENCE",
+                        "metric": "lookthrough_vs_analyst_sotp",
+                        "raw_input_path_a": (round(float(_sv), 4) if isinstance(_sv, (int, float)) else None),
+                        "gated_output_path_b": (round(float(_an), 4) if isinstance(_an, (int, float)) else None),
+                        "basis": f"{_sn} computed and published as a cross-check; weight renormalised onto the rest",
+                        "applied": True,
+                    })
+        except Exception:                       # a flag must never fail a run
             pass
 
         # ── Unrated / Pre-Revenue (owner, 2026-09-21) ─────────────────────────

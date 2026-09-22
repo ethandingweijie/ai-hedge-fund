@@ -461,6 +461,10 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
         "GATE_SCENARIO_ORDERING",
+        # Fifteenth (2026-09-23, owner rule 3): once an analyst SOTP is blended,
+        # the look-through leg is computed, published as a cross-check and never
+        # weighted; the record carries both figures. `applied` is a literal True.
+        "GATE_SOTP_PRECEDENCE",
     ], emitted
     # The two substring facts that used to be one assert. `"REINVESTMENT"` does
     # not contain `"INVENT"`, which is why the old guard could assert
@@ -486,7 +490,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 6   # +GATE_MARGIN_TURNAROUND, live since 2026-09-21, src.count('"applied": True,')
+    assert src.count('"applied": True,') == 7   # +GATE_MARGIN_TURNAROUND (2026-09-21), +GATE_SOTP_PRECEDENCE (2026-09-23), src.count('"applied": True,')
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
