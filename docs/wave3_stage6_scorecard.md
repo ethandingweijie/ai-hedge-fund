@@ -75,3 +75,12 @@ EV/Backlog constant and the Defense Tech revenue-DCF shape are owner decisions. 
 (correct); Cirrus's "1,059" is aircraft, not dollars, and stays pending. Rev DCF, EV/EBIT (norm) and SOTP
 availability are the three things that decide whether this wave's after-numbers are the profiles' or the
 plumbing's, and the first two are fixable without an owner decision.
+
+## Addendum: GE and BA re-measured on a basket that carries EV/EBIT (local refresh, 2026-09-23)
+
+The local US refresh (1,917 names, 25 minutes) now carries `ev_ebit`; the A&D industry median is 27.2x
+(n=18). GE's anchor prices: `EV/EBIT (norm)` 0.40, EV/EBITDA 0.33, P/E (norm) 0.27, surviving weight 0.45 ->
+0.75, base IV $164 -> **$186 (−55%)**, backtest passed. BA's anchor still cannot: its five-year normalised
+EBIT is negative, so the SOTP from the accepted inputs carries the most weight ($157 a share) and the blend
+stays at **$133 (−51%)**. Both are in `docs/baselines/after_wave3.json`. Production's basket gains the field
+on Saturday 26 September.

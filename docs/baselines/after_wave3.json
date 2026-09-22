@@ -248,14 +248,14 @@
    "methods_unavailable": [
     "EV/EBIT (norm)"
    ],
-   "bear": 94.57,
-   "base": 133.49,
-   "bull": 172.42,
+   "bear": 94.43,
+   "base": 133.3,
+   "bull": 172.18,
    "scenarios_ordered": true,
-   "target_12m_base": 165.62,
+   "target_12m_base": 165.51,
    "consensus": 273.13,
-   "iv_vs_consensus": -0.5112583751327207,
-   "pt_vs_consensus": -0.3936220847215611,
+   "iv_vs_consensus": -0.5119540145718156,
+   "pt_vs_consensus": -0.3940248233441951,
    "pt_bridge_present": true,
    "no_peer_multiples": false,
    "backtest_status": "skipped",
@@ -272,53 +272,52 @@
    "industry_routing": true,
    "profile_fallback_used": false,
    "anchor_method": "EV/EBIT (norm)",
-   "anchor_in_blend": false,
+   "anchor_in_blend": true,
    "effective_weights": [
+    {
+     "method": "EV/EBIT (norm)",
+     "value_key": "EV/EBIT (norm)",
+     "weight": 0.4
+    },
     {
      "method": "EV/EBITDA",
      "value_key": "EV/EBITDA",
-     "weight": 0.555556
+     "weight": 0.333333
     },
     {
      "method": "P/E (norm)",
      "value_key": "P/E (norm)",
-     "weight": 0.444444
+     "weight": 0.266667
     }
    ],
    "proxied_weight": 0,
    "proxied_legs": [],
    "dropped_legs": [
     {
-     "method": "EV/EBIT (norm)",
-     "weight": 0.3,
-     "reason": "uncomputable"
-    },
-    {
      "method": "SOTP (analyst)",
      "weight": 0.25,
      "reason": "uncomputable"
     }
    ],
-   "weight_surviving": 0.45,
+   "weight_surviving": 0.75,
    "methods_unavailable": [
-    "EV/EBIT (norm)",
     "SOTP (analyst)"
    ],
-   "bear": 121.93,
-   "base": 164.17,
-   "bull": 225.34,
+   "bear": 138.1,
+   "base": 186.29,
+   "bull": 256.05,
    "scenarios_ordered": true,
-   "target_12m_base": 240.96,
+   "target_12m_base": 251.92,
    "consensus": 411.6,
-   "iv_vs_consensus": -0.6011418853255588,
-   "pt_vs_consensus": -0.4145772594752186,
+   "iv_vs_consensus": -0.5474003887269194,
+   "pt_vs_consensus": -0.3879494655004859,
    "pt_bridge_present": true,
    "no_peer_multiples": false,
    "backtest_status": "passed",
    "backtest_status_basis": "forward_outcome",
-   "backtest_t1_gap": 0.0727919343451842,
+   "backtest_t1_gap": 0.06903731548221663,
    "backtest_forward_verdict": "TIE",
-   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $178.93 vs price $166.79 on 2024-12-31 = 7% gap; 12m later model and market were level (42% vs 46%)",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $178.30 vs price $166.79 on 2024-12-31 = 7% gap; 12m later model and market were level (42% vs 46%)",
    "currency": "USD",
    "regime": null
   },
