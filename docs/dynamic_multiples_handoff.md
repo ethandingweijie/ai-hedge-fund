@@ -357,3 +357,32 @@ businesses better than structural-growth tech.
 - `~/.claude/plans/dynamic-multiples-engine.md` and
   `~/.claude/plans/can-we-try-1-eager-dijkstra.md`: the original plans, on the
   old machine only. This document supersedes them for the handoff.
+
+## 9. Quarterly chain, verified end to end (2026-09-22)
+
+Owner asked for the quarterly update's code to be checked and for confirmation
+that it feeds the engine and the valuation. Read against production, read-only.
+
+| Link | Where | State |
+|---|---|---|
+| Fire | `scheduler_service._seconds_until_comps_history_fire`: 2nd of Jan/Apr/Jul/Oct, 05:00 UTC; slot `YYYY-Qn`; `COMPS_HISTORY_BACKFILL_DISABLED` off | next fire in 9.9 days (2 Oct) |
+| Task | `worker.run_comps_history_backfill_task`, registered with its own 2 h timeout (the default 60 min would kill it) | registered |
+| Backfill | `comps_history_backfill.run_quarterly_backfill`: gate `already_ran_this_quarter` (80 days on `source='backfill'` `recorded_at`), then `run_market` per market, `ON CONFLICT ... DO UPDATE` replaces only its own `backfill` rows, never a `refresh` row | gate currently **True** (Step A rows dated 21 Sep), so **2 Oct skips; first automatic run 2 Jan 2027**, as §6 says |
+| Update | same function, chained: `dynamic_multiples.update_all(markets, trigger="quarterly")` unless `DYNAMIC_MULTIPLES_AUTO_DISABLED` | not disabled in prod; one run logged (21 Sep, owner trigger), 416 multiples live |
+| Engine | `dcf_agent._dynamic_norm_multiple`: for `EV/EBITDA (norm)` / `P/E (norm)`, reads `current_multiple(exchange, level, key, norm_field)` off the live peer multiple's own provenance, gated by `DYNAMIC_MULTIPLES_ENABLED` | enabled; VLO's basket row present (5.39x, band 4.53–6.79x) |
+| Valuation | the leg's `multiple_parts.peer_source` names the dynamic multiple and `record_usage` writes `dynamic_multiples_usage`; the blend takes the leg as any other | **usage rows in prod: 0** — no production run of a name with a normalised leg has happened since the switch-on. Re-run VLO / PSX / MU / V to see the count move |
+
+Tests covering the chain: `tests/test_comps_history_backfill.py` (gate, replace
+semantics, per-market failure isolation, fire time, timeout registration, the
+kill switch, and the chained update switched off under pytest) and
+`tests/test_dynamic_multiples_industry.py` (the read side). Full suite 5,777.
+
+**One thing that looked like a defect and is not.** Production's
+`regional_comps_history` holds no `refresh` rows. The weekly refresh does append
+them (`save_comps` → `save_history(source="refresh")`; the local 21 Sep refresh
+wrote 3,883), but production's last refresh was Saturday 19 Sep 17:48 UTC and
+the history code was committed 21 Sep. The first production refresh that
+records history is **Saturday 26 Sep 01:00 UTC**. Until it runs, the 30-day
+re-peg window (`scripts/check_static_multiples.py`) and the NTM medians have
+nothing to read in production, and the weekly history the betas need has not
+started accumulating.
