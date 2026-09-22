@@ -216,6 +216,13 @@ _BANDS: dict[str, tuple[float, float]] = {
     # their trailing counterparts. One extra FMP call per name (see `ntm_blend`).
     "pe_ntm":        (1.0, 200.0),
     "ev_ebitda_ntm": (0.5, 100.0),
+    # EV / EBIT, for the EV/EBIT legs (Wave 3: Boeing on a normalised EV/EBIT).
+    # Those legs used to multiply EBIT by the peer EV/EBITDA -- a lower
+    # multiple on a smaller base, understating every EV/EBIT leg. Derived from
+    # fields the two TTM calls already return, so it costs no request:
+    #     ev_ebit = evToEBITDATTM x ebitdaMarginTTM / ebitMarginTTM
+    # None when the EBIT margin is not positive (a loss-maker has no EV/EBIT).
+    "ev_ebit":       (0.5, 120.0),
 }
 
 #: A consensus figure resting on fewer analysts than this is one broker's model,
@@ -240,6 +247,75 @@ INDUSTRY_FAMILIES: dict[str, frozenset] = {
         "Oil & Gas Equipment & Services", "Oil & Gas Drilling", "Coal",
     }),
 }
+
+
+#: Profile-scoped peer baskets (Wave 3, owner 2026-09-22). One FMP label,
+#: `Aerospace & Defense`, covers three businesses whose clusters trade at 15x,
+#: 27x and unpriceable EV/EBITDA against a 23x basket median that describes
+#: none of them. A profile basket is the SAME market's members filtered to a
+#: named list -- curation, not automation, the house rule for peer sets --
+#: with the same bands, the same median and the same floor of
+#: MIN_INDUSTRY_PEERS, ranking ABOVE the industry rung for every field it
+#: resolves. A name not in the members store simply does not count, and a
+#: field under the floor falls to the industry rung and says so.
+#:
+#: Membership, with the reason each name is in (2026-09-22):
+#:   Defense Primes: defence revenue share > ~70%, DoD/allied programme
+#:     backlogs. LHX (defence electronics) and ESLT (Israeli defence
+#:     electronics, ADR) are in; TXT (Bell/Cessna/industrial) is out; HII is
+#:     out only because it is below the store's top-20 cap.
+#:   Niche Aerospace Components: proprietary aftermarket parts with pricing
+#:     power (TDG, HEI), forgings/structures (HWM), actuation and controls
+#:     (CW, WWD). Exactly at the floor: one out-of-band reading and that field
+#:     falls to the industry rung.
+#: Commercial Aerospace & Engines (BA, GE) has no basket of its own: two names
+#: is not a peer set, and both take the industry rung.
+PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
+    "Defense Primes":              {"US": ("LMT", "RTX", "NOC", "GD", "LHX", "ESLT")},
+    "Niche Aerospace Components":  {"US": ("TDG", "HEI", "HWM", "CW", "WWD")},
+}
+
+
+def profile_basket_multiples(exchange: str, profile: Optional[str],
+                             max_age_days: float = MAX_AGE_DAYS) -> dict[str, dict]:
+    """{field: {value, basis: "profile", cohort, peer_count, key, exchange, members}}
+    for a profile with a curated basket in this market, else {}."""
+    syms = (PROFILE_PEER_BASKETS.get(profile or "") or {}).get(exchange)
+    if not syms:
+        return {}
+    _ensure_table()
+    try:
+        marks = ",".join("?" for _ in syms)
+        rows = _db.query(
+            f"SELECT symbol, metrics_json, computed_at FROM regional_comps_members "
+            f"WHERE exchange = ? AND symbol IN ({marks})", [exchange, *syms]) or []
+    except Exception as exc:                                   # noqa: BLE001
+        logger.warning("regional_comps profile basket %r failed: %s", profile, exc)
+        return {}
+    metrics: dict[str, dict] = {}
+    for r in rows:
+        r = dict(r)
+        age = _age_days(r.get("computed_at") or "")
+        if r["symbol"] in metrics or (age is not None and age > max_age_days):
+            continue
+        try:
+            metrics[r["symbol"]] = json.loads(r["metrics_json"] or "{}")
+        except (TypeError, ValueError):
+            continue
+    out: dict[str, dict] = {}
+    for field in FIELDS:
+        vals, used = [], []
+        for sym, m in metrics.items():
+            cell = (m.get(field) or {})
+            v = cell.get("value")
+            if cell.get("in_band") and isinstance(v, (int, float)):
+                vals.append(float(v))
+                used.append(sym)
+        if len(vals) < MIN_INDUSTRY_PEERS:
+            continue
+        out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all",
+                      "peer_count": len(vals), "key": profile, "exchange": exchange, "members": used}
+    return out
 
 
 def family_of(industry: Optional[str]) -> Optional[str]:
@@ -494,6 +570,16 @@ def ntm_multiples(km: dict, rt: dict, estimates: list[dict],
     return out
 
 
+def ev_ebit_from_ttm(km: dict, rt: dict) -> Optional[float]:
+    """EV/EBIT = EV/EBITDA x (EBITDA margin / EBIT margin); None without a positive EBIT margin."""
+    ev_ebitda = _safe_float((km or {}).get("evToEBITDATTM"))
+    m_ebitda = _safe_float((rt or {}).get("ebitdaMarginTTM"))
+    m_ebit = _safe_float((rt or {}).get("ebitMarginTTM"))
+    if not (ev_ebitda and ev_ebitda > 0 and m_ebitda and m_ebitda > 0 and m_ebit and m_ebit > 0):
+        return None
+    return ev_ebitda * m_ebitda / m_ebit
+
+
 def ntm_enabled() -> bool:
     """COMPS_NTM_DISABLED=true drops the fourth call per name (about 6,000 FMP
     calls a week across US, HKSE and SES) and the two NTM fields with it."""
@@ -526,6 +612,7 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
         row = _rt_row = rt[0]
         out["pe"] = _safe_float(row.get("priceToEarningsRatioTTM"))
         out["pb"] = _safe_float(row.get("priceToBookRatioTTM"))
+        out["ev_ebit"] = ev_ebit_from_ttm(_km_row, row)
 
     gr = _fmp_get(f"{_STABLE}/financial-growth",
                   {"symbol": symbol, "period": "annual", "limit": 3}, api_key=None)
