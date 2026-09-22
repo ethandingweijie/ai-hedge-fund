@@ -1,0 +1,936 @@
+{
+ "wave": "3",
+ "as_of": "2026-09-23",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "LMT": {
+   "profile": "Defense Primes",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Backlog-coverage DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 369.74,
+   "base": 554.43,
+   "bull": 735.76,
+   "scenarios_ordered": true,
+   "target_12m_base": 532.1,
+   "consensus": 644.86,
+   "iv_vs_consensus": -0.14023198833855421,
+   "pt_vs_consensus": -0.17485965946096826,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2113984206418347,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $383.21 vs price $485.94 on 2024-12-31 = 21% gap; 12m later the market was closer (21% vs 0%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "NOC": {
+   "profile": "Defense Primes",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Backlog-coverage DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 327.65,
+   "base": 506.07,
+   "bull": 660.11,
+   "scenarios_ordered": true,
+   "target_12m_base": 509.5,
+   "consensus": 621.7,
+   "iv_vs_consensus": -0.18599002734437842,
+   "pt_vs_consensus": -0.18047289689560886,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.24806269979338583,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $352.88 vs price $469.29 on 2024-12-31 = 25% gap; 12m later the market was closer (38% vs 18%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "GD": {
+   "profile": "Defense Primes",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Backlog-coverage DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 258.99,
+   "base": 359.55,
+   "bull": 464.94,
+   "scenarios_ordered": true,
+   "target_12m_base": 349.67,
+   "consensus": 422.57,
+   "iv_vs_consensus": -0.14913505454717557,
+   "pt_vs_consensus": -0.17251579619944624,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.26765900986044366,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $334.02 vs price $263.49 on 2024-12-31 = 27% gap; 12m later the model was closer (1% vs 22%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "RTX": {
+   "profile": "Defense Primes",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Backlog-coverage DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 76.89,
+   "base": 125.07,
+   "bull": 164.51,
+   "scenarios_ordered": true,
+   "target_12m_base": 157.47,
+   "consensus": 238.5,
+   "iv_vs_consensus": -0.47559748427672954,
+   "pt_vs_consensus": -0.339748427672956,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2158583850388374,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $90.74 vs price $115.72 on 2024-12-31 = 22% gap; 12m later the market was closer (51% vs 37%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BA": {
+   "profile": "Commercial Aerospace & Engines",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBIT (norm)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.357143
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.357143
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.285714
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/EBIT (norm)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "EV/EBIT (norm)"
+   ],
+   "bear": 94.57,
+   "base": 133.49,
+   "bull": 172.42,
+   "scenarios_ordered": true,
+   "target_12m_base": 165.62,
+   "consensus": 273.13,
+   "iv_vs_consensus": -0.5112583751327207,
+   "pt_vs_consensus": -0.3936220847215611,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 T-1 model returned non-positive IV",
+   "currency": "USD",
+   "regime": null
+  },
+  "GE": {
+   "profile": "Commercial Aerospace & Engines",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBIT (norm)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.555556
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.444444
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/EBIT (norm)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "SOTP (analyst)",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.45,
+   "methods_unavailable": [
+    "EV/EBIT (norm)",
+    "SOTP (analyst)"
+   ],
+   "bear": 121.93,
+   "base": 164.17,
+   "bull": 225.34,
+   "scenarios_ordered": true,
+   "target_12m_base": 240.96,
+   "consensus": 411.6,
+   "iv_vs_consensus": -0.6011418853255588,
+   "pt_vs_consensus": -0.4145772594752186,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.0727919343451842,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $178.93 vs price $166.79 on 2024-12-31 = 7% gap; 12m later model and market were level (42% vs 46%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HWM": {
+   "profile": "Niche Aerospace Components",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PEG",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PEG",
+     "value_key": "PEG",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.3
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.2
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 152.35,
+   "base": 174.13,
+   "bull": 194.38,
+   "scenarios_ordered": true,
+   "target_12m_base": 200.2,
+   "consensus": 331.1,
+   "iv_vs_consensus": -0.47408637873754156,
+   "pt_vs_consensus": -0.39534883720930236,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2931307044655304,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $77.31 vs price $109.37 on 2024-12-31 = 29% gap; 12m later the market was closer (62% vs 47%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "TDG": {
+   "profile": "Niche Aerospace Components",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PEG",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PEG",
+     "value_key": "PEG",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.3
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.2
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 1084.63,
+   "base": 1229.88,
+   "bull": 1384.06,
+   "scenarios_ordered": true,
+   "target_12m_base": 1149.31,
+   "consensus": 1465.14,
+   "iv_vs_consensus": -0.16057168598222693,
+   "pt_vs_consensus": -0.21556301786859966,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3364027044240171,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $947.04 vs price $1427.13 on 2024-09-30 = 34% gap; 12m later the market was closer (28% vs 8%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HEI": {
+   "profile": "Niche Aerospace Components",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PEG",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PEG",
+     "value_key": "PEG",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.3
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.2
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 166.76,
+   "base": 196.26,
+   "bull": 227.77,
+   "scenarios_ordered": true,
+   "target_12m_base": 251.84,
+   "consensus": 397.0,
+   "iv_vs_consensus": -0.5056423173803526,
+   "pt_vs_consensus": -0.3656423173803527,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.34236614545567856,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $161.09 vs price $244.95 on 2024-10-31 = 34% gap; 12m later the market was closer (49% vs 23%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "LHX": {
+   "profile": "Defense Primes",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Backlog-coverage DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 175.41,
+   "base": 292.36,
+   "bull": 411.62,
+   "scenarios_ordered": true,
+   "target_12m_base": 258.73,
+   "consensus": 340.0,
+   "iv_vs_consensus": -0.14011764705882346,
+   "pt_vs_consensus": -0.23902941176470582,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1345997966169689,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $237.98 vs price $209.75 on 2025-01-03 = 13% gap; 12m later the model was closer (22% vs 31%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "KTOS": {
+   "profile": "Defense Tech & Space",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/Fwd Rev",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.692308
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.307692
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "Rev DCF",
+     "weight": 0.35,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.65,
+   "methods_unavailable": [
+    "Rev DCF"
+   ],
+   "bear": 46.08,
+   "base": 49.28,
+   "bull": 52.49,
+   "scenarios_ordered": true,
+   "target_12m_base": 47.88,
+   "consensus": 98.15,
+   "iv_vs_consensus": -0.49791136016301585,
+   "pt_vs_consensus": -0.5121752419765665,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.036727914451217744,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $27.49 vs price $26.52 on 2024-12-27 = 4% gap; 12m later model and market were level (65% vs 66%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "AVAV": {
+   "profile": "Defense Tech & Space",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/Fwd Rev",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.692308
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.307692
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "Rev DCF",
+     "weight": 0.35,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.65,
+   "methods_unavailable": [
+    "Rev DCF"
+   ],
+   "bear": 182.42,
+   "base": 198.95,
+   "bull": 219.45,
+   "scenarios_ordered": true,
+   "target_12m_base": 178.57,
+   "consensus": 220.33,
+   "iv_vs_consensus": -0.09703626378613905,
+   "pt_vs_consensus": -0.1895338809966869,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.21970538260357914,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $118.23 vs price $151.52 on 2025-04-30 = 22% gap; 12m later the market was closer (39% vs 22%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "RKLB": {
+   "profile": "Defense Tech & Space",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/Fwd Rev",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.692308
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.307692
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "Rev DCF",
+     "weight": 0.35,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.65,
+   "methods_unavailable": [
+    "Rev DCF"
+   ],
+   "bear": 10.33,
+   "base": 10.85,
+   "bull": 11.32,
+   "scenarios_ordered": true,
+   "target_12m_base": 41.42,
+   "consensus": 109.2,
+   "iv_vs_consensus": -0.9006410256410257,
+   "pt_vs_consensus": -0.6206959706959707,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.8063277150330084,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $4.93 vs price $25.47 on 2024-12-31 = 81% gap; 12m later the market was closer (93% vs 63%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "S63.SI": {
+   "profile": "Aerospace & Engineering (SG)",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.35
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 2.89,
+   "base": 4.54,
+   "bull": 7.05,
+   "scenarios_ordered": true,
+   "target_12m_base": 7.62,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.0677893075739393,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $4.98 vs price $4.66 on 2024-12-31 = 7% gap; 12m later model and market were level (41% vs 45%)",
+   "currency": "SGD",
+   "regime": null
+  },
+  "S59.SI": {
+   "profile": "Aviation & Marine (SG)",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.3
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.25
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 1.4,
+   "base": 1.7,
+   "bull": 2.87,
+   "scenarios_ordered": true,
+   "target_12m_base": 2.42,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5139548819797056,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $3.30 vs price $2.18 on 2025-03-28 = 51% gap; 12m later the model was closer (2% vs 33%)",
+   "currency": "SGD",
+   "regime": null
+  },
+  "00232.HK": {
+   "profile": "GA Engines & Aftermarket (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.35
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 0.37,
+   "base": 0.49,
+   "bull": 0.6,
+   "scenarios_ordered": true,
+   "target_12m_base": 0.49,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 3.4602952205555435,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $0.48 vs price $0.11 on 2024-12-31 = 346% gap; 12m later the market was closer (225% vs 27%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02357.HK": {
+   "profile": "Aerospace Holdco (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.0875
+    },
+    {
+     "method": "SOTP / NAV (look-through)",
+     "value_key": "P/BV",
+     "weight": 0.4625
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.075
+    },
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.375
+    }
+   ],
+   "proxied_weight": 0.4625,
+   "proxied_legs": [
+    "SOTP / NAV (look-through) <- P/BV"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 21.16,
+   "base": 29.32,
+   "bull": 40.92,
+   "scenarios_ordered": true,
+   "target_12m_base": 16.15,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 5.999655908917523,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $27.02 vs price $3.86 on 2024-12-31 = 600% gap; 12m later the market was closer (581% vs 3%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02507.HK": {
+   "profile": "General Aviation (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.25
+    },
+    {
+     "method": "Backlog-coverage DCF",
+     "value_key": "Backlog-coverage DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 48.11,
+   "base": 60.39,
+   "bull": 75.18,
+   "scenarios_ordered": true,
+   "target_12m_base": 51.34,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 3.105589660696455,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $83.75 vs price $20.40 on 2024-12-31 = 311% gap; 12m later the model was closer (50% vs 63%)",
+   "currency": "HKD",
+   "regime": null
+  }
+ }
+}
