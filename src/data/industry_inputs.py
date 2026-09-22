@@ -35,6 +35,11 @@ KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "s
 #: ended fails its period check; here one for a year that HAS ended does.
 GUIDANCE_KINDS = ("fcf_guidance",)
 
+#: Kinds whose figures are next-fiscal-year ESTIMATES by construction (a SOTP's
+#: segment revenue is forward): the period check accepts a forward year, and a
+#: year already reported is reported as such rather than failed.
+FORWARD_PERIOD_KINDS = ("sotp",)
+
 #: The overlay toggle. Off by default: a valuation runs on audited actuals
 #: unless someone switches the forward view on deliberately.
 OVERLAY_FLAG = "FEATURE_FORWARD_OVERLAY"
@@ -205,7 +210,7 @@ def reconcile(kind: str, value: Optional[float], context: dict,
         # guidance. Flows -- capex, and a rate base projected for a future year
         # -- stay bound to years that have ended.
         hi = latest + 1 if kind == "backlog" else latest
-        if kind in GUIDANCE_KINDS:
+        if kind in GUIDANCE_KINDS or kind in FORWARD_PERIOD_KINDS:
             # The opposite test: guidance is for a year that has NOT ended, and
             # stale guidance for a year already reported is an actual, not this.
             checks.append({"check": "guidance period", "ok": latest < y <= latest + 2,

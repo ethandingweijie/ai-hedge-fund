@@ -260,6 +260,209 @@
     "value_usd": 39171034074.51573
    }
   },
+  "02357.HK": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 13.37,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 15.48
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-22T16:40:05+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.00x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 0.9978
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2026)",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable",
+      "ok": true
+     }
+    ],
+    "company": "AviChina Industry & Technology Company Limited",
+    "data": {
+     "associates_investments": null,
+     "fiscal_year": "FY2026",
+     "holdco_basis": "Reflects standard holding company and Hong Kong H-share to A-share structural discount (20%-30%) applied by brokers to Chinese SOE holdcos holding major stakes in onshore listed subsidiaries (AVICOPTER, AVIC Airborne, Jonhon Optronic, and Hongdu Aviation).",
+     "holdco_discount_pct": 0.25,
+     "net_cash": null,
+     "segments": [
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Reflects valuation of core listed tier-1 supplier subsidiaries AVIC Jonhon Optronic (002179.SZ) and AVIC Airborne Systems (600372.SH), trading at forward P/E multiples of 18x to 26x driven by high-reliability connector and avionics demand across defense and commercial aerospace.",
+       "multiple_high": 26.0,
+       "multiple_low": 18.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.fool.com/quote/hkg/2357/",
+       "name": "Aviation Ancillary System and Related Business",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Aviation Ancillary System and Related Business CN¥58.21b",
+        "scale": "bn",
+        "source_url": "https://simplywall.st/stocks/hk/capital-goods/sehk-2357/avichina-industry-technology-shares/past",
+        "value": 58.21
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on domestic OEM aircraft and helicopter assembly peers such as subsidiary AVICOPTER (600038.SH) and Hongdu Aviation (600316.SH), which command forward P/E multiples of 22x to 32x supported by defense procurement and emerging low-altitude economy expansion.",
+       "multiple_high": 32.0,
+       "multiple_low": 22.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://quartr.com/companies/avichina_industry_and_technology_company_2357",
+       "name": "Aviation Entire Aircraft",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Aviation Entire Aircraft CN¥28.55b",
+        "scale": "bn",
+        "source_url": "https://simplywall.st/stocks/hk/capital-goods/sehk-2357/avichina-industry-technology-shares/past",
+        "value": 28.55
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Based on Chinese industrial engineering design, consultancy, and EPC service provider peers typically trading in the 10x to 15x forward P/E range due to lower margin profiles relative to proprietary defense hardware.",
+       "multiple_high": 15.0,
+       "multiple_low": 10.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://simplywall.st/stocks/hk/capital-goods/sehk-2357/avichina-industry-technology-shares/past",
+       "name": "Aviation Engineering Services",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Aviation Engineering Services CN¥10.22b",
+        "scale": "bn",
+        "source_url": "https://simplywall.st/stocks/hk/capital-goods/sehk-2357/avichina-industry-technology-shares/past",
+        "value": 10.22
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "CNY bn",
+       "CNY bn",
+       "CNY bn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ev_rev_multiple": null,
+       "name": "Aviation Ancillary System and Related Business",
+       "pe_multiple": 22.0,
+       "rationale": "pe 18.0-26.0x: Reflects valuation of core listed tier-1 supplier subsidiaries AVIC Jonhon Optronic (002179.SZ) and AVIC Airborne Systems (600372.SH), trading at forward P/E multiples of 18x to 26x driven by high-reliability connector and avionics demand across defense and commercial aerospace.",
+       "revenue_fwd": 8703559200.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "Aviation Entire Aircraft",
+       "pe_multiple": 27.0,
+       "rationale": "pe 22.0-32.0x: Valued on domestic OEM aircraft and helicopter assembly peers such as subsidiary AVICOPTER (600038.SH) and Hongdu Aviation (600316.SH), which command forward P/E multiples of 22x to 32x supported by defense procurement and emerging low-altitude economy expansion.",
+       "revenue_fwd": 4268795999.9999995,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "Aviation Engineering Services",
+       "pe_multiple": 12.5,
+       "rationale": "pe 10.0-15.0x: Based on Chinese industrial engineering design, consultancy, and EPC service provider peers typically trading in the 10x to 15x forward P/E range due to lower margin profiles relative to proprietary defense hardware.",
+       "revenue_fwd": 1528094399.9999998,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "AviChina Industry & Technology Company Limited",
+     "depreciation_and_amortization": 484375273.1999999,
+     "market_cap": 3028981548.67803,
+     "net_ppe": 4655605735.2,
+     "operating_cash_flow": -1136263035.6,
+     "period": "2025-12-31",
+     "revenue": 13373405070.48
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 58.8,
+    "value_usd": 14500449600.0
+   }
+  },
+  "02507.HK": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:35:35+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.00x (plausible 0.05x to 15.0x)",
+      "ok": false,
+      "ratio": 0.0
+     }
+    ],
+    "company": "Cirrus Aircraft Limited",
+    "data": {
+     "book_to_bill": 0.98,
+     "kind": "order_backlog",
+     "orders": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Orders and reservations increased by 95 units on a year-over-year basis, from 633 in the financial year ended December 31, 2024, to 728 in the financial year ended December 31, 2025.",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0324/2026032400627.pdf",
+      "value": 728.0
+     },
+     "value": {
+      "currency": "USD",
+      "period": "H1 2026",
+      "quote": "As of June 30, 2026, we had a backlog of 1,059 aircraft, including approximately 193 reservations for the Vision Jet.",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0826/2026082601131.pdf",
+      "value": 1059.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Cirrus Aircraft Limited",
+     "depreciation_and_amortization": 56847970.0,
+     "market_cap": 1973869192.6275,
+     "net_ppe": 300557444.0,
+     "operating_cash_flow": 146212971.0,
+     "period": "2025-12-31",
+     "revenue": 1354365000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 118.4,
+    "value_usd": 1059.0
+   }
+  },
   "02883.HK": {},
   "03337.HK": {
    "backlog": {
@@ -306,6 +509,254 @@
    }
   },
   "5WH.SI": {},
+  "AVAV": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:31:36+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2027; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.76x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 0.7588
+     }
+    ],
+    "company": "AeroVironment, Inc.",
+    "data": {
+     "book_to_bill": 1.4,
+     "kind": "funded",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q1 FY2027",
+      "quote": "Record funded backlog of $1.5 billion, up 37% year-over-year",
+      "scale": "bn",
+      "source_url": "https://investor.avinc.com/news-releases/news-release-details/aerovironment-announces-fiscal-2027-first-quarter-results",
+      "value": 1.5
+     }
+    },
+    "fmp_context_usd": {
+     "company": "AeroVironment, Inc.",
+     "depreciation_and_amortization": 265037000.0,
+     "market_cap": 8019849760.0,
+     "net_ppe": 267111000.0,
+     "operating_cash_flow": -78404000.0,
+     "period": "2026-04-30",
+     "revenue": 1976845000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 79.8,
+    "value_usd": 1500000000.0
+   }
+  },
+  "BA": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:00:47+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "7.99x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 7.9921
+     }
+    ],
+    "company": "The Boeing Company",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Total company backlog grew to a record $715 billion, including over 6,200 commercial airplanes.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGlC9x8JvZay_62_AEhqSvy-dErZ5aXxi9FTM5VNu9h_gE_zBLrs2o1Eq7ObCj9MPts6xR0QIDIbQ2m0CG8ZNUIqShjQ_mdaxQ16XOXXyv2oX1tqyk_4DO9G5XWc5cZWxt4tcdPs2BAaroLz9zkjyfP_OnsUWLjs2qMSeUS_lJuWGGOorB65XWEDvwsNSIktnLS-lOYYGozKqexpdaGg-B-iW7XnUJYDBXUIgKRkzVarOGWb5k=",
+      "value": 715.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "The Boeing Company",
+     "depreciation_and_amortization": 1953000000.0,
+     "market_cap": 157062326400.0,
+     "net_ppe": 15602000000.0,
+     "operating_cash_flow": 1065000000.0,
+     "period": "2025-12-31",
+     "revenue": 89463000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 67.3,
+    "value_usd": 715000000000.0
+   },
+   "sotp": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 89.46,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 98.11
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-22T16:38:57+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.05x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0518
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026E (fiscal_year FY2026E)",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable",
+      "ok": true
+     }
+    ],
+    "company": "The Boeing Company",
+    "data": {
+     "associates_investments": null,
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "Standard conglomerate holding company discount reflecting unallocated corporate overhead, shared liabilities, and conglomerate complexity across commercial and defense divisions.",
+     "holdco_discount_pct": 0.1,
+     "net_cash": {
+      "currency": "USD",
+      "period": "2026",
+      "quote": "crises that have left it with nearly US$26 billion in net debt and a bruised reputation.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8WWwZoREYukvoER0Avw3--18USu82qi73bzFXnHo9fe5SrH8iqZN9ysGZzDzepGEai5Rmaj95RKeH3YvS_V7ALZzBUOo8xMmK50tBuf7Sgm_o9tLl5DKposC6mU53xvR5-aaHAGmhoxVSQkhMYjT0QCWExVqFxXHmI-sNhUaryBtYLALMQ6ZGsEVZYghLvTL0JDVzSpxCGD9pm7vk2mLA_jaTDS99EBMyt9k5wSZ1LsBmOMcuExlMjof6wtHdIJhVQIin",
+      "value": -26.0
+     },
+     "segments": [
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on EV/Sales against commercial jet competitor Airbus (~1.9x EV/Sales), discounted on the low end for ongoing 737 MAX production stabilization and delivery ramp risks.",
+       "multiple_high": 2.0,
+       "multiple_low": 1.4,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHly1R2cVtN-M6hje3qD6ZRtwddrbi4f0UQ_ybjpfJP8C1_nJdrc1gkE9POXaen4WBoKLaScEPRGZnTaCs9NQQOx4xSDCHZaguApFvvnyRntkKcLChHITI6cRqC4wPAC07N_vajYoypAXVOtEb7uzk8kJM=",
+       "name": "Commercial Airplanes",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2026E",
+        "quote": "It generates about US$43.4b from Commercial Airplanes",
+        "scale": "bn",
+        "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuQzhpSyxiBe5g4Jxrrnu2d8hlo13OIV1QyhgChEbUagMjxMqZDe59qlaXS9vWhMQ28xNLWSYEt5e3V__rjDiRelzdYyTFeckwTggvMbZdVHH3vzYLQBcG_VEj-D93iXXXZTMhAIbptmjqOzi00aJF345LKMrdtyqF5JlZDxXKuoHMPyL2nUxg3TdMU007v08Rj7ZxzOuAqBSXydSb4arvVg2Gh_qBrdzXE1sY84E=",
+        "value": 43.4
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on EV/Sales benchmarked against US defense prime contractors including Lockheed Martin (1.8x-2.0x), General Dynamics (2.0x), and Textron (1.2x), reflecting execution discounts from fixed-price development contracts.",
+       "multiple_high": 1.8,
+       "multiple_low": 1.2,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG_E9dKPCOiTSk-e8vygh3wv-4TIS8Ni11TqaHXGQ3MHx771r99XdpCGmJsBVBp5FvTwjZ75_GXnMSDhLoMPLDFwDXm-B1rJV4t42X57lGOrb9k-fDaWDXN0uDkCgZCCGWuRxI4sClL5EAikeP-",
+       "name": "Defense, Space & Security",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2026E",
+        "quote": "US$29.4b from Defense, Space & Security",
+        "scale": "bn",
+        "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuQzhpSyxiBe5g4Jxrrnu2d8hlo13OIV1QyhgChEbUagMjxMqZDe59qlaXS9vWhMQ28xNLWSYEt5e3V__rjDiRelzdYyTFeckwTggvMbZdVHH3vzYLQBcG_VEj-D93iXXXZTMhAIbptmjqOzi00aJF345LKMrdtyqF5JlZDxXKuoHMPyL2nUxg3TdMU007v08Rj7ZxzOuAqBSXydSb4arvVg2Gh_qBrdzXE1sY84E=",
+        "value": 29.4
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on EV/Sales reflecting high-margin commercial and defense aftermarket support, parts supply, and maintenance services, consistent with aerospace aftermarket peers.",
+       "multiple_high": 2.5,
+       "multiple_low": 1.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuQzhpSyxiBe5g4Jxrrnu2d8hlo13OIV1QyhgChEbUagMjxMqZDe59qlaXS9vWhMQ28xNLWSYEt5e3V__rjDiRelzdYyTFeckwTggvMbZdVHH3vzYLQBcG_VEj-D93iXXXZTMhAIbptmjqOzi00aJF345LKMrdtyqF5JlZDxXKuoHMPyL2nUxg3TdMU007v08Rj7ZxzOuAqBSXydSb4arvVg2Gh_qBrdzXE1sY84E=",
+       "name": "Global Services",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2026E",
+        "quote": "US$21.3b from Global Services",
+        "scale": "bn",
+        "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuQzhpSyxiBe5g4Jxrrnu2d8hlo13OIV1QyhgChEbUagMjxMqZDe59qlaXS9vWhMQ28xNLWSYEt5e3V__rjDiRelzdYyTFeckwTggvMbZdVHH3vzYLQBcG_VEj-D93iXXXZTMhAIbptmjqOzi00aJF345LKMrdtyqF5JlZDxXKuoHMPyL2nUxg3TdMU007v08Rj7ZxzOuAqBSXydSb4arvVg2Gh_qBrdzXE1sY84E=",
+        "value": 21.3
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "USD bn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ev_rev_multiple": 1.7,
+       "name": "Commercial Airplanes",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.4-2.0x: Valued on EV/Sales against commercial jet competitor Airbus (~1.9x EV/Sales), discounted on the low end for ongoing 737 MAX production stabilization and delivery ramp risks.",
+       "revenue_fwd": 43400000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 1.5,
+       "name": "Defense, Space & Security",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.2-1.8x: Valued on EV/Sales benchmarked against US defense prime contractors including Lockheed Martin (1.8x-2.0x), General Dynamics (2.0x), and Textron (1.2x), reflecting execution discounts from fixed-price development contracts.",
+       "revenue_fwd": 29400000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 2.15,
+       "name": "Global Services",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.8-2.5x: Valued on EV/Sales reflecting high-margin commercial and defense aftermarket support, parts supply, and maintenance services, consistent with aerospace aftermarket peers.",
+       "revenue_fwd": 21300000000.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "The Boeing Company",
+     "depreciation_and_amortization": 1953000000.0,
+     "market_cap": 156714562635.0,
+     "net_ppe": 15602000000.0,
+     "operating_cash_flow": 1065000000.0,
+     "period": "2025-12-31",
+     "revenue": 89463000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 70.6,
+    "value_usd": 94100000000.0
+   }
+  },
   "BE": {
    "backlog": {
     "basis": "actual",
@@ -709,6 +1160,107 @@
     "value_usd": 1316000000.0
    }
   },
+  "GD": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T15:57:26+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "2.60x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 2.5975
+     }
+    ],
+    "company": "General Dynamics Corporation",
+    "data": {
+     "book_to_bill": 1.4,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Backlog at the end of the quarter was $136.5 billion.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEcQf03xygBlVxpH-08sO9J9sDdyY5Pf2Hwpt0ZKqUD4Kbw1iwcBXIIfGziOIgfB4pmwQqjNqEf4FXTwAMI5xLre9dCmz4upxPz-5NY4xpXoT9d04ZZ-1dFT6E-fdNNDt6SEPe5jJ7DkTLUB0ZkEfTvquqjF0dUu5I5ixweztEtxG5U5N0TD25Nb7BBXKcxCeA8yoOOM4Jq0h39qVDC1cAZk0SO_NgvJIDpjNE=",
+      "value": 136.5
+     }
+    },
+    "fmp_context_usd": {
+     "company": "General Dynamics Corporation",
+     "depreciation_and_amortization": 924000000.0,
+     "market_cap": 93381395765.0,
+     "net_ppe": 7525000000.0,
+     "operating_cash_flow": 5120000000.0,
+     "period": "2025-12-31",
+     "revenue": 52550000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 60.2,
+    "value_usd": 136500000000.0
+   }
+  },
+  "GE": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:03:40+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "4.14x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 4.1435
+     }
+    ],
+    "company": "GE Aerospace",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "orders": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Full year 2025: Total orders of $66.2B, +32%",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHvvqF2s_RLoqrnabgG6eI8QP51SmKQbxKMCM0BfZ8KtC8voR7pLNFq8bLStLc_dVLTv9DhZp1H1UwmYbgGboGGFjXgwYUs08uTmWRbuwfva7WN5s8cNbIkSXuc_ZFxVdrozDZKF6Oy_WXfQqqU9awSS5GC94Z-5GJBZ1MxN-th0guGepZXzihrsPwgxyd0gjiSpCk0X-6D",
+      "value": 66.2
+     },
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "accelerated services and equipment output to fulfill our growing backlog of roughly $190 billion",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHvvqF2s_RLoqrnabgG6eI8QP51SmKQbxKMCM0BfZ8KtC8voR7pLNFq8bLStLc_dVLTv9DhZp1H1UwmYbgGboGGFjXgwYUs08uTmWRbuwfva7WN5s8cNbIkSXuc_ZFxVdrozDZKF6Oy_WXfQqqU9awSS5GC94Z-5GJBZ1MxN-th0guGepZXzihrsPwgxyd0gjiSpCk0X-6D",
+      "value": 190.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "GE Aerospace",
+     "depreciation_and_amortization": 1220000000.0,
+     "market_cap": 330432533515.0,
+     "net_ppe": 7987000000.0,
+     "operating_cash_flow": 8537000000.0,
+     "period": "2025-12-31",
+     "revenue": 45855000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 165.9,
+    "value_usd": 190000000000.0
+   }
+  },
   "GEV": {
    "backlog": {
     "basis": "actual",
@@ -816,6 +1368,111 @@
    }
   },
   "HAL": {},
+  "HEI": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:27:31+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.47x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 0.4699
+     }
+    ],
+    "company": "HEICO Corporation",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "As of October 31, 2025, the Company had $2,107.6 million of remaining performance obligations associated with firm contracts pertaining to many of the products offered by the FSG and ETG.",
+      "scale": "mn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFERSiRODvIQJVRzzMmR-celC2qqAPuceg1Xnox5iiht9Cv_2rNSmbj_e5R32UXFh4p2KkTgyj4IJl7eaKy60_BCNWG8xnHU5uCE0udxpx6Xp3MST3aARcq56AipAts67UewNQf00PMv219OfzM6ZQQvzZDSYwRA1Q=",
+      "value": 2107.6
+     }
+    },
+    "fmp_context_usd": {
+     "company": "HEICO Corporation",
+     "depreciation_and_amortization": 196076000.0,
+     "market_cap": 42814327788.0,
+     "net_ppe": 431710000.0,
+     "operating_cash_flow": 934266000.0,
+     "period": "2025-10-31",
+     "revenue": 4485044000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 216.0,
+    "value_usd": 2107600000.0
+   }
+  },
+  "HWM": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:12:03+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "positive",
+      "detail": "amount 0 is not positive",
+      "ok": false
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.00x (plausible 0.05x to 15.0x)",
+      "ok": false,
+      "ratio": 0.0
+     }
+    ],
+    "company": "Howmet Aerospace Inc.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "order_backlog",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Commercial aerospace, our largest end market, benefited from accelerating demand for new aircraft and engine spares and now enjoy a record backlog for new, more fuel-efficient aircraft.",
+      "scale": "mn",
+      "source_url": "https://www.howmet.com/investors/",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Howmet Aerospace Inc.",
+     "depreciation_and_amortization": 283000000.0,
+     "market_cap": 90740376070.0,
+     "net_ppe": 2593000000.0,
+     "operating_cash_flow": 1884000000.0,
+     "period": "2025-12-31",
+     "revenue": 8252000000.0
+    },
+    "grounding_urls": [
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFXmkZ4n2xMJKjxQtNcAqy48uJZoZDPbsotbC0SOZvi9mE_BwnC3WfOIOgDt8rYX57-NYf97FFkZXmAv2LdyFN_1LtlItxID10pJhVf6O_c-gpI0jN5BxfmQ8FvPqNV87vm7jQS0omuN_sfB5yAQRnkJ8O7BSOOx8lagXzBpnECu0hN",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEREEhm60E4pR4ccybxu5plyy8g6TWTMw2IhUDjrg6DKOy0rIAAuGhSjG29IGVBixzELBphmmpii_ziuTSk2txEHRJUqubPKwFmJKdoPQPxPyiDR6PUOiXvc9CpbIaqRf8Snkj4_LbaW9c796nnR9-VRZY84URSfVDovgN6CYDQ_MKiyz0MjXLGBO265tbC_yjd",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHtelglAWvTVPObPAok7ySTszslpHnk1Gqs1OWmriqnEeI5WwnFQTsn7yO-61JhuCoXFnkzHO9uQtKLuusf1p-DV3xxq1ygnsdSljKjF5BbjaE84i2gX2JNPvyu4metAyiSmhz_HMRQBTxTrpHofpU22qYQmWX6g-DkjNPiMSxwbiNA",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG3dpLAG4wcpEmylOpeXktFuSDQ43vjOFg138EWxVNgCl8aQAZdBba8Mc13H51DPIRjcMqLg0P_dn5TU1CJuuMQBfEzQVYY2eMgb1wzxeITF5v_GEQEkInHoSw=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGgxRzFhYthKIG9gEjYD0YcRMC6zBygJoy18IDAJHTm_e1LZxMUBlQ-qcw0ueM_E0eWUuN-Pq3SuqzqI5t8r3YmJjhbhtVhCu0Lu7Gr-wloWsKW-9ST0Ds="
+    ],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 497.0,
+    "value_usd": 0.0
+   }
+  },
   "KMI": {
    "maintenance_capex": {
     "basis": "actual",
@@ -880,6 +1537,60 @@
     "value_usd": 951000000.0
    }
   },
+  "KTOS": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:30:11+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "1.17x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 1.1672
+     }
+    ],
+    "company": "Kratos Defense & Security Solutions, Inc.",
+    "data": {
+     "book_to_bill": 1.1,
+     "kind": "funded",
+     "orders": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Last Twelve Months Ended December 28, 2025, Consolidated Book to Bill Ratio of 1.1 to 1 and Bookings of $1.475 Billion.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGSPHM70AicY9VJwI2ep_A_gLxOrZMXlpOu3JlcbZjesAr6LcvqCTl5XOjlCGbtLS_h71hiVnBQSmmY4w25xEDNyk8jYD4-UEmFaPSy9V9b5mhMJJaFNez9nz6fXeY-Kvj9YwupLXnknPz1fIKeELDqjX1kgfKi2YEaIj3tCWaLQXymJsz0-Fw_ph4QkN9wJ-U0nHvhAviCcrcL-lCEUjA=",
+      "value": 1.475
+     },
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Backlog on June 28, 2026, included funded backlog of $1.572 billion and unfunded backlog of $512.7 million.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFAQa8cVNvy0ttNk6-EJ8JadRhdKFYSJdbo77scGdcWslmuL5rgASVpEB_Ihq1B7gaI7sWeItdUpR1-1bpfPNapphnooMkGczB2XQtuhi65zFh96v0EEbhr2HjRvgwFTU6Oa6bT9PuVNpXgHcSEdWsiydAQS1Y5mJvd1r0gBVusyCk3MN8yZPiUuk3uQS-w-1wF",
+      "value": 1.572
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Kratos Defense & Security Solutions, Inc.",
+     "depreciation_and_amortization": 59300000.0,
+     "market_cap": 8772185600.0,
+     "net_ppe": 405300000.0,
+     "operating_cash_flow": -42100000.0,
+     "period": "2025-12-28",
+     "revenue": 1346800000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 154.3,
+    "value_usd": 1572000000.0
+   }
+  },
   "LEU": {
    "backlog": {
     "basis": "actual",
@@ -924,6 +1635,107 @@
     "ok": true,
     "secs": 19.7,
     "value_usd": 4500000000.0
+   }
+  },
+  "LHX": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T15:59:34+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "1.92x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 1.9209
+     }
+    ],
+    "company": "L3Harris Technologies, Inc.",
+    "data": {
+     "book_to_bill": 1.2,
+     "kind": "total",
+     "orders": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Full Year. Orders of $27.5 billion; book-to-bill of 1.3x",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF9ySBo3xjX1iQhqeQpDPdupQFPKviKj2LD5F-3NWlRuTwWoeilzlBIt0eolR1jMUd4THd3BQf4chuxabGCicDmACySEovUI-CVnpSwiRTZoDA468qufKcWCOHKKt_1EVD3YY8ZQa7ozTHU0LTzWzJ10r2CyvUXgWWzPc7CH0Aeq5SPsIaidr-qTTIvXlxHVdPmxthE5I2KDDqnJwifofo5dedZxSCakNjZCu25wAPS",
+      "value": 27.5
+     },
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Orders of $7.3 billion; book-to-bill of 1.2x increases backlog to record $42 billion",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFZGYAQoafyQGJQcOln8rGup7g2hwcutbNgJ_kGRq2X_2egqlABBvV7tAjfgmBImypQxx0Pdl9ex8-6FJra7E04bBn3766kL0KIFoSl4k0n66TiFSwvdhB6KGBDXbLVzanTLsUULdis42nc6Mfx7_EaZcV8FnZW-YRmWtbxJ2WxnUPruIRw0fclc2sD4A8av75Y5hXs8EZ2LdIPz0wuJGfBF1Uqe-LWyzYVEPFngXE=",
+      "value": 42.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "L3Harris Technologies, Inc.",
+     "depreciation_and_amortization": 1224000000.0,
+     "market_cap": 44883401450.0,
+     "net_ppe": 2665000000.0,
+     "operating_cash_flow": 3106000000.0,
+     "period": "2026-01-02",
+     "revenue": 21865000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 32.3,
+    "value_usd": 42000000000.0
+   }
+  },
+  "LMT": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T15:54:59+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "3.06x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 3.0643
+     }
+    ],
+    "company": "Lockheed Martin Corporation",
+    "data": {
+     "book_to_bill": 3.2,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Record backlog of $230 billion, inclusive of the multi-year contract to produce THAAD interceptors",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQH3pZqwwAEwnkaaObUeJivtGSdNjLWqwejsPICWoRekuGql62gErQeAEvw282Y_Mx7VPCHP-r4AbQ9bCl7ExOc4I4MNSWOuRjh753CKyJAnQkkGYerHjc1tdGDqbsWM_qEU1OCiHIw_E-abl4SnbHAO8g1pWPYS1yYwqmMXEG6eijE0B5UKMDw6h7xgakKyDS4VV_oPOtsjnEBC_C2SV03tHCSVE0y7kkm9XKBJF40PsSPpzDWdqvuwpQKZaQ==",
+      "value": 230.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Lockheed Martin Corporation",
+     "depreciation_and_amortization": 1687000000.0,
+     "market_cap": 120223647720.0,
+     "net_ppe": 9851000000.0,
+     "operating_cash_flow": 8557000000.0,
+     "period": "2025-12-31",
+     "revenue": 75057000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 69.9,
+    "value_usd": 230000000000.0
    }
   },
   "NEE": {
@@ -992,6 +1804,53 @@
     "ok": true,
     "secs": 82.2,
     "value_usd": 68000000000.0
+   }
+  },
+  "NOC": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T15:56:18+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "2.50x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 2.5027
+     }
+    ],
+    "company": "Northrop Grumman Corporation",
+    "data": {
+     "book_to_bill": 1.84,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Backlog continues to grow, including a new record high of $105 billion.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE3dy2nKUsw1IY_jxJl3F9-gSyTIWNhWe7u24rV3UBBswdD92tEkhXK_Cboy-rKT3McaaakKBVFllZsJPVsLLMqYrbcMAbUramuyERoLemoLgKXyuanrKsASvA5uaEOPiiXR4EIO3ArB6khQ7mxDm6Ui77dw3SCAM15rOaE1nEQrX59O10umvTTZhWhMQ==",
+      "value": 105.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Northrop Grumman Corporation",
+     "depreciation_and_amortization": 1472000000.0,
+     "market_cap": 72688664895.0,
+     "net_ppe": 12831000000.0,
+     "operating_cash_flow": 4757000000.0,
+     "period": "2025-12-31",
+     "revenue": 41954000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 73.7,
+    "value_usd": 105000000000.0
    }
   },
   "OKE": {
@@ -1144,6 +2003,319 @@
     "value_usd": 6732000000.0
    }
   },
+  "RKLB": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:33:29+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "3.92x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 3.9216
+     }
+    ],
+    "company": "Rocket Lab USA, Inc.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Q2 2026 saw our backlog grow to $2.36 billion – another record",
+      "scale": "bn",
+      "source_url": "https://investors.rocketlabcorp.com/",
+      "value": 2.36
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Rocket Lab USA, Inc.",
+     "depreciation_and_amortization": 43935000.0,
+     "market_cap": 41386130125.0,
+     "net_ppe": 423739000.0,
+     "operating_cash_flow": -165521000.0,
+     "period": "2025-12-31",
+     "revenue": 601799000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 106.5,
+    "value_usd": 2360000000.0
+   }
+  },
+  "RTX": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T15:58:54+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "3.02x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 3.0247
+     }
+    ],
+    "company": "RTX Corporation",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Total backlog was $268 billion and $218 billion as of December 31, 2025 and 2024, respectively.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNqCJ6UbBueN5aaBVb26Jb3-6XT5rX6pS9_KEo2kBuWy9dNLxz94RDM0Usu0gy8trBP4tGP3YOvmXqxB3YbzVLz4tTkeBtZDhTfs7X0qCKUS41Z2LTP9TrqkVkqbjEAkmjoTXJ1-qbo6vFSQcQ6OWX2yLLEh8pbGEaT8p2hip3rm0=",
+      "value": 268.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "RTX Corporation",
+     "depreciation_and_amortization": 4378000000.0,
+     "market_cap": 256559232929.0,
+     "net_ppe": 18755000000.0,
+     "operating_cash_flow": 10567000000.0,
+     "period": "2025-12-31",
+     "revenue": 88603000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 83.4,
+    "value_usd": 268000000000.0
+   }
+  },
+  "S63.SI": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:37:39+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "2.31x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 2.3084
+     }
+    ],
+    "company": "Singapore Technologies Engineering Ltd",
+    "data": {
+     "book_to_bill": null,
+     "kind": "order_backlog",
+     "orders": {
+      "currency": "SGD",
+      "period": "FY2024",
+      "quote": "TOTAL CONTRACT WINS. $12.6b. Commercial Aerospace: $4.7b. Defence & Public Security: $5.3b. Urban Solutions & Satcom: $2.6b for FY2024.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE-MoYHSENUnj4dAjHDnXripwWuRUHsjdmDMQ2H_TkTw2o5kv6a4uyAshIDY3AKH_1b7gWxaWKdMqbYmeLIYK3Jlv0-M9GqmNr0kXsLnlnVAxc_T5REFi38B1BakxN9PaqKv3c_aO8f4PImmHYFW85B_-yl9QGsf6UbLdQUx6hhlbJfrU2-ujaT0GWSrIT9rAMHjUmQ3Wr87wItZTtuBx00",
+      "value": 12.6
+     },
+     "value": {
+      "currency": "SGD",
+      "period": "FY2024",
+      "quote": "ORDER BOOK. $28.5b as at 31 December 2024.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE-MoYHSENUnj4dAjHDnXripwWuRUHsjdmDMQ2H_TkTw2o5kv6a4uyAshIDY3AKH_1b7gWxaWKdMqbYmeLIYK3Jlv0-M9GqmNr0kXsLnlnVAxc_T5REFi38B1BakxN9PaqKv3c_aO8f4PImmHYFW85B_-yl9QGsf6UbLdQUx6hhlbJfrU2-ujaT0GWSrIT9rAMHjUmQ3Wr87wItZTtuBx00",
+      "value": 28.5
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Singapore Technologies Engineering Ltd",
+     "depreciation_and_amortization": 415709251.23,
+     "market_cap": 26120291411.63988,
+     "net_ppe": 2292905973.54,
+     "operating_cash_flow": 1235124380.49,
+     "period": "2025-12-31",
+     "revenue": 9673548235.26
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 116.6,
+    "value_usd": 22330035000.0
+   },
+   "sotp": {
+    "anchors": {
+     "reported_currency": "SGD",
+     "revenue_latest_usd_bn": 9.68,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 10.61
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-22T16:43:01+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "0.87x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 0.8683
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2024 (fiscal_year FY2026)",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable",
+      "ok": true
+     }
+    ],
+    "company": "Singapore Technologies Engineering Ltd",
+    "data": {
+     "associates_investments": null,
+     "fiscal_year": "FY2026",
+     "holdco_basis": "Standard 10% conglomerate holding-company discount commonly applied in broker sum-of-the-parts valuations for multi-business industrial conglomerates to account for corporate overheads and capital allocation frictions.",
+     "holdco_discount_pct": 0.1,
+     "net_cash": null,
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2024",
+        "quote": "2024 EBIT ($m) 400.2",
+        "source_url": "https://www.stengg.com",
+        "value": 0.0913
+       },
+       "multiple_basis": "Reflects global commercial aerospace MRO and aerostructures peer multiples (such as SIA Engineering, MTU Aero Engines, and Safran) supported by strong post-pandemic flight activity, spare parts demand, and high hangar capacity utilisation.",
+       "multiple_high": 24.0,
+       "multiple_low": 18.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.businesstimes.com.sg/companies-markets/goldman-sachs-initiates-coverage-st-engineering-stock-ends-24-up",
+       "name": "Commercial Aerospace",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "period": "FY2024",
+        "quote": "COMMERCIAL AEROSPACE 2024 REVENUE ($m) 4,384",
+        "scale": "mn",
+        "source_url": "https://www.stengg.com",
+        "value": 4384.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2024",
+        "quote": "2024 EBIT ($m) 636.4",
+        "source_url": "https://www.stengg.com",
+        "value": 0.129
+       },
+       "multiple_basis": "In line with global defence primes (e.g., General Dynamics, BAE Systems, Rheinmetall) benefiting from multi-year backlogs, expanding European and Asian defence budgets, and resilient long-term contracts.",
+       "multiple_high": 22.0,
+       "multiple_low": 16.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.businesstimes.com.sg/companies-markets/goldman-sachs-initiates-coverage-st-engineering-stock-ends-24-up",
+       "name": "Defence & Public Security",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "period": "FY2024",
+        "quote": "DEFENCE & PUBLIC SECURITY 2024 REVENUE ($m) 4,935",
+        "scale": "mn",
+        "source_url": "https://www.stengg.com",
+        "value": 4935.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2024",
+        "quote": "2024 EBIT ($m) 39.9",
+        "source_url": "https://www.stengg.com",
+        "value": 0.0204
+       },
+       "multiple_basis": "EV/Sales multiple applied due to ongoing operational restructuring and lower operating margin during the satcom market turnaround alongside smart city and intelligent transport peer levels.",
+       "multiple_high": 1.6,
+       "multiple_low": 1.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.businesstimes.com.sg/companies-markets/goldman-sachs-initiates-coverage-st-engineering-stock-ends-24-up",
+       "name": "Urban Solutions & Satcom",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "period": "FY2024",
+        "quote": "URBAN SOLUTIONS & SATCOM 2024 REVENUE ($m) 1,957",
+        "scale": "mn",
+        "source_url": "https://www.stengg.com",
+        "value": 1957.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "SGD mn",
+       "SGD mn",
+       "SGD mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.0913,
+       "ev_rev_multiple": null,
+       "name": "Commercial Aerospace",
+       "pe_multiple": 21.0,
+       "rationale": "pe 18.0-24.0x: Reflects global commercial aerospace MRO and aerostructures peer multiples (such as SIA Engineering, MTU Aero Engines, and Safran) supported by strong post-pandemic flight activity, spare parts demand, and high hangar capacity utilisation.",
+       "revenue_fwd": 3435477760.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.129,
+       "ev_rev_multiple": null,
+       "name": "Defence & Public Security",
+       "pe_multiple": 19.0,
+       "rationale": "pe 16.0-22.0x: In line with global defence primes (e.g., General Dynamics, BAE Systems, Rheinmetall) benefiting from multi-year backlogs, expanding European and Asian defence budgets, and resilient long-term contracts.",
+       "revenue_fwd": 3867263400.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0204,
+       "ev_rev_multiple": 1.3,
+       "name": "Urban Solutions & Satcom",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.0-1.6x: EV/Sales multiple applied due to ongoing operational restructuring and lower operating margin during the satcom market turnaround alongside smart city and intelligent transport peer levels.",
+       "revenue_fwd": 1533583480.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Singapore Technologies Engineering Ltd",
+     "depreciation_and_amortization": 415778225.72,
+     "market_cap": 26124625291.08432,
+     "net_ppe": 2293286412.56,
+     "operating_cash_flow": 1235329312.36,
+     "period": "2025-12-31",
+     "revenue": 9675153270.64
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 168.9,
+    "value_usd": 8836324640.0
+   }
+  },
   "SLB": {
    "backlog": {
     "basis": "actual",
@@ -1233,6 +2405,66 @@
     "ok": false,
     "secs": 623.4,
     "value_usd": null
+   }
+  },
+  "TDG": {
+   "backlog": {
+    "basis": "actual",
+    "built_at": "2026-09-22T16:23:48+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "positive",
+      "detail": "amount 0 is not positive",
+      "ok": false
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.00x (plausible 0.05x to 15.0x)",
+      "ok": false,
+      "ratio": 0.0
+     }
+    ],
+    "company": "TransDigm Group Incorporated",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "orders": null,
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "TransDigm Group Incorporated does not disclose or report a total contracted backlog, order backlog, or remaining performance obligations dollar amount in its SEC filings",
+      "scale": "units",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1260221/000126022125000081/tdg-20250930.htm",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "TransDigm Group Incorporated",
+     "depreciation_and_amortization": 367000000.0,
+     "market_cap": 61811941692.0,
+     "net_ppe": 1579000000.0,
+     "operating_cash_flow": 2038000000.0,
+     "period": "2025-09-30",
+     "revenue": 8831000000.0
+    },
+    "grounding_urls": [
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEdIXQdTPAb-b4daMLLjYNYsKrUuKSiA6sSoJYkiosjbDJyN57qGHy9q7-lRQKRTfV0sElFhETzYjjy9BUFr0EX-AcPPr89FO8C4o2B3AChV8SnSLWkQxFGZukXTKRAnI-qXL-xzJHLY-FceymyBSQ=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGHsNqBJgefij3_CU00W7L45KXh1cJE9BLZnkQ3z8A2QndK5BLw56iSw_-wsh9j9QFJ8AyJf9WtfLu5-jzsPsBCHAFsTF1kG1RxifBHVsnfJkb3P9mkrtYimSkfhOr3__hkYwShK_rqWWpow6MjORrQAvqx3tyx3MK1KqOVGwtXuYW2qW9thSgiOFM=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGN87Wh-F4vqugMFbwn2DWl3fuyadZ9RmpPiizyu7q0QNQ8JChm-0OrDDc4mOTUbwOGkEPAHzG9YMDGEs63GrIBhOV1s2IZbKe88tH3z3jynh5M9dOXEFTCd-IbPVonJLBPHWPmhGNPl8A1qgdA04bROagagq_N1gfe80q0FzIY8a_BjQ1MJj4pzAM=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGarSshrTvEMxDGkleEDLbFCdjtIO9JwAFs-ftqhexg6IxF19KkaF-_v4MJX6t1RGe31a60Uum2ni95kaWi3EO762q5jt8IfpaJEcrEjhYPyh6x6MgtUyaJ-q7rkJKe8sZmpPvg74tmzX-9nVEvd15C-xQqPIztk6V2H-Dz3NhFLlACLL-ASs6l8KSvnM4iX8dsz_HAB6DEQhTshFExTAG7Dmtjb-BCTw==",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG71ONOE176wdmKuG145fcR0Lg4dKToa-RPmhFdmeQdV1ouJiM-MnH4gMHY9LYMDjrivfehJcvRcaTaAmZazij1elda4RLOolU_-t-oWyuGxyM-7pRW1QU2imnFoOFcAsQchrTEnX0FU2a73g90m0kG_Pj8UWU4NK9WY_eQZhXHPYHSOE3Khmt-67BU85Q=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGbRlNUkTiP7HVcr2Gfh-Z4EMrmH1xEtKMp8QaZ4W-m5IRCJk6XhTr1SQ6lGgn-iRzznZKtEIUgKBJfo3ZrvBkiyHbSN3sGbeBfkD-HXV9Bp2N16kfDPJ8Qgu9U0wlwM1SuptG0fdNHRGG75RKqym70VhlubuO84AF1QIR4KWSuaxcoRf68gYx2lQt27AoPR8F6xhHiGCeZAipPDdTRc-b_Zyu0qHQ4SHDc83ukstP11-tclJJe",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQESIpu7wBIF7jByIE3ppODXyfNlqK3Ey5GVgHOIX9ZJ9aJj-vT-xy16zJdzhcVzTblH2DaLuAB3fPuMP5jSifFsrK2Evx8-7t60E1KvrDZNTiyIPEWaYJJWeEGdjsTIQ7IGRfrCgcslfT4k8lhWrR06_nvcDqcsFNDca0g7NZMf0_9ugdXwHbBAYcmw1atC8EJgtbNMwZLKX_LKnwfp1frRGuustynYtUXRriKLK-E0K7ZOTg=="
+    ],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 700.0,
+    "value_usd": 0.0
    }
   },
   "WMB": {}

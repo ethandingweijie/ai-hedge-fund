@@ -130,6 +130,10 @@ def build_one(ticker: str, kind: str) -> dict:
         conv, conv_checks = gp.to_engine_assumptions(data, fmp_revenue_fwd_usd=None)
         seg_sum = sum(s["revenue_fwd"] for s in conv.get("segments") or [])
         checks = ii.reconcile("sotp", seg_sum or None, ctx, period=data.get("fiscal_year"))
+        _periods = sorted({str((s.get("revenue_fwd") or {}).get("period")) for s in data.get("segments") or []})
+        checks.append({"check": "segment revenue periods", "ok": None,
+                       "detail": f"{', '.join(_periods)} (fiscal_year {data.get('fiscal_year')}); actuals stand in "
+                                 f"for a forward year where no estimate was cited"})
         checks.append({"check": "segments with a cited multiple range", "ok": len(conv.get("segments") or []) >= 2,
                        "detail": (f"{len(conv.get('segments') or [])} usable; dropped "
                                   f"{conv_checks.get('dropped_segments') or 'none'}")})
