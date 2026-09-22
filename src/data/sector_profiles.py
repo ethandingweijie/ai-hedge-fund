@@ -3170,7 +3170,17 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # visibility and lower cost of equity.  Benchmarks: NEE 14x, SO 12x, DUK 12x,
     # D 11–13x — mid-range 12.5x base.  FCF yield lower (4.5%) reflecting
     # capital-intensive reinvestment cycle (capex > depreciation for rate base growth).
-    "Regulated Utility":   {"ev_ebitda": 12.5, "pe": 18.0, "ev_revenue": 3.0,  "pb": 2.0,  "fcf_yield": 0.045, "growth_avg": 0.04},
+    # Forward (NTM) statics, owner 2026-09-22: "proceed with NTM for Wave 2".
+    # Read by the Forward P/E and Forward EV/EBITDA legs when
+    # NTM_FORWARD_MULTIPLES_ENABLED is on AND the live basket resolves no NTM
+    # median; a live TRAILING median at industry level outranks them
+    # (dcf_agent._basket_rank), so they cannot swap a name's peer set. Derived
+    # from the 2026-09-21 local refresh, the first to carry NTM fields; the
+    # trailing statics stay on the trailing readings, because the mismatch runs
+    # both ways. Re-peg per scripts/check_static_multiples.py.
+    #   US Regulated Electric  NTM EV/EBITDA 9.79x (n=15)  NTM P/E 16.86x (n=15)
+    "Regulated Utility":   {"ev_ebitda": 12.5, "pe": 18.0, "ev_revenue": 3.0,  "pb": 2.0,  "fcf_yield": 0.045, "growth_avg": 0.04,
+                            "ev_ebitda_ntm": 9.8, "pe_ntm": 16.9},
     # IPP / Merchant Power: riskier than regulated; closer to generic Energy
     # Wave 2, derived 2026-09-21 and shown to the owner first. Fallbacks only:
     # live comps win every field they resolve. Basis: US industry medians,
@@ -3180,9 +3190,17 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # re-derived when it does.
     #   IPP basket        live EV/EBITDA 12.07x (n=7), through-cycle 11.05x, P/B 2.90x
     #   Solar basket      live 22.22x / 20.22x P/E / 2.78x EV/Rev (n=5-8), through-cycle 18.13x / 22.25x
-    "IPP":                 {"ev_ebitda": 11.0, "pe": 14.0, "ev_revenue": 2.0,  "pb": 2.0,  "fcf_yield": 0.060, "growth_avg": 0.06},
-    "Merchant Power":      {"ev_ebitda": 11.0, "pe": 18.0, "ev_revenue": 2.5,  "pb": 2.9,  "fcf_yield": 0.050, "growth_avg": 0.06},
-    "Clean Tech / Power Equipment OEM": {"ev_ebitda": 18.0, "pe": 21.0, "ev_revenue": 2.8, "pb": 2.1, "fcf_yield": 0.050, "growth_avg": 0.10},
+    #   US Independent Power Producers  NTM EV/EBITDA 9.41x (n=6)  NTM P/E 10.59x (n=5) -- one basket
+    #   serves IPP and Merchant Power; the same forward readings for both.
+    "IPP":                 {"ev_ebitda": 11.0, "pe": 14.0, "ev_revenue": 2.0,  "pb": 2.0,  "fcf_yield": 0.060, "growth_avg": 0.06,
+                            "ev_ebitda_ntm": 9.4, "pe_ntm": 10.6},
+    "Merchant Power":      {"ev_ebitda": 11.0, "pe": 18.0, "ev_revenue": 2.5,  "pb": 2.9,  "fcf_yield": 0.050, "growth_avg": 0.06,
+                            "ev_ebitda_ntm": 9.4, "pe_ntm": 10.6},
+    #   US Solar  NTM EV/EBITDA 9.30x (n=8)  NTM P/E 12.01x (n=6). The trailing 18.0x is the
+    #   through-cycle reading held deliberately under a 22.35x live median (check_static_multiples
+    #   flags it, +24%); a policy-cycle basket's spot multiple is the thing not to peg to.
+    "Clean Tech / Power Equipment OEM": {"ev_ebitda": 18.0, "pe": 21.0, "ev_revenue": 2.8, "pb": 2.1, "fcf_yield": 0.050, "growth_avg": 0.10,
+                                         "ev_ebitda_ntm": 9.3, "pe_ntm": 12.0},
     "Financials":          {"ev_ebitda": 12.0, "pe": 12.0, "ev_revenue": 2.0,  "pb": 1.4,  "fcf_yield": 0.065, "growth_avg": 0.06},
     # Financials sub-profile overrides — keyed on profile_name for dcf_agent lookup
     # Banks use P/E and P/TBV; EV/EBITDA is not applicable
@@ -3396,7 +3414,12 @@ HK_SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # Wave 2, HKSE industry medians 2026-09-19 (TTM) beside the through-cycle
     # table: Regulated Electric 9.80x / 13.18x / 0.92x (through-cycle 10.47x /
     # 15.60x); Independent Power Producers 8.34x / 7.38x / 0.80x (8.28x / 10.39x).
-    "Regulated Utility": {"ev_ebitda": 10.0, "pe": 14.0, "ev_revenue": 3.0, "pb": 0.95, "fcf_yield": 0.060, "growth_avg": 0.03},
+    #   NTM (2026-09-22): HKSE Regulated Electric NTM EV/EBITDA 8.92x (n=5), NTM P/E 14.60x (n=6) --
+    #   ABOVE trailing, because HK consensus sits below trailing earnings. The HKSE IPP basket
+    #   forms no NTM median (no member clears two analysts), so IPP carries none: its forward
+    #   legs keep the trailing multiple and say so.
+    "Regulated Utility": {"ev_ebitda": 10.0, "pe": 14.0, "ev_revenue": 3.0, "pb": 0.95, "fcf_yield": 0.060, "growth_avg": 0.03,
+                          "ev_ebitda_ntm": 8.9, "pe_ntm": 14.6},
     "IPP":               {"ev_ebitda":  8.3, "pe":  9.0, "ev_revenue": 2.9, "pb": 0.80, "fcf_yield": 0.060, "growth_avg": 0.04},
     "Financials":   {"ev_ebitda":  8.5, "pe":  7.7, "ev_revenue": 1.4, "pb": 0.7, "fcf_yield": 0.090, "growth_avg": 0.05},
     "Industrials":  {"ev_ebitda":  8.0, "pe": 14.0, "ev_revenue": 1.2, "pb": 1.5, "fcf_yield": 0.060, "growth_avg": 0.05},

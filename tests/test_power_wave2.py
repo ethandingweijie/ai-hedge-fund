@@ -284,3 +284,38 @@ def test_the_note_is_appended_before_the_scenario_loop_so_it_reaches_every_scena
     note_at = src.index("_vc_reg.regime_deviation(ticker)")
     snapshot_at = src.index("forward_flags = list(ticker_forward_flags)")
     assert note_at < snapshot_at
+
+
+# -- forward (NTM) statics, owner 2026-09-22 ----------------------------------
+
+def test_the_wave_two_statics_carry_forward_multiples_where_a_basket_measured_them():
+    """Derived from the 2026-09-21 refresh, the first with NTM fields. HKSE IPP
+    forms no NTM median, so it carries none rather than an invented one."""
+    from src.data.sector_profiles import HK_SECTOR_PEER_MULTIPLES as HK, SECTOR_PEER_MULTIPLES as US
+    want = {"Regulated Utility": (9.8, 16.9), "IPP": (9.4, 10.6), "Merchant Power": (9.4, 10.6), OEM: (9.3, 12.0)}
+    for prof, (ev, pe) in want.items():
+        assert (US[prof]["ev_ebitda_ntm"], US[prof]["pe_ntm"]) == (ev, pe), prof
+        assert US[prof]["ev_ebitda_ntm"] < US[prof]["ev_ebitda"]          # US forward sits below trailing
+    assert (HK["Regulated Utility"]["ev_ebitda_ntm"], HK["Regulated Utility"]["pe_ntm"]) == (8.9, 14.6)
+    assert "pe_ntm" not in HK["IPP"] and "ev_ebitda_ntm" not in HK["IPP"]
+
+
+def test_a_static_forward_multiple_never_outranks_a_live_trailing_basket(monkeypatch):
+    """The static NTM is a fallback for the fallback: with the flag on and a live
+    industry trailing median, the forward leg stays on the live basket."""
+    monkeypatch.setenv(dcf_agent.NTM_FORWARD_FLAG, "true")
+    peer = {"pe": 19.8, "pe_ntm": 16.9, "_comp_basis": {"pe": {"basis": "industry", "key": "Regulated Electric"},
+                                                        "pe_ntm": {"basis": "static", "cohort": "US"}}}
+    monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: dict(peer))
+    v, tr = dcf_agent._traced_method_value(
+        method_name="Forward P/E", most_recent={}, revenue_base=2.5e10, shares=2e9, net_debt=9e10, market_cap=1.5e11,
+        wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02, fcf_floor=0.0, sector="Energy", scenario="base",
+        profile_name=PROFILE, forward_consensus={"eps": {"base": 3.0}})
+    assert tr["multiple_parts"]["peer_multiple"] == 19.8
+    # Both static: the forward one is on the same footing and is used.
+    peer["_comp_basis"]["pe"] = {"basis": "static", "cohort": "US"}
+    v, tr = dcf_agent._traced_method_value(
+        method_name="Forward P/E", most_recent={}, revenue_base=2.5e10, shares=2e9, net_debt=9e10, market_cap=1.5e11,
+        wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02, fcf_floor=0.0, sector="Energy", scenario="base",
+        profile_name=PROFILE, forward_consensus={"eps": {"base": 3.0}})
+    assert tr["multiple_parts"]["peer_multiple"] == 16.9
