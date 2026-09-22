@@ -237,8 +237,8 @@ class TestMultipleBands:
 
     def test_the_shipped_table_is_authored_and_reviewed(self):
         assert vc.bands_reviewed().get("reviewer") == "owner"
-        assert vc.multiple_band("US", "Aerospace & Defense", "pe") == (25.0, 30.0,
-                                                                      "US/Aerospace & Defense")
+        # Wave 3 (2026-09-22): the owner's A&D band moved with the split to Defense Primes.
+        assert vc.multiple_band("US", "Defense Primes", "pe") == (25.0, 30.0, "US/Defense Primes")
 
     def test_early_stage_biotech_carries_no_pe_band(self):
         """The owner's note: it trades on P/S or rNPV, and HK pre-revenue names

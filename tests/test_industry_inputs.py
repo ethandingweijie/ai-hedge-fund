@@ -201,7 +201,9 @@ def test_the_reserve_value_is_a_cross_check_and_a_bear_floor_not_a_leg():
 
 def test_backlog_bounds_only_the_bear_decline():
     from src.agents.analysis import dcf_agent as d
-    assert d._BACKLOG_VISIBILITY_PROFILES == frozenset({"Oilfield Services & Drilling"})
+    # Wave 3 (2026-09-22): the profiles whose backlog is the business join the bear-only floor.
+    assert d._BACKLOG_VISIBILITY_PROFILES == frozenset({
+        "Oilfield Services & Drilling", "Defense Primes", "Defense Tech & Space", "General Aviation (HK)"})
     src = __import__("inspect").getsource(d.run_dcf_agent)
     assert 'if scenario == "bear" and _backlog_cov is not None and g < 0:' in src
     assert "-(1.0 - min(_backlog_cov, 1.0))" in src

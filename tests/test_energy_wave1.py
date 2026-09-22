@@ -64,7 +64,8 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
     """Scope grows a wave at a time. Wave 2 (tests/test_power_wave2.py) added
     exactly these three; anything else appearing here is unreviewed routing."""
     wave2 = {"Regulated Electric", "Independent Power Producers", "Solar"}
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2
+    wave3 = {"Aerospace & Defense"}                       # tests/test_aerospace_defense_wave3.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3
 
 
 def test_scope_does_not_reach_other_industries():

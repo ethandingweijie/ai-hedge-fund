@@ -534,6 +534,7 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "maintenance_capex": MaintenanceCapex,
     "rate_base": RateBase,
     "fcf_guidance": FcfGuidance,
+    "sotp": SotpInputs,
 }
 
 _INDUSTRY_ASK = {
@@ -551,6 +552,9 @@ _INDUSTRY_ASK = {
         "(total backlog, funded backlog, contract drilling backlog, order backlog, or remaining "
         "performance obligations) and its latest book-to-bill ratio if it states one. Also report "
         "the total ORDERS it booked in the latest completed fiscal year, as it reports them."),
+    # `sotp` is asked through sotp_prompt(company, ticker, anchors), which needs
+    # the FMP anchors; this entry keeps the kind tables complete.
+    "sotp": "its business segments with a cited multiple range each (see sotp_prompt)",
     "fcf_guidance": (
         "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
         "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
@@ -577,6 +581,7 @@ _INDUSTRY_ASK = {
 
 
 _OVERLAY_ASK = {
+    "sotp": "segment revenue",
     "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",

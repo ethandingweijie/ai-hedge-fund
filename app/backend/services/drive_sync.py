@@ -511,9 +511,10 @@ _INDUSTRY_SYNONYMS: dict[str, tuple[tuple[str, str], ...]] = {
     "telecommunications": (("Telco", ""),),
     "reits": (("REIT", ""),),
     "s-reits": (("REIT", ""),),
-    "aerospace": (("Industrials", "Aerospace & Defense"),),
-    "defense": (("Industrials", "Aerospace & Defense"),),
-    "defence": (("Industrials", "Aerospace & Defense"),),
+    # Wave 3 (2026-09-22): the parent profile was split three ways.
+    "aerospace": (("Industrials", "Commercial Aerospace & Engines"), ("Industrials", "Niche Aerospace Components")),
+    "defense": (("Industrials", "Defense Primes"), ("Industrials", "Defense Tech & Space")),
+    "defence": (("Industrials", "Defense Primes"), ("Industrials", "Defense Tech & Space")),
     "upstream oil": (("Resources", "Upstream Oil & Gas"),),
     "oil & gas": (("Resources", "Upstream Oil & Gas"),),
     "it services": (("ProfessionalServices", "IT Services"),),

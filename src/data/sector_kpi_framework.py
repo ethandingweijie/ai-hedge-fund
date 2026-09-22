@@ -3594,7 +3594,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
 # ── Industrials ──────────────────────────────────────────────────
-    'Aerospace & Defense': {
+    'Defense Primes': {   # Wave 3 (2026-09-22): the split parent's spec, kept for the row's default profile
         "sector":         'Industrials',
         # Multi-method anchor list — Aerospace/Defense often has lumpy EBITDA
         # so blend with P/E and DCF for robustness (audit Apr 2026: LMT failed

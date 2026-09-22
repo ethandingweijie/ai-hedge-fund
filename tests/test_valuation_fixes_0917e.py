@@ -1079,11 +1079,15 @@ def test_fourteen_of_sixteen_leg_multiples_carry_the_premium():
     # +1 for EV/OCF (Wave 1 oil, gas & coal (owner-approved 2026-09-20)), which carries the premium like its siblings.
     # +1 for P/Rate Base (Wave 2, 2026-09-21), the THIRD documented exception: a
     # PEG premium on a regulator-capped return is incoherent, and its branch says so.
-    assert len(mults) == 18
+    # +2 for Wave 3 (2026-09-22): EV/EBIT (norm) carries the premium like its
+    # siblings; PEG is the FOURTH documented exception -- the growth is already
+    # the multiplier, so a premium on top would count it twice.
+    assert len(mults) == 20
     with_gp = [m for m in mults if "growth_premium" in m]
     without = [m for m in mults if "growth_premium" not in m]
-    assert len(with_gp) == 15
-    assert without == ['mult = _mnav * sm', 'mult = _on_book * sm', 'mult = cfg["p_tbv"] * sm']
+    assert len(with_gp) == 16
+    assert without == ['mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc',   # PEG, in file order
+                       'mult = _mnav * sm', 'mult = _on_book * sm', 'mult = cfg["p_tbv"] * sm']
 
 
 def test_the_fcf_yield_leg_reaches_the_same_scaling_from_the_other_side():

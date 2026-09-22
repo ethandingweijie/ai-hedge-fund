@@ -113,6 +113,14 @@ _PROJECTION_YEARS = 10
 _MIN_HISTORY_YEARS = 2
 _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 
+#: Per-PROFILE terminal growth, consulted after the sector table (owner,
+#: 2026-09-22): a defence prime's DCF "relies heavily on predicting baseline
+#: FCF and applying a stable terminal growth rate (2.5% to 3.0%)". The
+#: Industrials sector table says 2.0% base, which is a machinery rate.
+_PROFILE_TGR: dict[str, dict[str, float]] = {
+    "Defense Primes": {"bear": 0.020, "base": 0.0275, "bull": 0.030},
+}
+
 # RSU/PSU cash tax withholding, as a fraction of gross SBC expense — used
 # when FMP doesn't expose a clean withholding line (same estimator and rate
 # as src/research_ideas/sw46/tragic_algebra.py's Method E, calibrated
@@ -298,6 +306,9 @@ _RESERVE_FLOOR_PROFILES: frozenset[str] = frozenset({
 #: FMP carries no backlog for peers, so a peer median cannot be taken.
 _BACKLOG_VISIBILITY_PROFILES: frozenset[str] = frozenset({
     "Oilfield Services & Drilling",
+    # Wave 3 (2026-09-22): the bear-only floor on top of the backlog-coverage
+    # leg, for the names whose backlog is the business.
+    "Defense Primes", "Defense Tech & Space", "General Aviation (HK)",
 })
 
 
@@ -320,6 +331,10 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Automotive (OEM)",
     "Digital Asset Mining",
     "Clean Tech / Power Equipment OEM",
+    # Wave 3: the delivery cycle -- strikes, groundings, engine ramps -- is the
+    # definition of the mean-reversion premise (owner, 2026-09-22: Boeing on
+    # "normalized mid-cycle delivery volumes").
+    "Commercial Aerospace & Engines",
 })
 
 #: Phase 1.2B — peak-consensus trigger. Forward consensus EPS above EITHER
@@ -400,6 +415,7 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     # (tests/test_growth_convergence.py) -- a one-year consensus jump on an
     # IRA-credit or tariff swing is not a decade's growth.
     "Clean Tech / Power Equipment OEM",
+    "Commercial Aerospace & Engines",
 })
 
 #: Fraction of the gap to the long-run rate retained each year. 0.5 halves the
@@ -5834,6 +5850,10 @@ def _compute_method_value(
         if _is_tech_subtype(sector, profile_name):
             tech_mults = _tech_subtype_multiples(profile_name)
             base_mult = tech_mults["ev_ebit"] if method_name in _EV_EBIT_METHODS else tech_mults["ev_ebitda"]
+        elif method_name in _EV_EBIT_METHODS and isinstance(peer.get("ev_ebit"), (int, float)):
+            # EBIT on an EV/EBIT median. The EV/EBITDA fallback below is the
+            # old behaviour, kept for a basket with no EV/EBIT reading.
+            base_mult = float(peer["ev_ebit"])
         else:
             base_mult = peer.get("ev_ebitda", 12.0)
         mult = base_mult * sm * growth_premium
@@ -5856,6 +5876,9 @@ def _compute_method_value(
                        multiple_parts={
                            "peer_multiple": float(base_mult),
                            "peer_source": ("tech sub-type table" if _is_tech_subtype(sector, profile_name)
+                                           else "peer median ev_ebit"
+                                           if (method_name in _EV_EBIT_METHODS
+                                               and isinstance(peer.get("ev_ebit"), (int, float)))
                                            else "peer median ev_ebitda"),
                            "scenario_band": sm, "growth_premium": growth_premium,
                            "sbc_haircut": (0.90 if (_sbc_v and revenue_base and revenue_base > 0
@@ -5880,6 +5903,29 @@ def _compute_method_value(
     # all. Routing it to the plain branch instead would satisfy the coverage
     # test and still hand a steel company its peak-year EBITDA, which is the
     # defect Phase 1.2B exists to remove. The note now says what the code does.
+    # ── EV/EBIT (norm) ────────────────────────────────────────────────────
+    # Declines without an EV/EBIT median: pricing EBIT at EV/EBITDA is the
+    # basis mismatch the ev_ebit comps field was added to remove.
+    if method_name in _EV_EBIT_NORM_METHODS:
+        norm_ebit = most_recent.get("normalized_ebit")
+        _ev_ebit = peer.get("ev_ebit")
+        if norm_ebit is None or norm_ebit <= 0 or shares <= 0:
+            return None
+        if not isinstance(_ev_ebit, (int, float)) or _ev_ebit <= 0:
+            return None
+        mult = float(_ev_ebit) * sm * growth_premium * _own_disc
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = norm_ebit * mult
+        _leg_trace(kind="ev_multiple", metric="EBIT (5y normalised)",
+                   metric_value=float(norm_ebit), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(_ev_ebit), "peer_source": "peer median ev_ebit",
+                                   "scenario_band": sm, "growth_premium": growth_premium,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0),
+                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
+
     if method_name in {"EV/EBITDA (norm)", "EV/EBITDA (Norm)",
                        "EV/EBITDA norm", "Normalized EV/EBITDA"}:
         norm_ebitda = most_recent.get("normalized_ebitda")
@@ -6348,6 +6394,41 @@ def _compute_method_value(
     # (eps_low / eps_avg / eps_high) so there is no scenario multiplier (sm)
     # — dispersion IS the scenario signal. Growth premium and SBC discount
     # still apply to the multiple.
+    # ── PEG ───────────────────────────────────────────────────────────────
+    # fair P/E = PEG x EPS growth (%), on NTM consensus EPS. The PEG is an
+    # owner-set profile constant (valuation_constants `profiles.<p>.peg_ratio`);
+    # no constant, no leg. Growth is consensus FY2/FY1 EPS when the run has two
+    # forward years, else the revenue growth base, and the trace says which.
+    # No growth premium: the growth is already the multiplier.
+    if method_name in _PEG_METHODS:
+        from src.data import valuation_constants as _vc_peg
+        _peg = _vc_peg.peg_ratio(profile_name)
+        if not _peg:
+            return None
+        _g_peg = most_recent.get("_eps_growth_fy2")
+        _g_src = "consensus EPS growth FY2/FY1"
+        if not isinstance(_g_peg, (int, float)):
+            _g_peg, _g_src = growth_base, "revenue growth base (no second forward year)"
+        if not _g_peg or _g_peg <= 0:
+            return None
+        _fair_pe = float(_peg) * float(_g_peg) * 100.0
+        _eps_src = forward_consensus.get("eps", {}).get(scenario) if forward_consensus else None
+        if isinstance(_eps_src, (int, float)) and _eps_src > 0:
+            _eps_peg, _eps_label, _sm_peg = float(_eps_src), f"EPS (NTM consensus, {scenario})", 1.0
+        elif net_income is not None and shares > 0 and net_income / shares > 0:
+            _eps_peg, _eps_label, _sm_peg = net_income / shares, "EPS (TTM)", sm
+        else:
+            return None
+        mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc
+        _leg_trace(kind="equity_multiple", metric=_eps_label,
+                   metric_value=float(_eps_peg), per_share_metric=float(_eps_peg), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(_fair_pe),
+                                   "peer_source": f"PEG {float(_peg):.2f} x EPS growth {float(_g_peg):.1%} "
+                                                  f"(owner-set PEG; {_g_src})",
+                                   "scenario_band": _sm_peg, "sbc_pe_discount": sbc_pe_discount,
+                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
+        return _eps_peg * mult
+
     if method_name in {"Forward P/E", "Fwd P/E", "NTM P/E"}:
         if forward_consensus is None:
             return None
@@ -7243,6 +7324,14 @@ _LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
 #: which has no order-intake ratio and therefore no ceiling.
 _BACKLOG_BOUNDED_METHODS: frozenset[str] = frozenset({"Backlog DCF", "Backlog-coverage DCF"})
 _CONTRACTED_BACKLOG_METHODS: frozenset[str] = frozenset({"Contracted-backlog DCF"})
+
+#: Wave 3 legs (owner framework, 2026-09-22). "EV/EBIT (norm)": Boeing's
+#: "normalized EV/EBIT" -- through-cycle EBIT margin x current revenue at the
+#: basket's EV/EBIT median (regional_comps.ev_ebit), never at EV/EBITDA on
+#: EBIT. "PEG": the niche-components anchor -- fair P/E = owner-set PEG x
+#: consensus EPS growth, on NTM EPS.
+_EV_EBIT_NORM_METHODS: frozenset[str] = frozenset({"EV/EBIT (norm)"})
+_PEG_METHODS: frozenset[str] = frozenset({"PEG"})
 _BACKLOG_BOUND_YEARS = 3
 
 
@@ -7351,8 +7440,8 @@ def _forward_peer_multiple(peer: dict, field: str, default: float) -> tuple[floa
 
 
 def _basket_rank(peer: dict, field: str) -> int:
-    """How specific the basket behind one field is: industry 3, a same-market
-    family 2, sector 1, static table or unknown 0.
+    """How specific the basket behind one field is: curated profile basket 4,
+    industry 3, a same-market family 2, sector 1, static table or unknown 0.
 
     Comps resolve FIELD BY FIELD, so two fields of one name can come from
     different baskets. Measured 2026-09-22: HKSE `Consumer Electronics` has an
@@ -7364,6 +7453,8 @@ def _basket_rank(peer: dict, field: str) -> int:
     """
     b = (peer.get("_comp_basis") or {}).get(field) or {}
     level = b.get("basis")
+    if level == "profile":
+        return 4
     if level == "industry":
         try:
             from src.data.regional_comps import INDUSTRY_FAMILIES
@@ -10392,6 +10483,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # the per-share IV lands in the listing currency like every other
         # method. Shadow-only today; blend promotion is a later phase.
         _ticker_sotp = sotp_assumptions_all.get(ticker)
+        if not _ticker_sotp:
+            # Owner, 2026-09-22: for the SOTP-valued profiles, "tap on Gemini
+            # to get the business segments and the multiple range". The cited
+            # inputs live in the review-gated store (kind `sotp`) and reach
+            # the engine only once ACCEPTED, converted by the same function
+            # the Gemini evaluation used.
+            try:
+                from src.data import industry_inputs as _ii_s
+                from src.agents.industry.gemini_params import to_engine_assumptions as _to_engine
+                _sotp_e = _ii_s.accepted_entry(ticker, "sotp")
+                if _sotp_e:
+                    _conv, _conv_checks = _to_engine(_sotp_e["data"])
+                    if _conv.get("segments"):
+                        _conv["_origin"] = "gemini_accepted"
+                        _conv["_review"] = {"kind": "sotp", "built_at": _sotp_e.get("built_at"),
+                                            "checks": _conv_checks}
+                        _ticker_sotp = _conv
+                        ticker_forward_flags.append(
+                            f"SOTP (analyst): {len(_conv['segments'])} segments from owner-accepted "
+                            f"Gemini inputs, each with a cited multiple range (midpoint used)")
+            except Exception:                              # noqa: BLE001
+                _ticker_sotp = None
         if _ticker_sotp:
             if not _ticker_sotp.get("fx_usd_to_reporting"):
                 _ticker_sotp = dict(_ticker_sotp)
@@ -10957,6 +11070,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
                 "period_end":            getattr(_fwd, "period_end",            ""),
             }
+            # Consensus EPS growth into the second forward year, for the PEG
+            # leg. estimates are sorted ascending by period_end.
+            if len(estimates) >= 2:
+                _e1, _e2 = _safe(getattr(estimates[0], "eps_avg", None)), _safe(getattr(estimates[1], "eps_avg", None))
+                if _e1 and _e1 > 0 and _e2 and _e2 > 0:
+                    most_recent["_eps_growth_fy2"] = _e2 / _e1 - 1.0
 
         # ── R1: licensed analyst-report estimates vs street consensus ─────
         # Deposited sell-side reports (analyst_reports table) are the ONLY
@@ -11288,6 +11407,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         profile_name, profile_data = _lc["profile"], _lc_data
         except Exception:                                  # noqa: BLE001
             pass
+
+        # Per-profile terminal growth (owner, 2026-09-22), now that the profile
+        # is final. The sector table stands for every profile not listed.
+        if profile_name in _PROFILE_TGR:
+            tgr_table = _PROFILE_TGR[profile_name]
 
         # B4: an ACTIVE calibration's fitted method weights for this (sector,
         # profile), and its market IV multiplier. Nothing is active until a

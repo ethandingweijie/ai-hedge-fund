@@ -29,6 +29,17 @@
    "effective_until": "2026-11-15",
    "reviewer": "owner",
    "note": "Distributable cash flow is capitalised at this yield, NOT at the peer free-cash-flow yield: peer FCF is net of total capex while distributable CF is net of maintenance capex only, and mixing the two priced Energy Transfer at 2.3x spot once its audited maintenance capex replaced the D&A stand-in."
+  },
+  "Niche Aerospace Components": {
+   "peg_ratio": 2.2,
+   "peg_band": [
+    1.5,
+    3.2
+   ],
+   "derivation": "NTM P/E over consensus FY2/FY1 EPS growth on the niche basket, 2026-09-22: TDG 1.47, HWM 1.67, WWD 2.23, CW 2.87, HEI 3.17; median 2.23. Band = the basket's range.",
+   "last_reviewed": "2026-09-22",
+   "reviewer": "derived from the market; owner to confirm",
+   "note": "Owner framework 2026-09-22: niche high-margin components (TransDigm, HEICO, Howmet) on PEG and EV/FCF, 'high structural P/E ratios (often 30x+) due to proprietary aftermarket parts with near-monopoly pricing power'. The PEG turns that growth into a fair P/E rather than borrowing a basket median that would price a 15%-grower and a 22%-grower alike."
   }
  },
  "segment_multiples": {
@@ -275,16 +286,6 @@
   },
   "bands": {
    "US": {
-    "Aerospace & Defense": {
-     "pe": [
-      25.0,
-      30.0
-     ],
-     "ev_ebitda": [
-      14.0,
-      18.0
-     ]
-    },
     "Food & Beverage": {
      "pe": [
       21.0,
@@ -326,15 +327,39 @@
       18.0,
       22.0
      ]
-    }
-   },
-   "HKSE": {
-    "Aerospace & Defense": {
+    },
+    "Defense Primes": {
      "pe": [
-      12.0,
+      25.0,
+      30.0
+     ],
+     "ev_ebitda": [
+      14.0,
       18.0
      ]
     },
+    "Commercial Aerospace & Engines": {
+     "ev_ebitda": [
+      20.0,
+      32.0
+     ],
+     "pe": [
+      30.0,
+      45.0
+     ]
+    },
+    "Niche Aerospace Components": {
+     "ev_ebitda": [
+      20.0,
+      32.0
+     ],
+     "pe": [
+      30.0,
+      45.0
+     ]
+    }
+   },
+   "HKSE": {
     "Food & Beverage": {
      "pe": [
       10.0,
@@ -351,6 +376,24 @@
      "pe": [
       20.0,
       35.0
+     ]
+    },
+    "Aerospace Holdco (HK)": {
+     "pe": [
+      12.0,
+      18.0
+     ]
+    },
+    "General Aviation (HK)": {
+     "pe": [
+      12.0,
+      18.0
+     ]
+    },
+    "GA Engines & Aftermarket (HK)": {
+     "pe": [
+      12.0,
+      18.0
      ]
     }
    },
@@ -384,7 +427,8 @@
      ]
     }
    }
-  }
+  },
+  "_wave3_note": "2026-09-22: the Aerospace & Defense band moved to Defense Primes when the profile was split; Commercial Aerospace & Engines and Niche Aerospace Components take the measured cluster ranges (27x / 40x medians); the HK band applies to the three HK aerospace profiles."
  },
  "cost_of_equity": {
   "_doc": "Owner-set cost of equity by profile and market, CAPM-built. The value is the midpoint of the owner's application range; the range is a flag band, never a clamp. Keyed by the market of the cash flows because the risk-free rate must match their denomination.",

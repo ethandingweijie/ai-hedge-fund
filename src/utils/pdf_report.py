@@ -1952,6 +1952,65 @@ _SEG_TYPE_LABEL = {
 }
 
 
+def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """The analyst sum-of-the-parts (dcf_range.sotp_breakdown): each segment's
+    forward revenue, the method and multiple it was valued on, its value, then
+    the bridge -- associates, net cash, holdco discount -- to a per-share figure.
+    Web (both render paths) and the Excel model already show it; the PDF did not.
+    """
+    b = dcf_t.get("sotp_breakdown") or {}
+    rows = b.get("rows") or []
+    if not rows or b.get("per_share_reporting") is None:
+        return []
+    ccy = b.get("reporting_currency") or ""
+    st_l = ParagraphStyle("_asl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_aslb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_asv", parent=st_l, alignment=2)
+
+    def _bn(v):
+        try:
+            return f"{float(v) / 1e9:,.2f}bn"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _x(v):
+        try:
+            return f"{float(v):.1f}x"
+        except (TypeError, ValueError):
+            return "—"
+
+    hdr = [Paragraph(_wh(h), st_lb) for h in ("Segment", "Fwd revenue (USD)", "Method", "Multiple", "Value (USD)")]
+    body = [hdr]
+    for r in rows:
+        body.append([Paragraph(_strip(str(r.get("name") or "")), st_l), Paragraph(_bn(r.get("revenue_fwd")), st_v),
+                     Paragraph(_strip(str(r.get("method") or "")), st_l), Paragraph(_x(r.get("multiple")), st_v),
+                     Paragraph(_bn(r.get("value")), st_v)])
+    for label, key in (("Sum of segments", "segment_value"), ("+ Associates / investments", "associates"),
+                       ("+ Net cash", "net_cash"), ("= NAV", "nav")):
+        body.append([Paragraph(f"<b>{label}</b>", st_l), "", "", "", Paragraph(_bn(b.get(key)), st_v)])
+    body.append([Paragraph(f"<b>- Holdco discount ({_pct_s(b.get('holdco_discount_pct'), signed=False)})</b>", st_l),
+                 "", "", "", Paragraph(_bn(b.get("holdco_discount")), st_v)])
+    body.append([Paragraph("<b>= Equity value</b>", st_l), "", "", "", Paragraph(_bn(b.get("final")), st_v)])
+    body.append([Paragraph(f"<b>Per share ({ccy})</b>", st_l), "", "", "",
+                 Paragraph(f"<b>{_money(b.get('per_share_reporting'))}</b>", st_v)])
+    lab_w = width * 0.30
+    col_w = (width - lab_w) / 4.0
+    t = Table(body, colWidths=[lab_w, col_w, col_w, col_w, col_w])
+    t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black),
+                           ("LINEABOVE", (0, len(rows) + 1), (-1, len(rows) + 1), 0.4, colors.black),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                           ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5)]))
+    out = [Paragraph("Sum of the parts (analyst)", styles["RptLabel"])]
+    if b.get("sentence"):
+        out.append(Paragraph(_strip(str(b["sentence"])), styles["RptBody"]))
+    out += [t, Spacer(1, 4)]
+    if (b.get("sources") or {}).get("all") in ("gemini_grounded", "gemini_accepted"):
+        out.append(Paragraph("Segments and multiple ranges: owner-accepted, cited inputs (midpoint of each "
+                             "range applied). Source: Financial Modeling Prep for the group anchors.",
+                             styles["RptBody"]))
+    return out
+
+
 def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """The segment sum-of-the-parts, with the arithmetic behind each part.
 
@@ -2656,6 +2715,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         story.append(Paragraph("Valuation Summary", styles["RptSubsection"]))
         story.extend(_valuation_summary(dcf_ticker, scen, styles, page_w))
         story.extend(_segment_sotp_block_pdf(dcf_ticker, styles, page_w))
+        story.extend(_analyst_sotp_block_pdf(dcf_ticker, styles, page_w))
         story.append(Spacer(1, 8))
 
         # ── Risk Assessment (value-trap checks + risk flags) ──

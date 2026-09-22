@@ -1340,7 +1340,10 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     bad one.
     """
     src = _engine_src()
-    assert src.count('"normalized_ebit"') == 1, "normalized_ebit gained a reader"
+    # The dispatch gap the docstring describes was closed on 2026-09-22: the
+    # "EV/EBIT (norm)" leg (Boeing on a normalised EV/EBIT, owner framework) is
+    # its one reader. Two occurrences: the write, and that branch's read.
+    assert src.count('"normalized_ebit"') == 2, "normalized_ebit gained a reader beyond EV/EBIT (norm)"
     # THREE since 2026-09-20: the segment SOTP reconciles its estimated segment
     # EBITDA to this figure, so the parts sum to the company's own normalised
     # earnings. Phillips 66's segments summed to $16.6bn of EBITDA against the
@@ -1388,6 +1391,7 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
         ("Energy", "Clean Tech / Power Equipment OEM", "EV/EBITDA (norm)"),
         ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
         ("Energy", "Refining & Marketing", "EV/EBITDA (norm)"),
+        ("Industrials", "Defense Primes", "EV/EBITDA (norm)"),      # Wave 3: through-cycle check on the primes
         ("Materials", "Steel / Metals", "EV/EBITDA (Norm)"),
         ("Resources", "Coal", "EV/EBITDA (norm)"),
         ("Resources", "Integrated Oil & Gas", "EV/EBITDA (norm)"),
@@ -1695,7 +1699,9 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 profiles, all five with a normalised leg.
     # Wave 2 power & transition (owner-confirmed 2026-09-21): +1 profile, with a normalised anchor.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
-    assert (total, with_norm) == (106, 34), (total, with_norm)
+    # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
+    # Commercial Aerospace & Engines carries EV/EBIT (norm).
+    assert (total, with_norm) == (112, 36), (total, with_norm)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1719,10 +1725,10 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 9, spellings      # +1: Wave 2 hardware OEM profile
+    assert spellings.get("EV/EBITDA (norm)") == 10, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
     assert spellings.get("P/E (norm)") == 26, spellings
-    assert len(spellings) == 3, spellings
+    assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
 @pytest.mark.xfail(strict=True, reason=(
@@ -2064,7 +2070,8 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # joins the swap population and its anchors: a utility in a depressed year is
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
-    assert (tot, trail, elig, anchored) == (106, 38, 38, 14)
+    # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
+    assert (tot, trail, elig, anchored) == (112, 38, 38, 14)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2820,7 +2827,8 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     missing = [k for k in hk
                if k.split(".")[0].zfill(5) not in _REPORTING_CURRENCY]
     # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
-    assert len(hk) == 163 and len(missing) == 122, (len(hk), len(missing))
+    # +3 / +3: 02357.HK, 02507.HK, 00232.HK pinned in Wave 3 (all HKD reporters).
+    assert len(hk) == 166 and len(missing) == 125, (len(hk), len(missing))
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")

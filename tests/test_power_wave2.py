@@ -151,7 +151,9 @@ def test_an_unmapped_industrial_is_capital_goods_whatever_its_growth_or_leverage
 def test_car_makers_and_defence_names_are_still_reached_by_what_they_are():
     from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as pins
     assert {pins[t][1] for t in ("GM", "F", "TM")} == {"Automotive (OEM)"}
-    assert {pins[t][1] for t in ("LMT", "RTX", "BA", "GE")} == {"Aerospace & Defense"}
+    # Wave 3 split the parent: primes and the commercial pair are still reached by pin.
+    assert {pins[t][1] for t in ("LMT", "RTX")} == {"Defense Primes"}
+    assert {pins[t][1] for t in ("BA", "GE")} == {"Commercial Aerospace & Engines"}
 
 
 # -- the owner-confirmed tables, routing and pins (2026-09-21) ----------------

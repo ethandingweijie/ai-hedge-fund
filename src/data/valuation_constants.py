@@ -231,6 +231,12 @@ def ticker_multiple_discount(ticker: Optional[str], doc: Optional[dict] = None) 
     return float(v) if isinstance(v, (int, float)) and 0.5 <= v <= 1.0 else 1.0
 
 
+def peg_ratio(profile: Optional[str], doc: Optional[dict] = None) -> Optional[float]:
+    """The profile's PEG ratio for the PEG leg, or None when none is recorded."""
+    v = (entry(profile, doc) or {}).get("peg_ratio")
+    return float(v) if isinstance(v, (int, float)) and 0.3 <= v <= 6.0 else None
+
+
 def detail(profile: Optional[str], doc: Optional[dict] = None,
            today: Optional[date] = None) -> Optional[dict]:
     """The constant plus the audit trail behind it: benchmark, band, review

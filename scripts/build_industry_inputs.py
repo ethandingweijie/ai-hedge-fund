@@ -51,7 +51,16 @@ WAVE2 = {
     # `fcf_guidance_fade`). GE Vernova is the first name that needs it.
     "fcf_guidance": ["GEV"],
 }
-WAVES = {"1": WAVE1, "2": WAVE2}
+
+#: Wave 3 (owner framework, 2026-09-22). Backlog for the names whose order
+#: book bounds the DCF; the Gemini SOTP inputs -- business segments with a
+#: cited multiple range each -- for the SOTP-valued profiles.
+WAVE3 = {
+    "backlog": ["LMT", "NOC", "GD", "RTX", "LHX", "BA", "GE", "HWM", "TDG", "HEI",
+                "KTOS", "AVAV", "RKLB", "02507.HK", "S63.SI"],
+    "sotp": ["BA", "02357.HK", "S63.SI"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3}
 
 
 def _fmp(path: str, params: dict):
@@ -86,10 +95,51 @@ def fmp_context(ticker: str) -> dict:
     }
 
 
+def _sotp_anchors(ticker: str, ctx: dict) -> dict:
+    """The FMP anchors sotp_prompt fixes: next-year consensus revenue, the
+    reporting currency, latest revenue. Gemini must not contradict them."""
+    from src.tools.fmp_transcripts import to_fmp_symbol
+    from datetime import date
+    sym = to_fmp_symbol(ticker)
+    today = date.today().isoformat()
+    est = [e for e in (_fmp("analyst-estimates", {"symbol": sym, "period": "annual", "limit": 10}) or [])
+           if str(e.get("date", "")) > today]
+    fwd = min(est, key=lambda e: e["date"]) if est else {}
+    inc = (_fmp("income-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
+    return {"reported_currency": inc.get("reportedCurrency") or "USD",
+            "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2),
+            "revenue_next_fy_usd_bn": (round(float(fwd["revenueAvg"]) * (ctx.get("revenue") or 0)
+                                             / float(inc.get("revenue") or 1) / 1e9, 2)
+                                       if fwd.get("revenueAvg") and inc.get("revenue") else None),
+            "revenue_next_fy_period": fwd.get("date")}
+
+
 def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
+    if kind == "sotp":
+        # Owner, 2026-09-22: the SOTP-valued profiles take their segments and
+        # the multiple range to adopt from Gemini, cited, then review-gated.
+        anchors = _sotp_anchors(ticker, ctx)
+        out = gp.generate(gp.sotp_prompt(ctx["company"], ticker, anchors), schema=schema,
+                          grounded=True, timeout=300.0)
+        data = out.get("json")
+        if not isinstance(data, dict):
+            raise gp.GeminiParseError(f"{ticker}/sotp: no structured answer")
+        conv, conv_checks = gp.to_engine_assumptions(data, fmp_revenue_fwd_usd=None)
+        seg_sum = sum(s["revenue_fwd"] for s in conv.get("segments") or [])
+        checks = ii.reconcile("sotp", seg_sum or None, ctx, period=data.get("fiscal_year"))
+        checks.append({"check": "segments with a cited multiple range", "ok": len(conv.get("segments") or []) >= 2,
+                       "detail": (f"{len(conv.get('segments') or [])} usable; dropped "
+                                  f"{conv_checks.get('dropped_segments') or 'none'}")})
+        return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
+                "anchors": anchors, "value_usd": seg_sum or None, "checks": checks,
+                "engine_preview": {"segments": conv.get("segments"), "checks": conv_checks},
+                "ok": all(c["ok"] is not False for c in checks),
+                "grounding_urls": out.get("grounding_urls") or [],
+                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     # Grounded reserve/backlog calls read long filings; 90s (the client default)
     # timed out repeatedly on EOG, Rex and Williams. Two attempts, longer each.
     for attempt, timeout in enumerate((180.0, 300.0)):

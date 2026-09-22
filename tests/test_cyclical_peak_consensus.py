@@ -286,7 +286,9 @@ def test_the_cyclical_profiles_are_the_ones_the_plans_name():
         "Integrated Oil & Gas", "Refining & Marketing",
         "Oilfield Services & Drilling", "Coal",
         # Wave 2 power & transition (owner-confirmed 2026-09-21): policy-cycle hardware.
-        "Clean Tech / Power Equipment OEM"})
+        "Clean Tech / Power Equipment OEM",
+        # Wave 3 (owner framework 2026-09-22): the delivery cycle is the premise.
+        "Commercial Aerospace & Engines"})
     for name in _CYCLICAL_PROFILES:
         _profile(name)          # raises if the taxonomy drifted
 

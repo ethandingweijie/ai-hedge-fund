@@ -1107,7 +1107,8 @@ class TestTheOpsSpellingsAreInTheSwap:
         # Wave 2 (2026-09-21): +1 profile, and Regulated Utility's new trailing P/E anchor
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
-        assert (tot, trail, elig, anchored) == (106, 38, 38, 14)
+        # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
+        assert (tot, trail, elig, anchored) == (112, 38, 38, 14)
         assert sorted(consumer_anchors) == [
             ("Food & Beverage", "P/E", 0.5),
             ("Household / Personal", "P/E", 0.4),

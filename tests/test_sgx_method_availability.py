@@ -176,7 +176,9 @@ def test_every_declared_method_produces_a_value(profile):
     None unless a published table exists for that specific ticker, which is
     the correct behaviour rather than a silent substitution.
     """
-    DATA_GATED = {"SOTP (published)", "Published SOTP"}
+    # `SOTP (analyst)` likewise (Wave 3): it prices only on owner-ACCEPTED
+    # Gemini segment inputs and declines otherwise, by design.
+    DATA_GATED = {"SOTP (published)", "Published SOTP", "SOTP (analyst)"}
     dead = []
     for m in _declared_methods(profile):
         name = m["name"]

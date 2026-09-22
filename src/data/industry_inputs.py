@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
-KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance")
+KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp")
 
 #: Kinds that ARE guidance. Everywhere else a figure for a year that has not
 #: ended fails its period check; here one for a year that HAS ended does.
@@ -51,7 +51,7 @@ RESERVE_MEASURE_REMARK = (
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
 #: and NAV curves, where the audit trail can separate price from reserve life.
-NO_OVERLAY = ("pv10",)
+NO_OVERLAY = ("pv10", "sotp")
 
 #: Plausibility bounds, each against a figure FMP reports for the same company.
 #: A figure outside them is kept for review with the failed check named -- a
@@ -70,6 +70,9 @@ BOUNDS = {
     # Guided FCF / latest reported revenue: a margin. Under 1% is a scale error read
     # low; over 45% of LAST year's revenue is bn-for-mn or a cumulative multi-year figure.
     "fcf_guidance": ("revenue", 0.01, 0.45),
+    # Segment revenues summed / latest group revenue: reportable segments run a
+    # little under the group (eliminations) to a little over (a forward year).
+    "sotp": ("revenue", 0.6, 1.6),
 }
 
 #: Ratios a rate order can plausibly carry. An allowed ROE outside 6-14% or an equity
@@ -293,6 +296,19 @@ def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
                 [key, status, content_hash(e, overlay=overlay), reviewer,
                  datetime.now(timezone.utc).isoformat()])
     return {"input_key": key, **review_for(ticker, kind, e, overlay=overlay)}
+
+
+def accepted_entry(ticker: str, kind: str, doc: Optional[dict] = None) -> Optional[dict]:
+    """The stored entry when the owner has accepted exactly its current figures,
+    else None. For kinds whose payload is structured (a SOTP's segments and
+    multiple ranges), the caller converts it; the gate is the same."""
+    try:
+        e = entry(ticker, kind, doc)
+        if not e or review_for(ticker, kind, e)["status"] != "accepted":
+            return None
+        return e
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def accepted_amount(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] = None,

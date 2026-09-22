@@ -236,13 +236,26 @@ _FINANCIALS_LEVERAGE_CAP: dict[str, float] = {
 #
 # Each sector carries (rates, leverage caps, default cap for a profile with no
 # cap of its own).
+# Wave 3 (2026-09-22). Damodaran January 2026: Aerospace/Defense 7.24%,
+# D/(D+E) 12.6%; Electrical Equipment 8.99% is the nearest row for a pre-profit
+# hardware maker (no space row exists). The leverage premium adds TransDigm's
+# and Boeing's debt on top; the base is the industry's.
+_INDUSTRIALS_PROFILE_WACC: dict[str, float] = {
+    "Defense Primes":                 0.072,
+    "Commercial Aerospace & Engines": 0.072,
+    "Niche Aerospace Components":     0.072,
+    "Defense Tech & Space":           0.090,
+}
+
 _PROFILE_WACC: dict[str, dict[str, float]] = {
-    "Energy":     _ENERGY_PROFILE_WACC,
-    "Financials": _FINANCIALS_PROFILE_WACC,
+    "Energy":      _ENERGY_PROFILE_WACC,
+    "Financials":  _FINANCIALS_PROFILE_WACC,
+    "Industrials": _INDUSTRIALS_PROFILE_WACC,
 }
 _PROFILE_LEVERAGE_CAP: dict[str, tuple[dict[str, float], float]] = {
-    "Energy":     (_ENERGY_LEVERAGE_CAP, 0.035),
-    "Financials": (_FINANCIALS_LEVERAGE_CAP, 0.010),
+    "Energy":      (_ENERGY_LEVERAGE_CAP, 0.035),
+    "Financials":  (_FINANCIALS_LEVERAGE_CAP, 0.010),
+    "Industrials": ({}, 0.040),
 }
 _DEFAULT_LEVERAGE_CAP = 0.040
 
@@ -2588,11 +2601,22 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "SG offshore marine, vessel fleet and resource support (Marco Polo Marine, Dyna-Mac, Samudera, Rex, Geo Energy). Day rates and utilisation set the cash flow, and the asset book is the downside — so EV/EBITDA over P/B, both against maintenance capex. Primary metrics: charter day rates, fleet utilisation, order intake and yard backlog, freight rates, cash cost per tonne or boe.",
         },
+        # Wave 3 (owner, 2026-09-22): "SOTP combined with DDM ... a DDM is
+        # frequently overlaid to capture its appeal as a high-yield regional
+        # proxy." The SOTP is the analyst form fed by accepted Gemini inputs
+        # (segments with cited multiple ranges); without accepted inputs it
+        # declines and the DCF, DDM and EV/EBITDA carry the weight. SATS (S58.SI)
+        # shares the profile and takes the same table.
         "Aerospace & Engineering (SG)": {
             "methods": [
-                {"name": "DCF",                 "weight": 0.45, "anchor": True, "implementable": True},
-                {"name": "EV/EBITDA",           "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "Forward P/E",         "weight": 0.2, "anchor": False, "implementable": True},
+                # The ANCHOR flag sits on DCF: an SGX anchor must produce a value on
+                # an ordinary row (tests/test_sgx_method_availability.py), and the
+                # analyst SOTP prices only on owner-accepted inputs. The weights are
+                # the owner's: SOTP carries the most.
+                {"name": "SOTP (analyst)",      "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",                 "weight": 0.25, "anchor": True,  "implementable": True},
+                {"name": "DDM",                 "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",           "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": ['P/BV'],
             "rationale": "SG aerospace, defence and engineering (ST Engineering, SATS). DCF-anchored, following the published method for its largest member (ST Engineering: DCF, WACC 6.8%, terminal g 4%). Order-book-driven with multi-year delivery schedules, so backlog and burn rate lead the P&L. Primary metrics: order book backlog, EBIT margin, aviation traffic / cargo tonnage, net debt / EBITDA.",
@@ -2620,15 +2644,107 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["P/BV"],
             "rationale": "SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). EV/EBITDA-anchored with a published-SOTP secondary. ROIC vs WACC was dropped as the EVA proxy: on the BN4.SI forward run it returned S$1.90 against EV/EBITDA S$10.91 and a published SOTP of S$10.70, so at any material weight it dragged the blend toward a number no method supported. EVA remains the right lens for a conglomerate; this engine implementation is not it. EV/EBITDA-anchored with SOTP secondary — the house method is SOTP, but `segment_breakdown` is populated solely from FMP revenue-product-segmentation, which returns nothing for SGX, so an SOTP anchor would silently never fire and the weights would renormalise onto the secondaries. SOTP contributes the moment segment data exists. Per-segment bases (PE, net book value, discount to book, mark-to-market) with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion.",
         },
-        "Aerospace & Defense": {
+        # ── Wave 3: aerospace & defence (owner framework, 2026-09-22) ──────────
+        # One FMP label, `Aerospace & Defense`, covers three US businesses whose
+        # clusters trade at 15x, 27x and unpriceable EV/EBITDA. The parent
+        # profile is retired; the label's row defaults to Defense Primes and the
+        # rest are pinned. Each profile prices on a curated basket where one
+        # exists (regional_comps.PROFILE_PEER_BASKETS).
+        #
+        # Owner: "DCF based on FCF conversion. Secondary: EV/EBITDA relative to
+        # multi-year historical defense budget appropriations ... stable terminal
+        # growth (2.5% to 3.0%) coupled with a low WACC." The backlog-coverage
+        # DCF is that DCF with the funded book bounding years 1-3; EV/EBITDA
+        # (norm) is the through-cycle (dynamic) multiple on normalised earnings,
+        # which is "relative to multi-year history" in the engine's own terms.
+        "Defense Primes": {
             "methods": [
-                {"name": "EV/EBITDA",   "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "Backlog DCF", "weight": 0.30, "anchor": False, "implementable": True,  "note": "proxied by DCF"},
-                {"name": "FCF Yield",   "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/E",         "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "Backlog-coverage DCF", "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA (norm)",     "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",            "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",            "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E"],
+            "rationale": "Fixed-price and cost-plus DoD programmes skew earnings with contract write-downs; value rests on baseline FCF conversion of a funded backlog, a stable terminal rate and a low WACC, cross-checked against a through-cycle EV/EBITDA.",
+        },
+        # Owner: Boeing on "SOTP and normalized EV/EBIT rather than P/E or
+        # near-term FCF"; GE Aerospace on "P/E and EV/EBITDA on aftermarket
+        # service margins". One profile: the normalised EBIT leg is the
+        # mid-cycle delivery economics, the SOTP separates commercial from
+        # defence, and the earnings legs carry GE's services franchise. Boeing's
+        # legs drop where its trailing figures are negative and the run says so.
+        "Commercial Aerospace & Engines": {
+            "methods": [
+                {"name": "EV/EBIT (norm)",       "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "SOTP (analyst)",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",            "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E",                  "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["FCF Yield"],
+            "rationale": "Free cash flow has been deeply negative through production crises, so the commercial business is valued on normalised mid-cycle delivery economics and a sum of the parts, while high-margin engine services carry the earnings multiples.",
+        },
+        # Owner: "PEG ratio and EV/FCF ... ROIC is a critical metric alongside
+        # standard multiples." FCF Yield is EV/FCF's equity form.
+        "Niche Aerospace Components": {
+            "methods": [
+                {"name": "PEG",                  "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "FCF Yield",            "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "ROIC vs WACC",         "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",          "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": "Proprietary aftermarket parts with near-monopoly pricing power command structural 30x+ P/Es; growth-adjusted earnings and free cash flow price them, and ROIC checks the debt-funded bolt-on record.",
+        },
+        # Defence tech and space: pre-profit hardware priced on forward revenue.
+        # EV/Backlog waits on an owner-set constant (never derived from
+        # EV/Revenue, which would vote twice on one opinion).
+        "Defense Tech & Space": {
+            "methods": [
+                {"name": "EV/Fwd Rev",           "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "Rev DCF",              "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",           "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E", "EV/EBITDA"],
+            "rationale": "Pre-profit or thin-margin defence hardware and launch: revenue and the path to margin are what can be measured; earnings multiples are not yet meaningful.",
+        },
+        # Owner (HK): AviChina -- "an umbrella vehicle holding stakes in
+        # helicopter, trainer aircraft and component subsidiaries ... SOTP to
+        # separate its manufacturing segments from its joint-venture holdings",
+        # Forward P/E against global aerospace peers as the check. The
+        # look-through NAV is exact once a template exists (owner-authored,
+        # cited stakes); until then the P/BV proxy stands.
+        "Aerospace Holdco (HK)": {
+            "methods": [
+                {"name": "DCF",                          "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "SOTP / NAV (look-through)",    "weight": 0.35, "anchor": False, "implementable": False, "proxy": "P/BV"},
+                {"name": "Forward P/E",                  "weight": 0.30, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Long-cycle backlog visibility drives value; FCF yield tests cash conversion from progress payments.",
+            "rationale": "A state-backed holding of listed aviation manufacturers: the parts are valued separately and the stakes looked through; forward earnings against global aerospace peers check the whole.",
+        },
+        # Owner (HK): Cirrus -- "Forward P/E and EV/Sales benchmarked against
+        # premium consumer-industrial and general aviation peers ... DCF
+        # projections focus heavily on order backlog conversion rates".
+        "General Aviation (HK)": {
+            "methods": [
+                {"name": "Forward P/E",          "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/Revenue",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Backlog-coverage DCF", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",            "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": "A luxury private-aircraft manufacturer behaves like a high-end discretionary maker, not a defence prime: forward earnings, sales and the conversion of its order book.",
+        },
+        # Owner (HK): Continental Aerospace -- "EV/EBITDA and P/B ... tied to
+        # global fleet flight hours and replacement part cycles."
+        "GA Engines & Aftermarket (HK)": {
+            "methods": [
+                {"name": "EV/EBITDA",            "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "P/BV",                 "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",            "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": "General-aviation piston engines and aftermarket parts: an installed-base business whose value follows fleet flight hours and replacement cycles, priced on cash earnings and the asset base.",
         },
         "Automotive (OEM)": {
             "methods": [
@@ -3237,6 +3353,18 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # EV/EBITDA 14x (franchise/lease normalize). Growth avg 8% (travel recovery plateau).
     "Travel & Dining":     {"ev_ebitda": 14.0, "pe": 22.0, "ev_revenue": 3.0,  "pb": 6.0,  "fcf_yield": 0.040, "growth_avg": 0.08},
     "Industrials":         {"ev_ebitda": 13.0, "pe": 18.0, "ev_revenue": 2.0,  "pb": 3.0,  "fcf_yield": 0.050, "growth_avg": 0.06},
+    # Wave 3 (2026-09-22), the curated baskets' medians on the 2026-09-21 refresh
+    # (regional_comps.PROFILE_PEER_BASKETS): primes n=6, niche n=5; Commercial
+    # Aerospace & Engines is the BA/GE pair and takes the industry rung live, so
+    # its static is the aftermarket cluster measured beside it (n=10). Defense
+    # Tech & Space carries no static: no earnings multiple exists for it and its
+    # forward-revenue leg reads the live industry EV/Revenue (4.8x, n=19).
+    "Defense Primes":      {"ev_ebitda": 15.3, "pe": 23.1, "ev_revenue": 2.2,  "pb": 4.1,  "fcf_yield": 0.055, "growth_avg": 0.06,
+                            "ev_ebitda_ntm": 13.5, "pe_ntm": 19.2, "ev_ebit": 19.0},
+    "Commercial Aerospace & Engines": {"ev_ebitda": 27.2, "pe": 40.2, "ev_revenue": 7.0, "pb": 8.5, "fcf_yield": 0.030, "growth_avg": 0.10,
+                            "ev_ebitda_ntm": 23.1, "pe_ntm": 34.4},
+    "Niche Aerospace Components": {"ev_ebitda": 26.4, "pe": 39.1, "ev_revenue": 8.6, "pb": 8.5, "fcf_yield": 0.025, "growth_avg": 0.15,
+                            "ev_ebitda_ntm": 22.7, "pe_ntm": 34.4},
     "RealEstate":          {"ev_ebitda": 20.0, "pe": 35.0, "ev_revenue": 8.0,  "pb": 1.5,  "fcf_yield": 0.045, "growth_avg": 0.05},
     # REIT: SGX/APAC REITs trade at tighter multiples than US REITs (lower growth).
     # P/B around 0.9-1.0 (trading near NAV), P/E 12-15x (distributable income focus),
@@ -3523,6 +3651,16 @@ def get_sector_peer_multiples(
     # qualifying comp set, so this can only add information.
     regional = _regional_peer_multiples(ticker, exchange, industry, sector,
                                         market_cap)
+    # A curated profile basket outranks the industry median for every field it
+    # resolves (regional_comps.PROFILE_PEER_BASKETS): the industry label can
+    # blend businesses the profile has just told us apart.
+    try:
+        from src.data.regional_comps import profile_basket_multiples
+        _pb = profile_basket_multiples(_market or "US", profile_name)
+        if _pb:
+            regional = {**(regional or {}), **_pb}
+    except Exception:                                      # noqa: BLE001
+        pass
 
     def _stamp(values: dict, basis: dict) -> dict:
         """Attach provenance for EVERY field, including the ones that fell
@@ -5034,12 +5172,23 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "BE":    ("Energy",    "Clean Tech / Power Equipment OEM", "Green & Renewable Energy", "Bloom Energy — SOFC fuel-cell OEM; equipment, installation and long-term service"),
 
     # ── Industrials ───────────────────────────────────────────────────────────
-    "LMT":   ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "Lockheed Martin"),
-    "RTX":   ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "RTX Corp (Raytheon)"),
-    "BA":    ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "Boeing"),
+    # Wave 3 (owner framework, 2026-09-22). One FMP label; the row defaults to
+    # Defense Primes and the rest are named here.
+    "LMT":   ("Industrials", "Defense Primes",  "Aerospace/Defense",  "Lockheed Martin"),
+    "RTX":   ("Industrials", "Defense Primes",  "Aerospace/Defense",  "RTX Corp — Raytheon + Pratt & Whitney + Collins; owner places it with the primes"),
+    "NOC":   ("Industrials", "Defense Primes",  "Aerospace/Defense",  "Northrop Grumman"),
+    "GD":    ("Industrials", "Defense Primes",  "Aerospace/Defense",  "General Dynamics"),
+    "LHX":   ("Industrials", "Defense Primes",  "Aerospace/Defense",  "L3Harris — defence electronics"),
+    "BA":    ("Industrials", "Commercial Aerospace & Engines",  "Aerospace/Defense",  "Boeing — SOTP + normalised EV/EBIT; FCF negative through production crises"),
+    "HWM":   ("Industrials", "Niche Aerospace Components",  "Aerospace/Defense",  "Howmet — engineered forgings and fasteners"),
+    "TDG":   ("Industrials", "Niche Aerospace Components",  "Aerospace/Defense",  "TransDigm — proprietary aftermarket parts, debt-funded bolt-ons"),
+    "HEI":   ("Industrials", "Niche Aerospace Components",  "Aerospace/Defense",  "HEICO — aftermarket PMA parts"),
+    "KTOS":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "Kratos — drones, hypersonics, microwave electronics"),
+    "AVAV":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "AeroVironment — tactical UAS and loitering munitions"),
+    "RKLB":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "Rocket Lab — launch and space systems"),
     "CAT":   ("Industrials", "",  "Machinery",          "Caterpillar"),
     "DE":    ("Industrials", "",  "Machinery",          "Deere & Company"),
-    "GE":    ("Industrials", "Aerospace & Defense",  "Electrical Equipment", "GE Aerospace (post-Vernova spin-off)"),
+    "GE":    ("Industrials", "Commercial Aerospace & Engines",  "Aerospace/Defense", "GE Aerospace — engines; P/E and EV/EBITDA on aftermarket service margins"),
     "GEV":   ("Industrials", "Capital Goods",  "Electrical Equipment", "GE Vernova — wind/gas turbine OEM + grid electrification; book-to-bill driven"),
     "HON":   ("Industrials", "",  "Electrical Equipment", "Honeywell"),
     "UPS":   ("Transportation", "", "Transportation",   "United Parcel Service"),
@@ -5149,6 +5298,11 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # FMP labels Power Assets `Independent Power Producers`; it is a holding
     # company of regulated networks (UK, Australia, HK Electric).
     "00006.HK": ("Energy",      "Regulated Utility",  "Utility (General)", "Power Assets — regulated network holdings"),
+    # Wave 3 (owner framework, 2026-09-22): the three HK aerospace names, each
+    # on its own method set. All carry the one FMP label.
+    "02357.HK": ("Industrials", "Aerospace Holdco (HK)",         "Aerospace/Defense", "AviChina — holding of AVIC listed subsidiaries; SOTP + DCF, Forward P/E check"),
+    "02507.HK": ("Industrials", "General Aviation (HK)",         "Aerospace/Defense", "Cirrus Aircraft — SR-series and Vision Jet; Forward P/E + EV/Sales, backlog DCF"),
+    "00232.HK": ("Industrials", "GA Engines & Aftermarket (HK)", "Aerospace/Defense", "Continental Aerospace Technologies — GA piston engines and parts; EV/EBITDA + P/B"),
 
     # Financials
     "00005.HK": ("Financials",  "Money Center Bank (EU)",  "Banking",  "HSBC Holdings"),

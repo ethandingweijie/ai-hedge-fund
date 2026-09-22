@@ -1442,3 +1442,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Backlog-Gated Long Cycle profile added (owner 2026-09-22): the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
 
+## 2026-09-22T15:36:42+00:00
+
+- regenerated at HEAD: `871feb8`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles and the SG aerospace table rebuilt; the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
+
+## 2026-09-22T15:52:03+00:00
+
+- regenerated at HEAD: `871feb8`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles, the SG aerospace table rebuilt with DCF as anchor; the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
+
