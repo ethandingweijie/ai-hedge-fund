@@ -1,0 +1,54 @@
+{
+ "wave": "3",
+ "as_of": "2026-09-23",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "02357.HK": {
+   "profile": "Aerospace Holdco (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.09589
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.082192
+    },
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.821918
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 24.1,
+   "base": 32.94,
+   "bull": 43.76,
+   "scenarios_ordered": true,
+   "target_12m_base": 17.96,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 6.60132848841626,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $29.34 vs price $3.86 on 2024-12-31 = 660% gap; 12m later the market was closer (639% vs 3%)",
+   "currency": "HKD",
+   "regime": null
+  }
+ }
+}

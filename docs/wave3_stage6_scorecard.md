@@ -98,3 +98,31 @@ Rule 1 does what it was asked to: the projection family's 0.35 is no longer lost
 does not lift either name toward consensus -- a 13-16% terminal margin on today's revenue base is a small
 number against a market that prices a re-rated growth path (RKLB at 30x sales). That gap is the AI/space
 regime, not the plumbing, and it is now measured on a full method set.
+
+## Addendum: SOTP precedence reaches a templated look-through (owner, 2026-09-23)
+
+Rule 3 was first scoped to the look-through that has no template and would price as its P/BV proxy; whether it
+should also displace a look-through that COMPLETES from a template (S08.SI, BN4.SI, U96.SI, 02020.HK) was left
+open. The owner closed it: the analyst SOTP takes structural precedence either way. A template applies one
+top-down formula across the holding structure, while the SOTP isolates each business line on its own multiple
+and keeps holding-level items (holdco discount, deferred tax on the portfolio, minority haircuts) segregated,
+so the template cannot outvote it and, sitting beside it, would double-count. The call site now shadows a
+completing look-through whenever the SOTP in the blend is the owner-ACCEPTED one (Gemini-cited segments and
+multiple ranges, review-gated, origin-tagged by the bridge). The extractor's machine-built SOTP is not that
+framework: on BN4.SI (2026-09-15) it said S$7.12 against a S$11.70-14.30 ground truth and the look-through was
+the leg that had it right, so beside a completing template it keeps sharing the family weight as decided
+then. With no template every analyst SOTP displaces the P/BV proxy, as in the first cut. The 2026-09-15
+sharing decision otherwise applies only to SOTPs that remain in the blend (segments, published).
+
+Closing it exposed a defect in the first cut: the shadowed look-through still counted as a family peer when the
+promoted weight was split, so half of the 3.0 went to a leg that was then removed and renormalised away. The
+analyst SOTP carried 1.5, not 3.0. The shadowed leg is now excluded from the split.
+
+| Name | Rule 3 as first cut | Extended rule |
+|---|---|---|
+| 02357.HK | SOTP (analyst) 0.70, DCF 0.16, Forward P/E 0.14; base HK$30.78, target HK$16.88 | **SOTP (analyst) 0.82, DCF 0.10, Forward P/E 0.08; base HK$32.94, target HK$17.96**; look-through shadow-only |
+
+No name carries an owner-accepted SOTP beside a templated look-through today (accepted `sotp` inputs: 02357.HK,
+BA, S63.SI), so the extension changes nothing else until one is accepted for a conglomerate
+(`docs/baselines/after_wave3_precedence.json`). Note for that day: the bridge only reads the accepted input
+when the extractor built no SOTP of its own, so on a name with both, the machine SOTP is the one in the blend.

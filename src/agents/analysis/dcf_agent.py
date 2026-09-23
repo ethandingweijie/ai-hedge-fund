@@ -8598,26 +8598,31 @@ def _promote_sotp_analyst_profile(profile_data: Optional[dict],
     # ground-truth range, and the extractor's S$7.12 outvoted them 75% to 15%
     # and published a SELL. With no curated SOTP present the analyst takes the
     # whole weight and blends are bit-identical to before.
-    peers = [m for m in methods if m.get("name") in _SOTP_LED_METHODS]
-    share = _SOTP_ANALYST_BLEND_WEIGHT / float(len(peers) + 1)
-    kept = [
-        {**m, "weight": float(m.get("weight") or 0.0) + share}
-        if m.get("name") in _SOTP_LED_METHODS else m
-        for m in methods
-    ]
     # Owner rule 3 (2026-09-23): analyst SOTP over look-through. Two SOTPs in
     # one blend drift against each other, so once the analyst SOTP is in, the
     # look-through leg is computed but carries no weight -- published as a
     # cross-check with its variance against the analyst figure -- and its
-    # weight renormalises onto the rest. SCOPED to the look-through that has no
-    # template and would price as its P/BV proxy (AviChina, the case raised):
-    # a look-through that COMPLETES (S08.SI, BN4.SI, U96.SI, 02020.HK) keeps
-    # the earlier owner decision that the SOTP family SHARES the promoted
-    # weight (tests/test_valuation_fixes_0916.py). Whether the precedence rule
-    # should reach a completing look-through too is recorded as open.
-    shadow = ([m["name"] for m in kept if m.get("name") in _LOOKTHROUGH_ANCHORS]
+    # profile weight renormalises onto the rest. The owner extended the rule
+    # the same day to a look-through that COMPLETES from a template (S08.SI,
+    # BN4.SI, U96.SI, 02020.HK) when the SOTP is the owner-accepted one (the
+    # call site decides): a template applies one top-down formula
+    # across the structure, while the analyst SOTP isolates each business line
+    # on its own multiple and keeps holding-level items (holdco discount,
+    # deferred tax on the portfolio, minority haircuts) segregated, so the
+    # template cannot outvote it and cannot double-count beside it. The
+    # 2026-09-15 family-sharing decision now covers the SOTPs that remain in
+    # the blend (segments, published); the shadowed look-through takes no
+    # part of the promoted weight, which goes to the analyst SOTP in full.
+    shadow = ([m["name"] for m in methods if m.get("name") in _LOOKTHROUGH_ANCHORS]
               if shadow_lookthrough else [])
-    kept = [m for m in kept if m.get("name") not in shadow]
+    peers = [m for m in methods
+             if m.get("name") in _SOTP_LED_METHODS and m.get("name") not in shadow]
+    share = _SOTP_ANALYST_BLEND_WEIGHT / float(len(peers) + 1)
+    kept = [
+        {**m, "weight": float(m.get("weight") or 0.0) + share}
+        if m.get("name") in _SOTP_LED_METHODS else m
+        for m in methods if m.get("name") not in shadow
+    ]
     return {
         **profile_data,
         **({"shadow_methods": shadow} if shadow else {}),
@@ -11599,16 +11604,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(agent_id, ticker,
                                    "SOTP (segments) promoted from the filing")
 
+        # Owner, 2026-09-23: the analyst SOTP takes precedence over the
+        # look-through whether or not a template completes it. The rule keys
+        # on the SOTP the owner ACCEPTED (Gemini-cited segments and multiple
+        # ranges, review-gated); the extractor's machine-built SOTP still
+        # shares the family weight beside a look-through that completes --
+        # BN4.SI, 2026-09-15: that SOTP said S$7.12 against a S$11.70-14.30
+        # ground truth and the look-through was the leg that had it right.
+        # With no template the look-through is its P/BV proxy and any analyst
+        # SOTP displaces it (AviChina, the case raised).
+        _sotp_a = most_recent.get("sotp_assumptions") or {}
         _lt_completes = False
-        try:
-            from src.agents.analysis import holdco_sotp as _hs
-            _lt_completes = bool(_hs.enabled_for(ticker) and _hs.can_value(
-                ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker)))
-        except Exception:                                  # noqa: BLE001
-            _lt_completes = False
+        if _sotp_a and _sotp_a.get("_origin") != "gemini_accepted":
+            try:
+                from src.agents.analysis import holdco_sotp as _hs
+                _lt_completes = bool(_hs.enabled_for(ticker) and _hs.can_value(
+                    ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker)))
+            except Exception:                              # noqa: BLE001
+                _lt_completes = False
         profile_data = _promote_sotp_analyst_profile(
-            profile_data, bool(most_recent.get("sotp_assumptions")),
-            shadow_lookthrough=not _lt_completes)
+            profile_data, bool(_sotp_a), shadow_lookthrough=not _lt_completes)
 
         # v3.21 (Fix D) — write the locally-resolved profile_name back to state
         # so late-pipeline consumers (sector_card render, reextract path, audit

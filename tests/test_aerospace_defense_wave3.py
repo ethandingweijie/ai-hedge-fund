@@ -318,11 +318,28 @@ def test_rule_3_the_analyst_sotp_takes_precedence_and_the_lookthrough_goes_shado
     names = [m["name"] for m in out["methods"]]
     assert "SOTP (analyst)" in names and "SOTP / NAV (look-through)" not in names
     assert out["shadow_methods"] == ["SOTP / NAV (look-through)"]
-    # Scoped: a look-through that COMPLETES keeps the earlier decision that the
-    # SOTP family shares the promoted weight (test_valuation_fixes_0916.py).
-    kept = dcf_agent._promote_sotp_analyst_profile(profile, True, shadow_lookthrough=False)
-    assert "SOTP / NAV (look-through)" in [m["name"] for m in kept["methods"]] and "shadow_methods" not in kept
-    assert "shadow_lookthrough=not _lt_completes" in inspect.getsource(dcf_agent.run_dcf_agent)
+    # The shadowed look-through takes no part of the promoted weight: the
+    # analyst SOTP carries the whole share, and the look-through's own 0.35
+    # renormalises onto the rest (the 0916 family-sharing decision applies
+    # only to SOTPs that remain in the blend).
+    w = {m["name"]: m["weight"] for m in out["methods"]}
+    assert w["SOTP (analyst)"] == pytest.approx(dcf_agent._SOTP_ANALYST_BLEND_WEIGHT)
+    assert w["DCF"] == pytest.approx(0.35) and w["Forward P/E"] == pytest.approx(0.30)
+    # Owner, 2026-09-23: precedence reaches a look-through that COMPLETES from
+    # a template too, keyed on the owner-ACCEPTED SOTP (origin tag); the
+    # extractor's machine SOTP keeps sharing beside a completing template
+    # (BN4.SI, 2026-09-15).
+    src_run = inspect.getsource(dcf_agent.run_dcf_agent)
+    assert 'if _sotp_a and _sotp_a.get("_origin") != "gemini_accepted":' in src_run
+    assert "shadow_lookthrough=not _lt_completes)" in src_run
+    templated = {"methods": [{"name": "DCF", "weight": 0.30, "anchor": True, "implementable": True},
+                             {"name": "SOTP / NAV", "weight": 0.40, "anchor": False, "implementable": True},
+                             {"name": "SOTP (published)", "weight": 0.30, "anchor": False, "implementable": True}]}
+    out2 = dcf_agent._promote_sotp_analyst_profile(templated, True, shadow_lookthrough=True)
+    w2 = {m["name"]: m["weight"] for m in out2["methods"]}
+    assert out2["shadow_methods"] == ["SOTP / NAV"] and "SOTP / NAV" not in w2
+    half = dcf_agent._SOTP_ANALYST_BLEND_WEIGHT / 2.0
+    assert w2["SOTP (analyst)"] == pytest.approx(half) and w2["SOTP (published)"] == pytest.approx(0.30 + half)
     assert profile["methods"][1]["name"] == "SOTP / NAV (look-through)"     # copy-on-write: the table is untouched
     assert dcf_agent._promote_sotp_analyst_profile(profile, False) is profile  # no assumptions, no change
     src = inspect.getsource(dcf_agent.run_dcf_agent)
