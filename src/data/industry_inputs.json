@@ -508,6 +508,158 @@
     "value_usd": 2768401915.0
    }
   },
+  "03690.HK": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 54.37,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 62.01
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-24T01:17:38+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.00x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2026); actuals stand in for a forward year where no estimate was cited",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     }
+    ],
+    "company": "Meituan",
+    "data": {
+     "associates_investments": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "Investments accounted for using the equity method 18,306,338",
+      "scale": "thousands",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032600888.pdf",
+      "value": 18306338.0
+     },
+     "fiscal_year": "FY2026",
+     "holdco_basis": "Standard 10% conglomerate and holding company discount applied across broker SOTP valuations for Chinese internet platform conglomerates to account for corporate overhead and multi-segment capital allocation friction.",
+     "holdco_discount_pct": 0.1,
+     "net_cash": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "3) Net cash amounts to 56.1 billion yuan.",
+      "scale": "bn",
+      "source_url": "https://www.phillip.com.hk/en-us/research/equity-report/detail/?id=3690_20250916",
+      "value": 56.1
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "The operating margin for this segment was negative 2.6% in 2025 and positive 20.9% in 2024.",
+        "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032600888.pdf",
+        "value": -0.026
+       },
+       "multiple_basis": "Core Local Commerce is Meituan's core commerce business encompassing food delivery, in-store dining, hotel and travel booking, and flash purchase. Broker SOTP valuations value the core business on normalized earnings at 12x to 18x P/E, reflecting market leadership and recovering unit economics as competition rationalizes.",
+       "multiple_high": 18.0,
+       "multiple_low": 12.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.phillip.com.hk/en-us/research/equity-report/detail/?id=3690_20250528",
+       "name": "Core Local Commerce",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Total revenues 260,826,094",
+        "scale": "thousands",
+        "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032600888.pdf",
+        "value": 260826094.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "the operating margin for this segment decreased by 1.4 percentage points to negative 9.7% from negative 8.3% on a year-over-year basis.",
+        "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032600888.pdf",
+        "value": -0.097
+       },
+       "multiple_basis": "New Initiatives (including Xiaoxiang Supermarket, B2B food distribution Kuailv, and overseas food delivery KeeTa) operate at an operating loss, making EV/Sales (P/S) the standard valuation multiple. Brokers typically assign 0.8x to 1.2x EV/Sales in SOTP analyses.",
+       "multiple_high": 1.2,
+       "multiple_low": 0.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.phillip.com.hk/en-us/research/equity-report/detail/?id=3690_20250916",
+       "name": "New Initiatives",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "104,028,652",
+        "scale": "thousands",
+        "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032600888.pdf",
+        "value": 104028652.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [
+       "Core Local Commerce margin -0.026",
+       "New Initiatives margin -0.097"
+      ],
+      "currencies": [
+       "CNY thousands",
+       "CNY thousands"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.0,
+       "ev_rev_multiple": null,
+       "name": "Core Local Commerce",
+       "pe_multiple": 15.0,
+       "rationale": "pe 12.0-18.0x: Core Local Commerce is Meituan's core commerce business encompassing food delivery, in-store dining, hotel and travel booking, and flash purchase. Broker SOTP valuations value the core business on normalized earnings at 12x to 18x P/E, reflecting market leadership and recovering unit ",
+       "revenue_fwd": 38868304527.880005,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0,
+       "ev_rev_multiple": 1.0,
+       "name": "New Initiatives",
+       "pe_multiple": null,
+       "rationale": "ev_rev 0.8-1.2x: New Initiatives (including Xiaoxiang Supermarket, B2B food distribution Kuailv, and overseas food delivery KeeTa) operate at an operating loss, making EV/Sales (P/S) the standard valuation multiple. Brokers typically assign 0.8x to 1.2x EV/Sales in SOTP analyses.",
+       "revenue_fwd": 15502349721.04,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Meituan",
+     "depreciation_and_amortization": 1519860791.7800002,
+     "market_cap": 56661944123.88145,
+     "net_ppe": 5770357357.660001,
+     "operating_cash_flow": -2058711449.0200002,
+     "period": "2025-12-31",
+     "revenue": 54370654248.920006
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 95.3,
+    "value_usd": 54370654248.920006
+   }
+  },
   "5WH.SI": {},
   "AVAV": {
    "backlog": {
@@ -755,6 +907,267 @@
     "ok": true,
     "secs": 70.6,
     "value_usd": 94100000000.0
+   }
+  },
+  "BABA": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 152.55,
+     "revenue_next_fy_period": "2027-03-31",
+     "revenue_next_fy_usd_bn": 167.28
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-24T01:11:31+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2027; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "0.87x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 0.8702
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2027); actuals stand in for a forward year where no estimate was cited",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "6 usable; dropped none",
+      "ok": true
+     }
+    ],
+    "company": "Alibaba Group Holding Limited",
+    "data": {
+     "associates_investments": {
+      "currency": "CNY",
+      "period": "2025-03-31",
+      "quote": "Investment in equity method investees 203,131 210,169 28,962",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+      "value": 210169.0
+     },
+     "fiscal_year": "FY2027",
+     "holdco_basis": "Standard conglomerate holding company discount applied to investment holdings and associates (such as Ant Group) across broker SOTP frameworks, notably CMB International (30%).",
+     "holdco_discount_pct": 0.3,
+     "net_cash": {
+      "currency": "CNY",
+      "period": "2025-03-31",
+      "quote": "As of March 31, 2025, Alibaba's net cash amounted to 366.4 billion yuan.",
+      "scale": "bn",
+      "source_url": "https://www.moomoo.com/community/discussion/186591396118534",
+      "value": 366.4
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Taobao and Tmall Group adjusted EBITA increased by 1% to RMB196,232 million (US$27,041 million) in fiscal year 2025, compared to RMB194,827 million in fiscal year 2024",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 0.4362
+       },
+       "multiple_basis": "Reflects mature core commerce cash cow; CMB International applies 8.0x-9.0x EV/adj. EBITA post-tax, and DBS Group Research applies 11.0x P/E to core commerce.",
+       "multiple_high": 11.0,
+       "multiple_low": 8.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Taobao and Tmall Group",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Total Taobao and Tmall Group 434,893 449,827 61,988 3%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 449827.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Cloud Intelligence Group adjusted EBITA increased by 72% to RMB10,556 million (US$1,455 million) in fiscal year 2025, compared to RMB6,121 million in fiscal year 2024",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 0.0894
+       },
+       "multiple_basis": "Valued on forward EV/Sales benchmarked against enterprise cloud hyperscalers and AI infrastructure peers; broker models like CMB International apply 4.0x to 7.5x EV/revenue multiples.",
+       "multiple_high": 7.5,
+       "multiple_low": 4.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Cloud Intelligence Group",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Cloud Intelligence Group 106,374 118,028 16,265 11%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 118028.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Alibaba International Digital Commerce Group adjusted EBITA was a loss of RMB15,137 million (US$2,086 million) in fiscal year 2025, compared to a loss of RMB8,035 million in fiscal year 2024",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": -0.1144
+       },
+       "multiple_basis": "Valued on EV/Sales given current segment operating losses and cross-border expansion phase; CMB International maintains an unchanged 1.5x EV/revenue multiple (peers range 1.2x-2.0x).",
+       "multiple_high": 2.0,
+       "multiple_low": 1.2,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Alibaba International Digital Commerce Group",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Total Alibaba International Digital Commerce Group 102,598 132,300 18,231 29%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 132300.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Benchmarked against express logistics peers and minority share repurchase valuation; peer multiples span 0.8x to 1.2x EV/Sales.",
+       "multiple_high": 1.2,
+       "multiple_low": 0.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Cainiao Smart Logistics Network Limited",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Cainiao Smart Logistics Network Limited 99,020 101,272 13,956 2%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 101272.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on EV/Sales due to operating ramp in on-demand delivery and mapping; CMB International assigns a 1.0x to 1.5x EV/revenue multiple.",
+       "multiple_high": 1.5,
+       "multiple_low": 1.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Local Services Group",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Local Services Group 59,802 67,076 9,243 12%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 67076.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "Valued on EV/Sales aligned with online video and entertainment streaming peers; CMB International applies 0.7x to 1.0x EV/revenue.",
+       "multiple_high": 1.0,
+       "multiple_low": 0.7,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.cmbi.com.hk/",
+       "name": "Digital Media and Entertainment Group",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Digital Media and Entertainment Group 21,145 22,267 3,068 5%",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1577552/000110465925049400/tm2515233d1_ex99-1.htm",
+        "value": 22267.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [
+       "Alibaba International Digital Commerce Group margin -0.1144"
+      ],
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.4362,
+       "ev_rev_multiple": null,
+       "name": "Taobao and Tmall Group",
+       "pe_multiple": 9.5,
+       "rationale": "pe 8.0-11.0x: Reflects mature core commerce cash cow; CMB International applies 8.0x-9.0x EV/adj. EBITA post-tax, and DBS Group Research applies 11.0x P/E to core commerce.",
+       "revenue_fwd": 67033219540.00001,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0894,
+       "ev_rev_multiple": 5.75,
+       "name": "Cloud Intelligence Group",
+       "pe_multiple": null,
+       "rationale": "ev_rev 4.0-7.5x: Valued on forward EV/Sales benchmarked against enterprise cloud hyperscalers and AI infrastructure peers; broker models like CMB International apply 4.0x to 7.5x EV/revenue multiples.",
+       "revenue_fwd": 17588532560.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0,
+       "ev_rev_multiple": 1.6,
+       "name": "Alibaba International Digital Commerce Group",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.2-2.0x: Valued on EV/Sales given current segment operating losses and cross-border expansion phase; CMB International maintains an unchanged 1.5x EV/revenue multiple (peers range 1.2x-2.0x).",
+       "revenue_fwd": 19715346000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 1.0,
+       "name": "Cainiao Smart Logistics Network Limited",
+       "pe_multiple": null,
+       "rationale": "ev_rev 0.8-1.2x: Benchmarked against express logistics peers and minority share repurchase valuation; peer multiples span 0.8x to 1.2x EV/Sales.",
+       "revenue_fwd": 15091553440.000002,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 1.25,
+       "name": "Local Services Group",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.0-1.5x: Valued on EV/Sales due to operating ramp in on-demand delivery and mapping; CMB International assigns a 1.0x to 1.5x EV/revenue multiple.",
+       "revenue_fwd": 9995665520.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 0.85,
+       "name": "Digital Media and Entertainment Group",
+       "pe_multiple": null,
+       "rationale": "ev_rev 0.7-1.0x: Valued on EV/Sales aligned with online video and entertainment streaming peers; CMB International applies 0.7x to 1.0x EV/revenue.",
+       "revenue_fwd": 3318228340.0000005,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Alibaba Group Holding Limited",
+     "depreciation_and_amortization": 7021524360.000001,
+     "market_cap": 265525493121.0,
+     "net_ppe": 41970470558.12,
+     "operating_cash_flow": 11357261260.000002,
+     "period": "2026-03-31",
+     "revenue": 152547303400.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 87.7,
+    "value_usd": 132742545400.0
    }
   },
   "BE": {
@@ -1473,6 +1886,189 @@
     "value_usd": 0.0
    }
   },
+  "JD": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 195.08,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 201.61
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-24T01:13:36+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2025; FMP's latest reported year is 2025",
+      "ok": false
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.06x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.064
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2025); actuals stand in for a forward year where no estimate was cited",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable; dropped none",
+      "ok": true
+     }
+    ],
+    "company": "JD.com, Inc.",
+    "data": {
+     "associates_investments": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "Investment in equity investees. 56,850. 51,978. 7,433.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+      "value": 51978.0
+     },
+     "fiscal_year": "FY2025",
+     "holdco_basis": "Broker sum-of-the-parts convention for Chinese internet conglomerates; UOB Kay Hian applies a 20% discount on subsidiary stakes, and Phillip Securities / JP Morgan apply 20% to 30% conglomerate discounts to account for holding company structure and overhead.",
+     "holdco_discount_pct": 0.2,
+     "net_cash": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "With a P/E non-GAAP of 11.13, FCF yield over 7.2%, and net cash of $16.91B, JD is trading near book value",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHIzOZqfPTMoytifqctsSV5xHQDU-cA6lThP4Sck-ZUnQ3G88lFXVq4ffdERgkg6dE43HOOz-0dHorK-Ri68QfXOsVI1RcLFsBAAbSZFnIUhBkgFPfFGwaiAC347kffPDujCsJ2Po4HMCCHCEJfERg1-NgSJs5R15zxrL0gUw==",
+      "value": 16.91
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Operating margin of JD Retail for the year of 2025 was 4.6%, compared to 4.0% for the year of 2024.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": 0.046
+       },
+       "multiple_basis": "Core e-commerce retail peer trading range and broker SOTP benchmarks; Phillip Securities uses 13.0x forward P/E for JD Retail versus comparable e-commerce peers trading at 8x-11x.",
+       "multiple_high": 13.0,
+       "multiple_low": 8.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEZgaTgIJ1Nh7C9wPOMTkmmEMyui8RmTaqcAK8i2Jl2jrlEO2Sx_-z5cGhW6GCNARjGWWTO5wPvitFTc-OzB4-WdkC0C8uBgUTO_ng3SUPb9EBWXTKJdBM1p4A-ehfVtgFI0RAoE9_0Loh8eX1VGREB2Y60mWdVsgq45KGGniJstTH8zL-nm0_XX6Os5xv_r4x8WKGqjDRx99RHPbE=",
+       "name": "JD Retail",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Net revenues from JD Retail increased by 10.9% to RMB1,126,399 million (US$161,073 million) in 2025 from RMB1,015,948 million in 2024.",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": 1126399.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Operating margin: JD Retail, 3.3, %, 3.2, %, 4.0, %, 4.6, %. JD Logistics, 3.5, %, 3.0, %, 3.5, %, 2.4, %.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": 0.024
+       },
+       "multiple_basis": "JD Logistics market trading valuation and broker research multiples; forward P/E ranges between 7x-9x based on recent earnings, up to 12x fair value benchmark for third-party logistics infrastructure.",
+       "multiple_high": 12.0,
+       "multiple_low": 7.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEj4vTNlaJcl4i8vKyLsO1scG2uxcv51pn4VTOJxe32jz7oClZZTlSy_MtAPg2YkhRqVjfjacE5HSopE-qvsa4HnrtkLAXT0jSDRwavfTIDZ-rfcN41bHJY3PWzwk0x4epytbmU-Mtw0tvsMzwSYQUtSktZi3TFcul5L0JA32XA0hDBt01_EK7c8cEYaD4EJP_QhGTOU0NfLvRj44iGhIGnLu_pA5DWQDLrGQ_zG47rOSA6CxaVig4znNIisx1ZBvVNDHxs",
+       "name": "JD Logistics",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Net revenues from JD Logistics increased by 18.8% to RMB217,146 million (US$31,052 million) in 2025 from RMB182,837 million in 2024.",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": 217146.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Operating margin: JD Retail, 3.3, %, 3.2, %, 4.0, %, 4.6, %. JD Logistics, 3.5, %, 3.0, %, 3.5, %, 2.4, %. New Businesses, (18.9, )%, (105.1, )%, (15.0, )%, (94.6, )%.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": -0.946
+       },
+       "multiple_basis": "Valued on EV/Sales due to operating losses from strategic investments in JD Food Delivery, Jingxi, and overseas operations; consistent with early-stage and quick-commerce peer multiples.",
+       "multiple_high": 1.0,
+       "multiple_low": 0.3,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+       "name": "New Businesses",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "Net revenues from New Businesses increased by 157.3% to RMB49,282 million (US$7,047 million) in 2025 from RMB19,157 million in 2024.",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1549802/000119312526157870/g53690dsp135.jpg",
+        "value": 49282.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [
+       "New Businesses margin -0.946"
+      ],
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.046,
+       "ev_rev_multiple": null,
+       "name": "JD Retail",
+       "pe_multiple": 10.5,
+       "rationale": "pe 8.0-13.0x: Core e-commerce retail peer trading range and broker SOTP benchmarks; Phillip Securities uses 13.0x forward P/E for JD Retail versus comparable e-commerce peers trading at 8x-11x.",
+       "revenue_fwd": 167855978980.00003,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.024,
+       "ev_rev_multiple": null,
+       "name": "JD Logistics",
+       "pe_multiple": 9.5,
+       "rationale": "pe 7.0-12.0x: JD Logistics market trading valuation and broker research multiples; forward P/E ranges between 7x-9x based on recent earnings, up to 12x fair value benchmark for third-party logistics infrastructure.",
+       "revenue_fwd": 32359096920.000004,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0,
+       "ev_rev_multiple": 0.65,
+       "name": "New Businesses",
+       "pe_multiple": null,
+       "rationale": "ev_rev 0.3-1.0x: Valued on EV/Sales due to operating losses from strategic investments in JD Food Delivery, Jingxi, and overseas operations; consistent with early-stage and quick-commerce peer multiples.",
+       "revenue_fwd": 7344003640.000001,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "JD.com, Inc.",
+     "depreciation_and_amortization": 1452497940.0000002,
+     "market_cap": 38128561980.0,
+     "net_ppe": 19232839059.66,
+     "operating_cash_flow": 2830038820.0000005,
+     "period": "2025-12-31",
+     "revenue": 195079846700.00003
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 54.5,
+    "value_usd": 207559079540.00003
+   }
+  },
   "KMI": {
    "maintenance_capex": {
     "basis": "actual",
@@ -1952,6 +2548,168 @@
     "source": "sec_10k",
     "value_usd": 36627000000.0,
     "verified_at": "2026-09-20T02:52:51+00:00"
+   }
+  },
+  "PDD": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 64.35,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 69.52
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-24T01:12:37+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.30x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.3041
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026E (fiscal_year FY2026); actuals stand in for a forward year where no estimate was cited",
+      "ok": null
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable; dropped none",
+      "ok": true
+     }
+    ],
+    "company": "PDD Holdings Inc.",
+    "data": {
+     "associates_investments": null,
+     "fiscal_year": "FY2026",
+     "holdco_basis": "Broker SOTP frameworks (such as CMB International and Morgan Stanley) apply a 30% holding discount to net cash holdings to account for lack of dividend distributions, substantial capital redeployment into overseas initiatives, and VIE corporate holding structures.",
+     "holdco_discount_pct": 0.3,
+     "net_cash": {
+      "currency": "CNY",
+      "period": "FY2026E",
+      "quote": "4 Net cash 398,449 56,921 38.0 24.6% 2026E net cash",
+      "scale": "mn",
+      "source_url": "http://www.cmbi.com.hk",
+      "value": 398449.0
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2026E",
+        "quote": "PDD main app Rev. (RMBmn) 279,730 OP. (RMBmn) 117,487",
+        "source_url": "http://www.cmbi.com.hk",
+        "value": 0.42
+       },
+       "multiple_basis": "CMB International applies 10.0x 2026E P/E on NOPAT; Morgan Stanley has applied up to 15x forward P/E for PDD's domestic core business reflecting market leadership in China e-commerce.",
+       "multiple_high": 15.0,
+       "multiple_low": 10.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "http://www.cmbi.com.hk",
+       "name": "PDD Main App",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2026E",
+        "quote": "1. PDD main app 279,730 117,487 93,989 10.0 939,894 134,271 89.8 58.0% 10x 2026E PE; tax rate @20%",
+        "scale": "mn",
+        "source_url": "http://www.cmbi.com.hk",
+        "value": 279730.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "CMB International applies 1.0x 2026E P/S (EV/Sales) in line with grocery and community group buying peer multiples.",
+       "multiple_high": 1.0,
+       "multiple_low": 0.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "http://www.cmbi.com.hk",
+       "name": "Duoduo Grocery",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2026E",
+        "quote": "2. Duoduo Grocery 21,355 1.0 21,355 3,051 2.0 1.3% 1.0x 2026E PS",
+        "scale": "mn",
+        "source_url": "http://www.cmbi.com.hk",
+        "value": 21355.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "multiple_basis": "CMB International applies 1.0x 2026E P/S (EV/Sales), previously 1.2x P/S, reflecting rapid cross-border revenue growth balanced against global tariff and regulatory uncertainties.",
+       "multiple_high": 1.2,
+       "multiple_low": 1.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "http://www.cmbi.com.hk",
+       "name": "Temu",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2026E",
+        "quote": "3. Temu (2026E) 262,100 1.0 262,100 37,443 25.0 16.2% 1.0x 2026E PS",
+        "scale": "mn",
+        "source_url": "http://www.cmbi.com.hk",
+        "value": 262100.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.42,
+       "ev_rev_multiple": null,
+       "name": "PDD Main App",
+       "pe_multiple": 12.5,
+       "rationale": "pe 10.0-15.0x: CMB International applies 10.0x 2026E P/E on NOPAT; Morgan Stanley has applied up to 15x forward P/E for PDD's domestic core business reflecting market leadership in China e-commerce.",
+       "revenue_fwd": 41685364600.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 0.9,
+       "name": "Duoduo Grocery",
+       "pe_multiple": null,
+       "rationale": "ev_rev 0.8-1.0x: CMB International applies 1.0x 2026E P/S (EV/Sales) in line with grocery and community group buying peer multiples.",
+       "revenue_fwd": 3182322100.0000005,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 1.1,
+       "name": "Temu",
+       "pe_multiple": null,
+       "rationale": "ev_rev 1.0-1.2x: CMB International applies 1.0x 2026E P/S (EV/Sales), previously 1.2x P/S, reflecting rapid cross-border revenue growth balanced against global tariff and regulatory uncertainties.",
+       "revenue_fwd": 39058142000.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "PDD Holdings Inc.",
+     "depreciation_and_amortization": 447114243.28000003,
+     "market_cap": 112732998761.0,
+     "net_ppe": 919945911.1000001,
+     "operating_cash_flow": 15936003583.800001,
+     "period": "2025-12-31",
+     "revenue": 64353648151.26
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 62.3,
+    "value_usd": 83925828700.0
    }
   },
   "RIG": {
