@@ -10677,7 +10677,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 from src.agents.industry.gemini_params import to_engine_assumptions as _to_engine
                 _sotp_e = _ii_s.accepted_entry(ticker, "sotp")
                 if _sotp_e:
-                    _conv, _conv_checks = _to_engine(_sotp_e["data"])
+                    _conv, _conv_checks = _to_engine(_ii_s.canonical_data(_sotp_e))
                     if _conv.get("segments"):
                         _conv["_origin"] = "gemini_accepted"
                         _conv["_review"] = {"kind": "sotp", "built_at": _sotp_e.get("built_at"),

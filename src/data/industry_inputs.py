@@ -313,6 +313,32 @@ def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
     return {"input_key": key, **review_for(ticker, kind, e, overlay=overlay)}
 
 
+def canonical_data(e: Optional[dict]) -> Optional[dict]:
+    """The entry's `data` with every grounding wrapper replaced by the
+    canonical URL recorded in `canonical_urls` (owner, 2026-09-24). Returns
+    the same object when there is nothing to map; never mutates the entry."""
+    if not isinstance(e, dict) or not isinstance(e.get("data"), dict):
+        return None if not isinstance(e, dict) else e.get("data")
+    cmap = e.get("canonical_urls") or {}
+    if not cmap:
+        return e["data"]
+
+    def walk(node):
+        if isinstance(node, dict):
+            out = {}
+            for k, v in node.items():
+                if isinstance(k, str) and k.endswith("source_url") and isinstance(v, str) and v in cmap:
+                    out[k] = cmap[v]
+                    out[k.replace("source_url", "grounding_url")] = v
+                else:
+                    out[k] = walk(v)
+            return out
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        return node
+    return walk(e["data"])
+
+
 def accepted_entry(ticker: str, kind: str, doc: Optional[dict] = None) -> Optional[dict]:
     """The stored entry when the owner has accepted exactly its current figures,
     else None. For kinds whose payload is structured (a SOTP's segments and
@@ -433,7 +459,7 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
         for kind, e in sorted((kinds or {}).items()):
             if not isinstance(e, dict) or not isinstance(e.get("data"), dict):
                 continue
-            data = e["data"]
+            data = canonical_data(e)                   # the gate shows canonical sources
             v = data.get("value") or {}
             try:
                 rv = reviews(t, kind, e)

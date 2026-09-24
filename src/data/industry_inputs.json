@@ -146,6 +146,9 @@
    "pv10": {
     "basis": "actual",
     "built_at": "2026-09-20T02:10:48+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3BGcwU0-Fj27mkX5PUxtWEj7XdTXhAWCwXy3zbilhnZl7P3L5JUIBWzZYIrYW7BK1LS1pQgON47m3Qll2EDTX1evIiGKx3eSFycETf52IiTVeAD9V3s4tw1Zos91c4dF1j9e_ebbGRyx7mn4jz7u1W9akfn7m7NRR0RT9GmUSe2Z8-A-U": "https://www.cnoocltd.com/tzzgx/dqbg/nb/material/c00883-2025AnnualResults-cn.pdf"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -467,6 +470,9 @@
   "03337.HK": {
    "backlog": {
     "built_at": "2026-09-19T18:12:23+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFQ3iUnOg7Qmbd1Qx2a8q6bxo8VJveoRhXCiZzxo3-k5zpNhrp4LuB2tEjo_pMsYg8hKLLbWQt0XNi9V73tO3SBXyyBVX7oXhjmvuJ6-rq00k5ycvClArJ3MHQHr5p-5-TWHrGO1Q==": "https://iis.aastocks.com/20260717/12248902-0.PDF"
+    },
     "checks": [
      {
       "check": "backlog / revenue",
@@ -723,6 +729,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T16:00:47+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGlC9x8JvZay_62_AEhqSvy-dErZ5aXxi9FTM5VNu9h_gE_zBLrs2o1Eq7ObCj9MPts6xR0QIDIbQ2m0CG8ZNUIqShjQ_mdaxQ16XOXXyv2oX1tqyk_4DO9G5XWc5cZWxt4tcdPs2BAaroLz9zkjyfP_OnsUWLjs2qMSeUS_lJuWGGOorB65XWEDvwsNSIktnLS-lOYYGozKqexpdaGg-B-iW7XnUJYDBXUIgKRkzVarOGWb5k=": "https://boeing.mediaroom.com/2026-07-28-Boeing-Reports-Second-Quarter-Results?_sp=3aac3a03-2b5a-41b1-a682-eb8852ef24bb&asPDF=1"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -774,6 +783,12 @@
     },
     "basis": "estimate",
     "built_at": "2026-09-22T16:38:57+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8WWwZoREYukvoER0Avw3--18USu82qi73bzFXnHo9fe5SrH8iqZN9ysGZzDzepGEai5Rmaj95RKeH3YvS_V7ALZzBUOo8xMmK50tBuf7Sgm_o9tLl5DKposC6mU53xvR5-aaHAGmhoxVSQkhMYjT0QCWExVqFxXHmI-sNhUaryBtYLALMQ6ZGsEVZYghLvTL0JDVzSpxCGD9pm7vk2mLA_jaTDS99EBMyt9k5wSZ1LsBmOMcuExlMjof6wtHdIJhVQIin": "https://www.businesstimes.com.sg/companies-markets/transport-logistics/boeing-ceo-says-it-taking-longer-stabilise-737-max-output-shares-slide",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG_E9dKPCOiTSk-e8vygh3wv-4TIS8Ni11TqaHXGQ3MHx771r99XdpCGmJsBVBp5FvTwjZ75_GXnMSDhLoMPLDFwDXm-B1rJV4t42X57lGOrb9k-fDaWDXN0uDkCgZCCGWuRxI4sClL5EAikeP-": "https://finbox.com/NYSE:LMT/explorer/ev_to_revenue_ltm/",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHly1R2cVtN-M6hje3qD6ZRtwddrbi4f0UQ_ybjpfJP8C1_nJdrc1gkE9POXaen4WBoKLaScEPRGZnTaCs9NQQOx4xSDCHZaguApFvvnyRntkKcLChHITI6cRqC4wPAC07N_vajYoypAXVOtEb7uzk8kJM=": "https://multiples.vc/public-comps/airbus-valuation-multiples",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuQzhpSyxiBe5g4Jxrrnu2d8hlo13OIV1QyhgChEbUagMjxMqZDe59qlaXS9vWhMQ28xNLWSYEt5e3V__rjDiRelzdYyTFeckwTggvMbZdVHH3vzYLQBcG_VEj-D93iXXXZTMhAIbptmjqOzi00aJF345LKMrdtyqF5JlZDxXKuoHMPyL2nUxg3TdMU007v08Rj7ZxzOuAqBSXydSb4arvVg2Gh_qBrdzXE1sY84E=": "https://simplywall.st/stocks/us/capital-goods/nyse-ge/general-electric/news/3-defense-stocks-with-earnings-growth-over-9"
+    },
     "checks": [
      {
       "check": "guidance period",
@@ -930,6 +945,15 @@
     },
     "basis": "estimate",
     "built_at": "2026-09-24T02:54:21+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE7Pt-skkGu2qfV9O48yK-dgpLQJpvJ5bcgTrWOUlWX5RjvvLrQ6roO6GepQNaV5c3lTFR1Mh7wYtTAfj4PPVLGqhzeK0OKRQV2SyCd8KMrZ7BZAticVzwXtTij6J_VqSNwQtKG5U75Mw==": "https://www.scribd.com/document/1070776519/Q4-2026",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE9ksZsUC-2rba6mckN1HhVDzha7HBRlGjCW35QT_RjEAe3LDDeEwU9iXuSKNkXKAiAmjkiuiCO-W6iK005IscfzQZqZMbcUdRrsu6wpfGigk8HTDLikB2TOn4c7PdcokOaLwVzRgw5Cuz4pie0-nRYK3cSWzRCpyxi7cz5uD2oeETV8TuToQruj_k65C-Ccxx25ueO8nKB3uC35YN-ap0if0B0TlGA6U3fwpH2iX_8": "https://za.investing.com/news/company-news/alibaba-q2-2026-slides-ai-surge-drives-revenue-up-9-profit-down-75-93CH-4438116",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEbS7Vz73jvC05jvcwAyl0P2oek9WEdmWI5ovZE23lzRx-KhIjd-TgRMWPtDpw7y9FibF_DE9LytjNr4wPzGj7VVMOs-CeU6q1jwvDieDKpJNCJgMYEgQ4204r6Uyw2Gc2k-8Wm0m4RAP39m7LqT3C89drc-4M6fCiqJEDjEbqpe5NsnA==": "https://hk-official.cmbi.info/upload/ec2e72b5-1273-40a5-afbc-a8456eab1c26.pdf",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8MYignnSB4Fbb9HobfOg87rflbInSGqyOXD-r5SupNmYGwdH2o9D_cEtryodrfHjpAuAB7sq-4jNxphU0-wNkMEdIF6xTPO9PXmxTNBNHUHmgI_f35DnMVbigWizQJYfZTjaHkI0zXbEEHtnp": "https://pdf.dfcfw.com/pdf/H3_AP202308161594834642_1.pdf",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFS_p4qoYJnk20dqgZsaWeFj5vMLvHL2bRF4eP6-Mg5CQXsrORTadPGfWxzGhdmqxfTQEwINosEsik-EKEGleJkLdbjE8nA_1okpR787gmgG78dL8wRTftw9XIZdGXuOXPPrCHvYGLj": "https://stockanalysis.com/stocks/baba/financials/",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFYuDArtIESuXLWH5TU_WblIZe7AIkbDzhKIPY-AhLtT9oZavVBnz3fpp7JqAb_-3ZlRuDiEcBDnKWhShiCPdi6n8yarqtEb-HMMwzJmvBVz_WctdilvNXSsoR_CKyG_gYV-E7t2yXEEOX558laW4HmS2R4Vs64s0KWR30TcqMiYNq1WLNVEHOWsN5_VXq1EQ==": "https://www.sec.gov/Archives/edgar/data/1577552/000110465926099220/tm2623667d1_ex99-1.htm",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQH46_kSsmJbMUmR3K-tepIDx8ber2I0UalqTVmUQxhLDkIaweZDm6iwvHAfukIcBI1__Rv6DhB6iKj-NwieDYLEGB7DWsBZNkbRyvL2KMP0Xm6mRKjQ2ngiBWdoksXRw8_uWzTBBXlSzGvByLZOZb82rrMatAiSUVc_aQxlRle5V15Q5OqtsmCB72vNT8MaKe0ipnFimtuDR2TfW6p4r13BOXYdywZW": "https://www.futunn.com/403"
+    },
     "checks": [
      {
       "check": "guidance period",
@@ -1347,6 +1371,9 @@
    "rate_base": {
     "basis": "actual",
     "built_at": "2026-09-21T14:16:28+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHZ2u6DNKlU1oeZxBSyKC-pruCajn_05OIMwckBBMyD86kwyszOuZDWDq8iNKUHIznV5QuZBoxDWcpWxJx7JIb6O64-AFB2Us7eA6cuVhlmAjnk4o85WntQBaWtVwWKBp05nF5CLs-2Q92lQuzFlu1yiSXRRrm04dy-6SR7W6Uyasd6bI3chBh1EK7nNCSw6jC_S7WfPNH9Z59-Let_Ci4=": "https://s201.q4cdn.com/583395453/files/doc_financials/2025/q4/Q4-2025-Earnings-Presentation_vF-w-Reg-G.pdf"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -1556,6 +1583,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T15:57:26+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEcQf03xygBlVxpH-08sO9J9sDdyY5Pf2Hwpt0ZKqUD4Kbw1iwcBXIIfGziOIgfB4pmwQqjNqEf4FXTwAMI5xLre9dCmz4upxPz-5NY4xpXoT9d04ZZ-1dFT6E-fdNNDt6SEPe5jJ7DkTLUB0ZkEfTvquqjF0dUu5I5ixweztEtxG5U5N0TD25Nb7BBXKcxCeA8yoOOM4Jq0h39qVDC1cAZk0SO_NgvJIDpjNE=": "https://www.prnewswire.com/news-releases/general-dynamics-reports-second-quarter-2026-financial-results-302836859.html"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -1603,6 +1633,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T16:03:40+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHvvqF2s_RLoqrnabgG6eI8QP51SmKQbxKMCM0BfZ8KtC8voR7pLNFq8bLStLc_dVLTv9DhZp1H1UwmYbgGboGGFjXgwYUs08uTmWRbuwfva7WN5s8cNbIkSXuc_ZFxVdrozDZKF6Oy_WXfQqqU9awSS5GC94Z-5GJBZ1MxN-th0guGepZXzihrsPwgxyd0gjiSpCk0X-6D": "https://www.geaerospace.com/news/press-releases/ge-aerospace-announces-fourth-quarter-2025-results"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -1764,6 +1797,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T16:27:31+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFERSiRODvIQJVRzzMmR-celC2qqAPuceg1Xnox5iiht9Cv_2rNSmbj_e5R32UXFh4p2KkTgyj4IJl7eaKy60_BCNWG8xnHU5uCE0udxpx6Xp3MST3aARcq56AipAts67UewNQf00PMv219OfzM6ZQQvzZDSYwRA1Q=": "https://heico.com/wp-content/uploads/2026/01/AnnualReport_2025.pdf"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -1875,6 +1911,13 @@
     },
     "basis": "estimate",
     "built_at": "2026-09-24T02:57:00+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFE8gahdlcjFWTimfzxLrIhimecVaR0ZELXkTXADMQpk0BzSCmb8mgCPaCOcS38w7y1NyMhW-DnIqGwHUuDwZKbxTmiYbQTOn66y6hu9Pn5ieqnRnGW2T52i2YPiu1g40-LsycF8L6HcAORjLvOEs-TIz5v4gRXKQ==": "https://uobkh.com.sg/strapi-uploads/JD_com_9618_HK_2a9275f95c.pdf",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFRFSjRJ_fjjf2GjjMOQHkFYlksupjcp_5mKO76pOi-iMGEu3mRYIDRx0GD4xpa2ATOQlFfL7jdhqEYfAqzrDE5aO23UnWnELGoYLQxEEBexZveUJW_OjJgijYcoxX5Bh-g54Y9uA9TIQLtIo8A12A_aRBJTsWt7vhqKBRs-dB9_NrBMQuC0h9pSCSDJAK8qPUxp0WsB_cCq1v7U8w=": "https://www.futunn.com/403",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFoafCJWY1E9FWdeftu90_q2dsqQ803in8qXi5bQN9ChsVi3Rot6glfZFCi2zclt_0zhdiTqmFbajBuhVVMO4kZNH2VrvRgBhAdw6gRRqNQ-_ICqIBeGfUsf5nAeD7TDi6Ddol2e7ADQZPfZ2ZGeYqXkG0o0uKv": "https://uobkh.com.sg/strapi-uploads/JD_com_9618_HK_2a9275f95c.pdf",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGN9yClNaGesL36NG3yQEXu8AjGIUeTTRpkaAQbRwWlxtOPwuf5VKp4Fdb5dSPcBRcm4zozjJYeaLkkuEpdlWkkRvgvs_z-zT1GzbryzHNwlnHXJSAm4kfI5QG-eE37G6Ffqup1pe4nWM9-QheKEnnldbrNxeUKOB8CFtYWsovB6UxdYBidzlPSPZKVCOJRevjSVI0=": "https://seekingalpha.com/article/4946685-jdcom-at-a-turning-point-yet-still-deeply-discounted",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHR5eVOFKdOpZDMNa39WVHJIMPzf8S6OGKbpNkpLUp4ESqsTgusR5izJ20HuGRo3lNE1wGQHjTuAbAFEuv_Sz_2lTveuyXYy62lDqVBUwkmNQTlXDJcdQ==": "https://ir.jd.com/node/11991/pdf"
+    },
     "checks": [
      {
       "check": "guidance period",
@@ -2135,6 +2178,10 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T16:30:11+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFAQa8cVNvy0ttNk6-EJ8JadRhdKFYSJdbo77scGdcWslmuL5rgASVpEB_Ihq1B7gaI7sWeItdUpR1-1bpfPNapphnooMkGczB2XQtuhi65zFh96v0EEbhr2HjRvgwFTU6Oa6bT9PuVNpXgHcSEdWsiydAQS1Y5mJvd1r0gBVusyCk3MN8yZPiUuk3uQS-w-1wF": "https://www.kratosdefense.com/newsroom/kratos-reports-second-quarter-2026-financial-results",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGSPHM70AicY9VJwI2ep_A_gLxOrZMXlpOu3JlcbZjesAr6LcvqCTl5XOjlCGbtLS_h71hiVnBQSmmY4w25xEDNyk8jYD4-UEmFaPSy9V9b5mhMJJaFNez9nz6fXeY-Kvj9YwupLXnknPz1fIKeELDqjX1kgfKi2YEaIj3tCWaLQXymJsz0-Fw_ph4QkN9wJ-U0nHvhAviCcrcL-lCEUjA=": "https://www.kratosdefense.com/newsroom/kratos-reports-fourth-quarter-and-full-year-2025-financial-results"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2189,6 +2236,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-21T14:43:22+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFPKpWJHeTb8j8nQNGBa_OevoLQimxsKvFaipEiQLQOLiI6NceGjzjVsxy4aTv0u3cogZKlNXHhnOLopTTpIgMzz8e5NPcgiPq3d9H1HYirA6Py0vNQ1Dr8OFOHmv_o6c8NerLYbE7RV0jNY_gvOovuuCXaJaZZKwa-tOC4G1glPHVwJmDWa0USCh9iyx6J0oubIoa3ShIS4yI=": "https://www.prnewswire.com/news-releases/centrus-reports-second-quarter-2026-results-302843983.html"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2235,6 +2285,10 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T15:59:34+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF9ySBo3xjX1iQhqeQpDPdupQFPKviKj2LD5F-3NWlRuTwWoeilzlBIt0eolR1jMUd4THd3BQf4chuxabGCicDmACySEovUI-CVnpSwiRTZoDA468qufKcWCOHKKt_1EVD3YY8ZQa7ozTHU0LTzWzJ10r2CyvUXgWWzPc7CH0Aeq5SPsIaidr-qTTIvXlxHVdPmxthE5I2KDDqnJwifofo5dedZxSCakNjZCu25wAPS": "https://www.l3harris.com/newsroom/press-release/2026/01/l3harris-technologies-reports-strong-full-year-and-fourth-quarter",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFZGYAQoafyQGJQcOln8rGup7g2hwcutbNgJ_kGRq2X_2egqlABBvV7tAjfgmBImypQxx0Pdl9ex8-6FJra7E04bBn3766kL0KIFoSl4k0n66TiFSwvdhB6KGBDXbLVzanTLsUULdis42nc6Mfx7_EaZcV8FnZW-YRmWtbxJ2WxnUPruIRw0fclc2sD4A8av75Y5hXs8EZ2LdIPz0wuJGfBF1Uqe-LWyzYVEPFngXE=": "https://www.l3harris.com/newsroom/press-release/2026/07/l3harris-technologies-reports-robust-second-quarter-2026-results"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2289,6 +2343,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T15:54:59+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQH3pZqwwAEwnkaaObUeJivtGSdNjLWqwejsPICWoRekuGql62gErQeAEvw282Y_Mx7VPCHP-r4AbQ9bCl7ExOc4I4MNSWOuRjh753CKyJAnQkkGYerHjc1tdGDqbsWM_qEU1OCiHIw_E-abl4SnbHAO8g1pWPYS1yYwqmMXEG6eijE0B5UKMDw6h7xgakKyDS4VV_oPOtsjnEBC_C2SV03tHCSVE0y7kkm9XKBJF40PsSPpzDWdqvuwpQKZaQ==": "https://investors.lockheedmartin.com/news-releases/news-release-details/lockheed-martin-reports-second-quarter-2026-financial-results"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2404,6 +2461,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T15:56:18+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE3dy2nKUsw1IY_jxJl3F9-gSyTIWNhWe7u24rV3UBBswdD92tEkhXK_Cboy-rKT3McaaakKBVFllZsJPVsLLMqYrbcMAbUramuyERoLemoLgKXyuanrKsASvA5uaEOPiiXR4EIO3ArB6khQ7mxDm6Ui77dw3SCAM15rOaE1nEQrX59O10umvTTZhWhMQ==": "https://investor.northropgrumman.com/static-files/a48b12f6-1fae-46a4-890f-973b42c3aac4"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2558,6 +2618,13 @@
     },
     "basis": "estimate",
     "built_at": "2026-09-24T02:55:43+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF06bJPAgluogQ2vjnPsPGEPyzQt-ErCq3EAnyUL6jDwDwWQsYhwwCv6oFLrQCRjRXGmsgKHD53Yi0r0XpuO8L4mb9qcv3ioQIqfnGv4NfyOHQD-Zv4VeLqF2NGRm2cYilBu3NkWqa2eFAq0PERYp4Q2QJoQ6sPcUdwYvcLHPLBof_-lkqpKsLrgIN5FFSPNdGco9IV4vGFIEP_OPzPcSDOhgy1PbJbM_PfbPxt0DU1": "https://reportify-1252068037.cos.ap-beijing.myqcloud.com/media/production/s_ab6effb9_ab6effb940f7b2d9cec324fcc62311f0.pdf",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFCJErS60gJpaKOcLpAmX2DipMXgRfJzcivkbdu0kubZ-OBqpMEIOhxHt-yW9GG-eHNT4GJOmvggSxGWvXq8MaDMk1Pvpp5iNBKx_rkGLT2poOMqmszgF7aOR7PjdInGTcTDU0tPHLdtX1RH7fqATZLGq4c1gb_0qd11y-GUJInsrtYCjri8PAwtew_kVNP8gcQ-jTDW5768buvr_b5kJBjVoUv": "https://www.futunn.com/403",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHA7S4rTqSRrinP9D3qzNpi1CxiVPLqRne4NZsLJr_btSADcie2KtwJd7lv7YZK4wck8s_uaHTVCJHed5v21Ksz5XEfSkgqxa9w2NadOLSzfRsgq7eA6FyUh3AChbFyH7BF-Jx5Tcdz6mFC5XFwbOeyOygJDoDZi4MfTD6bpAH70he8_OpvrziSQP67SzZsn5CsiIsv0xYFgOexWQpdUpDxJgdLu3ciTFmAwaOop_SYub_irocUgpGevbQeVBGOMw==": "https://www.futunn.com/403",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHDX2wDB-IzH25dJFFooW6aAkLHtQVzTgX6zFkJYCHJ7iJY01eWsAGQxtv2iGpE6BkmbxpBOYEtwQUMf18NlqkyzrknNbqcW4pG8jIA142dObSATr2uAOG9QeuMG6UmQKNBd19jjcsjAJSGADBMdaCZ9NA7vbZP2j2TI35TloYLEuxT6uZpMDIX3II25AG7hlHqFVuyhk5V3cHXohBdROVZ92loJv7sOq5QJcTobZwA9GAM4cjRjEQfc2A=": "https://investor.pddholdings.com/news-releases/news-release-details/pdd-holdings-announces-fourth-quarter-2025-and-fiscal-year-2025/",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHVFjNAJmh5evttTCU9KM_1Rz4-PcijSYzuIUQMI2mmPH4R-SIZrOI_BGkr-t0c2feycz1caB0PnqUoRGh_vKA0ZXiSz2Lros1Jg8qyt9IiL9TrW2vlug7xBCkgkZ1pL41_1z4D2w4qz_D1vConQEUnIFDPoRRswGNiJ1RCbx4427WQBw==": "https://hk-official.cmbi.info/upload/b287c13c-d2ee-4442-a439-76241a94f274.pdf"
+    },
     "checks": [
      {
       "check": "guidance period",
@@ -2793,6 +2860,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T15:58:54+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNqCJ6UbBueN5aaBVb26Jb3-6XT5rX6pS9_KEo2kBuWy9dNLxz94RDM0Usu0gy8trBP4tGP3YOvmXqxB3YbzVLz4tTkeBtZDhTfs7X0qCKUS41Z2LTP9TrqkVkqbjEAkmjoTXJ1-qbo6vFSQcQ6OWX2yLLEh8pbGEaT8p2hip3rm0=": "https://investors.rtx.com/static-files/ea90bddd-958c-455f-a934-ff6aa96fab62"
+    },
     "checks": [
      {
       "check": "latest reported period",
@@ -2840,6 +2910,9 @@
    "backlog": {
     "basis": "actual",
     "built_at": "2026-09-22T16:37:39+00:00",
+    "canonical_urls": {
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE-MoYHSENUnj4dAjHDnXripwWuRUHsjdmDMQ2H_TkTw2o5kv6a4uyAshIDY3AKH_1b7gWxaWKdMqbYmeLIYK3Jlv0-M9GqmNr0kXsLnlnVAxc_T5REFi38B1BakxN9PaqKv3c_aO8f4PImmHYFW85B_-yl9QGsf6UbLdQUx6hhlbJfrU2-ujaT0GWSrIT9rAMHjUmQ3Wr87wItZTtuBx00": "https://www.stengg.com/getmedia/81fac7b0-2587-444c-8960-c4eac97bf17b/ST-Engineering-Annual-Report-2024.pdf"
+    },
     "checks": [
      {
       "check": "latest reported period",

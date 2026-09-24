@@ -631,6 +631,80 @@ def industry_input_prompt(kind: str, company: str, ticker: str) -> str:
             "figures only -- no estimates, no broker figures.\n" + _AMOUNT_RULE)
 
 
+# ── Grounding redirect wrappers (owner, 2026-09-24) ─────────────────────────
+# Gemini grounding cites `vertexaisearch.cloud.google.com/grounding-api-redirect/…`,
+# a wrapper that 302s to the page. A wrapper is not a source: a domain
+# allowlist (EDGAR, HKEX, company IR, broker portals) would fail it, and the
+# net-cash precedence rule must not key on one. Resolve to the terminal URL
+# before recording; keep the wrapper beside it as provenance.
+GROUNDING_REDIRECT_PREFIX = "https://vertexaisearch.cloud.google.com/grounding-api-redirect/"
+_RESOLVED: dict[str, Optional[str]] = {}
+
+
+def is_grounding_redirect(url: Optional[str]) -> bool:
+    return isinstance(url, str) and url.startswith(GROUNDING_REDIRECT_PREFIX)
+
+
+def is_canonical_source(url: Optional[str]) -> bool:
+    """A direct http(s) URL that is not a grounding wrapper."""
+    return isinstance(url, str) and url.startswith("http") and not is_grounding_redirect(url)
+
+
+def resolve_source_url(url: str, timeout: float = 15.0) -> Optional[str]:
+    """The terminal URL behind a grounding wrapper (one HEAD, redirects
+    followed), or None when it does not resolve. Cached per process; a
+    canonical URL resolves to itself without a request."""
+    if not is_grounding_redirect(url):
+        return url if is_canonical_source(url) else None
+    if url in _RESOLVED:
+        return _RESOLVED[url]
+    final: Optional[str] = None
+    try:
+        import requests
+        r = requests.head(url, allow_redirects=True, timeout=timeout)
+        cand = r.url if r.url and not is_grounding_redirect(r.url) else None
+        if not cand and r.headers.get("location"):
+            cand = r.headers["location"]
+        if not cand:
+            r = requests.get(url, allow_redirects=True, timeout=timeout, stream=True)
+            cand = r.url if r.url and not is_grounding_redirect(r.url) else None
+            r.close()
+        final = cand if is_canonical_source(cand) else None
+    except Exception:                                      # noqa: BLE001
+        final = None
+    _RESOLVED[url] = final
+    return final
+
+
+def canonicalize_citations(data, resolver=None) -> tuple:
+    """Walk a Gemini answer and replace every grounding-wrapped `*source_url`
+    with its terminal URL, keeping the wrapper under `grounding_url` beside
+    it. Returns (copy, {wrapper: canonical_or_None}); the input is never
+    mutated. A wrapper that does not resolve is left in place and reported."""
+    resolver = resolver or resolve_source_url
+    mapping: dict = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            out = {}
+            for k, v in node.items():
+                if isinstance(k, str) and k.endswith("source_url") and is_grounding_redirect(v):
+                    canon = mapping[v] if v in mapping else resolver(v)
+                    mapping[v] = canon
+                    if canon:
+                        out[k] = canon
+                        out[k.replace("source_url", "grounding_url")] = v
+                    else:
+                        out[k] = v
+                else:
+                    out[k] = walk(v)
+            return out
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        return node
+    return walk(data), mapping
+
+
 def _cited_ok(c: Optional[dict]) -> bool:
     return bool(c) and c.get("value") is not None \
         and str(c.get("source_url", "")).startswith("http") and bool(str(c.get("quote", "")).strip())
@@ -741,8 +815,14 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
             if field == "net_cash":
                 # Item 2: the citation travels with the figure so the engine's
                 # net-cash restatement can defer to it (see _refresh_sotp_net_cash).
-                assumptions["_net_cash_citation"] = {"source_url": c.get("source_url"),
-                                                     "period": c.get("period"), "quote": c.get("quote")}
+                # Only a CANONICAL URL earns precedence; a grounding wrapper is
+                # recorded as unresolved and the figure is restated as before.
+                if is_canonical_source(c.get("source_url")):
+                    assumptions["_net_cash_citation"] = {"source_url": c.get("source_url"),
+                                                         "period": c.get("period"), "quote": c.get("quote")}
+                else:
+                    assumptions["_net_cash_citation_unresolved"] = c.get("source_url")
+                    checks.setdefault("unresolved_citations", []).append("net_cash")
     checks["citation_coverage"] = citation_coverage(sotp)
     return assumptions, checks
 

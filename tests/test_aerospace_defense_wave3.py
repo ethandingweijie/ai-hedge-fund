@@ -214,7 +214,8 @@ def test_the_sotp_legs_read_owner_accepted_gemini_inputs_and_nothing_else():
     src = inspect.getsource(dcf_agent.run_dcf_agent)
     at = src.index('_ii_s.accepted_entry(ticker, "sotp")')
     assert "if not _ticker_sotp:" in src[at - 900: at]      # the pipeline's own assumptions still win
-    assert "_to_engine(_sotp_e[\"data\"])" in src[at: at + 400]
+    # 2026-09-24: the accepted entry reaches the bridge with canonical URLs
+    assert "_to_engine(_ii_s.canonical_data(_sotp_e))" in src[at: at + 400]
 
 
 def test_accepted_entry_is_the_same_gate_as_every_other_kind(tmp_path, monkeypatch):

@@ -114,6 +114,35 @@ def _sotp_anchors(ticker: str, ctx: dict) -> dict:
             "revenue_next_fy_period": fwd.get("date")}
 
 
+def _url_check(mapping: dict) -> dict:
+    """Every grounding wrapper resolved to a canonical source, or which did not."""
+    bad = [w for w, c in mapping.items() if not c]
+    return {"check": "sources resolve to canonical URLs", "ok": not bad,
+            "detail": (f"{len(mapping) - len(bad)} of {len(mapping)} grounding wrapper(s) resolved"
+                       + (f"; unresolved: {len(bad)}" if bad else "")) if mapping else "no grounding wrappers"}
+
+
+def resolve_store_urls(doc: dict) -> dict:
+    """Owner, 2026-09-24: existing entries keep their reviewed `data` (the
+    content hash the owner accepted must not move), and gain `canonical_urls`
+    {wrapper: terminal url} beside it. The gate and the engine read the map."""
+    n = 0
+    for key, kinds in (doc.get("tickers") or {}).items():
+        for kind, e in (kinds or {}).items():
+            if not isinstance(e, dict) or not isinstance(e.get("data"), dict):
+                continue
+            _, mapping = gp.canonicalize_citations(e["data"])
+            if mapping:
+                e["canonical_urls"] = {**(e.get("canonical_urls") or {}),
+                                       **{w: c for w, c in mapping.items() if c}}
+                unresolved = [w for w, c in mapping.items() if not c]
+                print(f"  {key:<10} {kind:<18} {len(mapping) - len(unresolved)} of {len(mapping)} resolved"
+                      + (f"; unresolved {len(unresolved)}" if unresolved else ""))
+                n += 1
+    print(f"resolved sources on {n} entries")
+    return doc
+
+
 def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
@@ -127,6 +156,7 @@ def build_one(ticker: str, kind: str) -> dict:
         data = out.get("json")
         if not isinstance(data, dict):
             raise gp.GeminiParseError(f"{ticker}/sotp: no structured answer")
+        data, _urls = gp.canonicalize_citations(data)      # owner, 2026-09-24: no wrappers in the store
         conv, conv_checks = gp.to_engine_assumptions(data, fmp_revenue_fwd_usd=None)
         seg_sum = sum(s["revenue_fwd"] for s in conv.get("segments") or [])
         checks = ii.reconcile("sotp", seg_sum or None, ctx, period=data.get("fiscal_year"))
@@ -162,6 +192,7 @@ def build_one(ticker: str, kind: str) -> dict:
         checks.append({"check": "segments with a cited multiple range", "ok": len(conv.get("segments") or []) >= 2,
                        "detail": (f"{len(conv.get('segments') or [])} usable; dropped "
                                   f"{conv_checks.get('dropped_segments') or 'none'}")})
+        checks.append(_url_check(_urls))
         return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
                 "anchors": anchors, "value_usd": seg_sum or None, "checks": checks,
                 "engine_preview": {"segments": conv.get("segments"), "checks": conv_checks},
@@ -182,9 +213,10 @@ def build_one(ticker: str, kind: str) -> dict:
     data = out.get("json")
     if not isinstance(data, dict):
         raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
+    data, _urls = gp.canonicalize_citations(data)          # owner, 2026-09-24: no wrappers in the store
     value_usd = gp.amount((data or {}).get("value"), ii._fx("USD"))
     period = (data.get("value") or {}).get("period")
-    checks = ii.reconcile(kind, value_usd, ctx, period=period, data=data)
+    checks = ii.reconcile(kind, value_usd, ctx, period=period, data=data) + [_url_check(_urls)]
     return {
         # Audited actual unless a check says the period is not the latest
         # reported one -- a guidance figure must arrive as an overlay, not as
@@ -228,7 +260,13 @@ def main(argv=None) -> int:
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--overlay", action="store_true",
                     help="capture management guidance as a delta on the stored actual")
+    ap.add_argument("--resolve-urls", action="store_true",
+                    help="resolve grounding redirect wrappers on EXISTING entries into canonical_urls "
+                         "(reviewed data untouched, acceptances survive)")
     a = ap.parse_args(argv)
+    if a.resolve_urls:
+        ii.save(resolve_store_urls(ii.load() or {"version": 1, "tickers": {}}))
+        return 0
     jobs = ([(k, t) for k, ts in WAVES[a.wave].items() for t in ts] if a.wave
             else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
     if not jobs or any(k is None for k, _ in jobs):

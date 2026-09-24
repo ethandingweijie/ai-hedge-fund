@@ -207,3 +207,53 @@ def test_the_build_checks_are_one_sided_and_period_aware():
     assert '"check": "segment revenue vs group revenue", "ok": _excess <= _tol' in src
     assert 'sotp_input_thresholds()["segment_sum_excess_tolerance"]' in src
     assert "(ii._year(p) or 0) <= _latest" in src
+
+
+# ── 5. grounding wrappers resolve to canonical sources (owner, 2026-09-24) ──
+
+WRAP = gp.GROUNDING_REDIRECT_PREFIX + "AUZIYQabc"
+
+
+def test_a_grounding_wrapper_is_not_a_canonical_source():
+    assert gp.is_grounding_redirect(WRAP) and not gp.is_canonical_source(WRAP)
+    assert gp.is_canonical_source("https://www1.hkexnews.hk/x.pdf")
+    assert gp.resolve_source_url("https://www1.hkexnews.hk/x.pdf") == "https://www1.hkexnews.hk/x.pdf"
+
+
+def test_the_walk_replaces_wrappers_and_keeps_them_as_provenance():
+    doc = _sotp_doc()
+    doc["net_cash"]["source_url"] = WRAP
+    doc["segments"][0]["multiple_source_url"] = WRAP + "2"
+    out, mapping = gp.canonicalize_citations(
+        doc, resolver=lambda u: "https://www1.hkexnews.hk/r.pdf" if u == WRAP else None)
+    assert out["net_cash"]["source_url"] == "https://www1.hkexnews.hk/r.pdf"
+    assert out["net_cash"]["grounding_url"] == WRAP
+    assert out["segments"][0]["multiple_source_url"] == WRAP + "2"     # unresolved stays, reported
+    assert mapping == {WRAP: "https://www1.hkexnews.hk/r.pdf", WRAP + "2": None}
+    assert doc["net_cash"]["source_url"] == WRAP                        # input untouched
+
+
+def test_precedence_needs_a_canonical_url_not_a_wrapper():
+    fx = lambda ccy: 0.14 if ccy == "CNY" else None      # noqa: E731
+    doc = _sotp_doc(); doc["net_cash"]["source_url"] = WRAP
+    a, checks = gp.to_engine_assumptions(doc, fx_to_usd=fx)
+    assert "net_cash" in a and "_net_cash_citation" not in a
+    assert a["_net_cash_citation_unresolved"] == WRAP and checks["unresolved_citations"] == ["net_cash"]
+    out, flag = d._refresh_sotp_net_cash({**a, "fx_usd_to_reporting": 1.0}, net_debt=1e9)
+    assert out["_net_cash_source"] == "engine_net_debt"                # restated, as before
+
+
+def test_existing_entries_keep_their_hash_and_gain_a_canonical_map():
+    doc = _sotp_doc(); doc["net_cash"]["source_url"] = WRAP
+    e = {"data": doc, "canonical_urls": {WRAP: "https://www1.hkexnews.hk/r.pdf"}, "checks": [], "ok": True,
+         "company": "JD.com", "basis": "estimate"}
+    cd = ii.canonical_data(e)
+    assert cd["net_cash"]["source_url"] == "https://www1.hkexnews.hk/r.pdf"
+    assert cd["net_cash"]["grounding_url"] == WRAP and e["data"]["net_cash"]["source_url"] == WRAP
+    assert ii.content_hash(e) == ii.content_hash({"data": doc})          # reviewed data unchanged
+    rows = ii.ui_summary(doc={"version": 1, "tickers": {"JD": {"sotp": e}}},
+                         reviews=lambda *a, **k: {"status": "pending", "reviewer": None,
+                                                  "reviewed_at": None, "stale": False})["rows"]
+    assert rows[0]["detail"]["net_cash"]["source_url"] == "https://www1.hkexnews.hk/r.pdf"
+    src = inspect.getsource(d.run_dcf_agent)
+    assert "_to_engine(_ii_s.canonical_data(_sotp_e))" in src
