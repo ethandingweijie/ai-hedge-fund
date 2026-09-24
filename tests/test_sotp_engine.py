@@ -16,6 +16,7 @@ behind the "SOTP (analyst)" shadow method:
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 from pathlib import Path
 
@@ -210,20 +211,21 @@ def test_segment_tax_rate_overrides_default():
 
 # ── Fallback keyword multiples ────────────────────────────────────────────────
 
-def test_fallback_multiple_path():
-    """No explicit multiple → _classify_segment keyword multiple."""
+def test_no_multiple_is_degraded_not_a_classifier_constant():
+    """Owner, 2026-09-24 (item 1): a segment with no anchor is Degraded with a
+    reason; the keyword multiple no longer prices anything in this leg."""
     assumptions = {
         "segments": [{"name": "advertising platform", "revenue_fwd": 100.0}],
     }
     table = _sotp_analyst_style(assumptions, shares=10.0, tier="default")
     row = table["rows"][0]
-    _, expected_mult = _classify_segment("advertising platform", tier="default")
-    assert row["method"] == "EV/Rev (fallback)"
-    assert row["multiple"] == expected_mult
-    assert row["value"] == pytest.approx(100.0 * expected_mult)
+    assert row["method"] == "Degraded" and row["value"] is None
+    assert "no multiple cited" in row["degraded_reason"]
+    assert table["degraded"] is True and table["per_share_reporting"] is None
+    assert "EV/Rev (fallback)" not in inspect.getsource(_sotp_analyst_style)
 
 
-def test_fallback_honors_tier():
+def test_tier_no_longer_changes_an_unanchored_segment():
     assumptions = {
         "segments": [{"name": "cloud infrastructure", "revenue_fwd": 100.0}],
     }
@@ -231,7 +233,7 @@ def test_fallback_honors_tier():
                                     tier="default")
     premium_t = _sotp_analyst_style(copy.deepcopy(assumptions), shares=10.0,
                                     tier="premium")
-    assert premium_t["rows"][0]["value"] > default_t["rows"][0]["value"]
+    assert default_t["rows"][0]["value"] is None and premium_t["rows"][0]["value"] is None
 
 
 # ── Precondition guards ───────────────────────────────────────────────────────

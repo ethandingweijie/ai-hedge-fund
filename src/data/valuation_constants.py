@@ -247,6 +247,18 @@ def peg_detail(profile: Optional[str], doc: Optional[dict] = None) -> Optional[d
             "interval": [float(iv[0]), float(iv[1])] if isinstance(iv, list) and len(iv) == 2 else None}
 
 
+def sotp_input_thresholds(doc: Optional[dict] = None) -> dict:
+    """Owner thresholds for SOTP inputs (2026-09-24): the net-cash variance
+    above which the FMP check flags a cited figure, and the excess of segment
+    revenue over consolidated revenue a pre-fill may carry."""
+    cfg = (doc or load()).get("sotp_inputs") or {}
+    def _f(k, default):
+        v = cfg.get(k)
+        return float(v) if isinstance(v, (int, float)) and 0.0 < v < 1.0 else default
+    return {"net_cash_variance_flag": _f("net_cash_variance_flag", 0.20),
+            "segment_sum_excess_tolerance": _f("segment_sum_excess_tolerance", 0.05)}
+
+
 def target_margin(ticker: Optional[str], profile: Optional[str],
                   doc: Optional[dict] = None) -> Optional[dict]:
     """The terminal EBIT margin for `Rev DCF (Target Margin)`: the ticker's own

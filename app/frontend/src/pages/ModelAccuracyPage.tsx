@@ -29,8 +29,7 @@ import {
   type DynamicMultiplesLog, type DynamicMultipleRow,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
-  type SegmentMemory, type SegmentMemoryTicker,
-} from '@/lib/api';
+  type SegmentMemory, type SegmentMemoryTicker, type CitedFigure } from '@/lib/api';
 
 const HORIZON_LABEL: Record<string, string> = {
   consensus_0d: 'Street consensus',
@@ -422,7 +421,46 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   maintenance_capex: 'Maintenance capex',
   rate_base: 'Regulated rate base',
   fcf_guidance: 'FCF guidance (faded overlay)',
+  sotp: 'SOTP segments (Gemini, cited)',
 };
+
+/** kind === 'sotp': the segment table with a period label on every figure (owner, 2026-09-24). */
+function SotpInputFigures({ row }: { row: IndustryInputRow }) {
+  const d = row.detail;
+  if (!d?.segments) return null;
+  const fig = (c?: CitedFigure | null) => c?.value == null ? '—'
+    : `${c.value.toLocaleString()} ${c.currency ?? ''} ${c.scale ?? ''}`.trim();
+  const tag = (p?: string | null) => (
+    <span className="ml-1 rounded border border-border px-1 text-[10px] text-muted-foreground">{p ?? 'period n/a'}</span>
+  );
+  return (
+    <div className="text-left">
+      <div className="text-muted-foreground">Forward year {tag(d.fiscal_year)}</div>
+      {d.segments.map((s) => (
+        <div key={s.name} className="mt-1">
+          <div className="font-medium">{s.name}</div>
+          <div className="tabular-nums">
+            {s.revenue.source_url ? (
+              <a href={s.revenue.source_url} target="_blank" rel="noreferrer" title={s.revenue.quote ?? undefined}
+                 className="underline decoration-dotted underline-offset-2">{fig(s.revenue)}</a>
+            ) : fig(s.revenue)}
+            {tag(s.revenue.period_label)}
+          </div>
+          {s.margin && s.margin.value != null && (
+            <div className="tabular-nums">margin {(s.margin.value * 100).toFixed(1)}%{tag(s.margin.period_label)}</div>
+          )}
+          <div className="text-muted-foreground tabular-nums">
+            {s.multiple.metric === 'pe' ? 'P/E' : 'EV/Sales'} {s.multiple.low}–{s.multiple.high}x
+            {s.ev_sales_fallback && ` · EV/Sales ${s.ev_sales_fallback.low}–${s.ev_sales_fallback.high}x if unprofitable`}
+          </div>
+        </div>
+      ))}
+      {d.net_cash && <div className="mt-1 tabular-nums">net cash {fig(d.net_cash)}{tag(d.net_cash.period_label)}</div>}
+      {d.associates && <div className="tabular-nums">associates {fig(d.associates)}{tag(d.associates.period_label)}</div>}
+      {d.holdco_discount_pct != null && <div className="text-muted-foreground">holdco discount {(d.holdco_discount_pct * 100).toFixed(0)}%</div>}
+    </div>
+  );
+}
 
 function IndustryInputReview({ row, onChanged, overlay = false }:
     { row: IndustryInputRow; onChanged: () => void; overlay?: boolean }) {
@@ -627,13 +665,17 @@ function IndustryInputsSection({ allowed }: { allowed: boolean }) {
                     {r.source && <div className="text-muted-foreground">{SOURCE_LABEL[r.source] ?? r.source}</div>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {r.source_url ? (
-                      <a href={r.source_url} target="_blank" rel="noreferrer" title={r.quote ?? undefined}
-                         className="underline decoration-dotted underline-offset-2">
-                        {r.value?.toLocaleString()} {r.currency} {r.scale}
-                      </a>
-                    ) : <span>{r.value?.toLocaleString()} {r.currency} {r.scale}</span>}
-                    {r.period && <div className="text-muted-foreground">{r.period}</div>}
+                    {r.kind === 'sotp' ? <SotpInputFigures row={r} /> : (
+                      <>
+                        {r.source_url ? (
+                          <a href={r.source_url} target="_blank" rel="noreferrer" title={r.quote ?? undefined}
+                             className="underline decoration-dotted underline-offset-2">
+                            {r.value?.toLocaleString()} {r.currency} {r.scale}
+                          </a>
+                        ) : <span>{r.value?.toLocaleString()} {r.currency} {r.scale}</span>}
+                        {r.period && <div className="text-muted-foreground">{r.period}</div>}
+                      </>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-muted-foreground">
                     {r.checks.map((c) => (

@@ -58,6 +58,10 @@ RESERVE_MEASURE_REMARK = (
 #: and NAV curves, where the audit trail can separate price from reserve life.
 NO_OVERLAY = ("pv10", "sotp")
 
+#: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
+#: pre-fill whose segments sum to more than the group can only be rebuilt.
+HARD_CHECKS = ("segment revenue vs group revenue",)
+
 #: Plausibility bounds, each against a figure FMP reports for the same company.
 #: A figure outside them is kept for review with the failed check named -- a
 #: wrong scale (bn read as mn) lands 1000x out and fails here.
@@ -293,6 +297,12 @@ def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
         raise KeyError(f"{ticker}|{kind}" + ("|overlay" if overlay else ""))
     if overlay and kind in NO_OVERLAY:
         raise ValueError(f"{kind} may not carry a forward overlay")
+    if status == "accepted" and not overlay:
+        failed = [c for c in (e.get("checks") or [])
+                  if c.get("check") in HARD_CHECKS and c.get("ok") is False]
+        if failed:
+            raise ValueError("cannot accept: " + "; ".join(
+                f"{c['check']} failed ({c.get('detail')})" for c in failed) + " -- rebuild the entry")
     _ensure_reviews()
     key = _review_key(ticker, kind, overlay)
     _db.execute("DELETE FROM industry_input_reviews WHERE input_key = ?", [key])
@@ -430,6 +440,35 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
             except Exception:  # noqa: BLE001
                 rv = {"status": "pending", "reviewer": None, "reviewed_at": None, "stale": False}
             ov = e.get("overlay") or {}
+            detail = {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",
+                                                "book_to_bill", "definition")
+                      if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {})
+            if kind == "sotp":
+                # Owner, 2026-09-24 (item 3): every figure on the gate carries
+                # its period label, so trailing actuals standing in for a
+                # forward year are visible before acceptance.
+                def _cited(c):
+                    c = c or {}
+                    return {"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
+                            "period_label": c.get("period"), "source_url": c.get("source_url"),
+                            "quote": c.get("quote")}
+                detail = {
+                    "fiscal_year": data.get("fiscal_year"),
+                    "segments": [{
+                        "name": s.get("name"),
+                        "revenue": _cited(s.get("revenue_fwd")),
+                        "margin": ({"value": (s.get("ebit_margin") or {}).get("value"),
+                                    "period_label": (s.get("ebit_margin") or {}).get("period")}
+                                   if s.get("ebit_margin") else None),
+                        "multiple": {"metric": s.get("multiple_metric"), "low": s.get("multiple_low"),
+                                     "high": s.get("multiple_high")},
+                        "ev_sales_fallback": ({"low": s.get("ev_sales_low"), "high": s.get("ev_sales_high")}
+                                              if s.get("ev_sales_low") is not None else None),
+                    } for s in (data.get("segments") or []) if isinstance(s, dict)],
+                    "net_cash": _cited(data.get("net_cash")) if data.get("net_cash") else None,
+                    "associates": _cited(data.get("associates_investments")) if data.get("associates_investments") else None,
+                    "holdco_discount_pct": data.get("holdco_discount_pct"),
+                }
             rows.append({
                 "ticker": t, "company": e.get("company"), "kind": kind,
                 "basis": e.get("basis") or "actual",
@@ -437,10 +476,9 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                             if ov and kind not in NO_OVERLAY else None),
                 "overlay_allowed": kind not in NO_OVERLAY,
                 "value": v.get("value"), "currency": v.get("currency"), "scale": v.get("scale"),
-                "period": v.get("period"), "source_url": v.get("source_url"), "quote": v.get("quote"),
-                "detail": {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",
-                                                     "book_to_bill", "definition")
-                           if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {}),
+                "period": v.get("period") or (data.get("fiscal_year") if kind == "sotp" else None),
+                "source_url": v.get("source_url"), "quote": v.get("quote"),
+                "detail": detail,
                 "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None,
                 "checks": (e.get("checks") or []) + [c for c in
                            [ground_truth_check(e.get("value_usd"), e.get("ground_truth"))] if c],

@@ -1,639 +1,645 @@
 {
- "version": 1,
- "profiles": {
-  "Midstream / Pipelines": {
-   "target_dcf_yield": 0.0975,
-   "benchmark": "AMZI_coverage_adjusted",
-   "benchmark_detail": {
-    "proxy_symbol": "AMLP",
-    "proxy_name": "Alerian MLP ETF (AMZI tracker)",
-    "index_yield": 0.07,
-    "coverage_factor": 1.4,
-    "formula": "target_dcf_yield = index distribution yield x sector coverage factor"
-   },
-   "tolerance_band": [
-    0.085,
-    0.11
-   ],
-   "inertia_bps": 50,
-   "review_cadence": "quarterly",
-   "macro_triggers": {
-    "ten_year_move_bps": 75,
-    "index_yield_move_bps": 100
-   },
-   "observed_at_last_review": {
-    "ten_year": 0.0501,
-    "index_yield": 0.07
-   },
-   "last_reviewed": "2026-09-20",
-   "effective_until": "2026-11-15",
-   "reviewer": "owner",
-   "note": "Distributable cash flow is capitalised at this yield, NOT at the peer free-cash-flow yield: peer FCF is net of total capex while distributable CF is net of maintenance capex only, and mixing the two priced Energy Transfer at 2.3x spot once its audited maintenance capex replaced the D&A stand-in."
-  },
-  "Niche Aerospace Components": {
-   "peg_ratio": 2.2,
-   "peg_band": [
-    1.5,
-    3.2
-   ],
-   "derivation": "NTM P/E over consensus FY2/FY1 EPS growth on the niche basket, 2026-09-22: TDG 1.47, HWM 1.67, WWD 2.23, CW 2.87, HEI 3.17; median 2.23. Band = the basket's range.",
-   "last_reviewed": "2026-09-22",
-   "reviewer": "owner, 2026-09-23: keep 2.2 as the active baseline under [OWNER_OVERRIDE_PENDING]; append a +/-0.3x sensitivity flag until signed off",
-   "note": "Owner framework 2026-09-22: niche high-margin components (TransDigm, HEICO, Howmet) on PEG and EV/FCF, 'high structural P/E ratios (often 30x+) due to proprietary aftermarket parts with near-monopoly pricing power'. The PEG turns that growth into a fair P/E rather than borrowing a basket median that would price a 15%-grower and a 22%-grower alike.",
-   "status": "OWNER_OVERRIDE_PENDING",
-   "sensitivity_interval": [
-    1.9,
-    2.5
-   ]
-  }
- },
- "segment_multiples": {
-  "refining": {
-   "multiple": 4.5,
-   "accepted_at": "2026-09-21",
-   "reviewer": "owner",
-   "basis": "owner starting point 2026-09-21: the crack-rule trough (3-2-1 crack +175% above its long-run mean)",
-   "derivation": {
-    "segment_type": "refining",
-    "mode": "calibrated",
-    "baseline": 5.5,
-    "band": [
-     4.5,
-     6.5
-    ],
-    "basket": "Oil & Gas Refining & Marketing",
-    "basket_is_proxy": false,
-    "market_multiple_now": 5.536454,
-    "real_rate": {
-     "now": 0.024686363636363638,
-     "mean_5y": 0.014485036202735318,
-     "delta": 0.01020132743362832,
-     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
-    },
-    "roic": {
-     "now": 0.049849,
-     "window_mean": 0.0888048,
-     "delta": -0.038955800000000006
-    },
-    "betas": {
-     "b1": -0.45187653081304635,
-     "b2": 1.7599250616008948,
-     "n": 5,
-     "shrink_weight": 0.3333333333333333,
-     "prior": {
-      "b1": -4.0,
-      "b2": 2.0
-     },
-     "ols": {
-      "b1": 6.644370407560863,
-      "b2": 1.2797751848026842,
-      "a": 1.6191647159230826,
-      "n": 5,
-      "r2": 0.7421262874571031
-     },
-     "note": "prior-dominated: the history is too short to overrule it",
-     "cohort": "large",
-     "years": [
-      "2021",
-      "2022",
-      "2023",
-      "2024",
-      "2025"
-     ],
-     "regressor_corr": -0.1253654053217254
-    },
-    "terms": {
-     "rate": -0.004609740450395923,
-     "roic": -0.06855928871471215
-    },
-    "crack": {
-     "now": 64.9412956521739,
-     "long_run_mean": 23.580135612950166,
-     "spike": 1.7540679459242918
-    },
-    "rules": [
-     "crack spread +175% above its long-run mean (>25%): forced to the trough multiple 4.50x"
-    ],
-    "raw": 4.5,
-    "proposed": 4.5,
-    "flags": [],
-    "as_of": "2026-09-21",
-    "owner_set": true,
-    "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."
-   },
-   "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."
-  },
-  "midstream": {
-   "multiple": 12.18,
-   "accepted_at": "2026-09-21",
-   "reviewer": "owner",
-   "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (12.18x, 2025, US large cohort); replaces 14.1x read off the old basis",
-   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
-   "derivation": {
-    "segment_type": "midstream",
-    "mode": "calibrated",
-    "baseline": 12.18,
-    "band": [
-     9.744,
-     14.616
-    ],
-    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
-    "basket": "Oil & Gas Midstream",
-    "basket_is_proxy": false,
-    "market_multiple_now": 12.178945,
-    "real_rate": {
-     "now": 0.024686363636363638,
-     "mean_5y": 0.014485036202735318,
-     "delta": 0.01020132743362832,
-     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
-    },
-    "roic": {
-     "now": 0.078925,
-     "window_mean": 0.08193639999999999,
-     "delta": -0.0030113999999999974
-    },
-    "betas": {
-     "b1": -8.0,
-     "b2": 2.0,
-     "n": 5,
-     "shrink_weight": 0.3333333333333333,
-     "prior": {
-      "b1": -8.0,
-      "b2": 2.0
-     },
-     "ols": {
-      "b1": -4.142402649168411,
-      "b2": -21.747276038758287,
-      "a": 2.3612626263088963,
-      "n": 5,
-      "r2": 0.7687411252663863
-     },
-     "note": "regressors collinear (corr -0.91): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
-     "cohort": "large",
-     "years": [
-      "2021",
-      "2022",
-      "2023",
-      "2024",
-      "2025"
-     ],
-     "regressor_corr": -0.911124054945489
-    },
-    "terms": {
-     "rate": -0.08161061946902656,
-     "roic": -0.006022799999999995
-    },
-    "crack": null,
-    "rules": [],
-    "raw": 11.158057055344662,
-    "proposed": 11.1581,
-    "flags": [],
-    "as_of": "2026-09-21",
-    "owner_set": true
-   }
-  },
-  "chemicals": {
-   "multiple": 6.58,
-   "accepted_at": "2026-09-21",
-   "reviewer": "owner",
-   "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (6.58x, 2025, US large cohort); replaces 5.2x read off the old basis",
-   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
-   "derivation": {
-    "segment_type": "chemicals",
-    "mode": "calibrated",
-    "baseline": 6.58,
-    "band": [
-     5.264,
-     7.896
-    ],
-    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
-    "basket": "Chemicals",
-    "basket_is_proxy": false,
-    "market_multiple_now": 6.57935,
-    "real_rate": {
-     "now": 0.024686363636363638,
-     "mean_5y": 0.014485036202735318,
-     "delta": 0.01020132743362832,
-     "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
-    },
-    "roic": {
-     "now": 0.0218,
-     "window_mean": 0.0602982,
-     "delta": -0.0384982
-    },
-    "betas": {
-     "b1": -4.0,
-     "b2": 2.0,
-     "n": 5,
-     "shrink_weight": 0.3333333333333333,
-     "prior": {
-      "b1": -4.0,
-      "b2": 2.0
-     },
-     "ols": {
-      "b1": 19.638843171505926,
-      "b2": 9.306885409563101,
-      "a": 2.0187681009399654,
-      "n": 5,
-      "r2": 0.803941649999334
-     },
-     "note": "regressors collinear (corr -0.98): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
-     "cohort": "large",
-     "years": [
-      "2021",
-      "2022",
-      "2023",
-      "2024",
-      "2025"
-     ],
-     "regressor_corr": -0.9778810290272917
-    },
-    "terms": {
-     "rate": -0.04080530973451328,
-     "roic": -0.0769964
-    },
-    "crack": null,
-    "rules": [],
-    "raw": 5.848779667300614,
-    "proposed": 5.8488,
-    "flags": [],
-    "as_of": "2026-09-21",
-    "owner_set": true
-   }
-  }
- },
- "multiple_bands": {
-  "_doc": [
-   "Owner plausibility bands on multiple LEVELS, per (market, profile, field).",
-   "They FLAG and never clamp: see check_multiples in valuation_constants.py,",
-   "which has no return path carrying a value. Distinct from",
-   "regional_comps._BANDS (drops a peer before the median), from",
-   "dynamic_multiples.MAX_DEVIATION (caps the engine's quarterly move, and",
-   "does clamp by the owner's choice), and from SEGMENT_BASELINES bands.",
-   "Market keys match multiples_used.comp_market: US / HKSE / SES.",
-   "Resolution is most-specific-first: (market, profile), (market, *),",
-   "(*, profile), (*, *). No match is no opinion.",
-   "",
-   "Ranges supplied by the owner 2026-09-21 as SECTOR forward P/E (and",
-   "EV/EBITDA for A&D). The sector -> profile mapping below is the",
-   "assistant's reading and is the thing to check at each wave's Stage 3",
-   "checkpoint; the numbers themselves are the owner's.",
-   "Early-stage biotech deliberately carries NO pe band: the owner's note",
-   "is that it trades on P/S or rNPV, and HK pre-revenue names are unrated.",
-   "Wave 3-5 profiles that do not exist yet (Defense Primes, Commercial",
-   "Aerospace & Aftermarket, Defense Tech & Space, and the staples splits)",
-   "get their rows when those profiles are authored."
-  ],
-  "reviewed": {
-   "last_reviewed": "2026-09-21",
-   "reviewer": "owner",
-   "review_cadence": "quarterly"
-  },
-  "bands": {
-   "US": {
-    "Food & Beverage": {
-     "pe": [
-      21.0,
-      23.0
-     ]
-    },
-    "Household / Personal": {
-     "pe": [
-      21.0,
-      23.0
-     ]
-    },
-    "Large Cap Pharma": {
-     "pe": [
-      18.0,
-      22.0
-     ]
-    },
-    "MedTech / Devices": {
-     "pe": [
-      18.0,
-      22.0
-     ]
-    },
-    "CDMO / Life Science Tools": {
-     "pe": [
-      18.0,
-      22.0
-     ]
-    },
-    "Managed Care": {
-     "pe": [
-      18.0,
-      22.0
-     ]
-    },
-    "Healthcare Providers / Services": {
-     "pe": [
-      18.0,
-      22.0
-     ]
-    },
-    "Defense Primes": {
-     "pe": [
-      25.0,
-      30.0
-     ],
-     "ev_ebitda": [
-      14.0,
-      18.0
-     ]
-    },
-    "Commercial Aerospace & Engines": {
-     "ev_ebitda": [
-      20.0,
-      32.0
-     ],
-     "pe": [
-      30.0,
-      45.0
-     ]
+  "version": 1,
+  "profiles": {
+    "Midstream / Pipelines": {
+      "target_dcf_yield": 0.0975,
+      "benchmark": "AMZI_coverage_adjusted",
+      "benchmark_detail": {
+        "proxy_symbol": "AMLP",
+        "proxy_name": "Alerian MLP ETF (AMZI tracker)",
+        "index_yield": 0.07,
+        "coverage_factor": 1.4,
+        "formula": "target_dcf_yield = index distribution yield x sector coverage factor"
+      },
+      "tolerance_band": [
+        0.085,
+        0.11
+      ],
+      "inertia_bps": 50,
+      "review_cadence": "quarterly",
+      "macro_triggers": {
+        "ten_year_move_bps": 75,
+        "index_yield_move_bps": 100
+      },
+      "observed_at_last_review": {
+        "ten_year": 0.0501,
+        "index_yield": 0.07
+      },
+      "last_reviewed": "2026-09-20",
+      "effective_until": "2026-11-15",
+      "reviewer": "owner",
+      "note": "Distributable cash flow is capitalised at this yield, NOT at the peer free-cash-flow yield: peer FCF is net of total capex while distributable CF is net of maintenance capex only, and mixing the two priced Energy Transfer at 2.3x spot once its audited maintenance capex replaced the D&A stand-in."
     },
     "Niche Aerospace Components": {
-     "ev_ebitda": [
-      20.0,
-      32.0
-     ],
-     "pe": [
-      30.0,
-      45.0
-     ]
-    }
-   },
-   "HKSE": {
-    "Food & Beverage": {
-     "pe": [
-      10.0,
-      15.0
-     ]
-    },
-    "Household / Personal": {
-     "pe": [
-      10.0,
-      15.0
-     ]
-    },
-    "Large Cap Pharma": {
-     "pe": [
-      20.0,
-      35.0
-     ]
-    },
-    "Aerospace Holdco (HK)": {
-     "pe": [
-      12.0,
-      18.0
-     ]
-    },
-    "General Aviation (HK)": {
-     "pe": [
-      12.0,
-      18.0
-     ]
-    },
-    "GA Engines & Aftermarket (HK)": {
-     "pe": [
-      12.0,
-      18.0
-     ]
-    }
-   },
-   "SES": {
-    "Aerospace & Engineering (SG)": {
-     "pe": [
-      16.0,
-      20.0
-     ],
-     "ev_ebitda": [
-      10.0,
-      13.0
-     ]
-    },
-    "Agribusiness & Food (SG)": {
-     "pe": [
-      11.0,
-      13.0
-     ]
-    },
-    "Packaged Consumer & Lifestyle (SG)": {
-     "pe": [
-      11.0,
-      13.0
-     ]
-    },
-    "Healthcare Provider (SG)": {
-     "pe": [
-      12.0,
-      15.0
-     ]
-    }
-   }
-  },
-  "_wave3_note": "2026-09-22: the Aerospace & Defense band moved to Defense Primes when the profile was split; Commercial Aerospace & Engines and Niche Aerospace Components take the measured cluster ranges (27x / 40x medians); the HK band applies to the three HK aerospace profiles."
- },
- "cost_of_equity": {
-  "_doc": "Owner-set cost of equity by profile and market, CAPM-built. The value is the midpoint of the owner's application range; the range is a flag band, never a clamp. Keyed by the market of the cash flows because the risk-free rate must match their denomination.",
-  "reviewed": {
-   "last_reviewed": "2026-09-21",
-   "reviewer": "owner"
-  },
-  "profiles": {
-   "Regulated Utility": {
-    "US": {
-     "value": 0.0725,
-     "band": [
-      0.07,
-      0.075
-     ],
-     "capm": {
-      "risk_free": [
-       0.04,
-       0.043
+      "peg_ratio": 2.2,
+      "peg_band": [
+        1.5,
+        3.2
       ],
-      "risk_free_basis": "10Y US Treasury",
-      "levered_beta": [
-       0.55,
-       0.65
-      ],
-      "equity_risk_premium": [
-       0.0475,
-       0.0525
-      ],
-      "company_specific": [
-       0.0,
-       0.0
-      ],
-      "capm_range": [
-       0.068,
-       0.077
+      "derivation": "NTM P/E over consensus FY2/FY1 EPS growth on the niche basket, 2026-09-22: TDG 1.47, HWM 1.67, WWD 2.23, CW 2.87, HEI 3.17; median 2.23. Band = the basket's range.",
+      "last_reviewed": "2026-09-22",
+      "reviewer": "owner, 2026-09-23: keep 2.2 as the active baseline under [OWNER_OVERRIDE_PENDING]; append a +/-0.3x sensitivity flag until signed off",
+      "note": "Owner framework 2026-09-22: niche high-margin components (TransDigm, HEICO, Howmet) on PEG and EV/FCF, 'high structural P/E ratios (often 30x+) due to proprietary aftermarket parts with near-monopoly pricing power'. The PEG turns that growth into a fair P/E rather than borrowing a basket median that would price a 15%-grower and a 22%-grower alike.",
+      "status": "OWNER_OVERRIDE_PENDING",
+      "sensitivity_interval": [
+        1.9,
+        2.5
       ]
-     },
-     "rationale": "Low operational volatility, protected volume dispatch."
-    },
-    "HKSE": {
-     "value": 0.06,
-     "band": [
-      0.058,
-      0.062
-     ],
-     "capm": {
-      "risk_free": [
-       0.021,
-       0.023
-      ],
-      "risk_free_basis": "10Y China CGB",
-      "levered_beta": [
-       0.5,
-       0.6
-      ],
-      "equity_risk_premium": [
-       0.055,
-       0.06
-      ],
-      "company_specific": [
-       0.005,
-       0.01
-      ],
-      "capm_range": [
-       0.055,
-       0.064
-      ]
-     },
-     "rationale": "RMB/HKD cash flows of Asian regulated power assets; sovereign/market liquidity premium in the ERP; company-specific premium for nuclear tail risk and marketised tariffs."
     }
-   }
-  }
- },
- "ticker_multiple_discounts": {
-  "_doc": "Owner-set factor on PEER multiples for one ticker. Applied where a peer multiple is applied and recorded as its own part (`owner_multiple_discount`); the basket median is never edited.",
-  "reviewed": {
-   "last_reviewed": "2026-09-21",
-   "reviewer": "owner"
   },
-  "tickers": {
-   "01816.HK": {
-    "factor": 0.875,
-    "band": [
-     0.85,
-     0.9
+  "segment_multiples": {
+    "refining": {
+      "multiple": 4.5,
+      "accepted_at": "2026-09-21",
+      "reviewer": "owner",
+      "basis": "owner starting point 2026-09-21: the crack-rule trough (3-2-1 crack +175% above its long-run mean)",
+      "derivation": {
+        "segment_type": "refining",
+        "mode": "calibrated",
+        "baseline": 5.5,
+        "band": [
+          4.5,
+          6.5
+        ],
+        "basket": "Oil & Gas Refining & Marketing",
+        "basket_is_proxy": false,
+        "market_multiple_now": 5.536454,
+        "real_rate": {
+          "now": 0.024686363636363638,
+          "mean_5y": 0.014485036202735318,
+          "delta": 0.01020132743362832,
+          "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+        },
+        "roic": {
+          "now": 0.049849,
+          "window_mean": 0.0888048,
+          "delta": -0.038955800000000006
+        },
+        "betas": {
+          "b1": -0.45187653081304635,
+          "b2": 1.7599250616008948,
+          "n": 5,
+          "shrink_weight": 0.3333333333333333,
+          "prior": {
+            "b1": -4.0,
+            "b2": 2.0
+          },
+          "ols": {
+            "b1": 6.644370407560863,
+            "b2": 1.2797751848026842,
+            "a": 1.6191647159230826,
+            "n": 5,
+            "r2": 0.7421262874571031
+          },
+          "note": "prior-dominated: the history is too short to overrule it",
+          "cohort": "large",
+          "years": [
+            "2021",
+            "2022",
+            "2023",
+            "2024",
+            "2025"
+          ],
+          "regressor_corr": -0.1253654053217254
+        },
+        "terms": {
+          "rate": -0.004609740450395923,
+          "roic": -0.06855928871471215
+        },
+        "crack": {
+          "now": 64.9412956521739,
+          "long_run_mean": 23.580135612950166,
+          "spike": 1.7540679459242918
+        },
+        "rules": [
+          "crack spread +175% above its long-run mean (>25%): forced to the trough multiple 4.50x"
+        ],
+        "raw": 4.5,
+        "proposed": 4.5,
+        "flags": [],
+        "as_of": "2026-09-21",
+        "owner_set": true,
+        "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."
+      },
+      "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."
+    },
+    "midstream": {
+      "multiple": 12.18,
+      "accepted_at": "2026-09-21",
+      "reviewer": "owner",
+      "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (12.18x, 2025, US large cohort); replaces 14.1x read off the old basis",
+      "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
+      "derivation": {
+        "segment_type": "midstream",
+        "mode": "calibrated",
+        "baseline": 12.18,
+        "band": [
+          9.744,
+          14.616
+        ],
+        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
+        "basket": "Oil & Gas Midstream",
+        "basket_is_proxy": false,
+        "market_multiple_now": 12.178945,
+        "real_rate": {
+          "now": 0.024686363636363638,
+          "mean_5y": 0.014485036202735318,
+          "delta": 0.01020132743362832,
+          "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+        },
+        "roic": {
+          "now": 0.078925,
+          "window_mean": 0.08193639999999999,
+          "delta": -0.0030113999999999974
+        },
+        "betas": {
+          "b1": -8.0,
+          "b2": 2.0,
+          "n": 5,
+          "shrink_weight": 0.3333333333333333,
+          "prior": {
+            "b1": -8.0,
+            "b2": 2.0
+          },
+          "ols": {
+            "b1": -4.142402649168411,
+            "b2": -21.747276038758287,
+            "a": 2.3612626263088963,
+            "n": 5,
+            "r2": 0.7687411252663863
+          },
+          "note": "regressors collinear (corr -0.91): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
+          "cohort": "large",
+          "years": [
+            "2021",
+            "2022",
+            "2023",
+            "2024",
+            "2025"
+          ],
+          "regressor_corr": -0.911124054945489
+        },
+        "terms": {
+          "rate": -0.08161061946902656,
+          "roic": -0.006022799999999995
+        },
+        "crack": null,
+        "rules": [],
+        "raw": 11.158057055344662,
+        "proposed": 11.1581,
+        "flags": [],
+        "as_of": "2026-09-21",
+        "owner_set": true
+      }
+    },
+    "chemicals": {
+      "multiple": 6.58,
+      "accepted_at": "2026-09-21",
+      "reviewer": "owner",
+      "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (6.58x, 2025, US large cohort); replaces 5.2x read off the old basis",
+      "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
+      "derivation": {
+        "segment_type": "chemicals",
+        "mode": "calibrated",
+        "baseline": 6.58,
+        "band": [
+          5.264,
+          7.896
+        ],
+        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
+        "basket": "Chemicals",
+        "basket_is_proxy": false,
+        "market_multiple_now": 6.57935,
+        "real_rate": {
+          "now": 0.024686363636363638,
+          "mean_5y": 0.014485036202735318,
+          "delta": 0.01020132743362832,
+          "source": "FMP 10y Treasury minus FMP 10y breakeven (inflationRate)"
+        },
+        "roic": {
+          "now": 0.0218,
+          "window_mean": 0.0602982,
+          "delta": -0.0384982
+        },
+        "betas": {
+          "b1": -4.0,
+          "b2": 2.0,
+          "n": 5,
+          "shrink_weight": 0.3333333333333333,
+          "prior": {
+            "b1": -4.0,
+            "b2": 2.0
+          },
+          "ols": {
+            "b1": 19.638843171505926,
+            "b2": 9.306885409563101,
+            "a": 2.0187681009399654,
+            "n": 5,
+            "r2": 0.803941649999334
+          },
+          "note": "regressors collinear (corr -0.98): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
+          "cohort": "large",
+          "years": [
+            "2021",
+            "2022",
+            "2023",
+            "2024",
+            "2025"
+          ],
+          "regressor_corr": -0.9778810290272917
+        },
+        "terms": {
+          "rate": -0.04080530973451328,
+          "roic": -0.0769964
+        },
+        "crack": null,
+        "rules": [],
+        "raw": 5.848779667300614,
+        "proposed": 5.8488,
+        "flags": [],
+        "as_of": "2026-09-21",
+        "owner_set": true
+      }
+    }
+  },
+  "multiple_bands": {
+    "_doc": [
+      "Owner plausibility bands on multiple LEVELS, per (market, profile, field).",
+      "They FLAG and never clamp: see check_multiples in valuation_constants.py,",
+      "which has no return path carrying a value. Distinct from",
+      "regional_comps._BANDS (drops a peer before the median), from",
+      "dynamic_multiples.MAX_DEVIATION (caps the engine's quarterly move, and",
+      "does clamp by the owner's choice), and from SEGMENT_BASELINES bands.",
+      "Market keys match multiples_used.comp_market: US / HKSE / SES.",
+      "Resolution is most-specific-first: (market, profile), (market, *),",
+      "(*, profile), (*, *). No match is no opinion.",
+      "",
+      "Ranges supplied by the owner 2026-09-21 as SECTOR forward P/E (and",
+      "EV/EBITDA for A&D). The sector -> profile mapping below is the",
+      "assistant's reading and is the thing to check at each wave's Stage 3",
+      "checkpoint; the numbers themselves are the owner's.",
+      "Early-stage biotech deliberately carries NO pe band: the owner's note",
+      "is that it trades on P/S or rNPV, and HK pre-revenue names are unrated.",
+      "Wave 3-5 profiles that do not exist yet (Defense Primes, Commercial",
+      "Aerospace & Aftermarket, Defense Tech & Space, and the staples splits)",
+      "get their rows when those profiles are authored."
     ],
-    "rationale": "CGN Power fits a baseload utility (>7,000 operating hours, priority dispatch, stable payout) but is not a pure cost-of-service one: historically 40-55%+ of volume in coastal provinces clears through market-based trading, exposing realised tariffs to bilateral discounts. 10-15% off developed-market utility multiples for marketised tariff variability and nuclear decommissioning / project execution risk; midpoint 12.5%."
-   }
-  }
- },
- "regime_deviations": {
-  "_doc": "Owner-recorded structural regime deviations. A regime changes no valuation: it puts a note on each member's run and separates the members in a wave scorecard, so a deliberate through-cycle stance is not mistaken for a defect or counted once per name.",
-  "reviewed": {
-   "last_reviewed": "2026-09-21",
-   "reviewer": "owner"
+    "reviewed": {
+      "last_reviewed": "2026-09-21",
+      "reviewer": "owner",
+      "review_cadence": "quarterly"
+    },
+    "bands": {
+      "US": {
+        "Food & Beverage": {
+          "pe": [
+            21.0,
+            23.0
+          ]
+        },
+        "Household / Personal": {
+          "pe": [
+            21.0,
+            23.0
+          ]
+        },
+        "Large Cap Pharma": {
+          "pe": [
+            18.0,
+            22.0
+          ]
+        },
+        "MedTech / Devices": {
+          "pe": [
+            18.0,
+            22.0
+          ]
+        },
+        "CDMO / Life Science Tools": {
+          "pe": [
+            18.0,
+            22.0
+          ]
+        },
+        "Managed Care": {
+          "pe": [
+            18.0,
+            22.0
+          ]
+        },
+        "Healthcare Providers / Services": {
+          "pe": [
+            18.0,
+            22.0
+          ]
+        },
+        "Defense Primes": {
+          "pe": [
+            25.0,
+            30.0
+          ],
+          "ev_ebitda": [
+            14.0,
+            18.0
+          ]
+        },
+        "Commercial Aerospace & Engines": {
+          "ev_ebitda": [
+            20.0,
+            32.0
+          ],
+          "pe": [
+            30.0,
+            45.0
+          ]
+        },
+        "Niche Aerospace Components": {
+          "ev_ebitda": [
+            20.0,
+            32.0
+          ],
+          "pe": [
+            30.0,
+            45.0
+          ]
+        }
+      },
+      "HKSE": {
+        "Food & Beverage": {
+          "pe": [
+            10.0,
+            15.0
+          ]
+        },
+        "Household / Personal": {
+          "pe": [
+            10.0,
+            15.0
+          ]
+        },
+        "Large Cap Pharma": {
+          "pe": [
+            20.0,
+            35.0
+          ]
+        },
+        "Aerospace Holdco (HK)": {
+          "pe": [
+            12.0,
+            18.0
+          ]
+        },
+        "General Aviation (HK)": {
+          "pe": [
+            12.0,
+            18.0
+          ]
+        },
+        "GA Engines & Aftermarket (HK)": {
+          "pe": [
+            12.0,
+            18.0
+          ]
+        }
+      },
+      "SES": {
+        "Aerospace & Engineering (SG)": {
+          "pe": [
+            16.0,
+            20.0
+          ],
+          "ev_ebitda": [
+            10.0,
+            13.0
+          ]
+        },
+        "Agribusiness & Food (SG)": {
+          "pe": [
+            11.0,
+            13.0
+          ]
+        },
+        "Packaged Consumer & Lifestyle (SG)": {
+          "pe": [
+            11.0,
+            13.0
+          ]
+        },
+        "Healthcare Provider (SG)": {
+          "pe": [
+            12.0,
+            15.0
+          ]
+        }
+      }
+    },
+    "_wave3_note": "2026-09-22: the Aerospace & Defense band moved to Defense Primes when the profile was split; Commercial Aerospace & Engines and Niche Aerospace Components take the measured cluster ranges (27x / 40x medians); the HK band applies to the three HK aerospace profiles."
   },
-  "regimes": {
-   "ai_power": {
-    "label": "AI-power re-rating",
-    "tickers": [
-     "VST",
-     "CEG",
-     "NRG",
-     "BE",
-     "GEV",
-     "CCJ",
-     "LEU",
-     "SMR"
+  "cost_of_equity": {
+    "_doc": "Owner-set cost of equity by profile and market, CAPM-built. The value is the midpoint of the owner's application range; the range is a flag band, never a clamp. Keyed by the market of the cash flows because the risk-free rate must match their denomination.",
+    "reviewed": {
+      "last_reviewed": "2026-09-21",
+      "reviewer": "owner"
+    },
+    "profiles": {
+      "Regulated Utility": {
+        "US": {
+          "value": 0.0725,
+          "band": [
+            0.07,
+            0.075
+          ],
+          "capm": {
+            "risk_free": [
+              0.04,
+              0.043
+            ],
+            "risk_free_basis": "10Y US Treasury",
+            "levered_beta": [
+              0.55,
+              0.65
+            ],
+            "equity_risk_premium": [
+              0.0475,
+              0.0525
+            ],
+            "company_specific": [
+              0.0,
+              0.0
+            ],
+            "capm_range": [
+              0.068,
+              0.077
+            ]
+          },
+          "rationale": "Low operational volatility, protected volume dispatch."
+        },
+        "HKSE": {
+          "value": 0.06,
+          "band": [
+            0.058,
+            0.062
+          ],
+          "capm": {
+            "risk_free": [
+              0.021,
+              0.023
+            ],
+            "risk_free_basis": "10Y China CGB",
+            "levered_beta": [
+              0.5,
+              0.6
+            ],
+            "equity_risk_premium": [
+              0.055,
+              0.06
+            ],
+            "company_specific": [
+              0.005,
+              0.01
+            ],
+            "capm_range": [
+              0.055,
+              0.064
+            ]
+          },
+          "rationale": "RMB/HKD cash flows of Asian regulated power assets; sovereign/market liquidity premium in the ERP; company-specific premium for nuclear tail risk and marketised tariffs."
+        }
+      }
+    }
+  },
+  "ticker_multiple_discounts": {
+    "_doc": "Owner-set factor on PEER multiples for one ticker. Applied where a peer multiple is applied and recorded as its own part (`owner_multiple_discount`); the basket median is never edited.",
+    "reviewed": {
+      "last_reviewed": "2026-09-21",
+      "reviewer": "owner"
+    },
+    "tickers": {
+      "01816.HK": {
+        "factor": 0.875,
+        "band": [
+          0.85,
+          0.9
+        ],
+        "rationale": "CGN Power fits a baseload utility (>7,000 operating hours, priority dispatch, stable payout) but is not a pure cost-of-service one: historically 40-55%+ of volume in coastal provinces clears through market-based trading, exposing realised tariffs to bilateral discounts. 10-15% off developed-market utility multiples for marketised tariff variability and nuclear decommissioning / project execution risk; midpoint 12.5%."
+      }
+    }
+  },
+  "regime_deviations": {
+    "_doc": "Owner-recorded structural regime deviations. A regime changes no valuation: it puts a note on each member's run and separates the members in a wave scorecard, so a deliberate through-cycle stance is not mistaken for a defect or counted once per name.",
+    "reviewed": {
+      "last_reviewed": "2026-09-21",
+      "reviewer": "owner"
+    },
+    "regimes": {
+      "ai_power": {
+        "label": "AI-power re-rating",
+        "tickers": [
+          "VST",
+          "CEG",
+          "NRG",
+          "BE",
+          "GEV",
+          "CCJ",
+          "LEU",
+          "SMR"
+        ],
+        "recorded": "2026-09-21",
+        "note": "Structural regime deviation (owner, 2026-09-21): the market has re-rated this name on data-centre load growth. Consensus 12-month targets carry that regime; this valuation is through-cycle by design and does not chase it. The gap to consensus is recorded, not tuned away.",
+        "evidence": "Wave 2 Stage 6, base IV vs consensus: VST -53%, CEG -65%, NRG -39%, BE -84%, GEV -75%, CCJ -88%, LEU -71%, SMR -65% -- 8 of the wave's 11 misses. US Independent Power Producers basket: normalised EV/EBITDA 18.1x market-now against an 11.1x through-cycle.",
+        "review": "Revisit when the through-cycle multiple itself re-rates (the quarterly dynamic multiples update moves it at most 20% a quarter), or when Wave 3's backlog-coverage DCF prices the contracted part of the order books."
+      }
+    }
+  },
+  "unrated": {
+    "_doc": "When a valuation is withheld instead of published (owner, 2026-09-21: pre-revenue names 'urgently require an explicit Unrated / Pre-Revenue state rather than outputting distorted fractional-weight numbers like $3.90'). An unrated name publishes no intrinsic value, no 12-month target and no rating; the figure the engine computed is kept as `indicative_iv` for audit only.",
+    "reviewed": {
+      "last_reviewed": "2026-09-21",
+      "reviewer": "owner"
+    },
+    "pre_revenue_below": 10000000,
+    "min_weight_surviving": 0.35,
+    "min_weight_rationale": "Below about a third of the profile's intended weight the published number is one or two side legs standing in for a method set that could not be computed: NuScale priced at $3.90 on 0.20 of its weight, from a forward-revenue multiple alone. Bloom (0.65, anchor dropped) stays rated and says so."
+  },
+  "backlog_gated_long_cycle": {
+    "_doc": "Owner, 2026-09-22. A profile for long-cycle equipment makers whose order book, not their trailing earnings, describes them (heavy power equipment, nuclear, grid infrastructure), kept apart from short-cycle industrials such as Dover or Illinois Tool Works. ELIGIBILITY IS A GATE, not a label: all three rules must hold on owner-ACCEPTED filing figures, or the name stays on the profile it would otherwise have had.",
+    "reviewed": {
+      "last_reviewed": "2026-09-22",
+      "reviewer": "owner"
+    },
+    "profile": "Backlog-Gated Long Cycle",
+    "sectors": [
+      "Industrials",
+      "Energy"
     ],
-    "recorded": "2026-09-21",
-    "note": "Structural regime deviation (owner, 2026-09-21): the market has re-rated this name on data-centre load growth. Consensus 12-month targets carry that regime; this valuation is through-cycle by design and does not chase it. The gap to consensus is recorded, not tuned away.",
-    "evidence": "Wave 2 Stage 6, base IV vs consensus: VST -53%, CEG -65%, NRG -39%, BE -84%, GEV -75%, CCJ -88%, LEU -71%, SMR -65% -- 8 of the wave's 11 misses. US Independent Power Producers basket: normalised EV/EBITDA 18.1x market-now against an 11.1x through-cycle.",
-    "review": "Revisit when the through-cycle multiple itself re-rates (the quarterly dynamic multiples update moves it at most 20% a quarter), or when Wave 3's backlog-coverage DCF prices the contracted part of the order books."
-   }
-  }
- },
- "unrated": {
-  "_doc": "When a valuation is withheld instead of published (owner, 2026-09-21: pre-revenue names 'urgently require an explicit Unrated / Pre-Revenue state rather than outputting distorted fractional-weight numbers like $3.90'). An unrated name publishes no intrinsic value, no 12-month target and no rating; the figure the engine computed is kept as `indicative_iv` for audit only.",
-  "reviewed": {
-   "last_reviewed": "2026-09-21",
-   "reviewer": "owner"
+    "min_backlog_coverage_forward_sales": 3.0,
+    "min_book_to_bill": 1.5,
+    "min_contract_liability_share": 0.5,
+    "contract_liability_share_definition": "contract liabilities (customer advances / deferred revenue) over operating working-capital ASSETS, receivables plus inventory. Not over NET working capital: for exactly these companies the advances are large enough to drive net working capital to zero or below (GE Vernova FY2025: -$0.75bn), and a share of a negative number says nothing. GE Vernova: $25.8bn / ($19.1bn + $10.4bn) = 87%.",
+    "methods": {
+      "Backlog-coverage DCF": 0.35,
+      "Forward EV/EBITDA": 0.25,
+      "Forward P/E": 0.2,
+      "EV/EBITDA": 0.2
+    }
   },
-  "pre_revenue_below": 10000000,
-  "min_weight_surviving": 0.35,
-  "min_weight_rationale": "Below about a third of the profile's intended weight the published number is one or two side legs standing in for a method set that could not be computed: NuScale priced at $3.90 on 0.20 of its weight, from a forward-revenue multiple alone. Bloom (0.65, anchor dropped) stays rated and says so."
- },
- "backlog_gated_long_cycle": {
-  "_doc": "Owner, 2026-09-22. A profile for long-cycle equipment makers whose order book, not their trailing earnings, describes them (heavy power equipment, nuclear, grid infrastructure), kept apart from short-cycle industrials such as Dover or Illinois Tool Works. ELIGIBILITY IS A GATE, not a label: all three rules must hold on owner-ACCEPTED filing figures, or the name stays on the profile it would otherwise have had.",
-  "reviewed": {
-   "last_reviewed": "2026-09-22",
-   "reviewer": "owner"
-  },
-  "profile": "Backlog-Gated Long Cycle",
-  "sectors": [
-   "Industrials",
-   "Energy"
-  ],
-  "min_backlog_coverage_forward_sales": 3.0,
-  "min_book_to_bill": 1.5,
-  "min_contract_liability_share": 0.5,
-  "contract_liability_share_definition": "contract liabilities (customer advances / deferred revenue) over operating working-capital ASSETS, receivables plus inventory. Not over NET working capital: for exactly these companies the advances are large enough to drive net working capital to zero or below (GE Vernova FY2025: -$0.75bn), and a share of a negative number says nothing. GE Vernova: $25.8bn / ($19.1bn + $10.4bn) = 87%.",
-  "methods": {
-   "Backlog-coverage DCF": 0.35,
-   "Forward EV/EBITDA": 0.25,
-   "Forward P/E": 0.2,
-   "EV/EBITDA": 0.2
-  }
- },
- "fcf_guidance_fade": {
-  "_doc": "Owner, 2026-09-22. How an ACCEPTED free-cash-flow guidance overlay enters a DCF: never held flat. A guided 25% margin is inflated by advance billings and reservation prepayments -- cash borrowed from the future -- and neutralises once delivery catches up with order velocity. Years 1-3 take the guidance; years 4-7 fade it; years 8-10 and the terminal sit on a floor the installed-base service revenue supports (about 20% adjusted EBITDA x 70-80% conversion).",
-  "reviewed": {
-   "last_reviewed": "2026-09-22",
-   "reviewer": "owner"
-  },
-  "explicit_years": 3,
-  "explicit_margin_ceiling": 0.25,
-  "explicit_margin_band": [
-   0.22,
-   0.25
-  ],
-  "fade_years": 4,
-  "fade_bps_per_year": 225,
-  "fade_bps_band": [
-   200,
-   250
-  ],
-  "floor_margin": 0.15,
-  "floor_margin_band": [
-   0.145,
-   0.155
-  ]
- },
- "target_margins": {
-  "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
-  "reviewed": {
-   "last_reviewed": "2026-09-23",
-   "reviewer": "owner"
-  },
-  "profiles": {
-   "Defense Tech & Space": {
-    "ebit_margin": 0.13,
-    "band": [
-     0.12,
-     0.14
+  "fcf_guidance_fade": {
+    "_doc": "Owner, 2026-09-22. How an ACCEPTED free-cash-flow guidance overlay enters a DCF: never held flat. A guided 25% margin is inflated by advance billings and reservation prepayments -- cash borrowed from the future -- and neutralises once delivery catches up with order velocity. Years 1-3 take the guidance; years 4-7 fade it; years 8-10 and the terminal sit on a floor the installed-base service revenue supports (about 20% adjusted EBITDA x 70-80% conversion).",
+    "reviewed": {
+      "last_reviewed": "2026-09-22",
+      "reviewer": "owner"
+    },
+    "explicit_years": 3,
+    "explicit_margin_ceiling": 0.25,
+    "explicit_margin_band": [
+      0.22,
+      0.25
     ],
-    "ramp_years": 5,
-    "tax_rate": 0.21,
-    "basis": "mature defence/aerospace peers, 12-14% EBIT (Kratos)"
-   }
-  },
-  "tickers": {
-   "RKLB": {
-    "ebit_margin": 0.165,
-    "band": [
-     0.15,
-     0.18
+    "fade_years": 4,
+    "fade_bps_per_year": 225,
+    "fade_bps_band": [
+      200,
+      250
     ],
-    "basis": "Rocket Lab Space Systems at scale, 15-18% EBIT (owner)"
-   }
+    "floor_margin": 0.15,
+    "floor_margin_band": [
+      0.145,
+      0.155
+    ]
+  },
+  "target_margins": {
+    "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
+    "reviewed": {
+      "last_reviewed": "2026-09-23",
+      "reviewer": "owner"
+    },
+    "profiles": {
+      "Defense Tech & Space": {
+        "ebit_margin": 0.13,
+        "band": [
+          0.12,
+          0.14
+        ],
+        "ramp_years": 5,
+        "tax_rate": 0.21,
+        "basis": "mature defence/aerospace peers, 12-14% EBIT (Kratos)"
+      }
+    },
+    "tickers": {
+      "RKLB": {
+        "ebit_margin": 0.165,
+        "band": [
+          0.15,
+          0.18
+        ],
+        "basis": "Rocket Lab Space Systems at scale, 15-18% EBIT (owner)"
+      }
+    }
+  },
+  "sotp_inputs": {
+    "net_cash_variance_flag": 0.2,
+    "segment_sum_excess_tolerance": 0.05,
+    "reviewer": "owner, 2026-09-24: pre-deployment sequencing. Item 2: a cited net-cash figure backed by a URL is kept; FMP net debt is the audit check and flags above 20% variance, never overwrites. Item 4: the sum of segment revenues may not exceed consolidated group revenue by more than a minimal reporting variance.",
+    "note": "The 5% excess tolerance is the build's proposed 'minimal' value: it catches a group total cited as a segment (Meituan, 2026-09-24: +40%) while leaving room for rounding. Where a company reports segment revenue GROSS of inter-segment sales (JD Logistics), the pre-fill must cite external revenue; a gross figure fails this check by design."
   }
- }
 }

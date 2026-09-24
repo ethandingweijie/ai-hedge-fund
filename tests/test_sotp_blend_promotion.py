@@ -231,9 +231,11 @@ def test_scenario_tps_net_debt_passthrough():
     assert out0["bear"]["per_share"] == pytest.approx(120.0)
 
 
-def test_scenario_tps_tier_passthrough_changes_fallback_multiple():
-    # "Zorblatt" matches no keyword → tier-default EV/Rev fallback multiple
-    # (3.0 default tier vs 4.5 premium tier).
+def test_scenario_tps_never_price_an_unanchored_segment_from_the_tier():
+    # Owner, 2026-09-24 (item 1): "Zorblatt" matches no keyword and carries no
+    # multiple. It used to price at the tier's EV/Rev constant (3.0x default,
+    # 4.5x premium); now the segment is Degraded in every scenario and no TP
+    # is published for it, whatever the tier.
     a = {"segments": [{"name": "Zorblatt Division", "revenue_fwd": 50e9}],
          "default_tax_rate": 0.25}
     scenarios = {"bull": [{"name": "Zorblatt Division"}]}
@@ -241,5 +243,11 @@ def test_scenario_tps_tier_passthrough_changes_fallback_multiple():
                                     tier="default")
     out_premium = sotp_scenario_tps(a, scenarios, shares=_SHARES,
                                     tier="premium")
-    assert out_default["bull"]["per_share"] == pytest.approx(50e9 * 3.0 / _SHARES)
-    assert out_premium["bull"]["per_share"] == pytest.approx(50e9 * 4.5 / _SHARES)
+    assert "bull" not in out_default and "bull" not in out_premium
+    # With a cited EV/Sales fallback the scenario prices on it, tier-blind.
+    a2 = {"segments": [{"name": "Zorblatt Division", "revenue_fwd": 50e9,
+                        "pe_multiple": 15.0, "ebit": -1e9, "ev_rev_fallback_multiple": 1.2}],
+          "default_tax_rate": 0.25}
+    scenarios2 = {"bull": [{"name": "Zorblatt Division", "pe_multiple": 20.0}]}
+    out2 = sotp_scenario_tps(a2, scenarios2, shares=_SHARES, tier="premium")
+    assert out2["bull"]["per_share"] == pytest.approx(50e9 * 1.2 / _SHARES)

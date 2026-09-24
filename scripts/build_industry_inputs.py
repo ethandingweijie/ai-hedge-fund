@@ -130,10 +130,35 @@ def build_one(ticker: str, kind: str) -> dict:
         conv, conv_checks = gp.to_engine_assumptions(data, fmp_revenue_fwd_usd=None)
         seg_sum = sum(s["revenue_fwd"] for s in conv.get("segments") or [])
         checks = ii.reconcile("sotp", seg_sum or None, ctx, period=data.get("fiscal_year"))
+        # Owner, 2026-09-24 (item 4): segments may not sum to more than the
+        # group. The comparison base is the FMP forward consensus revenue for
+        # the same year when the anchors carry it, else the latest reported
+        # revenue; both in USD like seg_sum. One-sided on purpose: segments
+        # summing BELOW the group is eliminations and unallocated items.
+        from src.data.valuation_constants import sotp_input_thresholds
+        _tol = sotp_input_thresholds()["segment_sum_excess_tolerance"]
+        _fwd_bn = anchors.get("revenue_next_fy_usd_bn")
+        _group = (float(_fwd_bn) * 1e9 if isinstance(_fwd_bn, (int, float)) and _fwd_bn > 0
+                  else (ctx.get("revenue") or None))
+        _group_label = "FMP FY+1 consensus revenue" if isinstance(_fwd_bn, (int, float)) and _fwd_bn > 0 else "FMP latest revenue"
+        if seg_sum and isinstance(_group, (int, float)) and _group > 0:
+            _excess = seg_sum / _group - 1.0
+            checks.append({"check": "segment revenue vs group revenue", "ok": _excess <= _tol,
+                           "detail": (f"segments sum to {seg_sum / 1e9:.1f}bn USD vs {_group_label} "
+                                      f"{_group / 1e9:.1f}bn ({_excess:+.1%}; may not exceed by more than {_tol:.0%})"),
+                           "ratio": round(seg_sum / _group, 4)})
+        else:
+            checks.append({"check": "segment revenue vs group revenue", "ok": None,
+                           "detail": "no group revenue to check against"})
+        # Owner, 2026-09-24 (item 3): every segment figure must be stated for a
+        # year AFTER the latest reported one; an actual standing in fails.
+        _latest = ii._year(ctx.get("period"))
         _periods = sorted({str((s.get("revenue_fwd") or {}).get("period")) for s in data.get("segments") or []})
-        checks.append({"check": "segment revenue periods", "ok": None,
-                       "detail": f"{', '.join(_periods)} (fiscal_year {data.get('fiscal_year')}); actuals stand in "
-                                 f"for a forward year where no estimate was cited"})
+        _bad = [p for p in _periods if _latest and (ii._year(p) or 0) <= _latest]
+        checks.append({"check": "segment revenue periods", "ok": (not _bad) if _latest else None,
+                       "detail": (f"{', '.join(_periods)} (fiscal_year {data.get('fiscal_year')}); "
+                                  + (f"latest reported year is {_latest}; not forward: {', '.join(_bad)}"
+                                     if _bad else "all forward of the latest reported year"))})
         checks.append({"check": "segments with a cited multiple range", "ok": len(conv.get("segments") or []) >= 2,
                        "detail": (f"{len(conv.get('segments') or [])} usable; dropped "
                                   f"{conv_checks.get('dropped_segments') or 'none'}")})

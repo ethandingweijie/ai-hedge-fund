@@ -96,3 +96,50 @@ today, and the engine defects dominate the source difference:
 
 Recommended order: fix 1-2 (engine), tighten 4 (prompt), re-run this comparison, then
 proceed with the change set (bridge flip, retire promotion, pre-fill by profile).
+
+## Re-run after the four pre-deployment items (owner sequencing, 2026-09-24)
+
+Built the same day: (1) the leg prices an earnings segment with non-positive EBIT on its cited
+EV/Sales range or marks it `Degraded` with a reason, and a table with a Degraded segment does not
+publish; (2) a URL-cited net-cash figure is kept, FMP net debt is the audit check and flags above
+20% variance; (3) the pre-fill prompt demands FY+1/FY+2 figures and every figure on the review gate
+carries its period label; (4) segments summing above group revenue by more than 5% fail a hard check
+that blocks acceptance. The four pre-fills were rebuilt under the new prompt; the extractor snapshot
+is unchanged and priced through the new leg.
+
+| Name | Spot | Consensus | Extractor (engine) | Gemini v2 (engine) | Gemini v2 vs consensus |
+|---|---|---|---|---|---|
+| BABA | 110.78 | 180.57 | 125.84 | **136.09** | −25% |
+| PDD | 79.20 | 103.22 | 141.31 | **Degraded, no value** | — |
+| JD | 27.16 | 35.86 | 38.29 | **64.73** | +80% |
+| 3690.HK | 72.55 | 110.72 | **Degraded, no value** | **100.66** | −9% |
+
+What changed and why:
+
+- **Meituan no longer prices from a constant.** The extractor's Food Delivery and Instashopping rows
+  carry a P/E and no EBIT, so the table is Degraded ("P/E 12x cited but EBIT is not stated; no cited
+  EV/Sales range to fall back on") and publishes nothing, where it published HK$148.82 of 3.0x EV/Rev
+  before. The Gemini rebuild cites FY2026E core revenue of RMB 297bn at a 10.7% margin on 12-16x and a
+  loss-making New Initiatives at 0.8-1.0x sales, both forward, and lands 9% under consensus. The group
+  check passes (the first build had cited group revenue for the core segment). Its cited net cash is a
+  September-2025 broker figure and the FMP check flags a −90% variance: the reviewer sees it before
+  accepting.
+- **PDD is the check working.** Gemini cites the domestic core on 9-13x P/E with no margin and no
+  EV/Sales range. The leg cannot price that segment and says so; under the old code it would have
+  priced 32.4bn of revenue at 3.0x. The pre-fill needs a cited margin for the core before it is usable.
+- **BABA moves inside the band.** The cited net cash (RMB 208bn at June 2026, $31bn) is kept instead of
+  FMP's −$12.8bn; the China E-commerce segment is FY2026A revenue on a FY2027E 27.8% margin at 10x.
+  The period check flags the two FY2026A revenues as not forward.
+- **JD is the one clear overshoot, and it is the inputs.** FY2027F JD Retail revenue of RMB 1.2tn at
+  4.6% and 10x P/E is $69.8bn for a segment consensus values the whole group below; against GS's
+  FY26E $152bn at 4.0% and 9x it is 1.5x the segment value. The period check also flags JD Logistics
+  (FY2025). This is a reviewer's decline, not an engine fix.
+- **Forward figures are scarce.** Even under the forward prompt, three of four rebuilt entries cite
+  at least one trailing segment revenue; public consensus rarely goes to segment level. The period
+  check makes that visible on every figure, which is the point of item 3; it does not block
+  acceptance, the reconciliation check does.
+
+Net: with the four items in, Gemini is within 30% of consensus on the two names that price and
+refuses to price the one whose inputs cannot support it; the extractor snapshot is within 30% on
+one of its three priced names and now correctly refuses Meituan. Neither the 3.0x constant nor the
+net-cash restatement decides any number in this table.

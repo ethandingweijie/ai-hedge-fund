@@ -64,7 +64,8 @@ def build_sotp_sentence(table: dict, reporting_ccy: str = "USD") -> str:
     ccy = (reporting_ccy or "USD").upper()
     sym = _CCY_SYMBOLS.get(ccy, f"{ccy} ")
     seg_bits = " + ".join(
-        f"{r['name']} {r['multiple']:g}x {r['method'].replace(' (fallback)', '')}"
+        (f"{r['name']} {r['multiple']:g}x {r['method']}" if isinstance(r.get("multiple"), (int, float))
+         else f"{r['name']} Degraded")            # owner, 2026-09-24: a Degraded row has no multiple
         for r in table.get("rows") or []
     )
     frags: list[str] = []
@@ -398,7 +399,9 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
             continue
         t = _sotp_analyst_style(a, shares=shares, fx_to_reporting=fx,
                                 net_debt=net_debt, tier=tier)
-        if t is not None:
+        # A Degraded table (owner, 2026-09-24) publishes no per-share value in
+        # any scenario; leaving the case out says so more plainly than None.
+        if t is not None and not t.get("degraded"):
             out[case] = {
                 "per_share": t["per_share"],
                 "per_share_reporting": t["per_share_reporting"],
@@ -444,7 +447,10 @@ def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
         table = _sotp_analyst_style(assumptions, shares=shares,
                                     fx_to_reporting=fx, net_debt=net_debt,
                                     tier=tier)
-    if table is None:
+    if table is None or table.get("degraded"):
+        # Owner, 2026-09-24: a Degraded table publishes no per-share value, so
+        # there is no breakdown to draw; the reason reaches the report through
+        # the forward flags (`sotp_analyst_degraded`).
         return None
 
     fwd = assumptions.get("_fwd_estimates") or {}

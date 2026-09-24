@@ -129,10 +129,13 @@ class TestEvEbitAnchor:
         eb_row = self._row({**self.SEG, "ev_ebit_multiple": 8.0})
         assert pe_row["value"] == pytest.approx(eb_row["value"] * (1 - 0.17))
 
-    def test_a_segment_with_no_earnings_falls_back(self):
+    def test_a_segment_with_no_earnings_is_degraded(self):
+        # Owner, 2026-09-24 (item 1): no classifier constant; the reason names
+        # the cited multiple that could not price.
         row = self._row({"name": "Other", "revenue_fwd": 300e6,
                          "ev_ebit_multiple": 3.0})
-        assert row["method"] == "EV/Rev (fallback)"
+        assert row["method"] == "Degraded" and row["value"] is None
+        assert "EV/EBIT 3x cited but EBIT is not stated" in row["degraded_reason"]
 
 
 class TestThePromotedWeightBelongsToTheSotpFamily:

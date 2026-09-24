@@ -36,7 +36,7 @@ TIMEOUT_S = 90
 #: and unallocated revenue: the validated BABA snapshot sums 12% under FMP's
 #: FY2027 consensus, so a +/-3% match would reject correct inputs.
 SEGMENT_SUM_TOLERANCE = 0.15
-MARGIN_BOUNDS = (0.0, 0.60)
+MARGIN_BOUNDS = (-1.0, 0.60)   # a loss-making segment reaches the engine as a loss (owner, 2026-09-24)
 _SCALES = {"units": 1.0, "thousands": 1e3, "mn": 1e6, "bn": 1e9, "tn": 1e12}
 
 
@@ -74,17 +74,24 @@ class CitedRatio(BaseModel):
 
 class SegmentEstimate(BaseModel):
     name: str
-    revenue_fwd: Cited = Field(description="Next-fiscal-year segment revenue, in the source's currency and scale")
-    ebit_margin: Optional[CitedRatio] = Field(default=None, description="Segment EBIT or EBITA margin")
+    revenue_fwd: Cited = Field(description="NEXT fiscal year (FY+1) consensus or guided segment revenue, "
+                                           "external of inter-segment sales, in the source's currency and scale; "
+                                           "period must name the forward year, e.g. 'FY2026E'")
+    ebit_margin: Optional[CitedRatio] = Field(default=None, description="FY+1 segment EBIT or EBITA margin "
+                                                                        "(consensus or guided); negative if loss-making")
     multiple_metric: Literal["pe", "ev_rev"]
     multiple_low: float
     multiple_high: float
     multiple_basis: str = Field(description="Why this range: peers, broker SOTP convention, growth; cite")
     multiple_source_url: str
+    ev_sales_low: Optional[float] = Field(default=None, description="For a P/E segment whose FY+1 earnings are "
+                                                                     "negative or near zero: the cited EV/Sales range low")
+    ev_sales_high: Optional[float] = Field(default=None, description="...and its high")
+    ev_sales_source_url: Optional[str] = None
 
 
 class SotpInputs(BaseModel):
-    fiscal_year: str
+    fiscal_year: str = Field(description="The FORWARD year every segment figure is stated for, e.g. 'FY2026E'")
     segments: list[SegmentEstimate]
     associates_investments: Optional[Cited] = None
     net_cash: Optional[Cited] = Field(
@@ -349,19 +356,32 @@ _AMOUNT_RULE = (
 
 
 def sotp_prompt(company: str, ticker: str, anchors: dict) -> str:
+    # Owner, 2026-09-24 (pre-deployment item 3): FORWARD figures. The first
+    # build cited FY2025 actuals on three of four names and a JD Retail SOTP on
+    # trailing revenue and margin is a different valuation from the FY26E one
+    # the brokers publish.
+    fwd = anchors.get("revenue_next_fy_period") or "the next fiscal year"
     return (
         f"You are building sum-of-the-parts valuation INPUTS for {company} ({ticker}).\n"
-        "1. Segment revenue and margin: take them from the COMPANY's own results "
-        "announcements, annual reports or consensus estimates of REVENUE. Broker SOTP "
-        "tables list segment VALUES (enterprise value, value per share/ADS) next to "
-        "multiples -- never report a value from such a table as revenue. A segment's "
-        "revenue is always smaller than the group's total revenue.\n"
+        f"PERIOD RULE: every segment revenue and margin must be a FORWARD figure for the NEXT "
+        f"fiscal year (FY+1, ending {fwd}) -- consensus estimates or management guidance -- and "
+        "FY+2 where the source gives it. State the period on EVERY number as the forward year "
+        "label (e.g. 'FY2026E'). Do not answer with the latest reported actuals; if no forward "
+        "estimate exists for a segment, say so in the quote and give the actual with its own "
+        "period label so the reviewer can see it is not forward.\n"
+        "1. Segment revenue and margin: consensus segment estimates or the company's guidance, "
+        "EXTERNAL of inter-segment sales (net of eliminations) where the company discloses "
+        "that split. Broker SOTP tables list segment VALUES (enterprise value, value per "
+        "share/ADS) next to multiples -- never report a value from such a table as revenue. "
+        "Never cite the group's total revenue as a segment's revenue: the sum of segment "
+        "revenues must not exceed consolidated group revenue.\n"
         "2. Multiples: a RANGE per segment (P/E on segment NOPAT for profitable core "
         "businesses, EV/Sales otherwise) with the basis; broker SOTP notes are a good "
-        "source for the multiple itself.\n"
+        "source for the multiple itself. For a P/E segment whose FY+1 earnings are negative "
+        "or near zero, ALSO give the EV/Sales range brokers use for it (ev_sales_low/high).\n"
         "3. Associates and strategic investments (total, not per share), net cash "
-        "(cash + short-term investments - total debt; negative if net debt) and a "
-        "holding-company discount.\n"
+        "(cash + short-term investments - total debt; negative if net debt) at the latest "
+        "balance-sheet date with that date as the period, and a holding-company discount.\n"
         f"Do NOT compute a per-share value.\n{_AMOUNT_RULE}\n"
         f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
     )
@@ -673,6 +693,15 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
                "rationale": f"{s.get('multiple_metric')} {lo}-{hi}x: {s.get('multiple_basis', '')}"[:300],
                "source": "gemini_grounded"}
         seg["pe_multiple" if s.get("multiple_metric") == "pe" else "ev_rev_multiple"] = round((lo + hi) / 2, 3)
+        # Owner, 2026-09-24 (item 1): the cited EV/Sales range a P/E segment
+        # falls to when its earnings are non-positive. Never competes with the
+        # P/E when earnings are positive -- the leg reads it only when no
+        # earnings anchor can price.
+        f_lo, f_hi = s.get("ev_sales_low"), s.get("ev_sales_high")
+        if (s.get("multiple_metric") == "pe" and isinstance(f_lo, (int, float))
+                and isinstance(f_hi, (int, float)) and 0 < f_lo <= f_hi):
+            seg["ev_rev_fallback_multiple"] = round((f_lo + f_hi) / 2, 3)
+        seg["period_label"] = (rev_c or {}).get("period")
         margin = s.get("ebit_margin")
         if margin is not None:
             if _cited_ok(margin):
@@ -709,6 +738,11 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
             checks["dropped_fields"].append(field)
         else:
             assumptions[field] = value
+            if field == "net_cash":
+                # Item 2: the citation travels with the figure so the engine's
+                # net-cash restatement can defer to it (see _refresh_sotp_net_cash).
+                assumptions["_net_cash_citation"] = {"source_url": c.get("source_url"),
+                                                     "period": c.get("period"), "quote": c.get("quote")}
     checks["citation_coverage"] = citation_coverage(sotp)
     return assumptions, checks
 

@@ -2630,6 +2630,32 @@ def _refresh_sotp_net_cash(
         return assumptions, None
     live = -float(net_debt) / fx
     stated = _safe(assumptions.get("net_cash"))
+    cite = assumptions.get("_net_cash_citation")
+    if stated is not None and isinstance(cite, dict) and str(cite.get("source_url", "")).startswith("http"):
+        # Owner, 2026-09-24 (pre-deployment item 2): a net-cash figure cited
+        # from a filing or broker page with a direct URL takes precedence. FMP
+        # net debt is the audit check: the variance is recorded, flagged above
+        # the owner's threshold, never written over the cited figure. (BABA,
+        # 2026-09-24: FMP net debt -$12.8bn against the note's $68bn of cash,
+        # short-term investments and stakes -- $29 an ADS restated by nobody's
+        # decision.)
+        try:
+            from src.data.valuation_constants import sotp_input_thresholds
+            _thr = sotp_input_thresholds()["net_cash_variance_flag"]
+        except Exception:                                  # noqa: BLE001
+            _thr = 0.20
+        out = dict(assumptions)
+        out["_net_cash_source"] = "cited"
+        out["_net_cash_fmp_check"] = live
+        var = (live - stated) / max(abs(stated), 1.0)
+        out["_net_cash_variance"] = var
+        if abs(var) <= _thr:
+            return out, None
+        return out, (
+            f"SOTP (analyst): net cash kept at the cited ${stated / 1e9:.1f}bn "
+            f"({cite.get('period') or 'period n/a'}, {cite.get('source_url')}); FMP net debt "
+            f"implies ${live / 1e9:.1f}bn, a {var:+.0%} variance above the {_thr:.0%} audit "
+            f"threshold -- review the cited figure")
     out = dict(assumptions)
     out["net_cash"] = live
     out["_net_cash_source"] = "engine_net_debt"
@@ -2790,6 +2816,7 @@ def _sotp_analyst_style(
     default_tax = float(_dt) if _dt is not None else 0.15
 
     rows: list[dict] = []
+    degraded_segments: list[dict] = []
     total_seg_value = 0.0
     for seg in segments:
         if not isinstance(seg, dict):
@@ -2830,8 +2857,44 @@ def _sotp_analyst_style(
         if evebit and evebit > 0 and ebit is not None and ebit > 0:
             anchors.append(("EV/EBIT", evebit, ebit * evebit))
         if not anchors:
-            _, mult = _classify_segment(str(seg.get("name", "")), tier=tier)
-            anchors.append(("EV/Rev (fallback)", mult, rev * mult))
+            # Owner, 2026-09-24 (pre-deployment item 1): no classifier
+            # constant. Until today an earnings-based segment with no positive
+            # EBIT fell to `_classify_segment`'s keyword multiple -- 3.0x
+            # EV/Rev on Meituan, 64% of the extractor NAV and 86% of the
+            # Gemini NAV, while the cited 12-18x P/E never priced. Now: the
+            # segment's own CITED EV/Sales range if the source gave one for
+            # this case, else the segment is Degraded with the reason, and a
+            # table with a degraded segment does not publish a per-share value
+            # (a NAV missing an operating segment is not a NAV).
+            _fb = _safe(seg.get("ev_rev_fallback_multiple"))
+            if _fb and _fb > 0:
+                anchors.append(("EV/Rev (cited, earnings non-positive)", _fb, rev * _fb))
+            else:
+                _why = []
+                if pe and pe > 0:
+                    _why.append(f"P/E {pe:g}x cited but EBIT is "
+                                + ("not stated" if ebit is None else
+                                   f"{ebit / rev:+.1%} of revenue (non-positive)"))
+                if evebit and evebit > 0:
+                    _why.append(f"EV/EBIT {evebit:g}x cited but EBIT is "
+                                + ("not stated" if ebit is None else "non-positive"))
+                if not _why:
+                    _why.append("no multiple cited")
+                _why.append("no cited EV/Sales range to fall back on")
+                _reason = "; ".join(_why)
+                degraded_segments.append({"name": str(seg.get("name", "segment")), "reason": _reason})
+                rows.append({
+                    "name":          str(seg.get("name", "segment")),
+                    "revenue_fwd":   rev,
+                    "ebit":          ebit,
+                    "method":        "Degraded",
+                    "multiple":      None,
+                    "value":         None,
+                    "implied_evrev": None,
+                    "degraded_reason": _reason,
+                    "rationale":     str(seg.get("rationale", "")),
+                })
+                continue
         method, mult, value = max(anchors, key=lambda a: a[2])
 
         total_seg_value += value
@@ -2853,10 +2916,12 @@ def _sotp_analyst_style(
     associates, net_cash, _addback_basis = _sotp_nonoperating_addback(
         assumptions, net_debt)
 
-    if not rows:
+    priced_rows = [r for r in rows if r.get("value") is not None]
+    if not priced_rows:
         # ── THE DEGRADED PATH ────────────────────────────────────────────────
         # Segments were supplied but none survived the positive-forward-revenue
-        # filter, so there is no operating value to sum. What there still is, is
+        # filter (or every one of them is Degraded), so there is no operating
+        # value to sum. What there still is, is
         # the balance-sheet add-back -- and it is returned rather than dropped.
         #
         # `per_share` and `per_share_reporting` are DELIBERATELY None. The
@@ -2873,14 +2938,17 @@ def _sotp_analyst_style(
         # The holdco discount is not applied here. It is a discount on an
         # operating NAV, and there is no operating NAV; discounting a cash and
         # associates pile by 15% would be a number with no meaning attached.
-        if abs(associates) <= 0.0 and abs(net_cash) <= 0.0:
+        if abs(associates) <= 0.0 and abs(net_cash) <= 0.0 and not degraded_segments:
             # Nothing to preserve, so the old contract holds exactly: no rows
             # and no add-back is still None, and a caller cannot tell the
-            # difference between this and the pre-fix behaviour.
+            # difference between this and the pre-fix behaviour. A Degraded
+            # segment IS something to preserve: its reason is the report.
             return None
         _nav_addback = associates + net_cash
         return {
-            "rows":                [],
+            "rows":                rows,
+            "degraded":            True,
+            "degraded_segments":   degraded_segments,
             "segment_value":       0.0,
             "associates":          associates,
             "net_cash":            net_cash,
@@ -2894,9 +2962,40 @@ def _sotp_analyst_style(
             "shares":              shares,
             "degraded_no_segments": True,
             "degraded_reason": (
-                f"{len(segments)} segment(s) supplied, none carried a usable "
-                f"forward revenue, so no operating value could be summed; "
-                f"{_addback_basis}"),
+                (f"{len(segments)} segment(s) supplied, none carried a usable "
+                 f"forward revenue, so no operating value could be summed; ")
+                if not degraded_segments else
+                (f"{len(degraded_segments)} of {len(rows)} segment(s) Degraded: "
+                 + "; ".join(f"{d['name']}: {d['reason']}" for d in degraded_segments) + "; ")
+            ) + _addback_basis,
+        }
+
+    if degraded_segments:
+        # A priced remainder beside a Degraded segment is a partial NAV. It is
+        # returned with every row so the report can show which segment failed
+        # and why, but per_share is None: the leg does not publish.
+        _partial_nav = total_seg_value + associates + net_cash
+        return {
+            "rows":                rows,
+            "degraded":            True,
+            "degraded_segments":   degraded_segments,
+            "segment_value":       total_seg_value,
+            "associates":          associates,
+            "net_cash":            net_cash,
+            "nav":                 _partial_nav,
+            "holdco_discount_pct": 0.0,
+            "holdco_discount":     0.0,
+            "final":               _partial_nav,
+            "per_share":           None,
+            "per_share_reporting": None,
+            "fx_to_reporting":     float(fx_to_reporting or 1.0),
+            "shares":              shares,
+            "degraded_no_segments": False,
+            "degraded_reason": (
+                f"{len(degraded_segments)} of {len(rows)} segment(s) Degraded, so the NAV is "
+                f"partial and the method does not publish: "
+                + "; ".join(f"{d['name']}: {d['reason']}" for d in degraded_segments)
+                + f"; {_addback_basis}"),
         }
 
     nav = total_seg_value + associates + net_cash
@@ -2925,6 +3024,8 @@ def _sotp_analyst_style(
         # without a `.get` default hiding a table that was never degraded from
         # one whose key is missing for an unrelated reason.
         "degraded_no_segments": False,
+        "degraded":            False,
+        "degraded_segments":   [],
     }
 
 
@@ -6182,7 +6283,7 @@ def _compute_method_value(
             )
             if table is None:
                 return None
-            if table.get("degraded_no_segments"):
+            if table.get("degraded_no_segments") or table.get("degraded"):
                 # ── THE METHOD DOES NOT PUBLISH, BUT NOTHING IS DISCARDED ──
                 # Cached under a DIFFERENT key from `sotp_analyst_table`, and
                 # that is load-bearing rather than tidy. `build_sotp_breakdown`
@@ -8670,7 +8771,7 @@ def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
         fx = float(assumptions.get("fx_usd_to_reporting") or 1.0)
         _tbl = _sotp_analyst_style(
             assumptions, shares=shares, net_debt=net_debt, fx_to_reporting=fx)
-        if (_tbl or {}).get("degraded_no_segments"):
+        if (_tbl or {}).get("degraded_no_segments") or (_tbl or {}).get("degraded"):
             # ── A DEGRADED EXTRACTION IS NOT A $0.00 EXTRACTION ─────────────
             # `check_table` reads `float(table.get("per_share") or 0.0)`, so
             # handing it the degraded table would grade the total as $0.00/ADS

@@ -345,17 +345,41 @@ export interface SegmentMemory {
 
 /** An industry input FMP does not carry (PV-10, backlog, maintenance capex),
  *  cited as the filing prints it and checked against FMP; review-gated. */
+export interface CitedFigure {
+  value?: number | null;
+  currency?: string | null;
+  scale?: string | null;
+  period_label?: string | null;
+  source_url?: string | null;
+  quote?: string | null;
+}
+
+export interface SotpInputSegment {
+  name: string;
+  revenue: CitedFigure;
+  margin?: { value?: number | null; period_label?: string | null } | null;
+  multiple: { metric: 'pe' | 'ev_rev'; low: number; high: number };
+  ev_sales_fallback?: { low: number; high: number } | null;
+}
+
 export interface IndustryInputRow {
   ticker: string;
   company?: string | null;
-  kind: 'pv10' | 'backlog' | 'maintenance_capex' | 'rate_base' | 'fcf_guidance';
+  kind: 'pv10' | 'backlog' | 'maintenance_capex' | 'rate_base' | 'fcf_guidance' | 'sotp';
   value?: number | null;
   currency?: string | null;
   scale?: string | null;
   period?: string | null;
   source_url?: string | null;
   quote?: string | null;
-  detail?: Record<string, unknown>;
+  detail?: Record<string, unknown> & {
+    /** kind === 'sotp': every figure with its period label (owner, 2026-09-24). */
+    fiscal_year?: string | null;
+    segments?: SotpInputSegment[];
+    net_cash?: CitedFigure | null;
+    associates?: CitedFigure | null;
+    holdco_discount_pct?: number | null;
+  };
   checks: { check: string; ok: boolean | null; detail: string }[];
   ok?: boolean | null;
   model?: string | null;

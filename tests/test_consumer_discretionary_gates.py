@@ -2758,7 +2758,9 @@ def test_associates_are_added_back_unconditionally_and_only_inside_the_segment_p
     _sotp_start = src.index("def _sotp_analyst_style(")
     assert _sotp_start < _addback_call, "the add-back call left the table builder"
     _body_after = src[_addback_call:]
-    _guard = _body_after.index("if not rows:")
+    # 2026-09-24: the guard counts PRICED rows; a Degraded row (owner item 1)
+    # is kept for the report and does not count as operating value.
+    _guard = _body_after.index("if not priced_rows:")
     assert _guard > 0, "the zero-row guard vanished"
     # And the guard no longer returns None unconditionally.
     _guard_block = _body_after[_guard:_guard + 4000]
@@ -2766,7 +2768,7 @@ def test_associates_are_added_back_unconditionally_and_only_inside_the_segment_p
     assert '"per_share":           None' in _guard_block
 
     body = _sotp_body()
-    assert "if not rows:" in body
+    assert "if not priced_rows:" in body
     # The value arrives from the LLM extractor, FX-converted to USD there.
     import src.agents.analysis.sotp_extractor as sx
     sxs = inspect.getsource(sx)
