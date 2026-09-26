@@ -333,47 +333,42 @@ class TestTheSeparateCacheKeyIsLoadBearing:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# `_gate_live_sotp`: a degraded extraction falls back to the snapshot, honestly
+# `_gate_live_sotp`: a degraded input is flagged, never replaced (2026-09-26)
 # ─────────────────────────────────────────────────────────────────────────────
 class TestTheLiveGateHandlesDegradation:
-    def test_a_degraded_live_baba_is_replaced_by_the_validated_snapshot(self):
+    """Owner, 2026-09-26: the snapshot is retired, so the gate FLAGS a degraded
+    input and never substitutes one. The assumptions come back unchanged."""
+
+    def test_a_degraded_live_baba_is_flagged_not_replaced(self):
         a, flag = dcf_agent._gate_live_sotp(
             "BABA", dict(_BABA_NO_REVENUE), _BABA_SHARES, None)
-        assert str(a.get("_origin") or "").startswith("snapshot:")
-        assert flag is not None
-        assert "degraded" in flag
+        assert a.get("_origin") is None                     # nothing substituted
+        assert flag is not None and "degraded" in flag
         # The flag must NOT report a computed total that was never computed.
         assert "$0.00/ADS" not in flag
         # And it must say what actually went wrong.
         assert "none carried a usable forward revenue" in flag
+        assert "does not publish" in flag
 
-    def test_the_snapshot_it_returns_carries_usable_revenue(self):
-        """The fallback has to be a real remedy, not a lateral move."""
-        a, _ = dcf_agent._gate_live_sotp(
-            "BABA", dict(_BABA_NO_REVENUE), _BABA_SHARES, None)
-        t = _sotp_analyst_style(a, shares=_BABA_SHARES)
-        assert t is not None
-        assert t["degraded_no_segments"] is False
-        assert len(t["rows"]) == 5
-        assert t["per_share_reporting"] == pytest.approx(154.69, abs=0.01)
+    def test_the_gate_returns_the_same_object_it_was_given(self):
+        given = dict(_BABA_NO_REVENUE)
+        a, _ = dcf_agent._gate_live_sotp("BABA", given, _BABA_SHARES, None)
+        assert a is given
 
     def test_a_degraded_name_with_no_snapshot_discloses_instead_of_publishing(self):
         a, flag = dcf_agent._gate_live_sotp(
             "NOT_IN_ANY_SNAPSHOT", dict(_BABA_NO_REVENUE), _BABA_SHARES, None)
-        assert a.get("_origin") is None or not str(
-            a["_origin"]).startswith("snapshot:")
+        assert a.get("_origin") is None
         assert flag is not None
         assert "does not publish" in flag
         assert "disclosed rather than valued" in flag
 
-    def test_a_snapshot_origin_entry_is_never_gated(self):
-        """Unchanged by this work, and worth pinning because the degraded
-        branch sits immediately after the early return: a curated snapshot must
-        not be second-guessed by a live gate."""
+    def test_no_origin_short_circuits_the_gate_any_more(self):
+        """The `snapshot:` early return went with the snapshot: every set of
+        inputs is graded on what it contains."""
         a = {**_BABA_NO_REVENUE, "_origin": "snapshot:BABA"}
         out, flag = dcf_agent._gate_live_sotp("BABA", a, _BABA_SHARES, None)
-        assert out is a
-        assert flag is None
+        assert out is a and flag is not None and "degraded" in flag
 
     def test_a_healthy_live_extraction_is_still_graded_not_short_circuited(self):
         out, flag = dcf_agent._gate_live_sotp(
@@ -432,5 +427,7 @@ class TestWhatTheGoldenBasketDoesAndDoesNotCover:
         and golden replay calls `run_dcf_agent` directly with reconstructed
         state."""
         pl = (_ROOT / "src" / "pipeline.py").read_text(encoding="utf-8")
-        assert "attach_snapshot(" in pl
+        # 2026-09-26: the attach is retired; replay and pipeline now agree
+        # that the leg's only source is the owner-accepted input.
+        assert "attach_snapshot(" not in pl
         assert "sotp_assumptions_v1.json" in pl

@@ -2687,6 +2687,11 @@ def _pin_sotp_holdco_discount(
     """
     if not isinstance(assumptions, dict):
         return assumptions, None
+    if assumptions.get("_origin") == "gemini_accepted":
+        # Owner, 2026-09-26: the accepted input's holdco discount was cited
+        # with a basis and reviewed; the pin exists for the extractor's
+        # run-to-run re-decision, not for a figure the owner signed.
+        return assumptions, None
     try:
         from src.agents.analysis.sotp_snapshot import curated_holdco_discount
         curated = curated_holdco_discount(ticker)
@@ -6251,7 +6256,7 @@ def _compute_method_value(
     # Consumes assumptions assembled by the SOTP extractor (or a hand-built
     # fixture) on most_recent["sotp_assumptions"]. Per segment: higher of
     # P/E-on-NOPAT and EV/Rev; + associates + net cash; − holdco discount.
-    # Task #25: promoted into the blend at _SOTP_ANALYST_BLEND_WEIGHT via
+    # Task #25 promoted this into the blend at 3.0; since 2026-09-26 it is a profile method, via
     # the profile overlay in run_dcf_agent when assumptions exist; tickers
     # without assumptions never see the method. The base table is computed
     # once and cached on most_recent (the scenario loop and the Tier 1
@@ -7730,22 +7735,13 @@ _DEPLETING_HORIZON_YEARS = 15
 _DCF_PROJECTION_FAMILY: frozenset[str] = frozenset(_DCF_FAMILY_NAMES)
 
 
-# ── SOTP (analyst) blend promotion (task #25) ───────────────────────────────
-# Weight the analyst SOTP method carries once promoted into the blend.
-# Profile weights sum to 1.0, so a weight of w buys a w/(1+w) share of the
-# blended IV — 3.0 → exactly 75%: the analyst SOTP carries three quarters
-# and the DCF+multiples blend keeps one quarter, internally renormalized
-# (user-chosen for the 3690.HK/BABA/PDD/JD/MSFT/AMZN SOTP coverage; the
-# method lands in the multi bucket like every other peer-relative method).
-# Override via the env var
-# (1.0 → 50/50, the original setting); 0 keeps the method shadow-only
-# (pre-promotion behaviour).
-try:
-    _SOTP_ANALYST_BLEND_WEIGHT = max(
-        0.0, float(os.getenv("SOTP_ANALYST_BLEND_WEIGHT", "3.0")))
-except (TypeError, ValueError):
-    _SOTP_ANALYST_BLEND_WEIGHT = 3.0
-
+# ── SOTP (analyst): a profile method, never a promotion (owner, 2026-09-26) ──
+# Task #25 promoted the analyst SOTP into ANY profile at weight 3.0 (75% of
+# the blend) whenever the extractor produced assumptions, and task #27 froze
+# six extractor outputs into a snapshot so the promotion fired every run.
+# Retired: the methods a name is valued on are declared by its profile, the
+# SOTP (analyst) leg reads the owner-ACCEPTED Gemini inputs only, and the
+# extractor's output is an unweighted cross-check (GATE_SOTP_EXTRACTOR_CROSSCHECK).
 _SOTP_ANALYST_METHOD_NAMES: frozenset[str] = frozenset(
     {"SOTP (analyst)", "Analyst SOTP"})
 
@@ -8417,8 +8413,8 @@ def _pe_norm_leg_swaps(
     #:   1. **Profile Overrides** decide WHICH profile's rows are being read.
     #:      `TICKER_SECTOR_LOOKUP`'s pin, then the ladder, then industry
     #:      routing, then the SOTP promotions, applied in the order
-    #:      `_promote_lookthrough_sotp` -> `_promote_segment_sotp` ->
-    #:      `_promote_sotp_analyst_profile` in `run_dcf_agent`. A promotion here
+    #:      `_promote_lookthrough_sotp` in `run_dcf_agent` (the segment and
+    #:      analyst promotions retired 2026-09-26). A promotion here
     #:      can replace the whole row set, so it is necessarily first.
     #:   2. **Analytical Flags** rewrite the selected profile's rows. This swap
     #:      is one of exactly two such mechanisms and it runs FIRST: applied in
@@ -8542,16 +8538,11 @@ _SEGMENT_SOTP_TICKERS: frozenset[str] = frozenset({
 #: filing-derived segment map is better evidence than a research note, but
 #: the pilot path values each segment on a revenue multiple keyed off its
 #: name, so it earns a seat at the table rather than the table.
-_SEGMENT_SOTP_WEIGHT = 0.40
-
-#: Profiles whose segment SOTP is priced on owner-set through-cycle EV/EBITDA
-#: bands per business type, with the per-segment working recorded (see
-#: `_SEGMENT_EBITDA_MULTIPLES`). That is a materially better instrument than
-#: the name-keyed revenue multiple the pilot set uses, so it is promoted into
-#: the blend rather than shadow-computed (owner, 2026-09-20).
-_SEGMENT_SOTP_PROFILES: frozenset[str] = frozenset({
-    "Refining & Marketing",
-})
+#: The segment-note promotion (SOTP (segments) inserted at 0.40 as anchor for
+#: the three pilot names and the refiners) retired 2026-09-26: Refining &
+#: Marketing now DECLARES "SOTP (segments)" in its method table, the China
+#: platforms carry the owner-accepted analyst SOTP, and `_SEGMENT_SOTP_TICKERS`
+#: only selects whose filing footnote is fetched for the shadow computation.
 
 
 #: Tickers whose profile gains SOTP / NAV from a COMPLETE look-through even
@@ -8637,106 +8628,6 @@ def _promote_lookthrough_sotp(profile_data, ticker, end_date):
     return {**profile_data, "methods": scaled}, True
 
 
-def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
-                          has_breakdown: bool,
-                          profile_name: Optional[str] = None) -> tuple[Optional[dict], bool]:
-    """Add "SOTP (segments)" to this ticker's profile at a co-equal weight.
-
-    Copy-on-write: profile dicts are references into
-    INDUSTRY_VALUATION_PROFILES and mutating one leaks the method into every
-    later ticker sharing the profile. Existing weights are scaled down so the
-    total still sums to 1.0, which keeps the relative ordering of the methods
-    the profile author chose.
-
-    Returns the input unchanged when there is nothing to promote, so every
-    ticker outside the pilot set stays bit-identical.
-    """
-    _eligible = (ticker in _SEGMENT_SOTP_TICKERS
-                 or (profile_name or "") in _SEGMENT_SOTP_PROFILES)
-    if (not has_breakdown or not _eligible
-            or not profile_data or not profile_data.get("methods")):
-        return profile_data, False
-    methods = profile_data["methods"]
-    if any(m.get("name") in {"SOTP (segments)", "SOTP (Segments)"} for m in methods):
-        return profile_data, False
-    scale = 1.0 - _SEGMENT_SOTP_WEIGHT
-    scaled = [{**m, "weight": float(m.get("weight") or 0.0) * scale,
-               "anchor": False} for m in methods]
-    scaled.append({"name": "SOTP (segments)", "weight": _SEGMENT_SOTP_WEIGHT,
-                   "anchor": True, "implementable": True})
-    return {**profile_data, "methods": scaled}, True
-
-
-def _promote_sotp_analyst_profile(profile_data: Optional[dict],
-                                  has_assumptions: bool,
-                                  shadow_lookthrough: bool = False) -> Optional[dict]:
-    """Promote "SOTP (analyst)" into the resolved valuation profile.
-
-    When the ticker carries extractor-built ``sotp_assumptions`` and the
-    blend weight is positive, returns a COPY of ``profile_data`` with the
-    method appended. Profile dicts are direct references into
-    INDUSTRY_VALUATION_PROFILES and must never be mutated in place (that
-    would leak the method into every later ticker sharing the profile).
-
-    Returns the input object unchanged when there is nothing to promote
-    (no assumptions, zero weight, empty profile, or the method already
-    present) — tickers without SOTP evidence keep bit-identical blends.
-    """
-    if (_SOTP_ANALYST_BLEND_WEIGHT <= 0
-            or not has_assumptions
-            or not profile_data
-            or not profile_data.get("methods")):
-        return profile_data
-    methods = profile_data["methods"]
-    if any(m.get("name") in _SOTP_ANALYST_METHOD_NAMES for m in methods):
-        return profile_data
-    # The promoted weight belongs to the SOTP FAMILY, not to the machine-built
-    # member of it. A profile that already carries a curated SOTP -- a
-    # look-through NAV template with sourced stakes, or a broker's own
-    # published table -- splits the weight evenly with it, on top of whatever
-    # the profile already gave it. BN4.SI, 2026-09-15: the look-through said
-    # S$12.25 and the broker table S$11.16, both inside the S$11.70-14.30
-    # ground-truth range, and the extractor's S$7.12 outvoted them 75% to 15%
-    # and published a SELL. With no curated SOTP present the analyst takes the
-    # whole weight and blends are bit-identical to before.
-    # Owner rule 3 (2026-09-23): analyst SOTP over look-through. Two SOTPs in
-    # one blend drift against each other, so once the analyst SOTP is in, the
-    # look-through leg is computed but carries no weight -- published as a
-    # cross-check with its variance against the analyst figure -- and its
-    # profile weight renormalises onto the rest. The owner extended the rule
-    # the same day to a look-through that COMPLETES from a template (S08.SI,
-    # BN4.SI, U96.SI, 02020.HK) when the SOTP is the owner-accepted one (the
-    # call site decides): a template applies one top-down formula
-    # across the structure, while the analyst SOTP isolates each business line
-    # on its own multiple and keeps holding-level items (holdco discount,
-    # deferred tax on the portfolio, minority haircuts) segregated, so the
-    # template cannot outvote it and cannot double-count beside it. The
-    # 2026-09-15 family-sharing decision now covers the SOTPs that remain in
-    # the blend (segments, published); the shadowed look-through takes no
-    # part of the promoted weight, which goes to the analyst SOTP in full.
-    shadow = ([m["name"] for m in methods if m.get("name") in _LOOKTHROUGH_ANCHORS]
-              if shadow_lookthrough else [])
-    peers = [m for m in methods
-             if m.get("name") in _SOTP_LED_METHODS and m.get("name") not in shadow]
-    share = _SOTP_ANALYST_BLEND_WEIGHT / float(len(peers) + 1)
-    kept = [
-        {**m, "weight": float(m.get("weight") or 0.0) + share}
-        if m.get("name") in _SOTP_LED_METHODS else m
-        for m in methods if m.get("name") not in shadow
-    ]
-    return {
-        **profile_data,
-        **({"shadow_methods": shadow} if shadow else {}),
-        "methods": kept + [{
-            "name": "SOTP (analyst)",
-            "weight": share,
-            "anchor": False,
-            "implementable": True,
-        }],
-    }
-
-
-# ── Prediction ledger (B1) ────────────────────────────────────────────────────
 # A run is only learnable if it records what produced its answer. These stamp
 # dcf_range with the parameters in force and the Street reference at the time
 # of the run -- two inputs a later outcome job cannot reconstruct, because
@@ -8749,22 +8640,20 @@ _LEARNABLE_PARAM_NAMES: tuple[str, ...] = (
     "_GROWTH_MULT", "_MARGIN_DELTA_MULT",
     "_TV_DOMINANCE_THRESHOLD", "_TV_DOMINANCE_REWEIGHT",
     "_CALIBRATION_TOLERANCE", "_CONSENSUS_DIVERGENCE_MULT",
-    "_SEGMENT_SOTP_WEIGHT", "_LOOKTHROUGH_PROMOTE_WEIGHT",
-    "_SOTP_ANALYST_BLEND_WEIGHT",
+    "_LOOKTHROUGH_PROMOTE_WEIGHT",
 )
 
 
 def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
                     net_debt: Optional[float]) -> tuple[dict, Optional[str]]:
-    """Live-extracted SOTP inputs, or the validated snapshot when the live
-    value falls outside the ground-truth band.
+    """Grade the SOTP inputs against the sell-side reference band and FLAG.
 
-    The 25 Aug production BABA run extracted 8x P/E on EBIT and published
-    $61/ADS against a $152-201 consensus band; the validated snapshot for the
-    same name sat at $174. Snapshot entries themselves are never gated, and a
-    ticker without a ground-truth reference passes through untouched.
-    Returns (assumptions to use, forward flag or None)."""
-    if str(assumptions.get("_origin") or "").startswith("snapshot:") or shares <= 0:
+    Until 2026-09-26 this replaced an implausible live extraction with the
+    task #27 snapshot. The snapshot is retired and the leg's only source is
+    the owner-accepted Gemini input, so the reference is a cross-check the
+    reviewer reads, never a substitution the engine makes. A Degraded table
+    is named as such. Returns (assumptions unchanged, forward flag or None)."""
+    if shares <= 0 or not isinstance(assumptions, dict):
         return assumptions, None
     try:
         from src.agents.analysis.sotp_ground_truth import check_table
@@ -8772,49 +8661,19 @@ def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
         _tbl = _sotp_analyst_style(
             assumptions, shares=shares, net_debt=net_debt, fx_to_reporting=fx)
         if (_tbl or {}).get("degraded_no_segments") or (_tbl or {}).get("degraded"):
-            # ── A DEGRADED EXTRACTION IS NOT A $0.00 EXTRACTION ─────────────
-            # `check_table` reads `float(table.get("per_share") or 0.0)`, so
-            # handing it the degraded table would grade the total as $0.00/ADS
-            # and the flag below would report "live value $0.00/ADS outside the
-            # reference" -- a true sentence about a number the engine never
-            # computed, and one that hides the real failure (no usable segment
-            # revenue) behind an arithmetic-looking one.
-            #
-            # The remedy is the same one an implausible grade triggers, because
-            # a live extraction that found no usable segment revenue at all is a
-            # strictly worse failure than the bad-multiple case this function
-            # exists for (25 Aug, BABA, 8x P/E on EBIT, $61/ADS against a
-            # $152-201 band). Only the flag text differs: it names what
-            # happened rather than what the total graded at.
-            from src.agents.analysis.sotp_snapshot import (
-                load_sotp_snapshot, lookup_snapshot,
-            )
-            key, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
             _reason = _tbl.get("degraded_reason") or "no usable segment revenue"
-            if not snap:
-                return assumptions, (
-                    f"SOTP (analyst): live extraction degraded -- {_reason}. "
-                    f"No validated snapshot to fall back to, so the method does "
-                    f"not publish; the associates and net cash it did find are "
-                    f"disclosed rather than valued.")
-            return ({**snap, "_origin": f"snapshot:{key}",
-                     "fx_usd_to_reporting": fx},
-                    f"SOTP (analyst): live extraction degraded -- {_reason}. "
-                    f"Replaced with the validated snapshot ({key}).")
+            return assumptions, (
+                f"SOTP (analyst): inputs degraded -- {_reason}. The method does not "
+                f"publish; the associates and net cash it did find are disclosed "
+                f"rather than valued.")
         grade = check_table(ticker, _tbl)
         if not grade or grade["plausible"]:
             return assumptions, None
-        from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
-        key, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
         live = grade["total"]
         band = f"${live['range'][0]}-{live['range'][1]}/ADS"
-        if not snap:
-            return assumptions, (f"SOTP (analyst): live value ${live['value_per_ads']:.2f}/ADS "
-                                 f"outside the {band} reference and no validated snapshot "
-                                 f"to fall back to -- treat with caution")
-        return ({**snap, "_origin": f"snapshot:{key}", "fx_usd_to_reporting": fx},
-                f"SOTP (analyst): live value ${live['value_per_ads']:.2f}/ADS outside the "
-                f"{band} reference -- replaced with the validated snapshot ({key})")
+        return assumptions, (
+            f"SOTP (analyst): accepted inputs value ${live['value_per_ads']:.2f}/ADS, "
+            f"outside the {band} sell-side reference -- review the accepted figures")
     except Exception:
         return assumptions, None
 
@@ -10665,8 +10524,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Assumptions are USD-denominated; resolve USD→target-currency FX so
         # the per-share IV lands in the listing currency like every other
         # method. Shadow-only today; blend promotion is a later phase.
-        _ticker_sotp = sotp_assumptions_all.get(ticker)
-        if not _ticker_sotp:
+        # Owner, 2026-09-26: the SOTP (analyst) leg reads the owner-ACCEPTED
+        # Gemini inputs and nothing else. The pipeline extractor's output --
+        # the leg's source since task #25 -- is held beside it as an
+        # unweighted cross-check (GATE_SOTP_EXTRACTOR_CROSSCHECK) and never
+        # enters the blend. Before this flip the accepted input was read only
+        # when the extractor built nothing, so on every name with broker PDFs
+        # the reviewed figures were silently ignored.
+        _ticker_sotp_extractor = sotp_assumptions_all.get(ticker) or None
+        if _ticker_sotp_extractor:
+            most_recent["sotp_assumptions_extractor"] = _ticker_sotp_extractor
+            ticker_forward_flags.append(
+                f"SOTP (analyst): the extractor built {len(_ticker_sotp_extractor.get('segments') or [])} "
+                f"segment(s); held as a cross-check only, the leg reads the owner-accepted inputs")
+        _ticker_sotp = None
+        if True:
             # Owner, 2026-09-22: for the SOTP-valued profiles, "tap on Gemini
             # to get the business segments and the multiple range". The cited
             # inputs live in the review-gated store (kind `sotp`) and reach
@@ -11565,7 +11437,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── SOTP (analyst) blend promotion (task #25) ────────────────────
         # With extractor-built assumptions on this ticker, lift the shadow
-        # method into the resolved profile at _SOTP_ANALYST_BLEND_WEIGHT
+        # method into the resolved profile (retired 2026-09-26: profiles declare it)
         # (weight 3.0 → exactly 75% of the blended IV; the DCF+multiples
         # blend keeps the other 25%, internally renormalized). Copy-on-
         # write — the shared INDUSTRY_VALUATION_PROFILES dict is never
@@ -11696,35 +11568,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _log.info("[dcf] %s: SOTP / NAV promoted from a complete "
                       "look-through", ticker)
 
-        profile_data, _seg_sotp_on = _promote_segment_sotp(
-            profile_data, ticker, bool(most_recent.get("segment_breakdown")),
-            profile_name=profile_name)
-        if _seg_sotp_on:
-            _log.info("[dcf] %s: SOTP (segments) promoted at %.2f from the "
-                      "filing segment note", ticker, _SEGMENT_SOTP_WEIGHT)
-            progress.update_status(agent_id, ticker,
-                                   "SOTP (segments) promoted from the filing")
-
-        # Owner, 2026-09-23: the analyst SOTP takes precedence over the
-        # look-through whether or not a template completes it. The rule keys
-        # on the SOTP the owner ACCEPTED (Gemini-cited segments and multiple
-        # ranges, review-gated); the extractor's machine-built SOTP still
-        # shares the family weight beside a look-through that completes --
-        # BN4.SI, 2026-09-15: that SOTP said S$7.12 against a S$11.70-14.30
-        # ground truth and the look-through was the leg that had it right.
-        # With no template the look-through is its P/BV proxy and any analyst
-        # SOTP displaces it (AviChina, the case raised).
-        _sotp_a = most_recent.get("sotp_assumptions") or {}
-        _lt_completes = False
-        if _sotp_a and _sotp_a.get("_origin") != "gemini_accepted":
-            try:
-                from src.agents.analysis import holdco_sotp as _hs
-                _lt_completes = bool(_hs.enabled_for(ticker) and _hs.can_value(
-                    ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker)))
-            except Exception:                              # noqa: BLE001
-                _lt_completes = False
-        profile_data = _promote_sotp_analyst_profile(
-            profile_data, bool(_sotp_a), shadow_lookthrough=not _lt_completes)
+        # Owner, 2026-09-26: no promotion by data. "SOTP (segments)" and
+        # "SOTP (analyst)" enter a blend only where the profile table declares
+        # them; a profile that names the analyst SOTP over a look-through
+        # declares the look-through under `shadow_methods` (owner rule 3,
+        # 2026-09-23: computed, published as a cross-check, unweighted).
 
         # v3.21 (Fix D) — write the locally-resolved profile_name back to state
         # so late-pipeline consumers (sector_card render, reextract path, audit
@@ -15230,6 +15078,35 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"PEG {_peg_o['peg']:.1f} [OWNER_OVERRIDE_PENDING]: active baseline; leg "
                     f"{_peg_o['leg_at_low']:,.2f} at {_peg_o['interval'][0]:.1f}x to "
                     f"{_peg_o['leg_at_high']:,.2f} at {_peg_o['interval'][1]:.1f}x until signed off")
+            # Owner, 2026-09-26: the extractor's SOTP, when the pipeline built
+            # one, graded against the accepted leg and never weighted.
+            _ex_a = most_recent.get("sotp_assumptions_extractor")
+            _an_acc = _b_tbl.get("SOTP (analyst)")
+            if isinstance(_ex_a, dict) and isinstance(_an_acc, (int, float)) and _an_acc > 0:
+                try:
+                    _ex_fx = float((most_recent.get("sotp_assumptions") or {}).get("fx_usd_to_reporting")
+                                   or most_recent.get("_sotp_usd_reporting_fx") or 1.0)
+                    _ex_t = _sotp_analyst_style({**_ex_a, "fx_usd_to_reporting": _ex_fx}, shares=shares,
+                                                net_debt=net_debt, fx_to_reporting=_ex_fx)
+                    _ex_v = (_ex_t or {}).get("per_share_reporting")
+                except Exception:                          # noqa: BLE001
+                    _ex_v = None
+                if isinstance(_ex_v, (int, float)) and _ex_v > 0:
+                    _ex_spread = _ex_v / _an_acc - 1.0
+                    _b_sr.setdefault("forward_flags", []).append(
+                        f"SOTP cross-check: extractor SOTP {_ex_v:,.2f} vs the accepted leg "
+                        f"{_an_acc:,.2f} ({_ex_spread:+.1%}), unweighted")
+                else:
+                    _b_sr.setdefault("forward_flags", []).append(
+                        "SOTP cross-check: extractor SOTP did not price (degraded), unweighted")
+                gate_evaluations.append({
+                    "gate_id": "GATE_SOTP_EXTRACTOR_CROSSCHECK",
+                    "metric": "extractor_vs_accepted_sotp",
+                    "raw_input_path_a": (round(float(_ex_v), 4) if isinstance(_ex_v, (int, float)) else None),
+                    "gated_output_path_b": round(float(_an_acc), 4),
+                    "basis": "the extractor's SOTP is a cross-check on the owner-accepted inputs; no weight",
+                    "applied": False,
+                })
             _shadow_names = (profile_data or {}).get("shadow_methods") or []
             if _shadow_names:
                 _an = _b_tbl.get("SOTP (analyst)")

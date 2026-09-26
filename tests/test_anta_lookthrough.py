@@ -898,49 +898,24 @@ class TestThePromote:
         assert da._promote_lookthrough_sotp(empty, TICKER, END) == (empty, False)
 
 
-# ── 7. the SOTP-family weight-split guard still engages ─────────────────────
+# ── 7. the analyst SOTP cannot sweep, because it is never promoted ─────────
 class TestTheAnalystSplitGuard:
     def test_sotp_nav_is_in_the_sotp_led_family(self):
         assert "SOTP / NAV" in da._SOTP_LED_METHODS
 
-    def test_a_promoted_profile_makes_the_analyst_share_not_sweep(self, monkeypatch):
-        """The reason the owner's additive bridge is not needed.
-
-        `_promote_sotp_analyst_profile` splits its 3.0 blend weight across
-        every `_SOTP_LED_METHODS` member present plus one. Before the promote
-        Anta had no such member, so an extractor-built analyst SOTP note would
-        have taken 3.0 of a 4.0 total -- 75% of the blend -- and published
-        whatever the note said. That is the BN4.SI failure the guard was written
-        for, and 75% is the same share the engine's own comment records for it
-        ("the extractor's S$7.12 outvoted them 75% to 15%"). After the promote
-        the analyst takes 1.5 of 4.0 -- 37.5% -- and the curated look-through
-        keeps the larger share at 1.90.
-        """
+    def test_the_75_percent_sweep_is_structurally_impossible_now(self, monkeypatch):
+        """Owner, 2026-09-26: the promotion that put an extractor-built SOTP at
+        3.0 of a 4.0 total is gone. Anta's promoted look-through keeps 0.40 and
+        no analyst leg appears unless Apparel / Athletic Wear declares one."""
         _patch_promote(monkeypatch)
         promoted, fired = da._promote_lookthrough_sotp(_anta_profile(), TICKER, END)
         assert fired is True
-
-        after = da._promote_sotp_analyst_profile(promoted, True)
-        w = {m["name"]: m["weight"] for m in after["methods"]}
-        share = da._SOTP_ANALYST_BLEND_WEIGHT / 2.0
-        assert share == pytest.approx(1.5)
-        assert w["SOTP (analyst)"] == pytest.approx(share)
-        assert w["SOTP / NAV"] == pytest.approx(0.40 + share)
-        assert w["SOTP / NAV"] > w["SOTP (analyst)"]
-        assert w["SOTP (analyst)"] / sum(w.values()) == pytest.approx(0.375, abs=1e-6)
-
-    def test_without_the_promote_the_same_note_would_have_swept(self):
-        before = da._promote_sotp_analyst_profile(_anta_profile(), True)
-        w = {m["name"]: m["weight"] for m in before["methods"]}
-        assert w["SOTP (analyst)"] == pytest.approx(da._SOTP_ANALYST_BLEND_WEIGHT)
-        # 3.0 of a 4.0 total: the raw profile's four rows sum to 1.0 and the
-        # analyst leg is added on top at the full blend weight, because there
-        # is no `_SOTP_LED_METHODS` peer to split it with.
-        assert sum(w.values()) == pytest.approx(4.0, abs=1e-9)
-        assert w["SOTP (analyst)"] / sum(w.values()) == pytest.approx(0.75, abs=1e-6)
-        assert "SOTP / NAV" not in w
+        w = {m["name"]: m["weight"] for m in promoted["methods"]}
+        assert w["SOTP / NAV"] == pytest.approx(0.40)
+        assert "SOTP (analyst)" not in w
+        assert not hasattr(da, "_promote_sotp_analyst_profile")
 
     def test_no_assumptions_means_no_analyst_leg_at_all(self, monkeypatch):
         _patch_promote(monkeypatch)
         promoted, _ = da._promote_lookthrough_sotp(_anta_profile(), TICKER, END)
-        assert da._promote_sotp_analyst_profile(promoted, False) is promoted
+        assert all(m["name"] != "SOTP (analyst)" for m in promoted["methods"])

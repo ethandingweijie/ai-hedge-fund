@@ -180,8 +180,8 @@ class TestParamVersion:
 
     def test_moves_when_a_scalar_moves(self, monkeypatch):
         before = d._param_version()
-        monkeypatch.setattr(d, "_SOTP_ANALYST_BLEND_WEIGHT",
-                            d._SOTP_ANALYST_BLEND_WEIGHT + 1.0)
+        monkeypatch.setattr(d, "_LOOKTHROUGH_PROMOTE_WEIGHT",
+                            d._LOOKTHROUGH_PROMOTE_WEIGHT + 0.1)
         assert d._param_version() != before
 
     def test_moves_when_a_profile_weight_moves(self, monkeypatch):

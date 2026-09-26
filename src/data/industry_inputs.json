@@ -903,6 +903,507 @@
     "value_usd": 61955294240.0
    }
   },
+  "09618.HK": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 189.98,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 200.58
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T06:55:37+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2027; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.14x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.1405
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 216.7bn USD vs FMP FY+1 consensus revenue 200.6bn (+8.0%; may not exceed by more than 5%)",
+      "ok": false,
+      "ratio": 1.0802
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025, FY2027F (fiscal_year FY2027F); latest reported year is 2025; not forward: FY2025",
+      "ok": false
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "3 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 3 segment(s) price (P/E, EV/Rev, EV/Rev)",
+      "ok": true
+     }
+    ],
+    "company": "JD.com, Inc.",
+    "data": {
+     "associates_investments": {
+      "currency": "CNY",
+      "period": "2026-06-30",
+      "quote": "Investment in equity investees, 51,978, 58,040",
+      "scale": "mn",
+      "source_url": "https://www.globenewswire.com/news-release/2026/08/13/2929555/0/en/JD-com-Announces-Second-Quarter-and-Interim-2026-Results.html",
+      "value": 58040.0
+     },
+     "fiscal_year": "FY2027F",
+     "holdco_basis": "UOB Kay Hian applies a 20% holding company discount to the gross asset value of subsidiaries and net cash ('To JD(20% discount)') to calculate the SOTP target price of HK$148.00.",
+     "holdco_discount_pct": 0.2,
+     "net_cash": {
+      "currency": "CNY",
+      "period": "FY2027F",
+      "quote": "Net cash. 101,656. 81,325. 34. 23%.",
+      "scale": "mn",
+      "source_url": "https://research.uobkayhian.com",
+      "value": 101656.0
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2026E",
+        "quote": "JD Retail/JD Logistics/New Businesses operating margins came in at 4.6%/3.5%/-135.7%",
+        "source_url": "https://research.uobkayhian.com",
+        "value": 0.046
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Core retail peers trade at 8x-13x forward earnings; UOB Kay Hian target price implies 12x 2026F PE while JD trades at 9x 2026F PE.",
+       "multiple_high": 13.0,
+       "multiple_low": 9.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://research.uobkayhian.com",
+       "name": "JD Retail",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2027F",
+        "quote": "SOTP-Based Valuation. 2027F. Revenue. (Rmbm) ... JD Retail. 1,199,186.",
+        "scale": "mn",
+        "source_url": "https://research.uobkayhian.com",
+        "value": 1199186.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Operating margin: ... JD Logistics ... 2.4%",
+        "source_url": "https://www.globenewswire.com/news-release/2026/03/05/2919888/0/en/JD-com-Announces-Fourth-Quarter-and-Full-Year-2025-Results-and-Annual-Dividend.html",
+        "value": 0.024
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at listed market capitalization of RMB 80,677m in UOB Kay Hian SOTP, implying ~0.35x-0.40x forward EV/Sales, in line with 3PL and contract logistics peers trading at 0.3x-0.6x EV/Sales.",
+       "multiple_high": 0.55,
+       "multiple_low": 0.35,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://research.uobkayhian.com",
+       "name": "JD Logistics",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2025",
+        "quote": "No separate forward segment revenue estimate exists in broker SOTP tables which value the listed subsidiary at market cap; FY2025 actual net revenue was RMB 217,146 million: 'JD Logistics, 182,837, 217,146'",
+        "scale": "mn",
+        "source_url": "https://www.globenewswire.com/news-release/2026/03/05/2919888/0/en/JD-com-Announces-Fourth-Quarter-and-Full-Year-2025-Results-and-Annual-Dividend.html",
+        "value": 217146.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2025",
+        "quote": "Operating margin: ... New Businesses ... (94.6)%",
+        "source_url": "https://www.globenewswire.com/news-release/2026/03/05/2919888/0/en/JD-com-Announces-Fourth-Quarter-and-Full-Year-2025-Results-and-Annual-Dividend.html",
+        "value": -0.946
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "UOB Kay Hian SOTP values New Business and others at 1.0x EV/Sales (RMB 38,054m revenue pegged to 1x multiple) reflecting early-stage food delivery and European overseas retail initiatives.",
+       "multiple_high": 1.0,
+       "multiple_low": 0.5,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://research.uobkayhian.com",
+       "name": "New Businesses",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "period": "FY2027F",
+        "quote": "New Business and others. 38,054. 1. 38,054.",
+        "scale": "mn",
+        "source_url": "https://research.uobkayhian.com",
+        "value": 38054.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.046,
+       "ev_rev_multiple": null,
+       "name": "JD Retail",
+       "pe_multiple": 11.0,
+       "period_label": "FY2027F",
+       "rationale": "pe 9.0-13.0x: Core retail peers trade at 8x-13x forward earnings; UOB Kay Hian target price implies 12x 2026F PE while JD trades at 9x 2026F PE.",
+       "revenue_fwd": 178654730280.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.024,
+       "ev_rev_multiple": 0.45,
+       "name": "JD Logistics",
+       "pe_multiple": null,
+       "period_label": "FY2025",
+       "rationale": "ev_rev 0.35-0.55x: Valued at listed market capitalization of RMB 80,677m in UOB Kay Hian SOTP, implying ~0.35x-0.40x forward EV/Sales, in line with 3PL and contract logistics peers trading at 0.3x-0.6x EV/Sales.",
+       "revenue_fwd": 32350411080.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": -0.946,
+       "ev_rev_multiple": 0.75,
+       "name": "New Businesses",
+       "pe_multiple": null,
+       "period_label": "FY2027F",
+       "rationale": "ev_rev 0.5-1.0x: UOB Kay Hian SOTP values New Business and others at 1.0x EV/Sales (RMB 38,054m revenue pegged to 1x multiple) reflecting early-stage food delivery and European overseas retail initiatives.",
+       "revenue_fwd": 5669284920.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "JD.com, Inc.",
+     "depreciation_and_amortization": 1452108060.0,
+     "market_cap": 36117078411.1875,
+     "net_ppe": 19223661265.38,
+     "operating_cash_flow": 2829279180.0,
+     "period": "2025-12-31",
+     "revenue": 189979955832.42
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 107.0,
+    "value_usd": 216674426280.0
+   }
+  },
+  "09988.HK": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 152.51,
+     "revenue_next_fy_period": "2027-03-31",
+     "revenue_next_fy_usd_bn": 166.85
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T06:56:44+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2027; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.10x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0977
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 167.4bn USD vs FMP FY+1 consensus revenue 166.8bn (+0.3%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 1.0033
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2027E (fiscal_year FY2027E); all forward of the latest reported year",
+      "ok": true
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "5 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "4 of 4 grounding wrapper(s) resolved",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 5 segment(s) price (P/E, EV/Rev, EV/Rev, EV/Rev, EV/Rev)",
+      "ok": true
+     }
+    ],
+    "company": "Alibaba Group Holding Limited",
+    "data": {
+     "associates_investments": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+      "period": "FY2027E",
+      "quote": "Total Core+initiatives valuation. 3,423. 179. Investees. 7. Net cash. 84. 4. Total. 3,529.",
+      "scale": "bn",
+      "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+      "value": 7.0
+     },
+     "fiscal_year": "FY2027E",
+     "holdco_basis": "Brokers and equity research analysts conventionally apply a 15% to 20% holding-company / conglomerate discount to Alibaba's aggregate gross SOTP valuation (e.g. 15% applied by Simple Investing; 20% by Morningstar) to account for corporate overhead, complex capital allocation across diverse units, and execution discount.",
+     "holdco_discount_pct": 0.15,
+     "net_cash": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGovKiY_ozBmNQ5XSzOMZ_T9NEB9YdpuNRIjDdR3eWvxawcgubZjm0NumYNOoJpsekQjdVMW8XsA0umuUbNnVbEF9tfxfeTDs9Wu7COJvzJExPXwjwfAsH_zIzPRuUKNkysJIzJKUlKIQlmVptkW9s6_iuMMsXhtnGM8PJY3CxSSPIt_uDzxynvYIX2gNp6wz9vGPv9tzuzKW81ddstiWx4mluNbvnHgmi80gBitxVQAA==",
+      "period": "2026-06-30",
+      "quote": "The company's net cash position declined from RMB 260,828 million at March 31, 2026, to RMB 207,975 million at June 30, 2026, as the AI buildout consumed capital.",
+      "scale": "mn",
+      "source_url": "https://www.investing.com/news/company-news/alibaba-q2-2026-slides-ai-surge-drives-revenue-up-9-profit-down-75-93CH-4870097",
+      "value": 207975.0
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFvHbvYh4I3q0kjRJ7c59M7l9Sp66XX33ZIHO_6moKbc6HsXmdPOxtyK7kEH3d8OyVKGKBVy9csVZcNuuFAnhLAc9nxehcMVUapcFY9wC8z7EEOKslEqnh7PM4NPjuwVkEViMfGgidlj3XGxkZ181gcDI2ZRuzHx633M-GusZCK",
+        "period": "FY2027E",
+        "quote": "Alibaba China E-commerce Group. 522. 216.",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 0.4138
+       },
+       "ev_sales_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFvHbvYh4I3q0kjRJ7c59M7l9Sp66XX33ZIHO_6moKbc6HsXmdPOxtyK7kEH3d8OyVKGKBVy9csVZcNuuFAnhLAc9nxehcMVUapcFY9wC8z7EEOKslEqnh7PM4NPjuwVkEViMfGgidlj3XGxkZ181gcDI2ZRuzHx633M-GusZCK",
+       "ev_sales_high": null,
+       "ev_sales_low": 1.5,
+       "ev_sales_source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+       "multiple_basis": "Valued at 6.0x to 12.0x forward earnings/EBITA across broker SOTPs (UOB Kay Hian applies 6.0x EV/EBITA, Citi applies 10.0x FY2027E P/E, and independent analyst SOTPs assign 9.0x-12.0x FY2027E P/E compared to domestic peers JD at ~7x-9.5x and PDD at ~7x-9x).",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEFu69ZpftnQNNFkmMf7luVLoRcMeXT9JfjMtQtWS7zSBWK_H3uH4NrmYMc7M6eK6Y4tRqvnVRXEdShWWG2M0H5A-_U4AICXWcfQZqK-57OVOwiDatf3m34WbkVrDT_VeXOKBgp_odZ3kcnRzjeFPYuXFoZmt-1whf3DQCg3NVp-_J3Sz8nRaOe9pDrbQEhG-mWxs6INBzGzkdItVW62w6o8_ybBtvF",
+       "multiple_high": 12.0,
+       "multiple_low": 6.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.futunn.com/403",
+       "name": "Alibaba China E-commerce Group",
+       "revenue_fwd": {
+        "currency": "HKD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFvHbvYh4I3q0kjRJ7c59M7l9Sp66XX33ZIHO_6moKbc6HsXmdPOxtyK7kEH3d8OyVKGKBVy9csVZcNuuFAnhLAc9nxehcMVUapcFY9wC8z7EEOKslEqnh7PM4NPjuwVkEViMfGgidlj3XGxkZ181gcDI2ZRuzHx633M-GusZCK",
+        "period": "FY2027E",
+        "quote": "Core commerce. Alibaba China E-commerce Group. 522. 216. 2. 6. 1,299.",
+        "scale": "bn",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 522.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "Cloud Computing, other. Cloud Intelligence Group. 219. 22.",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 0.1005
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 5.0x to 7.0x forward EV/Sales across broker SOTPs (UOB Kay Hian applies 5.0x EV/Revenue, while Citi applies 7.0x P/S on FY2027E revenue, reflecting accelerating AI cloud and MaaS monetization at a discount to US hyperscalers).",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEFu69ZpftnQNNFkmMf7luVLoRcMeXT9JfjMtQtWS7zSBWK_H3uH4NrmYMc7M6eK6Y4tRqvnVRXEdShWWG2M0H5A-_U4AICXWcfQZqK-57OVOwiDatf3m34WbkVrDT_VeXOKBgp_odZ3kcnRzjeFPYuXFoZmt-1whf3DQCg3NVp-_J3Sz8nRaOe9pDrbQEhG-mWxs6INBzGzkdItVW62w6o8_ybBtvF",
+       "multiple_high": 7.0,
+       "multiple_low": 5.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.futunn.com/403",
+       "name": "Cloud Intelligence Group",
+       "revenue_fwd": {
+        "currency": "HKD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "Cloud Computing, other. Cloud Intelligence Group. 219. 22. 5. 50. 1,097.",
+        "scale": "bn",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 219.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "Alibaba International Digital Commerce Group. 171. 10.",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 0.0585
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 0.8x to 1.2x forward EV/Sales across broker SOTP frameworks (UOB Kay Hian uses ~0.8x EV/Revenue and 8x EV/EBITA, while Citi assigns 1.2x P/S on FY2027E) reflecting international logistics scale and operating efficiency improvements.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEFu69ZpftnQNNFkmMf7luVLoRcMeXT9JfjMtQtWS7zSBWK_H3uH4NrmYMc7M6eK6Y4tRqvnVRXEdShWWG2M0H5A-_U4AICXWcfQZqK-57OVOwiDatf3m34WbkVrDT_VeXOKBgp_odZ3kcnRzjeFPYuXFoZmt-1whf3DQCg3NVp-_J3Sz8nRaOe9pDrbQEhG-mWxs6INBzGzkdItVW62w6o8_ybBtvF",
+       "multiple_high": 1.2,
+       "multiple_low": 0.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.futunn.com/403",
+       "name": "Alibaba International Digital Commerce Group (AIDC)",
+       "revenue_fwd": {
+        "currency": "HKD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "International commerce. Alibaba International Digital Commerce Group. 171. 10. 0. 8. 82.",
+        "scale": "bn",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 171.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 0.8x to 1.0x forward EV/Sales (UOB Kay Hian applies 1.0x EV/Revenue) with management guiding toward unit economics breakeven by end-FY2027.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+       "multiple_high": 1.0,
+       "multiple_low": 0.8,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+       "name": "Quick Commerce (Instant Commerce + Ele.me)",
+       "revenue_fwd": {
+        "currency": "HKD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "Instant Commerce +Ele.me. Quick Commerce. 117. 1. 117. 100. 117. 6.",
+        "scale": "bn",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 117.0
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "All Others. Freshippo, Cainiao, Alibaba Health, Hujing DME, Amap,. Intelligent Information Platform. 284. 11.",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 0.0387
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 0.2x to 0.8x EV/Sales (Citi applies 0.2x P/S following segment restructuring and non-core disposals, while UOB Kay Hian applies 20x EV/EBITA implying ~0.8x EV/Revenue).",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEFu69ZpftnQNNFkmMf7luVLoRcMeXT9JfjMtQtWS7zSBWK_H3uH4NrmYMc7M6eK6Y4tRqvnVRXEdShWWG2M0H5A-_U4AICXWcfQZqK-57OVOwiDatf3m34WbkVrDT_VeXOKBgp_odZ3kcnRzjeFPYuXFoZmt-1whf3DQCg3NVp-_J3Sz8nRaOe9pDrbQEhG-mWxs6INBzGzkdItVW62w6o8_ybBtvF",
+       "multiple_high": 0.8,
+       "multiple_low": 0.2,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://www.futunn.com/403",
+       "name": "All Others (Freshippo, Cainiao, Alibaba Health, DME, Amap)",
+       "revenue_fwd": {
+        "currency": "HKD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFwDjyOKpXnt-AHFOdjPjbPXL-f8uNorOGOHOl0Ce5tBZW9Otsxrayn_jrRJ1QcJCANKeO_7gp1cNTmVj0Hy36p4cs-PMOCimvOI9jUYlexCNZjeOjwesdcBOK2Qaq4UW5oP_rlocEXfJKczpvApIv4fZi9oDxhrgjFjCw52QSTLQ==",
+        "period": "FY2027E",
+        "quote": "All Others. Freshippo, Cainiao, Alibaba Health, Hujing DME, Amap,. Intelligent Information Platform. 284. 11. 20. 228.",
+        "scale": "bn",
+        "source_url": "https://uobkh.com.sg/strapi-uploads/1_Alibaba_Group_9988_HK_bc0f7fe3cb.pdf",
+        "value": 284.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "HKD bn",
+       "HKD bn",
+       "HKD bn",
+       "HKD bn",
+       "HKD bn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.4138,
+       "ev_rev_multiple": null,
+       "name": "Alibaba China E-commerce Group",
+       "pe_multiple": 9.0,
+       "period_label": "FY2027E",
+       "rationale": "pe 6.0-12.0x: Valued at 6.0x to 12.0x forward earnings/EBITA across broker SOTPs (UOB Kay Hian applies 6.0x EV/EBITA, Citi applies 10.0x FY2027E P/E, and independent analyst SOTPs assign 9.0x-12.0x FY2027E P/E compared to domestic peers JD at ~7x-9.5x and PDD at ~7x-9x).",
+       "revenue_fwd": 66555000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.1005,
+       "ev_rev_multiple": 6.0,
+       "name": "Cloud Intelligence Group",
+       "pe_multiple": null,
+       "period_label": "FY2027E",
+       "rationale": "ev_rev 5.0-7.0x: Valued at 5.0x to 7.0x forward EV/Sales across broker SOTPs (UOB Kay Hian applies 5.0x EV/Revenue, while Citi applies 7.0x P/S on FY2027E revenue, reflecting accelerating AI cloud and MaaS monetization at a discount to US hyperscalers).",
+       "revenue_fwd": 27922500000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0585,
+       "ev_rev_multiple": 1.0,
+       "name": "Alibaba International Digital Commerce Group (AIDC)",
+       "pe_multiple": null,
+       "period_label": "FY2027E",
+       "rationale": "ev_rev 0.8-1.2x: Valued at 0.8x to 1.2x forward EV/Sales across broker SOTP frameworks (UOB Kay Hian uses ~0.8x EV/Revenue and 8x EV/EBITA, while Citi assigns 1.2x P/S on FY2027E) reflecting international logistics scale and operating efficiency improvements.",
+       "revenue_fwd": 21802500000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 0.9,
+       "name": "Quick Commerce (Instant Commerce + Ele.me)",
+       "pe_multiple": null,
+       "period_label": "FY2027E",
+       "rationale": "ev_rev 0.8-1.0x: Valued at 0.8x to 1.0x forward EV/Sales (UOB Kay Hian applies 1.0x EV/Revenue) with management guiding toward unit economics breakeven by end-FY2027.",
+       "revenue_fwd": 14917500000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.0387,
+       "ev_rev_multiple": 0.5,
+       "name": "All Others (Freshippo, Cainiao, Alibaba Health, DME, Amap)",
+       "pe_multiple": null,
+       "period_label": "FY2027E",
+       "rationale": "ev_rev 0.2-0.8x: Valued at 0.2x to 0.8x EV/Sales (Citi applies 0.2x P/S following segment restructuring and non-core disposals, while UOB Kay Hian applies 20x EV/EBITA implying ~0.8x EV/Revenue).",
+       "revenue_fwd": 36210000000.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Alibaba Group Holding Limited",
+     "depreciation_and_amortization": 7019639640.0,
+     "market_cap": 265038406500.0,
+     "net_ppe": 41975707344.48,
+     "operating_cash_flow": 11354212740.0,
+     "period": "2026-03-31",
+     "revenue": 152506356600.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 63.1,
+    "value_usd": 167407500000.0
+   }
+  },
   "5WH.SI": {},
   "AVAV": {
    "backlog": {
@@ -1910,6 +2411,177 @@
     "ok": true,
     "secs": 165.9,
     "value_usd": 190000000000.0
+   },
+   "sotp": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 45.85,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 50.29
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T06:57:27+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.07x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0729
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 49.2bn USD vs FMP FY+1 consensus revenue 50.3bn (-2.2%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 0.9783
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026E (fiscal_year FY2026E); all forward of the latest reported year",
+      "ok": true
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 2 segment(s) price (P/E, P/E)",
+      "ok": true
+     }
+    ],
+    "company": "GE Aerospace",
+    "data": {
+     "associates_investments": {
+      "currency": "USD",
+      "period": "2026-06-30",
+      "quote": "$ 7,619 million and $ 7,660 million were in our run-off insurance operations, primarily comprised of equity method investments as of June 30, 2026 and December 31, 2025, respectively",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/40545/000004054526000047/ge-20260630.htm",
+      "value": 7619.0
+     },
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "GE Aerospace operates as a focused pure-play commercial and defense propulsion aerospace company following the completed spin-offs of GE HealthCare and GE Vernova, warranting no conglomerate holding company discount.",
+     "holdco_discount_pct": 0.0,
+     "net_cash": {
+      "currency": "USD",
+      "period": "2026-06-30",
+      "quote": "Cash, cash equivalents and restricted cash were $9,345 million and total borrowings $19,157 million at June 30, 2026.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/40545/000004054526000047/ge-20260630.htm",
+      "value": -9812.0
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2026E",
+        "quote": "The Commercial Engines & Services segment generated revenue of $9.73 billion, up 27% YoY, with services revenue growing 26% and ... while margin contracted 160 basis points to 27.3%",
+        "source_url": "https://www.investing.com/news/stock-market-news/ge-aerospace-beats-estimates-lifts-guidance-on-services-growth-93CH-3524675",
+        "value": 0.273
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Premium commercial aerospace valuation reflecting dominant ~55% narrowbody market position via CFM, high aftermarket service visibility from an installed base of over 44,000 engines, and multi-year backlog; aligned with commercial aerospace peers such as Safran",
+       "multiple_high": 35.0,
+       "multiple_low": 30.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4802087-ge-aerospace-full-throttle-ahead-full-valuation-technical-froth-eases",
+       "name": "Commercial Engines & Services",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2026E",
+        "quote": "GE Aerospace generates about US$37.7b from Commercial Engines & Services and roughly US$11.5b from Defense & Propulsion Technologies",
+        "scale": "bn",
+        "source_url": "https://simplywall.st/stocks/us/capital-goods/nyse-ge/general-electric/news/3-aerospace-stocks-with-revenue-growth-up-to-43",
+        "value": 37.7
+       }
+      },
+      {
+       "ebit_margin": {
+        "period": "FY2026E",
+        "quote": "Defense & Propulsion Technologies revenue rose 16% to $3.44 billion. Operating profit increased 18% to $475 million with margins expanding 30 basis points to 13.8%.",
+        "source_url": "https://www.investing.com/news/stock-market-news/ge-aerospace-beats-estimates-lifts-guidance-on-services-growth-93CH-3524675",
+        "value": 0.138
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued in line with defense prime contractors and propulsion peers (Lockheed Martin, RTX defense, Northrop Grumman) reflecting steady government defense budgets, long-cycle military engine programs, and lower operating margins relative to commercial services",
+       "multiple_high": 22.0,
+       "multiple_low": 18.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4802087-ge-aerospace-full-throttle-ahead-full-valuation-technical-froth-eases",
+       "name": "Defense & Propulsion Technologies",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2026E",
+        "quote": "roughly US$11.5b from Defense & Propulsion Technologies",
+        "scale": "bn",
+        "source_url": "https://simplywall.st/stocks/us/capital-goods/nyse-ge/general-electric/news/3-aerospace-stocks-eith-revenue-growth-up-to-43",
+        "value": 11.5
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.273,
+       "ev_rev_multiple": null,
+       "name": "Commercial Engines & Services",
+       "pe_multiple": 32.5,
+       "period_label": "FY2026E",
+       "rationale": "pe 30.0-35.0x: Premium commercial aerospace valuation reflecting dominant ~55% narrowbody market position via CFM, high aftermarket service visibility from an installed base of over 44,000 engines, and multi-year backlog; aligned with commercial aerospace peers such as Safran",
+       "revenue_fwd": 37700000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.138,
+       "ev_rev_multiple": null,
+       "name": "Defense & Propulsion Technologies",
+       "pe_multiple": 20.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 18.0-22.0x: Valued in line with defense prime contractors and propulsion peers (Lockheed Martin, RTX defense, Northrop Grumman) reflecting steady government defense budgets, long-cycle military engine programs, and lower operating margins relative to commercial services",
+       "revenue_fwd": 11500000000.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "GE Aerospace",
+     "depreciation_and_amortization": 1220000000.0,
+     "market_cap": 339376322377.0,
+     "net_ppe": 7987000000.0,
+     "operating_cash_flow": 8537000000.0,
+     "period": "2025-12-31",
+     "revenue": 45855000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 38.1,
+    "value_usd": 49200000000.0
    }
   },
   "GEV": {
@@ -3130,6 +3802,187 @@
     "ok": true,
     "secs": 83.4,
     "value_usd": 268000000000.0
+   }
+  },
+  "S58.SI": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "SGD",
+     "revenue_latest_usd_bn": 4.97,
+     "revenue_next_fy_period": "2027-03-31",
+     "revenue_next_fy_usd_bn": 5.32
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T06:58:24+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2027; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.00x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 0.9991
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 5.0bn USD vs FMP FY+1 consensus revenue 5.3bn (-6.7%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 0.9331
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026 (fiscal_year FY2027E); latest reported year is 2026; not forward: FY2026",
+      "ok": false
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "6 of 6 grounding wrapper(s) resolved",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 2 segment(s) price (P/E, P/E)",
+      "ok": true
+     }
+    ],
+    "company": "SATS Ltd.",
+    "data": {
+     "associates_investments": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEF2PaJxIy0RWFOIIeGRORJOKb95KiQUj3KVy4eh_dvjJkA6F8WI2DKdzDMCMjjyxMsYh2b3lA0A5sPj3HaIJRGJrZummfC7bxwp4ycwVfz5rzwYzMgO2qlexwa39GHIzKRWtYR-BsITWyOCRTpyL_uf5k2KaX_ajjiq8fOdMz_AEFsQ64Fg0HMXGEwQHtfDNoyiXhgJck=",
+      "period": "31 Mar 2026",
+      "quote": "Investment in associates: 463.4",
+      "scale": "mn",
+      "source_url": "https://links.sgx.com/FileOpen/SATS_2H_FY26_SGX_Announcement.ashx?App=Announcement&FileID=890167",
+      "value": 463.4
+     },
+     "fiscal_year": "FY2027E",
+     "holdco_basis": "Standard 10% holding company discount applied to multi-divisional operations and regional business holdings across Gateway Services and Food Solutions.",
+     "holdco_discount_pct": 0.1,
+     "net_cash": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE0XQ5_itmwrO3RuwJohrWEozA2zbiMWBjR6sWSTSbaxJRfApaBCR3dW77T_99eLlEFr8GUr4jCcPDWu3nWeSTSB8BF9W1ZKCKlaAz0SdkDU1NY9HD3JFVGm6nH2oEF_H1-aEUU-6k7L_aasHZHi163gZGf6hUtK6EZ1aWxCSfOwBvhdWlO031ypMhZJdTc3q1_xfIgdo4rLyYeDJd_ukxvhOVHm0Ax6vA1y9Dd",
+      "period": "31 Mar 2026",
+      "quote": "Total borrowings(1) (S$ million) 4,136.1 ... Cash and cash equivalents (S$ million) 752.5 ... Net borrowings(2) (S$ million) 3,383.6",
+      "scale": "mn",
+      "source_url": "https://www.sats.com.sg/content/dam/sats/corporate/docs/agm-2026/SATS_Letter_to_Shareholders_2026.pdf.downloadasset.pdf",
+      "value": -3383.6
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHcawGDSb1AYDaCJnHhsKkNF-VqvsvN2VB8eeZK2U2nqXakWKtW0aFZrxo6_0nGclUZCeFzZ4Ph9P94pyEAoede6dySjK77DMRRBmtUoln-XC8Vp-rPwRR7uvErRVlqQrglDA5kjhBxFFySIkZtU58bzj-Ywc9S8NUVmA1qjgLHKjlI62Xv2Gbi0jKod4aXOI4tFnj1DCHQ-oRQchNMuh4wuHKtoLH4m0UMj2t-5jDHzqzz0RnNjx2BGNo2dcOeSHroon95Jpdaztai20bQdSN4SA==",
+        "period": "1Q FY27",
+        "quote": "EBIT margin %. 8.6%.",
+        "source_url": "https://www.sats.com.sg/content/dam/sats/corporate/documents/investors/financial-results/19Aug26%20Q1%20FY27%20Presentation%20Slides.pdf.downloadasset.pdf",
+        "value": 0.086
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Based on global airport ground handling and cargo logistics peers (e.g., Menzies, Swissport, dnata, Fraport) and broker valuation bands for SATS forward P/E ranging between 15.4x and 20.2x forward earnings.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEMPA9x4UIK9fcxU1iJsKjM9Gvm1n9-EzXdyujXctIL0p8FiWfrOgak12JWI3vGgDmznQ6vSCZ7nM5IYhD4CSqEf3I7BMkHaUnfnSA26Bbu2UjZUwhTMaMjB-IKBBhtzQ1t5sc1TWwXCRwCso-cyibanyVdVKqgp5Pv9-o4xX-n9zdQr61SN1wht8Wcwdu_M_MvoHJKsP6S",
+       "multiple_high": 20.0,
+       "multiple_low": 16.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.dbs.com.sg/treasures/aics/templatedata/article/equity/data/en/DBSV/012014/SATS_SP.xml",
+       "name": "Gateway Services",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHtBRWjYCUdNrHdrfRY9f7tw1TKERFCb4opqpgNVstvt8gcC9ZcXSzNVpOuTZqX7UpLAXcaEGZMt3wfX15SVgCE269A3fa-orvAFxDDsyXgYP8inc9keL4Tuo3gibCdMIN8oduH0TqNuXuS6XOx_M3xnK3xKXNy9dwJM1bMo0yULFPnqobAEFk0I1BpL-4GDPhos1k0um8=",
+        "period": "FY2026",
+        "quote": "No standalone forward FY2027E revenue estimate is published by segment; latest actual reported: 'Gateway Services revenue rose 10.8% to $4.95 billion, driven by continued market share gains and cargo volumes that outperformed IATA global growth benchmarks.'",
+        "scale": "bn",
+        "source_url": "https://links.sgx.com/FileOpen/SATS_2H_FY26_SGX_Announcement.ashx?App=Announcement&FileID=890167",
+        "value": 4.95
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHcawGDSb1AYDaCJnHhsKkNF-VqvsvN2VB8eeZK2U2nqXakWKtW0aFZrxo6_0nGclUZCeFzZ4Ph9P94pyEAoede6dySjK77DMRRBmtUoln-XC8Vp-rPwRR7uvErRVlqQrglDA5kjhBxFFySIkZtU58bzj-Ywc9S8NUVmA1qjgLHKjlI62Xv2Gbi0jKod4aXOI4tFnj1DCHQ-oRQchNMuh4wuHKtoLH4m0UMj2t-5jDHzqzz0RnNjx2BGNo2dcOeSHroon95Jpdaztai20bQdSN4SA==",
+        "period": "1Q FY27",
+        "quote": "EBIT margin %. 10.4%.",
+        "source_url": "https://www.sats.com.sg/content/dam/sats/corporate/documents/investors/financial-results/19Aug26%20Q1%20FY27%20Presentation%20Slides.pdf.downloadasset.pdf",
+        "value": 0.104
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Reflects airline catering, commercial central kitchen, and contract catering peer multiples (such as Gategroup, LSG, Compass Group) and broker historical P/E multiples for SATS food solutions division.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEkzaBxOsyEK5xjEoe-pXhfD6QnQwPnXRml4eZeKlTYa6UbeSLfr7yVdWfeVb5gFwBfsSTHjqAI9KpjbpnfnMjPt5hV7A4yCj9Mofl53db9REboWg8aGFYAgCURet_M9dkudxfQHVzM9lZJpC9j2I5IZUZ8BB-oA8mNef1LUSn5ZtECwH8BaJwok_9vz2gwekAvt1tHMV8=",
+       "multiple_high": 22.0,
+       "multiple_low": 17.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.poems.com.sg/stocks/articles/sats-growth-cargo-strength-contract-wins-target-raised/",
+       "name": "Food Solutions",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHtBRWjYCUdNrHdrfRY9f7tw1TKERFCb4opqpgNVstvt8gcC9ZcXSzNVpOuTZqX7UpLAXcaEGZMt3wfX15SVgCE269A3fa-orvAFxDDsyXgYP8inc9keL4Tuo3gibCdMIN8oduH0TqNuXuS6XOx_M3xnK3xKXNy9dwJM1bMo0yULFPnqobAEFk0I1BpL-4GDPhos1k0um8=",
+        "period": "FY2026",
+        "quote": "No standalone forward FY2027E revenue estimate is published by segment; latest actual reported: 'Food Solutions revenue grew 2.9% to $1.39 billion, reflecting steady demand amid the expansion of air travel in Asia-Pacific.'",
+        "scale": "bn",
+        "source_url": "https://links.sgx.com/FileOpen/SATS_2H_FY26_SGX_Announcement.ashx?App=Announcement&FileID=890167",
+        "value": 1.39
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "SGD bn",
+       "SGD bn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.086,
+       "ev_rev_multiple": null,
+       "name": "Gateway Services",
+       "pe_multiple": 18.0,
+       "period_label": "FY2026",
+       "rationale": "pe 16.0-20.0x: Based on global airport ground handling and cargo logistics peers (e.g., Menzies, Swissport, dnata, Fraport) and broker valuation bands for SATS forward P/E ranging between 15.4x and 20.2x forward earnings.",
+       "revenue_fwd": 3875652000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.104,
+       "ev_rev_multiple": null,
+       "name": "Food Solutions",
+       "pe_multiple": 19.5,
+       "period_label": "FY2026",
+       "rationale": "pe 17.0-22.0x: Reflects airline catering, commercial central kitchen, and contract catering peer multiples (such as Gategroup, LSG, Compass Group) and broker historical P/E multiples for SATS food solutions division.",
+       "revenue_fwd": 1088314400.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "SATS Ltd.",
+     "depreciation_and_amortization": 472203176.0,
+     "market_cap": 4429440124.7536,
+     "net_ppe": 2061690272.0,
+     "operating_cash_flow": 865014208.0,
+     "period": "2026-03-31",
+     "revenue": 4968272680.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 52.9,
+    "value_usd": 4963966400.0
    }
   },
   "S63.SI": {

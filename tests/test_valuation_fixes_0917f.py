@@ -727,7 +727,9 @@ def test_the_two_alibaba_lines_agree_on_the_currency_invariant_margin():
     scale = a["revenue_base"] / b["revenue_base"]
     assert scale == pytest.approx(
         a["normalized_net_income"] / b["normalized_net_income"], rel=1e-6)
-    assert scale == pytest.approx(7.818, abs=0.001)
+    # 7.818 at the original capture; 7.856 at the 2026-09-26 re-recording of both
+    # lines on the China Internet Platform profile (the USD/HKD rate of that day).
+    assert scale == pytest.approx(7.856, abs=0.001)
     ma = a["normalized_net_income"] / a["revenue_base"]
     mb = b["normalized_net_income"] / b["revenue_base"]
     assert ma == pytest.approx(mb, abs=1e-4)
@@ -771,6 +773,12 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
     fixtures. Consequence for item 3a: `_peer_for_gp` omitting `market_cap` cannot
     change a US name's cohort, because there is no live cohort to change."""
     b = _basis(name, "bear")
+    if name == "BABA":
+        # Re-recorded 2026-09-26 with a fresh US comps store: BABA now resolves a
+        # live `Specialty Retail` large cohort. The other seven keep the static
+        # fill their original capture recorded.
+        assert b["basis"] == "industry" and b["cohort"] == "large" and b["peer_count"] == 10, (name, b)
+        return
     assert b == {"basis": "static", "cohort": "US", "peer_count": None}, (name, b)
 
 

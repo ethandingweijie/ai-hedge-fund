@@ -1887,12 +1887,19 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Refining & Marketing": {
             "methods": [
-                {"name": "EV/EBITDA (norm)",  "weight": 0.40, "anchor": True,  "implementable": True, "note": "mid-cycle"},
-                {"name": "Forward EV/EBITDA", "weight": 0.20, "anchor": False, "implementable": True,
+                # Owner, 2026-09-20: the segment SOTP on through-cycle EV/EBITDA
+                # bands per business type is the better instrument. Declared
+                # here since 2026-09-26 (the data-driven promotion retired) at
+                # the 0.40 it was promoted at; the other five keep their
+                # ratios. Anchor stays on mid-cycle EV/EBITDA so a filing
+                # without a segment note still has its anchor in the blend.
+                {"name": "SOTP (segments)",   "weight": 0.40, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA (norm)",  "weight": 0.24, "anchor": True,  "implementable": True, "note": "mid-cycle"},
+                {"name": "Forward EV/EBITDA", "weight": 0.12, "anchor": False, "implementable": True,
                  "note": "the current crack-spread cycle, partially"},
-                {"name": "FCF Yield",         "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/BV",              "weight": 0.10, "anchor": False, "implementable": True, "note": "replacement-cost floor"},
-                {"name": "P/E (norm)",        "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",         "weight": 0.12, "anchor": False, "implementable": True},
+                {"name": "P/BV",              "weight": 0.06, "anchor": False, "implementable": True, "note": "replacement-cost floor"},
+                {"name": "P/E (norm)",        "weight": 0.06, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": (
@@ -2017,6 +2024,30 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # EV/Revenue leg either -- on the consolidated entity it would price
         # the loss-making growth arm's revenue as though it earned core
         # margins, which is the whole error the unbundling exists to avoid.
+        # Owner, 2026-09-26. China internet platforms are conglomerates: a
+        # core commerce or gaming business at 8-16x earnings beside cloud at
+        # 4-7x sales and loss-making international, logistics or new-initiative
+        # arms. The owner-accepted Gemini SOTP is the one leg that prices the
+        # parts separately (0.35: the registry's weight for a SOTP that is one
+        # method among several; the 0.25/0.35/0.45 sweep of 2026-09-26 could
+        # not separate them). The earnings legs are NORMALISED: Meituan's NTM
+        # EPS is 0.19 in the 2026 price war and a raw Forward P/E priced it at
+        # HK$3.24. DCF anchors so a name whose SOTP is Degraded or pending
+        # still has its anchor in the blend.
+        "China Internet Platform": {
+            "methods": [
+                {"name": "DCF",              "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "SOTP (analyst)",   "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA (norm)", "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",       "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "EV/NTM Revenue", "P/BV", "Forward P/E"],
+            "rationale": (
+                "Sum-of-the-parts on owner-accepted, cited segment inputs, with a "
+                "DCF anchor and through-cycle earnings multiples. The parts trade "
+                "on different multiples and a single-multiple leg blends them; a "
+                "raw forward P/E dies in a price war."),
+        },
         "Local Services & Instant Retail": {
             "methods": [
                 # NORMALISED, because the raw metric is negative in a price
@@ -2719,9 +2750,13 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         "Aerospace Holdco (HK)": {
             "methods": [
                 {"name": "DCF",                          "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "SOTP / NAV (look-through)",    "weight": 0.35, "anchor": False, "implementable": False, "proxy": "P/BV"},
+                # Owner rule 3 (2026-09-23), declared (2026-09-26): the accepted
+                # analyst SOTP takes the structural slot; the look-through is
+                # computed and published as an unweighted cross-check.
+                {"name": "SOTP (analyst)",               "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "Forward P/E",                  "weight": 0.30, "anchor": False, "implementable": True},
             ],
+            "shadow_methods": ["SOTP / NAV (look-through)"],
             "excluded": [],
             "rationale": "A state-backed holding of listed aviation manufacturers: the parts are valued separately and the stakes looked through; forward earnings against global aerospace peers check the whole.",
         },
@@ -4899,8 +4934,8 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Consumer Discretionary ────────────────────────────────────────────────
     "AMZN":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Internet)", "Amazon — AWS + retail + ads + AI capex; AWS > 60% EBIT"),
-    "BABA":  ("Tech", "",              "Software (Internet)",             "Alibaba ADR — cloud/e-commerce; misclassified as Consumer frequently"),
-    "JD":    ("Consumer", "",          "Retail (General)",                "JD.com — pure-play retailer; Consumer"),
+    "BABA":  ("Tech", "China Internet Platform", "Software (Internet)",   "Alibaba ADR — owner profile 2026-09-26; accepted Gemini SOTP"),
+    "JD":    ("Tech", "China Internet Platform", "Retail (General)",      "JD.com — owner profile 2026-09-26 (retail, logistics, new businesses as parts)"),
     # ── Travel & Dining (profile override) ────────────────────────────────
     "MCD":   ("Consumer", "Travel & Dining", "Restaurant/Dining",        "McDonald's — franchise royalty model"),
     "SBUX":  ("Consumer", "Travel & Dining", "Restaurant/Dining",        "Starbucks — global coffeehouse"),
@@ -5017,7 +5052,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # ── Tech platforms (NOT Consumer) ─────────────────────────────────────
     "UBER":  ("Tech", "",              "Software (Internet)",             "Uber: platform marketplace — Tech WACC (marketplace, not logistics)"),
     "GRAB":  ("Tech", "",              "Software (Internet)",             "Grab Holdings — SEA super-app platform"),
-    "PDD":   ("Tech", "",              "Software (Internet)",             "PDD Holdings — Pinduoduo/Temu marketplace; 20-F filer (RMB reporting)"),
+    "PDD":   ("Tech", "China Internet Platform", "Software (Internet)",   "PDD Holdings — owner profile 2026-09-26; 20-F filer (RMB reporting)"),
     # CRWD moved to Cybersecurity section above with profile override
     "KO":    ("Consumer", "",          "Beverage (Soft)",                 ""),
     "PEP":   ("Consumer", "",          "Beverage (Soft)",                 ""),
@@ -5252,10 +5287,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # Source: user-provided classification table (100 HKEX well-known stocks, April 2026)
 
     # Technology
-    "00700.HK": ("Tech",        "",  "Internet Platform",        "Tencent Holdings"),
-    "09988.HK": ("Tech",        "",  "Software (Internet)",      "Alibaba Group HK listing"),
-    "03690.HK": ("Tech", "Local Services & Instant Retail", "On-Demand Commerce", "Meituan"),
-    "09618.HK": ("Tech",        "",  "E-commerce",               "JD.com HK listing"),
+    "00700.HK": ("Tech", "China Internet Platform", "Internet Platform", "Tencent Holdings — owner profile 2026-09-26"),
+    "09988.HK": ("Tech", "China Internet Platform", "Software (Internet)", "Alibaba Group HK listing — owner profile 2026-09-26"),
+    "03690.HK": ("Tech", "China Internet Platform", "On-Demand Commerce", "Meituan — owner profile 2026-09-26 (was Local Services & Instant Retail)"),
+    "09618.HK": ("Tech", "China Internet Platform", "E-commerce",       "JD.com HK listing — owner profile 2026-09-26"),
     "09999.HK": ("Tech",        "",  "Gaming",                   "NetEase"),
     "09626.HK": ("Tech",        "",  "Internet Media",           "Bilibili"),
     "02018.HK": ("Tech",        "",  "Components",               "AAC Technologies"),

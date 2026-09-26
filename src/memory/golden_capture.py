@@ -624,6 +624,18 @@ class pinned_env:
         for k in SECRET_ENV_VARS:
             self._set(k, None)
         self._set("FMP_API_KEY", "golden-replay-no-network")
+        # 2026-09-26: the review-gated inputs store keeps its acceptances in the
+        # run-archive sqlite. A developer's local acceptance (BABA's Gemini SOTP
+        # that day) changed what the engine did inside a golden replay. Inside
+        # the replay every review reads PENDING: the fixture is the engine on
+        # its recorded inputs, never on whatever the developer has accepted.
+        # (Pinning an EMPTY archive instead was tried and rejected: the comps
+        # and dynamic-multiples tables live in the same file, and emptying them
+        # moved 09988.HK from 119.82 to 103.54 against its own recording.)
+        from src.data import industry_inputs as _ii
+        self._review_undo = _ii.review_for
+        _ii.review_for = lambda ticker, kind, e, *, overlay=False: {
+            "status": "pending", "reviewer": None, "reviewed_at": None, "stale": False}
         return self
 
     def __exit__(self, *exc) -> None:
@@ -632,6 +644,11 @@ class pinned_env:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = old
+        try:
+            from src.data import industry_inputs as _ii
+            _ii.review_for = self._review_undo
+        except Exception:                                  # noqa: BLE001
+            pass
 
     def _set(self, key: str, value: str | None) -> None:
         self._undo.append((key, os.environ.get(key)))

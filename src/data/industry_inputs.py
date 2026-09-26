@@ -313,6 +313,44 @@ def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
     return {"input_key": key, **review_for(ticker, kind, e, overlay=overlay)}
 
 
+def engine_preview_check(assumptions: Optional[dict]) -> dict:
+    """Owner, 2026-09-26: run the engine's SOTP leg on the converted inputs
+    (unit shares, no balance sheet) and report which segments would be
+    Degraded. Tencent's first pre-fill passed every gate check and could not
+    price: two of four segments cited on P/E with no margin."""
+    try:
+        from src.agents.analysis.dcf_agent import _sotp_analyst_style
+        t = _sotp_analyst_style(dict(assumptions or {}), shares=1.0)
+    except Exception as exc:  # noqa: BLE001
+        return {"check": "segments price in the engine", "ok": None,
+                "detail": f"preview unavailable ({type(exc).__name__})"}
+    if not t:
+        return {"check": "segments price in the engine", "ok": False,
+                "detail": "no segment carries a usable forward revenue"}
+    bad = t.get("degraded_segments") or []
+    n = len(t.get("rows") or [])
+    if bad:
+        return {"check": "segments price in the engine", "ok": False,
+                "detail": (f"{len(bad)} of {n} segment(s) Degraded, the leg would not publish: "
+                           + "; ".join(f"{d['name']}: {d['reason']}" for d in bad))}
+    return {"check": "segments price in the engine", "ok": True,
+            "detail": f"all {n} segment(s) price"
+                      + (f" ({', '.join(r['method'] for r in t.get('rows') or [])})" if n else "")}
+
+
+def sotp_engine_preview(e: Optional[dict]) -> Optional[dict]:
+    """The preview check for a stored sotp entry (canonical data through the bridge)."""
+    if not isinstance(e, dict) or not isinstance(e.get("data"), dict):
+        return None
+    try:
+        from src.agents.industry.gemini_params import to_engine_assumptions
+        conv, _ = to_engine_assumptions(canonical_data(e))
+    except Exception as exc:  # noqa: BLE001
+        return {"check": "segments price in the engine", "ok": None,
+                "detail": f"preview unavailable ({type(exc).__name__})"}
+    return engine_preview_check(conv)
+
+
 def canonical_data(e: Optional[dict]) -> Optional[dict]:
     """The entry's `data` with every grounding wrapper replaced by the
     canonical URL recorded in `canonical_urls` (owner, 2026-09-24). Returns
@@ -506,8 +544,10 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                 "source_url": v.get("source_url"), "quote": v.get("quote"),
                 "detail": detail,
                 "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None,
-                "checks": (e.get("checks") or []) + [c for c in
-                           [ground_truth_check(e.get("value_usd"), e.get("ground_truth"))] if c],
+                "checks": ([c for c in (e.get("checks") or [])
+                            if not (kind == "sotp" and c.get("check") == "segments price in the engine")]
+                           + [c for c in [ground_truth_check(e.get("value_usd"), e.get("ground_truth"))] if c]
+                           + ([sotp_engine_preview(e)] if kind == "sotp" else [])),
                 "ground_truth": e.get("ground_truth"), "source": e.get("source"),
                 "ok": e.get("ok"),
                 "model": e.get("model"), "built_at": e.get("built_at"),

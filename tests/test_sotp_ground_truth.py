@@ -76,23 +76,25 @@ _LIVE_61 = {"segments": [{"name": "China Commerce", "revenue_fwd": 60e9,
             "associates_investments": 40e9, "fx_usd_to_reporting": 7.8}
 
 
-def test_gate_replaces_an_implausible_live_value_with_the_snapshot():
+def test_gate_flags_an_implausible_value_and_keeps_the_inputs():
+    # Owner, 2026-09-26: the snapshot is retired; the sell-side reference is a
+    # cross-check the reviewer reads, never a substitution the engine makes.
     from src.agents.analysis.dcf_agent import _gate_live_sotp
     out, flag = _gate_live_sotp("09988.HK", _LIVE_61, ADS * 8, None)
-    assert out["_origin"] == "snapshot:BABA"
-    assert out["segments"] == load_sotp_snapshot()["BABA"]["segments"]
-    assert out["fx_usd_to_reporting"] == 7.8                 # the run's FX is kept
-    assert "replaced with the validated snapshot" in flag
+    assert out is _LIVE_61 and "_origin" not in out
+    assert "outside the $152-201/ADS sell-side reference" in flag
+    assert "review the accepted figures" in flag
 
 
-def test_gate_passes_plausible_live_values_and_snapshots_through():
+def test_gate_passes_plausible_values_through_and_grades_every_origin():
     from src.agents.analysis.dcf_agent import _gate_live_sotp
     snap = load_sotp_snapshot()["BABA"]
-    plausible_live = {k: v for k, v in snap.items() if k != "_origin"}
-    out, flag = _gate_live_sotp("BABA", plausible_live, ADS, None)
-    assert out is plausible_live and flag is None
+    plausible = {k: v for k, v in snap.items() if k != "_origin"}
+    out, flag = _gate_live_sotp("BABA", plausible, ADS, None)
+    assert out is plausible and flag is None
     tagged = {**_LIVE_61, "_origin": "snapshot:BABA"}
-    assert _gate_live_sotp("BABA", tagged, ADS, None) == (tagged, None)
+    out2, flag2 = _gate_live_sotp("BABA", tagged, ADS, None)
+    assert out2 is tagged and flag2 and "outside the" in flag2     # no origin short-circuits the grade
 
 
 def test_gate_ignores_names_without_a_reference():

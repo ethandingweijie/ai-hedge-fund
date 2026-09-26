@@ -337,10 +337,21 @@ _SHARES_MOVED = {
 }
 
 
+#: Owner change set, 2026-09-26: BABA and 09988_HK route to the new China
+#: Internet Platform profile (DCF anchor, SOTP (analyst) 0.35 on owner-accepted
+#: inputs, normalised earnings legs) and both fixtures were re-recorded with the
+#: replay owning its review state (no accepted SOTP inside a replay). Seventh
+#: re-baseline for these two names only.
+_CHINA_PROFILE_MOVED = {
+    "09988_HK": (103.54,   60.43,   149.98,   (92.20, 107.28, 123.54)),
+    "BABA":     (150.42,  105.10,   204.01,   (108.12, 123.98, 142.73)),
+}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name)
-            or _TWO_TIER_MOVED[name])
+    return (_CHINA_PROFILE_MOVED.get(name) or _SHARES_MOVED.get(name)
+            or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.16, 48.07, 58.22)}
 

@@ -1,4 +1,93 @@
 {
  "comp_age_days": null,
- "fields": {}
+ "fields": {
+  "ev_ebit": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 18.9393
+  },
+  "ev_ebitda": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 16.6994
+  },
+  "ev_ebitda_ntm": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 12.6035
+  },
+  "ev_ocf": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 17.5379
+  },
+  "ev_revenue": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 3.197
+  },
+  "fcf_yield": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 8,
+   "value": 0.0503
+  },
+  "growth_avg": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 0.0755
+  },
+  "pb": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 8,
+   "value": 4.9402
+  },
+  "pe": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 24.434
+  },
+  "pe_ntm": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 19.8053
+  },
+  "roic": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "US",
+   "key": "Specialty Retail",
+   "peer_count": 10,
+   "value": 0.1358
+  }
+ }
 }

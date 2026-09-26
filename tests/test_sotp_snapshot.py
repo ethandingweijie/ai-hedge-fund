@@ -2,8 +2,9 @@
 
 The snapshot (src/data/sotp_assumptions_v1.json) is what lifts the trialed
 SOTP (analyst) assumptions into production runs for the 6 trialed tickers;
-pipeline.py Phase 4.4 attaches entries when the live extractor produced
-nothing. These tests pin:
+pipeline.py Phase 4.4 attached entries until 2026-09-26 (retired: the leg
+reads owner-accepted Gemini inputs only; the module stays for the holdco
+pin and segment memory). These tests pin:
 
   * the committed artifact's contract (exactly the 6 trialed tickers,
     consumable assumptions dicts, validated meta block)
@@ -19,7 +20,6 @@ import pytest
 
 from src.agents.analysis.sotp_snapshot import (
     _DATA_PATH,
-    attach_snapshot,
     load_sotp_snapshot,
 )
 
@@ -115,57 +115,14 @@ def test_entries_without_segments_are_dropped(tmp_path, monkeypatch):
     assert set(load_sotp_snapshot(p).keys()) == {"AAA"}
 
 
-# ── attach_snapshot merge semantics (pipeline Phase 4.4 contract) ────────────
+# ── attach_snapshot: RETIRED from the pipeline (owner, 2026-09-26) ───────────
+
+def test_the_pipeline_no_longer_attaches_the_snapshot():
+    from pathlib import Path
+    pl = (Path(__file__).resolve().parents[1] / "src" / "pipeline.py").read_text(encoding="utf-8")
+    assert "attach_snapshot(" not in pl
+    assert "RETIRED (owner, 2026-09-26)" in pl
+    from src.agents.analysis import sotp_snapshot as ss
+    assert not hasattr(ss, "attach_snapshot")
 
 
-def test_attach_fills_gaps_but_live_output_wins():
-    live = {"segments": [{"name": "live"}]}
-    snap_assume = {"BABA": {"segments": [{"name": "snap"}]},
-                   "JD": {"segments": [{"name": "snap-jd"}]}}
-    merged, attached = attach_snapshot({"BABA": live}, snap_assume,
-                                       ["BABA", "JD"])
-    assert attached == ["JD"]
-    assert merged["BABA"] is live           # live extractor output untouched
-    assert {k: v for k, v in merged["JD"].items() if k != "_origin"} == snap_assume["JD"]
-    assert merged["JD"]["_origin"] == "snapshot:JD"
-
-
-@pytest.mark.parametrize("run_ticker,snap_key", [
-    ("09988.HK", "BABA"),        # HK line -> ADR entry
-    ("9988.HK", "BABA"),         # 4-digit form canonicalises first
-    ("03690.HK", "3690.HK"),     # 4-digit snapshot key reachable from canonical
-    ("baba", "BABA"),
-])
-def test_attach_resolves_canonical_and_adr_aliases(run_ticker, snap_key):
-    snap_assume = {"BABA": {"segments": [{"name": "b"}]},
-                   "3690.HK": {"segments": [{"name": "m"}]}}
-    merged, attached = attach_snapshot({}, snap_assume, [run_ticker])
-    assert attached == [run_ticker]
-    assert merged[run_ticker]["segments"] == snap_assume[snap_key]["segments"]
-    assert merged[run_ticker]["_origin"] == f"snapshot:{snap_key}"
-
-
-def test_an_hk_line_without_an_adr_gets_nothing():
-    merged, attached = attach_snapshot({}, {"BABA": {"segments": [{"name": "b"}]}},
-                                       ["00700.HK"])
-    assert attached == [] and merged == {}
-
-
-def test_attach_only_covers_run_tickers():
-    snap_assume = {t: {"segments": [{"name": t}]} for t in ("BABA", "MSFT")}
-    merged, attached = attach_snapshot({}, snap_assume, ["BABA"])
-    assert attached == ["BABA"]
-    assert "MSFT" not in merged
-
-
-def test_attach_empty_snapshot_is_noop():
-    merged, attached = attach_snapshot(None, {}, ["BABA", "JD"])
-    assert merged == {} and attached == []
-
-
-def test_attach_does_not_mutate_existing():
-    existing = {"BABA": {"segments": [{"name": "live"}]}}
-    before = json.loads(json.dumps(existing))
-    attach_snapshot(existing, {"JD": {"segments": [{"name": "x"}]}},
-                    ["BABA", "JD"])
-    assert existing == before

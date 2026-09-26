@@ -1,12 +1,12 @@
 {
   "ticker": "BABA",
-  "captured_at": "2026-09-16T13:22:59+00:00",
-  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "end_date": "2026-09-16",
+  "captured_at": "2026-09-26T06:47:18+00:00",
+  "commit": "af9f1e156f6afaf7b01b7e2cc05cca1206bd9e4b",
+  "end_date": "2026-09-19",
   "state_source": "prod_web_run",
-  "source_run_id": "bf012128-b79b-4703-a1a4-b0f62b5eb3af",
-  "source_run_at": "2026-09-16T09:31:34.175637",
-  "archive_run_id": "135b5491-3d56-489e-9cac-2fbeb29cb4f2",
+  "source_run_id": "87b45324-61a0-4a78-b616-6b6b7856993a",
+  "source_run_at": "2026-09-19T12:08:26.401048",
+  "archive_run_id": "7970233f-b054-47ed-add2-d26356dfa9f8",
   "targets_hit": {
     "src.memory.analyst_basis.get_analyst_basis": 1,
     "src.memory.analyst_basis.method_disagrees": 1,
@@ -21,8 +21,8 @@
   },
   "recorded_calls": 27,
   "replay": {
-    "base_iv": 193.13,
-    "profile": "Hyperscaler / Tech Conglomerate",
+    "base_iv": 151.35,
+    "profile": "China Internet Platform",
     "skip_reason": null
   }
 }

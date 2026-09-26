@@ -2,15 +2,8 @@
 
 Guards the blend-promotion contract added to dcf_agent.py:
 
-  * ``_promote_sotp_analyst_profile`` — copy-on-write overlay of the method
-    onto the resolved valuation profile; bit-identical pass-through when
-    there is nothing to promote (production safety: no assumptions, zero
-    weight, empty profile, method already present).
-  * Weight-share math — profile weights sum to 1.0, so the promoted weight
-    w buys a w/(1+w) share of the blended IV (default w=3.0 → 75%: the
-    analyst SOTP carries three quarters, today's DCF+multiples blend one
-    quarter, renormalized); a None SOTP value renormalizes back to today's
-    blend.
+  * The promotion overlay and its 3.0 weight-share RETIRED 2026-09-26: the
+    leg is declared by the profile table at the profile's weight.
   * Composite consistency — the method lands in the multi bucket, so the
     v3.19 composite multiplier applies to its leg like every other
     peer-relative method.
@@ -23,6 +16,7 @@ Guards the blend-promotion contract added to dcf_agent.py:
 from __future__ import annotations
 
 import copy
+import inspect
 
 import pytest
 
@@ -84,88 +78,29 @@ def _dispatch(most_recent: dict, scenario: str, shares: float = _SHARES,
     )
 
 
-# ── Profile overlay: _promote_sotp_analyst_profile ───────────────────────────
+# ── Profile overlay: RETIRED (owner, 2026-09-26) ─────────────────────────────
 
-def test_promote_adds_method_at_blend_weight():
-    out = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    assert out is not _PROFILE
-    assert [m["name"] for m in out["methods"]] == [
-        "DCF", "P/E", "SOTP (analyst)"]
-    entry = out["methods"][-1]
-    assert entry["weight"] == pytest.approx(
-        dcf_agent._SOTP_ANALYST_BLEND_WEIGHT)
-    assert entry["implementable"] is True
-    assert entry["anchor"] is False
-    # Non-method keys carry over
-    assert out["name"] == "Test Profile"
+def test_the_analyst_sotp_is_a_profile_method_not_a_promotion():
+    """Task #25's 3.0 promotion (75% of the blend on any name the extractor
+    produced assumptions for) is gone: the leg enters a blend only where the
+    profile table declares "SOTP (analyst)"."""
+    assert not hasattr(dcf_agent, "_promote_sotp_analyst_profile")
+    assert not hasattr(dcf_agent, "_SOTP_ANALYST_BLEND_WEIGHT")
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    assert "_promote_sotp_analyst_profile(" not in src and "_promote_segment_sotp(" not in src
 
 
-def test_promote_copy_on_write_never_mutates_input():
-    before = copy.deepcopy(_PROFILE)
-    out = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    assert _PROFILE == before  # shared INDUSTRY_VALUATION_PROFILES safety
-    out["methods"].append({"name": "junk"})
-    assert len(_PROFILE["methods"]) == 2
-
-
-def test_promote_no_assumptions_returns_same_object():
-    assert dcf_agent._promote_sotp_analyst_profile(_PROFILE, False) is _PROFILE
-
-
-def test_promote_zero_weight_returns_same_object(monkeypatch):
-    monkeypatch.setattr(dcf_agent, "_SOTP_ANALYST_BLEND_WEIGHT", 0.0)
-    assert dcf_agent._promote_sotp_analyst_profile(_PROFILE, True) is _PROFILE
-
-
-def test_promote_idempotent_when_method_present():
-    once = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    twice = dcf_agent._promote_sotp_analyst_profile(once, True)
-    assert twice is once
-
-
-def test_promote_empty_or_missing_profile():
-    assert dcf_agent._promote_sotp_analyst_profile(None, True) is None
-    assert dcf_agent._promote_sotp_analyst_profile({}, True) == {}
-    assert dcf_agent._promote_sotp_analyst_profile(
-        {"methods": []}, True) == {"methods": []}
-
-
-# ── Blend weight-share math ───────────────────────────────────────────────────
-
-def test_promoted_profile_blends_at_75_percent():
-    """Default w=3.0 → SOTP carries w/(1+w) = 75% of the blended IV."""
-    w = dcf_agent._SOTP_ANALYST_BLEND_WEIGHT
-    assert w == pytest.approx(3.0)
+def test_a_profile_that_declares_the_leg_blends_it_at_its_declared_weight():
+    methods = [{"name": "DCF", "weight": 0.30, "anchor": True, "implementable": True},
+               {"name": "SOTP (analyst)", "weight": 0.35, "anchor": False, "implementable": True},
+               {"name": "P/E", "weight": 0.35, "anchor": False, "implementable": True}]
     values = {"DCF": 100.0, "P/E": 80.0, "SOTP (analyst)": 120.0}
-    legacy_iv, _ = dcf_agent._blend_methods(
-        _PROFILE["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0)
-    promoted = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    iv, bd = dcf_agent._blend_methods(
-        promoted["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0)
-    assert legacy_iv == pytest.approx(92.0)
-    # Weight-share contract: IV = (legacy sum + w·V_sotp) / (1 + w)
-    assert iv == pytest.approx(
-        (0.6 * 100.0 + 0.4 * 80.0 + w * 120.0) / (1.0 + w))
-    # …which at w=3.0 is exactly 25% legacy + 75% SOTP:
-    assert iv == pytest.approx(0.25 * legacy_iv + 0.75 * 120.0)
-    assert iv == pytest.approx(113.0)
-    # Weight shares: DCF 0.6/4, multi bucket (P/E 0.4 + SOTP 3.0)/4
-    assert bd["weight_dcf"] == pytest.approx(0.6 / (1.0 + w))
-    assert bd["weight_multi"] == pytest.approx((0.4 + w) / (1.0 + w))
-
-
-def test_sotp_none_renormalizes_to_legacy_blend():
-    """No assumptions → dispatcher returns None → today's blend unchanged."""
-    values = {"DCF": 100.0, "P/E": 80.0, "SOTP (analyst)": None}
-    promoted = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    iv, bd = dcf_agent._blend_methods(
-        promoted["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0)
-    assert iv == pytest.approx(92.0)
-    assert bd["weight_dcf"] == pytest.approx(0.6)
-    assert bd["weight_multi"] == pytest.approx(0.4)
+    iv, bd = dcf_agent._blend_methods(methods, values, c_macro=0.0, forward_flags=[], dcf_tv_fraction=0.0)
+    assert iv == pytest.approx(0.30 * 100 + 0.35 * 120 + 0.35 * 80)
+    # a None leg renormalises onto the rest, as every other method does
+    iv2, _ = dcf_agent._blend_methods(methods, {**values, "SOTP (analyst)": None},
+                                      c_macro=0.0, forward_flags=[], dcf_tv_fraction=0.0)
+    assert iv2 == pytest.approx((0.30 * 100 + 0.35 * 80) / 0.65)
 
 
 # ── Dispatcher scenario awareness ─────────────────────────────────────────────

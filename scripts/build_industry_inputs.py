@@ -63,6 +63,24 @@ WAVE3 = {
 WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3}
 
 
+def sotp_profile_tickers() -> list[str]:
+    """Owner, 2026-09-26: the SOTP pre-fill is driven by the registry, not a
+    hand list -- every pinned ticker whose profile declares "SOTP (analyst)"."""
+    from src.data import sector_profiles as sp
+    out = []
+    for lookup in (sp.TICKER_SECTOR_LOOKUP, sp.SGX_TICKER_SECTOR_LOOKUP):
+        for t in lookup:
+            try:
+                sector, profile = sp.get_wacc_profile_for_ticker(t)
+            except Exception:                              # noqa: BLE001
+                continue
+            key = "RealEstate" if sector == "REIT" else sector
+            pd = (sp.INDUSTRY_VALUATION_PROFILES.get(key) or {}).get(profile) or {}
+            if any(m.get("name") == "SOTP (analyst)" for m in pd.get("methods") or []):
+                out.append(t)
+    return sorted(set(out))
+
+
 def _fmp(path: str, params: dict):
     from src.tools.api import _fmp_get
     return _fmp_get(f"https://financialmodelingprep.com/stable/{path}", params,
@@ -193,6 +211,7 @@ def build_one(ticker: str, kind: str) -> dict:
                        "detail": (f"{len(conv.get('segments') or [])} usable; dropped "
                                   f"{conv_checks.get('dropped_segments') or 'none'}")})
         checks.append(_url_check(_urls))
+        checks.append(ii.engine_preview_check(conv))
         return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
                 "anchors": anchors, "value_usd": seg_sum or None, "checks": checks,
                 "engine_preview": {"segments": conv.get("segments"), "checks": conv_checks},
@@ -263,14 +282,21 @@ def main(argv=None) -> int:
     ap.add_argument("--resolve-urls", action="store_true",
                     help="resolve grounding redirect wrappers on EXISTING entries into canonical_urls "
                          "(reviewed data untouched, acceptances survive)")
+    ap.add_argument("--profile-sotp", action="store_true",
+                    help="build the sotp kind for every pinned ticker whose profile declares SOTP (analyst)")
     a = ap.parse_args(argv)
     if a.resolve_urls:
         ii.save(resolve_store_urls(ii.load() or {"version": 1, "tickers": {}}))
         return 0
-    jobs = ([(k, t) for k, ts in WAVES[a.wave].items() for t in ts] if a.wave
-            else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
+    if a.profile_sotp:
+        jobs = [("sotp", t) for t in sotp_profile_tickers()]
+        print(f"profiles declaring SOTP (analyst): {len(jobs)} pinned ticker(s): "
+              + ", ".join(t for _, t in jobs))
+    else:
+        jobs = ([(k, t) for k, ts in WAVES[a.wave].items() for t in ts] if a.wave
+                else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
     if not jobs or any(k is None for k, _ in jobs):
-        ap.error("give --wave N, or --kind with --tickers")
+        ap.error("give --wave N, --profile-sotp, or --kind with --tickers")
     doc = ii.load() or {"version": 1, "tickers": {}}
     for kind, t in jobs:
         key = ii._key(t)

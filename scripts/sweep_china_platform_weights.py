@@ -1,5 +1,8 @@
-"""Owner, 2026-09-26: measure the DRAFT "China Internet Platform" profile at three
-SOTP (analyst) weights before it touches the registry.
+"""Owner, 2026-09-26: measure the "China Internet Platform" profile at three
+SOTP (analyst) weights. Written while the profile was a DRAFT; the registry now
+carries it (same day, with normalised earnings legs), and this script still
+OVERRIDES the registry entry in-process with the sweep shape below, so it stays
+a weight-sensitivity tool, not a reading of the live profile.
 
     python scripts/sweep_china_platform_weights.py --sotp-weight 0.35 \
         --out docs/baselines/china_platform_w35.json

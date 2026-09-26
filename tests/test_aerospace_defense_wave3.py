@@ -33,7 +33,8 @@ TABLE = {
     NICHE:  [("PEG", 0.30, True), ("FCF Yield", 0.30, False), ("ROIC vs WACC", 0.20, False),
              ("Forward P/E", 0.20, False)],
     DTS:    [("EV/Fwd Rev", 0.45, True), ("Rev DCF (Target Margin)", 0.35, False), ("EV/Revenue", 0.20, False)],
-    HOLDCO: [("DCF", 0.35, True), ("SOTP / NAV (look-through)", 0.35, False), ("Forward P/E", 0.30, False)],
+    # 2026-09-26: the accepted analyst SOTP holds the slot; the look-through is a declared shadow method.
+    HOLDCO: [("DCF", 0.35, True), ("SOTP (analyst)", 0.35, False), ("Forward P/E", 0.30, False)],
     GA:     [("Forward P/E", 0.35, True), ("EV/Revenue", 0.25, False), ("Backlog-coverage DCF", 0.25, False),
              ("EV/EBITDA", 0.15, False)],
     GAENG:  [("EV/EBITDA", 0.45, True), ("P/BV", 0.35, False), ("FCF Yield", 0.20, False)],
@@ -213,7 +214,7 @@ def test_the_sotp_legs_read_owner_accepted_gemini_inputs_and_nothing_else():
     assert "sotp" in ii.KINDS and "sotp" in ii.NO_OVERLAY and gp.INDUSTRY_INPUT_SCHEMAS["sotp"] is gp.SotpInputs
     src = inspect.getsource(dcf_agent.run_dcf_agent)
     at = src.index('_ii_s.accepted_entry(ticker, "sotp")')
-    assert "if not _ticker_sotp:" in src[at - 900: at]      # the pipeline's own assumptions still win
+    assert "_ticker_sotp = None" in src[at - 900: at]      # 2026-09-26: the accepted input is the ONLY source
     # 2026-09-24: the accepted entry reaches the bridge with canonical URLs
     assert "_to_engine(_ii_s.canonical_data(_sotp_e))" in src[at: at + 400]
 
@@ -311,38 +312,17 @@ def test_rule_2_the_peg_runs_as_the_active_baseline_and_carries_its_sensitivity(
 
 
 def test_rule_3_the_analyst_sotp_takes_precedence_and_the_lookthrough_goes_shadow():
-    profile = {"methods": [{"name": "DCF", "weight": 0.35, "anchor": True, "implementable": True},
-                           {"name": "SOTP / NAV (look-through)", "weight": 0.35, "anchor": False,
-                            "implementable": False, "proxy": "P/BV"},
-                           {"name": "Forward P/E", "weight": 0.30, "anchor": False, "implementable": True}]}
-    out = dcf_agent._promote_sotp_analyst_profile(profile, True, shadow_lookthrough=True)
-    names = [m["name"] for m in out["methods"]]
-    assert "SOTP (analyst)" in names and "SOTP / NAV (look-through)" not in names
-    assert out["shadow_methods"] == ["SOTP / NAV (look-through)"]
-    # The shadowed look-through takes no part of the promoted weight: the
-    # analyst SOTP carries the whole share, and the look-through's own 0.35
-    # renormalises onto the rest (the 0916 family-sharing decision applies
-    # only to SOTPs that remain in the blend).
-    w = {m["name"]: m["weight"] for m in out["methods"]}
-    assert w["SOTP (analyst)"] == pytest.approx(dcf_agent._SOTP_ANALYST_BLEND_WEIGHT)
-    assert w["DCF"] == pytest.approx(0.35) and w["Forward P/E"] == pytest.approx(0.30)
-    # Owner, 2026-09-23: precedence reaches a look-through that COMPLETES from
-    # a template too, keyed on the owner-ACCEPTED SOTP (origin tag); the
-    # extractor's machine SOTP keeps sharing beside a completing template
-    # (BN4.SI, 2026-09-15).
-    src_run = inspect.getsource(dcf_agent.run_dcf_agent)
-    assert 'if _sotp_a and _sotp_a.get("_origin") != "gemini_accepted":' in src_run
-    assert "shadow_lookthrough=not _lt_completes)" in src_run
-    templated = {"methods": [{"name": "DCF", "weight": 0.30, "anchor": True, "implementable": True},
-                             {"name": "SOTP / NAV", "weight": 0.40, "anchor": False, "implementable": True},
-                             {"name": "SOTP (published)", "weight": 0.30, "anchor": False, "implementable": True}]}
-    out2 = dcf_agent._promote_sotp_analyst_profile(templated, True, shadow_lookthrough=True)
-    w2 = {m["name"]: m["weight"] for m in out2["methods"]}
-    assert out2["shadow_methods"] == ["SOTP / NAV"] and "SOTP / NAV" not in w2
-    half = dcf_agent._SOTP_ANALYST_BLEND_WEIGHT / 2.0
-    assert w2["SOTP (analyst)"] == pytest.approx(half) and w2["SOTP (published)"] == pytest.approx(0.30 + half)
-    assert profile["methods"][1]["name"] == "SOTP / NAV (look-through)"     # copy-on-write: the table is untouched
-    assert dcf_agent._promote_sotp_analyst_profile(profile, False) is profile  # no assumptions, no change
+    # Owner rule 3 (2026-09-23), declared in the table since 2026-09-26: the
+    # accepted analyst SOTP holds the structural slot at 0.35 and the
+    # look-through is a declared shadow method -- computed, published as an
+    # unweighted cross-check with its variance, never blended.
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    p = P["Industrials"]["Aerospace Holdco (HK)"]
+    w = {m["name"]: m["weight"] for m in p["methods"]}
+    assert w == {"DCF": 0.35, "SOTP (analyst)": 0.35, "Forward P/E": 0.30}
+    assert p["shadow_methods"] == ["SOTP / NAV (look-through)"]
+    assert next(m for m in p["methods"] if m["name"] == "SOTP (analyst)")["implementable"] is True
+    assert not hasattr(dcf_agent, "_promote_sotp_analyst_profile")
     src = inspect.getsource(dcf_agent.run_dcf_agent)
     assert 'for _shadow in (profile_data.get("shadow_methods") or []):' in src
     assert '"gate_id": "GATE_SOTP_PRECEDENCE"' in src and "holding-company spread), unweighted" in src

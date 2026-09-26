@@ -464,6 +464,9 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # Fifteenth (2026-09-23, owner rule 3): once an analyst SOTP is blended,
         # the look-through leg is computed, published as a cross-check and never
         # weighted; the record carries both figures. `applied` is a literal True.
+        # Sixteenth (2026-09-26): the pipeline extractor's SOTP, graded against
+        # the owner-accepted leg and never weighted. `applied` is a literal False.
+        "GATE_SOTP_EXTRACTOR_CROSSCHECK",
         "GATE_SOTP_PRECEDENCE",
     ], emitted
     # The two substring facts that used to be one assert. `"REINVESTMENT"` does
@@ -498,7 +501,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     # file, so it lives nowhere in particular and breaks everywhere. If you are
     # reading this because it failed, the second copy is in
     # `test_reinvestment_scope_and_cap.py` and both have to move together.
-    assert src.count('"applied": False,') == 4, src.count('"applied": False,')
+    assert src.count('"applied": False,') == 5   # +GATE_SOTP_EXTRACTOR_CROSSCHECK (2026-09-26), src.count('"applied": False,')
     assert '"applied": _s_to_c is not None' not in src
 
     # ── the eleventh gate's named facts ──────────────────────────────────────
@@ -1401,6 +1404,7 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
         ("Resources", "Integrated Oil & Gas", "EV/EBITDA (norm)"),
         ("Resources", "Mining (Major)", "EV/EBITDA (norm)"),
         ("Resources", "Upstream Oil & Gas", "EV/EBITDA (norm)"),
+        ("Tech", "China Internet Platform", "EV/EBITDA (norm)"),
         ("Tech", "Local Services & Instant Retail", "EV/EBITDA (norm)"),
     ], users
     consumer_vocab = {m["name"] for d in _consumer_profiles().values()
@@ -1705,7 +1709,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (112, 36), (total, with_norm)
+    assert (total, with_norm) == (113, 37), (total, with_norm)   # +China Internet Platform (2026-09-26), normalised legs
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1729,9 +1733,9 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 10, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes
+    assert spellings.get("EV/EBITDA (norm)") == 11, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 26, spellings
+    assert spellings.get("P/E (norm)") == 27, spellings            # +1 China Internet Platform (2026-09-26)
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
@@ -2075,7 +2079,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (112, 38, 38, 14)
+    assert (tot, trail, elig, anchored) == (113, 38, 38, 14)   # +China Internet Platform (2026-09-26), no trailing P/E
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2922,9 +2926,9 @@ def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
     assert lk["BIRK"][1] == "Apparel / Athletic Wear"
 
     consumer = [v for v in lk.values() if v[0] == "Consumer"]
-    assert len(consumer) == 84
+    assert len(consumer) == 83     # JD moved to Tech / China Internet Platform (owner, 2026-09-26)
     assert sum(1 for v in consumer if v[1]) == 43
-    assert sum(1 for v in consumer if not v[1]) == 41
+    assert sum(1 for v in consumer if not v[1]) == 40   # JD -> Tech / China Internet Platform (owner, 2026-09-26)
 
 
 def test_the_pins_override_a_classification_that_would_otherwise_move():

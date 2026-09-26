@@ -141,26 +141,5 @@ def curated_holdco_discount(ticker: str) -> tuple[float, str] | None:
     return None
 
 
-def attach_snapshot(existing: dict | None, snapshot: dict,
-                    tickers: list) -> tuple[dict, list]:
-    """Merge snapshot assumptions into the run's ``sotp_assumptions`` dict.
-
-    Returns ``(merged, attached)`` where ``attached`` lists the tickers that
-    received a snapshot entry. Live extractor output already present in
-    ``existing`` always wins — the snapshot only fills gaps, so a production
-    run with ``sotp_enabled`` / licensed PDFs keeps its live-extracted
-    assumptions untouched. ``existing`` is never mutated.
-    """
-    merged = dict(existing or {})
-    attached: list = []
-    for ticker in tickers:
-        if merged.get(ticker):
-            continue
-        snap_key, snap = lookup_snapshot(snapshot, ticker)
-        if not snap:
-            continue
-        # _origin marks the entry as validated snapshot input, so the live
-        # plausibility gate in dcf_agent never second-guesses it.
-        merged[ticker] = {**snap, "_origin": f"snapshot:{snap_key}"}
-        attached.append(ticker)
-    return merged, attached
+# `attach_snapshot` retired 2026-09-26 (owner): the pipeline no longer merges
+# the snapshot into a run; the SOTP (analyst) leg reads owner-accepted inputs.

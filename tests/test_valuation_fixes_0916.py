@@ -139,41 +139,24 @@ class TestEvEbitAnchor:
 
 
 class TestThePromotedWeightBelongsToTheSotpFamily:
-    KEPPEL = [{"name": "EV/EBITDA", "weight": 0.24},
-              {"name": "SOTP (published)", "weight": 0.21},
-              {"name": "DCF", "weight": 0.15},
-              {"name": "SOTP / NAV", "weight": 0.40}]
-    JD = [{"name": "EV/EBITDA", "weight": 0.40}, {"name": "P/E", "weight": 0.25},
-          {"name": "DCF", "weight": 0.25}, {"name": "FCF Yield", "weight": 0.10}]
+    """2026-09-15: the machine SOTP was outvoting two curated SOTPs 75% to 15%
+    (BN4.SI). 2026-09-26: the machine SOTP no longer enters any blend -- the
+    SOTP family a profile carries is the one it declares, and the extractor's
+    output is an unweighted cross-check (GATE_SOTP_EXTRACTOR_CROSSCHECK)."""
 
-    def _promoted(self, methods):
-        out = d._promote_sotp_analyst_profile({"methods": methods}, True)
-        return {m["name"]: m["weight"] for m in out["methods"]}
+    def test_the_machine_sotp_cannot_outvote_a_curated_one_because_it_is_never_weighted(self):
+        assert not hasattr(d, "_promote_sotp_analyst_profile")
+        src = inspect.getsource(d.run_dcf_agent)
+        assert '"gate_id": "GATE_SOTP_EXTRACTOR_CROSSCHECK"' in src
+        assert 'most_recent["sotp_assumptions_extractor"] = _ticker_sotp_extractor' in src
+        # the extractor's output never becomes the leg's source
+        assert "_ticker_sotp = None\n        if True:" in src
 
-    def test_a_curated_sotp_shares_the_weight(self):
-        w = self._promoted(self.KEPPEL)
-        share = d._SOTP_ANALYST_BLEND_WEIGHT / 3.0
-        assert w["SOTP (analyst)"] == pytest.approx(share)
-        assert w["SOTP / NAV"] == pytest.approx(0.40 + share)
-        assert w["SOTP (published)"] == pytest.approx(0.21 + share)
-        assert w["EV/EBITDA"] == 0.24 and w["DCF"] == 0.15
-
-    def test_the_machine_sotp_no_longer_outvotes_two_curated_ones(self):
-        w = self._promoted(self.KEPPEL)
-        total = sum(w.values())
-        assert w["SOTP (analyst)"] / total < 0.30
-        assert (w["SOTP / NAV"] + w["SOTP (published)"]) > w["SOTP (analyst)"] * 2
-
-    def test_the_sotp_family_still_outweighs_the_generic_multiples(self):
-        w = self._promoted(self.KEPPEL)
-        family = sum(v for k, v in w.items() if k in d._SOTP_LED_METHODS)
-        assert family / sum(w.values()) > 0.90
-
-    def test_with_no_curated_sotp_the_blend_is_unchanged(self):
-        w = self._promoted(self.JD)
-        assert w["SOTP (analyst)"] == pytest.approx(d._SOTP_ANALYST_BLEND_WEIGHT)
-        assert {k: v for k, v in w.items() if k != "SOTP (analyst)"} == \
-            {m["name"]: m["weight"] for m in self.JD}
+    def test_keppel_style_profiles_declare_their_sotp_family(self):
+        from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+        conglomerate = P["Industrials"]["Conglomerate / Industrial (SG)"]["methods"]
+        assert any(m["name"] == "SOTP (published)" for m in conglomerate)
+        assert not any(m["name"] == "SOTP (analyst)" for m in conglomerate)
 
     def test_a_published_sotp_counts_as_sotp_led_for_the_target(self):
         for name in ("SOTP (published)", "Published SOTP"):

@@ -1,5 +1,5 @@
 {
- "comp_age_days": 3.2,
+ "comp_age_days": 4.64,
  "fields": {
   "ev_ebitda": {
    "basis": "industry",
@@ -7,7 +7,23 @@
    "exchange": "HKSE",
    "key": "Specialty Retail",
    "peer_count": 6,
-   "value": 8.4433
+   "value": 8.8548
+  },
+  "ev_ebitda_ntm": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "HKSE",
+   "key": "Specialty Retail",
+   "peer_count": 5,
+   "value": 9.0066
+  },
+  "ev_ocf": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "HKSE",
+   "key": "Specialty Retail",
+   "peer_count": 5,
+   "value": 14.2539
   },
   "ev_revenue": {
    "basis": "industry",
@@ -15,15 +31,15 @@
    "exchange": "HKSE",
    "key": "Specialty Retail",
    "peer_count": 9,
-   "value": 1.1581
+   "value": 1.1329
   },
   "fcf_yield": {
    "basis": "industry",
-   "cohort": "large",
+   "cohort": "all",
    "exchange": "HKSE",
    "key": "Specialty Retail",
-   "peer_count": 9,
-   "value": 0.0017
+   "peer_count": 8,
+   "value": 0.0796
   },
   "growth_avg": {
    "basis": "industry",
@@ -39,7 +55,7 @@
    "exchange": "HKSE",
    "key": "Specialty Retail",
    "peer_count": 7,
-   "value": 1.7986
+   "value": 1.8181
   },
   "pe": {
    "basis": "industry",
@@ -47,7 +63,23 @@
    "exchange": "HKSE",
    "key": "Specialty Retail",
    "peer_count": 6,
-   "value": 16.2909
+   "value": 17.2733
+  },
+  "pe_ntm": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "HKSE",
+   "key": "Specialty Retail",
+   "peer_count": 5,
+   "value": 15.1834
+  },
+  "roic": {
+   "basis": "industry",
+   "cohort": "large",
+   "exchange": "HKSE",
+   "key": "Specialty Retail",
+   "peer_count": 8,
+   "value": 0.038
   }
  }
 }

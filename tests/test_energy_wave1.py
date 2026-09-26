@@ -41,9 +41,12 @@ TABLE = {   # owner-approved method table: (name, weight, anchor)
                                           ("P/BV", .10, False)],
     ("Energy", "Midstream / Pipelines"): [("EV/EBITDA", .45, True), ("Distributable CF Yield", .25, False),
                                           ("DDM", .20, False), ("DCF", .10, False)],
-    ("Energy", "Refining & Marketing"): [("EV/EBITDA (norm)", .40, True), ("Forward EV/EBITDA", .20, False),
-                                         ("FCF Yield", .20, False), ("P/BV", .10, False),
-                                         ("P/E (norm)", .10, False)],
+    # 2026-09-26: the segment SOTP the owner promoted on 2026-09-20 is declared
+    # at its 0.40; the five approved rows keep their ratios (x0.6), anchor unchanged.
+    ("Energy", "Refining & Marketing"): [("SOTP (segments)", .40, False), ("EV/EBITDA (norm)", .24, True),
+                                         ("Forward EV/EBITDA", .12, False),
+                                         ("FCF Yield", .12, False), ("P/BV", .06, False),
+                                         ("P/E (norm)", .06, False)],
     ("Energy", "Oilfield Services & Drilling"): [("EV/EBITDA (norm)", .50, True), ("P/BV", .20, False),
                                                  ("FCF Yield", .20, False), ("P/E (norm)", .10, False)],
     ("Resources", "Coal"): [("EV/EBITDA (norm)", .40, True),
