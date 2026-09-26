@@ -1482,3 +1482,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 4 (owner, 2026-09-26): COST pinned to Membership / Subscription Retail, shipped with the Discount Stores row it shares with WMT; fixture re-recorded on the pin against a review-cleared archive; 819.32 -> 525.00; no other fixture moved
 
+## 2026-09-26T13:53:21+00:00
+
+- regenerated at HEAD: `5306d5b`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner remediation 2026-09-26: one equity bridge (minority interest and preferred deducted on the DCF family and the analyst SOTP as on the EV legs); DDM at cost of equity with a dividend coverage cap; country premium is the owner's TOTAL, zero for China and Hong Kong (the HK table's embedded 150bps removed); EV/EBITDAR renamed EV/EBITDA so airlines join the mid-cycle swap; trading vs statement currency in the payload. Delta report docs/delta_report_2026-09-26.md
+
+## 2026-09-26T14:01:56+00:00
+
+- regenerated at HEAD: `5306d5b`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner remediation 2026-09-26 (continued): COST fixture re-recorded because the Membership / Subscription Retail method list changed with the EV/EBITDAR rename; same engine as the rest of this regeneration
+

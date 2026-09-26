@@ -506,6 +506,11 @@
           "rationale": "RMB/HKD cash flows of Asian regulated power assets; sovereign/market liquidity premium in the ERP; company-specific premium for nuclear tail risk and marketised tariffs."
         }
       }
+    },
+    "ddm_equity_spread": {
+      "value": 0.015,
+      "status": "PROPOSED",
+      "note": "Owner, 2026-09-26: DDM discounts at the cost of equity. Where no profile CoE row exists the leg uses WACC + this spread and says so in the trace. Profiles carrying DDM weight and no CoE row today: Insurance, Insurance (P&C), Mortgage/GSE, Holding Company, Real Estate Asset Manager (SG), Tobacco. Owner to set rows (Rf + beta x ERP) and retire the spread."
     }
   },
   "ticker_multiple_discounts": {
@@ -641,5 +646,35 @@
     "segment_sum_excess_tolerance": 0.05,
     "reviewer": "owner, 2026-09-24: pre-deployment sequencing. Item 2: a cited net-cash figure backed by a URL is kept; FMP net debt is the audit check and flags above 20% variance, never overwrites. Item 4: the sum of segment revenues may not exceed consolidated group revenue by more than a minimal reporting variance.",
     "note": "The 5% excess tolerance is the build's proposed 'minimal' value: it catches a group total cited as a segment (Meituan, 2026-09-24: +40%) while leaving room for rounding. Where a company reports segment revenue GROSS of inter-segment sales (JD Logistics), the pre-fill must cite external revenue; a gross figure fails this check by design."
+  },
+  "country_risk_premium": {
+    "_doc": "The owner's TOTAL country premium in the discount rate for cash flows domiciled in the currency (statement currency is the domicile proxy). Owner, 2026-09-26: China and Hong Kong carry NO country premium ('for the basis of my computation, assume country premium for China and Hong Kong is zero'); the 150bps the HK sector WACC table embeds is removed by the engine so the total is zero. Other rows carried over from the inline Damodaran table.",
+    "by_currency": {
+      "CNY": 0.0,
+      "HKD": 0.0,
+      "BRL": 0.022,
+      "INR": 0.014,
+      "MXN": 0.018,
+      "ZAR": 0.025,
+      "KRW": 0.007,
+      "IDR": 0.02,
+      "TRY": 0.04,
+      "RUB": 0.08
+    },
+    "reviewed": {
+      "last_reviewed": "2026-09-26",
+      "reviewer": "owner, 2026-09-26: CNY 0, HKD 0 -- no risk premium for China or Hong Kong"
+    }
+  },
+  "regime_flags": {
+    "_doc": "Computed, not owner-recorded (contrast regime_deviations). A name whose consensus target sits more than the threshold above spot is tagged Growth_Inflection_Speculative: the market prices a re-rated path the engine's trailing and normalised economics cannot reach, and the scorecard counts it apart instead of chasing it.",
+    "growth_inflection": {
+      "consensus_spread_min": 0.5,
+      "label": "Growth_Inflection_Speculative"
+    },
+    "reviewed": {
+      "last_reviewed": "2026-09-26",
+      "reviewer": "owner, 2026-09-26: strongly endorsed; threshold 50%"
+    }
   }
 }

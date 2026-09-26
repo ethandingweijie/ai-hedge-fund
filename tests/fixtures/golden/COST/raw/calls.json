@@ -2638,7 +2638,7 @@
   "result": null
  },
  {
-  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [], \"methods\": [{\"anchor\": true, \"implementable\": true, \"name\": \"P/E\", \"weight\": 0.4}, {\"anchor\": false, \"implementable\": true, \"name\": \"DCF\", \"weight\": 0.3}, {\"anchor\": false, \"implementable\": true, \"name\": \"FCF Yield\", \"weight\": 0.2}, {\"anchor\": false, \"implementable\": true, \"name\": \"EV/EBITDAR\", \"note\": \"proxied by EV/EBITDA\", \"weight\": 0.1}], \"rationale\": \"Membership-model retailers earn the majority of net income from recurring membership fees with 90%+ renewal rates.  Market values them at a structural premium (40-55x P/E) vs traditional retail (15-20x) due to subscription economics, not merchandise margins.\"}, \"Consumer\", \"Membership / Subscription Retail\", [\"active\", null]]]",
+  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [], \"methods\": [{\"anchor\": true, \"implementable\": true, \"name\": \"P/E\", \"weight\": 0.4}, {\"anchor\": false, \"implementable\": true, \"name\": \"DCF\", \"weight\": 0.3}, {\"anchor\": false, \"implementable\": true, \"name\": \"FCF Yield\", \"weight\": 0.2}, {\"anchor\": false, \"implementable\": true, \"name\": \"EV/EBITDA\", \"note\": \"renamed from EV/EBITDAR 2026-09-26\", \"weight\": 0.1}], \"rationale\": \"Membership-model retailers earn the majority of net income from recurring membership fees with 90%+ renewal rates.  Market values them at a structural premium (40-55x P/E) vs traditional retail (15-20x) due to subscription economics, not merchandise margins.\"}, \"Consumer\", \"Membership / Subscription Retail\", [\"active\", null]]]",
   "target": "src.memory.calibration.apply_profile_weights",
   "result": {
    "methods": [
@@ -2661,11 +2661,11 @@
      "implementable": true
     },
     {
-     "name": "EV/EBITDAR",
+     "name": "EV/EBITDA",
      "weight": 0.1,
      "anchor": false,
      "implementable": true,
-     "note": "proxied by EV/EBITDA"
+     "note": "renamed from EV/EBITDAR 2026-09-26"
     }
    ],
    "excluded": [],

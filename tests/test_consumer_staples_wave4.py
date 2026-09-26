@@ -53,7 +53,7 @@ def test_the_thin_labels_pool_into_families():
 @pytest.mark.parametrize("name,expected", [
     ("Food & Beverage", {"Forward P/E": 0.35, "EV/EBITDA": 0.25, "DCF": 0.25, "FCF Yield": 0.15}),
     ("Agribusiness & Food Processing", {"EV/EBITDA (norm)": 0.35, "P/E (norm)": 0.25, "DCF": 0.25, "P/BV": 0.15}),
-    ("Grocery & Discount Retail", {"EV/EBITDAR": 0.35, "Forward P/E": 0.25, "FCF Yield": 0.20, "DCF": 0.20}),
+    ("Grocery & Discount Retail", {"EV/EBITDA": 0.35, "Forward P/E": 0.25, "FCF Yield": 0.20, "DCF": 0.20}),
     ("Tobacco", {"FCF Yield": 0.35, "Forward P/E": 0.25, "DDM": 0.20, "EV/EBITDA": 0.20}),
     ("Household / Personal", {"Forward P/E": 0.40, "EV/EBITDA": 0.30, "DCF": 0.20, "ROIC": 0.10}),
 ])

@@ -2787,6 +2787,7 @@ def _sotp_analyst_style(
     net_debt: Optional[float] = None,
     fx_to_reporting: float = 1.0,
     tier: str = "default",
+    minority_interest: float = 0.0,
 ) -> Optional[dict]:
     """GS-style analyst SOTP; see comment above for methodology.
 
@@ -2981,7 +2982,7 @@ def _sotp_analyst_style(
         # A priced remainder beside a Degraded segment is a partial NAV. It is
         # returned with every row so the report can show which segment failed
         # and why, but per_share is None: the leg does not publish.
-        _partial_nav = total_seg_value + associates + net_cash
+        _partial_nav = total_seg_value + associates + net_cash - max(float(minority_interest or 0.0), 0.0)
         return {
             "rows":                rows,
             "degraded":            True,
@@ -3005,7 +3006,10 @@ def _sotp_analyst_style(
                 + f"; {_addback_basis}"),
         }
 
-    nav = total_seg_value + associates + net_cash
+    # Owner, 2026-09-26: one equity bridge -- the outside shareholders' claim on
+    # consolidated subsidiaries comes off the NAV, as it does off every EV leg.
+    _mi_usd = max(float(minority_interest or 0.0), 0.0)
+    nav = total_seg_value + associates + net_cash - _mi_usd
     holdco_pct = float(assumptions.get("holdco_discount_pct", 0.0) or 0.0)
     holdco_value = nav * holdco_pct
     final = nav - holdco_value
@@ -3019,6 +3023,7 @@ def _sotp_analyst_style(
         "segment_value":       total_seg_value,
         "associates":          associates,
         "net_cash":            net_cash,
+        "minority_interest":   _mi_usd,
         "nav":                 nav,
         "holdco_discount_pct": holdco_pct,
         "holdco_discount":     holdco_value,
@@ -3579,6 +3584,8 @@ def _project_dcf(
     include_terminal: bool = True,
     sales_to_capital: Optional[float] = None,
     margin_schedule: Optional[list[float]] = None,
+    minority_interest: float = 0.0,
+    preferred_equity: float = 0.0,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -3784,7 +3791,9 @@ def _project_dcf(
         tv           = fcf_terminal / (wacc_T - tgr)
         pv_tv        = tv * disc_cum
 
-    equity_value = pv_sum + pv_tv - (net_debt or 0.0)
+    # Owner, 2026-09-26: the same bridge as the multiples legs (minority
+    # interest and preferred deducted); see build_equity_bridge.
+    equity_value = build_equity_bridge(pv_sum + pv_tv, net_debt, minority_interest, preferred_equity)
     iv = equity_value / shares
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
 
@@ -5530,6 +5539,45 @@ def _compute_rnpv(
 
 # ── Multi-Method Valuation Engine ─────────────────────────────────────────────
 
+def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc: float) -> tuple[float, str]:
+    """The discount rate for a dividend stream: the owner's cost-of-equity row
+    for this profile and market when one exists, else WACC plus the owner's
+    proposed equity spread (never below WACC). Returns (rate, source)."""
+    try:
+        from src.data import valuation_constants as _vc
+        _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker))
+        if isinstance(_coe, (int, float)) and _coe > 0:
+            return max(float(_coe), float(wacc)), "owner cost_of_equity table"
+        _spread = _vc.ddm_equity_spread()
+    except Exception:                                      # noqa: BLE001
+        _spread = 0.015
+    return float(wacc) + float(_spread), f"WACC + {_spread:.2%} equity spread (proposed; no owner CoE row for {profile_name})"
+
+
+def build_equity_bridge(ev: float, net_debt: Optional[float], minority_interest: Optional[float] = 0.0,
+                        preferred_equity: Optional[float] = 0.0) -> float:
+    """Owner, 2026-09-26: the ONE equity bridge every leg uses.
+
+        equity = EV - net debt - minority interest - preferred equity
+
+    Until today the multiples legs deducted minority interest and the DCF
+    family and the analyst SOTP did not, so one company had two bridges and a
+    consolidated subsidiary's outside shareholders were paid twice. Net debt
+    already nets cash (a net-cash name arrives with a negative figure, which
+    adds). Minority interest and preferred are floored at zero: deducting a
+    negative would add value on somebody else's losses.
+    """
+    return (float(ev) - float(net_debt or 0.0)
+            - max(float(minority_interest or 0.0), 0.0)
+            - max(float(preferred_equity or 0.0), 0.0))
+
+
+def _preferred_equity(most_recent: dict) -> float:
+    """Preferred stock at book, when the line items carry it; else 0."""
+    v = _safe((most_recent or {}).get("preferred_equity"))
+    return max(v, 0.0) if v is not None else 0.0
+
+
 def _minority_interest(most_recent: dict) -> float:
     """Book value of the stake in consolidated subsidiaries owned by others.
 
@@ -5616,9 +5664,10 @@ def _ev_to_equity_ps(
     if not shares or shares <= 0:
         return None
     _mi = _minority_interest(most_recent)
-    equity = ev - (net_debt or 0.0) - _mi
+    _pref = _preferred_equity(most_recent)
+    equity = build_equity_bridge(ev, net_debt, _mi, _pref)
     _leg_trace(ev=float(ev), net_debt=float(net_debt or 0.0),
-               minority_interest=float(_mi), equity=float(equity),
+               minority_interest=float(_mi), preferred_equity=float(_pref), equity=float(equity),
                shares=float(shares), floored_at_zero=equity < 0)
     return max(equity / shares, 0.0)
 
@@ -5824,6 +5873,8 @@ def _compute_method_value(
                    wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
                    tgr=float(tgr), fcf_floor=-1.0,
                    net_debt=float(net_debt or 0.0), shares=float(shares),
+                   minority_interest=_minority_interest(most_recent),
+                   preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
                    projection_rows=_rows,
                    target_margin={"ebit_margin_start": float(_m0), "ebit_margin_terminal": float(_tgt),
@@ -5893,6 +5944,8 @@ def _compute_method_value(
                    wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
                    tgr=float(tgr), fcf_floor=float(fcf_floor),
                    net_debt=float(net_debt or 0.0), shares=float(shares),
+                   minority_interest=_minority_interest(most_recent),
+                   preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
                    projection_rows=_rows, **({"backlog_bound": _bound} if _bound else {}))
         return iv
@@ -5923,6 +5976,8 @@ def _compute_method_value(
                    wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
                    tgr=float(tgr), fcf_floor=float(fcf_floor),
                    net_debt=float(net_debt or 0.0), shares=float(shares),
+                   minority_interest=_minority_interest(most_recent),
+                   preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
                    projection_rows=_rows)
         return iv
@@ -5967,6 +6022,8 @@ def _compute_method_value(
             wacc, 0.0, fcf_floor, net_debt, shares,
             years=_DEPLETING_HORIZON_YEARS,
             include_terminal=False,
+            minority_interest=_minority_interest(most_recent),
+            preferred_equity=_preferred_equity(most_recent),
         )
         return iv
 
@@ -6277,16 +6334,16 @@ def _compute_method_value(
                 # degraded. The verdict is a function of the assumptions alone,
                 # so recomputing per scenario cannot change it.
                 return None
+            _sotp_fx = float(assumptions.get("fx_usd_to_reporting")
+                             or most_recent.get("_sotp_usd_reporting_fx") or 1.0)
             table = _sotp_analyst_style(
                 assumptions,
                 shares=shares,
                 net_debt=net_debt,
-                fx_to_reporting=float(
-                    assumptions.get("fx_usd_to_reporting")
-                    or most_recent.get("_sotp_usd_reporting_fx")
-                    or 1.0
-                ),
+                fx_to_reporting=_sotp_fx,
                 tier=_resolve_segment_tier(sector, profile_name),
+                # reporting-currency book figure into the USD table
+                minority_interest=_minority_interest(most_recent) / (_sotp_fx or 1.0),
             )
             if table is None:
                 return None
@@ -6319,6 +6376,7 @@ def _compute_method_value(
                             fx=float(table.get("fx_to_reporting") or 1.0),
                             net_debt=net_debt,
                             tier=_resolve_segment_tier(sector, profile_name),
+                            minority_interest=float(table.get("minority_interest") or 0.0),
                         ) or {}
                     )
                 except Exception:
@@ -7014,7 +7072,23 @@ def _compute_method_value(
     # cash-coverable portion of the distribution.
     if method_name == "DDM":
         div = dividends_ps
-        if div and div > 0 and wacc > tgr:
+        # Owner, 2026-09-26 (Priority 1): dividends are an EQUITY stream and
+        # are discounted at the cost of equity, never at WACC (WACC < Ke for
+        # any levered name: D05.SI +24% on the leg). Ke is the owner's table
+        # where a row exists, else WACC plus the owner's proposed equity
+        # spread, disclosed in the trace. A dividend the earnings or free
+        # cash flow do not cover is capped at what covers it, and flagged.
+        _ke, _ke_src = _ddm_cost_of_equity(profile_name, ticker, wacc)
+        _cov_eps = (float(net_income) / float(shares)) if (isinstance(net_income, (int, float)) and net_income > 0
+                                                          and shares and shares > 0) else None
+        _fcf_abs = _safe(most_recent.get("free_cash_flow"))
+        _cov_fcf = (float(_fcf_abs) / float(shares)) if (_fcf_abs is not None and _fcf_abs > 0
+                                                         and shares and shares > 0) else None
+        _cover = min(x for x in (_cov_eps, _cov_fcf) if x is not None) if (_cov_eps or _cov_fcf) else None
+        _div_capped = False
+        if div and div > 0 and _cover is not None and div > _cover:
+            div, _div_capped = _cover, True
+        if div and div > 0 and _ke > tgr:
             # AFFO-gate for REITs (sector=RealEstate/REIT or profile matches)
             if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
                 # Prefer research-sourced AFFO/share when available (parsed
@@ -7035,7 +7109,12 @@ def _compute_method_value(
                 if affo_ps and affo_ps > 0 and div > affo_ps:
                     div = affo_ps
             d_next = div * (1 + tgr)
-            return d_next / (wacc - tgr)
+            _ddm_v = d_next / (_ke - tgr)
+            _leg_trace(kind="ddm", dps=float(dividends_ps or 0.0), dps_used=float(div), growth=float(tgr),
+                       cost_of_equity=float(_ke), cost_of_equity_source=_ke_src, wacc=float(wacc),
+                       coverage_eps=_cov_eps, coverage_fcf=_cov_fcf, dividend_capped=_div_capped,
+                       value=float(_ddm_v))
+            return _ddm_v
         return None
 
     # ── NAV (Cap Rates) — REIT asset-backed valuation ─────────────────────
@@ -12007,20 +12086,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Source: Damodaran Jan 2026 country risk premiums.
         # Applied when the company reports in a non-USD currency (ADR or cross-listing)
         # reflecting political/regulatory/FX tail risk not captured by the sector WACC.
-        _CRP_BY_CURRENCY = {
-            "CNY":  0.018,  # China (mainland) — VIE risk, regulatory, capital controls
-            "HKD":  0.010,  # Hong Kong — lower than CNY; separate legal system
-            "BRL":  0.022,  # Brazil — fiscal policy risk, FX volatility
-            "INR":  0.014,  # India — governance improving; lower than EM median
-            "MXN":  0.018,  # Mexico — AMLO/Sheinbaum policy uncertainty
-            "ZAR":  0.025,  # South Africa — load-shedding, governance risk
-            "KRW":  0.007,  # South Korea — high-quality governance; small premium
-            "IDR":  0.020,  # Indonesia — commodity, EM
-            "TRY":  0.040,  # Turkey — currency and political risk
-            "RUB":  0.080,  # Russia — sanctions; use only in non-sanction context
-        }
-        _crp = _CRP_BY_CURRENCY.get(reported_currency.upper(), 0.0)
+        # Owner, 2026-09-26: the table moved to valuation_constants
+        # (`country_risk_premium.by_currency`) and China went from 180bps to
+        # the midpoint of the owner's +250..+450bps range. The statement
+        # currency is the domicile proxy, so BABA and 09988.HK both carry it.
+        try:
+            from src.data.valuation_constants import country_risk_premium as _crp_of
+            _crp = _crp_of(reported_currency)
+        except Exception:                                  # noqa: BLE001
+            _crp = 0.0
+        # The owner's figure is the TOTAL country premium in the rate. The HK
+        # sector WACC table embeds 150bps of its own (`crp_embedded`), so the
+        # engine adds only the difference -- and when the owner's total is
+        # BELOW what the table embeds (owner, 2026-09-26: China and Hong Kong
+        # carry no country premium), the embedded part is taken back out.
+        _crp_embedded = float(((_wacc_build.get("base_breakdown") or {}).get("crp_embedded")) or 0.0)
+        _wacc_build["country_risk_premium_total"] = _crp
+        _wacc_build["country_risk_premium_embedded"] = _crp_embedded
+        _crp = _crp - _crp_embedded
         _wacc_build["country_risk_premium"] = _crp
+        if _crp < 0:
+            wacc = round(wacc + _crp, 4)
+            fx_note = (fx_note or "") + (
+                f" | embedded {_crp_embedded:.1%} country premium removed for {reported_currency}: "
+                f"the owner's total is {_wacc_build['country_risk_premium_total']:.1%}.")
         if _crp > 0:
             wacc = round(wacc + _crp, 4)
             fx_note = (fx_note or "") + (
@@ -12838,6 +12927,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 fcf_floor=fcf_floor,
                 net_debt=net_debt,
                 shares=shares,
+                minority_interest=_minority_interest(most_recent),
+                preferred_equity=_preferred_equity(most_recent),
                 growth_schedule=_growth_schedule,
                 wacc_schedule=_wacc_schedule,
                 margin_delta_absolute=md_abs,
@@ -14381,6 +14472,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # +15pp when all three scenarios sit on the same side of spot).
         _pt_unified = False
         _pt_bridge: Optional[dict] = None
+        _consensus_spread: Optional[float] = None
+        _regime_flag: Optional[str] = None
         if _spot_for_cap and float(_spot_for_cap) > 0:
             _pt_cross = {"method": _12m_pt_method_label, "targets": dict(_12m_targets)}
             _pt_rows: dict = {}
@@ -14581,7 +14674,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         #
         # Legacy path (reported_currency == "USD", is_hk=True, e.g. CNOOC/AIA):
         # inputs were converted USD → HKD in the block above, so outputs are HKD.
-        _output_currency = reported_currency   # stays source ccy unless we convert
+        # Owner, 2026-09-26 (audit A1): every per-share figure was converted to
+        # the TRADING currency in the FX block, but the label stayed on the
+        # statement currency for every non-HK name (BABA's $133/ADS printed as
+        # RMB 133). The label now follows the money.
+        try:
+            _output_currency = _target_ccy
+        except NameError:                                  # pragma: no cover
+            _output_currency = reported_currency
         if _is_hk:
             _output_currency = "HKD"
             fx_note = (fx_note or "") + " | Per-share IV & PT in HKD (HKEX prices quoted in HKD)"
@@ -15089,7 +15189,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _ex_fx = float((most_recent.get("sotp_assumptions") or {}).get("fx_usd_to_reporting")
                                    or most_recent.get("_sotp_usd_reporting_fx") or 1.0)
                     _ex_t = _sotp_analyst_style({**_ex_a, "fx_usd_to_reporting": _ex_fx}, shares=shares,
-                                                net_debt=net_debt, fx_to_reporting=_ex_fx)
+                                                net_debt=net_debt, fx_to_reporting=_ex_fx,
+                                                minority_interest=_minority_interest(most_recent) / (_ex_fx or 1.0))
                     _ex_v = (_ex_t or {}).get("per_share_reporting")
                 except Exception:                          # noqa: BLE001
                     _ex_v = None
@@ -15109,6 +15210,33 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "basis": "the extractor's SOTP is a cross-check on the owner-accepted inputs; no weight",
                     "applied": False,
                 })
+            # Owner, 2026-09-26 (dual score): the consensus spread is recorded as
+            # a covariate beside the calibration record, and a spread above the
+            # owner's threshold tags the name Growth_Inflection_Speculative --
+            # the market prices a re-rated path, the scorecard counts it apart.
+            try:
+                from src.data.valuation_constants import growth_inflection_flag as _gi_flag
+                _cons_v = (_consensus_pt or {}).get("consensus") if isinstance(_consensus_pt, dict) else None
+                if (isinstance(_cons_v, (int, float)) and _cons_v > 0
+                        and isinstance(_spot_price, (int, float)) and _spot_price > 0):
+                    _consensus_spread = round(float(_cons_v) / float(_spot_price) - 1.0, 4)
+                    if isinstance(calibration_record, dict):
+                        calibration_record["consensus_spread"] = _consensus_spread
+                    _regime_flag = _gi_flag(_consensus_spread)
+                    if _regime_flag:
+                        _b_sr.setdefault("forward_flags", []).append(
+                            f"{_regime_flag}: consensus target {_cons_v:,.2f} sits {_consensus_spread:+.0%} above spot; "
+                            f"the market prices a re-rated path and this name is scored apart")
+                        gate_evaluations.append({
+                            "gate_id": "GATE_GROWTH_INFLECTION",
+                            "metric": "consensus_spread",
+                            "raw_input_path_a": _consensus_spread,
+                            "gated_output_path_b": None,
+                            "basis": "consensus target above spot by more than the owner's threshold; observation only",
+                            "applied": False,
+                        })
+            except Exception:                              # noqa: BLE001
+                pass
             _shadow_names = (profile_data or {}).get("shadow_methods") or []
             if _shadow_names:
                 _an = _b_tbl.get("SOTP (analyst)")
@@ -15203,6 +15331,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # display on the frontend. None for HK/SG or when FMP returns no
             # data. Shape: {high, low, consensus, median} or None.
             "consensus_pt":       _consensus_pt,
+            # Owner, 2026-09-26 (dual score): consensus/spot - 1, the covariate the
+            # ledger regresses on; and the computed regime tag above the threshold.
+            "consensus_spread":   _consensus_spread,
+            "regime_flag":        _regime_flag,
             # Forward test: one (Path A, Path B) pair per gate firing. An
             # empty list means no gate fired; absent means the run predates
             # instrumentation. The reconciliation worker must tell those apart.
@@ -15212,6 +15344,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # reported_currency remains the original financial statement currency.
             "reported_currency":  _output_currency,
             "source_currency":    reported_currency,   # original statement currency
+            # Owner, 2026-09-26: the two currencies named for what they are. Per-share
+            # values and spot are in trading_currency; the statements in statement_currency.
+            "trading_currency":   _output_currency,
+            "statement_currency": reported_currency,
             "fx_rate":            round(fx_rate, 6),
             "fx_note":            fx_note,
             # Country Risk Premium (Change 6) — 0.0 if USD-reporting
@@ -15232,6 +15368,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # `dcfRange?.sotp_breakdown`. Rides the existing persistence chain
             # (pipeline allowlist → analysis_service → web_runs) untouched.
             "sotp_breakdown":     sotp_breakdown,
+            # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
+            # its rows and reason so both renderers can show WHY it did not price.
+            "sotp_analyst_degraded": (
+                {k: (most_recent.get("sotp_analyst_degraded") or {}).get(k)
+                 for k in ("rows", "degraded_segments", "degraded_reason", "associates", "net_cash",
+                           "minority_interest", "segment_value", "fx_to_reporting", "shares")}
+                if isinstance(most_recent.get("sotp_analyst_degraded"), dict) else None),
             # D3: loud-degradation metadata — True when the intended profile
             # did not resolve and a fallback path ran; list of declared
             # profile methods that produced no value in the base scenario.

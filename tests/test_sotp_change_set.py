@@ -152,3 +152,17 @@ def test_golden_replay_never_reads_the_developers_review_database(tmp_path, monk
         assert ii.accepted_entry("BABA", "sotp", doc={"version": 1, "tickers": {"BABA": {"sotp": {
             "data": {"segments": []}}}}}) is None
     assert ii.review_for("BABA", "sotp", {})["status"] == "accepted"      # restored on exit
+
+
+# ── the China country risk premium is a TOTAL, not an add-on (2026-09-26) ───
+
+def test_the_country_premium_nets_what_the_wacc_table_already_embeds():
+    src = inspect.getsource(d.run_dcf_agent)
+    assert '_crp = _crp - _crp_embedded' in src            # the owner's figure is the TOTAL
+    assert '_wacc_build["country_risk_premium_total"] = _crp' in src
+    assert "embedded {_crp_embedded:.1%} country premium removed" in src
+    from src.data import valuation_constants as vc
+    # Owner, 2026-09-26: no country premium for China or Hong Kong.
+    assert vc.country_risk_premium("CNY") == 0.0 and vc.country_risk_premium("HKD") == 0.0
+    assert vc.country_risk_premium("BRL") == 0.022
+    assert vc.load()["country_risk_premium"]["reviewed"]["reviewer"].startswith("owner, 2026-09-26")

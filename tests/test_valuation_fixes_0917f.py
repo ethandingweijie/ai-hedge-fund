@@ -667,10 +667,12 @@ def test_the_quality_gate_saturates_in_bear_for_the_four_names_above_twice_wacc(
                        and _proj(n)["scenarios.bear.forward_roic"]
                        >= 2 * _proj(n)["wacc"])
     assert saturated == ["AAPL", "COST", "MELI", "V"]
+    # 1.106x until 2026-09-26; the bridge's preferred-equity deduction lifts the
+    # bear ROIC term to 1.380x WACC, still short of the 2x saturation line.
     assert _proj("02888_HK")["scenarios.bear.forward_roic"] / _proj("02888_HK")["wacc"] \
-        == pytest.approx(1.106, abs=5e-4)
+        == pytest.approx(1.380, abs=5e-4)
     assert _proj("02888_HK")["scenarios.bear.growth_premium"] == pytest.approx(
-        0.969, abs=5e-4)
+        0.889, abs=5e-4)   # 0.969 until the 2026-09-26 bridge
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -935,7 +937,7 @@ def test_02888_carries_a_forty_six_percent_bank_sector_growth_average():
     assert p["scenarios.bear.sector_g_avg"] == pytest.approx(0.4592, abs=5e-5)
     assert _basis("02888_HK", "bear")["basis"] == "industry"
     assert _basis("02888_HK", "bear")["cohort"] == "all"
-    assert p["scenarios.base.growth_premium"] == pytest.approx(0.891, abs=5e-4)
+    assert p["scenarios.base.growth_premium"] == pytest.approx(0.793, abs=5e-4)   # 0.891 until the 2026-09-26 bridge
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -209,7 +209,8 @@ def test_traditional_retail_is_the_only_consumer_profile_with_no_dcf_leg():
     assert without == ["Tobacco", "Traditional Retail"], without
     tr = {m["name"]: m["weight"]
           for m in INDUSTRY_VALUATION_PROFILES["Consumer"]["Traditional Retail"]["methods"]}
-    assert tr == {"EV/EBITDAR": 0.4, "P/E": 0.25, "EV/Revenue": 0.15,
+    # 2026-09-26 (audit A5): the anchor is named EV/EBITDA, which is what it computes.
+    assert tr == {"EV/EBITDA": 0.4, "P/E": 0.25, "EV/Revenue": 0.15,
                   "ROIC vs WACC": 0.1, "FCF Yield": 0.1}, tr
 
 

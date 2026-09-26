@@ -1,0 +1,1153 @@
+{
+ "wave": "dryrun-energy",
+ "as_of": "2026-09-26",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "COP": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.25
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 89.92,
+   "base": 138.5,
+   "bull": 188.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 131.22,
+   "consensus": 152.27,
+   "iv_vs_consensus": -0.09043147041439559,
+   "spot": 127.3,
+   "iv_vs_spot": 0.08798114689709347,
+   "consensus_spread": 0.1962,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1382412819334078,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3093008118067765,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $68.50 vs price $99.17 on 2024-12-31 = 31% gap; 12m later the market was closer (27% vs 6%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "EOG": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.25
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 92.3,
+   "base": 118.67,
+   "bull": 145.01,
+   "scenarios_ordered": true,
+   "target_12m_base": 132.76,
+   "consensus": 162.0,
+   "iv_vs_consensus": -0.2674691358024691,
+   "spot": 140.35,
+   "iv_vs_spot": -0.154470965443534,
+   "consensus_spread": 0.1543,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1804938271604939,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1420030556046713,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $105.17 vs price $122.58 on 2024-12-31 = 14% gap; 12m later the model was closer (0% vs 17%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "DVN": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.25
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 26.16,
+   "base": 37.22,
+   "bull": 48.07,
+   "scenarios_ordered": true,
+   "target_12m_base": 43.61,
+   "consensus": 61.93,
+   "iv_vs_consensus": -0.39899886969158727,
+   "spot": 47.05,
+   "iv_vs_spot": -0.20892667375132834,
+   "consensus_spread": 0.3163,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.295817858872921,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.21540162587593523,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $39.78 vs price $32.73 on 2024-12-31 = 22% gap; 12m later model and market were level (9% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "OXY": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.25
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 42.08,
+   "base": 54.99,
+   "bull": 67.68,
+   "scenarios_ordered": true,
+   "target_12m_base": 56.21,
+   "consensus": 70.9,
+   "iv_vs_consensus": -0.2244005641748943,
+   "spot": 56.86,
+   "iv_vs_spot": -0.03288779458318669,
+   "consensus_spread": 0.2469,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.20719322990126943,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.020781277803048982,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $50.44 vs price $49.41 on 2024-12-31 = 2% gap; 12m later model and market were level (23% vs 20%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00883.HK": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.25
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 24.67,
+   "base": 29.7,
+   "bull": 34.85,
+   "scenarios_ordered": true,
+   "target_12m_base": 26.55,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 23.399999618530273,
+   "iv_vs_spot": 0.26923078992192817,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3618359634228643,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $26.04 vs price $19.12 on 2024-12-31 = 36% gap; 12m later the market was closer (22% vs 10%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "5WH.SI": {
+   "profile": "Upstream Oil & Gas",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/OCF",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.416667
+    },
+    {
+     "method": "Depleting Asset DCF (Finite Life, No TV)",
+     "value_key": "Depleting Asset DCF (Finite Life, No TV)",
+     "weight": 0.416667
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/OCF",
+     "weight": 0.4,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [
+    "EV/OCF"
+   ],
+   "bear": 0.55,
+   "base": 0.88,
+   "bull": 1.56,
+   "scenarios_ordered": true,
+   "target_12m_base": 0.47,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 0.063,
+   "iv_vs_spot": 12.968253968253968,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": true,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.2305188669347293,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $0.41 vs price $0.18 on 2023-12-29 = 123% gap; 12m later the market was closer (232% vs 49%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "KMI": {
+   "profile": "Midstream / Pipelines",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "Distributable CF Yield",
+     "value_key": "Distributable CF Yield",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.2
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 14.68,
+   "base": 27.92,
+   "bull": 41.56,
+   "scenarios_ordered": true,
+   "target_12m_base": 29.76,
+   "consensus": 36.33,
+   "iv_vs_consensus": -0.23148912744288463,
+   "spot": 30.75,
+   "iv_vs_spot": -0.09203252032520315,
+   "consensus_spread": 0.1815,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.18084227910817496,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.20436994923466492,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $21.80 vs price $27.40 on 2024-12-31 = 20% gap; 12m later the market was closer (21% vs 0%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "WMB": {
+   "profile": "Midstream / Pipelines",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "Distributable CF Yield",
+     "value_key": "Distributable CF Yield",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.2
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 22.11,
+   "base": 34.76,
+   "bull": 53.05,
+   "scenarios_ordered": true,
+   "target_12m_base": 52.01,
+   "consensus": 86.64,
+   "iv_vs_consensus": -0.5987996306555863,
+   "spot": 69.26,
+   "iv_vs_spot": -0.4981230147271153,
+   "consensus_spread": 0.2509,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3996999076638966,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.39214524094110664,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $32.90 vs price $54.12 on 2024-12-31 = 39% gap; 12m later the market was closer (45% vs 10%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ET": {
+   "profile": "Midstream / Pipelines",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "Distributable CF Yield",
+     "value_key": "Distributable CF Yield",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.2
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 12.62,
+   "base": 27.71,
+   "bull": 42.9,
+   "scenarios_ordered": true,
+   "target_12m_base": 22.82,
+   "consensus": 24.67,
+   "iv_vs_consensus": 0.12322659100121602,
+   "spot": 20.19,
+   "iv_vs_spot": 0.37246161466072314,
+   "consensus_spread": 0.2219,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.07498986623429271,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6141652065634211,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $31.62 vs price $19.59 on 2024-12-31 = 61% gap; 12m later the market was closer (92% vs 19%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "OKE": {
+   "profile": "Midstream / Pipelines",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.459184
+    },
+    {
+     "method": "Distributable CF Yield",
+     "value_key": "Distributable CF Yield",
+     "weight": 0.255102
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.204082
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.081633
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 0.98,
+   "methods_unavailable": [],
+   "bear": 56.68,
+   "base": 117.53,
+   "bull": 263.66,
+   "scenarios_ordered": true,
+   "target_12m_base": 98.75,
+   "consensus": 98.5,
+   "iv_vs_consensus": 0.19319796954314716,
+   "spot": 88.63,
+   "iv_vs_spot": 0.3260746925420288,
+   "consensus_spread": 0.1114,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.002538071065989911,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17374464835577083,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $82.96 vs price $100.40 on 2024-12-31 = 17% gap; 12m later the model was closer (13% vs 37%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "SLB": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 32.28,
+   "base": 41.78,
+   "bull": 50.41,
+   "scenarios_ordered": true,
+   "target_12m_base": 46.66,
+   "consensus": 64.58,
+   "iv_vs_consensus": -0.35305048002477546,
+   "spot": 51.54,
+   "iv_vs_spot": -0.18936748156771432,
+   "consensus_spread": 0.253,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.2774852895633323,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2407695432199306,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $47.57 vs price $38.34 on 2024-12-31 = 24% gap; 12m later the market was closer (24% vs 0%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HAL": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 27.69,
+   "base": 35.93,
+   "bull": 43.46,
+   "scenarios_ordered": true,
+   "target_12m_base": 33.87,
+   "consensus": 43.11,
+   "iv_vs_consensus": -0.16655068429598696,
+   "spot": 32.76,
+   "iv_vs_spot": 0.09676434676434686,
+   "consensus_spread": 0.3159,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.21433542101600567,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.4603362864936256,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $39.71 vs price $27.19 on 2024-12-31 = 46% gap; 12m later the market was closer (41% vs 4%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BKR": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 27.11,
+   "base": 36.04,
+   "bull": 42.92,
+   "scenarios_ordered": true,
+   "target_12m_base": 46.94,
+   "consensus": 74.45,
+   "iv_vs_consensus": -0.5159167226326393,
+   "spot": 57.83,
+   "iv_vs_spot": -0.3767940515303476,
+   "consensus_spread": 0.2874,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3695097380792479,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.0007408883198760254,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $40.99 vs price $41.02 on 2024-12-31 = 0% gap; 12m later model and market were level (10% vs 10%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "RIG": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.555556
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.222222
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.222222
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E (norm)",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "P/E (norm)"
+   ],
+   "bear": 4.01,
+   "base": 6.19,
+   "bull": 8.37,
+   "scenarios_ordered": true,
+   "target_12m_base": 5.66,
+   "consensus": 7.0,
+   "iv_vs_consensus": -0.11571428571428566,
+   "spot": 5.38,
+   "iv_vs_spot": 0.15055762081784385,
+   "consensus_spread": 0.3011,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1914285714285714,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.8479511917657547,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $10.68 vs price $3.75 on 2024-12-31 = 185% gap; 12m later the market was closer (159% vs 9%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "02883.HK": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 8.08,
+   "base": 11.19,
+   "bull": 14.3,
+   "scenarios_ordered": true,
+   "target_12m_base": 9.3,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 7.40500020980835,
+   "iv_vs_spot": 0.5111410780486136,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9187775094578401,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $13.51 vs price $7.04 on 2024-12-31 = 92% gap; 12m later the market was closer (93% vs 1%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "03337.HK": {
+   "profile": "Oilfield Services & Drilling",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 2.02,
+   "base": 2.67,
+   "bull": 3.32,
+   "scenarios_ordered": true,
+   "target_12m_base": 1.75,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 0.8299999833106995,
+   "iv_vs_spot": 2.216867534562975,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 4.7849037131027075,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $3.47 vs price $0.60 on 2024-12-31 = 478% gap; 12m later the market was closer (334% vs 25%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "XOM": {
+   "profile": "Integrated Oil & Gas",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.45
+    },
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 46.16,
+   "base": 63.0,
+   "bull": 79.74,
+   "scenarios_ordered": true,
+   "target_12m_base": 111.78,
+   "consensus": 168.08,
+   "iv_vs_consensus": -0.6251784864350309,
+   "spot": 160.56,
+   "iv_vs_spot": -0.6076233183856503,
+   "consensus_spread": 0.0468,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3349595430747264,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3498764610020247,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $69.93 vs price $107.57 on 2024-12-31 = 35% gap; 12m later the market was closer (42% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CVX": {
+   "profile": "Integrated Oil & Gas",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.45
+    },
+    {
+     "method": "EV/OCF",
+     "value_key": "EV/OCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 59.37,
+   "base": 82.03,
+   "bull": 104.53,
+   "scenarios_ordered": true,
+   "target_12m_base": 143.24,
+   "consensus": 209.46,
+   "iv_vs_consensus": -0.6083739138737707,
+   "spot": 204.44,
+   "iv_vs_spot": -0.5987575816865585,
+   "consensus_spread": 0.0246,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3161462809128235,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3478660064551045,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $94.46 vs price $144.84 on 2024-12-31 = 35% gap; 12m later the market was closer (38% vs 5%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "VLO": {
+   "profile": "Refining & Marketing",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "SOTP (segments)",
+     "value_key": "SOTP (segments)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.24
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.12
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.12
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.06
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.06
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 173.13,
+   "base": 197.86,
+   "bull": 232.04,
+   "scenarios_ordered": true,
+   "target_12m_base": 292.52,
+   "consensus": 381.9,
+   "iv_vs_consensus": -0.48190625818277033,
+   "spot": 387.18,
+   "iv_vs_spot": -0.48897153778604263,
+   "consensus_spread": -0.0136,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.23404032469232783,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5306757082287976,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $187.65 vs price $122.59 on 2024-12-31 = 53% gap; 12m later the model was closer (15% vs 25%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "MPC": {
+   "profile": "Refining & Marketing",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "SOTP (segments)",
+     "value_key": "SOTP (segments)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA (norm)",
+     "value_key": "EV/EBITDA (norm)",
+     "weight": 0.24
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.12
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.12
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.06
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.06
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 198.21,
+   "base": 231.58,
+   "bull": 285.0,
+   "scenarios_ordered": true,
+   "target_12m_base": 312.55,
+   "consensus": 405.0,
+   "iv_vs_consensus": -0.42819753086419754,
+   "spot": 393.52,
+   "iv_vs_spot": -0.41151656840821305,
+   "consensus_spread": 0.0292,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.2282716049382716,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.25637420112861176,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $175.26 vs price $139.50 on 2024-12-31 = 26% gap; 12m later the model was closer (8% vs 14%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}

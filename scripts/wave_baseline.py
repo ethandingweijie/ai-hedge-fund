@@ -58,6 +58,7 @@ def baseline_one(ticker: str, end: str, key: str) -> dict:
     proxied = [e for e in ew if e.get("value_key") and e.get("value_key") != e.get("method")]
     dropped = base.get("legs_dropped") or []
     cons = (dr.get("consensus_pt") or {}).get("consensus")
+    spot = (dr.get("pt_bridge") or {}).get("spot")
     iv = base.get("intrinsic_value")
     bear = (dr.get("bear") or {}).get("intrinsic_value")
     bull = (dr.get("bull") or {}).get("intrinsic_value")
@@ -89,6 +90,12 @@ def baseline_one(ticker: str, end: str, key: str) -> dict:
         "target_12m_base": pt,
         "consensus": cons,
         "iv_vs_consensus": _pct(iv, cons),
+        # Owner, 2026-09-26 (dual score): the engine's own story against spot,
+        # and the sell-side premium the consensus band carries.
+        "spot": spot,
+        "iv_vs_spot": _pct(iv, spot),
+        "consensus_spread": dr.get("consensus_spread") if dr.get("consensus_spread") is not None else _pct(cons, spot),
+        "regime_flag": dr.get("regime_flag"),
         "pt_vs_consensus": _pct(pt, cons),
         "pt_bridge_present": bool(dr.get("pt_bridge")),
         "no_peer_multiples": bool((dr.get("multiples_used") or {}).get("no_peer_multiples")),
@@ -137,13 +144,15 @@ def main() -> int:
     path.write_text(json.dumps(out, indent=1, default=str), encoding="utf8")
 
     rows = [(t, r) for t, r in out["tickers"].items() if not r.get("error")]
-    print(f"\n| Ticker | Profile | Anchor (in blend) | Proxied wt | Dropped | Base IV | Consensus | IV vs cons | 12m vs cons | Bear<=Base<=Bull | Backtest |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|")
+    print(f"\n| Ticker | Profile | Anchor (in blend) | Proxied wt | Dropped | Base IV | Consensus | IV vs cons | IV vs spot | Cons spread | 12m vs cons | Bear<=Base<=Bull | Backtest |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
     for t, r in rows:
         dl = ", ".join(f"{x['method']} {x['weight']:.0%} ({x['reason']})" for x in r["dropped_legs"]) or "-"
         print(f"| {t} | {r['profile']} | {r['anchor_method']} ({'yes' if r['anchor_in_blend'] else 'NO'}) | "
               f"{r['proxied_weight']:.0%} | {dl} | {_f(r['base']).strip()} | {_f(r['consensus']).strip()} | "
-              f"{_f(r['iv_vs_consensus'], True).strip()} | {_f(r['pt_vs_consensus'], True).strip()} | "
+              f"{_f(r['iv_vs_consensus'], True).strip()} | {_f(r.get('iv_vs_spot'), True).strip()} | "
+              f"{_f(r.get('consensus_spread'), True).strip()}{' ' + r['regime_flag'] if r.get('regime_flag') else ''} | "
+              f"{_f(r['pt_vs_consensus'], True).strip()} | "
               f"{'ok' if r['scenarios_ordered'] else 'VIOLATED' if r['scenarios_ordered'] is False else '-'} | "
               f"{r['backtest_status']} / {r['backtest_forward_verdict'] or '-'} |")
     withc = [r for _, r in rows if r["iv_vs_consensus"] is not None]
@@ -153,6 +162,14 @@ def main() -> int:
     print(f"\nex recorded regime deviations: {sum(1 for r in core if abs(r['iv_vs_consensus']) <= 0.30)} "
           f"of {len(core)} within +/-30%   "
           f"(regime names: {', '.join(t for t, r in rows if r.get('regime')) or 'none'})")
+    withs = [r for _, r in rows if r.get("iv_vs_spot") is not None]
+    within_spot = sum(1 for r in withs if abs(r["iv_vs_spot"]) <= 0.30)
+    flagged = [t for t, r in rows if r.get("regime_flag")]
+    spreads = sorted(r["consensus_spread"] for r in withc if r.get("consensus_spread") is not None)
+    med_spread = spreads[len(spreads) // 2] if spreads else None
+    print(f"within +/-30% of spot: {within_spot} of {len(withs)}   "
+          f"median consensus spread: {_f(med_spread, True).strip()}   "
+          f"Growth_Inflection_Speculative: {', '.join(flagged) or 'none'}")
     print(f"within +/-30% of consensus: {within} of {len(withc)}   "
           f"backtest passed: {passed} of {len(rows)}   "
           f"anchor missing from blend: {sum(1 for _, r in rows if not r['anchor_in_blend'])}   "

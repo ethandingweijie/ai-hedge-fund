@@ -247,6 +247,31 @@ def peg_detail(profile: Optional[str], doc: Optional[dict] = None) -> Optional[d
             "interval": [float(iv[0]), float(iv[1])] if isinstance(iv, list) and len(iv) == 2 else None}
 
 
+def ddm_equity_spread(doc: Optional[dict] = None) -> float:
+    """Spread over WACC the DDM leg uses when no owner cost-of-equity row exists
+    (2026-09-26, PROPOSED 150bps)."""
+    v = (((doc or load()).get("cost_of_equity") or {}).get("ddm_equity_spread") or {}).get("value")
+    return float(v) if isinstance(v, (int, float)) and 0.0 <= v <= 0.10 else 0.015
+
+
+def country_risk_premium(currency: Optional[str], doc: Optional[dict] = None) -> float:
+    """Owner-set premium added to the discount rate for cash flows domiciled in
+    `currency` (2026-09-26: China +350bps, the midpoint of the owner's range)."""
+    tbl = ((doc or load()).get("country_risk_premium") or {}).get("by_currency") or {}
+    v = tbl.get((currency or "").upper())
+    return float(v) if isinstance(v, (int, float)) and 0.0 <= v < 0.20 else 0.0
+
+
+def growth_inflection_flag(consensus_spread: Optional[float], doc: Optional[dict] = None) -> Optional[str]:
+    """The regime label when the consensus target sits more than the owner's
+    threshold above spot, else None. `consensus_spread` = consensus/spot - 1."""
+    cfg = ((doc or load()).get("regime_flags") or {}).get("growth_inflection") or {}
+    thr = cfg.get("consensus_spread_min")
+    if not isinstance(consensus_spread, (int, float)) or not isinstance(thr, (int, float)):
+        return None
+    return str(cfg.get("label") or "Growth_Inflection_Speculative") if consensus_spread > thr else None
+
+
 def sotp_input_thresholds(doc: Optional[dict] = None) -> dict:
     """Owner thresholds for SOTP inputs (2026-09-24): the net-cash variance
     above which the FMP check flags a cited figure, and the excess of segment

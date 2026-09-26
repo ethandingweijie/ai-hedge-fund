@@ -63,3 +63,16 @@ the discount applied to the DCF leg as it is to the multiples.
    correctly routed names is what an intrinsic value should show in a market at 2026 multiples. Moving
    WACC or terminal growth to close it would be fitting the market, which is what the two-tier design
    was built to avoid.
+
+## Correction and decisions (owner, 2026-09-26)
+
+Finding 3 said the DCF carried no China discount. It carried 180bps (an inline Damodaran table) while the
+multiples legs carried the `cn_adr_haircut` only on the Consumer static row. The owner's decision: the
+country premium for China and Hong Kong is ZERO ("do not include risk premium for me"), recorded in
+`valuation_constants.country_risk_premium`; the engine removes the 150bps the HK sector WACC table embeds
+so the total is zero. PDD and JD therefore sit further above spot on their DCF anchor, and that gap is
+the owner's basis, scored as a genuine stance and flagged, not tuned.
+
+Applied: dual score (`iv_vs_spot`, `consensus_spread` covariate on the calibration record),
+`Growth_Inflection_Speculative` regime flag above a 50% spread (`GATE_GROWTH_INFLECTION`, observation),
+and the conservatism principle (no WACC or terminal-growth tuning to close the band).

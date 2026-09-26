@@ -198,8 +198,12 @@ def _same_projection(a: dict, b: dict) -> bool:
     wa, wb = a.get("wacc_schedule") or [], b.get("wacc_schedule") or []
     if len(wa) != len(wb) or not all(_close(x, y) for x, y in zip(wa, wb)):
         return False
+    # Owner, 2026-09-26 (audit B5): the per-year FCF margin is part of the path.
+    # A Rev DCF (Target Margin) or backlog-fade leg shares the core growth path
+    # and differs only here; without this row it was linked to the core DCF cell.
     return all(_close(x.get("growth_pct"), y.get("growth_pct"))
                and _close(x.get("reinvest_margin_deduction") or 0.0, y.get("reinvest_margin_deduction") or 0.0)
+               and _close(x.get("fcf_margin"), y.get("fcf_margin"))
                for x, y in zip(ra, rb))
 
 
@@ -1345,7 +1349,9 @@ class _Book:
         for i, s in enumerate(SCENARIOS):
             sh.put(14 + i, 1, s).font = Font(color=BLACK)
             sh.put(14 + i, 2, _num((cc.get("targets") or {}).get(s)), NUM)
-        if not pb:
+        if (self.dr.get("rating_state") or {}).get("state") == "unrated":
+            sh.note(18, 1, f"Unrated — {(self.dr.get('rating_state') or {}).get('reason') or ''}: no target is published.")
+        elif not pb:
             sh.note(18, 1, "Run predates the unified target rule: engine targets shown.")
         sh.widths({"A": 30, "B": 16, "C": 14, "D": 14, "E": 10, "F": 12})
 
@@ -1472,10 +1478,17 @@ class _Book:
         A = self.A
         r = 4
         sh.section(r, "Headline", 6); r += 1
-        for lab, v, fmt in (("Share price", "=" + A["spot"], NUM),
-                            ("Intrinsic value — base", ("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None, NUM),
-                            ("12-month target", ("=" + self.target_cell) if self.target_cell else None, NUM),
-                            ("Implied return to target", f"=IFERROR(B{r + 2}/B{r}-1,0)", PCT)):
+        # Owner, 2026-09-26: an Unrated name publishes no headline IV and no
+        # target; the rebuilt blend stays on its own tab as an indicative figure.
+        _rs = self.dr.get("rating_state") or {}
+        _unrated = _rs.get("state") == "unrated"
+        _hl = (("Share price", "=" + A["spot"], NUM),
+               ("Intrinsic value — base", f"N/A — Unrated: {_rs.get('reason') or ''}" if _unrated
+                else (("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None), None if _unrated else NUM),
+               ("12-month target", "N/A — Unrated" if _unrated
+                else (("=" + self.target_cell) if self.target_cell else None), None if _unrated else NUM),
+               ("Implied return to target", "N/A" if _unrated else f"=IFERROR(B{r + 2}/B{r}-1,0)", None if _unrated else PCT))
+        for lab, v, fmt in _hl:
             sh.label(r, 1, lab, bold=True)
             sh.put(r, 2, v, fmt, bold=True)
             r += 1

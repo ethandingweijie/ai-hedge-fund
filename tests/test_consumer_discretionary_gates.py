@@ -451,6 +451,10 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
         "GATE_GROWTH_CAGR_DIVERGENCE",
+        # Seventeenth (2026-09-26, owner): consensus target more than the owner's
+        # threshold above spot tags the name Growth_Inflection_Speculative; `applied`
+        # is a literal False (observation, scored apart).
+        "GATE_GROWTH_INFLECTION",
         "GATE_GROWTH_REINVESTMENT",
         "GATE_INVENTORY_STRESS",
         # Fourteenth (2026-09-22): records, for a name with an accepted backlog,
@@ -501,7 +505,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     # file, so it lives nowhere in particular and breaks everywhere. If you are
     # reading this because it failed, the second copy is in
     # `test_reinvestment_scope_and_cap.py` and both have to move together.
-    assert src.count('"applied": False,') == 5   # +GATE_SOTP_EXTRACTOR_CROSSCHECK (2026-09-26), src.count('"applied": False,')
+    assert src.count('"applied": False,') == 6   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION (2026-09-26), src.count('"applied": False,')
     assert '"applied": _s_to_c is not None' not in src
 
     # ── the eleventh gate's named facts ──────────────────────────────────────
@@ -1051,6 +1055,9 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         # years of EBIT, D&A and capex, and None reproduces the old path exactly
         # (pinned in tests/test_backlog_gated_long_cycle.py).
         "margin_schedule",
+        # 2026-09-26 (owner, Priority 1): the one equity bridge -- minority interest
+        # and preferred equity come off the DCF as they do off every EV leg.
+        "minority_interest", "preferred_equity",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
                    "depreciation", "ebit",

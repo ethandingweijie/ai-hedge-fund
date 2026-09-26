@@ -1286,7 +1286,13 @@ def _section_2f(
     data_src = dcf_data.get("data_source", "—")
     cal_err  = dcf_data.get("calibration_error", False)
     cal_note = dcf_data.get("calibration_note", "")
-    fwd_flags = dcf_data.get("forward_flags", [])
+    # Owner, 2026-09-26 (audit): flags live on each scenario; the ticker level
+    # carried none, so no flag ever printed. Base first, then the others, deduped.
+    fwd_flags = list(dcf_data.get("forward_flags") or [])
+    for _sc in ("base", "bear", "bull"):
+        for _f in ((dcf_data.get(_sc) or {}).get("forward_flags") or []):
+            if _f not in fwd_flags:
+                fwd_flags.append(_f)
     shares   = dcf_data.get("shares_outstanding", 0)
     net_debt = dcf_data.get("net_debt", None)
     revenue_base = dcf_data.get("revenue_base", 0)
@@ -1318,7 +1324,7 @@ def _section_2f(
         ("Methodology Backtest", f"{cal_status}  {_strip(cal_note[:120])}"),
     ]
     if reported_currency != "USD":
-        fx_display = f"{reported_currency}→USD @ {fx_rate:.4f}  |  {_strip(fx_note[:100])}"
+        fx_display = f"{dcf_data.get('source_currency') or reported_currency}→{dcf_data.get('trading_currency') or reported_currency} @ {fx_rate:.4f}  |  {_strip(fx_note[:100])}"
         header_rows.insert(1, ("Currency (FX)", fx_display))
     if flag_text:
         header_rows.append(("Forward flags", _strip(flag_text)))
@@ -1823,9 +1829,10 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
     out += [pill, Spacer(1, 5)]
 
     price = scen.get("current_price") or rv.get("price")
-    target = decision.get("price_target") or scen.get("12m_price_target")
-    iv = (scen.get("reconciliation") or {}).get("blended_iv") or rv.get("intrinsic_value") \
-        or ((dcf_t.get("base") or {}).get("intrinsic_value"))
+    _unrated = ((dcf_t.get("rating_state") or {}).get("state") == "unrated")
+    target = None if _unrated else (decision.get("price_target") or scen.get("12m_price_target"))
+    iv = None if _unrated else ((scen.get("reconciliation") or {}).get("blended_iv") or rv.get("intrinsic_value")
+                                or ((dcf_t.get("base") or {}).get("intrinsic_value")))
     up = ((float(target) - float(price)) / float(price) * 100
           if isinstance(target, (int, float)) and isinstance(price, (int, float)) and price else None)
     weight = decision.get("position_size_pct")
@@ -1952,6 +1959,36 @@ _SEG_TYPE_LABEL = {
 }
 
 
+def _degraded_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """Owner, 2026-09-26: a Degraded analyst SOTP prints its rows and the reason
+    each segment could not price, and says plainly that no per-share value is
+    published. Before this the block returned nothing and the reason lived only
+    in a flag the PDF never printed."""
+    d = dcf_t.get("sotp_analyst_degraded") or {}
+    rows = d.get("rows") or []
+    if not rows:
+        return []
+    st_l = ParagraphStyle("_dsl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_dslb", parent=st_l, fontName="Helvetica-Bold")
+
+    def _bn(v):
+        try:
+            return f"{float(v) / 1e9:,.2f}bn"
+        except (TypeError, ValueError):
+            return "—"
+    body = [[Paragraph(_wh(h), st_lb) for h in ("Segment", "Fwd revenue (USD)", "Method", "Value (USD)", "Reason")]]
+    for r in rows:
+        body.append([Paragraph(_strip(str(r.get("name") or "")), st_l), Paragraph(_bn(r.get("revenue_fwd")), st_l),
+                     Paragraph(_strip(str(r.get("method") or "")), st_l),
+                     Paragraph(_bn(r.get("value")) if r.get("value") is not None else "not priced", st_l),
+                     Paragraph(_strip(str(r.get("degraded_reason") or "")), st_l)])
+    t = Table(body, colWidths=[width * 0.24, width * 0.14, width * 0.12, width * 0.12, width * 0.38], hAlign="LEFT")
+    t.setStyle(TableStyle([("FONTSIZE", (0, 0), (-1, -1), 6.5), ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_NAVY),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    return [Paragraph("<b>Analyst sum-of-the-parts — Degraded, not published</b>", styles["RptLabel"]),
+            Paragraph(_strip(str(d.get("degraded_reason") or "")), st_l), Spacer(1, 3), t, Spacer(1, 4)]
+
+
 def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """The analyst sum-of-the-parts (dcf_range.sotp_breakdown): each segment's
     forward revenue, the method and multiple it was valued on, its value, then
@@ -1961,7 +1998,7 @@ def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     b = dcf_t.get("sotp_breakdown") or {}
     rows = b.get("rows") or []
     if not rows or b.get("per_share_reporting") is None:
-        return []
+        return _degraded_sotp_block_pdf(dcf_t, styles, width)
     ccy = b.get("reporting_currency") or ""
     st_l = ParagraphStyle("_asl", fontName="Helvetica", fontSize=6.5, leading=8)
     st_lb = ParagraphStyle("_aslb", parent=st_l, fontName="Helvetica-Bold")
@@ -2110,6 +2147,10 @@ def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
     """Intrinsic value → 12m target, per scenario, by the one rule every name uses."""
     pb = dcf_t.get("pt_bridge") or {}
     sc = pb.get("scenarios") or {}
+    _rs = dcf_t.get("rating_state") or {}
+    if _rs.get("state") == "unrated":
+        return [Paragraph(f"No 12-month target: Unrated — {_strip(str(_rs.get('reason') or ''))}. "
+                          f"Method values below are indicative only.", styles["RptBody"])]
     if not sc:
         return [Paragraph("Target derivation not recorded for this run.", styles["RptBody"])]
     spot, cap = pb.get("spot"), pb.get("capture")
@@ -2151,13 +2192,17 @@ def _decision_section(decision: dict, scen: dict, dcf_t: dict, styles, page_w: f
     er = decision.get("entry_range")
     entry = (f"{_money(er[0])} – {_money(er[1])}"
              if isinstance(er, list) and len(er) == 2 and all(isinstance(x, (int, float)) for x in er) else "—")
+    _rs = dcf_t.get("rating_state") or {}
+    _unrated = _rs.get("state") == "unrated"
     iv = (scen.get("reconciliation") or {}).get("blended_iv") or rv.get("intrinsic_value")
     w = decision.get("position_size_pct")
     rows = [
-        ("Rating", _strip(rv.get("rating_label") or decision.get("rating_label") or "—")),
+        ("Rating", "UNRATED" if _unrated else _strip(rv.get("rating_label") or decision.get("rating_label") or "—")),
         ("Trade action", _strip(decision.get("action", "—")).upper()),
-        ("12-month target", _money(decision.get("price_target") or scen.get("12m_price_target"))),
-        ("Fair value (IV)", _money(iv)),
+        # Owner, 2026-09-26: an Unrated name publishes no target and no fair value.
+        ("12-month target", f"N/A — Unrated: {_strip(str(_rs.get('reason') or ''))}" if _unrated
+         else _money(decision.get("price_target") or scen.get("12m_price_target"))),
+        ("Fair value (IV)", "N/A (indicative figures in the method table)" if _unrated else _money(iv)),
         ("Price", _money(scen.get("current_price") or rv.get("price"))),
         ("Position weight", f"{float(w):.1%}" if isinstance(w, (int, float)) else "—"),
         ("Entry range", entry),

@@ -325,13 +325,14 @@ def test_steel_keeps_its_capital_n_anchor_and_swaps_only_pe():
     assert [(s["from"], s["to"]) for s in got] == [("P/E", "P/E (norm)")]
 
 
-def test_airlines_ebitdar_is_not_touched_by_an_exact_name_match():
-    """`EV/EBITDAR` is a different method whose lease normalisation is separately
-    unimplemented. A prefix or substring match here would rewrite it into
-    `EV/EBITDA (norm)` and silently change an airline's 0.50 anchor from an
-    EBITDAR leg to an EBITDA one."""
+def test_airlines_anchor_now_swaps_to_the_normalised_ebitda_like_every_cyclical():
+    """Until 2026-09-26 the airline anchor was NAMED `EV/EBITDAR` and computed as
+    EV/EBITDA (audit A5); the exact-name swap therefore missed it and a peak
+    EBITDA flowed straight through a 0.50 anchor. Renamed to what it computes,
+    the anchor joins the mid-cycle swap like every other cyclical profile. This
+    is a disclosed valuation change for airlines, recorded in the delta report."""
     got = _mid_cycle_leg_swaps(_profile("Airlines"), "Airlines")
-    assert [(s["from"], s["to"]) for s in got] == [("P/E", "P/E (norm)")]
+    assert [(s["from"], s["to"]) for s in got] == [("EV/EBITDA", "EV/EBITDA (norm)"), ("P/E", "P/E (norm)")]
 
 
 def test_upstream_oil_and_gas_has_nothing_to_swap():

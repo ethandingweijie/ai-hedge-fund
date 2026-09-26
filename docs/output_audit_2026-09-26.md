@@ -74,3 +74,28 @@ SOTP block, segment SOTP block, Valuation Summary from `pt_bridge`, cross-check 
 6. **A5** implement EBITDAR properly or rename the rows "EV/EBITDA (lease proxy)". Owner decision.
 7. **Excel B5** margin-schedule rebuild and `_same_projection` on `fcf_margin`; **B6** segments tab; disclosure block (intended vs effective, dropped, surviving); gate ledger columns.
 8. A4 stays as the owner decided (flag OFF) unless revisited; A6/A7/A8/A9 owner constants after verification.
+
+## E. Status (owner playbook applied 2026-09-26)
+
+| Item | Status |
+|---|---|
+| A1 currency label | RESOLVED: `_output_currency` follows the trading currency; payload carries `trading_currency` and `statement_currency`; PDF/Excel labels follow |
+| A2 DDM at WACC, no payout check | RESOLVED: `_ddm_cost_of_equity` (owner CoE row, else WACC + PROPOSED 150bps spread, disclosed in the trace); dividend capped at min(EPS, FCF/share) with `dividend_capped`; trace `kind="ddm"` |
+| A3 asymmetric equity bridge | RESOLVED: `build_equity_bridge` (EV − net debt − minority interest − preferred) on every EV leg, all seven DCF call sites and the analyst SOTP NAV (scenario TPs and cross-check included); `preferredStock` now carried as a line item |
+| A4 forward metric on trailing multiple | OPEN by owner decision (NTM flag measured and left OFF, 2026-09-21) |
+| A5 EV/EBITDAR | RESOLVED by rename: every profile row is `EV/EBITDA` with a lease note; engine keeps the old name as an alias for archived runs; consequence: the airline anchor now joins the mid-cycle normalisation swap (disclosed in the delta report) |
+| A6 STI in target net debt vs peer EV | OPEN (needs the FMP EV definition confirmed) |
+| A7 `cn_adr_haircut` keyed on currency, Consumer-only | OPEN, owner constant |
+| A8 / A9 flat tax, WACC in RI / ROE-vs-CoE | OPEN, owner constants |
+| A10 target ordering when spot is missing | OPEN, low |
+| A11 PDF FX header direction | RESOLVED: `statement→trading @ rate` |
+| A12 cited net cash vs associates double count | OPEN, per accepted input |
+| PDF flags never print | RESOLVED: flags read from every scenario, deduped |
+| PDF Unrated not gated | RESOLVED: decision block, decision section and valuation summary print N/A with the reason |
+| PDF Degraded SOTP silent | RESOLVED: `sotp_analyst_degraded` published in the payload and rendered with per-segment reasons |
+| Excel Unrated headline | RESOLVED: Summary prints N/A — Unrated with the reason; Target tab note corrected |
+| Excel margin-schedule mis-link | RESOLVED: `_same_projection` compares `fcf_margin` per row |
+| Excel SOTP (segments) empty block, disclosure block, gate ledger columns, sotp_breakdown extras, PDF per-method inputs table, effective weights column | OPEN |
+
+Country risk premium (skew assessment item 3): the owner set China and Hong Kong to ZERO on 2026-09-26; the
+engine treats the owner's figure as the total and removes the 150bps the HK sector table embeds.

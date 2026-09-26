@@ -337,7 +337,8 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
                       shares: Optional[float] = None,
                       fx: float = 1.0,
                       net_debt: Optional[float] = None,
-                      tier: str = "default") -> dict:
+                      tier: str = "default",
+                      minority_interest: float = 0.0) -> dict:
     """Bear/bull TPs from per-segment multiple overrides.
 
     ``scenarios`` shape (from deep-research 2A.5 SCENARIO lines, surfaced on
@@ -398,7 +399,7 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
         if not applied:
             continue
         t = _sotp_analyst_style(a, shares=shares, fx_to_reporting=fx,
-                                net_debt=net_debt, tier=tier)
+                                net_debt=net_debt, tier=tier, minority_interest=minority_interest)
         # A Degraded table (owner, 2026-09-24) publishes no per-share value in
         # any scenario; leaving the case out says so more plainly than None.
         if t is not None and not t.get("degraded"):

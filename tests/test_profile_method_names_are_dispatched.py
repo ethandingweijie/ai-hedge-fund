@@ -339,7 +339,7 @@ _PROXY_EQUIVALENCES = {
     "PPA-backed DCF":   ("DCF",       "Energy",       "IPP"),
     "Backlog DCF":      ("DCF",       "Energy",       "EPC Contractor"),
     "Unit Econ DCF":    ("DCF",       "Tech",         "Early Platform"),
-    "EV/EBITDAR":       ("EV/EBITDA", "Transportation", "Airlines"),
+    # "EV/EBITDAR" renamed to EV/EBITDA in every profile 2026-09-26 (audit A5)
 }
 
 
@@ -394,4 +394,4 @@ def test_which_profiles_put_their_anchor_on_a_proxied_name():
         (dcf_anchored if _PROXY_EQUIVALENCES[m["name"]][0] == "DCF"
          else ebitdar_anchored).append(where)
     assert len(dcf_anchored) == 2, dcf_anchored
-    assert len(ebitdar_anchored) == 3, ebitdar_anchored   # +Grocery & Discount Retail (Wave 4, 2026-09-26)
+    assert len(ebitdar_anchored) == 0, ebitdar_anchored   # EV/EBITDAR renamed to EV/EBITDA (2026-09-26)

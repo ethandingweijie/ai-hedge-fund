@@ -184,7 +184,7 @@ _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW", "U
 #: Bull's quality gate unbinds on exactly six: (old_gp, new_gp). The scoping note
 #: said nine; the three extra were `forward_flags` prose containing "bull:".
 _BULL_MOVED = {
-    "02888_HK": (0.719, 0.815),
+    "02888_HK": (0.719, 0.719),   # 0.815 until the 2026-09-26 bridge deducted its preferred equity
     "09988_HK": (1.167, 1.0),
     "BABA":     (1.019, 1.0),
     "C38U_SI":  (1.2,   1.0),
@@ -359,12 +359,25 @@ _RERECORDED = {"COST": "2026-09-26 Wave 4 pin, live comps", "BABA": "2026-09-26 
                "09988_HK": "2026-09-26 China profile"}
 
 
+#: Owner remediation, 2026-09-26 (ninth re-baseline): one equity bridge (minority
+#: interest and preferred deducted on the DCF family and the analyst SOTP), DDM at
+#: cost of equity, and the owner's zero country premium for China and Hong Kong.
+#: 02888_HK moves on preferred equity, FCX on minority interest (Grasberg), the two
+#: Alibaba lines on the zero premium and the bridge.
+_REMEDIATION_MOVED = {
+    "02888_HK": (256.74,  213.55,   299.57,   (224.89, 240.01, 255.00)),
+    "09988_HK": (129.26,   63.81,   207.57,   (93.38, 116.29, 143.69)),
+    "FCX":      (24.31,    14.48,    44.60,   (41.92, 46.84, 56.98)),
+    "BABA":     (166.74,  110.75,   236.23,   (110.25, 138.24, 172.98)),
+}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name) or _SHARES_MOVED.get(name)
-            or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
+    return (_REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+            or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
-_TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.16, 48.07, 58.22)}
+_TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
 
 
 def _bear_gate_b_roic(projection: dict) -> float | None:
@@ -707,12 +720,12 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
     """
     for name, fx in _fixtures().items():
         if name == "FCX":
-            assert fx["base_iv"] == _FLOOR_MOVED["FCX"]["base_iv"]
+            assert fx["base_iv"] == _current("FCX")[0]          # 26.78 -> 24.31: minority interest in the bridge (2026-09-26)
             assert _PREFIX["FCX"][0] == 25.58, "the pre-×-10 pin stays as history"
             continue
-        if name in _TWO_TIER_MOVED:
-            # Moved by the fourth re-baseline (composite out of the IV), not by
-            # this fix; the pre-fix pin stays as history.
+        if name in _TWO_TIER_MOVED or name in _REMEDIATION_MOVED:
+            # Moved by a later re-baseline (composite out of the IV; the
+            # 2026-09-26 remediation), not by this fix; the pre-fix pin stays as history.
             assert fx["base_iv"] == _current(name)[0], name
             continue
         if name in _SHARES_MOVED:
@@ -828,7 +841,7 @@ def test_the_sign_flips_changed_only_their_flag_text():
             # the × 10 fix left it at 16.06, the later floor re-baseline took it
             # to 16.90.
             assert _BEAR_IV_UNMOVED["FCX"] == 16.06
-            assert p["scenarios.bear.intrinsic_value"] == _FLOOR_MOVED["FCX"]["bear_iv"]
+            assert p["scenarios.bear.intrinsic_value"] == _current("FCX")[1]   # 16.95 -> 14.48 (2026-09-26)
             continue
         if name in _ORDERING_CLAMPED:
             oc = _ORDERING_CLAMPED[name]
@@ -949,7 +962,7 @@ def test_fcx_bull_premium_came_off_its_clamp_ceiling():
     assert _PREFIX["FCX"][3] == 1.8
     assert 46.92 / 72.62 == pytest.approx(1 - 0.354, abs=5e-4), (
         "the cumulative cut from the pre-fix 72.62, × 10 fix and floor re-baseline")
-    assert p["scenarios.bull.intrinsic_value"] == _FLOOR_MOVED["FCX"]["bull_iv"]
+    assert p["scenarios.bull.intrinsic_value"] == _current("FCX")[2]     # 47.08 -> 44.60 (minority interest, 2026-09-26)
 
 
 def test_02888_is_the_one_bull_premium_that_rose():
@@ -960,10 +973,12 @@ def test_02888_is_the_one_bull_premium_that_rose():
     carries no DCF weight, the headline barely moved (+0.7%).
     """
     p = _proj("02888_HK")
-    assert p["scenarios.bull.growth_premium"] == 0.815
+    # 0.815 until 2026-09-26: with preferred equity in the bridge the bull ROIC term
+    # reads lower and the premium sits at 0.719, which is the pre-fix value again.
+    assert p["scenarios.bull.growth_premium"] == 0.719
     # 331.93 was this bull IV with the 1.10 composite; the two-tier
     # re-baseline removed the composite from the IV.
-    assert p["scenarios.bull.intrinsic_value"] == _TWO_TIER_MOVED["02888_HK"][2]
+    assert p["scenarios.bull.intrinsic_value"] == _current("02888_HK")[2]   # 301.76 -> 299.57 (preferred equity, 2026-09-26)
     assert 331.93 == pytest.approx(301.76 * 1.10, abs=0.01)
     assert 0.815 < 1.0
 
@@ -1074,7 +1089,7 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
             # weight, so the surviving tgr adds nothing while the premium moving
             # off the forced 1.0 (→ 0.969) shaves the multiple legs. Net −0.2%.
             assert got < before[name]
-            assert _proj(name)["scenarios.bear.growth_premium"] == 0.969
+            assert _proj(name)["scenarios.bear.growth_premium"] == 0.889   # 0.969 until the 2026-09-26 bridge
         else:
             assert got > before[name], name
 
@@ -1141,14 +1156,18 @@ def test_the_fcf_yield_leg_reaches_the_same_scaling_from_the_other_side():
 
 _BANK_LEGS = ["Excess Capital", "GGM (P/B)", "P/TBV", "Residual Income"]
 _02888_LEGS = {
+    # Forward P/E 138.28 -> 126.90 and P/E (norm) 132.80 -> 121.87 on 2026-09-26: the
+    # bridge deducts Standard Chartered's preferred equity on the earnings legs' path.
     "bear": {"Excess Capital": 188.02, "GGM (P/B)": 252.98, "P/TBV": 170.72,
-             "Residual Income": 230.90, "Forward P/E": 138.28, "P/E (norm)": 132.80},
+             "Residual Income": 230.90, "Forward P/E": 126.90, "P/E (norm)": 121.87},
     "bull": {"Excess Capital": 188.02, "GGM (P/B)": 421.63, "P/TBV": 284.54,
-             "Residual Income": 230.90, "Forward P/E": 153.21, "P/E (norm)": 186.07},
+             "Residual Income": 230.90, "Forward P/E": 135.22, "P/E (norm)": 164.23},
 }
 
 
-_02888_BLEND = {"bear": (214.6404, 236.1044), "bull": (301.759, 331.9349)}
+# 2026-09-26: the bridge deducts preferred equity on the earnings legs' path;
+# bear 214.6404 -> 213.5474, bull 301.759 -> 299.57; the x1.10 composite column follows.
+_02888_BLEND = {"bear": (213.5474, 234.9021), "bull": (299.5748, 329.5323)}
 
 
 def test_02888_six_legs_split_exactly_along_the_premium_line():
@@ -1211,7 +1230,7 @@ def test_02888_carries_no_dcf_leg_so_a_surviving_tgr_adds_nothing():
             _BANK_LEGS + ["P/E (norm)"]), scen
     # ... and it did gain the terminal growth rate, so the two facts coexist.
     assert proj["scenarios.bear.tgr"] == 0.01
-    assert proj["scenarios.bear.growth_premium"] == 0.969
+    assert proj["scenarios.bear.growth_premium"] == 0.889   # 0.969 until the 2026-09-26 bridge (preferred equity)
 
 
 def test_the_leg_table_is_a_superset_of_the_weighted_set():

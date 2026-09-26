@@ -192,6 +192,7 @@ _BALANCE_MAP: dict[str, str] = {
     "shortTermDebt":                     "short_term_debt",
     "shortTermInvestments":              "short_term_investments",
     "minorityInterest":                  "minority_interest",
+    "preferredStock":                    "preferred_equity",   # owner bridge, 2026-09-26
     "totalNonCurrentAssets":             "non_current_assets",
     "totalNonCurrentLiabilities":        "non_current_liabilities",
 }

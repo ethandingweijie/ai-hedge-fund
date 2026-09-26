@@ -2485,7 +2485,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # no basket reaches; it is scored, not patched.
         "Grocery & Discount Retail": {
             "methods": [
-                {"name": "EV/EBITDAR",       "weight": 0.35, "anchor": True,  "implementable": True},
+                # Owner, 2026-09-26 (audit A5): named for what it computes. Lease
+                # liabilities enter through FMP net debt; no rent add-back is made.
+                {"name": "EV/EBITDA",        "weight": 0.35, "anchor": True,  "implementable": True,
+                 "note": "lease-heavy; leases in net debt, no EBITDAR add-back"},
                 {"name": "Forward P/E",      "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",        "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "DCF",              "weight": 0.20, "anchor": False, "implementable": True},
@@ -2537,7 +2540,8 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Traditional Retail": {
             "methods": [
-                {"name": "EV/EBITDAR",   "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True,
+                 "note": "renamed from EV/EBITDAR 2026-09-26: leases in net debt, no rent add-back"},
                 {"name": "P/E",          "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "EV/Revenue",   "weight": 0.15, "anchor": False, "implementable": True, "note": "GMV-driven e-commerce"},
                 {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
@@ -2603,7 +2607,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 {"name": "P/E",          "weight": 0.40, "anchor": True,  "implementable": True},
                 {"name": "DCF",          "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",    "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDAR",   "weight": 0.10, "anchor": False, "implementable": True, "note": "proxied by EV/EBITDA"},
+                {"name": "EV/EBITDA",    "weight": 0.10, "anchor": False, "implementable": True, "note": "renamed from EV/EBITDAR 2026-09-26"},
             ],
             "excluded": [],
             "rationale": (
@@ -3102,7 +3106,8 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Transportation": {
         "Airlines": {
             "methods": [
-                {"name": "EV/EBITDAR",   "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by EV/EBITDA"},
+                {"name": "EV/EBITDA",    "weight": 0.50, "anchor": True,  "implementable": True,
+                 "note": "renamed from EV/EBITDAR 2026-09-26: lease normalisation unimplemented, leases in net debt"},
                 {"name": "FCF Yield",    "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "P/BV (Fleet)", "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
                 {"name": "P/E",          "weight": 0.10, "anchor": False, "implementable": True},
