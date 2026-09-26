@@ -142,6 +142,232 @@
     "value_usd": 8299189290.0
    }
   },
+  "00700.HK": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "CNY",
+     "revenue_latest_usd_bn": 112.0,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 122.85
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T06:01:33+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.09x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0894
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 122.0bn USD vs FMP FY+1 consensus revenue 122.8bn (-0.7%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 0.9932
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026E (fiscal_year FY2026E); all forward of the latest reported year",
+      "ok": true
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "4 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "6 of 6 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Tencent Holdings Limited",
+    "data": {
+     "associates_investments": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEtre-pWQ7ecl1Lzr1D2kHekePELH86ZpuQmgTRQf6Y3UYHDLxVqwI0zXOXCa7wmMkdItDkQ72lDwORQNoAN2gHaD0s-KZoKKU98KIH6m3kL00PHhOtwG2ukSTDTEQd_emY1Ry3OEe32_0BjJ0-ZfE15s7Dc7Pk4CHNovOs3SkgQZqQaA==",
+      "period": "2026-08-11",
+      "quote": "Listed investments (current value). 487,963. Unlisted investments (book value). 449,870. Total investment value. 937,833. Holdco discount. 30%. Valuation of strategic investments. 656,483.",
+      "scale": "mn",
+      "source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+      "value": 937833.0
+     },
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "CMB International applies a 30% holding company discount to the total fair value of Tencent's equity investments (current market value of listed investments and book value of unlisted investments).",
+     "holdco_discount_pct": 0.3,
+     "net_cash": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHuOHQjznqTnzI8oKE6O6X-Gb_djtoh90NXSJABn3KoqjC4mR5Fltdt0k4krXltdW-KEdhFaTvrFJJ3vu9CujzwlNtWz4a89leqCAktgb8tczQg0VQp_E3D0nKwdRlkhjIaDCaXPLlVMaVzmYOJxTyIZZTs3O-XzqIkEaL33NW-cd-9Qw==",
+      "period": "2026-06-30",
+      "quote": "7) HK$5.1 for net cash. Figure 4: Tencent: SOTP valuation... Net cash. 39,839. 0.7. 5.1.",
+      "scale": "mn",
+      "source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+      "value": 39839.0
+     },
+     "segments": [
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "CMB International applies a 22x to 24x forward P/E multiple (22x in August 2026 SOTP, 24x in May 2026 SOTP), at a premium to global gaming peers (17x average), driven by Tencent's domestic leadership and diversified evergreen game portfolio.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHB1NjkMRpUSfeXlsMJAhYidmxlviNN8F2FIrnjrd0aZ2BSu4nU8V0DLOgg2vOQfsm0i3vEQYVdbyMVQ5-0bQwGU02yOodQtriCIIJzBJLwYTumQ06qbscePqoCtnjqkb8MEk0ZgscXD5pl4d7EtRoDZKN-BsAC9edsHLO5lp9mSnNI",
+       "multiple_high": 24.0,
+       "multiple_low": 22.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+       "name": "Online Games",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFS0XkqqMEy20Vx9l4czp6STDcKrzBofvAczYabhXpE0ydf05N62C-6jpym_yISIZOFVX72GOSEx0F355VgVCvK169SBBZ7MO17GkQyv-WmbLwlBwTkJQzcYt0__ZsFak81wUFuk5uxWmrSGgujRIe4ShnxsLsqVjRyPTZ3DB_R2R72bmmaQOY5DvP5-iOvHyfFu-BJjgu6",
+        "period": "FY2026E",
+        "quote": "Online games 264,093 261,919 -1% 266,613 -2%",
+        "scale": "mn",
+        "source_url": "https://www.scribd.com/document/1073391351/J-P-Morgan-Tencent-0700-HK-Funding-the-AI-Trough-260813",
+        "value": 266613.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "CMB International values unlisted social networks and digital content services (such as Tencent Video subscriptions and other membership services) using a 2.0x to 3.5x P/S range, with 3.5x reflecting a premium to peers (1.2x-1.4x) due to content and user traffic leadership.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHB1NjkMRpUSfeXlsMJAhYidmxlviNN8F2FIrnjrd0aZ2BSu4nU8V0DLOgg2vOQfsm0i3vEQYVdbyMVQ5-0bQwGU02yOodQtriCIIJzBJLwYTumQ06qbscePqoCtnjqkb8MEk0ZgscXD5pl4d7EtRoDZKN-BsAC9edsHLO5lp9mSnNI",
+       "multiple_high": 3.5,
+       "multiple_low": 2.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+       "name": "Social Networks (SNS)",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNZl9eUxENyJcZ9M48ZMnbH8yTiXxrE0XOjJZvAAUY8mukHN95NsAdzzkiyE3B7WLxSSwW-FAgtWaVH33X--WL70_TUp1UvGjhjfksWylz-LKcPeYsyYldlgzNGdo0lrIxgElcgWUnYlG0lE1r0O1i3yIrhzsZ4wUMvseXp5cJN0ccuMO_boGavcM35X7GKw6_4552EIBPOQ==",
+        "period": "FY2026E",
+        "quote": "SNS 130,665 129,051 -1% 130,493 -1%",
+        "scale": "mn",
+        "source_url": "https://www.scribd.com/document/1073391351/J-P-Morgan-Tencent-0700-HK-Funding-the-AI-Trough-260813",
+        "value": 130493.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "CMB International applies a 20x to 22x forward P/E multiple (20x in August 2026 report, 22x in May 2026 report), priced at a premium to the 16x-19x industry average given resilient ad revenue growth supported by Weixin Video Accounts and Mini Programs.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHB1NjkMRpUSfeXlsMJAhYidmxlviNN8F2FIrnjrd0aZ2BSu4nU8V0DLOgg2vOQfsm0i3vEQYVdbyMVQ5-0bQwGU02yOodQtriCIIJzBJLwYTumQ06qbscePqoCtnjqkb8MEk0ZgscXD5pl4d7EtRoDZKN-BsAC9edsHLO5lp9mSnNI",
+       "multiple_high": 22.0,
+       "multiple_low": 20.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+       "name": "Marketing Services (Online Advertising)",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFS0XkqqMEy20Vx9l4czp6STDcKrzBofvAczYabhXpE0ydf05N62C-6jpym_yISIZOFVX72GOSEx0F355VgVCvK169SBBZ7MO17GkQyv-WmbLwlBwTkJQzcYt0__ZsFak81wUFuk5uxWmrSGgujRIe4ShnxsLsqVjRyPTZ3DB_R2R72bmmaQOY5DvP5-iOvHyfFu-BJjgu6",
+        "period": "FY2026E",
+        "quote": "Advertising 171,372 175,129 2% 171,471 2%",
+        "scale": "mn",
+        "source_url": "https://www.scribd.com/document/1073391351/J-P-Morgan-Tencent-0700-HK-Funding-the-AI-Trough-260813",
+        "value": 171471.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "CMB International applies a 4.0x to 4.5x P/S range across the segment (4.5x for FinTech at a premium to peer average 1.6x reflecting digital payment leadership; 4.5x for Cloud at a discount to peer average 5.7x reflecting IaaS revenue composition).",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHB1NjkMRpUSfeXlsMJAhYidmxlviNN8F2FIrnjrd0aZ2BSu4nU8V0DLOgg2vOQfsm0i3vEQYVdbyMVQ5-0bQwGU02yOodQtriCIIJzBJLwYTumQ06qbscePqoCtnjqkb8MEk0ZgscXD5pl4d7EtRoDZKN-BsAC9edsHLO5lp9mSnNI",
+       "multiple_high": 4.5,
+       "multiple_low": 4.0,
+       "multiple_metric": "ev_rev",
+       "multiple_source_url": "https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf",
+       "name": "FinTech and Business Services",
+       "revenue_fwd": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGWNjzpFmoeReS-I9KmO-wz9cvp5EuH_yADGnhS-bdkUqE3enbxXDyVAuk5Q-LmDXOxPsWTeSg7yElYOOTE5xiJeTd62_Y_BrGmsCVcCfUj-BG6Q5lcr4BddRtK_0hPd-0VSmhdeD4gEJjOelcVp1q0ZEYfMSs1dqB2Mz9wv8mhQVa_hJHuBUtvvhl8lXcOGefYcei8LvO-bg==",
+        "period": "FY2026E",
+        "quote": "Fintech and business services 242,812 247,901 2% 250,395 -1%",
+        "scale": "mn",
+        "source_url": "https://www.scribd.com/document/1073391351/J-P-Morgan-Tencent-0700-HK-Funding-the-AI-Trough-260813",
+        "value": 250395.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ev_rev_multiple": null,
+       "name": "Online Games",
+       "pe_multiple": 23.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 22.0-24.0x: CMB International applies a 22x to 24x forward P/E multiple (22x in August 2026 SOTP, 24x in May 2026 SOTP), at a premium to global gaming peers (17x average), driven by Tencent's domestic leadership and diversified evergreen game portfolio.",
+       "revenue_fwd": 39720004740.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 2.75,
+       "name": "Social Networks (SNS)",
+       "pe_multiple": null,
+       "period_label": "FY2026E",
+       "rationale": "ev_rev 2.0-3.5x: CMB International values unlisted social networks and digital content services (such as Tencent Video subscriptions and other membership services) using a 2.0x to 3.5x P/S range, with 3.5x reflecting a premium to peers (1.2x-1.4x) due to content and user traffic leadership.",
+       "revenue_fwd": 19440847140.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "Marketing Services (Online Advertising)",
+       "pe_multiple": 21.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 20.0-22.0x: CMB International applies a 20x to 22x forward P/E multiple (20x in August 2026 report, 22x in May 2026 report), priced at a premium to the 16x-19x industry average given resilient ad revenue growth supported by Weixin Video Accounts and Mini Programs.",
+       "revenue_fwd": 25545749580.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": 4.25,
+       "name": "FinTech and Business Services",
+       "pe_multiple": null,
+       "period_label": "FY2026E",
+       "rationale": "ev_rev 4.0-4.5x: CMB International applies a 4.0x to 4.5x P/S range across the segment (4.5x for FinTech at a premium to peer average 1.6x reflecting digital payment leadership; 4.5x for Cloud at a discount to peer average 5.7x reflecting IaaS revenue composition).",
+       "revenue_fwd": 37303847100.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Tencent Holdings Limited",
+     "depreciation_and_amortization": 9836851440.0,
+     "market_cap": 501634622582.82,
+     "net_ppe": 26372096946.0,
+     "operating_cash_flow": 45148686960.0,
+     "period": "2025-12-31",
+     "revenue": 111998098680.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 103.8,
+    "value_usd": 122010448560.0
+   }
+  },
   "00883.HK": {
    "pv10": {
     "basis": "actual",

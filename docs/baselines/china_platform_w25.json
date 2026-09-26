@@ -1,0 +1,366 @@
+{
+ "profile": "China Internet Platform",
+ "sotp_weight": 0.25,
+ "methods": [
+  {
+   "name": "DCF",
+   "weight": 0.3462,
+   "anchor": true,
+   "implementable": true
+  },
+  {
+   "name": "SOTP (analyst)",
+   "weight": 0.25,
+   "anchor": false,
+   "implementable": true
+  },
+  {
+   "name": "Forward P/E",
+   "weight": 0.2308,
+   "anchor": false,
+   "implementable": true
+  },
+  {
+   "name": "EV/EBITDA",
+   "weight": 0.1731,
+   "anchor": false,
+   "implementable": true
+  }
+ ],
+ "as_of": "2026-09-26",
+ "tickers": {
+  "BABA": {
+   "profile": "China Internet Platform",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.346165
+    },
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.249975
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.230777
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.173083
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 111.11,
+   "base": 148.39,
+   "bull": 198.92,
+   "scenarios_ordered": true,
+   "target_12m_base": 129.06,
+   "consensus": 180.57,
+   "iv_vs_consensus": -0.1782134352328737,
+   "pt_vs_consensus": -0.2852633327795314,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.014912987692498098,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $134.20 vs price $132.23 on 2025-03-31 = 1% gap; 12m later model and market were level (7% vs 5%)",
+   "currency": "CNY",
+   "regime": null,
+   "sotp_leg": 136.55,
+   "method_iv_table": {
+    "DCF": 125.5,
+    "SOTP (analyst)": 136.55,
+    "EV/EBITDA": 199.38,
+    "Forward P/E": 157.3,
+    "Forward EV/EBITDA": 216.72,
+    "SOTP (segments)": 338.51,
+    "SOTP 12m (probabilistic)": 374.24
+   },
+   "sotp_flags": [
+    "SOTP (analyst): 4 segments from owner-accepted Gemini inputs, each with a cited multiple range (midpoint used)",
+    "SOTP (analyst): net cash kept at the cited $31.0bn (2026-06-30, https://za.investing.com/news/company-news/alibaba-q2-2026-slides-ai-surge-drives-revenue-up-9-profit-down-75-93CH-4438116); FMP net debt implies $24.1bn, a -22% variance above the 20% audit threshold -- review the cited figure",
+    "SOTP (analyst): 4 segments, holdco 15%, sources={'all': 'gemini_grounded'}"
+   ]
+  },
+  "PDD": {
+   "profile": "China Internet Platform",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.461538
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.307692
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.230769
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "SOTP (analyst)",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.750025,
+   "methods_unavailable": [
+    "SOTP (analyst)"
+   ],
+   "bear": 200.75,
+   "base": 251.11,
+   "bull": 305.93,
+   "scenarios_ordered": true,
+   "target_12m_base": 164.34,
+   "consensus": 103.22,
+   "iv_vs_consensus": 1.4327649680294519,
+   "pt_vs_consensus": 0.5921333074985469,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 32.06832434406755,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $3207.30 vs price $96.99 on 2024-12-31 = 3207% gap; 12m later the market was closer (2729% vs 14%)",
+   "currency": "CNY",
+   "regime": null,
+   "sotp_leg": null,
+   "method_iv_table": {
+    "DCF": 244.59,
+    "EV/EBITDA": 263.56,
+    "Forward P/E": 251.56,
+    "Forward EV/EBITDA": 265.47,
+    "SOTP (segments)": 332.86,
+    "SOTP 12m (probabilistic)": 351.95
+   },
+   "sotp_flags": []
+  },
+  "JD": {
+   "profile": "China Internet Platform",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.461538
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.307692
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.230769
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "SOTP (analyst)",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.750025,
+   "methods_unavailable": [
+    "SOTP (analyst)"
+   ],
+   "bear": 53.59,
+   "base": 64.83,
+   "bull": 82.47,
+   "scenarios_ordered": true,
+   "target_12m_base": 45.67,
+   "consensus": 35.86,
+   "iv_vs_consensus": 0.8078639152258784,
+   "pt_vs_consensus": 0.27356385945343,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6806214586688848,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $58.27 vs price $34.67 on 2024-12-31 = 68% gap; 12m later the market was closer (103% vs 21%)",
+   "currency": "CNY",
+   "regime": null,
+   "sotp_leg": null,
+   "method_iv_table": {
+    "DCF": 52.98,
+    "EV/EBITDA": 70.22,
+    "Forward P/E": 78.56,
+    "Forward EV/EBITDA": 103.24,
+    "SOTP (segments)": 421.44,
+    "SOTP 12m (probabilistic)": 452.15
+   },
+   "sotp_flags": []
+  },
+  "03690.HK": {
+   "profile": "China Internet Platform",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.418622
+    },
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.302297
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.279081
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.1731,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.826917,
+   "methods_unavailable": [
+    "EV/EBITDA"
+   ],
+   "bear": 103.22,
+   "base": 104.53,
+   "bull": 142.1,
+   "scenarios_ordered": true,
+   "target_12m_base": 88.09,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.374525909819906,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $208.52 vs price $151.70 on 2024-12-31 = 37% gap; 12m later the market was closer (102% vs 47%)",
+   "currency": "HKD",
+   "regime": null,
+   "sotp_leg": 101.18,
+   "method_iv_table": {
+    "DCF": 174.47,
+    "SOTP (analyst)": 101.18,
+    "Forward P/E": 3.24,
+    "Forward EV/EBITDA": 41.34
+   },
+   "sotp_flags": [
+    "SOTP (analyst): 2 segments from owner-accepted Gemini inputs, each with a cited multiple range (midpoint used)",
+    "SOTP (analyst): net cash kept at the cited $8.4bn (2025-06-30, https://www.poems.com.hk/en-us/research-story/report-review-of-september-2025/); FMP net debt implies $14.1bn, a +69% variance above the 20% audit threshold -- review the cited figure",
+    "SOTP (analyst): holdco discount pinned to 15% from validated snapshot (3690.HK) (this run's research said 10%)",
+    "SOTP (analyst): 2 segments, holdco 15%, sources={'all': 'gemini_grounded'}"
+   ]
+  },
+  "00700.HK": {
+   "profile": "China Internet Platform",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.461538
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.307692
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.230769
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "SOTP (analyst)",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.750025,
+   "methods_unavailable": [
+    "SOTP (analyst)"
+   ],
+   "bear": 234.17,
+   "base": 326.52,
+   "bull": 424.5,
+   "scenarios_ordered": true,
+   "target_12m_base": 381.56,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.419577890737619,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $242.04 vs price $417.00 on 2024-12-31 = 42% gap; 12m later the market was closer (60% vs 30%)",
+   "currency": "HKD",
+   "regime": null,
+   "sotp_leg": null,
+   "method_iv_table": {
+    "DCF": 324.49,
+    "EV/EBITDA": 354.19,
+    "Forward P/E": 308.8,
+    "Forward EV/EBITDA": 492.6
+   },
+   "sotp_flags": [
+    "SOTP (analyst): 4 segments from owner-accepted Gemini inputs, each with a cited multiple range (midpoint used)",
+    "SOTP (analyst): net cash kept at the cited $5.9bn (2026-06-30, https://hk-official.cmbi.info/upload/81b48cd1-59ee-4b05-9b1f-5226ba4daa3e.pdf); FMP net debt implies $-0.3bn, a -105% variance above the 20% audit threshold -- review the cited figure",
+    "SOTP (analyst): live extraction degraded -- 2 of 4 segment(s) Degraded, so the NAV is partial and the method does not publish: Online Games: P/E 23x cited but EBIT is not stated; no cited EV/Sales range to fall back on; Marketing Services (Online Advertising): P/E 21x cited but EBIT is not stated; no cited EV/Sales range to fall back on; associates $+139.72bn from assumptions['associates_investments']; net cash $+5.94bn from assumptions['net_cash']. No validated snapshot to fall back to, so the method does not publish; the associates and net cash it did find are disclosed rather than valued.",
+    "SOTP (analyst): 4 segments, holdco 30%, sources={'all': 'gemini_grounded'}"
+   ]
+  }
+ }
+}
