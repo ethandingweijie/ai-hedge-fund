@@ -164,6 +164,57 @@ built and accepted for the pre-approval names (WAVE5 list extension for the owne
 | A50.SI | Healthcare Provider (SG) | EV/EBITDA (NO) | — | — | — | — | — | fired / MARKET_CLOSER |
 | QC7.SI | Healthcare Provider (SG) | EV/EBITDA (yes) | 0.61 | — | — | +20% | — | passed / MODEL_CLOSER |
 
+## Refinements (owner, 2026-09-26) and what they measured
+
+Applied in the commit after a8b778c: the three re-routings, the Commercial Biotech Forward P/E sanity gate
+(45x, weight rolled into EV/Fwd Rev and rNPV), the Surgical Robotics / Capital Systems profile (method
+table PROPOSED), the Managed Care structural flag Trough MLR Cycle, the `Medical - Distribution` row in
+scope, pipeline pre-fills for Akeso and Kelun-Biotech. Re-measured on the twenty names they touch
+(`docs/baselines/after_wave5_refine.json`, `after_wave5_refine_01666.json`).
+
+| Ticker | Profile now | IV before | IV after | Spot | vs spot before | after | What moved |
+|---|---|---|---|---|---|---|---|
+| 01666.HK | Large Cap Pharma (+ HK generics basket) | 22.31 | 10.10 | 3.09 | +622% | +227% | P/E leg on the HK Specialty & Generic cohort (18.0x, n=17) instead of the HK health sector median (24.9x); DCF 17.7 remains: HK$3.6bn net cash is 90% of the market cap, the market prices a 5x FCF SOE discount. Genuine, flagged Deep Value. |
+| 01099.HK | Pharma Distribution | 39.40 | 76.69 | 14.88 | +165% | +415% | **Worse, and for a peer-basis reason**: the HK `Medical - Distribution` cohort has 7 members but only 3 with a positive P/E, below the 5-peer floor, so the P/E (Ops) and FCF-yield rungs fell to the HKSE Healthcare sector median (P/E 24.9x, yield 3.0%, biotech-heavy). FCF Yield leg = 157/share on a working-capital FCF spike (CNY 14.7bn TTM) at a 3% target yield. EV/EBITDA (7.7x, industry rung) prices it at 9.7. |
+| 03320.HK | Pharma Distribution | 14.29 | 18.58 | 4.30 | +233% | +333% | Same rungs. |
+| ISRG | Surgical Robotics (PROPOSED) | 165.42 | 225.31 | 405.18 | -59% | -44% | DCF anchor (installed base) instead of the 3.7x Devices EV/Revenue; Forward P/E and EV/Revenue cross-check on ISRG's own statics (n=1). |
+| 02252.HK | Surgical Robotics (PROPOSED) | 2.26 | 1.91 | 21.18 | -89% | -91% | Pre-scale; DCF and Forward P/E uncomputable, two legs vote. Correctly unpriced in substance. |
+| BGNE | Commercial Biotech | 134.27 | 221.85 | 184.71 | -27% | +20% | Gate fired at 53.6x forward P/E; Forward P/E dropped, EV/Fwd Rev carries 0.47. |
+| 06160.HK | Commercial Biotech | 186.12 | 206.65 | 216.40 | -14% | -5% | Gate fired. |
+| 01801.HK | Commercial Biotech | 94.61 | 106.61 | 99.70 | -5% | +7% | Gate fired. |
+| 09926.HK | Commercial Biotech | 41.25 | 44.23 | 93.55 | -56% | -53% | NTM EPS not positive; gate drops the leg; rNPV still quarantined (pre-fill pending). |
+| 06990.HK | Commercial Biotech | 76.83 | 153.49 | 467.00 | -84% | -67% | Gate fired; DCF uncomputable; EV/Fwd Rev alone at 0.47 weight. |
+| REGN, ALNY, BIIB, VRTX | Commercial Biotech | unchanged | | | | | Forward P/E under 45x; gate silent. |
+| CI, ELV, HUM, UNH, CVS, MOH | Managed Care | unchanged | | | | | Flag emitted on every run: "Structural: Trough MLR Cycle -- ... Valuation unchanged." |
+
+### Pipeline acceptance preview (local archive copy, not the owner's gate)
+
+Accepting the three pipeline pre-fills in a copy of the local archive (`after_wave5_pipeline_preview.json`):
+
+| Ticker | Quarantined | Accepted | Spot | Reading |
+|---|---|---|---|---|
+| LLY | 517.30 | 418.40 | 1,190 | **Acceptance lowers LLY.** The rNPV (Pipeline) leg is 187.62/share: pipeline PV plus cash minus debt minus future R&D, a pipeline-only equity value blended at 0.30 as if it were the whole company. The marketed portfolio outside the listed assets (Verzenio, Taltz, Jardiance, Trulicity) is not in it. The DCF leg (137.95, 6.5% FCF margin base) is the other drag; P/E 680, EV/EBITDA 625, Forward P/E 1,135 (cross-check). |
+| 09926.HK | 44.23 | 34.40 | 93.55 | Same construction; seven assets, peak sum $3.07bn, 6.9x revenue. |
+| 06990.HK | 153.49 | 115.27 | 467.00 | Two approved assets, peak sum $3.25bn, 10.6x revenue: the plausibility check (0.02x-8x) fails and the entry is stored `ok: False`; accept would need the owner to read past that check. |
+
+**Finding for the owner.** On a revenue-generating pharma the rNPV (Pipeline) leg as built is a
+sum-of-parts component, not a company value; blending it as one understates every name it prices. The
+options are (a) the leg becomes marketed-portfolio value (P/E or EPV of current earnings) plus pipeline
+rNPV, a true SOTP; (b) the leg is a cross-check only on Large Cap Pharma and Commercial Biotech with weight
+re-assigned; (c) it stays as specified. Nothing changed here pending that decision; the six earlier
+pre-fills and these two stay pending on the gate.
+
+### Open for the owner after the refinements
+
+1. The HK distributor peer basis: relax the 5-peer floor for the HK `Medical - Distribution` P/E rung
+   (owner constant), pool a family (distribution + generics, 18.0x), or accept the sector fallback. The
+   routing is right; the multiple is not.
+2. The FCF Yield leg on distributors reads an unnormalised TTM FCF; a normalised FCF (3-year mean) is the
+   fix if the leg stays.
+3. The Surgical Robotics method table (DCF .40 anchor, Forward P/E .30, EV/Revenue .20, ROIC .10) and its
+   n=1 statics.
+4. The rNPV (Pipeline) construction, above.
+
 ## Status
 
 Shipped in 924dabb; unpushed with 42ea7e2, 5306d5b, 84a6778 (tag golden-2026-09-26), 8ab17de. Open for

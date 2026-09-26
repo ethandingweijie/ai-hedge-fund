@@ -74,7 +74,8 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
              "Household & Personal Products", "Tobacco"}         # tests/test_consumer_staples_wave4.py
     wave5 = {"Drug Manufacturers - General", "Biotechnology", "Medical - Devices",
              "Medical - Instruments & Supplies", "Medical - Healthcare Plans",
-             "Medical - Care Facilities", "Medical - Diagnostics & Research"}   # tests/test_healthcare_wave5.py
+             "Medical - Care Facilities", "Medical - Diagnostics & Research",
+             "Medical - Distribution"}                                        # tests/test_healthcare_wave5.py
     assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5
 
 

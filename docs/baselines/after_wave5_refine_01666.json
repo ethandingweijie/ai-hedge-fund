@@ -1,0 +1,66 @@
+{
+ "wave": "5",
+ "as_of": "2026-09-26",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "01666.HK": {
+   "profile": "Large Cap Pharma",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.571429
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.285714
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.142857
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 6.16,
+   "base": 10.1,
+   "bull": 17.33,
+   "scenarios_ordered": true,
+   "target_12m_base": 6.59,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 3.0899999141693115,
+   "iv_vs_spot": 2.268608505031365,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.656712555652859,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $13.79 vs price $5.19 on 2024-12-31 = 166% gap; 12m later the market was closer (213% vs 18%)",
+   "currency": "HKD",
+   "regime": null
+  }
+ }
+}

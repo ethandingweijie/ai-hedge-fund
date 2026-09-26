@@ -2318,6 +2318,13 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 {"name": "rNPV (Pipeline)",  "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": ["EV/R&D", "Cash Runway", "P/BV", "EPV"],
+            # Owner, 2026-09-26: "add EPS sanity gate (drop P/E when forward PE > 45x; roll
+            # weight into EV/Rev + rNPV)". A first-profit or loss year makes the forward
+            # multiple meaningless (Akeso, Kelun-Biotech); the leg is dropped and its weight
+            # rolls pro rata into the two legs named. The rNPV share is quarantined with the
+            # leg until a pipeline input is accepted, so the blend renormalises around EV/Fwd
+            # Rev and DCF meanwhile -- disclosed on the flag.
+            "forward_pe_sanity": {"max_forward_pe": 45.0, "roll_into": ["EV/Fwd Rev", "rNPV (Pipeline)"]},
             "rationale": ("Commercial-stage biotech: high earnings expansion on a few franchises, "
                           "priced on forward earnings and forward revenue with a long DCF for "
                           "patent durability; the accepted pipeline carries the Phase 3 option value."),
@@ -2346,6 +2353,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": [],
             "rationale": "Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy.",
+            # Owner, 2026-09-26: "keep valuation intact; emit structural flag Trough MLR Cycle".
+            # Observation only, on every run of the profile until the owner retires it.
+            "structural_flags": [{"name": "Trough MLR Cycle",
+                                  "note": "2025-26 Medicare Advantage and exchange medical loss ratios sit at a "
+                                          "cycle trough; the earnings-based legs price a recovery in operating EPS"}],
         },
         "MedTech / Devices": {
             "methods": [
@@ -2356,6 +2368,30 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": [],
             "rationale": "High R&D and patent protection lead to premium revenue multiples and long-cycle growth.",
+        },
+        "Surgical Robotics / Capital Systems": {
+            # Owner, 2026-09-26: "isolate Robotics / Capital Systems (ISRG) from standard
+            # implants / devices (BSX / EW / SYK)". Method table PROPOSED, derived from the
+            # comps store on 2026-09-26: the only scaled robotics name (ISRG) trades at 12.6x
+            # EV/Revenue, 45x P/E, 30.8x EV/EBITDA against a Devices cohort at 3.7x / 22x /
+            # 15x, so a cohort multiple cannot anchor it and a one-name cohort would price
+            # ISRG off ISRG. The DCF anchors: a razor-and-blade installed base (instruments
+            # and accessories are the recurring majority of revenue) is a projection, not a
+            # comparable. Forward P/E and EV/Revenue cross-check on the profile statics
+            # (ISRG's own trading, disclosed as n=1). Owner accepts or re-weights.
+            "methods": [
+                {"name": "DCF (5-yr)",   "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",   "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E", "P/BV", "EPV"],
+            "rationale": (
+                "Surgical robotics and capital systems (ISRG, MicroPort MedBot): a capital "
+                "placement funds a recurring instruments-and-service stream, so the franchise "
+                "is a projection of the installed base, not a device multiple. PROPOSED "
+                "2026-09-26; the Devices cohort cannot carry it (quality premium of 3-4x)."
+            ),
         },
         "CDMO / Life Science Tools": {
             "methods": [
@@ -2390,6 +2426,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": [],
             "rationale": "Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy.",
+            # Owner, 2026-09-26: "keep valuation intact; emit structural flag Trough MLR Cycle".
+            # Observation only, on every run of the profile until the owner retires it.
+            "structural_flags": [{"name": "Trough MLR Cycle",
+                                  "note": "2025-26 Medicare Advantage and exchange medical loss ratios sit at a "
+                                          "cycle trough; the earnings-based legs price a recovery in operating EPS"}],
         },
         "Healthcare Providers / Services": {
             "methods": [
@@ -3413,6 +3454,9 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Consumer":            {"ev_ebitda": 14.0, "pe": 20.0, "ev_revenue": 2.5,  "pb": 3.5,  "fcf_yield": 0.045, "cn_adr_haircut": 0.40, "growth_avg": 0.05},
     "Biopharma":           {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08},
     "MedTech / Devices":   {"ev_ebitda": 20.0, "pe": 30.0, "ev_revenue": 6.0,  "pb": 5.0,  "fcf_yield": 0.030, "growth_avg": 0.10},
+    # Surgical Robotics (PROPOSED 2026-09-26): ISRG's own trading in the comps store on
+    # 2026-09-26 (n=1, the only scaled robotics name); a cross-check basis, never an anchor.
+    "Surgical Robotics / Capital Systems": {"ev_ebitda": 30.8, "pe": 45.3, "ev_revenue": 12.6, "pb": 10.0, "fcf_yield": 0.015, "growth_avg": 0.15},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
     # Wave 5 (2026-09-26): read from the US Biotechnology basket that day (n13-17).
@@ -3570,7 +3614,8 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Tech":                 ["MSFT", "GOOGL", "ORCL", "ADBE", "CRM", "IBM", "SAP"],
     "Consumer":             ["PG", "KO", "PEP", "WMT", "TGT", "COST", "CL"],
     "Biopharma":            ["PFE", "MRK", "ABBV", "BMY", "LLY", "JNJ", "GSK"],
-    "MedTech / Devices":    ["MDT", "SYK", "BSX", "ISRG", "ZBH", "EW"],
+    "MedTech / Devices":    ["MDT", "SYK", "BSX", "ZBH", "EW", "ABT"],
+    "Surgical Robotics / Capital Systems": ["ISRG", "PRCT", "02252.HK"],
     "CDMO / Life Science Tools": ["TMO", "DHR", "A", "CRL", "ICLR", "AVTR"],
     "Pre-approval Biotech": ["VRTX", "REGN", "ALNY", "BMRN", "RARE", "SRPT"],
     "Telco":                ["VZ", "T", "TMUS", "VOD", "BCE"],
@@ -5261,7 +5306,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "JNJ":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Johnson & Johnson (post-Kenvue spin-off)"),
     "BAX":   ("Biopharma", "MedTech / Devices", "Healthcare Products",  "Baxter -- Wave 5 pin (2026-09-26); fell to Mature SaaS by the ladder"),
     "MDT":   ("Biopharma", "MedTech / Devices", "Healthcare Products",  "Medtronic — MedTech devices (Wave 5 pin, 2026-09-26)"),
-    "ISRG":  ("Biopharma", "MedTech / Devices",               "Healthcare Products",    "Intuitive Surgical"),
+    "ISRG":  ("Biopharma", "Surgical Robotics / Capital Systems", "Healthcare Products", "Intuitive Surgical -- owner 2026-09-26: robotics / capital systems isolated from implants and devices"),
     # Zoetis — animal-health pharma (spun out of Pfizer 2013). $9B revenue,
     # ~35% op margin, sub-10% growth, no clinical pipeline of human drugs.
     # Fits Large Cap Pharma archetype; without this override the LLM
@@ -5529,20 +5574,20 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "06618.HK": ("Biopharma",   "",  "Health Platform",          "JD Health"),
     "01093.HK": ("Biopharma", "Large Cap Pharma", "Pharmaceutical",    "CSPC Pharmaceutical -- Wave 5: a drug maker labelled Biotechnology"),
     "03692.HK": ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)", "Hansoh Pharma"),
-    "03320.HK": ("HealthcareServices", "Healthcare Providers / Services",  "Drugs (Pharmaceutical)", "CR Pharma"),
+    "03320.HK": ("HealthcareServices", "Pharma Distribution", "Medical - Distribution", "CR Pharmaceutical -- distributor; owner re-route 2026-09-26 off the provider profile"),
     "01801.HK": ("Biopharma", "Commercial Biotech", "Drugs (Biotech)", "Innovent Biologics -- Wave 5 (2026-09-26): approved franchises"),
     "09926.HK": ("Biopharma", "Commercial Biotech",  "Drugs (Biotech)",        "Akeso Inc"),
     "06160.HK": ("Biopharma", "Commercial Biotech",  "Drugs (Biotech)",        "BeiGene"),
     "09995.HK": ("Biopharma", "",  "Drugs (Biotech)",        "RemeGen"),
     "00853.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "MicroPort Scientific -- Wave 5: a revenue device maker, not pre-approval"),
-    "02252.HK": ("Biopharma", "MedTech / Devices",  "Healthcare Products",    "MicroPort Robot"),
+    "02252.HK": ("Biopharma", "Surgical Robotics / Capital Systems", "Healthcare Products", "MicroPort MedBot -- surgical robotics (owner split 2026-09-26)"),
     # Owner taxonomy, 2026-09-26 (Wave 5): the HK names by profile. 00992.HK in the owner's
     # list is Lenovo, not a MicroPort spin-off, and 02162.HK is Kangji Medical (devices), so
     # Clover (02197.HK) is the Chapter 18A name and the two MicroPort spin-offs are pinned.
     "06990.HK": ("Biopharma", "Commercial Biotech", "Drugs (Biotech)", "Kelun-Biotech -- commercial ADC developer"),
     "02197.HK": ("Biopharma", "Pre-approval Biotech", "Drugs (Biotech)", "Clover Biopharmaceuticals -- Chapter 18A"),
     "09688.HK": ("Biopharma", "Pre-approval Biotech", "Drugs (Biotech)", "Zai Lab -- in-licensing platform, clinical pipeline (owner placement)"),
-    "01666.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "Tongda / neurovascular devices (owner placement)"),
+    "01666.HK": ("Biopharma", "Large Cap Pharma", "Drugs (TCM)", "Tong Ren Tang Technologies -- TCM manufacturer; owner re-route 2026-09-26 off MedTech (EV/Revenue gave +622%)"),
     "02190.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "Zylox-Tonbridge Medical"),
     "02160.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "MicroPort CardioFlow"),
     "01515.HK": ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "China Resources Medical"),
@@ -5552,7 +5597,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "01548.HK": ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Genscript Biotech"),
     "03759.HK": ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Pharmaron Beijing"),
     "01833.HK": ("Biopharma", "",  "Healthcare Products",    "Ping An Healthcare"),
-    "01099.HK": ("HealthcareServices", "Healthcare Providers / Services",  "Drugs (Pharmaceutical)", "Sinopharm Group"),
+    "01099.HK": ("HealthcareServices", "Pharma Distribution", "Medical - Distribution", "Sinopharm -- distributor; owner re-route 2026-09-26 off the provider profile (HK Medical - Distribution cohort n=7)"),
     "02601.HK": ("Financials", "Insurance", "Insurance - Life", "CPIC"),
 
     # Consumer — Apparel & Footwear

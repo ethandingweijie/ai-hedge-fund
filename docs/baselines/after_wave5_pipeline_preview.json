@@ -1,0 +1,168 @@
+{
+ "wave": "5",
+ "as_of": "2026-09-26",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "LLY": {
+   "profile": "Large Cap Pharma",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "rNPV (Pipeline)",
+     "value_key": "rNPV (Pipeline)",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 300.66,
+   "base": 418.4,
+   "bull": 542.81,
+   "scenarios_ordered": true,
+   "target_12m_base": 801.06,
+   "consensus": 1343.07,
+   "iv_vs_consensus": -0.6884749119554454,
+   "spot": 1183.72,
+   "iv_vs_spot": -0.6465380326428547,
+   "consensus_spread": 0.1346,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.4035604994527463,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6185521533268227,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $294.48 vs price $772.00 on 2024-12-31 = 62% gap; 12m later the market was closer (73% vs 28%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "09926.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.46875
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "rNPV (Pipeline)",
+     "value_key": "rNPV (Pipeline)",
+     "weight": 0.28125
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 29.96,
+   "base": 34.4,
+   "bull": 41.92,
+   "scenarios_ordered": true,
+   "target_12m_base": 63.98,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 93.55000305175781,
+   "iv_vs_spot": -0.63228221402657,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 5.851383970537277,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $415.88 vs price $60.70 on 2024-12-31 = 585% gap; 12m later the market was closer (268% vs 46%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "06990.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.625
+    },
+    {
+     "method": "rNPV (Pipeline)",
+     "value_key": "rNPV (Pipeline)",
+     "weight": 0.375
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.75,
+   "methods_unavailable": [
+    "DCF"
+   ],
+   "bear": 96.19,
+   "base": 115.27,
+   "bull": 134.12,
+   "scenarios_ordered": true,
+   "target_12m_base": 291.13,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 467.0,
+   "iv_vs_spot": -0.753169164882227,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17276006600724123,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $138.98 vs price $168.00 on 2024-12-31 = 17% gap; 12m later the market was closer (65% vs 57%)",
+   "currency": "HKD",
+   "regime": null
+  }
+ }
+}

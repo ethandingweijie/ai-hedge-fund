@@ -8557,6 +8557,28 @@ def _pe_norm_leg_swaps(
     return swaps
 
 
+def _roll_leg_weight(profile_methods: list, leg: str, into: list[str]) -> tuple[list, dict]:
+    """Drop `leg` from a copy of the method rows and roll its weight pro rata into the
+    rows named in `into` that exist on the profile. Returns (rows, record). When none of
+    the named rows exists the leg is simply dropped and the blend renormalises. Owner,
+    2026-09-26 (Commercial Biotech Forward P/E sanity gate)."""
+    rows = [dict(m) for m in (profile_methods or []) if isinstance(m, dict)]
+    src = next((m for m in rows if m.get("name") == leg), None)
+    if src is None:
+        return rows, {"dropped": None, "rolled": {}}
+    w = float(src.get("weight") or 0.0)
+    rows = [m for m in rows if m.get("name") != leg]
+    targets = [m for m in rows if m.get("name") in set(into or [])]
+    tw = sum(float(m.get("weight") or 0.0) for m in targets)
+    rolled: dict[str, float] = {}
+    if tw > 0 and w > 0:
+        for m in targets:
+            share = w * float(m.get("weight") or 0.0) / tw
+            m["weight"] = round(float(m.get("weight") or 0.0) + share, 6)
+            rolled[m["name"]] = round(share, 6)
+    return rows, {"dropped": leg, "dropped_weight": w, "rolled": rolled, "anchor_dropped": bool(src.get("anchor"))}
+
+
 def _apply_pe_norm_swaps(profile_methods: list, swaps: list[dict]) -> list:
     """Rewrite a profile's method rows onto their normalized spelling.
 
@@ -12541,6 +12563,41 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                   f"despite the similar names, so this is a change of earnings "
                   f"source, not a relabel.")
 
+        # ── Forward P/E sanity gate (owner, 2026-09-26; profile-declared) ──
+        # "Drop P/E when forward P/E > 45x; roll weight into EV/Rev + rNPV." Read
+        # at spot against the base NTM EPS, once, above the scenario loop, so all
+        # three scenarios blend the same rows. A non-positive NTM EPS fires it
+        # too: there is no forward multiple to sanity-check. The rows are a copy;
+        # the registry is untouched.
+        _fpe_flag: str = ""
+        _fpe_rec: Optional[dict] = None
+        _fpe_cfg = (profile_data or {}).get("forward_pe_sanity") or None
+        if isinstance(_fpe_cfg, dict) and any(
+                isinstance(m, dict) and m.get("name") == "Forward P/E" for m in _pe_norm_methods):
+            _fpe_eps = ((forward_consensus or {}).get("eps") or {}).get("base")
+            _fpe_max = float(_fpe_cfg.get("max_forward_pe") or 0.0)
+            _fpe_at_spot = (float(_spot_price) / float(_fpe_eps)
+                            if isinstance(_fpe_eps, (int, float)) and _fpe_eps > 0
+                            and isinstance(_spot_price, (int, float)) and _spot_price > 0 else None)
+            _fpe_fires = ((not isinstance(_fpe_eps, (int, float)) or _fpe_eps <= 0)
+                          or (_fpe_at_spot is not None and _fpe_max > 0 and _fpe_at_spot > _fpe_max))
+            if _fpe_fires:
+                _pe_norm_methods, _fpe_roll = _roll_leg_weight(
+                    _pe_norm_methods, "Forward P/E", list(_fpe_cfg.get("roll_into") or []))
+                _fpe_rec = {"forward_pe_at_spot": (round(_fpe_at_spot, 2) if _fpe_at_spot is not None else None),
+                            "ntm_eps_base": (float(_fpe_eps) if isinstance(_fpe_eps, (int, float)) else None),
+                            "max_forward_pe": _fpe_max, **_fpe_roll}
+                _rolled_txt = ", ".join(f"{k} +{v:.2f}" for k, v in (_fpe_roll.get("rolled") or {}).items()) or "no named leg present"
+                _fpe_flag = (
+                    "Forward P/E sanity gate (owner, 45x): "
+                    + (f"forward P/E at spot {_fpe_at_spot:.1f}x exceeds {_fpe_max:.0f}x"
+                       if _fpe_at_spot is not None else "NTM EPS is not positive, no forward multiple exists")
+                    + f"; the Forward P/E leg (w={_fpe_roll.get('dropped_weight', 0.0):.2f}"
+                    + (", anchor" if _fpe_roll.get("anchor_dropped") else "")
+                    + f") is dropped and its weight rolls into {_rolled_txt}. "
+                      "A rolled rNPV share stays quarantined until a pipeline input is accepted, "
+                      "so the blend renormalises around the surviving legs meanwhile.")
+
         # ── Growth reinvestment: the charge the flat margin omits, OBSERVED ──
         #
         # The cash-conversion gate above records a cap it does not apply, and
@@ -13178,6 +13235,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _eff_profile_methods: list = _pe_norm_methods
             if _pe_norm_flag:
                 forward_flags.append(_pe_norm_flag)
+            if _fpe_flag:
+                forward_flags.append(_fpe_flag)
             if profile_data:
                 methods_to_compute = set()
                 for m in _eff_profile_methods:
@@ -15279,6 +15338,32 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 pass
             if most_recent.get("_pipeline_quarantine"):
                 _b_sr.setdefault("forward_flags", []).append(most_recent["_pipeline_quarantine"])
+            if _fpe_rec is not None:
+                gate_evaluations.append({
+                    "gate_id": "GATE_FORWARD_PE_SANITY",
+                    "metric": "forward_pe_at_spot",
+                    "raw_input_path_a": _fpe_rec.get("forward_pe_at_spot"),
+                    "gated_output_path_b": _fpe_rec.get("rolled"),
+                    "basis": (f"owner threshold {_fpe_rec.get('max_forward_pe'):.0f}x forward P/E; the leg is dropped "
+                              f"and its weight rolls into the legs named on the profile"),
+                    "applied": True,
+                })
+            # Owner, 2026-09-26: a profile may declare structural observations
+            # ("Trough MLR Cycle" on Managed Care). Flag only; the valuation is
+            # untouched and the record says so.
+            for _sf in ((profile_data or {}).get("structural_flags") or []):
+                _sf_name = (_sf.get("name") if isinstance(_sf, dict) else str(_sf)) or "structural"
+                _sf_note = (_sf.get("note") or "") if isinstance(_sf, dict) else ""
+                _b_sr.setdefault("forward_flags", []).append(
+                    f"Structural: {_sf_name}" + (f" -- {_sf_note}" if _sf_note else "") + ". Valuation unchanged.")
+                gate_evaluations.append({
+                    "gate_id": "GATE_STRUCTURAL_FLAG",
+                    "metric": "profile_structural_flag",
+                    "raw_input_path_a": None,
+                    "gated_output_path_b": None,
+                    "basis": f"{_sf_name}: profile-declared structural observation; no weight",
+                    "applied": False,
+                })
             _shadow_names = (profile_data or {}).get("shadow_methods") or []
             if _shadow_names:
                 _an = _b_tbl.get("SOTP (analyst)")

@@ -117,7 +117,8 @@ class TestTheAllowlistIsTheOwnersList:
         # 111 -> 112 with China Internet Platform (owner, 2026-09-26); still not the fourth name.
         # 112 -> 115 with Wave 4's Agribusiness & Food Processing, Grocery & Discount Retail, Tobacco; still not.
         # 115 -> 116 with Wave 5's Commercial Biotech (2026-09-26); still not the fourth name.
-        assert len(every) == 116, (
+        # 116 -> 117 with Surgical Robotics / Capital Systems (owner split, 2026-09-26); still not.
+        assert len(every) == 117, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:
@@ -408,7 +409,7 @@ class TestTheInvariantsAreNotDuplicated:
         # do with this count being a fact about the whole file rather than about
         # this gate — which is why an unrelated change reddens a test whose name
         # says "not applied and publishes both gates".
-        assert src.count('"applied": False,') == 6   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION (2026-09-26)
+        assert src.count('"applied": False,') == 7   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG (2026-09-26)
         # SIX, not five, since GATE_SCENARIO_ORDERING landed with a literal
         # `"applied": True,`. This is the SECOND copy of that count — the first
         # is in `test_consumer_discretionary_gates.py::
@@ -420,7 +421,7 @@ class TestTheInvariantsAreNotDuplicated:
         # added without a record.
         # FIVE since 2026-09-19: GATE_DETERMINISTIC_KPI_PRECEDENCE was retired
         # with the composite it measured.
-        assert src.count('"applied": True,') == 7   # +GATE_MARGIN_TURNAROUND (2026-09-21), +GATE_SOTP_PRECEDENCE (2026-09-23)
+        assert src.count('"applied": True,') == 8   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26)
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):
         """Out-of-scope names get one sentence; in-scope names get the paragraph.

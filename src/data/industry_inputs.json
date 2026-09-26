@@ -1243,6 +1243,139 @@
     "value_usd": 61955294240.0
    }
   },
+  "06990.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.31
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T15:21:27+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "10.59x (plausible 0.02x to 8.0x)",
+      "ok": false,
+      "ratio": 10.5932
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2025 (approved), 2026 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Sichuan Kelun-Biotech Biopharmaceutical Co., Ltd.",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Non-small cell lung cancer (NSCLC) and advanced solid tumors",
+       "launch_year": 2025,
+       "name": "Sacituzumab tirumotecan (sac-TMT / SKB264 / MK-2870)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGIOFPJJSNd80p8pqJ2Qt1vTP9OctbY0EX2pHQ17y1YRRyA1jUxewW1v8uKLv_jsEV1YsyCQ1o_ag9l11OPfi62760dtoyB5AUlBP90jCaz1jQTZEVXmWJx7029oYJS6-R2rEOvYNX5XQnblBgR5rSj-VU41L4ZAm2ReppxszQ7rTHxS2KGLpcEYsYiw8UnRsfjD6S5HG7OUPlH-g==",
+        "period": "Peak",
+        "quote": "Kelun retains 100% of Greater China revenue, projected ¥20 billion+ peak across all indications.",
+        "scale": "bn",
+        "source_url": "https://flcube.com/kelun-biotechs-sac-tmt-wins-breakthrough-therapy-designation-for-first-line-nsclc/",
+        "value": 20.0
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "Approved by NMPA in China for TNBC and EGFR-mutant NSCLC; multiple ongoing registrational Phase 3 trials for label expansions (standard oncology Phase 3 benchmark 50-60%)"
+      },
+      {
+       "indication": "HER2-positive breast cancer",
+       "launch_year": 2026,
+       "name": "Trastuzumab botidotin (A166)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEGQk8jjrtPuuAkorRwdotl-sAzM8xC_eRgDMsSpr2OuRekdDpiUyp6Uyte1TKCUiVj7JL_9zpx3K3aClc7Nh8NITXSgFEG06XhRaAdg5VhqHmf6IzJox7lcdhRb0XgQE6IYdFmjeY1SLGPharYbuTJQMmBeP47MwxMFyjadTGQFdNQI0rB1st64kkpuducMzKrRi_fXlQpT3hCtO3X_pLlOcIyHg==",
+        "period": "2030E",
+        "quote": "Analysts project trastuzumab botidotin could achieve ¥1.2‑1.8 billion (~US$165‑245 million) in China peak sales by 2030, assuming 25‑30% market share capture in second‑line HER2+ metastatic setting",
+        "scale": "bn",
+        "source_url": "https://flcube.com/kelun-biotechs-trastuzumab-botidotin-her2-adc-launches-in-china-after-phase-3-win-vs-t-dm1/",
+        "value": 1.8
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "Approved by NMPA in October 2025 and launched in China in late 2025; pre-peak commercial stage (standard oncology approved benchmark 100%)"
+      }
+     ],
+     "notes": "Late-stage assets lunbotinib fumarate (A400 / EP0031, NDA accepted in China), cetuximab N01 (A140, approved 2025), and tagitanlimab (A167, approved 2025) lack standalone consensus peak sales disclosures in accessible sources and are omitted per prompt requirements."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Non-small cell lung cancer (NSCLC) and advanced solid tumors",
+       "launch_year": 2025,
+       "name": "Sacituzumab tirumotecan (sac-TMT / SKB264 / MK-2870)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2979600000.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "HER2-positive breast cancer",
+       "launch_year": 2026,
+       "name": "Trastuzumab botidotin (A166)",
+       "patent_expiry": null,
+       "peak_sales_period": "2030E",
+       "peak_sales_usd": 268164000.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "CNY bn",
+       "CNY bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Sichuan Kelun-Biotech Biopharmaceutical Co., Ltd.",
+     "depreciation_and_amortization": 14956996.08,
+     "market_cap": 13884807389.535,
+     "net_ppe": 107638645.92,
+     "operating_cash_flow": -26861094.0,
+     "period": "2025-12-31",
+     "revenue": 306588921.6
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 51.7,
+    "value_usd": 3247764000.0
+   }
+  },
   "09618.HK": {
    "sotp": {
     "anchors": {
@@ -1450,6 +1583,340 @@
     "ok": false,
     "secs": 107.0,
     "value_usd": 216674426280.0
+   }
+  },
+  "09926.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.44
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T15:20:31+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "6.92x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 6.924
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved, phase_3, approved, approved, approved, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2022 (approved), 2024 (approved), 2027, 2024 (approved), 2024 (approved), 2025 (approved), 2021 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "7 of 7 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "7 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "5 of 5 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Akeso, Inc.",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Cervical cancer and gastric cancer",
+       "launch_year": 2022,
+       "name": "Cadonilimab (AK104)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK104. 2022. 2032. 5,789. 68%. 3,957.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 5789.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK104. 2022. 2032. 5,789. 68%. 3,957.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.68
+       },
+       "ptrs_basis": "Sell-side rNPV probability of success across approved and expanding Phase 3 oncology indications"
+      },
+      {
+       "indication": "Non-small cell lung cancer (NSCLC)",
+       "launch_year": 2024,
+       "name": "Ivonescimab (AK112, China)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK112 (China) mid 2024. 2032. 5,961. 50%. 2,951.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 5961.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK112 (China) mid 2024. 2032. 5,961. 50%. 2,951.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.5
+       },
+       "ptrs_basis": "Sell-side rNPV probability of success across ongoing Phase 3 trials in China (aligns with oncology Phase 3 benchmark of ~50%)"
+      },
+      {
+       "indication": "Non-small cell lung cancer (NSCLC) and solid tumors (ex-China via partner Summit Therapeutics)",
+       "launch_year": 2027,
+       "name": "Ivonescimab (AK112, Overseas Royalties)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQH7h4xSZ0o4jCuXIxvwJKhJzziqLPZgUvvvlSD82YSRF9mU5h0BxSgPSigDx4ONVYok2kVdQF8Wqe_bYmG2C8RDAOpKYcf-5HgMY_Fp_01ETY3WiWApbhs31K-9C6FR-ba5YYlVkDhWuSA5Z2E=",
+        "period": "2032E",
+        "quote": "AK112 (US) late 2027. 2032. 3,731. 25%. 933.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 3731.0
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQH7h4xSZ0o4jCuXIxvwJKhJzziqLPZgUvvvlSD82YSRF9mU5h0BxSgPSigDx4ONVYok2kVdQF8Wqe_bYmG2C8RDAOpKYcf-5HgMY_Fp_01ETY3WiWApbhs31K-9C6FR-ba5YYlVkDhWuSA5Z2E=",
+        "period": "2032E",
+        "quote": "AK112 (US) late 2027. 2032. 3,731. 25%. 933.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.25
+       },
+       "ptrs_basis": "Sell-side rNPV probability of success for US and ex-China regulatory approval and royalty generation"
+      },
+      {
+       "indication": "Hypercholesterolemia",
+       "launch_year": 2024,
+       "name": "Ebronucimab (AK102)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK102. 2024H2. 2032. 1,761. 85%. 1,497.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 1761.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr9qjJxvYOcJYCYGNaa_cRK77EXw5sU9wX8USwwRXWCQw1TWR6dMUz6YOZOjQG9WGAPDrUItMLsedCVo0G-yikhHE07S71az9v1Uva18GUoT1t2GB2bkR98SwbQZw7rhOLHtBLZrLmgSQdEOzx",
+        "period": "2032E",
+        "quote": "AK102. 2024H2. 2032. 1,761. 85%. 1,497.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.85
+       },
+       "ptrs_basis": "Sell-side rNPV probability of technical and regulatory success for NDA-stage cardiovascular/metabolic asset"
+      },
+      {
+       "indication": "Moderate-to-severe plaque psoriasis",
+       "launch_year": 2024,
+       "name": "Ebdarokimab (AK101)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHvdY_fLzop894i1YiO8qOC_D1JygElWnmul0J2JKUO1IE97H88xSZ9e_bEbYBpO_ZeEw1L_ps-xlgF30KM7UXrmYEmHn28tAKjfx6kxT8XJW8f7w-z7eP9GO_rGzse4e9yxVcYcFsL3O7gCXTS",
+        "period": "2032E",
+        "quote": "AK101. 2024H2. 2032. 1,181. 85%. 1,003.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 1181.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHvdY_fLzop894i1YiO8qOC_D1JygElWnmul0J2JKUO1IE97H88xSZ9e_bEbYBpO_ZeEw1L_ps-xlgF30KM7UXrmYEmHn28tAKjfx6kxT8XJW8f7w-z7eP9GO_rGzse4e9yxVcYcFsL3O7gCXTS",
+        "period": "2032E",
+        "quote": "AK101. 2024H2. 2032. 1,181. 85%. 1,003.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.85
+       },
+       "ptrs_basis": "Sell-side rNPV probability of regulatory success for NDA-stage immunology asset"
+      },
+      {
+       "indication": "Moderate-to-severe plaque psoriasis and ankylosing spondylitis",
+       "launch_year": 2025,
+       "name": "Gumokimab (AK111)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFua4t1kfayAikUxPyvVzOLe_LCIyQM10gvn0o5C3Aqrd8k1Al5jczRkHvmvBk4ULkZTYPfK0naSfxw419Exe2a8-nnkZxe-n7PL25XsN0muNDUglKUDYgaz7I1SmEhIVBUz-u1Mk5PFd1ZL5Vq",
+        "period": "2031E",
+        "quote": "AK111. 2025. 2031. 1,137. 70%. 796.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 1137.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFua4t1kfayAikUxPyvVzOLe_LCIyQM10gvn0o5C3Aqrd8k1Al5jczRkHvmvBk4ULkZTYPfK0naSfxw419Exe2a8-nnkZxe-n7PL25XsN0muNDUglKUDYgaz7I1SmEhIVBUz-u1Mk5PFd1ZL5Vq",
+        "period": "2031E",
+        "quote": "AK111. 2025. 2031. 1,137. 70%. 796.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.7
+       },
+       "ptrs_basis": "Sell-side rNPV probability of technical and regulatory success for Phase 3 immunology asset (aligns with autoimmune Phase 3 benchmark of ~70%)"
+      },
+      {
+       "indication": "Squamous non-small cell lung cancer (sqNSCLC) and Hodgkin lymphoma",
+       "launch_year": 2021,
+       "name": "Penpulimab (AK105)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFVMbHWoxdvBwUgYS0VdubSbfTdKSPUpicYh4vZgMs3PYX64VkmDWGx98B27LtNEXUanGInzZ_Tlib8AVT6aslUHQrcKY1sh-Wq08gEVse0_zB-9gYKNdcA4vTY9JT9r78enbHnauPeo3LQvBjC",
+        "period": "2030E",
+        "quote": "AK105. 2021. 2030. 1,054. 81%. 850.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 1054.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFVMbHWoxdvBwUgYS0VdubSbfTdKSPUpicYh4vZgMs3PYX64VkmDWGx98B27LtNEXUanGInzZ_Tlib8AVT6aslUHQrcKY1sh-Wq08gEVse0_zB-9gYKNdcA4vTY9JT9r78enbHnauPeo3LQvBjC",
+        "period": "2030E",
+        "quote": "AK105. 2021. 2030. 1,054. 81%. 850.",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202403201627282193_1.pdf",
+        "value": 0.81
+       },
+       "ptrs_basis": "Sell-side rNPV probability of success for approved PD-1 monoclonal antibody expanding indications"
+      }
+     ],
+     "notes": "Sell-side analyst rNPV pipeline model figures are taken from CMB International equity research covering Akeso, Inc. (09926 HK). For ivonescimab (AK112), UBS also projects peak sales in China of $1.2 billion and globally of $14.6 billion ('UBS has raised AK112 peak sales projections in China and globally to $1.2 billion and $14.6 billion, respectively')."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Cervical cancer and gastric cancer",
+       "launch_year": 2022,
+       "name": "Cadonilimab (AK104)",
+       "patent_expiry": null,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 862445220.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of success across approved and expanding Phase 3 oncology indications",
+       "ptrs_override": 0.68,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Non-small cell lung cancer (NSCLC)",
+       "launch_year": 2024,
+       "name": "Ivonescimab (AK112, China)",
+       "patent_expiry": null,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 888069780.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of success across ongoing Phase 3 trials in China (aligns with oncology Phase 3 benchmark of ~50%)",
+       "ptrs_override": 0.5,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Non-small cell lung cancer (NSCLC) and solid tumors (ex-China via partner Summit Therapeutics)",
+       "launch_year": 2027,
+       "name": "Ivonescimab (AK112, Overseas Royalties)",
+       "patent_expiry": null,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 555844380.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Sell-side rNPV probability of success for US and ex-China regulatory approval and royalty generation",
+       "ptrs_override": 0.25,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Hypercholesterolemia",
+       "launch_year": 2024,
+       "name": "Ebronucimab (AK102)",
+       "patent_expiry": null,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 262353780.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of technical and regulatory success for NDA-stage cardiovascular/metabolic asset",
+       "ptrs_override": 0.85,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Moderate-to-severe plaque psoriasis",
+       "launch_year": 2024,
+       "name": "Ebdarokimab (AK101)",
+       "patent_expiry": null,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 175945380.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of regulatory success for NDA-stage immunology asset",
+       "ptrs_override": 0.85,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Moderate-to-severe plaque psoriasis and ankylosing spondylitis",
+       "launch_year": 2025,
+       "name": "Gumokimab (AK111)",
+       "patent_expiry": null,
+       "peak_sales_period": "2031E",
+       "peak_sales_usd": 169390260.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of technical and regulatory success for Phase 3 immunology asset (aligns with autoimmune Phase 3 benchmark of ~70%)",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Squamous non-small cell lung cancer (sqNSCLC) and Hodgkin lymphoma",
+       "launch_year": 2021,
+       "name": "Penpulimab (AK105)",
+       "patent_expiry": null,
+       "peak_sales_period": "2030E",
+       "peak_sales_usd": 157024920.0,
+       "phase": "approved",
+       "ptrs_basis": "Sell-side rNPV probability of success for approved PD-1 monoclonal antibody expanding indications",
+       "ptrs_override": 0.81,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn",
+       "CNY mn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Akeso, Inc.",
+     "depreciation_and_amortization": 39018457.92,
+     "market_cap": 10973021388.375,
+     "net_ppe": 625836292.11324,
+     "operating_cash_flow": -165948253.49232,
+     "period": "2025-12-31",
+     "revenue": 443539563.38172
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 53.9,
+    "value_usd": 3071073720.0
    }
   },
   "09988.HK": {

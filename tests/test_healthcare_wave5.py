@@ -26,6 +26,7 @@ LABELS = {
     "Medical - Healthcare Plans": ("HealthcareServices", "Managed Care"),
     "Medical - Care Facilities": ("HealthcareServices", "Healthcare Providers / Services"),
     "Medical - Diagnostics & Research": ("Biopharma", "CDMO / Life Science Tools"),
+    "Medical - Distribution": ("HealthcareServices", "Pharma Distribution"),   # owner re-route 2026-09-26
 }
 
 
@@ -70,14 +71,17 @@ def test_the_pins_the_owner_decided(ticker, profile):
 # 18A name. CTLS is delisted and skipped. 01099.HK and 03320.HK are distributors
 # the owner placed on the provider profile.
 OWNER_TAXONOMY = {
-    "Large Cap Pharma": ["JNJ", "ABBV", "MRK", "BMY", "LLY", "PFE", "AMGN", "01177.HK", "03692.HK", "02196.HK", "01093.HK"],
+    "Large Cap Pharma": ["JNJ", "ABBV", "MRK", "BMY", "LLY", "PFE", "AMGN", "01177.HK", "03692.HK", "02196.HK", "01093.HK",
+                         "01666.HK"],                                   # Tong Ren Tang Technologies: TCM, re-routed off MedTech
     "Commercial Biotech": ["VRTX", "REGN", "BIIB", "ALNY", "BGNE", "01801.HK", "09926.HK", "06160.HK", "06990.HK"],
     "Pre-approval Biotech": ["CRSP", "BEAM", "KYMR", "02197.HK", "09688.HK"],
-    "MedTech / Devices": ["MDT", "SYK", "BAX", "ABT", "BSX", "ISRG", "EW", "BDX",
-                          "00853.HK", "01666.HK", "02190.HK", "02160.HK", "02252.HK"],
+    "MedTech / Devices": ["MDT", "SYK", "BAX", "ABT", "BSX", "EW", "BDX",
+                          "00853.HK", "02190.HK", "02160.HK"],
+    "Surgical Robotics / Capital Systems": ["ISRG", "02252.HK"],          # owner split 2026-09-26 (PROPOSED table)
     "CDMO / Life Science Tools": ["TMO", "DHR", "ILMN", "A", "CRL", "IQV", "02269.HK", "02268.HK", "01548.HK", "03759.HK", "02359.HK"],
     "Managed Care": ["UNH", "CVS", "MOH", "ELV", "CI", "CNC", "HUM"],
-    "Healthcare Providers / Services": ["HCA", "THC", "UHS", "ENSG", "01099.HK", "03320.HK", "01515.HK", "06078.HK"],
+    "Healthcare Providers / Services": ["HCA", "THC", "UHS", "ENSG", "01515.HK", "06078.HK"],
+    "Pharma Distribution": ["01099.HK", "03320.HK"],                     # distributors, re-routed 2026-09-26
     "Healthcare Provider (SG)": ["Q0F.SI", "A50.SI", "QC7.SI"],
 }
 
@@ -85,6 +89,56 @@ OWNER_TAXONOMY = {
 @pytest.mark.parametrize("profile,tickers", list(OWNER_TAXONOMY.items()))
 def test_the_owner_taxonomy_resolves_every_name_to_its_profile(profile, tickers):
     assert [sp.get_wacc_profile_for_ticker(t)[1] for t in tickers] == [profile] * len(tickers)
+
+
+# ── Wave 5 refinements (owner, 2026-09-26) ───────────────────────────────────
+
+def test_the_forward_pe_sanity_gate_rolls_weight_pro_rata_and_drops_the_leg():
+    methods = P["Biopharma"]["Commercial Biotech"]["methods"]
+    cfg = P["Biopharma"]["Commercial Biotech"]["forward_pe_sanity"]
+    assert cfg == {"max_forward_pe": 45.0, "roll_into": ["EV/Fwd Rev", "rNPV (Pipeline)"]}
+    rows, rec = d._roll_leg_weight(methods, "Forward P/E", cfg["roll_into"])
+    w = {m["name"]: m["weight"] for m in rows}
+    assert "Forward P/E" not in w
+    assert w["EV/Fwd Rev"] == pytest.approx(0.25 + 0.35 * 0.25 / 0.40)
+    assert w["rNPV (Pipeline)"] == pytest.approx(0.15 + 0.35 * 0.15 / 0.40)
+    assert w["DCF"] == 0.25 and sum(w.values()) == pytest.approx(1.0)
+    assert rec["anchor_dropped"] is True and rec["dropped_weight"] == 0.35
+    assert methods[0]["name"] == "Forward P/E"                         # the registry row is untouched
+    # nothing to roll into: the leg is dropped and the blend renormalises
+    rows2, rec2 = d._roll_leg_weight(methods, "Forward P/E", ["nope"])
+    assert rec2["rolled"] == {} and "Forward P/E" not in {m["name"] for m in rows2}
+
+
+def test_the_sanity_gate_reads_spot_over_base_ntm_eps_once_above_the_scenario_loop():
+    src = inspect.getsource(d.run_dcf_agent)
+    at = src.index('_fpe_cfg = (profile_data or {}).get("forward_pe_sanity")')
+    block = src[at: at + 2200]
+    assert '((forward_consensus or {}).get("eps") or {}).get("base")' in block
+    assert "_fpe_at_spot > _fpe_max" in block and "_fpe_eps <= 0" in block
+    assert "_roll_leg_weight(" in block and '_pe_norm_methods, "Forward P/E", list(_fpe_cfg.get("roll_into")' in block
+    assert src.index("for scenario in") > at                            # bound before the loop
+    assert '"gate_id": "GATE_FORWARD_PE_SANITY"' in src
+
+
+def test_the_surgical_robotics_profile_is_proposed_and_pins_isrg_and_medbot():
+    p = P["Biopharma"]["Surgical Robotics / Capital Systems"]
+    w = {m["name"]: m["weight"] for m in p["methods"]}
+    assert w == {"DCF (5-yr)": 0.40, "Forward P/E": 0.30, "EV/Revenue": 0.20, "ROIC vs WACC": 0.10}
+    assert [m["name"] for m in p["methods"] if m.get("anchor")] == ["DCF (5-yr)"]
+    assert "PROPOSED" in p["rationale"]
+    assert sp.SECTOR_PEER_MULTIPLES["Surgical Robotics / Capital Systems"]["ev_revenue"] == 12.6
+    assert "ISRG" not in sp.SECTOR_PEER_BASKETS["MedTech / Devices"]
+    assert sp.SECTOR_PEER_BASKETS["Surgical Robotics / Capital Systems"][0] == "ISRG"
+
+
+def test_managed_care_declares_the_trough_mlr_structural_flag_on_both_copies():
+    for sec in ("Biopharma", "HealthcareServices"):
+        flags = P[sec]["Managed Care"]["structural_flags"]
+        assert [f["name"] for f in flags] == ["Trough MLR Cycle"]
+        assert P[sec]["Managed Care"]["methods"][0] == {"name": "P/E (Ops)", "weight": 0.40, "anchor": True, "implementable": True}
+    src = inspect.getsource(d.run_dcf_agent)
+    assert '"gate_id": "GATE_STRUCTURAL_FLAG"' in src and 'f"Structural: {_sf_name}"' in src
 
 
 def test_the_two_flagged_tickers_are_not_pinned_to_health_profiles():

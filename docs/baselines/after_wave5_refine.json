@@ -1,0 +1,1128 @@
+{
+ "wave": "5",
+ "as_of": "2026-09-26",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "01666.HK": {
+   "profile": "Large Cap Pharma",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.571429
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.285714
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.142857
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 8.31,
+   "base": 12.56,
+   "bull": 19.65,
+   "scenarios_ordered": true,
+   "target_12m_base": 7.82,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 3.0899999141693115,
+   "iv_vs_spot": 3.0647250319994006,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.248843439715129,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $16.86 vs price $5.19 on 2024-12-31 = 225% gap; 12m later the market was closer (282% vs 18%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "01099.HK": {
+   "profile": "Pharma Distribution",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Ops)",
+     "value_key": "P/E (Ops)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 76.69,
+   "base": 76.69,
+   "bull": 117.54,
+   "scenarios_ordered": true,
+   "target_12m_base": 45.79,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 14.880000114440918,
+   "iv_vs_spot": 4.15389780982414,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.549353683561745,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $75.60 vs price $21.30 on 2024-12-31 = 255% gap; 12m later the market was closer (289% vs 10%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "03320.HK": {
+   "profile": "Pharma Distribution",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Ops)",
+     "value_key": "P/E (Ops)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 18.58,
+   "base": 18.58,
+   "bull": 25.06,
+   "scenarios_ordered": true,
+   "target_12m_base": 11.44,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 4.295000076293945,
+   "iv_vs_spot": 3.3259603422480595,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.688025360041941,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $15.32 vs price $5.70 on 2024-12-31 = 169% gap; 12m later the market was closer (244% vs 28%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "ISRG": {
+   "profile": "Surgical Robotics / Capital Systems",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (5-yr)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (5-yr)",
+     "value_key": "DCF (5-yr)",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.3
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 189.08,
+   "base": 225.31,
+   "bull": 260.59,
+   "scenarios_ordered": true,
+   "target_12m_base": 315.25,
+   "consensus": 491.15,
+   "iv_vs_consensus": -0.5412603074417184,
+   "spot": 405.18,
+   "iv_vs_spot": -0.4439261562762229,
+   "consensus_spread": 0.2122,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3581390613865417,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.8333011046521519,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $87.01 vs price $521.96 on 2024-12-31 = 83% gap; 12m later the market was closer (85% vs 8%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "02252.HK": {
+   "profile": "Surgical Robotics / Capital Systems",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (5-yr)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.6
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DCF (5-yr)",
+     "weight": 0.4,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "ROIC vs WACC",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.5,
+   "methods_unavailable": [
+    "DCF (5-yr)"
+   ],
+   "bear": 1.39,
+   "base": 1.91,
+   "bull": 2.32,
+   "scenarios_ordered": true,
+   "target_12m_base": 11.54,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 21.18,
+   "iv_vs_spot": -0.9098205854579793,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9316118736862444,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $0.65 vs price $9.51 on 2024-12-31 = 93% gap; 12m later the market was closer (97% vs 61%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "09926.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.652174
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.347826
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.28125,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.71875,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 38.44,
+   "base": 44.23,
+   "bull": 54.32,
+   "scenarios_ordered": true,
+   "target_12m_base": 68.89,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 93.55000305175781,
+   "iv_vs_spot": -0.527204718790558,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 5.851383970537277,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $415.88 vs price $60.70 on 2024-12-31 = 585% gap; 12m later the market was closer (268% vs 46%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "06990.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 1.0
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.28125,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.46875,
+   "methods_unavailable": [
+    "DCF",
+    "rNPV (Pipeline)"
+   ],
+   "bear": 127.13,
+   "base": 153.49,
+   "bull": 179.51,
+   "scenarios_ordered": true,
+   "target_12m_base": 310.25,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 467.0,
+   "iv_vs_spot": -0.6713276231263383,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17276006600724123,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $138.98 vs price $168.00 on 2024-12-31 = 17% gap; 12m later the market was closer (65% vs 57%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "BGNE": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.652174
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.347826
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.28125,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.71875,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 221.45,
+   "base": 221.85,
+   "bull": 244.29,
+   "scenarios_ordered": true,
+   "target_12m_base": 203.28,
+   "consensus": 258.0,
+   "iv_vs_consensus": -0.14011627906976742,
+   "spot": 184.71,
+   "iv_vs_spot": 0.20107195062530447,
+   "consensus_spread": 0.3968,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.21209302325581392,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "t1_tolerance",
+   "backtest_t1_gap": 1.5739752588209421,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Calibration Error: T-1 blended IV $475.44 vs actual $184.71 on 2024-12-31 = 157% error (>25% tolerance)",
+   "currency": "USD",
+   "regime": null
+  },
+  "06160.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.652174
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.347826
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.28125,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.71875,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 180.49,
+   "base": 206.65,
+   "bull": 240.5,
+   "scenarios_ordered": true,
+   "target_12m_base": 212.99,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 216.39999389648438,
+   "iv_vs_spot": -0.0450554259310576,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.5587232717662658,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $279.41 vs price $109.20 on 2024-12-31 = 156% gap; 12m later the market was closer (56% vs 39%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "REGN": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.411765
+    },
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.294118
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.294118
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.85,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 1051.21,
+   "base": 1283.98,
+   "bull": 1455.19,
+   "scenarios_ordered": true,
+   "target_12m_base": 1036.01,
+   "consensus": 827.71,
+   "iv_vs_consensus": 0.5512437931159464,
+   "spot": 788.04,
+   "iv_vs_spot": 0.6293335363687123,
+   "consensus_spread": 0.0503,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.25165818946249274,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.025371518522888936,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $694.26 vs price $712.33 on 2024-12-31 = 3% gap; 12m later model and market were level (10% vs 8%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ALNY": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.583333
+    },
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.416667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [
+    "DCF",
+    "rNPV (Pipeline)"
+   ],
+   "bear": 252.0,
+   "base": 262.87,
+   "bull": 277.81,
+   "scenarios_ordered": true,
+   "target_12m_base": 258.38,
+   "consensus": 347.33,
+   "iv_vs_consensus": -0.24316932024299653,
+   "spot": 255.96,
+   "iv_vs_spot": 0.026996405688388903,
+   "consensus_spread": 0.357,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.25609650764402725,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3699690336324193,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $148.25 vs price $235.31 on 2024-12-31 = 37% gap; 12m later the market was closer (63% vs 41%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BIIB": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.411765
+    },
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.294118
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.294118
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.85,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 209.21,
+   "base": 268.0,
+   "bull": 338.8,
+   "scenarios_ordered": true,
+   "target_12m_base": 241.74,
+   "consensus": 245.88,
+   "iv_vs_consensus": 0.08996258337400365,
+   "spot": 227.6,
+   "iv_vs_spot": 0.17750439367311066,
+   "consensus_spread": 0.0803,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.01683748169838939,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.10522715729208953,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $169.01 vs price $152.92 on 2024-12-31 = 11% gap; 12m later the model was closer (4% vs 13%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "VRTX": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.411765
+    },
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.294118
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.294118
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.85,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 408.76,
+   "base": 449.43,
+   "bull": 510.26,
+   "scenarios_ordered": true,
+   "target_12m_base": 487.81,
+   "consensus": 570.93,
+   "iv_vs_consensus": -0.21281067731595804,
+   "spot": 526.19,
+   "iv_vs_spot": -0.1458788650487467,
+   "consensus_spread": 0.085,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1455870246790324,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.18588416790762588,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $477.56 vs price $402.70 on 2024-12-31 = 19% gap; 12m later the model was closer (5% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "01801.HK": {
+   "profile": "Commercial Biotech",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/Fwd Rev",
+     "value_key": "EV/Fwd Rev",
+     "weight": 0.652174
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.347826
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.28125,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.71875,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 84.15,
+   "base": 106.61,
+   "bull": 137.07,
+   "scenarios_ordered": true,
+   "target_12m_base": 102.12,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 99.69999694824219,
+   "iv_vs_spot": 0.06930795650219568,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.1103703417858068,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $77.24 vs price $36.60 on 2024-12-31 = 111% gap; 12m later the model was closer (1% vs 52%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "CI": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Ops)",
+     "value_key": "P/E (Ops)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 338.18,
+   "base": 482.85,
+   "bull": 634.67,
+   "scenarios_ordered": true,
+   "target_12m_base": 377.43,
+   "consensus": 338.33,
+   "iv_vs_consensus": 0.42715691780214593,
+   "spot": 272.01,
+   "iv_vs_spot": 0.7751185618175804,
+   "consensus_spread": 0.2438,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.1155676410605031,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.8791760540689362,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $518.92 vs price $276.14 on 2024-12-31 = 88% gap; 12m later the market was closer (89% vs 0%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ELV": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Ops)",
+     "value_key": "P/E (Ops)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 406.63,
+   "base": 559.07,
+   "bull": 702.54,
+   "scenarios_ordered": true,
+   "target_12m_base": 477.58,
+   "consensus": 444.06,
+   "iv_vs_consensus": 0.25899653200018036,
+   "spot": 396.09,
+   "iv_vs_spot": 0.41147214017016354,
+   "consensus_spread": 0.1211,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.07548529477998467,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5129654136172426,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $558.13 vs price $368.90 on 2024-12-31 = 51% gap; 12m later the market was closer (59% vs 5%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HUM": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 371.67,
+   "base": 513.5,
+   "bull": 657.47,
+   "scenarios_ordered": true,
+   "target_12m_base": 438.51,
+   "consensus": 424.21,
+   "iv_vs_consensus": 0.2104853728106364,
+   "spot": 398.13,
+   "iv_vs_spot": 0.28977972019189724,
+   "consensus_spread": 0.0655,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.03370971924282795,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.301980340219547,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $330.33 vs price $253.71 on 2024-12-31 = 30% gap; 12m later the market was closer (29% vs 1%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "UNH": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 221.54,
+   "base": 288.52,
+   "bull": 355.35,
+   "scenarios_ordered": true,
+   "target_12m_base": 332.55,
+   "consensus": 473.89,
+   "iv_vs_consensus": -0.39116672645550654,
+   "spot": 376.59,
+   "iv_vs_spot": -0.23386175947316712,
+   "consensus_spread": 0.2584,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.29825486927346,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1208053194010725,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $444.75 vs price $505.86 on 2024-12-31 = 12% gap; 12m later the model was closer (35% vs 53%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CVS": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.444444
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.333333
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.222222
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EPV",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [],
+   "bear": 54.69,
+   "base": 89.43,
+   "bull": 128.25,
+   "scenarios_ordered": true,
+   "target_12m_base": 89.23,
+   "consensus": 111.2,
+   "iv_vs_consensus": -0.19577338129496402,
+   "spot": 89.13,
+   "iv_vs_spot": 0.0033658700774150674,
+   "consensus_spread": 0.2476,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.19757194244604315,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.323607042628015,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $104.31 vs price $44.89 on 2024-12-31 = 132% gap; 12m later the model was closer (31% vs 43%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "MOH": {
+   "profile": "Managed Care",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Ops)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 225.36,
+   "base": 294.78,
+   "bull": 377.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 242.78,
+   "consensus": 205.45,
+   "iv_vs_consensus": 0.43480165490386957,
+   "spot": 190.79,
+   "iv_vs_spot": 0.5450495308978458,
+   "consensus_spread": 0.0768,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.18169871014845462,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9735105911555737,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $574.39 vs price $291.05 on 2024-12-31 = 97% gap; 12m later the market was closer (231% vs 68%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}

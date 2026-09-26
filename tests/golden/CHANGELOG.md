@@ -1506,3 +1506,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 5 (owner spec, 2026-09-26): Commercial Biotech profile added (Biopharma), health labels into routing scope with two new rows, pins for the devices, CDMO, pharma and provider names; the profile-weights digest in param_version moves on every fixture, no valuation leaf moves (no health name in the golden basket)
 
+## 2026-09-26T15:32:53+00:00
+
+- regenerated at HEAD: `a8b778c`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 5 refinements (owner, 2026-09-26): Surgical Robotics / Capital Systems profile (PROPOSED) added, Commercial Biotech declares forward_pe_sanity, Managed Care declares structural_flags, Medical - Distribution row in scope; the constants/profile digest in param_version moves on every fixture, no valuation leaf moves (no health name in the golden basket)
+
