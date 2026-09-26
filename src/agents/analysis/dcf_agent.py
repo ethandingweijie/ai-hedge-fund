@@ -335,6 +335,7 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     # definition of the mean-reversion premise (owner, 2026-09-22: Boeing on
     # "normalized mid-cycle delivery volumes").
     "Commercial Aerospace & Engines",
+    "Agribusiness & Food Processing",     # Wave 4: crush spreads and protein margins mean-revert
 })
 
 #: Phase 1.2B — peak-consensus trigger. Forward consensus EPS above EITHER
@@ -416,6 +417,7 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     # IRA-credit or tariff swing is not a decade's growth.
     "Clean Tech / Power Equipment OEM",
     "Commercial Aerospace & Engines",
+    "Agribusiness & Food Processing",     # Wave 4: crush spreads and protein margins mean-revert
 })
 
 #: Fraction of the gap to the long-run rate retained each year. 0.5 halves the

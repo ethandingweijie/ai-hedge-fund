@@ -247,10 +247,24 @@ _INDUSTRIALS_PROFILE_WACC: dict[str, float] = {
     "Defense Tech & Space":           0.090,
 }
 
+#: Wave 4 (2026-09-26): the Consumer sector default is 7.5%. Rows proposed
+#: by the build from the Stage 3 table (F&B and Household below the default
+#: as the lowest-beta group; Grocery on lease leverage; Agribusiness on
+#: commodity cyclicality; Tobacco on the regulatory and ESG premium) and
+#: pending the owner's confirmation against the Damodaran January 2026 file.
+_CONSUMER_PROFILE_WACC: dict[str, float] = {
+    "Food & Beverage":                0.070,
+    "Household / Personal":           0.070,
+    "Grocery & Discount Retail":      0.0725,
+    "Agribusiness & Food Processing": 0.0825,
+    "Tobacco":                        0.0825,
+}
+
 _PROFILE_WACC: dict[str, dict[str, float]] = {
     "Energy":      _ENERGY_PROFILE_WACC,
     "Financials":  _FINANCIALS_PROFILE_WACC,
     "Industrials": _INDUSTRIALS_PROFILE_WACC,
+    "Consumer":    _CONSUMER_PROFILE_WACC,
 }
 _PROFILE_LEVERAGE_CAP: dict[str, tuple[dict[str, float], float]] = {
     "Energy":      (_ENERGY_LEVERAGE_CAP, 0.035),
@@ -2428,15 +2442,75 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ['P/BV'],
             "rationale": "SG agribusiness and consumer food (Wilmar, Thai Beverage, Olam, Golden Agri). Margin is set upstream by crush spreads and commodity prices rather than by pricing power. Primary metrics: crushing margin, CPO price and yield, same-store sales growth, gross margin.",
         },
+        # Wave 4 (owner, 2026-09-26). One profile, three baskets: the label
+        # (Beverages - Non-Alcoholic 18.9x NTM, Alcoholic 14.5x, Packaged Foods
+        # 11.7x) supplies the multiple at run time. The anchor moves to NTM
+        # because the trailing beverage basket (26.5x) over-prices the group;
+        # Brand Valuation was a proxy leg that never priced and gives way to
+        # FCF Yield.
         "Food & Beverage": {
             "methods": [
-                {"name": "P/E",             "weight": 0.50, "anchor": True,  "implementable": True},
-                {"name": "DCF (2-stage)",   "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",       "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "Brand Valuation", "weight": 0.05, "anchor": False, "implementable": False, "proxy": "P/E"},
+                {"name": "Forward P/E",     "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",       "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            "excluded": [],
-            "rationale": "Stable margins and brand moats make P/E and DCF highly reliable.",
+            "excluded": ["EV/Revenue", "P/BV"],
+            "rationale": ("Stable margins and brand moats: forward earnings anchor, cash "
+                          "generation cross-checks, the label's basket sets the multiple."),
+        },
+        # Wave 4 (owner, 2026-09-26). ADM, TSN, 00682.HK. Crush spreads and
+        # protein margins mean-revert: the trailing US basket prints 21.7x P/E
+        # against 11.8x NTM because earnings are at a cycle trough, so the
+        # earnings legs are NORMALISED and the asset book floors. Mirrors
+        # Agribusiness & Food (SG), which anchors on Forward P/E because SG
+        # consensus is denser.
+        "Agribusiness & Food Processing": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "P/E (norm)",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",              "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/BV",             "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "EV/NTM Revenue"],
+            "rationale": ("Commodity processors: through-cycle EBITDA anchors, normalised "
+                          "earnings and a DCF on a mid-cycle margin cross-check, and the "
+                          "asset book (silos, plants, crush capacity) floors."),
+        },
+        # Wave 4 (owner, 2026-09-26). WMT, KR, D01.SI, USFD. Lease-heavy, thin
+        # margin, high turnover: EV/EBITDAR anchors as it does for Traditional
+        # Retail; the Discount (13.2x), Grocery (8.7x) and Food Distribution
+        # (13.1x) baskets set the multiple. COST is NOT here: pinned Membership /
+        # Subscription Retail (owner). WMT's ~38x is a recorded quality premium
+        # no basket reaches; it is scored, not patched.
+        "Grocery & Discount Retail": {
+            "methods": [
+                {"name": "EV/EBITDAR",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF",              "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "P/BV"],
+            "rationale": ("Food and general-merchandise retail on leases: EBITDAR normalises "
+                          "the lease structure, forward earnings and cash yield cross-check."),
+        },
+        # Wave 4 (owner, 2026-09-26): a standalone profile. "Grouping PM and MO
+        # under Household / Personal is fundamentally distorted": no shared
+        # economic driver with P&G or Colgate. A cash-return business in
+        # structural volume decline priced on pricing power: FCF yield anchors,
+        # the dividend is the investment case, forward earnings (11.9x NTM
+        # against 20.0x trailing) and EV/EBITDA (11.7x) cross-check.
+        "Tobacco": {
+            "methods": [
+                {"name": "FCF Yield",        "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DDM",              "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",        "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "EV/NTM Revenue", "P/BV"],
+            "rationale": ("Tobacco: volume declines, price rises, cash is returned. Free cash "
+                          "yield anchors, the dividend stream is valued directly, and the "
+                          "cost of equity carries the regulatory and ESG premium."),
         },
         "Apparel / Athletic Wear": {
             "methods": [
@@ -2448,12 +2522,15 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "Brand-driven athletic/apparel companies valued on EV/EBITDA; DCF anchors the long-term growth thesis.",
         },
+        # Wave 4 (owner, 2026-09-26): anchor moves to NTM (US basket 16.8x
+        # against 22.2x trailing); weights unchanged. PM and MO left for the
+        # Tobacco profile; EL stays on Luxury Goods by pin.
         "Household / Personal": {
             "methods": [
-                {"name": "P/E",       "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA", "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "DCF",       "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "ROIC",      "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",   "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",         "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "ROIC",        "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Brand loyalty and global distribution scale are captured through earnings multiples.",
@@ -3397,6 +3474,15 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # its static is the aftermarket cluster measured beside it (n=10). Defense
     # Tech & Space carries no static: no earnings multiple exists for it and its
     # forward-revenue leg reads the live industry EV/Revenue (4.8x, n=19).
+    # Wave 4 statics (owner, 2026-09-26), read from the US baskets that day; the
+    # label's live basket wins at run time, these are the fallback and re-peg
+    # reference. Agricultural n9-12, Grocery/Discount/Distribution n5-9, Tobacco n5-7.
+    "Agribusiness & Food Processing": {"ev_ebitda": 9.5, "pe": 21.7, "ev_revenue": 0.6, "pb": 1.6, "fcf_yield": 0.055, "growth_avg": 0.03,
+                                       "pe_ntm": 11.8},
+    "Grocery & Discount Retail": {"ev_ebitda": 10.5, "pe": 17.0, "ev_revenue": 0.5, "pb": 3.0, "fcf_yield": 0.045, "growth_avg": 0.04,
+                                  "pe_ntm": 15.0, "ev_ebitda_ntm": 9.8},
+    "Tobacco":             {"ev_ebitda": 11.7, "pe": 20.0, "ev_revenue": 4.5,  "pb": 6.0,  "fcf_yield": 0.075, "growth_avg": 0.02,
+                            "pe_ntm": 11.9},
     "Defense Primes":      {"ev_ebitda": 15.3, "pe": 23.1, "ev_revenue": 2.2,  "pb": 4.1,  "fcf_yield": 0.055, "growth_avg": 0.06,
                             "ev_ebitda_ntm": 13.5, "pe_ntm": 19.2, "ev_ebit": 19.0},
     "Commercial Aerospace & Engines": {"ev_ebitda": 27.2, "pe": 40.2, "ev_revenue": 7.0, "pb": 8.5, "fcf_yield": 0.030, "growth_avg": 0.10,
@@ -5044,7 +5130,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "GM":    ("Industrials", "Automotive (OEM)", "Auto & Truck",         "General Motors — traditional OEM"),
     "F":     ("Industrials", "Automotive (OEM)", "Auto & Truck",         "Ford — traditional OEM"),
     # ── Retail (General) ──────────────────────────────────────────────────
-    "WMT":   ("Consumer", "Traditional Retail", "Retail (General)",       "Walmart"),
+    # Owner, 2026-09-26: COST ships pinned in the SAME commit as the Discount
+    # Stores row it shares with WMT, or the row would move it. Golden fixture.
+    "COST":  ("Consumer", "Membership / Subscription Retail", "Retail (General)", "Costco -- membership economics; pinned off the Discount Stores row"),
+    "WMT":   ("Consumer", "Grocery & Discount Retail", "Retail (General)", "Walmart -- Wave 4 (2026-09-26); its ~38x is a recorded quality premium the basket does not reach"),
     "TGT":   ("Consumer", "",          "Retail (General)",                "Target"),
     "HD":    ("Consumer", "",          "Retail (Building Supply)",        "Home Depot"),
     "TJX":   ("Consumer", "",          "Retail (Special Lines)",          "TJX Companies — off-price retail"),

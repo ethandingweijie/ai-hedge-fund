@@ -1,4 +1,93 @@
 {
  "comp_age_days": null,
- "fields": {}
+ "fields": {
+  "ev_ebit": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 8,
+   "value": 16.873
+  },
+  "ev_ebitda": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 13.1718
+  },
+  "ev_ebitda_ntm": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 11.9332
+  },
+  "ev_ocf": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 16.3372
+  },
+  "ev_revenue": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 1.2696
+  },
+  "fcf_yield": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 0.0319
+  },
+  "growth_avg": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 0.0665
+  },
+  "pb": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 5.3336
+  },
+  "pe": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 8,
+   "value": 19.1099
+  },
+  "pe_ntm": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 8,
+   "value": 18.0969
+  },
+  "roic": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Discount Stores",
+   "peer_count": 9,
+   "value": 0.1135
+  }
+ }
 }

@@ -68,7 +68,11 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
     exactly these three; anything else appearing here is unreviewed routing."""
     wave2 = {"Regulated Electric", "Independent Power Producers", "Solar"}
     wave3 = {"Aerospace & Defense"}                       # tests/test_aerospace_defense_wave3.py
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3
+    wave4 = {"Agricultural Farm Products", "Beverages - Non-Alcoholic", "Beverages - Alcoholic",
+             "Beverages - Wineries & Distilleries", "Food Confectioners", "Packaged Foods",
+             "Discount Stores", "Grocery Stores", "Food Distribution",
+             "Household & Personal Products", "Tobacco"}         # tests/test_consumer_staples_wave4.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4
 
 
 def test_scope_does_not_reach_other_industries():

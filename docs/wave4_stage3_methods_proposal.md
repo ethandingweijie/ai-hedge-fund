@@ -143,3 +143,14 @@ spread (Agribusiness), volume decline and pricing (Tobacco).
 3. USFD: Grocery & Discount Retail (proposed) or stay on Traditional Retail?
 4. WMT: record the quality premium as a deviation, or set an owner premium factor?
 5. Tobacco cost of equity: 8.0-8.5% as proposed?
+
+## 8. Decisions applied (owner, 2026-09-26)
+
+1. EL: **Luxury Goods**, the existing pin holds. The label was the weaker argument; prestige beauty is
+   brand economics, and the Stage 0 miss is the loss year, not the profile. Household is struck.
+2. WH Group: Food & Beverage (build default; no SOTP profile in this wave).
+3. USFD: Grocery & Discount Retail (build default).
+4. WMT: no premium factor set; the gap is scored and explained (build default, owner to decide).
+5. Tobacco cost of equity: 8.25% recorded as the row midpoint, pending confirmation.
+
+Stage 4 shipped on these; the scorecard is `docs/wave4_stage6_scorecard.md`.

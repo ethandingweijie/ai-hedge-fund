@@ -1,12 +1,12 @@
 {
   "ticker": "COST",
-  "captured_at": "2026-09-16T13:21:02+00:00",
-  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "end_date": "2026-08-25",
+  "captured_at": "2026-09-26T12:57:43+00:00",
+  "commit": "a217a82940f1a281ac80a87b3755584af9ba1e92",
+  "end_date": "2026-09-19",
   "state_source": "prod_web_run",
-  "source_run_id": "8e76c599-ce18-4fa6-b17f-8d3bde8c5481",
-  "source_run_at": "2026-08-25T00:56:06.487865",
-  "archive_run_id": "9164808b-c94c-46a4-a5c7-485f5b149457",
+  "source_run_id": "e697fce2-8458-4612-817c-9a0a557bba16",
+  "source_run_at": "2026-09-19T12:13:14.635187",
+  "archive_run_id": "731fc4d3-1d47-482d-b83f-1d3c0c95b849",
   "targets_hit": {
     "src.memory.analyst_basis.get_analyst_basis": 1,
     "src.memory.assumption_steward.steward_enabled": 1,
@@ -16,11 +16,11 @@
     "src.memory.calibration.active_version": 1,
     "src.memory.calibration.apply_profile_weights": 1,
     "src.memory.calibration.iv_multiplier": 1,
-    "src.tools.api._fmp_get": 15
+    "src.tools.api._fmp_get": 16
   },
-  "recorded_calls": 24,
+  "recorded_calls": 25,
   "replay": {
-    "base_iv": 1324.57,
+    "base_iv": 524.99,
     "profile": "Membership / Subscription Retail",
     "skip_reason": null
   }

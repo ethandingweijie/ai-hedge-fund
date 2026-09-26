@@ -288,7 +288,8 @@ def test_the_cyclical_profiles_are_the_ones_the_plans_name():
         # Wave 2 power & transition (owner-confirmed 2026-09-21): policy-cycle hardware.
         "Clean Tech / Power Equipment OEM",
         # Wave 3 (owner framework 2026-09-22): the delivery cycle is the premise.
-        "Commercial Aerospace & Engines"})
+        "Commercial Aerospace & Engines",
+        "Agribusiness & Food Processing"})   # Wave 4 (2026-09-26): crush spreads and protein margins mean-revert
     for name in _CYCLICAL_PROFILES:
         _profile(name)          # raises if the taxonomy drifted
 

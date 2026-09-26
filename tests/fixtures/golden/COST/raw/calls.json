@@ -4,6 +4,47 @@
   "target": "src.tools.api._fmp_get",
   "result": [
    {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "FY",
+    "revenue": 303154000000,
+    "costOfRevenue": 264279000000,
+    "grossProfit": 38875000000,
+    "researchAndDevelopmentExpenses": 0,
+    "generalAndAdministrativeExpenses": 0,
+    "sellingAndMarketingExpenses": 0,
+    "sellingGeneralAndAdministrativeExpenses": 27190000000,
+    "otherExpenses": 0,
+    "operatingExpenses": 27190000000,
+    "costAndExpenses": 291469000000,
+    "netInterestIncome": 566000000,
+    "interestIncome": 711000000,
+    "interestExpense": 145000000,
+    "depreciationAndAmortization": 2674000000,
+    "ebitda": 14359000000,
+    "ebit": 11685000000,
+    "nonOperatingIncomeExcludingInterest": 0,
+    "operatingIncome": 11685000000,
+    "totalOtherIncomeExpensesNet": 566000000,
+    "incomeBeforeTax": 12251000000,
+    "incomeTaxExpense": 3025000000,
+    "netIncomeFromContinuingOperations": 9226000000,
+    "netIncomeFromDiscontinuedOperations": 0,
+    "otherAdjustmentsToNetIncome": 0,
+    "netIncome": 9226000000,
+    "netIncomeDeductions": 0,
+    "bottomLineNetIncome": 9226000000,
+    "eps": 20.78,
+    "epsDiluted": 20.76,
+    "weightedAverageShsOut": 443953000,
+    "weightedAverageShsOutDil": 444427000
+   },
+   {
     "date": "2025-08-31",
     "symbol": "COST",
     "reportedCurrency": "USD",
@@ -166,47 +207,6 @@
     "epsDiluted": 13.14,
     "weightedAverageShsOut": 443651000,
     "weightedAverageShsOutDil": 444757000
-   },
-   {
-    "date": "2021-08-29",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2021-10-06",
-    "acceptedDate": "2021-10-05 20:49:17",
-    "fiscalYear": "2021",
-    "period": "FY",
-    "revenue": 195929000000,
-    "costOfRevenue": 170684000000,
-    "grossProfit": 25245000000,
-    "researchAndDevelopmentExpenses": 0,
-    "generalAndAdministrativeExpenses": 0,
-    "sellingAndMarketingExpenses": 0,
-    "sellingGeneralAndAdministrativeExpenses": 18461000000,
-    "otherExpenses": 76000000,
-    "operatingExpenses": 18537000000,
-    "costAndExpenses": 189221000000,
-    "netInterestIncome": -130000000,
-    "interestIncome": 41000000,
-    "interestExpense": 171000000,
-    "depreciationAndAmortization": 1781000000,
-    "ebitda": 8632000000,
-    "ebit": 6851000000,
-    "nonOperatingIncomeExcludingInterest": -143000000,
-    "operatingIncome": 6708000000,
-    "totalOtherIncomeExpensesNet": -28000000,
-    "incomeBeforeTax": 6680000000,
-    "incomeTaxExpense": 1601000000,
-    "netIncomeFromContinuingOperations": 5079000000,
-    "netIncomeFromDiscontinuedOperations": 0,
-    "otherAdjustmentsToNetIncome": 0,
-    "netIncome": 5007000000,
-    "netIncomeDeductions": 0,
-    "bottomLineNetIncome": 5007000000,
-    "eps": 11.3,
-    "epsDiluted": 11.27,
-    "weightedAverageShsOut": 443089000,
-    "weightedAverageShsOutDil": 444346000
    }
   ]
  },
@@ -214,6 +214,69 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/balance-sheet-statement\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "FY",
+    "cashAndCashEquivalents": 20207000000,
+    "shortTermInvestments": 1094000000,
+    "cashAndShortTermInvestments": 21301000000,
+    "netReceivables": 3959000000,
+    "accountsReceivables": 3959000000,
+    "otherReceivables": 0,
+    "inventory": 19324000000,
+    "prepaids": 0,
+    "otherCurrentAssets": 1998000000,
+    "totalCurrentAssets": 46582000000,
+    "propertyPlantEquipmentNet": 38330000000,
+    "goodwill": 0,
+    "intangibleAssets": 0,
+    "goodwillAndIntangibleAssets": 0,
+    "longTermInvestments": 0,
+    "taxAssets": 0,
+    "otherNonCurrentAssets": 4133000000,
+    "totalNonCurrentAssets": 42463000000,
+    "otherAssets": 0,
+    "totalAssets": 89045000000,
+    "totalPayables": 22591000000,
+    "accountPayables": 22591000000,
+    "otherPayables": 0,
+    "accruedExpenses": 0,
+    "shortTermDebt": 2248000000,
+    "capitalLeaseObligationsCurrent": 0,
+    "taxPayables": 0,
+    "deferredRevenue": 0,
+    "otherCurrentLiabilities": 19113000000,
+    "totalCurrentLiabilities": 43952000000,
+    "longTermDebt": 2414000000,
+    "capitalLeaseObligationsNonCurrent": 2414000000,
+    "deferredRevenueNonCurrent": 0,
+    "deferredTaxLiabilitiesNonCurrent": 0,
+    "otherNonCurrentLiabilities": 2962000000,
+    "totalNonCurrentLiabilities": 9290000000,
+    "otherLiabilities": 0,
+    "capitalLeaseObligations": 2414000000,
+    "totalLiabilities": 53242000000,
+    "treasuryStock": 0,
+    "preferredStock": 0,
+    "commonStock": 2000000,
+    "retainedEarnings": 28591000000,
+    "additionalPaidInCapital": 8830000000,
+    "accumulatedOtherComprehensiveIncomeLoss": -1620000000,
+    "otherTotalStockholdersEquity": 0,
+    "totalStockholdersEquity": 35803000000,
+    "totalEquity": 35803000000,
+    "minorityInterest": 0,
+    "totalLiabilitiesAndTotalEquity": 89045000000,
+    "totalInvestments": 1094000000,
+    "totalDebt": 4662000000,
+    "netDebt": -15545000000
+   },
    {
     "date": "2025-08-31",
     "symbol": "COST",
@@ -465,69 +528,6 @@
     "totalInvestments": 846000000,
     "totalDebt": 10906000000,
     "netDebt": 703000000
-   },
-   {
-    "date": "2021-08-29",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2021-10-06",
-    "acceptedDate": "2021-10-05 20:49:17",
-    "fiscalYear": "2021",
-    "period": "FY",
-    "cashAndCashEquivalents": 11258000000,
-    "shortTermInvestments": 917000000,
-    "cashAndShortTermInvestments": 12175000000,
-    "netReceivables": 1803000000,
-    "accountsReceivables": 1803000000,
-    "otherReceivables": 0,
-    "inventory": 14215000000,
-    "prepaids": 0,
-    "otherCurrentAssets": 1312000000,
-    "totalCurrentAssets": 29505000000,
-    "propertyPlantEquipmentNet": 26382000000,
-    "goodwill": 996000000,
-    "intangibleAssets": 0,
-    "goodwillAndIntangibleAssets": 996000000,
-    "longTermInvestments": 0,
-    "taxAssets": 0,
-    "otherNonCurrentAssets": 2385000000,
-    "totalNonCurrentAssets": 29763000000,
-    "otherAssets": 0,
-    "totalAssets": 59268000000,
-    "totalPayables": 16278000000,
-    "accountPayables": 16278000000,
-    "otherPayables": 0,
-    "accruedExpenses": 5761000000,
-    "shortTermDebt": 799000000,
-    "capitalLeaseObligationsCurrent": 294000000,
-    "taxPayables": 0,
-    "deferredRevenue": 0,
-    "otherCurrentLiabilities": 6309000000,
-    "totalCurrentLiabilities": 29441000000,
-    "longTermDebt": 6692000000,
-    "capitalLeaseObligationsNonCurrent": 3622000000,
-    "deferredRevenueNonCurrent": 0,
-    "deferredTaxLiabilitiesNonCurrent": 754000000,
-    "otherNonCurrentLiabilities": 681000000,
-    "totalNonCurrentLiabilities": 11749000000,
-    "otherLiabilities": 0,
-    "capitalLeaseObligations": 3916000000,
-    "totalLiabilities": 41190000000,
-    "treasuryStock": 0,
-    "preferredStock": 0,
-    "commonStock": 4000000,
-    "retainedEarnings": 11666000000,
-    "additionalPaidInCapital": 7031000000,
-    "accumulatedOtherComprehensiveIncomeLoss": -1137000000,
-    "otherTotalStockholdersEquity": 0,
-    "totalStockholdersEquity": 17564000000,
-    "totalEquity": 18078000000,
-    "minorityInterest": 514000000,
-    "totalLiabilitiesAndTotalEquity": 59268000000,
-    "totalInvestments": 917000000,
-    "totalDebt": 11407000000,
-    "netDebt": 149000000
    }
   ]
  },
@@ -535,6 +535,55 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/cash-flow-statement\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "FY",
+    "netIncome": 9226000000,
+    "depreciationAndAmortization": 2674000000,
+    "deferredIncomeTax": 0,
+    "stockBasedCompensation": 924000000,
+    "changeInWorkingCapital": 2328000000,
+    "accountsReceivables": 0,
+    "inventory": 0,
+    "accountsPayables": 0,
+    "otherWorkingCapital": 2328000000,
+    "otherNonCashItems": 673000000,
+    "netCashProvidedByOperatingActivities": 15825000000,
+    "investmentsInPropertyPlantAndEquipment": -6435000000,
+    "acquisitionsNet": 0,
+    "purchasesOfInvestments": -788000000,
+    "salesMaturitiesOfInvestments": 811000000,
+    "otherInvestingActivities": 26000000,
+    "netCashProvidedByInvestingActivities": -6386000000,
+    "netDebtIssuance": 312000000,
+    "longTermNetDebtIssuance": 336000000,
+    "shortTermNetDebtIssuance": -24000000,
+    "netStockIssuance": -848000000,
+    "netCommonStockIssuance": -848000000,
+    "commonStockIssuance": 0,
+    "commonStockRepurchased": -848000000,
+    "netPreferredStockIssuance": 0,
+    "netDividendsPaid": -2458000000,
+    "commonDividendsPaid": -2458000000,
+    "preferredDividendsPaid": 0,
+    "otherFinancingActivities": -361000000,
+    "netCashProvidedByFinancingActivities": -3355000000,
+    "effectOfForexChangesOnCash": -38000000,
+    "netChangeInCash": 6046000000,
+    "cashAtEndOfPeriod": 20207000000,
+    "cashAtBeginningOfPeriod": 14161000000,
+    "operatingCashFlow": 15825000000,
+    "capitalExpenditure": -6435000000,
+    "freeCashFlow": 9390000000,
+    "incomeTaxesPaid": 0,
+    "interestPaid": 0
+   },
    {
     "date": "2025-08-31",
     "symbol": "COST",
@@ -730,55 +779,6 @@
     "freeCashFlow": 3501000000,
     "incomeTaxesPaid": 1940000000,
     "interestPaid": 145000000
-   },
-   {
-    "date": "2021-08-29",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2021-10-06",
-    "acceptedDate": "2021-10-05 20:49:17",
-    "fiscalYear": "2021",
-    "period": "FY",
-    "netIncome": 5079000000,
-    "depreciationAndAmortization": 1781000000,
-    "deferredIncomeTax": 59000000,
-    "stockBasedCompensation": 665000000,
-    "changeInWorkingCapital": 1003000000,
-    "accountsReceivables": 0,
-    "inventory": -1892000000,
-    "accountsPayables": 1838000000,
-    "otherWorkingCapital": 1057000000,
-    "otherNonCashItems": 371000000,
-    "netCashProvidedByOperatingActivities": 8958000000,
-    "investmentsInPropertyPlantAndEquipment": -3588000000,
-    "acquisitionsNet": 0,
-    "purchasesOfInvestments": -1331000000,
-    "salesMaturitiesOfInvestments": 1446000000,
-    "otherInvestingActivities": -62000000,
-    "netCashProvidedByInvestingActivities": -3535000000,
-    "netDebtIssuance": -120000000,
-    "longTermNetDebtIssuance": -161000000,
-    "shortTermNetDebtIssuance": 41000000,
-    "netStockIssuance": -496000000,
-    "netCommonStockIssuance": -496000000,
-    "commonStockIssuance": 0,
-    "commonStockRepurchased": -496000000,
-    "netPreferredStockIssuance": 0,
-    "netDividendsPaid": -5748000000,
-    "commonDividendsPaid": -5748000000,
-    "preferredDividendsPaid": 0,
-    "otherFinancingActivities": -124000000,
-    "netCashProvidedByFinancingActivities": -6488000000,
-    "effectOfForexChangesOnCash": 46000000,
-    "netChangeInCash": -1019000000,
-    "cashAtEndOfPeriod": 11258000000,
-    "cashAtBeginningOfPeriod": 12277000000,
-    "operatingCashFlow": 8958000000,
-    "capitalExpenditure": -3588000000,
-    "freeCashFlow": 5370000000,
-    "incomeTaxesPaid": 1527000000,
-    "interestPaid": 149000000
    }
   ]
  },
@@ -786,6 +786,74 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/ratios\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "COST",
+    "date": "2026-08-30",
+    "fiscalYear": "2026",
+    "period": "FY",
+    "reportedCurrency": "USD",
+    "grossProfitMargin": 0.12823515440996985,
+    "ebitMargin": 0.03854476602650798,
+    "ebitdaMargin": 0.047365365457820115,
+    "operatingProfitMargin": 0.03854476602650798,
+    "pretaxProfitMargin": 0.04041180390164735,
+    "continuousOperationsProfitMargin": 0.03043337709546963,
+    "netProfitMargin": 0.03043337709546963,
+    "bottomLineProfitMargin": 0.03043337709546963,
+    "receivablesTurnover": 76.57337711543319,
+    "payablesTurnover": 11.698419724669115,
+    "inventoryTurnover": 13.676205754502174,
+    "fixedAssetTurnover": 7.909052961127054,
+    "assetTurnover": 3.4045033410073557,
+    "currentRatio": 1.0598380050964689,
+    "quickRatio": 0.6201765562431744,
+    "solvencyRatio": 0.2235077570339206,
+    "cashRatio": 0.45975154714233707,
+    "priceToEarningsRatio": 45.42300288739172,
+    "priceToEarningsGrowthRatio": 3.2618723333308024,
+    "forwardPriceToEarningsGrowthRatio": 3.2618723333308024,
+    "priceToEarningsDilutedRatio": 45.466763005780344,
+    "priceToEarningsDilutedGrowthRatio": 3.246861781706901,
+    "priceToBookRatio": 11.704125273580425,
+    "priceToSalesRatio": 1.3822769851956431,
+    "priceToFreeCashFlowRatio": 44.62649597124601,
+    "priceToOperatingCashFlowRatio": 26.479797609478673,
+    "debtToAssetsRatio": 0.05235555056432141,
+    "debtToEquityRatio": 0.1302125520207804,
+    "debtToCapitalRatio": 0.11521067589274682,
+    "longTermDebtToCapitalRatio": 0.06316560692885365,
+    "financialLeverageRatio": 2.4870820880931768,
+    "workingCapitalTurnoverRatio": 155.38390568939005,
+    "operatingCashFlowRatio": 0.3600518747724791,
+    "operatingCashFlowSalesRatio": 0.05220119147364046,
+    "freeCashFlowOperatingCashFlowRatio": 0.5933649289099526,
+    "debtServiceCoverageRatio": 4.736314249895528,
+    "interestCoverageRatio": 80.58620689655173,
+    "shortTermOperatingCashFlowCoverageRatio": 7.039590747330961,
+    "operatingCashFlowCoverageRatio": 3.3944658944658945,
+    "capitalExpenditureCoverageRatio": 2.4592074592074593,
+    "dividendPaidAndCapexCoverageRatio": 1.7794894861126729,
+    "dividendPayoutRatio": 0.26642098417515714,
+    "dividendYield": 0.005865749313912733,
+    "dividendYieldPercentage": 0.5865749313912733,
+    "revenuePerShare": 682.8515631159154,
+    "netIncomePerShare": 20.781479120537533,
+    "interestDebtPerShare": 10.827722754435717,
+    "cashPerShare": 47.98030422139281,
+    "bookValuePerShare": 80.64592423071812,
+    "tangibleBookValuePerShare": 80.64592423071812,
+    "shareholdersEquityPerShare": 80.64592423071812,
+    "operatingCashFlowPerShare": 35.64566519428858,
+    "capexPerShare": 14.494777600331567,
+    "freeCashFlowPerShare": 21.15088759395702,
+    "netIncomePerEBT": 0.7530813811117459,
+    "ebtPerEbit": 1.0484381685922122,
+    "priceToFairValue": 11.704125273580425,
+    "debtToMarketCap": 0.011125355289447176,
+    "effectiveTaxRate": 0.24691861888825403,
+    "enterpriseValueMultiple": 28.100689265965595,
+    "dividendPerShare": 5.536622119909089
+   },
    {
     "symbol": "COST",
     "date": "2025-08-31",
@@ -1057,74 +1125,6 @@
     "effectiveTaxRate": 0.24553571428571427,
     "enterpriseValueMultiple": 23.874348359264495,
     "dividendPerShare": 3.3765279465165188
-   },
-   {
-    "symbol": "COST",
-    "date": "2021-08-29",
-    "fiscalYear": "2021",
-    "period": "FY",
-    "reportedCurrency": "USD",
-    "grossProfitMargin": 0.12884769482822858,
-    "ebitMargin": 0.0349667481587718,
-    "ebitdaMargin": 0.04405677566873714,
-    "operatingProfitMargin": 0.034236891935343926,
-    "pretaxProfitMargin": 0.03409398302446294,
-    "continuousOperationsProfitMargin": 0.025922655655875343,
-    "netProfitMargin": 0.025555175599324246,
-    "bottomLineProfitMargin": 0.025555175599324246,
-    "receivablesTurnover": 108.66833056017748,
-    "payablesTurnover": 10.48556333701929,
-    "inventoryTurnover": 12.007316215265565,
-    "fixedAssetTurnover": 7.426616632552498,
-    "assetTurnover": 3.3058142673955593,
-    "currentRatio": 1.0021738392038313,
-    "quickRatio": 0.5193437722903435,
-    "solvencyRatio": 0.16479728089342074,
-    "cashRatio": 0.3823919024489657,
-    "priceToEarningsRatio": 40.34778761061947,
-    "priceToEarningsGrowthRatio": 1.6228776794493613,
-    "forwardPriceToEarningsGrowthRatio": 1.6228776794493613,
-    "priceToEarningsDilutedRatio": 40.45519077196096,
-    "priceToEarningsDilutedGrowthRatio": 1.6218036478359454,
-    "priceToBookRatio": 11.501797299590072,
-    "priceToSalesRatio": 1.0310753781727053,
-    "priceToFreeCashFlowRatio": 37.61965880260708,
-    "priceToOperatingCashFlowRatio": 22.551637393391385,
-    "debtToAssetsRatio": 0.19246473645137344,
-    "debtToEquityRatio": 0.6494534274652699,
-    "debtToCapitalRatio": 0.39373856615235925,
-    "longTermDebtToCapitalRatio": 0.27589050131926124,
-    "financialLeverageRatio": 3.3744021862901388,
-    "workingCapitalTurnoverRatio": 117.32275449101796,
-    "operatingCashFlowRatio": 0.3042695560612751,
-    "operatingCashFlowSalesRatio": 0.045720643702565726,
-    "freeCashFlowOperatingCashFlowRatio": 0.5994641661085064,
-    "debtServiceCoverageRatio": 7.248453608247423,
-    "interestCoverageRatio": 39.228070175438596,
-    "shortTermOperatingCashFlowCoverageRatio": 11.211514392991239,
-    "operatingCashFlowCoverageRatio": 0.7853072674673446,
-    "capitalExpenditureCoverageRatio": 2.4966555183946486,
-    "dividendPaidAndCapexCoverageRatio": 0.9595115681233933,
-    "dividendPayoutRatio": 1.1479928100659078,
-    "dividendYield": 0.02845297101361097,
-    "dividendYieldPercentage": 2.845297101361097,
-    "revenuePerShare": 442.1888153395819,
-    "netIncomePerShare": 11.300212824060177,
-    "interestDebtPerShare": 26.13019054862567,
-    "cashPerShare": 27.47754965706664,
-    "bookValuePerShare": 40.79992958525263,
-    "tangibleBookValuePerShare": 38.55207418825563,
-    "shareholdersEquityPerShare": 39.63989175989474,
-    "operatingCashFlowPerShare": 20.217157275400652,
-    "capexPerShare": 8.097695948218078,
-    "freeCashFlowPerShare": 12.119461327182576,
-    "netIncomePerEBT": 0.7495508982035928,
-    "ebtPerEbit": 0.9958258795468098,
-    "priceToFairValue": 11.501797299590072,
-    "debtToMarketCap": 0.03708093351826023,
-    "effectiveTaxRate": 0.23967065868263474,
-    "enterpriseValueMultiple": 23.42059404193698,
-    "dividendPerShare": 12.97256307423565
    }
   ]
  },
@@ -1132,6 +1132,47 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/income-statement\", {\"limit\": 10, \"period\": \"quarter\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "Q4",
+    "revenue": 95723000000,
+    "costOfRevenue": 69251000000,
+    "grossProfit": 26472000000,
+    "researchAndDevelopmentExpenses": 0,
+    "generalAndAdministrativeExpenses": 0,
+    "sellingAndMarketingExpenses": 0,
+    "sellingGeneralAndAdministrativeExpenses": 8391000000,
+    "otherExpenses": 0,
+    "operatingExpenses": 8391000000,
+    "costAndExpenses": 91922000000,
+    "netInterestIncome": 233000000,
+    "interestIncome": 278000000,
+    "interestExpense": 45000000,
+    "depreciationAndAmortization": 883000000,
+    "ebitda": 4219000000,
+    "ebit": 3801000000,
+    "nonOperatingIncomeExcludingInterest": 0,
+    "operatingIncome": 3801000000,
+    "totalOtherIncomeExpensesNet": 208000000,
+    "incomeBeforeTax": 4009000000,
+    "incomeTaxExpense": 1011000000,
+    "netIncomeFromContinuingOperations": 2998000000,
+    "netIncomeFromDiscontinuedOperations": 0,
+    "otherAdjustmentsToNetIncome": 0,
+    "netIncome": 2998000000,
+    "netIncomeDeductions": 0,
+    "bottomLineNetIncome": 2998000000,
+    "eps": 13.6,
+    "epsDiluted": 13.58,
+    "weightedAverageShsOut": 443975000,
+    "weightedAverageShsOutDil": 444364000
+   },
    {
     "date": "2026-05-10",
     "symbol": "COST",
@@ -1295,47 +1336,6 @@
     "epsDiluted": 5.87,
     "weightedAverageShsOut": 444007000,
     "weightedAverageShsOutDil": 444706000
-   },
-   {
-    "date": "2025-05-11",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2025-06-05",
-    "acceptedDate": "2025-06-04 19:10:00",
-    "fiscalYear": "2025",
-    "period": "Q3",
-    "revenue": 63205000000,
-    "costOfRevenue": 54996000000,
-    "grossProfit": 8209000000,
-    "researchAndDevelopmentExpenses": 0,
-    "generalAndAdministrativeExpenses": 0,
-    "sellingAndMarketingExpenses": 0,
-    "sellingGeneralAndAdministrativeExpenses": 5679000000,
-    "otherExpenses": 0,
-    "operatingExpenses": 5679000000,
-    "costAndExpenses": 60675000000,
-    "netInterestIncome": 60000000,
-    "interestIncome": 95000000,
-    "interestExpense": 35000000,
-    "depreciationAndAmortization": 552000000,
-    "ebitda": 3167000000,
-    "ebit": 2615000000,
-    "nonOperatingIncomeExcludingInterest": -85000000,
-    "operatingIncome": 2530000000,
-    "totalOtherIncomeExpensesNet": 50000000,
-    "incomeBeforeTax": 2580000000,
-    "incomeTaxExpense": 677000000,
-    "netIncomeFromContinuingOperations": 1903000000,
-    "netIncomeFromDiscontinuedOperations": 0,
-    "otherAdjustmentsToNetIncome": 0,
-    "netIncome": 1903000000,
-    "netIncomeDeductions": 0,
-    "bottomLineNetIncome": 1903000000,
-    "eps": 4.29,
-    "epsDiluted": 4.28,
-    "weightedAverageShsOut": 443958000,
-    "weightedAverageShsOutDil": 444762000
    }
   ]
  },
@@ -1343,6 +1343,69 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/balance-sheet-statement\", {\"limit\": 10, \"period\": \"quarter\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "Q4",
+    "cashAndCashEquivalents": 20207000000,
+    "shortTermInvestments": 1094000000,
+    "cashAndShortTermInvestments": 21301000000,
+    "netReceivables": 3959000000,
+    "accountsReceivables": 3959000000,
+    "otherReceivables": 0,
+    "inventory": 19324000000,
+    "prepaids": 0,
+    "otherCurrentAssets": 1998000000,
+    "totalCurrentAssets": 46582000000,
+    "propertyPlantEquipmentNet": 38330000000,
+    "goodwill": 0,
+    "intangibleAssets": 0,
+    "goodwillAndIntangibleAssets": 0,
+    "longTermInvestments": 0,
+    "taxAssets": 0,
+    "otherNonCurrentAssets": 4133000000,
+    "totalNonCurrentAssets": 42463000000,
+    "otherAssets": 0,
+    "totalAssets": 89045000000,
+    "totalPayables": 22591000000,
+    "accountPayables": 22591000000,
+    "otherPayables": 0,
+    "accruedExpenses": 0,
+    "shortTermDebt": 2248000000,
+    "capitalLeaseObligationsCurrent": 0,
+    "taxPayables": 0,
+    "deferredRevenue": 0,
+    "otherCurrentLiabilities": 19113000000,
+    "totalCurrentLiabilities": 43952000000,
+    "longTermDebt": 2414000000,
+    "capitalLeaseObligationsNonCurrent": 2414000000,
+    "deferredRevenueNonCurrent": 0,
+    "deferredTaxLiabilitiesNonCurrent": 0,
+    "otherNonCurrentLiabilities": 2962000000,
+    "totalNonCurrentLiabilities": 9290000000,
+    "otherLiabilities": 0,
+    "capitalLeaseObligations": 2414000000,
+    "totalLiabilities": 53242000000,
+    "treasuryStock": 0,
+    "preferredStock": 0,
+    "commonStock": 2000000,
+    "retainedEarnings": 28591000000,
+    "additionalPaidInCapital": 8830000000,
+    "accumulatedOtherComprehensiveIncomeLoss": -1620000000,
+    "otherTotalStockholdersEquity": 0,
+    "totalStockholdersEquity": 35803000000,
+    "totalEquity": 35803000000,
+    "minorityInterest": 0,
+    "totalLiabilitiesAndTotalEquity": 89045000000,
+    "totalInvestments": 1094000000,
+    "totalDebt": 4662000000,
+    "netDebt": -15545000000
+   },
    {
     "date": "2026-05-10",
     "symbol": "COST",
@@ -1594,69 +1657,6 @@
     "totalInvestments": 1123000000,
     "totalDebt": 10221000000,
     "netDebt": -3940000000
-   },
-   {
-    "date": "2025-05-11",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2025-06-05",
-    "acceptedDate": "2025-06-04 19:10:00",
-    "fiscalYear": "2025",
-    "period": "Q3",
-    "cashAndCashEquivalents": 13836000000,
-    "shortTermInvestments": 1014000000,
-    "cashAndShortTermInvestments": 14850000000,
-    "netReceivables": 2875000000,
-    "accountsReceivables": 2875000000,
-    "otherReceivables": 0,
-    "inventory": 18606000000,
-    "prepaids": 0,
-    "otherCurrentAssets": 1820000000,
-    "totalCurrentAssets": 38151000000,
-    "propertyPlantEquipmentNet": 33300000000,
-    "goodwill": 0,
-    "intangibleAssets": 0,
-    "goodwillAndIntangibleAssets": 0,
-    "longTermInvestments": 0,
-    "taxAssets": 0,
-    "otherNonCurrentAssets": 4031000000,
-    "totalNonCurrentAssets": 37331000000,
-    "otherAssets": 0,
-    "totalAssets": 75482000000,
-    "totalPayables": 19820000000,
-    "accountPayables": 19820000000,
-    "otherPayables": 0,
-    "accruedExpenses": 4813000000,
-    "shortTermDebt": 178000000,
-    "capitalLeaseObligationsCurrent": 0,
-    "taxPayables": 0,
-    "deferredRevenue": 2931000000,
-    "otherCurrentLiabilities": 9837000000,
-    "totalCurrentLiabilities": 37579000000,
-    "longTermDebt": 5717000000,
-    "capitalLeaseObligationsNonCurrent": 2463000000,
-    "deferredRevenueNonCurrent": 0,
-    "deferredTaxLiabilitiesNonCurrent": 0,
-    "otherNonCurrentLiabilities": 2598000000,
-    "totalNonCurrentLiabilities": 10778000000,
-    "otherLiabilities": 0,
-    "capitalLeaseObligations": 2463000000,
-    "totalLiabilities": 48357000000,
-    "treasuryStock": 0,
-    "preferredStock": 0,
-    "commonStock": 2000000,
-    "retainedEarnings": 20890000000,
-    "additionalPaidInCapital": 8148000000,
-    "accumulatedOtherComprehensiveIncomeLoss": -1915000000,
-    "otherTotalStockholdersEquity": 0,
-    "totalStockholdersEquity": 27125000000,
-    "totalEquity": 27125000000,
-    "minorityInterest": 0,
-    "totalLiabilitiesAndTotalEquity": 75482000000,
-    "totalInvestments": 1014000000,
-    "totalDebt": 8358000000,
-    "netDebt": -5478000000
    }
   ]
  },
@@ -1664,6 +1664,55 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/cash-flow-statement\", {\"limit\": 10, \"period\": \"quarter\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "date": "2026-08-30",
+    "symbol": "COST",
+    "reportedCurrency": "USD",
+    "cik": "0000909832",
+    "filingDate": "2026-09-24",
+    "acceptedDate": "2026-09-24 16:17:37",
+    "fiscalYear": "2026",
+    "period": "Q4",
+    "netIncome": 2998000000,
+    "depreciationAndAmortization": 883000000,
+    "deferredIncomeTax": 0,
+    "stockBasedCompensation": 153000000,
+    "changeInWorkingCapital": 1534000000,
+    "accountsReceivables": 0,
+    "inventory": -3157000000,
+    "accountsPayables": 3818000000,
+    "otherWorkingCapital": 873000000,
+    "otherNonCashItems": -876000000,
+    "netCashProvidedByOperatingActivities": 4692000000,
+    "investmentsInPropertyPlantAndEquipment": -2207000000,
+    "acquisitionsNet": 0,
+    "purchasesOfInvestments": -308000000,
+    "salesMaturitiesOfInvestments": 267000000,
+    "otherInvestingActivities": 22000000,
+    "netCashProvidedByInvestingActivities": -2226000000,
+    "netDebtIssuance": 369000000,
+    "longTermNetDebtIssuance": 462000000,
+    "shortTermNetDebtIssuance": -93000000,
+    "netStockIssuance": -245000000,
+    "netCommonStockIssuance": -245000000,
+    "commonStockIssuance": 0,
+    "commonStockRepurchased": -245000000,
+    "netPreferredStockIssuance": 0,
+    "netDividendsPaid": -1304000000,
+    "commonDividendsPaid": -1304000000,
+    "preferredDividendsPaid": 0,
+    "otherFinancingActivities": 0,
+    "netCashProvidedByFinancingActivities": -1180000000,
+    "effectOfForexChangesOnCash": -25000000,
+    "netChangeInCash": 1261000000,
+    "cashAtEndOfPeriod": 20207000000,
+    "cashAtBeginningOfPeriod": 18946000000,
+    "operatingCashFlow": 4692000000,
+    "capitalExpenditure": -2207000000,
+    "freeCashFlow": 2485000000,
+    "incomeTaxesPaid": 0,
+    "interestPaid": 0
+   },
    {
     "date": "2026-05-10",
     "symbol": "COST",
@@ -1859,55 +1908,6 @@
     "freeCashFlow": 1901000000,
     "incomeTaxesPaid": -1648000000,
     "interestPaid": -81000000
-   },
-   {
-    "date": "2025-05-11",
-    "symbol": "COST",
-    "reportedCurrency": "USD",
-    "cik": "0000909832",
-    "filingDate": "2025-06-05",
-    "acceptedDate": "2025-06-04 19:10:00",
-    "fiscalYear": "2025",
-    "period": "Q3",
-    "netIncome": 1903000000,
-    "depreciationAndAmortization": 552000000,
-    "deferredIncomeTax": 0,
-    "stockBasedCompensation": 106000000,
-    "changeInWorkingCapital": 764000000,
-    "accountsReceivables": 0,
-    "inventory": 337000000,
-    "accountsPayables": 1062000000,
-    "otherWorkingCapital": -635000000,
-    "otherNonCashItems": 135000000,
-    "netCashProvidedByOperatingActivities": 3460000000,
-    "investmentsInPropertyPlantAndEquipment": -1131000000,
-    "acquisitionsNet": 0,
-    "purchasesOfInvestments": -228000000,
-    "salesMaturitiesOfInvestments": 34000000,
-    "otherInvestingActivities": -11000000,
-    "netCashProvidedByInvestingActivities": -1336000000,
-    "netDebtIssuance": -20000000,
-    "longTermNetDebtIssuance": -20000000,
-    "shortTermNetDebtIssuance": 0,
-    "netStockIssuance": -211000000,
-    "netCommonStockIssuance": -211000000,
-    "commonStockIssuance": 0,
-    "commonStockRepurchased": -211000000,
-    "netPreferredStockIssuance": 0,
-    "netDividendsPaid": -515000000,
-    "commonDividendsPaid": -515000000,
-    "preferredDividendsPaid": 0,
-    "otherFinancingActivities": -2000000,
-    "netCashProvidedByFinancingActivities": -748000000,
-    "effectOfForexChangesOnCash": 104000000,
-    "netChangeInCash": 1480000000,
-    "cashAtEndOfPeriod": 13836000000,
-    "cashAtBeginningOfPeriod": 12356000000,
-    "operatingCashFlow": 3460000000,
-    "capitalExpenditure": -1131000000,
-    "freeCashFlow": 2329000000,
-    "incomeTaxesPaid": 850000000,
-    "interestPaid": 26000000
    }
   ]
  },
@@ -1915,6 +1915,74 @@
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/ratios\", {\"limit\": 10, \"period\": \"quarter\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "COST",
+    "date": "2026-08-30",
+    "fiscalYear": "2026",
+    "period": "Q4",
+    "reportedCurrency": "USD",
+    "grossProfitMargin": 0.2765479560816105,
+    "ebitMargin": 0.03970832506294203,
+    "ebitdaMargin": 0.044075091670758335,
+    "operatingProfitMargin": 0.03970832506294203,
+    "pretaxProfitMargin": 0.041881261556783636,
+    "continuousOperationsProfitMargin": 0.031319536579505446,
+    "netProfitMargin": 0.031319536579505446,
+    "bottomLineProfitMargin": 0.031319536579505446,
+    "receivablesTurnover": 24.178580449608486,
+    "payablesTurnover": 3.0654242840069053,
+    "inventoryTurnover": 3.583678327468433,
+    "fixedAssetTurnover": 2.4973388990346987,
+    "assetTurnover": 1.07499578864619,
+    "currentRatio": 1.0598380050964689,
+    "quickRatio": 0.6201765562431744,
+    "solvencyRatio": 0.07289358025618872,
+    "cashRatio": 0.45975154714233707,
+    "priceToEarningsRatio": 17.35091911764706,
+    "priceToEarningsGrowthRatio": 0.09897637464339086,
+    "forwardPriceToEarningsGrowthRatio": 0.09897637464339086,
+    "priceToEarningsDilutedRatio": 17.376472754050074,
+    "priceToEarningsDilutedGrowthRatio": 0.09903585049418133,
+    "priceToBookRatio": 11.704705269111528,
+    "priceToSalesRatio": 4.377877445859407,
+    "priceToFreeCashFlowRatio": 168.6372485915493,
+    "priceToOperatingCashFlowRatio": 89.31448481457801,
+    "debtToAssetsRatio": 0.05235555056432141,
+    "debtToEquityRatio": 0.1302125520207804,
+    "debtToCapitalRatio": 0.11521067589274682,
+    "longTermDebtToCapitalRatio": 0.06316560692885365,
+    "financialLeverageRatio": 2.4870820880931768,
+    "workingCapitalTurnoverRatio": 33.69341781063006,
+    "operatingCashFlowRatio": 0.10675282125955587,
+    "operatingCashFlowSalesRatio": 0.049016432832234676,
+    "freeCashFlowOperatingCashFlowRatio": 0.5296248934356351,
+    "debtServiceCoverageRatio": 1.3990405582206715,
+    "interestCoverageRatio": 84.46666666666667,
+    "shortTermOperatingCashFlowCoverageRatio": 2.087188612099644,
+    "operatingCashFlowCoverageRatio": 1.0064350064350065,
+    "capitalExpenditureCoverageRatio": 2.1259628454916175,
+    "dividendPaidAndCapexCoverageRatio": 1.3363714041583594,
+    "dividendPayoutRatio": 0.4349566377585057,
+    "dividendYield": 0.003111699789508841,
+    "dividendYieldPercentage": 0.31116997895088416,
+    "revenuePerShare": 215.60448223436003,
+    "netIncomePerShare": 6.7526324680443714,
+    "interestDebtPerShare": 10.60194830790022,
+    "cashPerShare": 47.97792668506109,
+    "bookValuePerShare": 80.64192803648854,
+    "tangibleBookValuePerShare": 80.64192803648854,
+    "shareholdersEquityPerShare": 80.64192803648854,
+    "operatingCashFlowPerShare": 10.568162621769243,
+    "capexPerShare": 4.971000619404245,
+    "freeCashFlowPerShare": 5.597162002364998,
+    "netIncomePerEBT": 0.7478174108256423,
+    "ebtPerEbit": 1.054722441462773,
+    "priceToFairValue": 11.704705269111528,
+    "debtToMarketCap": 0.01112480400206305,
+    "effectiveTaxRate": 0.2521825891743577,
+    "enterpriseValueMultiple": 95.64317675989571,
+    "dividendPerShare": 2.9371023143195
+   },
    {
     "symbol": "COST",
     "date": "2026-05-10",
@@ -2186,74 +2254,6 @@
     "effectiveTaxRate": 0.2564102564102564,
     "enterpriseValueMultiple": 95.82001922401848,
     "dividendPerShare": 2.5968059062131905
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-11",
-    "fiscalYear": "2025",
-    "period": "Q3",
-    "reportedCurrency": "USD",
-    "grossProfitMargin": 0.12987896527173484,
-    "ebitMargin": 0.041373309073649236,
-    "ebitdaMargin": 0.05010679534846927,
-    "operatingProfitMargin": 0.040028478759591805,
-    "pretaxProfitMargin": 0.0408195554149197,
-    "continuousOperationsProfitMargin": 0.030108377501779922,
-    "netProfitMargin": 0.030108377501779922,
-    "bottomLineProfitMargin": 0.030108377501779922,
-    "receivablesTurnover": 21.984347826086957,
-    "payablesTurnover": 2.7747729566094854,
-    "inventoryTurnover": 2.9558207029990324,
-    "fixedAssetTurnover": 1.898048048048048,
-    "assetTurnover": 0.8373519514586258,
-    "currentRatio": 1.0152212671971048,
-    "quickRatio": 0.5201043135793928,
-    "solvencyRatio": 0.05076824451475485,
-    "cashRatio": 0.3681843582852125,
-    "priceToEarningsRatio": 59.21620046620046,
-    "priceToEarningsGrowthRatio": 9.17851107226108,
-    "forwardPriceToEarningsGrowthRatio": 9.17851107226108,
-    "priceToEarningsDilutedRatio": 59.35455607476635,
-    "priceToEarningsDilutedGrowthRatio": 9.177127516175375,
-    "priceToBookRatio": 16.63144411797235,
-    "priceToSalesRatio": 7.1375353484692665,
-    "priceToFreeCashFlowRatio": 193.70026693860027,
-    "priceToOperatingCashFlowRatio": 130.38379239884392,
-    "debtToAssetsRatio": 0.11072838557536896,
-    "debtToEquityRatio": 0.30812903225806454,
-    "debtToCapitalRatio": 0.23554941803116985,
-    "longTermDebtToCapitalRatio": 0.17407587844832836,
-    "financialLeverageRatio": 2.782746543778802,
-    "workingCapitalTurnoverRatio": 268.9574468085106,
-    "operatingCashFlowRatio": 0.09207270017829107,
-    "operatingCashFlowSalesRatio": 0.05474250454869077,
-    "freeCashFlowOperatingCashFlowRatio": 0.673121387283237,
-    "debtServiceCoverageRatio": 11.690140845070422,
-    "interestCoverageRatio": 72.28571428571429,
-    "shortTermOperatingCashFlowCoverageRatio": 19.43820224719101,
-    "operatingCashFlowCoverageRatio": 0.41397463508016275,
-    "capitalExpenditureCoverageRatio": 3.0592396109637487,
-    "dividendPaidAndCapexCoverageRatio": 2.1020656136087483,
-    "dividendPayoutRatio": 0.27062532842879666,
-    "dividendYield": 0.00114158307483897,
-    "dividendYieldPercentage": 0.11415830748389698,
-    "revenuePerShare": 142.36707075894566,
-    "netIncomePerShare": 4.28644151023295,
-    "interestDebtPerShare": 18.904941458426247,
-    "cashPerShare": 33.449110050950765,
-    "bookValuePerShare": 61.09812189441344,
-    "tangibleBookValuePerShare": 61.09812189441344,
-    "shareholdersEquityPerShare": 61.09812189441344,
-    "operatingCashFlowPerShare": 7.793530018605364,
-    "capexPerShare": 2.5475382806481695,
-    "freeCashFlowPerShare": 5.245991737957194,
-    "netIncomePerEBT": 0.7375968992248062,
-    "ebtPerEbit": 1.0197628458498025,
-    "priceToFairValue": 16.63144411797235,
-    "debtToMarketCap": 0.013067247041117917,
-    "effectiveTaxRate": 0.2624031007751938,
-    "enterpriseValueMultiple": 140.71674193242816,
-    "dividendPerShare": 1.1600196414976192
    }
   ]
  },
@@ -2264,21 +2264,21 @@
    {
     "symbol": "COST",
     "name": "Costco Wholesale Corporation",
-    "price": 901.35,
-    "changePercentage": -1.91096,
-    "change": -17.56,
-    "volume": 2191389,
-    "dayLow": 900.25,
-    "dayHigh": 916.92,
+    "price": 922.765,
+    "changePercentage": 2.93202,
+    "change": 26.285,
+    "volume": 4602713,
+    "dayLow": 883.1,
+    "dayHigh": 925.1,
     "yearHigh": 1096.5,
     "yearLow": 844.06,
-    "marketCap": 399729796650,
-    "priceAvg50": 939.1518,
-    "priceAvg200": 960.67126,
+    "marketCap": 409226899435,
+    "priceAvg50": 934.9014,
+    "priceAvg200": 960.2383,
     "exchange": "NASDAQ",
-    "open": 916.92,
-    "previousClose": 918.91,
-    "timestamp": 1789502401
+    "open": 886.62,
+    "previousClose": 896.48,
+    "timestamp": 1790366401
    }
   ]
  },
@@ -2289,21 +2289,50 @@
    {
     "symbol": "COST",
     "targetHigh": 1275,
-    "targetLow": 1000,
-    "targetConsensus": 1101.78,
-    "targetMedian": 1100
+    "targetLow": 955,
+    "targetConsensus": 1093.67,
+    "targetMedian": 1095.5
    }
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2026-08-25\", \"symbol\": \"COST\", \"to\": \"2026-08-25\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2026-09-19\", \"symbol\": \"COST\", \"to\": \"2026-09-19\"}, \"<redacted>\"]]",
+  "target": "src.tools.api._fmp_get",
+  "result": []
+ },
+ {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2026-09-12\", \"symbol\": \"COST\", \"to\": \"2026-09-19\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "COST",
-    "date": "2026-08-25",
-    "price": 960.01,
-    "volume": 1360603
+    "date": "2026-09-18",
+    "price": 895.31,
+    "volume": 4180440
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-09-17",
+    "price": 893.93,
+    "volume": 2322546
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-09-16",
+    "price": 893.74,
+    "volume": 2101651
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-09-15",
+    "price": 901.35,
+    "volume": 2200912
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-09-14",
+    "price": 918.91,
+    "volume": 2014224
    }
   ]
  },
@@ -2414,128 +2443,172 @@
   ]
  },
  {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"COST\"}, [\"api_key\", \"<redacted>\"]]]",
+  "target": "src.tools.api._fmp_get",
+  "result": [
+   {
+    "symbol": "COST",
+    "price": 922.765,
+    "marketCap": 409226899435,
+    "beta": 0.855,
+    "lastDividend": 5.54,
+    "range": "844.06-1096.5",
+    "change": 26.285,
+    "changePercentage": 2.93202,
+    "volume": 4602713,
+    "averageVolume": 2314468,
+    "companyName": "Costco Wholesale Corporation",
+    "currency": "USD",
+    "cik": "0000909832",
+    "isin": "US22160K1051",
+    "cusip": "22160K105",
+    "exchangeFullName": "NASDAQ Global Select",
+    "exchange": "NASDAQ",
+    "industry": "Discount Stores",
+    "website": "https://www.costco.com",
+    "description": "Costco Wholesale Corporation, alongside its group entities, operates membership-based retail warehouses across a broad international scope, spanning the United States, Puerto Rico, Canada, the United Kingdom, Mexico, Japan, South Korea, Australia, Spain, France, Iceland, China, and Taiwan. These outlets provide customers with an extensive array of both well-known branded and proprietary private-label products. Their vast inventory includes household staples, shelf-stable groceries, confectionery, chilled and frozen items, alcoholic beverages, tobacco, and deli selections. Furthermore, the stores stock major appliances, consumer electronics, health and beauty aids, hardware, garden and patio furniture, sporting goods, vehicle tires, toys, seasonal merchandise, office supplies, automotive maintenance products, postage services, event tickets, apparel, small kitchen appliances, home furnishings, domestic textiles, kitchenware, custom-order kiosks, and fine jewelry. Fresh departments offer meat, produce, a service deli, and bakery items. Beyond retail goods, Costco provides in-store amenities such as pharmacies, optical clinics, food courts, hearing aid centers, and tire installation facilities, in addition to managing 636 gas stations. The company also extends its offerings online through business delivery, travel booking, and same-day grocery fulfillment in various countries. As of August 29, 2021, Costco maintained a global network of 815 membership warehouses, with 564 located in the United States and Puerto Rico, 105 in Canada, 39 in Mexico, 30 in Japan, 29 in the United Kingdom, 16 in South Korea, 14 in Taiwan, 12 in Australia, 3 in Spain, and one each in Iceland, France, and China. Digital storefronts facilitate e-commerce operations in the United States, Canada, the United Kingdom, Mexico, South Korea, Taiwan, Japan, and Australia. Founded in 1976, the enterprise was originally known as Costco Companies, Inc. before officially adopting the name Costco Wholesale Corporation in August 1999. Its corporate headquarters are situated in Issaquah, Washington.",
+    "ceo": "Ron Vachris",
+    "sector": "Consumer Defensive",
+    "country": "US",
+    "fullTimeEmployees": "341000",
+    "phone": "425 313 8100",
+    "address": "999 Lake Drive",
+    "city": "Issaquah",
+    "state": "WA",
+    "zip": "98027",
+    "image": "https://images.financialmodelingprep.com/symbol/COST.png",
+    "ipoDate": "1986-07-09",
+    "defaultImage": false,
+    "isEtf": false,
+    "isActivelyTrading": true,
+    "isAdr": false,
+    "isFund": false
+   }
+  ]
+ },
+ {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/analyst-estimates\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"COST\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "COST",
-    "date": "2030-08-31",
-    "revenueLow": 383062573385,
-    "revenueHigh": 404488461933,
-    "revenueAvg": 394249500000,
-    "ebitdaLow": 21703061872,
-    "ebitdaHigh": 22899351238,
-    "ebitdaAvg": 22327671082,
-    "ebitLow": 16469051605,
-    "ebitHigh": 17665340971,
-    "ebitAvg": 17093660815,
-    "netIncomeLow": 12202836730,
-    "netIncomeHigh": 13097984977,
-    "netIncomeAvg": 12670213483,
-    "sgaExpenseLow": 34539375843,
-    "sgaExpenseHigh": 36471271227,
-    "sgaExpenseAvg": 35548060819,
-    "epsAvg": 28.485,
-    "epsHigh": 29.44671,
-    "epsLow": 27.43425,
-    "numAnalystsRevenue": 4,
-    "numAnalystsEps": 3
+    "date": "2031-08-30",
+    "revenueLow": 424578994660,
+    "revenueHigh": 448115580131,
+    "revenueAvg": 437072000000,
+    "ebitdaLow": 24669198396,
+    "ebitdaHigh": 26024647853,
+    "ebitdaAvg": 25388658429,
+    "ebitLow": 18798493041,
+    "ebitHigh": 20153942498,
+    "ebitAvg": 19517953074,
+    "netIncomeLow": 13962794192,
+    "netIncomeHigh": 14977994346,
+    "netIncomeAvg": 14501653042,
+    "sgaExpenseLow": 37897879912,
+    "sgaExpenseHigh": 39998753249,
+    "sgaExpenseAvg": 39013004357,
+    "epsAvg": 32.63,
+    "epsHigh": 33.70181,
+    "epsLow": 31.41752,
+    "numAnalystsRevenue": 5,
+    "numAnalystsEps": 5
    },
    {
     "symbol": "COST",
-    "date": "2029-08-31",
-    "revenueLow": 365621412347,
-    "revenueHigh": 383747483674,
-    "revenueAvg": 373826322888,
-    "ebitdaLow": 20295842794,
-    "ebitdaHigh": 21754690944,
-    "ebitdaAvg": 20798581456,
-    "ebitLow": 15562647490,
-    "ebitHigh": 17021495640,
-    "ebitAvg": 16065386152,
-    "netIncomeLow": 11524601114,
-    "netIncomeHigh": 12616214399,
-    "netIncomeAvg": 11900785710,
-    "sgaExpenseLow": 32966769021,
-    "sgaExpenseHigh": 34601131743,
-    "sgaExpenseAvg": 33706576323,
-    "epsAvg": 27.0733,
-    "epsHigh": 28.3636,
-    "epsLow": 25.90945,
-    "numAnalystsRevenue": 6,
-    "numAnalystsEps": 7
+    "date": "2030-08-30",
+    "revenueLow": 393339208333,
+    "revenueHigh": 415144012651,
+    "revenueAvg": 404913000000,
+    "ebitdaLow": 22447627446,
+    "ebitdaHigh": 23685314930,
+    "ebitdaAvg": 23104580947,
+    "ebitLow": 17178770429,
+    "ebitHigh": 18416457913,
+    "ebitAvg": 17835723930,
+    "netIncomeLow": 12749659584,
+    "netIncomeHigh": 13676658756,
+    "netIncomeAvg": 13241702494,
+    "sgaExpenseLow": 35109419612,
+    "sgaExpenseHigh": 37055714332,
+    "sgaExpenseAvg": 36142495134,
+    "epsAvg": 29.795,
+    "epsHigh": 30.77369,
+    "epsLow": 28.68786,
+    "numAnalystsRevenue": 9,
+    "numAnalystsEps": 9
    },
    {
     "symbol": "COST",
-    "date": "2028-08-31",
-    "revenueLow": 339521177956,
-    "revenueHigh": 367206308987,
-    "revenueAvg": 350851599187,
-    "ebitdaLow": 18472924368,
-    "ebitdaHigh": 20381550593,
-    "ebitdaAvg": 19126001400,
-    "ebitLow": 14272020288,
-    "ebitHigh": 16180646513,
-    "ebitAvg": 14925097320,
-    "netIncomeLow": 10558862630,
-    "netIncomeHigh": 11987031658,
-    "netIncomeAvg": 11047541020,
-    "sgaExpenseLow": 30613404667,
-    "sgaExpenseHigh": 33109673456,
-    "sgaExpenseAvg": 31635028038,
-    "epsAvg": 24.94867,
-    "epsHigh": 26.94908,
-    "epsLow": 23.73829,
+    "date": "2029-08-30",
+    "revenueLow": 364777352207,
+    "revenueHigh": 391645490500,
+    "revenueAvg": 378228873390,
+    "ebitdaLow": 20526917541,
+    "ebitdaHigh": 21707391432,
+    "ebitdaAvg": 20964246583,
+    "ebitLow": 15858098909,
+    "ebitHigh": 17038572800,
+    "ebitAvg": 16295427951,
+    "netIncomeLow": 11760507297,
+    "netIncomeHigh": 12644654817,
+    "netIncomeAvg": 12088056590,
+    "sgaExpenseLow": 32559991102,
+    "sgaExpenseHigh": 34958238522,
+    "sgaExpenseAvg": 33760672579,
+    "epsAvg": 27.43272,
+    "epsHigh": 28.45159,
+    "epsLow": 26.46218,
+    "numAnalystsRevenue": 12,
+    "numAnalystsEps": 11
+   },
+   {
+    "symbol": "COST",
+    "date": "2028-08-30",
+    "revenueLow": 347296033236,
+    "revenueHigh": 359274192257,
+    "revenueAvg": 353537178383,
+    "ebitdaLow": 18545970818,
+    "ebitdaHigh": 19447823654,
+    "ebitdaAvg": 19029194379,
+    "ebitLow": 14500851513,
+    "ebitHigh": 15402704349,
+    "ebitAvg": 14984075074,
+    "netIncomeLow": 10743960529,
+    "netIncomeHigh": 11419427351,
+    "netIncomeAvg": 11105883750,
+    "sgaExpenseLow": 30999610265,
+    "sgaExpenseHigh": 32068779579,
+    "sgaExpenseAvg": 31556694276,
+    "epsAvg": 24.95009,
+    "epsHigh": 25.69472,
+    "epsLow": 24.17486,
     "numAnalystsRevenue": 20,
-    "numAnalystsEps": 21
+    "numAnalystsEps": 19
    },
    {
     "symbol": "COST",
-    "date": "2027-08-31",
-    "revenueLow": 318459799404,
-    "revenueHigh": 332864116902,
-    "revenueAvg": 326986031907,
-    "ebitdaLow": 16797373876,
-    "ebitdaHigh": 17600226314,
-    "ebitdaAvg": 17242791694,
-    "ebitLow": 13156396608,
-    "ebitHigh": 13959249046,
-    "ebitAvg": 13601814426,
-    "netIncomeLow": 9724074150,
-    "netIncomeHigh": 10324825083,
-    "netIncomeAvg": 10057367240,
-    "sgaExpenseLow": 28714375840,
-    "sgaExpenseHigh": 30013161392,
-    "sgaExpenseAvg": 29483155589,
-    "epsAvg": 22.66786,
-    "epsHigh": 23.21213,
-    "epsLow": 21.86153,
-    "numAnalystsRevenue": 24,
-    "numAnalystsEps": 27
-   },
-   {
-    "symbol": "COST",
-    "date": "2026-08-31",
-    "revenueLow": 299329325957,
-    "revenueHigh": 303689753158,
-    "revenueAvg": 302279615004,
-    "ebitdaLow": 15234877243,
-    "ebitdaHigh": 15515602154,
-    "ebitdaAvg": 15442776050,
-    "ebitLow": 12184282950,
-    "ebitHigh": 12465007861,
-    "ebitAvg": 12392181757,
-    "netIncomeLow": 8996670010,
-    "netIncomeHigh": 9206728228,
-    "netIncomeAvg": 9152234590,
-    "sgaExpenseLow": 26989449788,
-    "sgaExpenseHigh": 27382613841,
-    "sgaExpenseAvg": 27255466750,
-    "epsAvg": 20.51758,
-    "epsHigh": 20.69844,
-    "epsLow": 20.22619,
-    "numAnalystsRevenue": 26,
-    "numAnalystsEps": 24
+    "date": "2027-08-30",
+    "revenueLow": 319356678686,
+    "revenueHigh": 333801563107,
+    "revenueAvg": 328198637883,
+    "ebitdaLow": 16575282053,
+    "ebitdaHigh": 17380698951,
+    "ebitdaAvg": 17063966443,
+    "ebitLow": 13192872367,
+    "ebitHigh": 13998289265,
+    "ebitAvg": 13681556757,
+    "netIncomeLow": 9764314535,
+    "netIncomeHigh": 10367553080,
+    "netIncomeAvg": 10130327790,
+    "sgaExpenseLow": 28505746186,
+    "sgaExpenseHigh": 29795095170,
+    "sgaExpenseAvg": 29294978607,
+    "epsAvg": 22.79105,
+    "epsHigh": 23.32791,
+    "epsLow": 21.97057,
+    "numAnalystsRevenue": 25,
+    "numAnalystsEps": 26
    }
   ]
  },
@@ -2615,53 +2688,1515 @@
   "result": null
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"COST\"}, [\"api_key\", \"<redacted>\"]]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-08-16\", \"symbol\": \"COST\", \"to\": \"2026-08-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "COST",
-    "price": 901.35,
-    "marketCap": 399729796650,
-    "beta": 0.855,
-    "lastDividend": 5.54,
-    "range": "844.06-1096.5",
-    "change": -17.56,
-    "changePercentage": -1.91096,
-    "volume": 2191389,
-    "averageVolume": 2241112,
-    "companyName": "Costco Wholesale Corporation",
-    "currency": "USD",
-    "cik": "0000909832",
-    "isin": "US22160K1051",
-    "cusip": "22160K105",
-    "exchangeFullName": "NASDAQ Global Select",
-    "exchange": "NASDAQ",
-    "industry": "Discount Stores",
-    "website": "https://www.costco.com",
-    "description": "Costco Wholesale Corporation, alongside its group entities, operates membership-based retail warehouses across a broad international scope, spanning the United States, Puerto Rico, Canada, the United Kingdom, Mexico, Japan, South Korea, Australia, Spain, France, Iceland, China, and Taiwan. These outlets provide customers with an extensive array of both well-known branded and proprietary private-label products. Their vast inventory includes household staples, shelf-stable groceries, confectionery, chilled and frozen items, alcoholic beverages, tobacco, and deli selections. Furthermore, the stores stock major appliances, consumer electronics, health and beauty aids, hardware, garden and patio furniture, sporting goods, vehicle tires, toys, seasonal merchandise, office supplies, automotive maintenance products, postage services, event tickets, apparel, small kitchen appliances, home furnishings, domestic textiles, kitchenware, custom-order kiosks, and fine jewelry. Fresh departments offer meat, produce, a service deli, and bakery items. Beyond retail goods, Costco provides in-store amenities such as pharmacies, optical clinics, food courts, hearing aid centers, and tire installation facilities, in addition to managing 636 gas stations. The company also extends its offerings online through business delivery, travel booking, and same-day grocery fulfillment in various countries. As of August 29, 2021, Costco maintained a global network of 815 membership warehouses, with 564 located in the United States and Puerto Rico, 105 in Canada, 39 in Mexico, 30 in Japan, 29 in the United Kingdom, 16 in South Korea, 14 in Taiwan, 12 in Australia, 3 in Spain, and one each in Iceland, France, and China. Digital storefronts facilitate e-commerce operations in the United States, Canada, the United Kingdom, Mexico, South Korea, Taiwan, Japan, and Australia. Founded in 1976, the enterprise was originally known as Costco Companies, Inc. before officially adopting the name Costco Wholesale Corporation in August 1999. Its corporate headquarters are situated in Issaquah, Washington.",
-    "ceo": "Ron Vachris",
-    "sector": "Consumer Defensive",
-    "country": "US",
-    "fullTimeEmployees": "341000",
-    "phone": "425 313 8100",
-    "address": "999 Lake Drive",
-    "city": "Issaquah",
-    "state": "WA",
-    "zip": "98027",
-    "image": "https://images.financialmodelingprep.com/symbol/COST.png",
-    "ipoDate": "1986-07-09",
-    "defaultImage": false,
-    "isEtf": false,
-    "isActivelyTrading": true,
-    "isAdr": false,
-    "isFund": false
-   }
-  ]
- },
- {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-08-17\", \"symbol\": \"COST\", \"to\": \"2025-09-01\"}, \"<redacted>\"]]",
-  "target": "src.tools.api._fmp_get",
-  "result": [
+    "date": "2026-08-31",
+    "price": 943.89,
+    "volume": 2393041
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-28",
+    "price": 945.47,
+    "volume": 1401469
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-27",
+    "price": 934.66,
+    "volume": 2242458
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-26",
+    "price": 956.12,
+    "volume": 1223015
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-25",
+    "price": 960.01,
+    "volume": 1360603
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-24",
+    "price": 971.4,
+    "volume": 2205864
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-21",
+    "price": 947.74,
+    "volume": 2368373
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-20",
+    "price": 933.51,
+    "volume": 2503700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-19",
+    "price": 956.99,
+    "volume": 1642300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-18",
+    "price": 961.35,
+    "volume": 1845200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-17",
+    "price": 953.5,
+    "volume": 1242967
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-14",
+    "price": 961.1,
+    "volume": 1165412
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-13",
+    "price": 961.85,
+    "volume": 1324920
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-12",
+    "price": 949.58,
+    "volume": 1312225
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-11",
+    "price": 944.32,
+    "volume": 1801428
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-10",
+    "price": 952.75,
+    "volume": 1479642
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-07",
+    "price": 947.82,
+    "volume": 1524247
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-06",
+    "price": 949.15,
+    "volume": 2116908
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-05",
+    "price": 941.99,
+    "volume": 1692426
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-04",
+    "price": 947.85,
+    "volume": 2437300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-08-03",
+    "price": 954.08,
+    "volume": 2014100
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-31",
+    "price": 951.89,
+    "volume": 1760200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-30",
+    "price": 954.17,
+    "volume": 2336010
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-29",
+    "price": 974.03,
+    "volume": 1976428
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-28",
+    "price": 966.58,
+    "volume": 2690594
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-27",
+    "price": 951.58,
+    "volume": 2110004
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-24",
+    "price": 935.03,
+    "volume": 1586611
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-23",
+    "price": 926.06,
+    "volume": 1785244
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-22",
+    "price": 927.31,
+    "volume": 1762703
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-21",
+    "price": 929.22,
+    "volume": 1833500
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-20",
+    "price": 935.8,
+    "volume": 1508337
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-17",
+    "price": 940.87,
+    "volume": 2508007
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-16",
+    "price": 945.57,
+    "volume": 2735301
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-15",
+    "price": 916.54,
+    "volume": 2423207
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-14",
+    "price": 921.75,
+    "volume": 2409202
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-13",
+    "price": 926.43,
+    "volume": 2373336
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-10",
+    "price": 916.25,
+    "volume": 2102300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-09",
+    "price": 912.97,
+    "volume": 4545245
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-08",
+    "price": 953.13,
+    "volume": 1645512
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-07",
+    "price": 947.5,
+    "volume": 1940200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-06",
+    "price": 950.25,
+    "volume": 2327543
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-02",
+    "price": 951.67,
+    "volume": 2787532
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-07-01",
+    "price": 924.67,
+    "volume": 2909700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-30",
+    "price": 935.47,
+    "volume": 2870944
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-29",
+    "price": 946.68,
+    "volume": 2450035
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-26",
+    "price": 952.54,
+    "volume": 8239200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-25",
+    "price": 942.24,
+    "volume": 2495029
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-24",
+    "price": 961.09,
+    "volume": 2020218
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-23",
+    "price": 957.68,
+    "volume": 2529841
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-22",
+    "price": 951.35,
+    "volume": 2191926
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-18",
+    "price": 951.45,
+    "volume": 3742900
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-17",
+    "price": 965.59,
+    "volume": 1928018
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-16",
+    "price": 986.68,
+    "volume": 1523449
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-15",
+    "price": 979.45,
+    "volume": 1893749
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-12",
+    "price": 982.35,
+    "volume": 1737681
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-11",
+    "price": 975.69,
+    "volume": 1903400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-10",
+    "price": 983.37,
+    "volume": 1715603
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-09",
+    "price": 968.59,
+    "volume": 1998630
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-08",
+    "price": 974.75,
+    "volume": 2086132
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-05",
+    "price": 971.87,
+    "volume": 3092018
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-04",
+    "price": 972.35,
+    "volume": 2345228
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-03",
+    "price": 961.83,
+    "volume": 2174108
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-02",
+    "price": 954.27,
+    "volume": 2218200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-06-01",
+    "price": 946.11,
+    "volume": 2816325
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-29",
+    "price": 956.32,
+    "volume": 7034527
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-28",
+    "price": 995.2,
+    "volume": 2853278
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-27",
+    "price": 1003.69,
+    "volume": 2392069
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-26",
+    "price": 1002.93,
+    "volume": 2707389
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-22",
+    "price": 1028.24,
+    "volume": 2051784
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-21",
+    "price": 1050.45,
+    "volume": 2149700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-20",
+    "price": 1074.01,
+    "volume": 2223436
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-19",
+    "price": 1094.32,
+    "volume": 2853300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-18",
+    "price": 1076.47,
+    "volume": 2295200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-15",
+    "price": 1048.95,
+    "volume": 1967000
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-14",
+    "price": 1041.25,
+    "volume": 1606609
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-13",
+    "price": 1033.08,
+    "volume": 1654600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-12",
+    "price": 1021.88,
+    "volume": 2143229
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-11",
+    "price": 999.47,
+    "volume": 2053529
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-08",
+    "price": 1008.79,
+    "volume": 1805200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-07",
+    "price": 1012.06,
+    "volume": 2014000
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-06",
+    "price": 995.75,
+    "volume": 2619130
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-05",
+    "price": 1016.42,
+    "volume": 1456309
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-04",
+    "price": 1012.79,
+    "volume": 1479687
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-05-01",
+    "price": 1011.7,
+    "volume": 1509728
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-30",
+    "price": 1014.53,
+    "volume": 2049300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-29",
+    "price": 998.67,
+    "volume": 1516900
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-28",
+    "price": 994,
+    "volume": 1776000
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-27",
+    "price": 998.01,
+    "volume": 1620400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-24",
+    "price": 1011.15,
+    "volume": 1695617
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-23",
+    "price": 1014.38,
+    "volume": 1570728
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-22",
+    "price": 1003.7,
+    "volume": 1215200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-21",
+    "price": 1005.81,
+    "volume": 1367100
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-20",
+    "price": 997.84,
+    "volume": 1475447
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-17",
+    "price": 999.89,
+    "volume": 2346525
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-16",
+    "price": 987.21,
+    "volume": 1484300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-15",
+    "price": 984.75,
+    "volume": 2346203
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-14",
+    "price": 974.8,
+    "volume": 2136508
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-13",
+    "price": 980.85,
+    "volume": 2255514
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-10",
+    "price": 998.47,
+    "volume": 2333039
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-09",
+    "price": 1032.03,
+    "volume": 1433627
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-08",
+    "price": 1030.27,
+    "volume": 2265711
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-07",
+    "price": 1013.21,
+    "volume": 1428543
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-06",
+    "price": 1018.55,
+    "volume": 1448642
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-02",
+    "price": 1014.96,
+    "volume": 1828612
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-04-01",
+    "price": 996.56,
+    "volume": 1769848
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-31",
+    "price": 996.43,
+    "volume": 2447900
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-30",
+    "price": 996.58,
+    "volume": 2129129
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-27",
+    "price": 983.86,
+    "volume": 1540925
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-26",
+    "price": 979.65,
+    "volume": 1498300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-25",
+    "price": 974.86,
+    "volume": 1067386
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-24",
+    "price": 973.82,
+    "volume": 1259325
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-23",
+    "price": 965.73,
+    "volume": 1779100
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-20",
+    "price": 972.33,
+    "volume": 2621600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-19",
+    "price": 974.78,
+    "volume": 1340200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-18",
+    "price": 979.92,
+    "volume": 1434421
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-17",
+    "price": 996.16,
+    "volume": 1210414
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-16",
+    "price": 1001.74,
+    "volume": 1243752
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-13",
+    "price": 1008.43,
+    "volume": 1469700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-12",
+    "price": 1003.32,
+    "volume": 1669248
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-11",
+    "price": 992.23,
+    "volume": 1262006
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-10",
+    "price": 997.36,
+    "volume": 1613400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-09",
+    "price": 1005.3,
+    "volume": 2348212
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-06",
+    "price": 998.1,
+    "volume": 2708900
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-05",
+    "price": 982.57,
+    "volume": 2774284
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-04",
+    "price": 1006.74,
+    "volume": 1806638
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-03",
+    "price": 1007.77,
+    "volume": 1947502
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-03-02",
+    "price": 1002.77,
+    "volume": 1986902
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-27",
+    "price": 1010.79,
+    "volume": 3935004
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-26",
+    "price": 986.74,
+    "volume": 1804400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-25",
+    "price": 994.76,
+    "volume": 1554600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-24",
+    "price": 998.43,
+    "volume": 1671134
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-23",
+    "price": 986.02,
+    "volume": 1489300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-20",
+    "price": 985.27,
+    "volume": 1662200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-19",
+    "price": 987.82,
+    "volume": 1750000
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-18",
+    "price": 996.08,
+    "volume": 1926800
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-17",
+    "price": 1012.05,
+    "volume": 1732204
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-13",
+    "price": 1018.48,
+    "volume": 2661600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-12",
+    "price": 998.86,
+    "volume": 2970400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-11",
+    "price": 978.14,
+    "volume": 1769400
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-10",
+    "price": 971.23,
+    "volume": 1781509
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-09",
+    "price": 997.59,
+    "volume": 1861700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-06",
+    "price": 1001.16,
+    "volume": 2358600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-05",
+    "price": 989.29,
+    "volume": 2988847
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-04",
+    "price": 978.35,
+    "volume": 2631500
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-03",
+    "price": 977.92,
+    "volume": 2960736
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-02-02",
+    "price": 968.36,
+    "volume": 2451300
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-30",
+    "price": 940.25,
+    "volume": 2396325
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-29",
+    "price": 952.89,
+    "volume": 1825000
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-28",
+    "price": 960.78,
+    "volume": 2474811
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-27",
+    "price": 970.28,
+    "volume": 2077931
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-26",
+    "price": 977.67,
+    "volume": 2458700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-23",
+    "price": 983.25,
+    "volume": 1680600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-22",
+    "price": 976.17,
+    "volume": 2074413
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-21",
+    "price": 982.86,
+    "volume": 4073700
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-20",
+    "price": 964.26,
+    "volume": 3209921
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-16",
+    "price": 963.61,
+    "volume": 3862947
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-15",
+    "price": 956.75,
+    "volume": 2185919
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-14",
+    "price": 950.98,
+    "volume": 2894900
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-13",
+    "price": 941.93,
+    "volume": 2222100
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-12",
+    "price": 943.08,
+    "volume": 3246406
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-09",
+    "price": 924.88,
+    "volume": 2895418
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-08",
+    "price": 915.31,
+    "volume": 5207200
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-07",
+    "price": 882.58,
+    "volume": 2680115
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-06",
+    "price": 889.1,
+    "volume": 2742339
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-05",
+    "price": 875.74,
+    "volume": 2805600
+   },
+   {
+    "symbol": "COST",
+    "date": "2026-01-02",
+    "price": 854.5,
+    "volume": 2373400
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-31",
+    "price": 862.34,
+    "volume": 1490000
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-30",
+    "price": 865.65,
+    "volume": 1680800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-29",
+    "price": 867.84,
+    "volume": 1792500
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-26",
+    "price": 873.35,
+    "volume": 1324100
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-24",
+    "price": 871.86,
+    "volume": 1822200
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-23",
+    "price": 854.79,
+    "volume": 1903349
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-22",
+    "price": 850,
+    "volume": 2373318
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-19",
+    "price": 855.62,
+    "volume": 10097638
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-18",
+    "price": 857.59,
+    "volume": 2467502
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-17",
+    "price": 862.65,
+    "volume": 2363703
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-16",
+    "price": 860.39,
+    "volume": 3843318
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-15",
+    "price": 860.56,
+    "volume": 4771436
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-12",
+    "price": 884.47,
+    "volume": 4808900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-11",
+    "price": 884.48,
+    "volume": 3041600
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-10",
+    "price": 874.41,
+    "volume": 3318300
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-09",
+    "price": 888.44,
+    "volume": 1899500
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-08",
+    "price": 887.52,
+    "volume": 2407918
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-05",
+    "price": 894.68,
+    "volume": 2359800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-04",
+    "price": 895.86,
+    "volume": 3787830
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-03",
+    "price": 922.26,
+    "volume": 1886800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-02",
+    "price": 922.03,
+    "volume": 2160600
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-12-01",
+    "price": 911.96,
+    "volume": 2149426
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-28",
+    "price": 913.59,
+    "volume": 1092608
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-26",
+    "price": 908.26,
+    "volume": 1936200
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-25",
+    "price": 894.33,
+    "volume": 2534731
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-24",
+    "price": 886.12,
+    "volume": 3661200
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-21",
+    "price": 899.01,
+    "volume": 2870100
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-20",
+    "price": 893.29,
+    "volume": 2648300
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-19",
+    "price": 890.6,
+    "volume": 3462344
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-18",
+    "price": 895.08,
+    "volume": 2984700
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-17",
+    "price": 912.59,
+    "volume": 2481947
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-14",
+    "price": 922.98,
+    "volume": 1739100
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-13",
+    "price": 925.08,
+    "volume": 2430607
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-12",
+    "price": 914,
+    "volume": 1829740
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-11",
+    "price": 913.86,
+    "volume": 1663441
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-10",
+    "price": 915.56,
+    "volume": 2612726
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-07",
+    "price": 922.74,
+    "volume": 2584010
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-06",
+    "price": 923.58,
+    "volume": 3247700
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-05",
+    "price": 935.03,
+    "volume": 2974800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-04",
+    "price": 940.74,
+    "volume": 2554542
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-11-03",
+    "price": 928.04,
+    "volume": 3206606
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-31",
+    "price": 911.45,
+    "volume": 2456300
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-30",
+    "price": 920.18,
+    "volume": 2677100
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-29",
+    "price": 912.42,
+    "volume": 2449600
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-28",
+    "price": 924.16,
+    "volume": 2090800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-27",
+    "price": 929.85,
+    "volume": 1967623
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-24",
+    "price": 932.14,
+    "volume": 1639400
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-23",
+    "price": 942.05,
+    "volume": 1974800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-22",
+    "price": 944.68,
+    "volume": 2372400
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-21",
+    "price": 937.5,
+    "volume": 1448215
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-20",
+    "price": 936.11,
+    "volume": 1523704
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-17",
+    "price": 936.33,
+    "volume": 2502200
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-16",
+    "price": 925.62,
+    "volume": 2721426
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-15",
+    "price": 954.99,
+    "volume": 2009832
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-14",
+    "price": 946.51,
+    "volume": 1925900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-13",
+    "price": 935.56,
+    "volume": 2169648
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-10",
+    "price": 930.01,
+    "volume": 3142539
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-09",
+    "price": 942.89,
+    "volume": 3742900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-08",
+    "price": 914.8,
+    "volume": 2376942
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-07",
+    "price": 914.8,
+    "volume": 2601836
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-06",
+    "price": 910.94,
+    "volume": 2504000
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-03",
+    "price": 915.38,
+    "volume": 2319200
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-02",
+    "price": 916.77,
+    "volume": 2063842
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-10-01",
+    "price": 917.34,
+    "volume": 2642100
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-30",
+    "price": 925.63,
+    "volume": 3096700
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-29",
+    "price": 916.87,
+    "volume": 4107021
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-26",
+    "price": 915.95,
+    "volume": 4812900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-25",
+    "price": 943.31,
+    "volume": 2991526
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-24",
+    "price": 945.27,
+    "volume": 2149803
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-23",
+    "price": 943.6,
+    "volume": 3258514
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-22",
+    "price": 943.26,
+    "volume": 2794337
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-19",
+    "price": 951.16,
+    "volume": 4606020
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-18",
+    "price": 952.36,
+    "volume": 1860900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-17",
+    "price": 963.03,
+    "volume": 1556800
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-16",
+    "price": 952.07,
+    "volume": 2012649
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-15",
+    "price": 960.1,
+    "volume": 2199423
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-12",
+    "price": 967.9,
+    "volume": 1461618
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-11",
+    "price": 964.32,
+    "volume": 1532027
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-10",
+    "price": 956.29,
+    "volume": 2277534
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-09",
+    "price": 979.25,
+    "volume": 1496835
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-08",
+    "price": 971.85,
+    "volume": 1737032
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-05",
+    "price": 963.48,
+    "volume": 1928500
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-04",
+    "price": 955.9,
+    "volume": 1471900
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-03",
+    "price": 949.78,
+    "volume": 1670500
+   },
+   {
+    "symbol": "COST",
+    "date": "2025-09-02",
+    "price": 938.82,
+    "volume": 1793947
+   },
    {
     "symbol": "COST",
     "date": "2025-08-29",
@@ -2721,1500 +4256,6 @@
     "date": "2025-08-18",
     "price": 979.35,
     "volume": 2078500
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-15",
-    "price": 972.04,
-    "volume": 1638300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-14",
-    "price": 975.39,
-    "volume": 1808742
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-13",
-    "price": 978.85,
-    "volume": 2352600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-12",
-    "price": 991.25,
-    "volume": 1589455
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-11",
-    "price": 988.74,
-    "volume": 2290125
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-08",
-    "price": 980.98,
-    "volume": 2189701
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-07",
-    "price": 977.45,
-    "volume": 1893300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-06",
-    "price": 968.56,
-    "volume": 2753000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-05",
-    "price": 943.63,
-    "volume": 2462300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-04",
-    "price": 955.37,
-    "volume": 2389907
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-08-01",
-    "price": 952.52,
-    "volume": 2934500
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-31",
-    "price": 939.64,
-    "volume": 2564400
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-30",
-    "price": 927.51,
-    "volume": 1699609
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-29",
-    "price": 934.57,
-    "volume": 2065900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-28",
-    "price": 933.99,
-    "volume": 2006300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-25",
-    "price": 935.48,
-    "volume": 1827700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-24",
-    "price": 933.8,
-    "volume": 2057100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-23",
-    "price": 941.19,
-    "volume": 2401619
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-22",
-    "price": 941.61,
-    "volume": 1799905
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-21",
-    "price": 947.56,
-    "volume": 1742426
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-18",
-    "price": 950.95,
-    "volume": 2115538
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-17",
-    "price": 953.91,
-    "volume": 2280638
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-16",
-    "price": 951.37,
-    "volume": 2950300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-15",
-    "price": 967.68,
-    "volume": 1878003
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-14",
-    "price": 980.91,
-    "volume": 1679303
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-11",
-    "price": 970.33,
-    "volume": 1942000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-10",
-    "price": 970.17,
-    "volume": 2903765
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-09",
-    "price": 982.09,
-    "volume": 2922600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-08",
-    "price": 985.84,
-    "volume": 1716200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-07",
-    "price": 992.18,
-    "volume": 1832600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-03",
-    "price": 987.02,
-    "volume": 1101400
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-02",
-    "price": 982.36,
-    "volume": 1606122
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-07-01",
-    "price": 985.96,
-    "volume": 2200600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-30",
-    "price": 989.94,
-    "volume": 2127600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-27",
-    "price": 985.14,
-    "volume": 2129200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-26",
-    "price": 982.91,
-    "volume": 2262800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-25",
-    "price": 986.54,
-    "volume": 1827700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-24",
-    "price": 1001.92,
-    "volume": 2385103
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-23",
-    "price": 1004.48,
-    "volume": 2082928
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-20",
-    "price": 980.29,
-    "volume": 3255700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-18",
-    "price": 974.9,
-    "volume": 1509613
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-17",
-    "price": 977.72,
-    "volume": 1668225
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-16",
-    "price": 984.36,
-    "volume": 2109338
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-13",
-    "price": 990.21,
-    "volume": 1786000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-12",
-    "price": 1002.71,
-    "volume": 1720138
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-11",
-    "price": 996.78,
-    "volume": 2459835
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-10",
-    "price": 1007.27,
-    "volume": 2255019
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-09",
-    "price": 1006.18,
-    "volume": 1696711
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-06",
-    "price": 1014.94,
-    "volume": 1855428
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-05",
-    "price": 1010.81,
-    "volume": 3297524
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-04",
-    "price": 1051.69,
-    "volume": 1422100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-03",
-    "price": 1055.59,
-    "volume": 1992900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-06-02",
-    "price": 1056.85,
-    "volume": 2148004
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-30",
-    "price": 1040.18,
-    "volume": 5403837
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-29",
-    "price": 1008.74,
-    "volume": 2023815
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-28",
-    "price": 1013.14,
-    "volume": 1674743
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-27",
-    "price": 1017.79,
-    "volume": 1868200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-23",
-    "price": 1008.5,
-    "volume": 1413916
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-22",
-    "price": 1018.13,
-    "volume": 1660909
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-21",
-    "price": 1025.3,
-    "volume": 1438900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-20",
-    "price": 1036.82,
-    "volume": 2271232
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-19",
-    "price": 1034.34,
-    "volume": 1879800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-16",
-    "price": 1025.83,
-    "volume": 2033744
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-15",
-    "price": 1010.47,
-    "volume": 2470700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-14",
-    "price": 991.54,
-    "volume": 2215000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-13",
-    "price": 999.03,
-    "volume": 2917044
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-12",
-    "price": 1016.15,
-    "volume": 2069049
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-09",
-    "price": 1008.09,
-    "volume": 1176700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-08",
-    "price": 1007.71,
-    "volume": 1882643
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-07",
-    "price": 1007.15,
-    "volume": 1316596
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-06",
-    "price": 1010.5,
-    "volume": 1381248
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-05",
-    "price": 1014.89,
-    "volume": 1952600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-02",
-    "price": 1008.3,
-    "volume": 1547710
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-05-01",
-    "price": 999.04,
-    "volume": 1829900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-30",
-    "price": 994.5,
-    "volume": 2212400
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-29",
-    "price": 991.7,
-    "volume": 1523146
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-28",
-    "price": 978.54,
-    "volume": 1616200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-25",
-    "price": 977.16,
-    "volume": 1780900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-24",
-    "price": 975.48,
-    "volume": 2468500
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-23",
-    "price": 975.84,
-    "volume": 2109700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-22",
-    "price": 979.23,
-    "volume": 2230645
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-21",
-    "price": 957.77,
-    "volume": 2841310
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-17",
-    "price": 994.5,
-    "volume": 2711124
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-16",
-    "price": 967.75,
-    "volume": 2531715
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-15",
-    "price": 976.92,
-    "volume": 1788200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-14",
-    "price": 979.32,
-    "volume": 2219943
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-11",
-    "price": 963.41,
-    "volume": 2721811
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-10",
-    "price": 964.31,
-    "volume": 4209100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-09",
-    "price": 965.19,
-    "volume": 5084527
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-08",
-    "price": 908.75,
-    "volume": 3545403
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-07",
-    "price": 908.13,
-    "volume": 4626600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-04",
-    "price": 916.48,
-    "volume": 5167000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-03",
-    "price": 967.08,
-    "volume": 3096918
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-02",
-    "price": 965.08,
-    "volume": 1719900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-04-01",
-    "price": 954.4,
-    "volume": 2041507
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-31",
-    "price": 945.78,
-    "volume": 3102000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-28",
-    "price": 929.66,
-    "volume": 2100500
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-27",
-    "price": 938.75,
-    "volume": 1547000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-26",
-    "price": 929.75,
-    "volume": 1646854
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-25",
-    "price": 930.26,
-    "volume": 1623000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-24",
-    "price": 926.04,
-    "volume": 2208100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-21",
-    "price": 909.26,
-    "volume": 3447600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-20",
-    "price": 895.4,
-    "volume": 1891800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-19",
-    "price": 904.05,
-    "volume": 1908521
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-18",
-    "price": 898.05,
-    "volume": 2182005
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-17",
-    "price": 916.61,
-    "volume": 2256100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-14",
-    "price": 903.92,
-    "volume": 3186406
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-13",
-    "price": 890.62,
-    "volume": 3447210
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-12",
-    "price": 927.08,
-    "volume": 2331610
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-11",
-    "price": 930.49,
-    "volume": 3204900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-10",
-    "price": 934.41,
-    "volume": 4459900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-07",
-    "price": 964.31,
-    "volume": 5510718
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-06",
-    "price": 1026.62,
-    "volume": 2594600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-05",
-    "price": 1047.75,
-    "volume": 1898604
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-04",
-    "price": 1036.87,
-    "volume": 2536800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-03-03",
-    "price": 1046.85,
-    "volume": 2422500
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-28",
-    "price": 1048.61,
-    "volume": 3307117
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-27",
-    "price": 1021.71,
-    "volume": 1629100
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-26",
-    "price": 1031.97,
-    "volume": 1555700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-25",
-    "price": 1055.66,
-    "volume": 2083802
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-24",
-    "price": 1035.6,
-    "volume": 1759749
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-21",
-    "price": 1035.03,
-    "volume": 1816308
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-20",
-    "price": 1034.83,
-    "volume": 2000545
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-19",
-    "price": 1062.54,
-    "volume": 1349634
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-18",
-    "price": 1056.03,
-    "volume": 2090600
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-14",
-    "price": 1071.85,
-    "volume": 1410728
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-13",
-    "price": 1076.86,
-    "volume": 1623300
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-12",
-    "price": 1065.12,
-    "volume": 1662315
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-11",
-    "price": 1058.34,
-    "volume": 1748505
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-10",
-    "price": 1061.92,
-    "volume": 2036900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-07",
-    "price": 1043.81,
-    "volume": 1632900
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-06",
-    "price": 1050.99,
-    "volume": 2218045
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-05",
-    "price": 1042.88,
-    "volume": 2050058
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-04",
-    "price": 1021.86,
-    "volume": 2001641
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-02-03",
-    "price": 1005.83,
-    "volume": 2751018
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-31",
-    "price": 979.88,
-    "volume": 1875713
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-30",
-    "price": 979.01,
-    "volume": 1788200
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-29",
-    "price": 964.02,
-    "volume": 1713749
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-28",
-    "price": 958.67,
-    "volume": 2166400
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-27",
-    "price": 965.25,
-    "volume": 3044700
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-24",
-    "price": 939.68,
-    "volume": 1562422
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-23",
-    "price": 942.16,
-    "volume": 1352440
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-22",
-    "price": 944.7,
-    "volume": 2155000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-21",
-    "price": 947.73,
-    "volume": 2042443
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-17",
-    "price": 943.19,
-    "volume": 2375012
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-16",
-    "price": 919.75,
-    "volume": 1353000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-15",
-    "price": 923.5,
-    "volume": 1839400
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-14",
-    "price": 917.23,
-    "volume": 1683800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-13",
-    "price": 924.7,
-    "volume": 1693800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-10",
-    "price": 936.94,
-    "volume": 2765800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-08",
-    "price": 927.37,
-    "volume": 1774800
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-07",
-    "price": 921.37,
-    "volume": 1888000
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-06",
-    "price": 922.71,
-    "volume": 1970405
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-03",
-    "price": 916.58,
-    "volume": 1614211
-   },
-   {
-    "symbol": "COST",
-    "date": "2025-01-02",
-    "price": 909.81,
-    "volume": 1767658
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-31",
-    "price": 916.27,
-    "volume": 1742939
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-30",
-    "price": 922.21,
-    "volume": 1881241
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-27",
-    "price": 939.7,
-    "volume": 1943440
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-26",
-    "price": 956.14,
-    "volume": 969936
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-24",
-    "price": 958.82,
-    "volume": 939029
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-23",
-    "price": 949.91,
-    "volume": 1856831
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-20",
-    "price": 954.07,
-    "volume": 5373800
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-19",
-    "price": 954.8,
-    "volume": 2610843
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-18",
-    "price": 964.74,
-    "volume": 2725300
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-17",
-    "price": 982.08,
-    "volume": 2050219
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-16",
-    "price": 992.87,
-    "volume": 2581300
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-13",
-    "price": 989.35,
-    "volume": 2951921
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-12",
-    "price": 988.39,
-    "volume": 2344334
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-11",
-    "price": 994.69,
-    "volume": 1903635
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-10",
-    "price": 993.4,
-    "volume": 1556800
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-09",
-    "price": 987.86,
-    "volume": 1855500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-06",
-    "price": 992.61,
-    "volume": 1737317
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-05",
-    "price": 982.26,
-    "volume": 2089430
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-04",
-    "price": 990.92,
-    "volume": 1784700
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-03",
-    "price": 982.15,
-    "volume": 1653910
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-12-02",
-    "price": 975,
-    "volume": 1955800
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-29",
-    "price": 971.88,
-    "volume": 1095900
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-27",
-    "price": 961.55,
-    "volume": 1499500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-26",
-    "price": 971.5,
-    "volume": 1438037
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-25",
-    "price": 960.89,
-    "volume": 3240929
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-22",
-    "price": 964.01,
-    "volume": 2078740
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-21",
-    "price": 955.65,
-    "volume": 2320548
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-20",
-    "price": 928.08,
-    "volume": 1452130
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-19",
-    "price": 930.15,
-    "volume": 1690536
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-18",
-    "price": 919.51,
-    "volume": 1797786
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-15",
-    "price": 907.07,
-    "volume": 2269945
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-14",
-    "price": 923.89,
-    "volume": 1859919
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-13",
-    "price": 933.73,
-    "volume": 1757645
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-12",
-    "price": 932.38,
-    "volume": 1691807
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-11",
-    "price": 932.88,
-    "volume": 2181815
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-08",
-    "price": 943.8,
-    "volume": 3277100
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-07",
-    "price": 913.93,
-    "volume": 2145500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-06",
-    "price": 899.25,
-    "volume": 2437420
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-05",
-    "price": 890.17,
-    "volume": 1622300
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-04",
-    "price": 886.07,
-    "volume": 1577144
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-11-01",
-    "price": 877.31,
-    "volume": 1625200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-31",
-    "price": 874.18,
-    "volume": 1771900
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-30",
-    "price": 879.09,
-    "volume": 1412209
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-29",
-    "price": 886.99,
-    "volume": 1361700
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-28",
-    "price": 890.96,
-    "volume": 912507
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-25",
-    "price": 891.22,
-    "volume": 1425842
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-24",
-    "price": 893.42,
-    "volume": 1649600
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-23",
-    "price": 899.17,
-    "volume": 2193500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-22",
-    "price": 893.49,
-    "volume": 1189700
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-21",
-    "price": 886.77,
-    "volume": 1184900
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-18",
-    "price": 889.56,
-    "volume": 1654015
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-17",
-    "price": 885.29,
-    "volume": 1321500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-16",
-    "price": 887.38,
-    "volume": 1475500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-15",
-    "price": 894.61,
-    "volume": 1613905
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-14",
-    "price": 889.76,
-    "volume": 1431500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-11",
-    "price": 889.03,
-    "volume": 1527300
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-10",
-    "price": 893.63,
-    "volume": 1765800
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-09",
-    "price": 909.1,
-    "volume": 1956500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-08",
-    "price": 890.42,
-    "volume": 1697910
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-07",
-    "price": 873.59,
-    "volume": 1963200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-04",
-    "price": 883.11,
-    "volume": 1517311
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-03",
-    "price": 875.67,
-    "volume": 1451942
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-02",
-    "price": 878.53,
-    "volume": 1317146
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-10-01",
-    "price": 877.38,
-    "volume": 1836700
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-30",
-    "price": 886.52,
-    "volume": 2146353
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-27",
-    "price": 885.62,
-    "volume": 3459100
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-26",
-    "price": 901.44,
-    "volume": 2738600
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-25",
-    "price": 908.42,
-    "volume": 1728137
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-24",
-    "price": 901.54,
-    "volume": 2432600
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-23",
-    "price": 917.08,
-    "volume": 1697643
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-20",
-    "price": 906.98,
-    "volume": 4658200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-19",
-    "price": 900.74,
-    "volume": 1747500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-18",
-    "price": 892.52,
-    "volume": 1338200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-17",
-    "price": 897.27,
-    "volume": 1387000
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-16",
-    "price": 907.87,
-    "volume": 1661046
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-13",
-    "price": 916,
-    "volume": 1327509
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-12",
-    "price": 915.03,
-    "volume": 1868674
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-11",
-    "price": 900.4,
-    "volume": 1796100
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-10",
-    "price": 894.29,
-    "volume": 1360818
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-09",
-    "price": 896.49,
-    "volume": 1954000
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-06",
-    "price": 876.68,
-    "volume": 2074604
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-05",
-    "price": 885.98,
-    "volume": 1998837
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-04",
-    "price": 890.02,
-    "volume": 1425200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-09-03",
-    "price": 878.57,
-    "volume": 1784200
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-30",
-    "price": 892.38,
-    "volume": 1933500
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-29",
-    "price": 886.63,
-    "volume": 1709900
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-28",
-    "price": 888.05,
-    "volume": 1668400
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-27",
-    "price": 908.9,
-    "volume": 2098900
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-26",
-    "price": 892.51,
-    "volume": 1737024
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-23",
-    "price": 879.21,
-    "volume": 1305800
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-22",
-    "price": 877.56,
-    "volume": 1440919
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-21",
-    "price": 881.42,
-    "volume": 1465505
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-20",
-    "price": 876.2,
-    "volume": 1104600
-   },
-   {
-    "symbol": "COST",
-    "date": "2024-08-19",
-    "price": 872.35,
-    "volume": 1318400
    }
   ]
  }

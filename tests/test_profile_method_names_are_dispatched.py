@@ -394,4 +394,4 @@ def test_which_profiles_put_their_anchor_on_a_proxied_name():
         (dcf_anchored if _PROXY_EQUIVALENCES[m["name"]][0] == "DCF"
          else ebitdar_anchored).append(where)
     assert len(dcf_anchored) == 2, dcf_anchored
-    assert len(ebitdar_anchored) == 2, ebitdar_anchored
+    assert len(ebitdar_anchored) == 3, ebitdar_anchored   # +Grocery & Discount Retail (Wave 4, 2026-09-26)

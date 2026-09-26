@@ -483,7 +483,9 @@ def test_that_ratio_reduces_to_the_scenario_margin_multipliers():
 #: side of its gate, so no valuation could move.
 _CLAMP_BINDS = {
     #                    half     before    after
-    ("COST", "bear"):    ("floor", 0.1603, 0.1724),
+    # after = 0.1724 at the original recording; 0.2364 since the 2026-09-26
+    # re-recording on the Wave 4 pin (the floor still binds, on a new margin base).
+    ("COST", "bear"):    ("floor", 0.1603, 0.2364),
     ("C38U_SI", "bull"): ("cap",   0.0331, 0.0296),
     ("V", "bull"):       ("cap",   0.5007, 0.4417),
 }
@@ -775,9 +777,13 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
     b = _basis(name, "bear")
     if name == "BABA":
         # Re-recorded 2026-09-26 with a fresh US comps store: BABA now resolves a
-        # live `Specialty Retail` large cohort. The other seven keep the static
+        # live `Specialty Retail` large cohort. The other six keep the static
         # fill their original capture recorded.
         assert b["basis"] == "industry" and b["cohort"] == "large" and b["peer_count"] == 10, (name, b)
+        return
+    if name == "COST":
+        # Re-recorded 2026-09-26 on the Wave 4 pin: a live `Discount Stores` cohort.
+        assert b["basis"] == "industry" and b["key"] == "Discount Stores" and b["peer_count"] == 9, (name, b)
         return
     assert b == {"basis": "static", "cohort": "US", "peer_count": None}, (name, b)
 

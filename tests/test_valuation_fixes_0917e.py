@@ -348,9 +348,20 @@ _CHINA_PROFILE_MOVED = {
 }
 
 
+#: Wave 4 (owner, 2026-09-26): COST pinned to Membership / Subscription Retail,
+#: shipped with the Discount Stores row it shares with WMT, and re-recorded on
+#: live comps. Eighth re-baseline, this one name.
+_WAVE4_MOVED = {
+    "COST":     (525.00,  339.50,   745.59,   (631.13, 723.88, 834.18)),
+}
+#: Re-recorded fixtures whose leaves no longer witness the 2026-09-17 fixes.
+_RERECORDED = {"COST": "2026-09-26 Wave 4 pin, live comps", "BABA": "2026-09-26 China profile",
+               "09988_HK": "2026-09-26 China profile"}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_CHINA_PROFILE_MOVED.get(name) or _SHARES_MOVED.get(name)
+    return (_WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name) or _SHARES_MOVED.get(name)
             or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.16, 48.07, 58.22)}
@@ -908,11 +919,16 @@ def test_bull_quality_gate_unbinds_on_exactly_six_not_nine():
     for name in _fixtures():
         if name in _BULL_MOVED:
             continue
+        if name == "COST":
+            # Re-recorded 2026-09-26 on the Wave 4 pin: bull premium 1.156 on the
+            # new profile; not evidence for or against this fix any more.
+            assert _proj(name)["scenarios.bull.growth_premium"] == 1.156
+            continue
         # Unmoved: the bull premium still equals the pre-fix value, and the only
         # bull leaf that changed is the new alias key.
         assert _proj(name)["scenarios.bull.growth_premium"] == _PREFIX[name][3], name
         unbound.add(name)
-    assert unbound == {"AAPL", "BN4_SI", "COST", "D05_SI", "MELI", "MU", "U96_SI", "V"}
+    assert unbound == {"AAPL", "BN4_SI", "D05_SI", "MELI", "MU", "U96_SI", "V"}
 
 
 def test_fcx_bull_premium_came_off_its_clamp_ceiling():

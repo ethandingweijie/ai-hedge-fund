@@ -246,6 +246,17 @@ INDUSTRY_FAMILIES: dict[str, frozenset] = {
         "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
         "Oil & Gas Equipment & Services", "Oil & Gas Drilling", "Coal",
     }),
+    # Wave 4 (owner, 2026-09-26). Wineries (3 US members) and Confectioners (3)
+    # cannot stand alone in any market; HKSE has no Discount, Grocery or Food
+    # Distribution members at all. The family is the fallback when the label's
+    # own basket is below the floor, never a replacement for it.
+    "Food & Beverage (family)": frozenset({
+        "Beverages - Non-Alcoholic", "Beverages - Alcoholic",
+        "Beverages - Wineries & Distilleries", "Food Confectioners", "Packaged Foods",
+    }),
+    "Grocery & Distribution (family)": frozenset({
+        "Discount Stores", "Grocery Stores", "Food Distribution",
+    }),
 }
 
 

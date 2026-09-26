@@ -1474,3 +1474,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner change set 2026-09-26: SOTP (analyst) is a profile method read from owner-accepted inputs only; the 3.0 promotion, snapshot attach and segment-note promotion retired; China Internet Platform profile (DCF .30 anchor, SOTP .35, EV/EBITDA (norm) .20, P/E (norm) .15) takes BABA/09988.HK, both fixtures re-recorded; the profile-weights digest in param_version moves on every other fixture with no valuation leaf moved
 
+## 2026-09-26T13:02:23+00:00
+
+- regenerated at HEAD: `a217a82`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 4 (owner, 2026-09-26): COST pinned to Membership / Subscription Retail, shipped with the Discount Stores row it shares with WMT; fixture re-recorded on the pin against a review-cleared archive; 819.32 -> 525.00; no other fixture moved
+

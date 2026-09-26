@@ -1163,8 +1163,9 @@ def test_el_changes_profile_with_the_cycle_and_lands_on_trailing_e_at_the_trough
     assert c("Consumer", 0.08, 0.20, 0.5) == "Luxury Goods"
 
     m = _methods
-    assert m("Household / Personal")["P/E"]["anchor"] is True
-    assert m("Household / Personal")["P/E"]["weight"] == 0.40
+    # Wave 4 (2026-09-26): the Household anchor is Forward P/E, same weight.
+    assert m("Household / Personal")["Forward P/E"]["anchor"] is True
+    assert m("Household / Personal")["Forward P/E"]["weight"] == 0.40
     assert "P/E (norm)" not in m("Household / Personal")
     assert m("Luxury Goods")["P/E (Premium)"]["anchor"] is True
     assert m("Luxury Goods")["P/E (Premium)"]["weight"] == 0.50
@@ -1246,8 +1247,8 @@ def test_the_consumer_ladder_no_longer_demotes_a_better_margin():
     # leg and gains a premium earnings anchor.
     ap, hh = _methods("Apparel / Athletic Wear"), _methods("Household / Personal")
     assert ap["DCF (FCF+)"]["weight"] == 0.30 and ap["EV/EBITDA"]["anchor"] is True
-    assert hh["DCF"]["weight"] == 0.20 and hh["P/E"]["anchor"] is True
-    assert hh["P/E"]["weight"] == 0.40
+    assert hh["DCF"]["weight"] == 0.20 and hh["Forward P/E"]["anchor"] is True   # Wave 4: NTM anchor
+    assert hh["Forward P/E"]["weight"] == 0.40
     assert "P/E (norm)" in ap and "P/E (norm)" not in hh
     assert set(ap) & set(hh) == {"EV/EBITDA"}, sorted(set(ap) & set(hh))
     lux = _methods("Luxury Goods")
@@ -1394,6 +1395,7 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20) added five users, none of them Consumer.
     # Wave 2 power & transition (owner-confirmed 2026-09-21) added one, the hardware OEM profile.
     assert sorted(users) == [
+        ("Consumer", "Agribusiness & Food Processing", "EV/EBITDA (norm)"),   # Wave 4: cyclical by design
         ("Crypto", "Digital Asset Mining", "EV/EBITDA (norm)"),
         ("Energy", "Clean Tech / Power Equipment OEM", "EV/EBITDA (norm)"),
         ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
@@ -1409,8 +1411,10 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
     ], users
     consumer_vocab = {m["name"] for d in _consumer_profiles().values()
                       for m in d.get("methods", [])}
-    assert consumer_vocab & norm_ev == set()
-    assert len(_consumer_profiles()) == 13
+    # Wave 4 (2026-09-26): Agribusiness & Food Processing is the one Consumer
+    # profile on the normalised EBITDA branch, by design (crush-spread cycle).
+    assert consumer_vocab & norm_ev == {"EV/EBITDA (norm)"}
+    assert len(_consumer_profiles()) == 16   # +3 Wave 4 profiles (2026-09-26)
 
 
 def test_the_normalizers_outlier_floor_is_relative_and_the_absolute_floor_is_gone():
@@ -1709,7 +1713,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (113, 37), (total, with_norm)   # +China Internet Platform (2026-09-26), normalised legs
+    assert (total, with_norm) == (116, 38), (total, with_norm)   # +China Internet Platform, +3 Wave 4 (Agribusiness normalised)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1733,9 +1737,9 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 11, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform
+    assert spellings.get("EV/EBITDA (norm)") == 12, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 27, spellings            # +1 China Internet Platform (2026-09-26)
+    assert spellings.get("P/E (norm)") == 28, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
@@ -2079,14 +2083,14 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (113, 38, 38, 14)   # +China Internet Platform (2026-09-26), no trailing P/E
+    assert (tot, trail, elig, anchored) == (116, 36, 36, 12)   # Wave 4: F&B and Household anchors moved to Forward P/E (not a swap leg)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
     assert elig == trail
     assert sorted(consumer_anchors) == [
-        ("Food & Beverage", "P/E", 0.5),
-        ("Household / Personal", "P/E", 0.4),
+        # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
+        # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
         ("Luxury Goods", "P/E (Premium)", 0.5),
         ("Membership / Subscription Retail", "P/E", 0.4),
     ], consumer_anchors
@@ -2288,7 +2292,10 @@ def test_apply_rewrites_the_proxy_even_when_no_leg_of_that_name_exists():
     fb_eff = dcf_agent._apply_pe_norm_swaps(
         fb["methods"], dcf_agent._pe_norm_leg_swaps(fb, dev))
     fb_rows = {m["name"]: m.get("proxy") for m in fb_eff}
-    assert "P/E (norm)" in fb_rows and fb_rows["Brand Valuation"] == "P/E (norm)"
+    # Wave 4 (2026-09-26): Food & Beverage anchors on Forward P/E, which the
+    # swap does not touch, and the Brand Valuation proxy leg is gone.
+    assert "P/E (norm)" not in fb_rows and "Brand Valuation" not in fb_rows
+    assert set(fb_rows) == {"Forward P/E", "EV/EBITDA", "DCF", "FCF Yield"}
 
     # Only two such rows exist, so the widened rewrite has no reach beyond these
     # two Consumer profiles. A third appearing is a change worth a test.
@@ -2300,7 +2307,7 @@ def test_apply_rewrites_the_proxy_even_when_no_leg_of_that_name_exists():
                         and m.get("proxy") in dcf_agent._PE_NORM_SWAP_LEGS):
                     found.append((pn, m["name"], m["proxy"], m["weight"]))
     assert sorted(found) == [
-        ("Food & Beverage", "Brand Valuation", "P/E", 0.05),
+        # ("Food & Beverage", "Brand Valuation", "P/E", 0.05) -- Wave 4: the proxy leg is gone
         ("Luxury Goods", "Brand Val", "P/E", 0.05),
     ], found
 
@@ -2926,8 +2933,8 @@ def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
     assert lk["BIRK"][1] == "Apparel / Athletic Wear"
 
     consumer = [v for v in lk.values() if v[0] == "Consumer"]
-    assert len(consumer) == 83     # JD moved to Tech / China Internet Platform (owner, 2026-09-26)
-    assert sum(1 for v in consumer if v[1]) == 43
+    assert len(consumer) == 84     # JD -> Tech (2026-09-26); COST pinned Membership / Subscription Retail (Wave 4)
+    assert sum(1 for v in consumer if v[1]) == 44   # +COST pin (Wave 4)
     assert sum(1 for v in consumer if not v[1]) == 40   # JD -> Tech / China Internet Platform (owner, 2026-09-26)
 
 

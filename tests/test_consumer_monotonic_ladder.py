@@ -205,7 +205,8 @@ def test_traditional_retail_is_the_only_consumer_profile_with_no_dcf_leg():
                         for m in INDUSTRY_VALUATION_PROFILES["Consumer"][n].get("methods", [])
                         if isinstance(m, dict))}
     without = sorted(set(INDUSTRY_VALUATION_PROFILES["Consumer"]) - dcf_names)
-    assert without == ["Traditional Retail"], without
+    # Wave 4 (2026-09-26): Tobacco has no DCF leg by design (FCF Yield anchor, DDM).
+    assert without == ["Tobacco", "Traditional Retail"], without
     tr = {m["name"]: m["weight"]
           for m in INDUSTRY_VALUATION_PROFILES["Consumer"]["Traditional Retail"]["methods"]}
     assert tr == {"EV/EBITDAR": 0.4, "P/E": 0.25, "EV/Revenue": 0.15,
@@ -436,6 +437,8 @@ class TestMarginAxisMonotonicity:
             "Agribusiness & Food (SG)", "Consumer Durables",
             "Packaged Consumer & Lifestyle (SG)", "Travel & Dining",
             "Online Gaming / Sports Betting",
+            # Wave 4 (2026-09-26): reached by industry rows and pins, never by the ladder.
+            "Agribusiness & Food Processing", "Grocery & Discount Retail", "Tobacco",
         }, sorted(set(INDUSTRY_VALUATION_PROFILES["Consumer"]) - set(witnesses))
         for name, (cagr, fcf) in witnesses.items():
             de = 2.0 if name == "Automotive & EV" else D_TO_E
@@ -525,8 +528,9 @@ class TestTheKnownResiduals:
         fb = {m["name"]: m["weight"] for m in con["Food & Beverage"]["methods"]}
         ap = {m["name"]: m["weight"]
               for m in con["Apparel / Athletic Wear"]["methods"]}
-        assert fb["DCF (2-stage)"] == ap["DCF (FCF+)"] == 0.30
-        assert fb["P/E"] == 0.5 and ap["P/E (norm)"] == 0.20
+            # Wave 4 (2026-09-26): Food & Beverage's DCF leg is 0.25 behind a Forward P/E anchor.
+        assert fb["DCF"] == 0.25 and ap["DCF (FCF+)"] == 0.30
+        assert fb["Forward P/E"] == 0.35 and ap["P/E (norm)"] == 0.20   # Wave 4: NTM anchor at 0.35
 
     def test_the_gross_margin_rung_pre_empts_the_membership_rung(self):
         """A membership-shaped name with a >= 65% gross margin resolves to Luxury
@@ -852,10 +856,10 @@ class TestTheSignatureIsBackwardCompatible:
         # the ladder for them. That is the vulnerability the owner named.
         assert get_wacc_profile_for_ticker("02331.HK") == ("Consumer", "")
         assert get_wacc_profile_for_ticker("01368.HK") == ("Consumer", "")
-        # And COST is not in the lookup at all, so it falls back to `("Tech","")`
-        # and is routed to Consumer by the sector classifier upstream.
-        assert "COST" not in TICKER_SECTOR_LOOKUP
-        assert get_wacc_profile_for_ticker("COST") == ("Tech", "")
+        # Wave 4 (owner, 2026-09-26): COST is pinned Membership / Subscription
+        # Retail, shipped with the Discount Stores row it shares with WMT.
+        assert TICKER_SECTOR_LOOKUP["COST"][1] == "Membership / Subscription Retail"
+        assert get_wacc_profile_for_ticker("COST") == ("Consumer", "Membership / Subscription Retail")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -999,7 +1003,7 @@ class TestTheGoldenBlindSpot:
         src = inspect.getsource(dcf_agent)
         assert '_pn_dict = state["data"].setdefault("profile_names", {})' in src
         assert "_pn_dict[ticker] = profile_name" in src
-        assert "COST" not in TICKER_SECTOR_LOOKUP
+        assert TICKER_SECTOR_LOOKUP["COST"][1] == "Membership / Subscription Retail"   # Wave 4 pin
         # The write-back is guarded so it cannot overwrite a name that was already
         # supplied, which is what makes it a pure pre-classification feed and not a
         # two-way sync.
@@ -1108,10 +1112,10 @@ class TestTheOpsSpellingsAreInTheSwap:
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
         # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
-        assert (tot, trail, elig, anchored) == (113, 38, 38, 14)   # +China Internet Platform (2026-09-26)
+        assert (tot, trail, elig, anchored) == (116, 36, 36, 12)   # Wave 4: two Consumer anchors moved to Forward P/E
         assert sorted(consumer_anchors) == [
-            ("Food & Beverage", "P/E", 0.5),
-            ("Household / Personal", "P/E", 0.4),
+            # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
+            # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
             ("Luxury Goods", "P/E (Premium)", 0.5),
             ("Membership / Subscription Retail", "P/E", 0.4),
         ], consumer_anchors

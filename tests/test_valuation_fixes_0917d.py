@@ -627,7 +627,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
     # recorded literals are restated onto the new divisor.
     expected = {
         "AAPL": {"bear": 137.10, "base": 195.14, "bull": 251.62},
-        "COST": {"bear": 635.95, "base": 905.75, "bull": 1152.55},
+        # COST re-recorded 2026-09-26 on the Wave 4 pin (Membership / Subscription
+        # Retail, live Discount Stores comps): its bear premium is now 0.941, Gate B
+        # fires, and the leaves below are no longer this fix's evidence.
         "V":    {"bear": 284.55, "base": 432.04, "bull": 542.55},
     }
     for fx, per in expected.items():
