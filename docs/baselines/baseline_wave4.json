@@ -1,0 +1,1329 @@
+{
+ "wave": "4",
+ "as_of": "2026-09-26",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "ADM": {
+   "profile": "Mature SaaS",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EPV",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.315789
+    },
+    {
+     "method": "DCF (2-stage)",
+     "value_key": "DCF (2-stage)",
+     "weight": 0.263158
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.105263
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.95,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 50.71,
+   "base": 82.57,
+   "bull": 127.09,
+   "scenarios_ordered": true,
+   "target_12m_base": 81.63,
+   "consensus": 88.0,
+   "iv_vs_consensus": -0.06170454545454551,
+   "pt_vs_consensus": -0.07238636363636364,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17397182482857085,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $59.31 vs price $50.52 on 2024-12-31 = 17% gap; 12m later the model was closer (3% vs 12%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00682.HK": {
+   "profile": "Mature SaaS",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EPV",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "DCF (2-stage)",
+     "value_key": "DCF (2-stage)",
+     "weight": 0.625
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.375
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EPV",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "P/E",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "LBO Floor",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.4,
+   "methods_unavailable": [
+    "EPV",
+    "P/E",
+    "EV/EBITDA",
+    "LBO Floor"
+   ],
+   "bear": 0.91,
+   "base": 0.97,
+   "bull": 1.04,
+   "scenarios_ordered": true,
+   "target_12m_base": 0.59,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9184249421671224,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $0.05 vs price $0.58 on 2024-06-28 = 92% gap; 12m later the model was closer (78% vs 164%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "F34.SI": {
+   "profile": "Agribusiness & Food (SG)",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.45
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.35
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 2.16,
+   "base": 3.81,
+   "bull": 9.93,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.73,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6203079965791828,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $1.18 vs price $3.10 on 2024-12-31 = 62% gap; 12m later the market was closer (62% vs 1%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "KO": {
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 52.5,
+   "base": 70.11,
+   "bull": 96.28,
+   "scenarios_ordered": true,
+   "target_12m_base": 81.62,
+   "consensus": 95.75,
+   "iv_vs_consensus": -0.26778067885117496,
+   "pt_vs_consensus": -0.14757180156657956,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.0010727332081064812,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $62.19 vs price $62.26 on 2024-12-31 = 0% gap; 12m later model and market were level (11% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "PEP": {
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 111.4,
+   "base": 160.24,
+   "bull": 209.62,
+   "scenarios_ordered": true,
+   "target_12m_base": 139.69,
+   "consensus": 153.64,
+   "iv_vs_consensus": 0.04295756313460042,
+   "pt_vs_consensus": -0.09079666753449611,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.09898150675569103,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $167.11 vs price $152.06 on 2024-12-31 = 10% gap; 12m later the market was closer (16% vs 6%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BUD": {
+   "profile": "Mature Platform",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (FCF+)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.166667
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.166667
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 40.89,
+   "base": 84.47,
+   "bull": 133.09,
+   "scenarios_ordered": true,
+   "target_12m_base": 80.26,
+   "consensus": 90.75,
+   "iv_vs_consensus": -0.0692011019283747,
+   "pt_vs_consensus": -0.11559228650137732,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.13719639844097478,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $56.94 vs price $50.07 on 2024-12-31 = 14% gap; 12m later the model was closer (11% vs 22%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BF-B": {
+   "profile": "Mature Platform",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (FCF+)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.166667
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.166667
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 11.89,
+   "base": 18.5,
+   "bull": 25.32,
+   "scenarios_ordered": true,
+   "target_12m_base": 22.33,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.4025369240906251,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $20.82 vs price $34.84 on 2025-04-30 = 40% gap; 12m later the model was closer (19% vs 35%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00168.HK": {
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 47.72,
+   "base": 73.23,
+   "bull": 110.17,
+   "scenarios_ordered": true,
+   "target_12m_base": 56.23,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.011748259565226309,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $56.13 vs price $56.80 on 2024-12-31 = 1% gap; 12m later model and market were level (15% vs 17%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "MDLZ": {
+   "profile": "Mature SaaS",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EPV",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.315789
+    },
+    {
+     "method": "DCF (2-stage)",
+     "value_key": "DCF (2-stage)",
+     "weight": 0.263158
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.105263
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.95,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 36.27,
+   "base": 41.07,
+   "bull": 56.59,
+   "scenarios_ordered": true,
+   "target_12m_base": 50.66,
+   "consensus": 70.29,
+   "iv_vs_consensus": -0.4157063593683312,
+   "pt_vs_consensus": -0.2792715891307441,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.048676987489856084,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $56.82 vs price $59.73 on 2024-12-31 = 5% gap; 12m later the model was closer (6% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "TSN": {
+   "profile": "Mature SaaS",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EPV",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.315789
+    },
+    {
+     "method": "DCF (2-stage)",
+     "value_key": "DCF (2-stage)",
+     "weight": 0.263158
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.105263
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.95,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 35.38,
+   "base": 38.83,
+   "bull": 59.18,
+   "scenarios_ordered": true,
+   "target_12m_base": 46.69,
+   "consensus": 67.4,
+   "iv_vs_consensus": -0.42388724035608316,
+   "pt_vs_consensus": -0.30727002967359063,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.23924107263544397,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $45.41 vs price $59.69 on 2024-09-27 = 24% gap; 12m later the market was closer (16% vs 10%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00288.HK": {
+   "profile": "Hyperscaler / Tech Conglomerate",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 16.31,
+   "base": 22.82,
+   "bull": 29.34,
+   "scenarios_ordered": true,
+   "target_12m_base": 14.66,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.3603690228172236,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $20.20 vs price $6.01 on 2024-12-31 = 236% gap; 12m later the market was closer (133% vs 31%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00322.HK": {
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 7.55,
+   "base": 10.19,
+   "bull": 13.06,
+   "scenarios_ordered": true,
+   "target_12m_base": 10.96,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.23602536096934132,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $7.73 vs price $10.12 on 2024-12-31 = 24% gap; 12m later the market was closer (34% vs 14%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "WMT": {
+   "profile": "Traditional Retail",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDAR",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDAR",
+     "value_key": "EV/EBITDAR",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 47.62,
+   "base": 65.37,
+   "bull": 82.68,
+   "scenarios_ordered": true,
+   "target_12m_base": 86.68,
+   "consensus": 128.84,
+   "iv_vs_consensus": -0.49262651350512265,
+   "pt_vs_consensus": -0.32722756907792605,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.4004160750406649,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $58.86 vs price $98.16 on 2025-01-31 = 40% gap; 12m later the market was closer (51% vs 18%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "KR": {
+   "profile": "Levered Subscription",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (Levered)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (Levered)",
+     "value_key": "DCF (Levered)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.375
+    },
+    {
+     "method": "Credit Metrics",
+     "value_key": "FCF Yield",
+     "weight": 0.125
+    }
+   ],
+   "proxied_weight": 0.125,
+   "proxied_legs": [
+    "Credit Metrics <- FCF Yield"
+   ],
+   "dropped_legs": [
+    {
+     "method": "LBO Analysis",
+     "weight": 0.2,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.8,
+   "methods_unavailable": [
+    "LBO Analysis"
+   ],
+   "bear": 42.52,
+   "base": 42.52,
+   "bull": 63.04,
+   "scenarios_ordered": true,
+   "target_12m_base": 53.06,
+   "consensus": 69.64,
+   "iv_vs_consensus": -0.3894313612866168,
+   "pt_vs_consensus": -0.23808156232050548,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.294487772668238,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $43.49 vs price $61.64 on 2025-01-31 = 29% gap; 12m later the market was closer (31% vs 2%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "06808.HK": {
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.5
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.333333
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E",
+     "weight": 0.4,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [
+    "P/E"
+   ],
+   "bear": 2.09,
+   "base": 2.75,
+   "bull": 6.39,
+   "scenarios_ordered": true,
+   "target_12m_base": 1.88,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2005041726267212,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $2.30 vs price $1.92 on 2025-03-31 = 20% gap; 12m later the market was closer (47% vs 22%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "D01.SI": {
+   "profile": "Levered Subscription",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (Levered)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (Levered)",
+     "value_key": "DCF (Levered)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.375
+    },
+    {
+     "method": "Credit Metrics",
+     "value_key": "FCF Yield",
+     "weight": 0.125
+    }
+   ],
+   "proxied_weight": 0.125,
+   "proxied_legs": [
+    "Credit Metrics <- FCF Yield"
+   ],
+   "dropped_legs": [
+    {
+     "method": "LBO Analysis",
+     "weight": 0.2,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.8,
+   "methods_unavailable": [
+    "LBO Analysis"
+   ],
+   "bear": 2.28,
+   "base": 3.32,
+   "bull": 4.68,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.31,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3691839475349193,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $3.16 vs price $2.31 on 2024-12-31 = 37% gap; 12m later the model was closer (20% vs 42%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "COST": {
+   "profile": "Hyperscaler / Tech Conglomerate",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 371.48,
+   "base": 561.32,
+   "bull": 764.98,
+   "scenarios_ordered": true,
+   "target_12m_base": 742.04,
+   "consensus": 1093.67,
+   "iv_vs_consensus": -0.48675560269551144,
+   "pt_vs_consensus": -0.3215138021523861,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5154421966071456,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $457.09 vs price $943.32 on 2025-08-29 = 52% gap; 12m later the market was closer (52% vs 0%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "PG": {
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 96.4,
+   "base": 134.13,
+   "bull": 175.75,
+   "scenarios_ordered": true,
+   "target_12m_base": 141.99,
+   "consensus": 157.78,
+   "iv_vs_consensus": -0.14989225503866144,
+   "pt_vs_consensus": -0.10007605526682717,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2107681797515639,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $125.74 vs price $159.32 on 2025-06-30 = 21% gap; 12m later the market was closer (14% vs 9%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CL": {
+   "profile": "Levered Subscription",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (Levered)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (Levered)",
+     "value_key": "DCF (Levered)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.375
+    },
+    {
+     "method": "Credit Metrics",
+     "value_key": "FCF Yield",
+     "weight": 0.125
+    }
+   ],
+   "proxied_weight": 0.125,
+   "proxied_legs": [
+    "Credit Metrics <- FCF Yield"
+   ],
+   "dropped_legs": [
+    {
+     "method": "LBO Analysis",
+     "weight": 0.2,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.8,
+   "methods_unavailable": [
+    "LBO Analysis"
+   ],
+   "bear": 33.7,
+   "base": 49.08,
+   "bull": 64.51,
+   "scenarios_ordered": true,
+   "target_12m_base": 67.57,
+   "consensus": 98.11,
+   "iv_vs_consensus": -0.4997451839771685,
+   "pt_vs_consensus": -0.31128325349097963,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.4495147704571885,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $50.04 vs price $90.91 on 2024-12-31 = 45% gap; 12m later the market was closer (37% vs 15%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "EL": {
+   "profile": "Luxury Goods",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E (norm)",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E (norm)"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 23.24,
+   "base": 34.55,
+   "bull": 46.43,
+   "scenarios_ordered": true,
+   "target_12m_base": 64.51,
+   "consensus": 102.27,
+   "iv_vs_consensus": -0.6621687689449496,
+   "pt_vs_consensus": -0.36921873472181477,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 T-1 model returned non-positive IV",
+   "currency": "USD",
+   "regime": null
+  },
+  "PM": {
+   "profile": "Mature Platform",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (FCF+)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.166667
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.166667
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 90.4,
+   "base": 134.76,
+   "bull": 188.25,
+   "scenarios_ordered": true,
+   "target_12m_base": 162.62,
+   "consensus": 212.17,
+   "iv_vs_consensus": -0.3648489418862233,
+   "pt_vs_consensus": -0.23353914313993485,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.12768424949155774,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $104.98 vs price $120.35 on 2024-12-31 = 13% gap; 12m later the market was closer (35% vs 25%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "MO": {
+   "profile": "Mature Platform",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF (FCF+)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.5
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.166667
+    },
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.166667
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 41.39,
+   "base": 61.35,
+   "bull": 87.28,
+   "scenarios_ordered": true,
+   "target_12m_base": 66.2,
+   "consensus": 71.33,
+   "iv_vs_consensus": -0.13991308005046965,
+   "pt_vs_consensus": -0.0719192485630169,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.46867314012942657,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $76.80 vs price $52.29 on 2024-12-31 = 47% gap; 12m later the market was closer (33% vs 9%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "USFD": {
+   "profile": "Mature SaaS",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EPV",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EPV",
+     "value_key": "EPV",
+     "weight": 0.315789
+    },
+    {
+     "method": "DCF (2-stage)",
+     "value_key": "DCF (2-stage)",
+     "weight": 0.263158
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.157895
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.105263
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "LBO Floor",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.95,
+   "methods_unavailable": [
+    "LBO Floor"
+   ],
+   "bear": 37.94,
+   "base": 59.48,
+   "bull": 81.03,
+   "scenarios_ordered": true,
+   "target_12m_base": 76.41,
+   "consensus": 117.0,
+   "iv_vs_consensus": -0.4916239316239317,
+   "pt_vs_consensus": -0.346923076923077,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.34121309649748804,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $44.91 vs price $68.17 on 2024-12-27 = 34% gap; 12m later the market was closer (41% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}
