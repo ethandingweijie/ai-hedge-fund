@@ -1,0 +1,380 @@
+{
+ "JPM": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "JPMorgan Chase & Co.",
+  "currency": "USD"
+ },
+ "BAC": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Bank of America Corporation",
+  "currency": "USD"
+ },
+ "WFC": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Wells Fargo & Company",
+  "currency": "USD"
+ },
+ "C": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Citigroup Inc.",
+  "currency": "USD"
+ },
+ "GS": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Capital Markets",
+  "name": "The Goldman Sachs Group, Inc.",
+  "currency": "USD"
+ },
+ "MS": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Capital Markets",
+  "name": "Morgan Stanley",
+  "currency": "USD"
+ },
+ "USB": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "U.S. Bancorp",
+  "currency": "USD"
+ },
+ "PNC": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "The PNC Financial Services Group, Inc.",
+  "currency": "USD"
+ },
+ "TFC": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "Truist Financial Corporation",
+  "currency": "USD"
+ },
+ "SCHW": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Capital Markets",
+  "name": "The Charles Schwab Corporation",
+  "currency": "USD"
+ },
+ "V": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Credit Services",
+  "name": "Visa Inc.",
+  "currency": "USD"
+ },
+ "MA": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Credit Services",
+  "name": "Mastercard Incorporated",
+  "currency": "USD"
+ },
+ "AXP": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Credit Services",
+  "name": "American Express Company",
+  "currency": "USD"
+ },
+ "COF": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Credit Services",
+  "name": "Capital One Financial Corporation",
+  "currency": "USD"
+ },
+ "SYF": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Credit Services",
+  "name": "Synchrony Financial",
+  "currency": "USD"
+ },
+ "BRK-B": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Diversified",
+  "name": "Berkshire Hathaway Inc.",
+  "currency": "USD"
+ },
+ "PGR": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Property & Casualty",
+  "name": "The Progressive Corporation",
+  "currency": "USD"
+ },
+ "CB": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Property & Casualty",
+  "name": "Chubb Limited",
+  "currency": "USD"
+ },
+ "MET": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Life",
+  "name": "MetLife, Inc.",
+  "currency": "USD"
+ },
+ "AIG": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Diversified",
+  "name": "American International Group, Inc.",
+  "currency": "USD"
+ },
+ "TRV": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Property & Casualty",
+  "name": "The Travelers Companies, Inc.",
+  "currency": "USD"
+ },
+ "MMC": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Brokers",
+  "name": "Marsh & McLennan Companies, Inc.",
+  "currency": "USD"
+ },
+ "AON": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Brokers",
+  "name": "Aon plc",
+  "currency": "USD"
+ },
+ "BLK": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Asset Management",
+  "name": "BlackRock, Inc.",
+  "currency": "USD"
+ },
+ "BX": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Asset Management",
+  "name": "Blackstone Inc.",
+  "currency": "USD"
+ },
+ "KKR": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Asset Management",
+  "name": "KKR & Co. Inc.",
+  "currency": "USD"
+ },
+ "APO": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Asset Management",
+  "name": "Apollo Global Management, Inc.",
+  "currency": "USD"
+ },
+ "ICE": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "Intercontinental Exchange, Inc.",
+  "currency": "USD"
+ },
+ "CME": {
+  "exchange": "NASDAQ",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "CME Group Inc.",
+  "currency": "USD"
+ },
+ "SPGI": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "S&P Global Inc.",
+  "currency": "USD"
+ },
+ "MSCI": {
+  "exchange": "NYSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "MSCI Inc.",
+  "currency": "USD"
+ },
+ "01398.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Industrial and Commercial Bank of China Limited",
+  "currency": "HKD"
+ },
+ "00005.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "HSBC Holdings plc",
+  "currency": "HKD"
+ },
+ "03988.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Bank of China Limited",
+  "currency": "HKD"
+ },
+ "00939.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "China Construction Bank Corporation",
+  "currency": "HKD"
+ },
+ "01288.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Agricultural Bank of China Limited",
+  "currency": "HKD"
+ },
+ "02628.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Life",
+  "name": "China Life Insurance Company Limited",
+  "currency": "HKD"
+ },
+ "03968.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "China Merchants Bank Co., Ltd.",
+  "currency": "HKD"
+ },
+ "02318.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Diversified",
+  "name": "Ping An Insurance (Group) Company of China, Ltd.",
+  "currency": "HKD"
+ },
+ "01299.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Life",
+  "name": "AIA Group Limited",
+  "currency": "HKD"
+ },
+ "03328.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Bank of Communications Co., Ltd.",
+  "currency": "HKD"
+ },
+ "02388.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "BOC Hong Kong (Holdings) Limited",
+  "currency": "HKD"
+ },
+ "02888.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Diversified",
+  "name": "Standard Chartered PLC",
+  "currency": "HKD"
+ },
+ "00388.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "Hong Kong Exchanges and Clearing Limited",
+  "currency": "HKD"
+ },
+ "00011.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "Hang Seng Bank Limited",
+  "currency": "HKD"
+ },
+ "01658.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "Postal Savings Bank of China Co., Ltd.",
+  "currency": "HKD"
+ },
+ "00945.HK": {
+  "exchange": "HKSE",
+  "sector": "Financial Services",
+  "industry": "Insurance - Life",
+  "name": "Manulife Financial Corporation",
+  "currency": "HKD"
+ },
+ "D05.SI": {
+  "exchange": "SES",
+  "sector": "Financial Services",
+  "industry": "Banks",
+  "name": "DBS Group Holdings Ltd",
+  "currency": "SGD"
+ },
+ "O39.SI": {
+  "exchange": "SES",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "Oversea-Chinese Banking Corporation Limited",
+  "currency": "SGD"
+ },
+ "U11.SI": {
+  "exchange": "SES",
+  "sector": "Financial Services",
+  "industry": "Banks - Regional",
+  "name": "United Overseas Bank Limited",
+  "currency": "SGD"
+ },
+ "S68.SI": {
+  "exchange": "SES",
+  "sector": "Financial Services",
+  "industry": "Financial - Data & Stock Exchanges",
+  "name": "Singapore Exchange Limited",
+  "currency": "SGD"
+ },
+ "G07.SI": {
+  "exchange": "SES",
+  "sector": "Financial Services",
+  "industry": "Insurance - Life",
+  "name": "Great Eastern Holdings Limited",
+  "currency": "SGD"
+ },
+ "J36.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "Jardine Matheson Holdings Limited",
+  "currency": "USD"
+ },
+ "BN4.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "Keppel Corporation Limited",
+  "currency": "SGD"
+ }
+}
