@@ -116,7 +116,8 @@ class TestTheAllowlistIsTheOwnersList:
         # 105 -> 111 with Wave 3's split (-1 parent, +7 profiles); still not the fourth name.
         # 111 -> 112 with China Internet Platform (owner, 2026-09-26); still not the fourth name.
         # 112 -> 115 with Wave 4's Agribusiness & Food Processing, Grocery & Discount Retail, Tobacco; still not.
-        assert len(every) == 115, (
+        # 115 -> 116 with Wave 5's Commercial Biotech (2026-09-26); still not the fourth name.
+        assert len(every) == 116, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:

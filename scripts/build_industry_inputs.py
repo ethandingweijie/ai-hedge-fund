@@ -60,7 +60,12 @@ WAVE3 = {
                 "KTOS", "AVAV", "RKLB", "02507.HK", "S63.SI"],
     "sotp": ["BA", "02357.HK", "S63.SI"],
 }
-WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3}
+#: Wave 5 (owner spec, 2026-09-26): the review-gated pipeline pre-fill for the
+#: profiles whose rNPV leg is quarantined until accepted.
+WAVE5 = {
+    "pipeline": ["LLY", "AMGN", "PFE", "VRTX", "01801.HK", "01093.HK"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5}
 
 
 def sotp_profile_tickers() -> list[str]:
@@ -165,6 +170,44 @@ def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
+    if kind == "pipeline":
+        # Owner spec, 2026-09-26 (Wave 5): late-stage assets, consensus peak
+        # sales, PTRS benchmarks; cited; quarantined until accepted.
+        anchors = {"reported_currency": (ctx.get("reported_currency") or "USD"),
+                   "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2)}
+        out = gp.generate(gp.pipeline_prompt(ctx["company"], ticker, anchors), schema=schema,
+                          grounded=True, timeout=300.0)
+        data = out.get("json")
+        if not isinstance(data, dict):
+            raise gp.GeminiParseError(f"{ticker}/pipeline: no structured answer")
+        data, _urls = gp.canonicalize_citations(data)
+        assets, conv_checks = gp.pipeline_to_engine_assets(data)
+        peak_sum = sum(a["peak_sales_usd"] for a in assets)
+        checks = ii.reconcile("pipeline", peak_sum or None, ctx)
+        _phases = [a.get("phase") for a in data.get("assets") or []]
+        checks.append({"check": "late-stage only", "ok": all(p in ("phase_2", "phase_3", "filed", "approved") for p in _phases),
+                       "detail": f"phases: {', '.join(str(p) for p in _phases) or 'none'}"})
+        # An APPROVED product is on the market already and its launch year is in
+        # the past by construction (the spec asks for approved-but-pre-peak
+        # assets); the window applies to the unapproved ones.
+        _yrs = [(a.get("phase"), a.get("launch_year")) for a in data.get("assets") or [] if a.get("launch_year")]
+        _bad_y = [y for ph, y in _yrs if ph != "approved" and not (2024 <= int(y) <= 2040)]
+        checks.append({"check": "launch years plausible", "ok": (not _bad_y) if _yrs else None,
+                       "detail": (", ".join(f"{y}{' (approved)' if ph == 'approved' else ''}" for ph, y in _yrs) or "none stated")
+                                 + (f"; out of window: {', '.join(str(y) for y in _bad_y)}" if _bad_y else "")})
+        checks.append({"check": "PTRS cited and in range", "ok": not conv_checks.get("ptrs_ignored"),
+                       "detail": (f"{len(assets) - len(conv_checks.get('ptrs_ignored') or [])} of {len(assets)} carry a usable PTRS"
+                                  + (f"; ignored: {', '.join(conv_checks['ptrs_ignored'])}" if conv_checks.get("ptrs_ignored") else ""))})
+        checks.append({"check": "assets with cited peak sales", "ok": len(assets) >= 1,
+                       "detail": f"{len(assets)} usable; dropped {conv_checks.get('dropped_assets') or 'none'}"})
+        checks.append(_url_check(_urls))
+        return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
+                "anchors": anchors, "value_usd": peak_sum or None, "checks": checks,
+                "engine_preview": {"assets": assets, "checks": conv_checks},
+                "ok": all(c["ok"] is not False for c in checks),
+                "grounding_urls": out.get("grounding_urls") or [],
+                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if kind == "sotp":
         # Owner, 2026-09-22: the SOTP-valued profiles take their segments and
         # the multiple range to adopt from Gemini, cited, then review-gated.

@@ -1720,7 +1720,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (116, 38), (total, with_norm)   # +China Internet Platform, +3 Wave 4 (Agribusiness normalised)
+    assert (total, with_norm) == (117, 38), (total, with_norm)   # +China Internet Platform, +3 Wave 4, +Commercial Biotech (Wave 5)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2090,7 +2090,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (116, 36, 36, 12)   # Wave 4: F&B and Household anchors moved to Forward P/E (not a swap leg)
+    assert (tot, trail, elig, anchored) == (117, 36, 36, 12)   # Wave 4 anchors on Forward P/E; +Commercial Biotech (Wave 5)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2852,7 +2852,8 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
                if k.split(".")[0].zfill(5) not in _REPORTING_CURRENCY]
     # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
     # +3 / +3: 02357.HK, 02507.HK, 00232.HK pinned in Wave 3 (all HKD reporters).
-    assert len(hk) == 166 and len(missing) == 125, (len(hk), len(missing))
+    # 166/125 -> 174/133: eight HK health names pinned on the owner's Wave 5 taxonomy (2026-09-26).
+    assert len(hk) == 174 and len(missing) == 133, (len(hk), len(missing))
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")

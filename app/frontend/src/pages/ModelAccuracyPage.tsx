@@ -422,6 +422,7 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   rate_base: 'Regulated rate base',
   fcf_guidance: 'FCF guidance (faded overlay)',
   sotp: 'SOTP segments (Gemini, cited)',
+  pipeline: 'Pipeline assets (rNPV, Gemini, cited)',
 };
 
 /** kind === 'sotp': the segment table with a period label on every figure (owner, 2026-09-24). */

@@ -946,6 +946,10 @@ RNPV_COMMERCIAL_DEFAULTS: dict[str, dict[str, float]] = {
         "peak_op_margin":     0.40,   # conservative for novel-drug launches
         "effective_tax_rate": 0.21,   # US statutory (no IP structures yet)
     },
+    "Commercial Biotech": {           # Wave 5 (2026-09-26): a commercial launch platform exists
+        "peak_op_margin":     0.42,
+        "effective_tax_rate": 0.18,
+    },
     "default": {
         "peak_op_margin":     0.40,
         "effective_tax_rate": 0.21,
@@ -2298,6 +2302,26 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "weight flows to EV/R&D + Pipeline NAV + Cash Runway via blend fallback."
             ),
         },
+        # Owner spec, 2026-09-26 (Wave 5). A profitable, high-growth biotech --
+        # Vertex, Innovent -- fits neither neighbour: Pre-approval Biotech prices
+        # cash runway and R&D that a self-funding company has outgrown, Large Cap
+        # Pharma prices trailing earnings on a name growing 15-30% on a few
+        # franchises. Forward earnings anchor, EV on forward revenue normalises
+        # early-launch profitability, a long DCF carries patent durability, and
+        # the pipeline leg carries late-stage option value -- from the review-
+        # gated pipeline pre-fill only, quarantined until accepted.
+        "Commercial Biotech": {
+            "methods": [
+                {"name": "Forward P/E",      "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/Fwd Rev",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",              "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "rNPV (Pipeline)",  "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/R&D", "Cash Runway", "P/BV", "EPV"],
+            "rationale": ("Commercial-stage biotech: high earnings expansion on a few franchises, "
+                          "priced on forward earnings and forward revenue with a long DCF for "
+                          "patent durability; the accepted pipeline carries the Phase 3 option value."),
+        },
         "Large Cap Pharma": {
             "methods": [
                 {"name": "P/E",             "weight": 0.40, "anchor": True,  "implementable": True},
@@ -3391,6 +3415,9 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "MedTech / Devices":   {"ev_ebitda": 20.0, "pe": 30.0, "ev_revenue": 6.0,  "pb": 5.0,  "fcf_yield": 0.030, "growth_avg": 0.10},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
+    # Wave 5 (2026-09-26): read from the US Biotechnology basket that day (n13-17).
+    "Commercial Biotech":   {"ev_ebitda": 16.9, "pe": 20.3, "ev_revenue": 6.2,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.15,
+                             "pe_ntm": 17.2},
     "Telco":               {"ev_ebitda": 8.5,  "pe": 14.0, "ev_revenue": 2.0,  "pb": 2.0,  "fcf_yield": 0.060, "growth_avg": 0.03},
     "Crypto":              {"ev_ebitda": 20.0, "pe": 35.0, "ev_revenue": 8.0,  "pb": 3.0,  "fcf_yield": 0.030, "growth_avg": 0.25},
     # Crypto sub-profiles (D1 taxonomy gap fix): lookup-assigned profiles for
@@ -5225,15 +5252,16 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "OHI":   ("RealEstate", "",                   "R.E.I.T.",                         "Omega Healthcare REIT — skilled nursing"),
 
     # ── Health Care / Biopharma ────────────────────────────────────────────────
-    "PFE":   ("Biopharma", "",  "Drugs (Pharmaceutical)",    ""),
+    "PFE":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Pfizer"),   # owner taxonomy 2026-09-26 (the map row already routed it here)
     "MRNA":  ("Biopharma", "",  "Drugs (Biotechnology)",     ""),
-    "AMGN":  ("Biopharma", "",  "Drugs (Biotechnology)",     "Amgen"),
+    "AMGN":  ("Biopharma", "Large Cap Pharma",  "Drugs (Biotechnology)",     "Amgen"),   # owner taxonomy 2026-09-26 (the map row already routed it here)
     "GILD":  ("Biopharma", "",  "Drugs (Biotechnology)",     "Gilead Sciences"),
-    "ABBV":  ("Biopharma", "",  "Drugs (Pharmaceutical)",    "AbbVie"),
+    "ABBV":  ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "AbbVie"),
     "LLY":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Eli Lilly"),
-    "JNJ":   ("Biopharma", "",  "Drugs (Pharmaceutical)",    "Johnson & Johnson (post-Kenvue spin-off)"),
-    "MDT":   ("Biopharma", "",               "Healthcare Products",    "Medtronic — MedTech devices"),
-    "ISRG":  ("Biopharma", "",               "Healthcare Products",    "Intuitive Surgical"),
+    "JNJ":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Johnson & Johnson (post-Kenvue spin-off)"),
+    "BAX":   ("Biopharma", "MedTech / Devices", "Healthcare Products",  "Baxter -- Wave 5 pin (2026-09-26); fell to Mature SaaS by the ladder"),
+    "MDT":   ("Biopharma", "MedTech / Devices", "Healthcare Products",  "Medtronic — MedTech devices (Wave 5 pin, 2026-09-26)"),
+    "ISRG":  ("Biopharma", "MedTech / Devices",               "Healthcare Products",    "Intuitive Surgical"),
     # Zoetis — animal-health pharma (spun out of Pfizer 2013). $9B revenue,
     # ~35% op margin, sub-10% growth, no clinical pipeline of human drugs.
     # Fits Large Cap Pharma archetype; without this override the LLM
@@ -5246,27 +5274,27 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "ZTS":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Zoetis — animal health pharma; routed to Large Cap Pharma to avoid Managed Care misclassification"),
     "NVO":   ("Biopharma", "",               "Drugs (Pharmaceutical)", "Novo Nordisk ADR — GLP-1/obesity; 20-F filer (DKK reporting currency)"),
     "TXG":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "10X Genomics — single-cell/spatial genomics instruments; tools co, NOT drug developer"),
-    "MRK":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Merck"),
-    "VRTX":  ("Biopharma", "",               "Drugs (Biotech)",           "Vertex Pharmaceuticals"),
-    "REGN":  ("Biopharma", "",               "Drugs (Biotech)",           "Regeneron"),
-    "BIIB":  ("Biopharma", "",               "Drugs (Biotech)",           "Biogen — MS + Alzheimer's (Leqembi) + ophthalmology; patent cliff on Tecfidera + Tysabri biosimilar risk"),
-    "BMY":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Bristol-Myers Squibb — oncology + cardiovascular; Eliquis/Opdivo LOE exposure"),
-    "CRSP":  ("Biopharma", "",               "Drugs (Biotech)",           "CRISPR Therapeutics — gene editing; Casgevy launch"),
-    "BEAM":  ("Biopharma", "",               "Drugs (Biotech)",           "Beam Therapeutics — base editing platform; pre-commercial"),
+    "MRK":   ("Biopharma", "Large Cap Pharma",               "Drugs (Pharmaceutical)",    "Merck"),
+    "VRTX":  ("Biopharma", "Commercial Biotech", "Drugs (Biotech)",       "Vertex Pharmaceuticals -- Wave 5 (2026-09-26): profitable, high-growth"),
+    "REGN":  ("Biopharma", "Commercial Biotech",               "Drugs (Biotech)",           "Regeneron"),
+    "BIIB":  ("Biopharma", "Commercial Biotech",               "Drugs (Biotech)",           "Biogen — MS + Alzheimer's (Leqembi) + ophthalmology; patent cliff on Tecfidera + Tysabri biosimilar risk"),
+    "BMY":   ("Biopharma", "Large Cap Pharma",               "Drugs (Pharmaceutical)",    "Bristol-Myers Squibb — oncology + cardiovascular; Eliquis/Opdivo LOE exposure"),
+    "CRSP":  ("Biopharma", "Pre-approval Biotech",               "Drugs (Biotech)",           "CRISPR Therapeutics — gene editing; Casgevy launch"),
+    "BEAM":  ("Biopharma", "Pre-approval Biotech",               "Drugs (Biotech)",           "Beam Therapeutics — base editing platform; pre-commercial"),
     "SAGE":  ("Biopharma", "",               "Drugs (Biotech)",           "Sage Therapeutics — CNS; zuranolone with Biogen"),
     "SRPT":  ("Biopharma", "",               "Drugs (Biotech)",           "Sarepta — DMD gene therapy (Elevidys)"),
     "ARWR":  ("Biopharma", "",               "Drugs (Biotech)",           "Arrowhead — RNAi platform (plozasiran, olpasiran w/ Amgen)"),
     "IONS":  ("Biopharma", "",               "Drugs (Biotech)",           "Ionis — antisense oligonucleotides (Spinraza, Waylivra)"),
-    "ALNY":  ("Biopharma", "",               "Drugs (Biotech)",           "Alnylam — RNAi platform (Onpattro, Amvuttra)"),
+    "ALNY":  ("Biopharma", "Commercial Biotech",               "Drugs (Biotech)",           "Alnylam — RNAi platform (Onpattro, Amvuttra)"),
     "RHHBY": ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Roche ADR — oncology + diagnostics"),
     "NVS":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Novartis ADR — Entresto, Cosentyx"),
     "AZN":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "AstraZeneca ADR — oncology (Tagrisso, Enhertu)"),
     "GSK":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "GSK ADR — vaccines, HIV, respiratory"),
     "SNY":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Sanofi ADR — Dupixent, vaccines"),
     "TAK":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Takeda ADR — rare disease, oncology"),
-    "SYK":   ("Biopharma", "",               "Healthcare Products",       "Stryker — MedTech"),
-    "BSX":   ("Biopharma", "",               "Healthcare Products",       "Boston Scientific"),
-    "ABT":   ("Biopharma", "",               "Healthcare Products",       "Abbott Laboratories"),
+    "SYK":   ("Biopharma", "MedTech / Devices", "Healthcare Products",     "Stryker — MedTech (Wave 5 pin, 2026-09-26)"),
+    "BSX":   ("Biopharma", "MedTech / Devices",               "Healthcare Products",       "Boston Scientific"),
+    "ABT":   ("Biopharma", "MedTech / Devices",               "Healthcare Products",       "Abbott Laboratories"),
     "TMO":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Thermo Fisher"),
     "DHR":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Danaher"),
     "A":     ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Agilent Technologies"),
@@ -5281,6 +5309,19 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "CVS":   ("HealthcareServices", "Managed Care", "Healthcare Support Services", "CVS Health — PBM + Aetna"),
     "ELV":   ("HealthcareServices", "Managed Care", "Healthcare Support Services", "Elevance Health (fmr Anthem)"),
     "MOH":   ("HealthcareServices", "Managed Care", "Healthcare Support Services", "Molina Healthcare — Medicaid"),
+    # Owner, 2026-09-26 (Wave 5 universe): HCA activates the US provider profile; THC and UHS reach it by the Care Facilities row.
+    "HCA":   ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "HCA Healthcare"),
+    # Owner taxonomy, 2026-09-26 (Wave 5): the US names by profile.
+    "BGNE":  ("Biopharma", "Commercial Biotech", "Drugs (Biotech)", "BeiGene ADR -- global commercial oncology (Brukinsa)"),
+    "KYMR":  ("Biopharma", "Pre-approval Biotech", "Drugs (Biotech)", "Kymera Therapeutics -- development-stage degrader platform"),
+    "EW":    ("Biopharma", "MedTech / Devices", "Healthcare Products", "Edwards Lifesciences"),
+    "BDX":   ("Biopharma", "MedTech / Devices", "Healthcare Products", "Becton Dickinson"),
+    "ILMN":  ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Illumina"),
+    "CRL":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Charles River Laboratories"),
+    "IQV":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "IQVIA -- clinical CRO"),
+    "THC":   ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "Tenet Healthcare"),
+    "UHS":   ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "Universal Health Services"),
+    "ENSG":  ("HealthcareServices", "Healthcare Providers / Services", "Post-acute", "The Ensign Group -- skilled nursing"),
     "CNC":   ("HealthcareServices", "Managed Care", "Healthcare Support Services", "Centene — Medicaid/ACA"),
 
     # ── Energy ────────────────────────────────────────────────────────────────
@@ -5478,29 +5519,40 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "02423.HK": ("RealEstate",  "",  "Prop Marketplace",         "KE Holdings (Beike)"),
 
     # Healthcare / Biopharma
-    "01177.HK": ("Biopharma",   "",  "Pharmaceutical",           "Sino Biopharmaceutical"),
-    "02269.HK": ("Biopharma",   "",  "Biotech CDMO",             "Wuxi Biologics"),
-    "02268.HK": ("Biopharma",   "",  "Biotechnology",            "Wuxi XDC Cayman"),
+    "01177.HK": ("Biopharma", "Large Cap Pharma",  "Pharmaceutical",           "Sino Biopharmaceutical"),
+    "02269.HK": ("Biopharma", "CDMO / Life Science Tools", "Biotech CDMO", "Wuxi Biologics -- Wave 5: a CDMO labelled Biotechnology"),
+    "02268.HK": ("Biopharma", "CDMO / Life Science Tools",  "Biotechnology",            "Wuxi XDC Cayman"),
     "00241.HK": ("Biopharma",   "",  "Health Platform",          "Alibaba Health"),
-    "02359.HK": ("Biopharma",   "",  "CRO/CDMO",                 "Wuxi AppTec"),
-    "02196.HK": ("Biopharma",   "",  "Pharmaceutical",           "Fosun Pharma"),
+    "02359.HK": ("Biopharma", "CDMO / Life Science Tools",  "CRO/CDMO",                 "Wuxi AppTec"),
+    "02196.HK": ("Biopharma", "Large Cap Pharma",  "Pharmaceutical",           "Fosun Pharma"),
     "06185.HK": ("Biopharma",   "",  "Biotech/Vaccine",          "CanSino Biologics"),
     "06618.HK": ("Biopharma",   "",  "Health Platform",          "JD Health"),
-    "01093.HK": ("Biopharma",   "",  "Pharmaceutical",           "CSPC Pharmaceutical"),
-    "03692.HK": ("Biopharma", "",  "Drugs (Pharmaceutical)", "Hansoh Pharma"),
-    "03320.HK": ("Biopharma", "",  "Drugs (Pharmaceutical)", "CR Pharma"),
-    "01801.HK": ("Biopharma", "",  "Drugs (Biotech)",        "Innovent Biologics"),
-    "09926.HK": ("Biopharma", "",  "Drugs (Biotech)",        "Akeso Inc"),
-    "06160.HK": ("Biopharma", "",  "Drugs (Biotech)",        "BeiGene"),
+    "01093.HK": ("Biopharma", "Large Cap Pharma", "Pharmaceutical",    "CSPC Pharmaceutical -- Wave 5: a drug maker labelled Biotechnology"),
+    "03692.HK": ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)", "Hansoh Pharma"),
+    "03320.HK": ("HealthcareServices", "Healthcare Providers / Services",  "Drugs (Pharmaceutical)", "CR Pharma"),
+    "01801.HK": ("Biopharma", "Commercial Biotech", "Drugs (Biotech)", "Innovent Biologics -- Wave 5 (2026-09-26): approved franchises"),
+    "09926.HK": ("Biopharma", "Commercial Biotech",  "Drugs (Biotech)",        "Akeso Inc"),
+    "06160.HK": ("Biopharma", "Commercial Biotech",  "Drugs (Biotech)",        "BeiGene"),
     "09995.HK": ("Biopharma", "",  "Drugs (Biotech)",        "RemeGen"),
-    "00853.HK": ("Biopharma", "",  "Healthcare Products",    "MicroPort Scientific"),
-    "02252.HK": ("Biopharma", "",  "Healthcare Products",    "MicroPort Robot"),
+    "00853.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "MicroPort Scientific -- Wave 5: a revenue device maker, not pre-approval"),
+    "02252.HK": ("Biopharma", "MedTech / Devices",  "Healthcare Products",    "MicroPort Robot"),
+    # Owner taxonomy, 2026-09-26 (Wave 5): the HK names by profile. 00992.HK in the owner's
+    # list is Lenovo, not a MicroPort spin-off, and 02162.HK is Kangji Medical (devices), so
+    # Clover (02197.HK) is the Chapter 18A name and the two MicroPort spin-offs are pinned.
+    "06990.HK": ("Biopharma", "Commercial Biotech", "Drugs (Biotech)", "Kelun-Biotech -- commercial ADC developer"),
+    "02197.HK": ("Biopharma", "Pre-approval Biotech", "Drugs (Biotech)", "Clover Biopharmaceuticals -- Chapter 18A"),
+    "09688.HK": ("Biopharma", "Pre-approval Biotech", "Drugs (Biotech)", "Zai Lab -- in-licensing platform, clinical pipeline (owner placement)"),
+    "01666.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "Tongda / neurovascular devices (owner placement)"),
+    "02190.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "Zylox-Tonbridge Medical"),
+    "02160.HK": ("Biopharma", "MedTech / Devices", "Healthcare Products", "MicroPort CardioFlow"),
+    "01515.HK": ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "China Resources Medical"),
+    "06078.HK": ("HealthcareServices", "Healthcare Providers / Services", "Hospitals", "Hygeia Healthcare -- oncology hospitals"),
     "01302.HK": ("Biopharma", "",  "Healthcare Products",    "LifeTech Scientific"),
     "09996.HK": ("Biopharma", "",  "Healthcare Products",    "Peijia Medical"),
     "01548.HK": ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Genscript Biotech"),
     "03759.HK": ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "Pharmaron Beijing"),
     "01833.HK": ("Biopharma", "",  "Healthcare Products",    "Ping An Healthcare"),
-    "01099.HK": ("Biopharma", "",  "Drugs (Pharmaceutical)", "Sinopharm Group"),
+    "01099.HK": ("HealthcareServices", "Healthcare Providers / Services",  "Drugs (Pharmaceutical)", "Sinopharm Group"),
     "02601.HK": ("Financials", "Insurance", "Insurance - Life", "CPIC"),
 
     # Consumer — Apparel & Footwear
@@ -5991,6 +6043,9 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # Healthcare
     "CLN.SI":  ("Healthcare", "Healthcare Provider (SG)", "Medical Gloves",         "Riverstone Holdings"),
     "A50.SI":  ("Healthcare", "Healthcare Provider (SG)",   "Healthcare Services",    "Thomson Medical Group"),
+    # Owner taxonomy, 2026-09-26 (Wave 5): SG operators on the SG provider profile.
+    "Q0F.SI":  ("Healthcare", "Healthcare Provider (SG)",   "Healthcare Services",    "IHH Healthcare -- regional hospital network"),
+    "QC7.SI":  ("Healthcare", "Healthcare Provider (SG)",   "Healthcare Services",    "Q & M Dental Group"),
     # REITs
     "A17U.SI": ("REIT",        "Industrial", "Industrial REIT",        "CapitaLand Ascendas REIT"),
     "C38U.SI": ("REIT",        "Retail",     "Retail REIT",            "CapitaLand Integrated Commercial Trust"),

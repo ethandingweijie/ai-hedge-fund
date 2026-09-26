@@ -27,9 +27,10 @@
     "v14: Wave 1 oil, gas & coal (owner-approved 2026-09-20). Industry routing is off in production (FEATURE_INDUSTRY_ROUTING unset), and with it off every uncurated energy name defaulted to the Tech sector: Valero, Marathon and Phillips 66 were valued as Hyperscaler / Tech Conglomerate, Williams and Energy Transfer as Levered Subscription, Seatrium as Growth SaaS, China Coal as a hyperscaler at 4.8x consensus. `routing_scope` switches industry routing on for exactly these industries whatever the flag says; every other industry is unchanged. Rows: Integrated -> Integrated Oil & Gas (was Upstream); E&P -> Upstream Oil & Gas; Midstream -> Midstream / Pipelines; Refining & Marketing -> Refining & Marketing (was Merchant Power); Equipment & Services and Drilling -> Oilfield Services & Drilling; Coal -> Coal (was Mining (Major)). The SG row for Oil & Gas Equipment & Services keeps the calibrated Offshore Marine & Resources (SG) profile. RXS.SI (Pacific Radiance, FMP 'Marine Shipping') is an offshore support-vessel operator and takes the same SG profile by override.",
     "v15: Wave 2 power & transition (owner-confirmed 2026-09-21). Labels measured live against FMP on 2026-09-21 (docs/waves_2_5_stage2_probe.md). With routing out of scope, the Stage 0 baseline had CLP (00002.HK) and Constellation valued as Mature SaaS, NRG as Levered Subscription and Nextracker as Early Platform. `Regulated Electric`, `Independent Power Producers` and `Solar` join routing_scope. New row: Solar -> Energy / Clean Tech / Power Equipment OEM (ENPH, FSLR, NXT). The IPP row keeps the contracted default because in HKSE its members are tariff generators; the US merchants (VST, CEG, NRG) are pinned to Merchant Power. Bloom, NuScale and GE Vernova carry FMP labels shared with hundreds of unrelated industrials (`Electrical Equipment & Parts`, `Industrial - Machinery`), so those labels are NOT in scope and the three are reached by pin. `Uranium` has no row yet: its profile's primary method (P/NAV at a long-term contract price) needs inputs the engine does not have. New key `comps_industry_overrides`: a ticker pinned AGAINST its FMP label must take the peer basket of the business it is, or the pin changes the methods and leaves the multiples behind -- 00006.HK and 01816.HK are labelled IPP and would have been priced on Chinese coal IPP medians (P/E 7.4x) under a Regulated Utility table.",
     "v16: Wave 3 aerospace & defence (owner framework 2026-09-22). Labels measured live 2026-09-21: every US and HK name in the universe carries the single label `Aerospace & Defense`, so the three-way split is a default row plus pins. Row: Aerospace & Defense -> Industrials / Defense Primes (the most conservative of the three; an unpinned newcomer errs cheap). Pinned off the row: BA, GE -> Commercial Aerospace & Engines; HWM, TDG, HEI -> Niche Aerospace Components; KTOS, AVAV, RKLB -> Defense Tech & Space; 02357.HK -> Aerospace Holdco (HK); 02507.HK -> General Aviation (HK); 00232.HK -> GA Engines & Aftermarket (HK). The label joins routing_scope, which also makes S63.SI's SG row deterministic (it had reached its profile through the LLM router). S59.SI (SIA Engineering, an MRO) joins routing_scope_tickers so the SG table routes it to Aviation & Marine (SG): its label, `Airlines, Airports & Air Services`, maps to Transportation/Airlines for US carriers and must NOT enter scope. The Stage 0 baseline had NOC, GD and KTOS valued as Mature SaaS, HWM/TDG/LHX as Mature Platform, RKLB as High-Growth Tech and 02357.HK as a Hyperscaler.",
-    "v17: Wave 4 consumer staples (owner universe 2026-09-26: 21 names; BF-B and 06808.HK cut, MDLZ kept). Eleven staples labels enter routing_scope -- until now none was in scope, so the map's own rows for beverages, packaged foods, household, tobacco and food distribution were never applied and 20 of 23 names fell to the ratio ladder (Coca-Cola as Luxury Goods, Mondelez as Mature SaaS). New rows: Agricultural Farm Products -> Agribusiness & Food Processing (SG keeps Agribusiness & Food (SG) by market); Wineries and Confectioners -> Food & Beverage (pooled families for the thin baskets); Discount Stores, Grocery Stores and Food Distribution -> Grocery & Discount Retail (Food Distribution moves off Traditional Retail); Tobacco -> Tobacco (owner: a standalone profile, not Household). Department Stores stays rowless (Sun Art cut). COST is pinned Membership / Subscription Retail in the same commit as the Discount Stores row; WMT's pin moves from Traditional Retail to Grocery & Discount Retail; EL keeps its Luxury Goods pin (owner, 2026-09-26: prestige beauty is brand economics, not household scale)."
+    "v17: Wave 4 consumer staples (owner universe 2026-09-26: 21 names; BF-B and 06808.HK cut, MDLZ kept). Eleven staples labels enter routing_scope -- until now none was in scope, so the map's own rows for beverages, packaged foods, household, tobacco and food distribution were never applied and 20 of 23 names fell to the ratio ladder (Coca-Cola as Luxury Goods, Mondelez as Mature SaaS). New rows: Agricultural Farm Products -> Agribusiness & Food Processing (SG keeps Agribusiness & Food (SG) by market); Wineries and Confectioners -> Food & Beverage (pooled families for the thin baskets); Discount Stores, Grocery Stores and Food Distribution -> Grocery & Discount Retail (Food Distribution moves off Traditional Retail); Tobacco -> Tobacco (owner: a standalone profile, not Household). Department Stores stays rowless (Sun Art cut). COST is pinned Membership / Subscription Retail in the same commit as the Discount Stores row; WMT's pin moves from Traditional Retail to Grocery & Discount Retail; EL keeps its Luxury Goods pin (owner, 2026-09-26: prestige beauty is brand economics, not household scale).",
+    "v18: Wave 5 health care (owner spec 2026-09-26). Seven health labels enter routing_scope -- as in Wave 4, none was in scope and 12 of 16 names fell to the ratio ladder (Vertex on MedTech, Medtronic on Large Cap Pharma, Baxter on Mature SaaS). New rows: Medical - Devices -> Biopharma / MedTech / Devices; Medical - Healthcare Plans -> HealthcareServices / Managed Care. Biotechnology keeps Pre-approval Biotech as its default row; commercial biotechs (VRTX, 01801.HK) are pinned to the new Commercial Biotech profile. Pins off the rows: MDT, SYK, BAX, 00853.HK -> MedTech / Devices (00853.HK produced no value on Pre-approval Biotech); 01093.HK -> Large Cap Pharma (a drug maker labelled Biotechnology); 02269.HK -> CDMO / Life Science Tools (a CDMO labelled Biotechnology). BSL.SI reaches Healthcare Provider (SG) by the SG market row. VEEV stays on Tech / Mature SaaS (health-care software; out of the Wave 5 scorecard). Software - Application is not brought into scope."
   ],
-  "version": 17,
+  "version": 18,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -362,6 +363,14 @@
     "Grocery Stores": [
       "Consumer",
       "Grocery & Discount Retail"
+    ],
+    "Medical - Devices": [
+      "Biopharma",
+      "MedTech / Devices"
+    ],
+    "Medical - Healthcare Plans": [
+      "HealthcareServices",
+      "Managed Care"
     ]
   },
   "ticker_overrides": {
@@ -732,13 +741,20 @@
     "Beverages - Alcoholic",
     "Beverages - Non-Alcoholic",
     "Beverages - Wineries & Distilleries",
+    "Biotechnology",
     "Coal",
     "Discount Stores",
+    "Drug Manufacturers - General",
     "Food Confectioners",
     "Food Distribution",
     "Grocery Stores",
     "Household & Personal Products",
     "Independent Power Producers",
+    "Medical - Care Facilities",
+    "Medical - Devices",
+    "Medical - Diagnostics & Research",
+    "Medical - Healthcare Plans",
+    "Medical - Instruments & Supplies",
     "Oil & Gas Drilling",
     "Oil & Gas Equipment & Services",
     "Oil & Gas Exploration & Production",

@@ -431,6 +431,346 @@
     "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
+  "01093.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 3.77
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:45:18+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.16x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.1579
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2024 (approved), 2021 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "CSPC Pharmaceutical Group Limited",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Acute ischemic stroke",
+       "launch_year": 2024,
+       "name": "Mingfule (tenecteplase / rhTNK-tPA)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "Peak",
+        "quote": "We expect Mingfule to realize RMB300mn sales in 2023, with peak sales potential of RMB2.0-3.0bn, upon the approval of new indications.",
+        "scale": "bn",
+        "source_url": "https://www.cmbi.com.hk",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "Pivotal/Phase 3",
+        "quote": "Mingfule, a 3rd-generation thrombolytic drug, has filed sNDA for thrombolytic treatment in acute ischemic stroke.",
+        "source_url": "https://www.cmbi.com.hk",
+        "value": 0.7
+       },
+       "ptrs_basis": "cardiovascular and stroke supplemental NDA benchmark 65-75%"
+      },
+      {
+       "indication": "Invasive fungal infections",
+       "launch_year": 2021,
+       "name": "Anfulike (amphotericin B cholesteryl sulfate complex)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "Peak",
+        "quote": "Amphotericin B cholesteryl sulfate complex for injection could be launched in 2020E with expected peak sales of over RMB1bn.",
+        "scale": "bn",
+        "source_url": "https://www.cmbi.com.hk",
+        "value": 1.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "Commercial",
+        "quote": "Anfulike is the main lipid-based amphotericin B with obvious safety advantages for treating invasive fungal infection, which will replace current conventional amphotericin B.",
+        "source_url": "https://www.cmbi.com.hk",
+        "value": 1.0
+       },
+       "ptrs_basis": "approved product (commercial stage, pre-peak)"
+      }
+     ],
+     "notes": "Late-stage assets with explicit analyst consensus peak sales in source currency/scale. CSPC Pharmaceutical reported currency is USD with latest revenue anchor of USD 3.77bn."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Acute ischemic stroke",
+       "launch_year": 2024,
+       "name": "Mingfule (tenecteplase / rhTNK-tPA)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 446940000.0,
+       "phase": "approved",
+       "ptrs_basis": "cardiovascular and stroke supplemental NDA benchmark 65-75%",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Invasive fungal infections",
+       "launch_year": 2021,
+       "name": "Anfulike (amphotericin B cholesteryl sulfate complex)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 148980000.0,
+       "phase": "approved",
+       "ptrs_basis": "approved product (commercial stage, pre-peak)",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "CNY bn",
+       "CNY bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "CSPC Pharmaceutical Group Limited",
+     "depreciation_and_amortization": 204544623.66,
+     "market_cap": 13567640244.15,
+     "net_ppe": 2010512824.88004,
+     "operating_cash_flow": 878633186.86884,
+     "period": "2025-12-31",
+     "revenue": 3774097825.68
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 33.9,
+    "value_usd": 595920000.0
+   }
+  },
+  "01801.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.94
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:44:40+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "4.18x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 4.1846
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, phase_3, filed, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2025 (approved), 2027, 2026, 2019 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "4 of 4 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "4 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Innovent Biologics, Inc.",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Obesity and Type 2 Diabetes",
+       "launch_year": 2025,
+       "name": "Mazdutide (IBI362)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "2031E",
+        "quote": "Macquarie Capital estimated mazdutide could reach peak sales of 8.6 billion yuan in 2031, with 80 per cent of revenue coming from obesity treatment and the remainder from diabetes drugs.",
+        "scale": "bn",
+        "source_url": "https://www.thestar.com.my/business/business-news/2026/01/17/china039s-weight-loss-drug-war-prices-slashed-up-to-80-as-obesity-crisis-worsens",
+        "value": 8.6
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "FY2025",
+        "quote": "Mazdutide, the first home-grown obesity drug that was approved in June last year",
+        "source_url": "https://www.thestar.com.my/business/business-news/2026/01/17/china039s-weight-loss-drug-war-prices-slashed-up-to-80-as-obesity-crisis-worsens",
+        "value": 1.0
+       },
+       "ptrs_basis": "approved drug benchmark 100%"
+      },
+      {
+       "indication": "Non-Small Cell Lung Cancer (NSCLC) and Colorectal Cancer",
+       "launch_year": 2027,
+       "name": "IBI363 (TAK-928)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "Peak",
+        "quote": "该行预测IBI363中国峰值销售有望达到约25亿元（风险调整后数字）",
+        "scale": "bn",
+        "source_url": "https://finance.sina.com.cn",
+        "value": 25.0
+       },
+       "phase": "phase_3",
+       "ptrs": null,
+       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+      },
+      {
+       "indication": "Claudin 18.2-positive Advanced Gastric Cancer and Pancreatic Cancer",
+       "launch_year": 2026,
+       "name": "IBI343",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "Peak",
+        "quote": "IBI343中国峰值销售有望达到约15亿元（同风险调整后数字）。",
+        "scale": "bn",
+        "source_url": "https://finance.sina.com.cn",
+        "value": 15.0
+       },
+       "phase": "filed",
+       "ptrs": null,
+       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+      },
+      {
+       "indication": "Non-Small Cell Lung Cancer, Lymphoma, and Solid Tumors",
+       "launch_year": 2019,
+       "name": "Sintilimab (Tyvyt)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNYbnlcdomLjsQaJ8JtNHoIn4H8GvY69wRYaRyFSLIznXRZCHbvDuJZbqaz3LNSftge08IIB4soNLgw1v5svAVFX4F5apBB04LPjiiNyPfYsvykz17hLb-43Fw5moZOAO-X7oH_Frk7c1JGv4=",
+        "period": "Peak",
+        "quote": "We expect Tyvyt to realize RMB5,974mn peak sales in China and US$1,565mn peak sales in overseas markets.",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202107221505385442_1.pdf",
+        "value": 5974.0
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "approved drug benchmark 100%"
+      }
+     ],
+     "notes": "Fixed anchors: reported currency is USD and revenue latest is USD 1.94 bn. Pipeline inputs include late-stage and recently approved pre-peak assets for Innovent Biologics."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Obesity and Type 2 Diabetes",
+       "launch_year": 2025,
+       "name": "Mazdutide (IBI362)",
+       "patent_expiry": null,
+       "peak_sales_period": "2031E",
+       "peak_sales_usd": 1281228000.0,
+       "phase": "approved",
+       "ptrs_basis": "approved drug benchmark 100%",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Non-Small Cell Lung Cancer (NSCLC) and Colorectal Cancer",
+       "launch_year": 2027,
+       "name": "IBI363 (TAK-928)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 3724500000.0,
+       "phase": "phase_3",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Claudin 18.2-positive Advanced Gastric Cancer and Pancreatic Cancer",
+       "launch_year": 2026,
+       "name": "IBI343",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2234700000.0,
+       "phase": "filed",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Non-Small Cell Lung Cancer, Lymphoma, and Solid Tumors",
+       "launch_year": 2019,
+       "name": "Sintilimab (Tyvyt)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 890006520.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "CNY bn",
+       "CNY bn",
+       "CNY bn",
+       "CNY mn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Innovent Biologics, Inc.",
+     "depreciation_and_amortization": 89584206.66,
+     "market_cap": 22130139810.0,
+     "net_ppe": 811021346.46,
+     "operating_cash_flow": 1489950767.76,
+     "period": "2025-12-31",
+     "revenue": 1942926096.54
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 48.0,
+    "value_usd": 8130434520.0
+   }
+  },
   "01816.HK": {
    "rate_base": {
     "basis": "actual",
@@ -1405,6 +1745,256 @@
    }
   },
   "5WH.SI": {},
+  "AMGN": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 36.74
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:42:22+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.43x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.4287
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_3, phase_3, approved, phase_3, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2028, 2028, 2024 (approved), 2027, 2020 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "5 of 5 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "5 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Amgen Inc.",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Obesity and Type 2 Diabetes",
+       "launch_year": 2028,
+       "name": "MariTide (maridebart cafraglutide / AMG 133)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Goldman Sachs models $3.75 billion in risk-adjusted peak sales for MariTide and views the recent competitive MTSR acquisition process as evidence of market demand for a monthly dosing option",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/company-news/amgen-stock-holds-buy-rating-at-goldman-sachs-ahead-of-maritide-data-93CH-4384594",
+        "value": 3.75
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "Phase 3",
+        "quote": "Phase 3 to Approval ... Metabolic/endocrinology",
+        "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6015565/",
+        "value": 0.7
+       },
+       "ptrs_basis": "Metabolic Phase 3 benchmark (~65-75%)"
+      },
+      {
+       "indication": "Sjögren's Disease",
+       "launch_year": 2028,
+       "name": "Dazodalibep (VIB4920)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "The research firm increased its peak sales estimate for dazodalibep to $4.5 billion from $1 billion based on the current data.",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/company-news/jefferies-raises-amgen-stock-price-target-on-drug-trial-success-93CH-4252636",
+        "value": 4.5
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "Phase 3",
+        "quote": "The price target increase follows positive Phase 3 trial results for Amgen's dazodalibep, a CD40L antagonist, in moderate-to-severe systemic Sjögren's disease.",
+        "source_url": "https://www.investing.com/news/company-news/jefferies-raises-amgen-stock-price-target-on-drug-trial-success-93CH-4252636",
+        "value": 0.7
+       },
+       "ptrs_basis": "Immunology/rheumatology Phase 3 benchmark (~65-75%) following positive topline results in pivotal OASIZ 301 Phase 3 study"
+      },
+      {
+       "indication": "Small Cell Lung Cancer (SCLC)",
+       "launch_year": 2024,
+       "name": "Imdelltra (tarlatamab-dlle / AMG 757)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2026-2032 forecast period",
+        "quote": "Currently, GlobalData analysts forecast peak sales of more than $10bn and $3bn for Imfinzi and Imdelltra, respectively, within the 2026-2032 forecast period.",
+        "scale": "bn",
+        "source_url": "https://www.clinicaltrialsarena.com/news/imfinzi-imdelltra-combo-builds-frontline-sclc-case-on-phase-iii-win/",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "Approved / Phase 3 label expansion",
+        "quote": "Adding Imdelltra (tarlatamab) to Imfinzi in this setting led to statistically significant improvements in overall survival (OS), progression-free survival (PFS), and objective response rate (ORR)",
+        "source_url": "https://www.clinicaltrialsarena.com/news/imfinzi-imdelltra-combo-builds-frontline-sclc-case-on-phase-iii-win/",
+        "value": 0.85
+       },
+       "ptrs_basis": "Commercial-stage product pre-peak; high probability of label expansion into first-line maintenance supported by positive Phase 3 DeLLphi-305 overall survival data"
+      },
+      {
+       "indication": "Elevated Lipoprotein(a) / Cardiovascular Disease",
+       "launch_year": 2027,
+       "name": "Olpasiran (AMG 890)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "FY2030E",
+        "quote": "Jay Olson, an analyst at investment bank Oppenheimer, anticipates that the drug's annual sales could reach $1.5 billion in 2030 for Amgen.",
+        "scale": "bn",
+        "source_url": "https://www.fool.com/investing/2022/12/11/could-amgens-heart-disease-candidate-generate-bi/",
+        "value": 1.5
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "Phase 3",
+        "quote": "Novartis trial failure for pelacarsen increased clinical uncertainty for Amgen's competing olpasiran... investors quickly reassessed the probability of success and future commercial viability for Amgen's candidate.",
+        "source_url": "https://www.investing.com/news/company-news/amgen-inc-stock-amgn-moved-down-by-833-on-sep-8-a-full-analysis-93CH-4239841",
+        "value": 0.5
+       },
+       "ptrs_basis": "Cardiovascular Phase 3 benchmark adjusted down (~50%) to account for class-wide outcome uncertainty after competitor pelacarsen missed primary cardiovascular endpoints"
+      },
+      {
+       "indication": "IgG4-Related Disease (IgG4-RD) and Generalized Myasthenia Gravis (gMG)",
+       "launch_year": 2020,
+       "name": "Uplizna (inebilizumab-cdon)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "TD Cowen analysts anticipate “a solid launch” in IgG4-RD and gMG and see peak sales of $2 billion to $3 billion for the Uplizna franchise.",
+        "scale": "bn",
+        "source_url": "https://www.biospace.com/article/beyond-maritide-amgen-makes-portfolio-play-amid-scrutiny-of-obesity-prospect/",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "Post-approval expansion",
+        "quote": "The anti-CD19 antibody won FDA approval in the fibro-inflammatory condition IgG4-RD this year, adding to an earlier authorization in neuromyelitis optica spectrum disorder.",
+        "source_url": "https://www.biospace.com/article/beyond-maritide-amgen-makes-portfolio-play-amid-scrutiny-of-obesity-prospect/",
+        "value": 0.95
+       },
+       "ptrs_basis": "Approved biologic undergoing rapid label and geographic commercial expansion"
+      }
+     ],
+     "notes": "Amgen terminated its rocatinlimab development partnership with Kyowa Kirin and discontinued bemarituzumab in first-line gastric cancer following Phase 3 readouts, concentrating late-stage capital into MariTide, Dazodalibep, Olpasiran, and commercial rollouts of Imdelltra and Uplizna."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Obesity and Type 2 Diabetes",
+       "launch_year": 2028,
+       "name": "MariTide (maridebart cafraglutide / AMG 133)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 3750000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Metabolic Phase 3 benchmark (~65-75%)",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Sjögren's Disease",
+       "launch_year": 2028,
+       "name": "Dazodalibep (VIB4920)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 4500000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Immunology/rheumatology Phase 3 benchmark (~65-75%) following positive topline results in pivotal OASIZ 301 Phase 3 study",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Small Cell Lung Cancer (SCLC)",
+       "launch_year": 2024,
+       "name": "Imdelltra (tarlatamab-dlle / AMG 757)",
+       "patent_expiry": null,
+       "peak_sales_period": "2026-2032 forecast period",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Commercial-stage product pre-peak; high probability of label expansion into first-line maintenance supported by positive Phase 3 DeLLphi-305 overall survival data",
+       "ptrs_override": 0.85,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Elevated Lipoprotein(a) / Cardiovascular Disease",
+       "launch_year": 2027,
+       "name": "Olpasiran (AMG 890)",
+       "patent_expiry": null,
+       "peak_sales_period": "FY2030E",
+       "peak_sales_usd": 1500000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Cardiovascular Phase 3 benchmark adjusted down (~50%) to account for class-wide outcome uncertainty after competitor pelacarsen missed primary cardiovascular endpoints",
+       "ptrs_override": 0.5,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "IgG4-Related Disease (IgG4-RD) and Generalized Myasthenia Gravis (gMG)",
+       "launch_year": 2020,
+       "name": "Uplizna (inebilizumab-cdon)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved biologic undergoing rapid label and geographic commercial expansion",
+       "ptrs_override": 0.95,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Amgen Inc.",
+     "depreciation_and_amortization": 5167000000.0,
+     "market_cap": 223768333880.0,
+     "net_ppe": 8515000000.0,
+     "operating_cash_flow": 9958000000.0,
+     "period": "2025-12-31",
+     "revenue": 36741000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 33.8,
+    "value_usd": 15750000000.0
+   }
+  },
   "AVAV": {
    "backlog": {
     "basis": "actual",
@@ -3237,6 +3827,266 @@
     "value_usd": 42000000000.0
    }
   },
+  "LLY": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 65.18
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:41:44+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "1.66x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 1.6553
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_3, phase_3, approved, approved, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2027, 2026, 2024 (approved), 2022 (approved), 2023 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "5 of 5 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "5 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "5 of 5 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Eli Lilly and Company",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Obesity and type 2 diabetes",
+       "launch_year": 2027,
+       "name": "Retatrutide",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEYXC6Igo8-wZFBJCNpP1Iayo7Xg1f2lrJJLdXfwWVqWX_Abf1udf-cr5EPeQcxf44RefiJSoLOYKDZImecrwcTwGXkswkouJtceKTK40nhXs_u1Ana-0xVjesdaDJkNvK9wHdkqFfxNSvkEc4a3LhzshlLqpxA_lldgW9ioKe6EUT9qoE1X2iw62QZmt4t1MYyOU9ehcwVTcTq8tSwawJZ6g==",
+        "period": "peak",
+        "quote": "with retatrutide's $6.6 billion peak consensus sales estimate considered large by most measures",
+        "scale": "bn",
+        "source_url": "https://www.fiercebiotech.com/biotech/eli-lillys-triple-g-drug-drives-deep-weight-loss-phase-3-obesity-trial",
+        "value": 6.6
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEYXC6Igo8-wZFBJCNpP1Iayo7Xg1f2lrJJLdXfwWVqWX_Abf1udf-cr5EPeQcxf44RefiJSoLOYKDZImecrwcTwGXkswkouJtceKTK40nhXs_u1Ana-0xVjesdaDJkNvK9wHdkqFfxNSvkEc4a3LhzshlLqpxA_lldgW9ioKe6EUT9qoE1X2iw62QZmt4t1MYyOU9ehcwVTcTq8tSwawJZ6g==",
+        "period": "Phase 3",
+        "quote": "retatrutide, has met the primary endpoint for weight loss in another pivotal study",
+        "source_url": "https://www.fiercebiotech.com/biotech/eli-lillys-triple-g-drug-drives-deep-weight-loss-phase-3-obesity-trial",
+        "value": 0.7
+       },
+       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%"
+      },
+      {
+       "indication": "Obesity and type 2 diabetes",
+       "launch_year": 2026,
+       "name": "Orforglipron",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFnKRBzs0MV_bLH_F0e5hCfgg6vn2Sl5ybgid7qq52ABaj8AYxVmyV7F-eYNjbzcGy0grXPOPYdOFInoJ3I_kAQYci8hVoAWs1FZVfJYDf7LplV4tq3qssXK15cdlkdOmwprMblUT9uUa52Ro6rMUDdxPOS6tImDdKTS7bWMkF_p7pCGGYf1aG9PYnl03prIyljGk4ndRR8JWNLPQ0rsJ2XsFc3oCn9T6h1-mNcwJtOP-IicE-OXDl3ems=",
+        "period": "peak",
+        "quote": "above the roughly $26 billion consensus estimate",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/stock-market-news/wolfe-bumps-eli-lilly-target-on-oral-obesity-drug-cardiometabolic-portfolio-4554766",
+        "value": 26.0
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFnKRBzs0MV_bLH_F0e5hCfgg6vn2Sl5ybgid7qq52ABaj8AYxVmyV7F-eYNjbzcGy0grXPOPYdOFInoJ3I_kAQYci8hVoAWs1FZVfJYDf7LplV4tq3qssXK15cdlkdOmwprMblUT9uUa52Ro6rMUDdxPOS6tImDdKTS7bWMkF_p7pCGGYf1aG9PYnl03prIyljGk4ndRR8JWNLPQ0rsJ2XsFc3oCn9T6h1-mNcwJtOP-IicE-OXDl3ems=",
+        "period": "Phase 3",
+        "quote": "experimental oral obesity drug orforglipron",
+        "source_url": "https://www.investing.com/news/stock-market-news/wolfe-bumps-eli-lilly-target-on-oral-obesity-drug-cardiometabolic-portfolio-4554766",
+        "value": 0.7
+       },
+       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%"
+      },
+      {
+       "indication": "Early symptomatic Alzheimer's disease",
+       "launch_year": 2024,
+       "name": "Donanemab (Kisunla)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHpNta0WKvWSx0Boti3dqI7eGd0da67t4KbW9QNH9KmYzstQJe5BnLeuBt8o150CaYv2_szm31pUQqAWLJBvdYTYI79imbqGjX4s-UcBVIUD2kNyggPI2gr_t0gfEPbbHaHyI7MRG2P6V8Q6PU-sre4sG0WQvJvscl79plkUJ_pbGc6Tq3f4Z0ScUMyQBbX81RnXyyP",
+        "period": "peak",
+        "quote": "Consensus among Wall Street analysts is that Kisunla will generate close to $5 billion in annual sales at its peak, according to the investment firm Jefferies.",
+        "scale": "bn",
+        "source_url": "https://www.biopharmadive.com/news/lilly-alzheimers-drug-fda-approval-kisunla-donanemab/720497/",
+        "value": 5.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHpNta0WKvWSx0Boti3dqI7eGd0da67t4KbW9QNH9KmYzstQJe5BnLeuBt8o150CaYv2_szm31pUQqAWLJBvdYTYI79imbqGjX4s-UcBVIUD2kNyggPI2gr_t0gfEPbbHaHyI7MRG2P6V8Q6PU-sre4sG0WQvJvscl79plkUJ_pbGc6Tq3f4Z0ScUMyQBbX81RnXyyP",
+        "period": "approved",
+        "quote": "Lilly drug for Alzheimer's approved by FDA",
+        "source_url": "https://www.biopharmadive.com/news/lilly-alzheimers-drug-fda-approval-kisunla-donanemab/720497/",
+        "value": 1.0
+       },
+       "ptrs_basis": "FDA approved; technical and regulatory success achieved"
+      },
+      {
+       "indication": "Type 2 diabetes and obesity",
+       "launch_year": 2022,
+       "name": "Tirzepatide (Mounjaro / Zepbound)",
+       "patent_expiry": 2036,
+       "peak_sales": {
+        "currency": "USD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF1mYiUTIebL209GbP5zpbKw84clOkkb5VFGzveXlK0lfj7BL69FcUwivnT0pgPLcti4XaAdox0LcNmUXNryDplUItt8mZs9DVJ7LBe2b0n1NLesJVm2exUj8socZaE5iyNbHHrfl0ZQAZYTgAhgRV1xcXhnUimGqQrtgZ9jc8cc_5DZ92K_Inw",
+        "period": "peak",
+        "quote": "In August, BMO Capital analyst Evan Seigerman projected Mounjaro would generate peak sales of $68.7 billion.",
+        "scale": "bn",
+        "source_url": "https://www.drugdiscoverytrends.com/eli-lilly-mounjaro-sales-growth-pharma-market/",
+        "value": 68.7
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF1mYiUTIebL209GbP5zpbKw84clOkkb5VFGzveXlK0lfj7BL69FcUwivnT0pgPLcti4XaAdox0LcNmUXNryDplUItt8mZs9DVJ7LBe2b0n1NLesJVm2exUj8socZaE5iyNbHHrfl0ZQAZYTgAhgRV1xcXhnUimGqQrtgZ9jc8cc_5DZ92K_Inw",
+        "period": "approved",
+        "quote": "The FDA approved the drug with a brand name of Mounjaro (tirzepatide) to treat type 2 diabetes in May 2022.",
+        "source_url": "https://www.drugdiscoverytrends.com/eli-lilly-mounjaro-sales-growth-pharma-market/",
+        "value": 1.0
+       },
+       "ptrs_basis": "approved product pre-peak across core metabolic indications"
+      },
+      {
+       "indication": "Relapsed or refractory mantle cell lymphoma and chronic lymphocytic leukemia",
+       "launch_year": 2023,
+       "name": "Pirtobrutinib (Jaypirca)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEMe9pZ2OcAh2qLQpX9tNU4RsFbuq10lNPVDTRfOs-J-huqLe-zDb9njPa5_9T16dwpw_NW1TKFvMeIsQ6gthvhQxR-7Z3YRj9E1pI_bBrn80UHqlNDpZF1oZKdUDu-Tu_-keutMnBogvwLNi7O4pQR7fZMMmHj35L2bySPn2YuVBJdrtI9TJxC22CutNQYOg==",
+        "period": "peak",
+        "quote": "Peak sales estimate: $1.59 billion – Bloomberg analyst consensus",
+        "scale": "bn",
+        "source_url": "https://endpoints.news/every-fda-drug-approval-from-2023-full-list-of-approved-new-drugs/",
+        "value": 1.59
+       },
+       "phase": "approved",
+       "ptrs": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEMe9pZ2OcAh2qLQpX9tNU4RsFbuq10lNPVDTRfOs-J-huqLe-zDb9njPa5_9T16dwpw_NW1TKFvMeIsQ6gthvhQxR-7Z3YRj9E1pI_bBrn80UHqlNDpZF1oZKdUDu-Tu_-keutMnBogvwLNi7O4pQR7fZMMmHj35L2bySPn2YuVBJdrtI9TJxC22CutNQYOg==",
+        "period": "approved",
+        "quote": "Eli Lilly received two accelerated approvals for its BTK inhibitor Jaypirca to bookend the year.",
+        "source_url": "https://endpoints.news/every-fda-drug-approval-from-2023-full-list-of-approved-new-drugs/",
+        "value": 1.0
+       },
+       "ptrs_basis": "accelerated approval received; confirmatory Phase 3 ongoing"
+      }
+     ],
+     "notes": "Fixed anchors respected: reported currency USD, latest USD revenue 65.18 bn. Consensus peak sales and benchmarks reflect sell-side consensus estimates and standard therapeutic benchmarks."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Obesity and type 2 diabetes",
+       "launch_year": 2027,
+       "name": "Retatrutide",
+       "patent_expiry": null,
+       "peak_sales_period": "peak",
+       "peak_sales_usd": 6600000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Obesity and type 2 diabetes",
+       "launch_year": 2026,
+       "name": "Orforglipron",
+       "patent_expiry": null,
+       "peak_sales_period": "peak",
+       "peak_sales_usd": 26000000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%",
+       "ptrs_override": 0.7,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Early symptomatic Alzheimer's disease",
+       "launch_year": 2024,
+       "name": "Donanemab (Kisunla)",
+       "patent_expiry": null,
+       "peak_sales_period": "peak",
+       "peak_sales_usd": 5000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "FDA approved; technical and regulatory success achieved",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Type 2 diabetes and obesity",
+       "launch_year": 2022,
+       "name": "Tirzepatide (Mounjaro / Zepbound)",
+       "patent_expiry": 2036,
+       "peak_sales_period": "peak",
+       "peak_sales_usd": 68700000000.0,
+       "phase": "approved",
+       "ptrs_basis": "approved product pre-peak across core metabolic indications",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Relapsed or refractory mantle cell lymphoma and chronic lymphocytic leukemia",
+       "launch_year": 2023,
+       "name": "Pirtobrutinib (Jaypirca)",
+       "patent_expiry": null,
+       "peak_sales_period": "peak",
+       "peak_sales_usd": 1590000000.0,
+       "phase": "approved",
+       "ptrs_basis": "accelerated approval received; confirmatory Phase 3 ongoing",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Eli Lilly and Company",
+     "depreciation_and_amortization": 1997000000.0,
+     "market_cap": 1114757656520.0,
+     "net_ppe": 24675000000.0,
+     "operating_cash_flow": 16813000000.0,
+     "period": "2025-12-31",
+     "revenue": 65179000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 27.2,
+    "value_usd": 107890000000.0
+   }
+  },
   "LMT": {
    "backlog": {
     "basis": "actual",
@@ -3656,6 +4506,284 @@
     "ok": false,
     "secs": 77.5,
     "value_usd": 71421525000.0
+   }
+  },
+  "PFE": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 62.58
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:42:52+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.28x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.278
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, phase_3, phase_3, phase_3, approved, approved, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2019 (approved), 2027, 2027, 2023 (approved), 2023 (approved), 2026",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "7 of 7 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "7 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Pfizer Inc.",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Urothelial / Bladder cancer",
+       "launch_year": 2019,
+       "name": "Padcev (enfortumab vedotin)",
+       "patent_expiry": 2033,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Padcev, a bladder cancer drug developed in partnership with Astellas, which Pfizer expects to achieve peak sales of over $3 billion",
+        "scale": "bn",
+        "source_url": "https://synapse.patsnap.com/article/pfizer-anticipates-8-blockbuster-cancer-drugs-from-4-key-areas-exec",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "Approved pre-peak asset with ongoing Phase 3 perioperative label expansion studies (oncology Phase 3 benchmark 50-60%)"
+      },
+      {
+       "indication": "HR-positive, HER2-negative metastatic breast cancer",
+       "launch_year": 2027,
+       "name": "Atirmociclib",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "He estimates peak sales of $2.6 billion for the medicine, with an expected launch in 2027.",
+        "scale": "bn",
+        "source_url": "https://www.biopharmadive.com/news/pfizer-atirmociclib-breast-cancer-phase-2-fourlight/742686/",
+        "value": 2.6
+       },
+       "phase": "phase_3",
+       "ptrs": null,
+       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+      },
+      {
+       "indication": "Metastatic castration-resistant prostate cancer (mCRPC)",
+       "launch_year": null,
+       "name": "Mevrometostat",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "The brokerage forecasts peak sales of about $1.2 billion and $2.7 billion, respectively, for the two programs.",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/stock-market-news/pfizer-upgraded-by-rbc-as-valuation-resets-ahead-of-key-pipeline-catalysts-3475960",
+        "value": 2.7
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "Phase 3 MEVPRO-1",
+        "quote": "Key opinion leaders assigned a 60% probability of success to MEVPRO-1.",
+        "source_url": "https://www.investing.com/news/stock-market-news/cantor-fitzgerald-reiterates-overweight-on-oric-pharmaceuticals-stock-93CH-3453303",
+        "value": 0.6
+       },
+       "ptrs_basis": "Survey of key opinion leaders evaluating Phase 3 MEVPRO-1 study"
+      },
+      {
+       "indication": "Lyme disease prevention",
+       "launch_year": 2027,
+       "name": "VLA15",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "The CEO said the annual peak sales estimate is “certainly north of” $1 billion.",
+        "scale": "bn",
+        "source_url": "https://endpts.com/valneva-and-pfizer-eye-2027-launch-for-partnered-lyme-disease-vaccine/",
+        "value": 1.0
+       },
+       "phase": "phase_3",
+       "ptrs": null,
+       "ptrs_basis": "Vaccines/infectious disease Phase 3 benchmark 65-75%"
+      },
+      {
+       "indication": "Multiple myeloma",
+       "launch_year": 2023,
+       "name": "Elrexfio (elranatamab)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "The company estimates that elranatamab could generate $4 billion in peak sales.",
+        "scale": "bn",
+        "source_url": "https://www.drugdiscoverytrends.com/pfizers-elranatamab-wins-priority-review-from-fda-for-multiple-myeloma/",
+        "value": 4.0
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "Approved pre-peak therapy undergoing Phase 3 registrational studies for earlier lines of therapy (oncology Phase 3 benchmark 50-60%)"
+      },
+      {
+       "indication": "Ulcerative colitis",
+       "launch_year": 2023,
+       "name": "Velsipity (etrasimod)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Analysts have estimated that peak sales for the drug, which is expected to compete with Bristol Myers Squibb's S1P receptor modulator Zeposia (ozanimod), could top $3 billion a year.",
+        "scale": "bn",
+        "source_url": "https://firstwordpharma.com/story/5790409",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": null,
+       "ptrs_basis": "Approved pre-peak drug with ongoing Phase 3 trials in Crohn's disease and other immuno-inflammatory indications"
+      },
+      {
+       "indication": "ER-positive, HER2-negative metastatic breast cancer",
+       "launch_year": 2026,
+       "name": "Vepdegestrant",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "FY2036E",
+        "quote": "The firm forecasts $1.1 billion in peak sales for the drug in 2036.",
+        "scale": "bn",
+        "source_url": "https://www.biospace.com/fda-clears-pfizer-arvinas-novel-breast-cancer-therapy-despite-mixed-data",
+        "value": 1.1
+       },
+       "phase": "phase_3",
+       "ptrs": null,
+       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+      }
+     ],
+     "notes": "Pipeline includes late-stage and recently approved pre-peak assets with verifiable peak annual sales forecasts from sell-side equity analysts or company management guidance. Fixed financial anchors referenced: reported currency USD, latest annual revenue USD 62.58 bn."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Urothelial / Bladder cancer",
+       "launch_year": 2019,
+       "name": "Padcev (enfortumab vedotin)",
+       "patent_expiry": 2033,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "HR-positive, HER2-negative metastatic breast cancer",
+       "launch_year": 2027,
+       "name": "Atirmociclib",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2600000000.0,
+       "phase": "phase_3",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Metastatic castration-resistant prostate cancer (mCRPC)",
+       "launch_year": null,
+       "name": "Mevrometostat",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2700000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Survey of key opinion leaders evaluating Phase 3 MEVPRO-1 study",
+       "ptrs_override": 0.6,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Lyme disease prevention",
+       "launch_year": 2027,
+       "name": "VLA15",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 1000000000.0,
+       "phase": "phase_3",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Multiple myeloma",
+       "launch_year": 2023,
+       "name": "Elrexfio (elranatamab)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 4000000000.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Ulcerative colitis",
+       "launch_year": 2023,
+       "name": "Velsipity (etrasimod)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "approved",
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "ER-positive, HER2-negative metastatic breast cancer",
+       "launch_year": 2026,
+       "name": "Vepdegestrant",
+       "patent_expiry": null,
+       "peak_sales_period": "FY2036E",
+       "peak_sales_usd": 1100000000.0,
+       "phase": "phase_3",
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Pfizer Inc.",
+     "depreciation_and_amortization": 6592000000.0,
+     "market_cap": 163402944800.0,
+     "net_ppe": 21530000000.0,
+     "operating_cash_flow": 11705000000.0,
+     "period": "2025-12-31",
+     "revenue": 62579000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 26.1,
+    "value_usd": 17400000000.0
    }
   },
   "RIG": {
@@ -4356,6 +5484,291 @@
     "ok": false,
     "secs": 700.0,
     "value_usd": 0.0
+   }
+  },
+  "VRTX": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 12.07
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-26T14:43:46+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "1.97x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 1.9711
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved, filed, phase_3, approved, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2025 (approved), 2025 (approved), 2026, 2027, 2024 (approved), 2028",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "6 of 6 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "6 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Vertex Pharmaceuticals Incorporated",
+    "data": {
+     "as_of": "2026-09-26",
+     "assets": [
+      {
+       "indication": "Cystic fibrosis",
+       "launch_year": 2025,
+       "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
+       "patent_expiry": 2043,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2030E",
+        "quote": "Company: Vertex Pharmaceuticals Used for: Cystic fibrosis. Est. 2030 sales: $8.3 billion.",
+        "scale": "bn",
+        "source_url": "https://www.fiercepharma.com/pharma/top-10-most-anticipated-drug-launches-2025",
+        "value": 8.3
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "2024",
+        "quote": "Vertex won FDA approval for its newest cystic fibrosis treatment, Alyftrek, in late December 2024",
+        "source_url": "https://www.fiercepharma.com/pharma/top-10-most-anticipated-drug-launches-2025",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved product; commercial launch underway"
+      },
+      {
+       "indication": "Moderate-to-severe acute pain",
+       "launch_year": 2025,
+       "name": "Suzetrigine (Journavx / VX-548)",
+       "patent_expiry": 2040,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2030E",
+        "quote": "the analysts are forecasting annual sales of just under $3 billion for suzetrigine by 2030.",
+        "scale": "bn",
+        "source_url": "https://www.fiercepharma.com/pharma/top-10-most-anticipated-drug-launches-2025",
+        "value": 3.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "2025",
+        "quote": "FDA approved Journavx in January 2025, making it the first approved drug in a new class of non-opioid pain medicine.",
+        "source_url": "https://www.nextinsight.net/index.php/story-archive-mainmenu-60/948-2026/16010-ix-biopharma-why-investors-are-paying-s600m-for-future-value",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved product for acute pain; Phase 3 underway for diabetic peripheral neuropathy"
+      },
+      {
+       "indication": "IgA nephropathy (IgAN)",
+       "launch_year": 2026,
+       "name": "Povetacicept (ALPN-303)",
+       "patent_expiry": 2035,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2039E",
+        "quote": "before scaling further to peak global sales of $4.3 billion by 2039.",
+        "scale": "bn",
+        "source_url": "https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/vertex-s-igan-drug-outlook-strengthens-on-positive-phase-3-data-87005161",
+        "value": 4.3
+       },
+       "phase": "filed",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Analysts have responded swiftly, raising the drug's probability of success to 80% from 70.86%, reflecting increased confidence in both regulatory prospects and commercial viability.",
+        "source_url": "https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/vertex-s-igan-drug-outlook-strengthens-on-positive-phase-3-data-87005161",
+        "value": 0.8
+       },
+       "ptrs_basis": "Sell-side probability of success following positive Phase 3 RAINIER interim data and BLA filing"
+      },
+      {
+       "indication": "APOL1-mediated kidney disease (AMKD)",
+       "launch_year": 2027,
+       "name": "Inaxaplin (VX-147)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "TD Cowen currently projects around $1 billion in peak sales for the drug",
+        "scale": "bn",
+        "source_url": "https://www.fiercebiotech.com/biotech/vertexs-midstage-data-amplify-kidney-disease-market-opportunity",
+        "value": 1.0
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "2026",
+        "quote": "In an Aug. 3 note to investors, Guggenheim Securities analysts put the probability of success in primary AMKD at 65%.",
+        "source_url": "https://www.fiercebiotech.com/biotech/vertexs-midstage-data-amplify-kidney-disease-market-opportunity",
+        "value": 0.65
+       },
+       "ptrs_basis": "Guggenheim Securities sell-side estimate for pivotal Phase 2/3 development in primary AMKD"
+      },
+      {
+       "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
+       "launch_year": 2024,
+       "name": "Casgevy (exagamglogene autotemcel)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Peak sales in 2030 and beyond could rise to more than $2.2 billion, according to Bloomberg.",
+        "scale": "bn",
+        "source_url": "https://www.nanalyze.com/2024/07/gene-editing-stocks/",
+        "value": 2.2
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "2024",
+        "quote": "CASGEVY is the first approved therapy in the U.S. that uses CRISPR",
+        "source_url": "https://www.nanalyze.com/2024/07/gene-editing-stocks/",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved product; commercial ramp underway"
+      },
+      {
+       "indication": "Congenital adrenal hyperplasia (CAH)",
+       "launch_year": 2028,
+       "name": "Atumelnant (CRN04894)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Vertex estimates that Palsonify and atumelnant will add more than $5 billion in annual peak sales potential to its portfolio.",
+        "scale": "bn",
+        "source_url": "https://www.fiercepharma.com/pharma/vertex-its-largest-ever-deal-acquires-endocrine-disease-specialist-crinetics-10b",
+        "value": 5.0
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Phase 3 to approval is approximately 60%.",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.6
+       },
+       "ptrs_basis": "BIO industry historical benchmark for Phase 3 transition success rate in rare/endocrine indications"
+      }
+     ],
+     "notes": "Fixed financial anchor: Vertex Pharmaceuticals reported revenue latest is USD 12.07 bn in reported currency USD."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "indication": "Cystic fibrosis",
+       "launch_year": 2025,
+       "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
+       "patent_expiry": 2043,
+       "peak_sales_period": "2030E",
+       "peak_sales_usd": 8300000000.000001,
+       "phase": "approved",
+       "ptrs_basis": "Approved product; commercial launch underway",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Moderate-to-severe acute pain",
+       "launch_year": 2025,
+       "name": "Suzetrigine (Journavx / VX-548)",
+       "patent_expiry": 2040,
+       "peak_sales_period": "2030E",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved product for acute pain; Phase 3 underway for diabetic peripheral neuropathy",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "IgA nephropathy (IgAN)",
+       "launch_year": 2026,
+       "name": "Povetacicept (ALPN-303)",
+       "patent_expiry": 2035,
+       "peak_sales_period": "2039E",
+       "peak_sales_usd": 4300000000.0,
+       "phase": "filed",
+       "ptrs_basis": "Sell-side probability of success following positive Phase 3 RAINIER interim data and BLA filing",
+       "ptrs_override": 0.8,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "APOL1-mediated kidney disease (AMKD)",
+       "launch_year": 2027,
+       "name": "Inaxaplin (VX-147)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 1000000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Guggenheim Securities sell-side estimate for pivotal Phase 2/3 development in primary AMKD",
+       "ptrs_override": 0.65,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
+       "launch_year": 2024,
+       "name": "Casgevy (exagamglogene autotemcel)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2200000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved product; commercial ramp underway",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Congenital adrenal hyperplasia (CAH)",
+       "launch_year": 2028,
+       "name": "Atumelnant (CRN04894)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 5000000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "BIO industry historical benchmark for Phase 3 transition success rate in rare/endocrine indications",
+       "ptrs_override": 0.6,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Vertex Pharmaceuticals Incorporated",
+     "depreciation_and_amortization": 209800000.0,
+     "market_cap": 133549652950.0,
+     "net_ppe": 3083000000.0,
+     "operating_cash_flow": 3631400000.0,
+     "period": "2025-12-31",
+     "revenue": 12074600000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 50.2,
+    "value_usd": 23800000000.0
    }
   },
   "WMB": {}

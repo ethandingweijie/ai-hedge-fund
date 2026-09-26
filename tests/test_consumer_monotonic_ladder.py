@@ -1113,7 +1113,7 @@ class TestTheOpsSpellingsAreInTheSwap:
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
         # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
-        assert (tot, trail, elig, anchored) == (116, 36, 36, 12)   # Wave 4: two Consumer anchors moved to Forward P/E
+        assert (tot, trail, elig, anchored) == (117, 36, 36, 12)   # Wave 4 anchors; +Commercial Biotech (Wave 5, 2026-09-26)
         assert sorted(consumer_anchors) == [
             # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
             # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E

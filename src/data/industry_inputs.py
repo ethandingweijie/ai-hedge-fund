@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
-KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp")
+KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp", "pipeline")
 
 #: Kinds that ARE guidance. Everywhere else a figure for a year that has not
 #: ended fails its period check; here one for a year that HAS ended does.
@@ -56,7 +56,7 @@ RESERVE_MEASURE_REMARK = (
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
 #: and NAV curves, where the audit trail can separate price from reserve life.
-NO_OVERLAY = ("pv10", "sotp")
+NO_OVERLAY = ("pv10", "sotp", "pipeline")
 
 #: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
 #: pre-fill whose segments sum to more than the group can only be rebuilt.
@@ -82,6 +82,10 @@ BOUNDS = {
     # Segment revenues summed / latest group revenue: reportable segments run a
     # little under the group (eliminations) to a little over (a forward year).
     "sotp": ("revenue", 0.6, 1.6),
+    # Summed consensus peak sales of the late-stage pipeline / latest revenue: a
+    # handful of Phase 3 assets on a large pharma is a fraction of revenue; a
+    # commercial biotech's pipeline can be several times its current sales.
+    "pipeline": ("revenue", 0.02, 8.0),
 }
 
 #: Ratios a rate order can plausibly carry. An allowed ROE outside 6-14% or an equity
@@ -507,6 +511,25 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
             detail = {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",
                                                 "book_to_bill", "definition")
                       if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {})
+            if kind == "pipeline":
+                # Wave 5 (owner spec, 2026-09-26): every asset with its cited peak
+                # sales, period label, PTRS and basis, so the reviewer sees the
+                # option value before it prices.
+                detail = {
+                    "as_of": data.get("as_of"),
+                    "assets": [{
+                        "name": a.get("name"), "indication": a.get("indication"), "phase": a.get("phase"),
+                        "peak_sales": {"value": (a.get("peak_sales") or {}).get("value"),
+                                       "currency": (a.get("peak_sales") or {}).get("currency"),
+                                       "scale": (a.get("peak_sales") or {}).get("scale"),
+                                       "period_label": (a.get("peak_sales") or {}).get("period"),
+                                       "source_url": (a.get("peak_sales") or {}).get("source_url"),
+                                       "quote": (a.get("peak_sales") or {}).get("quote")},
+                        "launch_year": a.get("launch_year"), "patent_expiry": a.get("patent_expiry"),
+                        "ptrs": (a.get("ptrs") or {}).get("value") if a.get("ptrs") else None,
+                        "ptrs_basis": a.get("ptrs_basis"),
+                    } for a in (data.get("assets") or []) if isinstance(a, dict)],
+                }
             if kind == "sotp":
                 # Owner, 2026-09-24 (item 3): every figure on the gate carries
                 # its period label, so trailing actuals standing in for a
@@ -540,7 +563,8 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                             if ov and kind not in NO_OVERLAY else None),
                 "overlay_allowed": kind not in NO_OVERLAY,
                 "value": v.get("value"), "currency": v.get("currency"), "scale": v.get("scale"),
-                "period": v.get("period") or (data.get("fiscal_year") if kind == "sotp" else None),
+                "period": (v.get("period") or (data.get("fiscal_year") if kind == "sotp" else None)
+                           or (data.get("as_of") if kind == "pipeline" else None)),
                 "source_url": v.get("source_url"), "quote": v.get("quote"),
                 "detail": detail,
                 "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None,

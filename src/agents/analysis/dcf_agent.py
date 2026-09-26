@@ -5437,6 +5437,11 @@ def _compute_rnpv(
         else:
             ta_mult = therapeutic_area_pos_multiplier(asset.get("indication"))
         pos = max(0.005, min(1.0, base_pos * ta_mult))
+        # Owner, 2026-09-26: an accepted input may carry a cited PTRS benchmark
+        # for the asset's therapeutic area and phase; it replaces the table.
+        _pos_o = asset.get("ptrs_override")
+        if isinstance(_pos_o, (int, float)) and 0.0 < _pos_o <= 1.0:
+            pos = float(_pos_o)
 
         # Years-to-launch: prefer asset-supplied launch_year if sane, else
         # fall back to phase median
@@ -7036,7 +7041,19 @@ def _compute_method_value(
     # assets are available the method returns None (falls through to the
     # profile's DCF proxy via the blend engine).
     if method_name in {"rNPV", "rNPV (Pipeline)"}:
-        assets = most_recent.get("pipeline_assets") or []
+        # Owner, 2026-09-26: accepted inputs first; the extractor's assets
+        # price only a Pre-approval Biotech (no other source exists for it); a
+        # revenue name with nothing accepted has its pipeline leg QUARANTINED
+        # -- None here, and the blend re-weights the rest to 1.0.
+        assets = most_recent.get("pipeline_assets_accepted") or []
+        if not assets:
+            if (profile_name or "") == "Pre-approval Biotech":
+                assets = most_recent.get("pipeline_assets") or []
+            else:
+                _n_ex = len(most_recent.get("pipeline_assets_extractor") or [])
+                most_recent.setdefault("_pipeline_quarantine", (
+                    f"rNPV (Pipeline): quarantined -- no owner-accepted pipeline input for {profile_name}; "
+                    f"{_n_ex} extractor asset(s) held, not priced; the blend re-weights without the leg"))
         if not assets:
             return None
         iv, audit = _compute_rnpv(
@@ -10676,7 +10693,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # from most_recent["pipeline_assets"] when dispatching the rNPV method.
         # Absent assets → rNPV returns None → blended IV falls to DCF proxy.
         _ticker_pipeline = pipeline_assets_all.get(ticker) or []
+        # Owner, 2026-09-26 (Wave 5): the review-gated pipeline pre-fill
+        # (kind `pipeline`, Gemini-cited late-stage assets with consensus peak
+        # sales and PTRS benchmarks) is the rNPV leg's source once ACCEPTED.
+        # The extractor's assets stay on `pipeline_assets_extractor`; the rNPV
+        # branch decides per profile (see _compute_method_value): accepted
+        # first; the extractor only for Pre-approval Biotech, whose research
+        # is the only source there is; on a revenue name with nothing accepted
+        # the leg is quarantined and the blend re-weights to 1.0 without it.
+        try:
+            from src.data import industry_inputs as _ii_p
+            from src.agents.industry.gemini_params import pipeline_to_engine_assets as _pipe_bridge
+            _pipe_e = _ii_p.accepted_entry(ticker, "pipeline")
+            if _pipe_e:
+                _acc_assets, _acc_checks = _pipe_bridge(_ii_p.canonical_data(_pipe_e))
+                if _acc_assets:
+                    most_recent["pipeline_assets_accepted"] = _acc_assets
+                    ticker_forward_flags.append(
+                        f"rNPV (Pipeline): {len(_acc_assets)} late-stage asset(s) from owner-accepted Gemini "
+                        f"inputs (consensus peak sales, PTRS benchmarks); the extractor's "
+                        f"{len(_ticker_pipeline)} asset(s) held as a cross-check")
+        except Exception:                                  # noqa: BLE001
+            pass
         if _ticker_pipeline:
+            most_recent["pipeline_assets_extractor"] = _ticker_pipeline
             most_recent["pipeline_assets"] = _ticker_pipeline
             # Pipeline-composition audit: phase mix + top assets by peak_sales.
             # Full per-asset rNPV table surfaces later from _compute_rnpv audit.
@@ -15237,6 +15277,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         })
             except Exception:                              # noqa: BLE001
                 pass
+            if most_recent.get("_pipeline_quarantine"):
+                _b_sr.setdefault("forward_flags", []).append(most_recent["_pipeline_quarantine"])
             _shadow_names = (profile_data or {}).get("shadow_methods") or []
             if _shadow_names:
                 _an = _b_tbl.get("SOTP (analyst)")

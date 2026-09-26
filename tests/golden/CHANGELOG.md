@@ -1498,3 +1498,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner remediation 2026-09-26 (continued): COST fixture re-recorded because the Membership / Subscription Retail method list changed with the EV/EBITDAR rename; same engine as the rest of this regeneration
 
+## 2026-09-26T14:45:07+00:00
+
+- regenerated at HEAD: `8ab17de`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 5 (owner spec, 2026-09-26): Commercial Biotech profile added (Biopharma), health labels into routing scope with two new rows, pins for the devices, CDMO, pharma and provider names; the profile-weights digest in param_version moves on every fixture, no valuation leaf moves (no health name in the golden basket)
+

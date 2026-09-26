@@ -100,6 +100,74 @@ class SotpInputs(BaseModel):
     holdco_basis: str
 
 
+class PipelineAsset(BaseModel):
+    name: str
+    indication: str = Field(description="Primary indication or therapeutic area")
+    phase: Literal["phase_2", "phase_3", "filed", "approved"] = Field(
+        description="Development stage; late-stage only (Phase 2, Phase 3, filed / under review, approved but pre-peak)")
+    peak_sales: Cited = Field(description="Analyst consensus PEAK annual sales for the asset, in the source's currency and scale")
+    launch_year: Optional[int] = Field(default=None, description="Expected first full commercial year")
+    patent_expiry: Optional[int] = Field(default=None, description="Loss-of-exclusivity year, when known")
+    ptrs: Optional[CitedRatio] = Field(default=None, description="Probability of technical and regulatory success from "
+                                                                 "the source, or the therapeutic-area benchmark for the phase, cited")
+    ptrs_basis: Optional[str] = Field(default=None, description="e.g. 'oncology Phase 3 benchmark 50-60%'")
+
+
+class PipelineInputs(BaseModel):
+    as_of: str = Field(description="Date the pipeline was read, e.g. '2026-09-26'")
+    assets: list[PipelineAsset]
+    notes: Optional[str] = None
+
+
+def pipeline_prompt(company: str, ticker: str, anchors: dict) -> str:
+    # Owner spec, 2026-09-26: late-stage assets, indications, consensus peak
+    # sales, PTRS benchmarks by therapeutic area; cited; no valuation.
+    return (
+        f"You are building risk-adjusted NPV INPUTS for {company}'s ({ticker}) drug pipeline.\n"
+        "List the LATE-STAGE assets only: Phase 2, Phase 3, filed / under regulatory review, and recently "
+        "approved products still years from peak. For each: the primary indication, the stage, the analyst "
+        "CONSENSUS PEAK annual sales (sell-side or the company's own peak-sales guidance; never a single "
+        "year's sales unless it is the peak), the expected first full commercial year, the loss-of-exclusivity "
+        "year when disclosed, and the probability of technical and regulatory success -- the source's own "
+        "figure, or the standard therapeutic-area benchmark for that phase (oncology Phase 3 about 50-60%, "
+        "metabolic Phase 3 about 65-75%, CNS lower), stated as a decimal with its basis. Cite every number. "
+        f"Do NOT value anything.\n{_AMOUNT_RULE}\n"
+        f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def pipeline_to_engine_assets(pipe: dict, fx_to_usd: Optional[Callable[[str], Optional[float]]] = None) -> tuple[list, dict]:
+    """Gemini pipeline inputs -> the asset dicts `_compute_rnpv` consumes
+    ({name, indication, phase, peak_sales_usd, launch_year, ptrs_override}).
+    Uncited or unconvertible peak sales drop the asset; an out-of-range PTRS is
+    ignored (the phase table prices it) and reported."""
+    fx = fx_to_usd or _default_fx
+    checks: dict = {"dropped_assets": [], "ptrs_ignored": [], "currencies": []}
+    out = []
+    for a in pipe.get("assets") or []:
+        ps_c = a.get("peak_sales")
+        ps = amount(ps_c, fx)
+        if not ps or ps <= 0:
+            checks["dropped_assets"].append(a.get("name")); continue
+        checks["currencies"].append(f"{(ps_c or {}).get('currency')} {(ps_c or {}).get('scale')}")
+        asset = {"name": a.get("name"), "indication": a.get("indication"), "phase": a.get("phase"),
+                 "peak_sales_usd": ps, "launch_year": a.get("launch_year"), "patent_expiry": a.get("patent_expiry"),
+                 "source": "gemini_accepted", "peak_sales_period": (ps_c or {}).get("period")}
+        pt = a.get("ptrs")
+        if pt is not None:
+            v = pt.get("value") if isinstance(pt, dict) else None
+            if isinstance(v, (int, float)) and v > 1.0:
+                v = v / 100.0
+            if isinstance(v, (int, float)) and 0.02 <= v <= 1.0 and _cited_ok(pt):
+                asset["ptrs_override"] = float(v); asset["ptrs_basis"] = a.get("ptrs_basis")
+            else:
+                checks["ptrs_ignored"].append(a.get("name"))
+        out.append(asset)
+    checks["citation_coverage"] = (sum(1 for a in pipe.get("assets") or [] if _cited_ok(a.get("peak_sales")))
+                                   / max(1, len(pipe.get("assets") or [])))
+    return out, checks
+
+
 class DirectEstimate(BaseModel):
     """Evaluation arm G2 only -- never used by a live run."""
     sotp_value: float
@@ -555,6 +623,7 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "rate_base": RateBase,
     "fcf_guidance": FcfGuidance,
     "sotp": SotpInputs,
+    "pipeline": PipelineInputs,
 }
 
 _INDUSTRY_ASK = {
@@ -575,6 +644,7 @@ _INDUSTRY_ASK = {
     # `sotp` is asked through sotp_prompt(company, ticker, anchors), which needs
     # the FMP anchors; this entry keeps the kind tables complete.
     "sotp": "its business segments with a cited multiple range each (see sotp_prompt)",
+    "pipeline": "its late-stage pipeline assets with consensus peak sales and PTRS (see pipeline_prompt)",
     "fcf_guidance": (
         "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
         "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
@@ -602,6 +672,7 @@ _INDUSTRY_ASK = {
 
 _OVERLAY_ASK = {
     "sotp": "segment revenue",
+    "pipeline": "peak sales",
     "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",
