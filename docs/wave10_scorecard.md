@@ -25,8 +25,8 @@ the HK hotel owners, re-measured after the anchor fix, +9% and +21%.
   equity is small against its EBITDA-based legs; Royalty Pharma -16% (a royalty book, flagged in the proposal).
 - Casinos: MGM +267% (anchor missing), Wynn Macau +67%; the Macau and Las Vegas operators share one profile.
 - Signet +140% on Luxury Goods; Fast Retailing still +776% (JPY statements against an HKD line, a data issue).
-- Anchor missing on 6: Pop Mart's peer MINISO (09896.HK), Jardine C&C (its Holding Company override), MGM,
-  Corcept, Longyuan, Brookfield.
+- Anchor missing on 7: MINISO (09896.HK), Jardine C&C (its Holding Company override), MGM, Corcept, Longyuan,
+  Brookfield, and Shangri-La (its EV/EBITDA anchor is non-positive; book prices the NAV weight).
 
 ## Per-ticker record
 
