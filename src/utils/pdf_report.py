@@ -602,7 +602,7 @@ def _is_balance_sheet_financial_profile(profile_name) -> bool:
 
 
 def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5,
-                          bank: bool = False) -> "Table | None":
+                          bank: bool = False, family: "str | None" = None) -> "Table | None":
     """Compact multi-year historical financials table (Revenue / Net Income / FCF / Net Debt).
     Returns None if raw_financials is absent or contains no parseable year-keyed data.
     `page_w` is the width available; `years` the most recent fiscal years shown.
@@ -648,32 +648,27 @@ def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5,
             Paragraph(_fmt_billions(v), styles["RptValue"]) for v in values
         ]
 
-    if bank:
-        # Owner, 2026-09-27 (JPM production report review): a bank generates cash by
-        # gathering deposits and writing loans, so corporate free cash flow and net debt
-        # are uninformative for it (JPM printed FCF -147.8bn and net debt 599bn). The
-        # balance-sheet financials show the book they are valued on instead.
-        def _per_share_row(label, key, fallback_num=None):
-            vals = []
-            for fy in fy_keys:
-                v = _get(fy, key)
-                if v is None and fallback_num:
-                    num, den = _get(fy, fallback_num), _get(fy, "shares_outstanding")
-                    try:
-                        v = float(num) / float(den) if num is not None and den else None
-                    except (TypeError, ValueError, ZeroDivisionError):
-                        v = None
-                vals.append(v)
-            return [Paragraph(label, styles["RptBody"])] + [
-                Paragraph(("%.2f" % float(v)) if isinstance(v, (int, float)) else "n/a", styles["RptValue"]) for v in vals]
-        rows = [
-            hdr,
-            _data_row("Revenue",          [_get(fy, "revenue")    for fy in fy_keys]),
-            _data_row("Net Income",        [_get(fy, "net_income") for fy in fy_keys]),
-            _data_row("Total equity",      [_get(fy, "total_equity") for fy in fy_keys]),
-            _per_share_row("Book value / share", "book_value_per_share", fallback_num="total_equity"),
-            _per_share_row("Dividends / share", "dividends_per_share"),
-        ]
+    # Owner, 2026-09-27 (JPM production report review, then "proceed with the family
+    # list"): the rows are the resolved profile FAMILY's (src/data/report_families.py). A
+    # bank shows the book it is valued on, an energy name its cash and leverage, a
+    # software name its margins and SBC. `bank=True` is the pre-family spelling and
+    # maps to the Banks family.
+    if family or bank:
+        from src.data.report_families import family_rows, format_value
+        _fam = family or "Banks"
+        _fys, _rows = family_rows(raw_financials, _fam, years=years)
+        if _rows:
+            hdr = [Paragraph(_wh(f"{_ccy} bn" if _ccy else "Key financials"), styles["RptLabel"])]
+            for fy in _fys:
+                hdr.append(Paragraph(_wh(_strip(str(fy))), styles["RptLabel"]))
+            fy_keys = _fys
+            rows = [hdr] + [
+                [Paragraph(label, styles["RptBody"])] + [Paragraph(format_value(v, kind), styles["RptValue"]) for v in vals]
+                for label, kind, vals in _rows]
+        else:
+            rows = [hdr,
+                    _data_row("Revenue",   [_get(fy, "revenue")    for fy in fy_keys]),
+                    _data_row("Net Income", [_get(fy, "net_income") for fy in fy_keys])]
     else:
         rows = [
             hdr,
@@ -2606,8 +2601,12 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         if _ph:
             col += [Paragraph("12-month price", styles["RptLabel"]), Spacer(1, 2),
                     _PriceSparkline(_ph, decisions.get(t, {}).get("price_target"), width), Spacer(1, 6)]
-        _kf = _key_financials_table(raw_financials, styles, width, years=3,
-                                    bank=_is_balance_sheet_financial_profile(((result.get("dcf_range") or {}).get(t) or {}).get("profile")))
+        try:
+            from src.data.report_families import report_family_for as _rf
+            _family = _rf(((result.get("dcf_range") or {}).get(t) or {}).get("profile"))
+        except Exception:                                  # noqa: BLE001
+            _family = None
+        _kf = _key_financials_table(raw_financials, styles, width, years=3, family=_family)
         if _kf:
             col += [Paragraph("Key financials", styles["RptLabel"]), Spacer(1, 2), _kf, Spacer(1, 6)]
         col += _intel_compact(short_interest.get(t) or {}, earnings_qual.get(t) or {},

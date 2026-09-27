@@ -1514,6 +1514,27 @@ class _Book:
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)
         r += 2
+        # Owner, 2026-09-27: the key metrics the profile's report FAMILY is judged on,
+        # read from the run's per-year raw financials (static values, input colour).
+        try:
+            from src.data.report_families import report_family_for, family_rows, format_value
+            _fam = report_family_for(self.dr.get("profile"))
+            _fys, _frows = family_rows(((self.run.get("data") or {}).get("raw_financials")), _fam, years=3)
+        except Exception:                                  # noqa: BLE001
+            _fam, _fys, _frows = None, [], []
+        if _frows:
+            sh.section(r, f"Key metrics ({_fam})", 6); r += 1
+            sh.header(r, ["Metric"] + [str(fy) for fy in _fys]); r += 1
+            for label, kind, vals in _frows:
+                sh.label(r, 1, label, indent=1)
+                for j, v in enumerate(vals):
+                    if v is None:
+                        sh.put(r, 2 + j, "n/a").font = Font(color=BLUE)
+                    else:
+                        sh.put(r, 2 + j, float(v) / (1e9 if kind == "bn" else 1.0),
+                               {"bn": '#,##0.0"B"', "ps": NUM, "pct": PCT, "x": '0.00"x"'}[kind]).font = Font(color=BLUE)
+                r += 1
+            r += 1
         # Football field: bear–bull range per leg, plus DCF and the blend.
         sh.section(r, "Football field (value per share, bear to bull)", 6); r += 1
         sh.header(r, ["Method", "Low", "High", "Range", "Base", "Low (engine)", "High (engine)", "Base (engine)"])

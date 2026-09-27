@@ -85,3 +85,14 @@ family's rows.
 2. The narrative-fidelity rule: unmatched numbers fail the draft (recommended), or are flagged in the PDF.
 3. Whether the thesis skeleton is mandatory per family or advisory.
 4. Build order as in section 3, or the guard alone first.
+
+
+## 5. Status
+
+- 2026-09-27: owner "proceed with the family list". Built: `src/data/report_families.py` (nine families
+  plus the operating-company default; every one of the 121 profile entries maps to exactly one family,
+  pinned by `tests/test_report_families.py`); the PDF key-financials block and a "Key metrics (family)"
+  block on the workbook Summary read the family's rows from the run's per-year raw financials (derived
+  ratios: RoE, EBIT and FCF margin, SBC and capex intensity, net debt to EBITDA and to equity). The
+  exposition, skeleton and signals fields are declared per family and not yet consumed (build steps 3
+  and 4). Step 1, the narrative-fidelity guard, is not built.
