@@ -104,3 +104,12 @@ def test_the_baskets_hold_five_names_or_more():
 def test_the_cyclicals_carry_the_fade():
     for prof in ("Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines"):
         assert prof in d._CYCLICAL_PROFILES and prof in d._CONVERGENCE_ALPHA_PROFILES
+
+
+def test_alibaba_prices_on_china_internet_peers_not_specialty_retail():
+    """Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform reads a curated China
+    internet basket on both exchanges, ahead of FMP's Specialty Retail label cohort."""
+    b = rc.PROFILE_PEER_BASKETS["China Internet Platform"]
+    assert "9988.HK" in b["HKSE"] and "0700.HK" in b["HKSE"] and "BABA" in b["US"]
+    assert all(len(v) >= rc.MIN_INDUSTRY_PEERS for v in b.values())
+    assert sp.get_wacc_profile_for_ticker("BABA")[1] == sp.get_wacc_profile_for_ticker("09988.HK")[1] == "China Internet Platform"

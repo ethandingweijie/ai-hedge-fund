@@ -306,6 +306,11 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Cruise Lines":                {"US": ("RCL", "CCL", "NCLH", "VIK", "LIND")},
     "City Gas Distribution (HK / China)": {"HKSE": ("0003.HK", "2688.HK", "0392.HK", "1193.HK", "0384.HK")},
     "Specialty & Generic Pharma":  {"US": ("TEVA", "ZTS", "VTRS", "ELAN", "ANIP")},
+    # Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform prices its relative
+    # legs on China internet peers (the owner's pins plus the store's internet, gaming and travel
+    # platforms) instead of FMP's Specialty Retail label (Amazon, O'Reilly; Meituan, MINISO).
+    "China Internet Platform":     {"HKSE": ("9988.HK", "0700.HK", "3690.HK", "9618.HK", "9999.HK", "9888.HK", "1024.HK", "9961.HK"),
+                                    "US": ("BABA", "PDD", "JD", "BIDU", "NTES", "TCOM")},
     # Wave 8c (owner verdict C1): the Tier-1 landlords' own median carries their P/B and so the P/NAV read
     # on a published NAV; the broad HKSE diversified label sat at 0.30x with small-cap illiquidity in it.
     "Landlord / Investment Property (HK)": {"HKSE": ("00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK")},
