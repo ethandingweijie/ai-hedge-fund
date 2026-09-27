@@ -390,7 +390,7 @@ _WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
 #: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
 #: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
 _WAVE8_MOVED = {
-    "C38U_SI":  (1.74,     1.34,     2.20,    (1.80,  2.00,  2.23)),
+    "C38U_SI":  (1.76,     1.36,     2.22,    (1.81,  2.01,  2.24)),   # Wave 8b step 1 (2026-09-27): clean NOI on the S-REIT NAV leg
 }
 _WAVE7_MOVED = {
     "02888_HK": (288.95,  236.95,   340.94,   (233.97, 259.98, 285.97)),

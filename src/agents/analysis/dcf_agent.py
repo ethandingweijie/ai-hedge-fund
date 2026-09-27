@@ -4170,7 +4170,10 @@ def _cohort_p_nav_4q(peer: Optional[dict]) -> Optional[dict]:
         ex, key = str(b.get("exchange") or ""), str(b.get("key") or "")
         if ex not in _P_NAV_CALIBRATED_EXCHANGES or b.get("basis") not in ("industry", "profile"):
             return None
-        if not key.startswith(("REIT", "Real Estate")):
+        # an industry cohort must be a real-estate label; a curated or sub-cohort basket ("profile" basis:
+        # DEV_HK_DIVERSIFIED, DEV_MAINLAND_SOE, a landlord basket) is a real-estate cohort by construction
+        # -- step 4's sub-cohorts otherwise fell out of the read and a published NAV went back to par
+        if b.get("basis") == "industry" and not key.startswith(("REIT", "Real Estate")):
             return None
         from datetime import date, timedelta
         from src.data import db as _db

@@ -1,0 +1,55 @@
+== 00688.HK | Property Developer (HK / China) | IV 20.66 | anchor P/BV | spot 12.42 | ccy HKD
+   flag: Cash-conversion (observed, not applied): FCF margin 10.1% vs 7.6% — reported FCF is 1.4x what a repeatable basis supports (ex-working-capital), so the excess is not projected
+   flag: CAGR-divergence gate: NTM growth +7.0% → +5.0%; analyst bands scaled 0.71x (NTM consensus +7.0% diverges from historical CAGR -8.7% by 15.8pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Gate B (base): Forward ROIC (2.1% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.32) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   legs: {'DDM': 5.48, 'Forward P/E': 10.47, 'P/BV': 27.3, 'Forward EV/EBITDA': 7.79}
+   weights: [('P/BV', 0.65), ('Forward P/E', 0.2), ('DDM', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (6.987, 'profile', 'DEV_MAINLAND_SOE'), 'pe': (7.59, 'profile', 'DEV_MAINLAND_SOE'), 'pb': (0.608, 'profile', 'DEV_MAINLAND_SOE'), 'fcf_yield': (0.068, 'industry', 'Real Estate - Development'), 'growth_avg': (0.064, 'profile', 'DEV_MAINLAND_SOE'), 'pe_ntm': (7.712, 'profile', 'DEV_MAINLAND_SOE')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag None
+== 01109.HK | Property Developer (HK / China) | IV 35.12 | anchor P/BV | spot 28.64 | ccy HKD
+   flag: CAGR-divergence gate: NTM growth -13.8% → -12.7%; analyst bands shifted +1.2% (NTM consensus -13.8% sits 16.2pp below historical CAGR +2.3% and below the -5.0% downside floor on a non-cyclical profile with positive secul
+   flag: Gate B (base): Forward ROIC (4.4% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.61) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   legs: {'DDM': 14.34, 'Forward P/E': 28.85, 'P/BV': 41.84, 'Forward EV/EBITDA': 6.55}
+   weights: [('P/BV', 0.65), ('Forward P/E', 0.2), ('DDM', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (6.987, 'profile', 'DEV_MAINLAND_SOE'), 'pe': (7.59, 'profile', 'DEV_MAINLAND_SOE'), 'pb': (0.608, 'profile', 'DEV_MAINLAND_SOE'), 'fcf_yield': (0.068, 'industry', 'Real Estate - Development'), 'growth_avg': (0.064, 'profile', 'DEV_MAINLAND_SOE'), 'pe_ntm': (7.712, 'profile', 'DEV_MAINLAND_SOE')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag None
+== 00016.HK | Landlord / Investment Property (HK) | IV 82.22 | anchor NAV (Cap Rates) | spot 107.1 | ccy HKD
+   flag: Gate B (base): Forward ROIC (2.5% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.13) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'NAV (Cap Rates)': 119.49, 'DDM': 26.05, 'P/BV': 88.7, 'Forward P/E': 109.39, 'Forward EV/EBITDA': 108.38}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (11.766, 'profile', 'DEV_HK_DIVERSIFIED'), 'pe': (14.932, 'profile', 'DEV_HK_DIVERSIFIED'), 'pb': (0.402, 'profile', 'DEV_HK_DIVERSIFIED'), 'fcf_yield': (0.078, 'profile', 'DEV_HK_DIVERSIFIED'), 'growth_avg': (0.039, 'profile', 'DEV_HK_DIVERSIFIED'), 'pe_ntm': (13.126, 'profile', 'DEV_HK_DIVERSIFIED')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (HK / China)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== 01113.HK | Landlord / Investment Property (HK) | IV 119.5 | anchor NAV (Cap Rates) | spot 46.0 | ccy HKD
+   flag: Gate B (base): Forward ROIC (1.7% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.14) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'NAV (Cap Rates)': 252.05, 'DDM': 16.19, 'P/BV': 46.08, 'Forward P/E': 51.43, 'Forward EV/EBITDA': 64.33}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (11.766, 'profile', 'DEV_HK_DIVERSIFIED'), 'pe': (14.932, 'profile', 'DEV_HK_DIVERSIFIED'), 'pb': (0.402, 'profile', 'DEV_HK_DIVERSIFIED'), 'fcf_yield': (0.078, 'profile', 'DEV_HK_DIVERSIFIED'), 'growth_avg': (0.039, 'profile', 'DEV_HK_DIVERSIFIED'), 'pe_ntm': (13.126, 'profile', 'DEV_HK_DIVERSIFIED')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (HK / China)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== 02202.HK | Property Developer (HK / China) | IV None | anchor P/BV | spot None | ccy HKD
+   flag: Unrated — too little of the method set could be computed: only 15% of the profile's intended method weight could be computed (minimum 35%). No intrinsic value, 12-month target or rating is published.
+   flag: Distressed_Developer: two consecutive loss years (-57,910,048,086, -103,647,378,053); the P/BV anchor and the RNAV leg stand down and no value is published on book (GATE_DISTRESSED_DEVELOPER)
+   flag: Gate B (base): Forward ROIC (-0.9% [Y10 projected]) < threshold (4.8%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.90) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   flag: Single-method blend: only DDM (DDM, multi) contributed a value — 15% of the profile's intended weight survived, so the published IV is that one method and not an average of views
+   legs: {'DDM': 11.21}
+   weights: [('DDM', 1.0)] | dropped: [('P/BV', 'uncomputable'), ('Forward P/E', 'uncomputable')]
+   mults: {'ev_ebitda': (11.766, 'industry', 'Real Estate - Development'), 'pe': (14.932, 'industry', 'Real Estate - Development'), 'pb': (0.404, 'industry', 'Real Estate - Development'), 'fcf_yield': (0.068, 'industry', 'Real Estate - Development'), 'growth_avg': (-0.009, 'industry', 'Real Estate - Development'), 'pe_ntm': (12.798, 'industry', 'Real Estate - Development')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag Distressed_Developer
+== 00960.HK | Property Developer (HK / China) | IV None | anchor P/BV | spot None | ccy HKD
+   flag: Unrated — too little of the method set could be computed: only 15% of the profile's intended method weight could be computed (minimum 35%). No intrinsic value, 12-month target or rating is published.
+   flag: Distressed_Developer: net income down 92% from its three-year peak with net debt 0.81x equity; the P/BV anchor and the RNAV leg stand down and no value is published on book (GATE_DISTRESSED_DEVELOPER)
+   flag: Gate B (base): Forward ROIC (3.4% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.32) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   flag: Single-method blend: only DDM (DDM, multi) contributed a value — 15% of the profile's intended weight survived, so the published IV is that one method and not an average of views
+   legs: {'DDM': 1.05}
+   weights: [('DDM', 1.0)] | dropped: [('P/BV', 'uncomputable'), ('Forward P/E', 'uncomputable')]
+   mults: {'ev_ebitda': (11.766, 'industry', 'Real Estate - Development'), 'pe': (14.932, 'industry', 'Real Estate - Development'), 'pb': (0.416, 'industry', 'Real Estate - Development'), 'fcf_yield': (0.068, 'industry', 'Real Estate - Development'), 'growth_avg': (-0.021, 'industry', 'Real Estate - Development'), 'pe_ntm': (12.798, 'industry', 'Real Estate - Development')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag Distressed_Developer

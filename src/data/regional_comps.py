@@ -310,7 +310,30 @@ def profile_basket_multiples(exchange: str, profile: Optional[str],
     syms = (PROFILE_PEER_BASKETS.get(profile or "") or {}).get(exchange)
     if not syms:
         return {}
+    return basket_multiples(exchange, tuple(syms), profile or "", max_age_days=max_age_days)
+
+
+def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: float = MAX_AGE_DAYS,
+                     exclude_loss_makers: bool = False) -> dict[str, dict]:
+    """Medians over an explicit member list (basis "profile", key as given).
+
+    Wave 8b step 4 (owner decision D): with `exclude_loss_makers`, a member whose stored P/E is out of
+    band or missing (net income not positive on the day the store was built) is dropped before every
+    median and named in `excluded`, so an insolvent outlier cannot pull a sub-cohort's book multiple to
+    liquidation levels. The distress gate itself runs on the valued name; this is its cohort-level proxy."""
+    if not syms:
+        return {}
     _ensure_table()
+    # the store keeps FMP's symbol form (four-digit Hong Kong codes: 0688.HK); baskets are written in the
+    # engine's canonical form (00688.HK); query on the store's form and report on the canonical one
+    def _store_symbol(sym: str) -> str:
+        s_ = str(sym).upper()
+        if s_.endswith(".HK"):
+            digits = s_.split(".")[0].lstrip("0") or "0"
+            return digits.zfill(4) + ".HK"
+        return s_
+    _canon = {_store_symbol(x): str(x).upper() for x in syms}
+    syms = tuple(_canon)
     try:
         marks = ",".join("?" for _ in syms)
         rows = _db.query(
@@ -323,13 +346,21 @@ def profile_basket_multiples(exchange: str, profile: Optional[str],
     for r in rows:
         r = dict(r)
         age = _age_days(r.get("computed_at") or "")
-        if r["symbol"] in metrics or (age is not None and age > max_age_days):
+        if _canon.get(r["symbol"], r["symbol"]) in metrics or (age is not None and age > max_age_days):
             continue
         try:
-            metrics[r["symbol"]] = json.loads(r["metrics_json"] or "{}")
+            metrics[_canon.get(r["symbol"], r["symbol"])] = json.loads(r["metrics_json"] or "{}")
         except (TypeError, ValueError):
             continue
+    excluded: list[str] = []
+    if exclude_loss_makers:
+        for sym in list(metrics):
+            pe_cell = (metrics[sym].get("pe") or {})
+            if not (pe_cell.get("in_band") and isinstance(pe_cell.get("value"), (int, float)) and pe_cell["value"] > 0):
+                excluded.append(sym); metrics.pop(sym)
     out: dict[str, dict] = {}
+    # a sub-cohort is small by construction: three names is the floor, not the industry's five
+    floor = 3 if exclude_loss_makers else MIN_INDUSTRY_PEERS
     for field in FIELDS:
         vals, used = [], []
         for sym, m in metrics.items():
@@ -338,10 +369,11 @@ def profile_basket_multiples(exchange: str, profile: Optional[str],
             if cell.get("in_band") and isinstance(v, (int, float)):
                 vals.append(float(v))
                 used.append(sym)
-        if len(vals) < MIN_INDUSTRY_PEERS:
+        if len(vals) < floor:
             continue
         out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all",
-                      "peer_count": len(vals), "key": profile, "exchange": exchange, "members": used}
+                      "peer_count": len(vals), "key": key, "exchange": exchange, "members": used,
+                      **({"excluded_loss_makers": excluded} if exclude_loss_makers else {})}
     return out
 
 

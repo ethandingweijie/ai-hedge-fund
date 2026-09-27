@@ -81,3 +81,33 @@ def test_the_ffo_field_and_the_opco_profile_are_the_owner_spec():
     assert "mult = _pffo_base * sm * growth_premium" in src
     # the sub-type cap rate still comes from the pins for the OpCo names
     assert d._classify_reit_subtype("AMT", "", industry="REIT - Specialty") == "tower"
+
+
+# ── step 4 (D): developer sub-cohorts with the contagion rule ────────────────────────────────
+
+def test_the_developer_sub_cohorts_price_on_their_own_median_with_loss_makers_excluded():
+    from src.data import regional_comps as rc
+    from src.data import sector_profiles as sp
+    assert set(sp.DEVELOPER_SUBCOHORTS) == {"DEV_MAINLAND_SOE", "DEV_MAINLAND_PRIVATE", "DEV_HK_DIVERSIFIED"}
+    assert sp.DEVELOPER_SUBCOHORT_OF["00688.HK"] == "DEV_MAINLAND_SOE" and sp.DEVELOPER_SUBCOHORT_OF["02202.HK"] == "DEV_MAINLAND_PRIVATE"
+    assert sp.DEVELOPER_SUBCOHORT_OF["00016.HK"] == "DEV_HK_DIVERSIFIED" and "01810.HK" not in sp.DEVELOPER_SUBCOHORT_OF
+    # the store keeps four-digit HK codes; the basket is written canonically and reported canonically
+    r = rc.basket_multiples("HKSE", ("00688.HK", "01109.HK", "00123.HK", "01908.HK", "03900.HK"), "DEV_MAINLAND_SOE", exclude_loss_makers=True)
+    if r:                                                             # the local store may be empty on a fresh clone
+        pb = r["pb"]
+        assert pb["basis"] == "profile" and pb["key"] == "DEV_MAINLAND_SOE" and pb["cohort"] == "all"
+        assert all(m.startswith("0") and m.endswith(".HK") and len(m) == 8 for m in pb["members"])
+        assert "excluded_loss_makers" in pb and not (set(pb["members"]) & set(pb["excluded_loss_makers"]))
+    assert rc.basket_multiples("HKSE", (), "x") == {}
+    # the A&D and OpCo baskets still resolve through the same function
+    assert "return basket_multiples(exchange, tuple(syms), profile or \"\", max_age_days=max_age_days)" in inspect.getsource(rc.profile_basket_multiples)
+    src = inspect.getsource(sp.get_sector_peer_multiples)
+    assert "DEVELOPER_SUBCOHORT_OF.get((ticker or \"\").upper())" in src and "exclude_loss_makers=True" in src
+
+
+def test_the_p_nav_read_follows_a_sub_cohort_basket_too():
+    """Step 4's sub-cohorts carry a 'profile' basis with a key of their own; the step 2 read must take the
+    basket's P/B (live, no history yet) rather than fall back to par."""
+    cal = d._cohort_p_nav_4q({"pb": 0.402, "_comp_basis": {"pb": {"basis": "profile", "key": "DEV_HK_DIVERSIFIED", "exchange": "HKSE", "cohort": "all"}}})
+    assert cal and cal["median"] == pytest.approx(0.402) and cal["points"] == 0 and "live P/B" in cal["window"]
+    assert d._cohort_p_nav_4q({"pb": 7.2, "_comp_basis": {"pb": {"basis": "profile", "key": "REIT (Specialty / OpCo)", "exchange": "US"}}}) is None
