@@ -1,0 +1,20 @@
+01113.HK   Landlord / Investment Proper IV     37.48 cons    -      -    proxied 0%  surviving 1.0  backtest fired
+00012.HK   Landlord / Investment Proper IV     17.33 cons    -      -    proxied 0%  surviving 1.0  backtest fired
+00004.HK   Landlord / Investment Proper IV     14.04 cons    -      -    proxied 0%  surviving 1.0  backtest passed
+00823.HK   REIT                         IV     55.32 cons    -      -    proxied 0%  surviving 0.55  backtest fired
+
+| Ticker | Profile | Anchor (in blend) | Proxied wt | Dropped | Base IV | Consensus | IV vs cons | IV vs spot | Cons spread | 12m vs cons | Bear<=Base<=Bull | Backtest |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 01113.HK | Landlord / Investment Property (HK) | NAV (Cap Rates) (yes) | 0% | - | 37.48 | - | - | -19% | - | - | ok | fired / MARKET_CLOSER |
+| 00012.HK | Landlord / Investment Property (HK) | NAV (Cap Rates) (yes) | 0% | - | 17.33 | - | - | -34% | - | - | ok | fired / MARKET_CLOSER |
+| 00004.HK | Landlord / Investment Property (HK) | NAV (Cap Rates) (yes) | 0% | - | 14.04 | - | - | -28% | - | - | ok | passed / TIE |
+| 00823.HK | REIT | NAV (Cap Rates) (yes) | 0% | P/FFO 30% (uncomputable), P/AFFO 15% (uncomputable) | 55.32 | - | - | +49% | - | - | ok | fired / MARKET_CLOSER |
+
+ex recorded regime deviations: 0 of 0 within +/-30%   (regime names: none)
+within +/-30% of spot: 2 of 4   median consensus spread: -   Growth_Inflection_Speculative: none
+within +/-30% of consensus: 0 of 0   backtest passed: 1 of 4   anchor missing from blend: 0   errors: 0
+written: C:\Users\ethan\Documents\Projects\AI Hedge Fund\docs\baselines\after_wave8b_step2_verify.json
+01113.HK accepted
+00012.HK accepted
+00004.HK accepted
+00823.HK accepted

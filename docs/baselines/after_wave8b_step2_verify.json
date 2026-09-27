@@ -1,0 +1,220 @@
+{
+ "wave": "8b-step2-verify",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "01113.HK": {
+   "profile": "Landlord / Investment Property (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.4
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.3
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 33.9,
+   "base": 37.48,
+   "bull": 43.65,
+   "scenarios_ordered": true,
+   "target_12m_base": 41.74,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 46.0,
+   "iv_vs_spot": -0.1852173913043479,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.8957017550760499,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $60.47 vs price $31.90 on 2024-12-31 = 90% gap; 12m later the market was closer (54% vs 19%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00012.HK": {
+   "profile": "Landlord / Investment Property (HK)",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.4
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.3
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 15.8,
+   "base": 17.33,
+   "bull": 20.56,
+   "scenarios_ordered": true,
+   "target_12m_base": 21.77,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 26.22,
+   "iv_vs_spot": -0.3390541571319604,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.21772520937844514,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $18.46 vs price $23.60 on 2024-12-31 = 22% gap; 12m later the market was closer (34% vs 16%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00004.HK": {
+   "profile": "Landlord / Investment Property (HK)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.4
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.3
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 12.48,
+   "base": 14.04,
+   "bull": 15.62,
+   "scenarios_ordered": true,
+   "target_12m_base": 16.77,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 19.5,
+   "iv_vs_spot": -0.28,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.002678169564654802,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $21.79 vs price $21.85 on 2024-12-31 = 0% gap; 12m later model and market were level (0% vs 1%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00823.HK": {
+   "profile": "REIT",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.909091
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.090909
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/FFO",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "P/AFFO",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.55,
+   "methods_unavailable": [
+    "P/FFO",
+    "P/AFFO"
+   ],
+   "bear": 55.32,
+   "base": 55.32,
+   "bull": 57.24,
+   "scenarios_ordered": true,
+   "target_12m_base": 46.17,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 37.02,
+   "iv_vs_spot": 0.4943273905996757,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17199384557460098,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $42.66 vs price $36.40 on 2025-03-31 = 17% gap; 12m later the market was closer (18% vs 1%)",
+   "currency": "HKD",
+   "regime": null
+  }
+ }
+}

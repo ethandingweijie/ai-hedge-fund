@@ -34,3 +34,26 @@ def test_the_nav_leg_trace_names_the_noi_basis_and_the_bridge():
     for lit in ('noi_basis=_reit_pre.get("noi_basis")', "gross_asset_value=", 'total_debt=most_recent.get("total_debt")'):
         assert lit in src, lit
     assert "[{_reit_m.get('noi_basis')}]" in inspect.getsource(d.run_dcf_agent)
+
+
+# ── step 2 (C): a published NAV read at the cohort's trailing four-quarter P/NAV ──────────────
+
+def test_a_published_nav_is_read_at_the_cohort_p_nav_on_fair_value_exchanges_and_at_par_on_us_gaap():
+    hk = {"pb": 0.295, "_comp_basis": {"pb": {"basis": "industry", "key": "Real Estate - Diversified", "exchange": "HKSE", "cohort": "all"}}}
+    us = {"pb": 1.82, "_comp_basis": {"pb": {"basis": "industry", "key": "REIT - Healthcare Facilities", "exchange": "US"}}}
+    sector_rung = {"pb": 0.5, "_comp_basis": {"pb": {"basis": "sector", "key": "Real Estate", "exchange": "HKSE"}}}
+    cal = d._cohort_p_nav_4q(hk)
+    assert cal and cal["exchange"] == "HKSE" and 0.2 < cal["median"] < 0.5 and cal["points"] >= 0
+    assert d._cohort_p_nav_4q(us) is None                       # US GAAP book is historic cost: P/B is not P/NAV
+    assert d._cohort_p_nav_4q(sector_rung) is None              # a whole-sector rung is not a cohort P/NAV
+    assert d._P_NAV_WINDOW_DAYS == 365 and d._P_NAV_CALIBRATED_EXCHANGES == ("HKSE", "SES")
+    mr = {}
+    v = d._calibrated_published_nav(mr, hk, 100.0, "NAV (Cap Rates)")
+    assert v == pytest.approx(100.0 * cal["median"])
+    rec = mr["_nav_calibration"]
+    assert rec["raw_published_nav"] == 100.0 and rec["cohort_p_nav_median_4q"] == cal["median"] and rec["calibrated_nav"] == v
+    mr2 = {}
+    assert d._calibrated_published_nav(mr2, us, 87.0, "NAV (Cap Rates)") == 87.0 and mr2["_nav_calibration"]["cohort_p_nav_median_4q"] is None
+    src = inspect.getsource(d._compute_method_value)
+    assert 'return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")' in src
+    assert 'return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)")' in src

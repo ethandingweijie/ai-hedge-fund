@@ -4152,6 +4152,76 @@ _REIT_SUBTYPE_PINS: dict[str, str] = {
 _LIVE_CAP_LABEL_PREFIXES = ("REIT", "Real Estate - Diversified")
 
 
+#: Wave 8b step 2 (owner decision C): a published NAV is read at the cohort's price to NAV where book IS
+#: NAV (IFRS fair-value reporters: HKSE, SES). US GAAP book is historic cost, so P/B is not P/NAV there
+#: and an appraised US NAV stays at par.
+_P_NAV_CALIBRATED_EXCHANGES = ("HKSE", "SES")
+_P_NAV_WINDOW_DAYS = 365          # four quarters: one audit and reporting cycle (owner, 2026-09-27)
+
+
+def _cohort_p_nav_4q(peer: Optional[dict]) -> Optional[dict]:
+    """{exchange, key, median, points, window} from the comps history for the cohort behind `pb`, or None.
+
+    The trailing median of the cohort's P/B over the last four quarters (every stored as_of within 365
+    days, weekly refreshes and the quarterly backfill alike), falling back to the live cohort P/B when
+    the history holds no point. Only a real-estate cohort on a fair-value exchange qualifies."""
+    try:
+        b = ((peer or {}).get("_comp_basis") or {}).get("pb") or {}
+        ex, key = str(b.get("exchange") or ""), str(b.get("key") or "")
+        if ex not in _P_NAV_CALIBRATED_EXCHANGES or b.get("basis") not in ("industry", "profile"):
+            return None
+        if not key.startswith(("REIT", "Real Estate")):
+            return None
+        from datetime import date, timedelta
+        from src.data import db as _db
+        floor = (date.today() - timedelta(days=_P_NAV_WINDOW_DAYS)).isoformat()
+        # the name's own size rung: the store resolved `pb` on the large cohort for a large name and on
+        # `all` otherwise, and the discount is read on the same rung (the majors trade at a smaller discount
+        # than the whole diversified cohort)
+        cohort = str(b.get("cohort") or "all")
+        rows = _db.query(
+            "SELECT value, as_of FROM regional_comps_history WHERE exchange = ? AND key = ? AND field = 'pb' "
+            "AND cohort = ? AND as_of >= ? AND as_of <= ? ORDER BY as_of",
+            [ex, key, cohort, floor, date.today().isoformat()]) or []
+        if not rows and cohort != "all":
+            rows = _db.query(
+                "SELECT value, as_of FROM regional_comps_history WHERE exchange = ? AND key = ? AND field = 'pb' "
+                "AND cohort = 'all' AND as_of >= ? AND as_of <= ? ORDER BY as_of",
+                [ex, key, floor, date.today().isoformat()]) or []
+            cohort = "all (no large-cohort history)"
+        vals = [float(r["value"]) for r in rows if isinstance(r["value"], (int, float)) and r["value"] > 0]
+        if not vals:
+            live = (peer or {}).get("pb")
+            if isinstance(live, (int, float)) and live > 0:
+                return {"exchange": ex, "key": key, "cohort": str(b.get("cohort") or "all"), "median": float(live), "points": 0, "window": "live P/B (no history point in the window)"}
+            return None
+        vals.sort()
+        med = vals[len(vals) // 2] if len(vals) % 2 else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2.0
+        return {"exchange": ex, "key": key, "cohort": cohort, "median": med, "points": len(vals),
+                "window": f"{rows[0]['as_of']}..{rows[-1]['as_of']}"}
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _calibrated_published_nav(most_recent: dict, peer: Optional[dict], raw: float, leg: str) -> float:
+    """The published NAV the leg prices: raw x cohort P/NAV on a fair-value exchange, raw at par elsewhere."""
+    cal = _cohort_p_nav_4q(peer)
+    if cal and cal.get("median"):
+        value = float(raw) * float(cal["median"])
+        most_recent["_nav_calibration"] = {"leg": leg, "raw_published_nav": float(raw), "cohort_p_nav_median_4q": cal["median"],
+                                           "calibrated_nav": value, "cohort": f"{cal['exchange']} {cal['key']} ({cal.get('cohort', 'all')})",
+                                           "points": cal["points"], "window": cal["window"]}
+        _leg_trace(kind="nav", nav_source="owner-accepted nav input", raw_published_nav=float(raw),
+                   cohort_p_nav_median_4q=cal["median"], calibrated_nav=value, cohort=f"{cal['exchange']} {cal['key']} ({cal.get('cohort', 'all')})",
+                   history_points=cal["points"], window=cal["window"])
+        return value
+    most_recent["_nav_calibration"] = {"leg": leg, "raw_published_nav": float(raw), "cohort_p_nav_median_4q": None,
+                                       "calibrated_nav": float(raw), "cohort": None, "points": 0,
+                                       "window": "par: US GAAP book is historic cost, P/B is not P/NAV"}
+    _leg_trace(kind="nav", nav_source="owner-accepted nav input (par)", raw_published_nav=float(raw), calibrated_nav=float(raw))
+    return float(raw)
+
+
 def _live_reit_cap_rate(peer: Optional[dict]) -> Optional[tuple[float, str]]:
     """(cap rate, basis text) from the live cohort behind `ev_ebitda`, or None.
 
@@ -7357,15 +7427,16 @@ def _compute_method_value(
         if most_recent.get("_distressed_developer"):
             return None
         _rn = most_recent.get("rnav_per_share_published")
-        return float(_rn) if isinstance(_rn, (int, float)) and _rn > 0 else None
+        if isinstance(_rn, (int, float)) and _rn > 0:
+            return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)")   # Wave 8b step 2
+        return None
 
     if method_name in {"NAV (Cap Rates)", "NAV"}:
         # Wave 8 (owner decision 3b): an owner-accepted published NAV per share prices ahead of the
         # computed one; the computed NAV stays in the trace as the cross-check.
         _pub = most_recent.get("nav_per_share_published")
         if isinstance(_pub, (int, float)) and _pub > 0:
-            _leg_trace(kind="nav", nav_source="owner-accepted nav input", nav_per_share=float(_pub))
-            return float(_pub)
+            return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")   # Wave 8b step 2
         reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
             most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
         )
@@ -11042,7 +11113,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker_forward_flags.append(
                     f"NAV: {(_nav_out.get('nav_per_share') or 0):,.2f} {_target_ccy}/share from the owner-accepted nav input "
                     f"({_nav_out.get('basis') or 'NAV'}, {_nav_out.get('period') or 'period n/a'})"
-                    + (f"; cap rate {_nav_out['cap_rate']:.2%}" if _nav_out.get("cap_rate") else ""))
+                    + (f"; cap rate {_nav_out['cap_rate']:.2%}" if _nav_out.get("cap_rate") else "")
+                    + "; read at the cohort's trailing four-quarter P/NAV on a fair-value exchange, at par on US GAAP (Wave 8b step 2)")
         except Exception:                                  # noqa: BLE001
             pass
         if _ticker_pipeline:
