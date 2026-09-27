@@ -3830,6 +3830,8 @@ _REIT_MAINT_CAPEX_PCT: dict[str, float] = {
     "retail":              0.055,
     "office":              0.060,
     "hospitality":         0.075,
+    "tower":               0.03,     # Wave 8
+    "specialty":           0.04,     # Wave 8
     "infrastructure":      0.085,   # infra concessions — heavy recurring maint reserves
     "default":             0.045,
 }
@@ -4064,17 +4066,27 @@ _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     # 5.0-5.3% implied cap for large DC REITs. Previous 4.5% was too tight;
     # only EQIX (interconnection moat) earns a sub-5% cap, routed through
     # the data_center_premium sub-type below.
+    # Wave 8 (owner decision 4, 2026-09-27): cap rates re-derived as the cohort's median EBITDA
+    # yield on the day (the engine's own NOI definition, 1 / EV-EBITDA; large cohort where it has
+    # five members): healthcare 6.0% -> 5.1%, industrial 5.5% -> 5.4%, retail 6.2% -> 6.9%, office
+    # 7.5% -> 6.5%, residential 5.5% -> 6.4%, hospitality 8.0% -> 9.1%, default 6.5% -> 6.6%; a new
+    # `tower` row (AMT, CCI, SBAC read the office cap through the word "tower" until this wave) and a
+    # `specialty` row on the REIT - Specialty cohort. The P/FFO and P/AFFO multiples stay as the April
+    # table until the comps job carries an FFO field. This table is the FALLBACK: the NAV leg reads
+    # the live cohort first (`_live_reit_cap_rate`) and an owner-accepted `nav` input ahead of both.
     "data_center":          {"cap_rate": 0.050, "p_ffo": 22.0, "p_affo": 25.0},
     # Data center premium — interconnection moat (EQIX). Colocation +
     # interconnection revenue commands tighter cap rate than pure wholesale
     # (DLR). Preserved 4.5% Green Street high-end + 23x P/FFO growth premium.
-    "data_center_premium":  {"cap_rate": 0.045, "p_ffo": 23.0, "p_affo": 26.0},
+    "data_center_premium":  {"cap_rate": 0.050, "p_ffo": 22.0, "p_affo": 25.0},   # Wave 8: the premium tier folds into data_center; a tighter cap is a research cap_rate_market only
+    "tower":                {"cap_rate": 0.051, "p_ffo": 20.0, "p_affo": 22.0},   # Wave 8 (PROPOSED, accepted): REIT - Specialty large 5.12%
+    "specialty":            {"cap_rate": 0.057, "p_ffo": 15.0, "p_affo": 17.0},   # Wave 8: REIT - Specialty all 5.69%
     "lab":                  {"cap_rate": 0.050, "p_ffo": 20.0, "p_affo": 22.0},
-    "industrial":           {"cap_rate": 0.055, "p_ffo": 18.0, "p_affo": 20.0},
+    "industrial":           {"cap_rate": 0.054, "p_ffo": 18.0, "p_affo": 20.0},
     # Self storage — Green Street April 2026 shows PSA / EXR ~5.5% (we were
     # 5.2%, slightly tighter than consensus). Move to 5.5% to match sector.
     "self_storage":         {"cap_rate": 0.055, "p_ffo": 19.0, "p_affo": 21.0},
-    "residential":          {"cap_rate": 0.055, "p_ffo": 17.0, "p_affo": 19.0},
+    "residential":          {"cap_rate": 0.064, "p_ffo": 17.0, "p_affo": 19.0},
     # Net-lease / single-tenant / triple-net REITs (O, ADC, NNN, WPC, SRC, GOOD).
     # Traded as fixed-income proxies — long-duration contractual cash flows
     # (10-20yr initial lease terms, escalators, credit-tenant covenants).
@@ -4084,16 +4096,16 @@ _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     # lower than industrial (5.5%) because contract duration is longer with
     # investment-grade counterparties.
     "net_lease":            {"cap_rate": 0.050, "p_ffo": 16.0, "p_affo": 18.0},
-    "healthcare":           {"cap_rate": 0.060, "p_ffo": 15.0, "p_affo": 17.0},
+    "healthcare":           {"cap_rate": 0.051, "p_ffo": 15.0, "p_affo": 17.0},
     # Retail — Class-A mall / grocery-anchored strip average. Green Street
     # April 2026: SPG Class-A malls ~6.0%, strip retail 7.5%, outlets 7.0%.
     # Previous 6.8% penalized Class-A mall operators (SPG, MAC); 6.2%
     # blend better reflects diversified retail REIT quality.
     # Distressed mall REITs (e.g. MAC legacy portfolio) should ideally
     # route through a future 'retail_distressed' sub-type at 7.5%.
-    "retail":               {"cap_rate": 0.062, "p_ffo": 14.0, "p_affo": 15.0},
-    "office":               {"cap_rate": 0.075, "p_ffo": 12.0, "p_affo": 13.0},
-    "hospitality":          {"cap_rate": 0.080, "p_ffo": 11.0, "p_affo": 12.0},
+    "retail":               {"cap_rate": 0.069, "p_ffo": 14.0, "p_affo": 15.0},
+    "office":               {"cap_rate": 0.065, "p_ffo": 12.0, "p_affo": 13.0},
+    "hospitality":          {"cap_rate": 0.091, "p_ffo": 11.0, "p_affo": 12.0},
     # Infrastructure trusts (Keppel Infrastructure, Asian Pay Television,
     # Hutchison Port Holdings) — SGX/HK business trust structures that own
     # long-term concession assets rather than fee-simple property. Cap rate
@@ -4104,11 +4116,82 @@ _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     # SGX/HK market convention — they distribute 90%+ like S-REITs and trade
     # on yield + DPU sustainability.
     "infrastructure": {"cap_rate": 0.085, "p_ffo": 10.0, "p_affo": 11.0},
-    "default":        {"cap_rate": 0.065, "p_ffo": 15.0, "p_affo": 17.0},
+    "default":        {"cap_rate": 0.066, "p_ffo": 15.0, "p_affo": 17.0},
 }
 
 
-def _classify_reit_subtype(ticker: str, notes: str = "") -> str:
+#: Wave 8 (owner decision 2, 2026-09-27): the sub-type comes from the FMP label first and the owner's
+#: pins for the names a label cannot separate (towers and data centres share `REIT - Specialty`,
+#: self-storage sits inside `REIT - Industrial`, net lease inside `REIT - Retail`). The keyword
+#: classifier is the fallback for a name with neither.
+_REIT_SUBTYPE_BY_LABEL: dict[str, str] = {
+    "REIT - Healthcare Facilities": "healthcare",
+    "REIT - Industrial":            "industrial",
+    "REIT - Specialty":             "specialty",
+    "REIT - Retail":                "retail",
+    "REIT - Office":                "office",
+    "REIT - Residential":           "residential",
+    "REIT - Hotel & Motel":         "hospitality",
+    "REIT - Diversified":           "default",
+}
+_REIT_SUBTYPE_PINS: dict[str, str] = {
+    # owner directory, 2026-09-27
+    "AMT": "tower", "CCI": "tower", "SBAC": "tower",
+    "EQIX": "data_center", "DLR": "data_center",
+    "PSA": "self_storage", "EXR": "self_storage", "CUBE": "self_storage",
+    "O": "net_lease", "ADC": "net_lease", "NNN": "net_lease", "WPC": "net_lease",
+    "VICI": "net_lease", "GLPI": "net_lease",                  # gaming net lease: triple-net economics
+    "ARE": "lab",
+    "IRM": "specialty",
+    "00823.HK": "retail", "00778.HK": "retail",
+    "02778.HK": "office", "00435.HK": "office", "01426.HK": "office",
+}
+
+#: Labels whose live cohort EBITDA yield is a cap rate the NAV leg may read (the engine's NOI is
+#: EBITDA, so the cohort's 1 / EV-EBITDA is the market's implied cap rate on the same definition).
+_LIVE_CAP_LABEL_PREFIXES = ("REIT", "Real Estate - Diversified")
+
+
+def _live_reit_cap_rate(peer: Optional[dict]) -> Optional[tuple[float, str]]:
+    """(cap rate, basis text) from the live cohort behind `ev_ebitda`, or None.
+
+    Wave 8 (owner decision 3a): live first, the sub-type table as the fallback. Only an industry
+    or curated-basket cohort on a real-estate label qualifies; a sector rung or a static fill does
+    not, because a whole-sector EBITDA yield is not a cap rate."""
+    try:
+        ev = (peer or {}).get("ev_ebitda")
+        b = ((peer or {}).get("_comp_basis") or {}).get("ev_ebitda") or {}
+        key = str(b.get("key") or "")
+        if (isinstance(ev, (int, float)) and ev > 0 and b.get("basis") in ("industry", "profile")
+                and key.startswith(_LIVE_CAP_LABEL_PREFIXES)):
+            return 1.0 / float(ev), f"live {key} cohort ({b.get('cohort') or 'all'}, n={b.get('peer_count')}) EBITDA yield"
+    except Exception:                                      # noqa: BLE001
+        return None
+    return None
+
+
+def _distressed_developer(series: list[dict], most_recent: dict) -> dict:
+    """Wave 8 (owner decision 5, PROPOSED rule accepted 2026-09-27): a developer the market prices
+    as credit rather than as a going concern publishes no value on book. Fires on two consecutive
+    loss years, or on net income down more than 80% from its three-year peak with net debt above
+    0.75x equity (Vanke: RMB -49.5bn and -88.6bn; Longfor: RMB 12.9bn -> 1.0bn with net debt 0.84x)."""
+    try:
+        rows = [r for r in (series or []) if isinstance(r, dict) and isinstance(r.get("net_income"), (int, float))]
+        ni = [float(r["net_income"]) for r in rows][-3:]
+        eq = most_recent.get("total_equity")
+        nd = (most_recent.get("total_debt") or 0.0) - (most_recent.get("cash_and_equivalents") or 0.0)
+        nd_eq = (nd / eq) if isinstance(eq, (int, float)) and eq > 0 else None
+        out = {"fired": False, "net_income_3y": ni, "net_debt_to_equity": (round(nd_eq, 3) if nd_eq is not None else None)}
+        if len(ni) >= 2 and ni[-1] < 0 and ni[-2] < 0:
+            out.update(fired=True, reason=f"two consecutive loss years ({ni[-2]:,.0f}, {ni[-1]:,.0f})")
+        elif len(ni) >= 2 and max(ni) > 0 and ni[-1] < 0.2 * max(ni) and nd_eq is not None and nd_eq > 0.75:
+            out.update(fired=True, reason=f"net income down {1 - ni[-1] / max(ni):.0%} from its three-year peak with net debt {nd_eq:.2f}x equity")
+        return out
+    except Exception:                                      # noqa: BLE001
+        return {"fired": False}
+
+
+def _classify_reit_subtype(ticker: str, notes: str = "", industry: Optional[str] = None) -> str:
     """
     Classify a REIT into one of the 10 sub-types:
       data_center, lab, industrial, self_storage, residential, healthcare,
@@ -4128,6 +4211,13 @@ def _classify_reit_subtype(ticker: str, notes: str = "") -> str:
     storage → residential → healthcare → retail (incl. SGX China retail
     trusts) → office → hospitality.
     """
+    # Wave 8: pin, then label, then the keywords below.
+    _pin = _REIT_SUBTYPE_PINS.get((ticker or "").upper())
+    if _pin:
+        return _pin
+    _lab = _REIT_SUBTYPE_BY_LABEL.get((industry or "").strip())
+    if _lab:
+        return _lab
     combined = (ticker + " " + (notes or "")).lower()
     keywords = [
         # Infrastructure trust gate — these own concession assets (power,
@@ -6956,6 +7046,9 @@ def _compute_method_value(
                                                    f"CoE owner-set ({profile_name})")})
         return (float(total_equity) / shares) * mult
 
+    # Wave 8: a distressed developer's book is not an anchor (GATE_DISTRESSED_DEVELOPER).
+    if method_name == "P/BV" and most_recent.get("_distressed_developer"):
+        return None
     if method_name in {"P/BV", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium * _own_disc
@@ -7244,12 +7337,39 @@ def _compute_method_value(
     # some retail REITs with significant ground leases this understates
     # net liability side of the bridge. Most equity REITs own property
     # fee-simple so this isn't material.
+    # ── RNAV (published) — Wave 8: the owner-accepted `nav` input for a developer ──────────
+    if method_name in {"RNAV (published)"}:
+        if most_recent.get("_distressed_developer"):
+            return None
+        _rn = most_recent.get("rnav_per_share_published")
+        return float(_rn) if isinstance(_rn, (int, float)) and _rn > 0 else None
+
     if method_name in {"NAV (Cap Rates)", "NAV"}:
+        # Wave 8 (owner decision 3b): an owner-accepted published NAV per share prices ahead of the
+        # computed one; the computed NAV stays in the trace as the cross-check.
+        _pub = most_recent.get("nav_per_share_published")
+        if isinstance(_pub, (int, float)) and _pub > 0:
+            _leg_trace(kind="nav", nav_source="owner-accepted nav input", nav_per_share=float(_pub))
+            return float(_pub)
         reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
             most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
         )
         mults = _REIT_SUBTYPE_MULTIPLES.get(reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
-        cap_rate = most_recent.get("cap_rate_market") or mults["cap_rate"]
+        # Wave 8 (owner decision 3a): research cap rate, then the accepted input's cap rate, then the
+        # live cohort's implied yield, then the sub-type table.
+        cap_rate, _cap_src = None, None
+        if most_recent.get("cap_rate_market"):
+            cap_rate, _cap_src = float(most_recent["cap_rate_market"]), "research cap_rate_market"
+        elif most_recent.get("nav_cap_rate_published"):
+            cap_rate, _cap_src = float(most_recent["nav_cap_rate_published"]), "owner-accepted nav input"
+        else:
+            _lc = _live_reit_cap_rate(peer)
+            if _lc:
+                cap_rate, _cap_src = _lc
+        if not cap_rate:
+            cap_rate, _cap_src = mults["cap_rate"], f"sub-type table ({reit_subtype})"
+        most_recent["_nav_cap_rate_used"] = {"cap_rate": cap_rate, "source": _cap_src}
+        _leg_trace(kind="nav", cap_rate=cap_rate, cap_rate_source=_cap_src, subtype=reit_subtype)
 
         _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
         noi = _reit.get("noi")
@@ -10891,6 +11011,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"Alt manager legs: forward DE {(_am_out.get('alt_de_fwd_total') or 0) / 1e9:,.2f}bn, FRE "
                     f"{(_am_out.get('alt_fre_fwd_total') or 0) / 1e9:,.2f}bn {_target_ccy}, cited P/DE "
                     f"{_am_out.get('alt_pde_multiple')}x and P/FRE {_am_out.get('alt_pfre_multiple')}x from the owner-accepted input")
+            # Wave 8 (owner decision 3b, 2026-09-27): a published NAV / RNAV per share and cap rate.
+            _nav_e = _ii_w6.accepted_entry(ticker, "nav")
+            if _nav_e:
+                _nav_out = _gp_w6.nav_to_engine(_ii_w6.canonical_data(_nav_e), _ii_w6._fx(_target_ccy))
+                if _nav_out.get("nav_per_share"):
+                    most_recent["nav_per_share_published"] = _nav_out["nav_per_share"]     # the REIT / landlord NAV leg
+                    most_recent["rnav_per_share_published"] = _nav_out["nav_per_share"]    # the developer RNAV leg
+                if _nav_out.get("cap_rate"):
+                    most_recent["nav_cap_rate_published"] = _nav_out["cap_rate"]
+                ticker_forward_flags.append(
+                    f"NAV: {(_nav_out.get('nav_per_share') or 0):,.2f} {_target_ccy}/share from the owner-accepted nav input "
+                    f"({_nav_out.get('basis') or 'NAV'}, {_nav_out.get('period') or 'period n/a'})"
+                    + (f"; cap rate {_nav_out['cap_rate']:.2%}" if _nav_out.get("cap_rate") else ""))
         except Exception:                                  # noqa: BLE001
             pass
         if _ticker_pipeline:
@@ -11909,6 +12042,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # and maintenance capex % for AFFO compute. Falls to "default" on no
         # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
         # dispatches don't re-classify.
+        # Wave 8 (owner decision 5, 2026-09-27): a distressed HK / China developer publishes no value
+        # on book; the P/BV anchor and the RNAV leg stand down and the run carries the flag.
+        if profile_name == "Property Developer (HK / China)":
+            _dd = _distressed_developer(series, most_recent)
+            if _dd.get("fired"):
+                most_recent["_distressed_developer"] = _dd
+                ticker_forward_flags.append(
+                    f"Distressed_Developer: {_dd.get('reason')}; the P/BV anchor and the RNAV leg stand down and no "
+                    f"value is published on book (GATE_DISTRESSED_DEVELOPER)")
         if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
             from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
             from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
@@ -11916,7 +12058,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _lookup_entry = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
             if _lookup_entry and len(_lookup_entry) >= 4:
                 _lookup_notes = _lookup_entry[3] or ""
-            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
+            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes, industry=_company_industry(ticker))
             most_recent["_reit_subtype"]  = _reit_subtype
             # SGX sub-sector drives the DDM calibration and is resolved from
             # the SGX lookup, not from the US sub-type keyword classifier.
@@ -15545,6 +15687,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "gated_output_path_b": None,
                     "basis": f"{_sf_name}: profile-declared structural observation; no weight",
                     "applied": False,
+                })
+            # Wave 8 (owner decision 5, 2026-09-27): the distress rule fired on a developer; the
+            # book anchor stood down, no value is published on book, the name is scored apart.
+            if most_recent.get("_distressed_developer"):
+                _ddr = most_recent["_distressed_developer"]
+                if not _regime_flag:
+                    _regime_flag = "Distressed_Developer"
+                gate_evaluations.append({
+                    "gate_id": "GATE_DISTRESSED_DEVELOPER",
+                    "metric": "net_income_3y_and_net_debt_to_equity",
+                    "raw_input_path_a": _ddr.get("net_income_3y"),
+                    "gated_output_path_b": _ddr.get("net_debt_to_equity"),
+                    "basis": (f"{_ddr.get('reason')}; owner rule: two loss years, or net income down >80% from the "
+                              f"three-year peak with net debt > 0.75x equity; P/BV and RNAV legs stand down"),
+                    "applied": True,
                 })
             # Owner Wave 6 (2026-09-27, decision 3): the GGM inversion at spot is the
             # market's own cost of equity for a bank; recorded as the outer-boundary

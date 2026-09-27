@@ -73,7 +73,15 @@ WAVE6 = {
     "alt_manager": ["BX", "KKR", "APO"],
     "sotp": ["BRK-B"],
 }
-WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6}
+#: Wave 8 (owner decisions, 2026-09-27): published NAV / RNAV for the REITs, landlords and
+#: developers in the probe universe, and the fund-manager input for CapitaLand Investment.
+WAVE8 = {
+    "nav": ["WELL", "PLD", "EQIX", "AMT", "DLR", "SPG", "PSA", "O", "VTR", "IRM",
+            "00016.HK", "01113.HK", "00688.HK", "01109.HK", "00083.HK", "02202.HK", "00960.HK",
+            "01972.HK", "00004.HK", "00012.HK", "00823.HK", "C09.SI", "U06.SI"],
+    "alt_manager": ["9CI.SI"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6, "8": WAVE8}
 
 
 def sotp_profile_tickers() -> list[str]:
@@ -181,6 +189,37 @@ def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
+    if kind == "nav":
+        # Wave 8 (owner, 2026-09-27): the published NAV / RNAV per share and the stated cap rate;
+        # quarantined until accepted; prices ahead of the computed NAV when it is.
+        anchors = {"reported_currency": (ctx.get("reported_currency") or "USD"),
+                   "market_cap_usd_bn": round((ctx.get("market_cap") or 0) / 1e9, 2),
+                   "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2)}
+        prompt = gp.nav_prompt(ctx["company"], ticker, anchors)
+        out = gp.generate(prompt, schema=schema, grounded=True, timeout=300.0)
+        data = out.get("json")
+        if not isinstance(data, dict):
+            raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
+        data, _urls = gp.canonicalize_citations(data)
+        _fx_usd = ii._fx("USD")
+        eng = gp.nav_to_engine(data, _fx_usd)
+        _sh = ctx.get("shares") or 0
+        headline = (ii.amount(data.get("nav_total"), _fx_usd) if data.get("nav_total")
+                    else ((eng.get("nav_per_share") or 0) * _sh if eng.get("nav_per_share") and _sh else None))
+        checks = ii.reconcile("nav", headline, ctx, period=data.get("fiscal_year"))
+        checks.append({"check": "NAV per share cited", "ok": bool(eng.get("nav_per_share")),
+                       "detail": f"{eng.get('nav_per_share')} USD/share" if eng.get("nav_per_share") else "missing or uncited"})
+        checks.append({"check": "NAV basis stated", "ok": bool(data.get("basis")), "detail": str(data.get("basis"))})
+        checks.append({"check": "cap rate plausible", "ok": (0.02 <= eng["cap_rate"] <= 0.12) if eng.get("cap_rate") else None,
+                       "detail": f"{eng['cap_rate']:.2%}" if eng.get("cap_rate") else "none stated"})
+        checks.append(_url_check(_urls))
+        preview = {"nav_per_share_usd": eng.get("nav_per_share"), "cap_rate": eng.get("cap_rate")}
+        return {"basis": "actual", "data": data, "company": ctx["company"],
+                "fmp_context_usd": ctx, "anchors": anchors, "value_usd": headline, "checks": checks,
+                "engine_preview": preview, "ok": all(c["ok"] is not False for c in checks),
+                "grounding_urls": out.get("grounding_urls") or [],
+                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if kind in ("embedded_value", "alt_manager"):
         # Wave 6 (owner, 2026-09-27): cited life-insurer embedded value, or an alt manager's
         # forward FRE / DE with the sell side's cited multiple ranges; quarantined until accepted.

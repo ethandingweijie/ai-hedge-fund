@@ -81,7 +81,8 @@ tech table were the same finding: a basis nobody re-derived.
 EBITDA takes Sun Hung Kai's and CK Asset's development profit at a 6.5% cap rate: +39% and +49% against
 spot, China Overseas Land +85%, while the HKSE development cohort trades at 0.40x book, 12.8x NTM earnings
 and an 8.5% implied EBITDA yield. Henderson Land's NAV is uncomputable (anchor missing, −36% on the rest);
-Vanke and Longfor, with negative earnings, produce no value. The RNAV-discount pattern that Property
+Vanke (two loss years, RMB −49.5bn and −88.6bn) and Longfor (profit down 92% in two years to RMB 1.0bn,
+revenue down 46%) produce no value on the ladder profiles they land on. The RNAV-discount pattern that Property
 Developer (SG) was built for has no Hong Kong or China profile to live in, and the Singapore "NAV" is the
 same cap-rate formula (City Developments: uncomputable, −64% on DDM and P/E alone).
 

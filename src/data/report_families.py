@@ -73,7 +73,8 @@ REPORT_FAMILIES: dict[str, dict] = {
     },
     "Property, REITs and holdcos": {
         "profiles": ["REIT", "S-REIT", "Property Developer (SG)", "Real Estate Agency (SG)", "Specialised Accommodation (SG)",
-                     "Holding Company", "Aerospace Holdco (HK)", "Conglomerate / Industrial (SG)"],
+                     "Holding Company", "Aerospace Holdco (HK)", "Conglomerate / Industrial (SG)",
+                     "Property Developer (HK / China)", "Landlord / Investment Property (HK)", "Homebuilder / Land Developer", "Real Estate Services"],   # Wave 8
         "rows": ["revenue", "ni", "equity", "bvps", "dps", "nd_equity"],
         "exposition": ["NAV discount", "SOTP look-through with the accepted inputs", "gearing"],
         "skeleton": ["rating", "price against NAV", "portfolio or subsidiary drivers", "distributions and gearing", "risk"],

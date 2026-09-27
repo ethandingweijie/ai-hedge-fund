@@ -387,6 +387,11 @@ _WAVE6_MOVED = {
 #: AAPL, V, SCHW and COST move on the same premium (AAPL also on the EV/EBITDA leg reading the
 #: live Consumer Electronics cohort in place of the static table, decision 2).
 _WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
+#: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
+#: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
+_WAVE8_MOVED = {
+    "C38U_SI":  (1.74,     1.34,     2.20,    (1.80,  2.00,  2.23)),
+}
 _WAVE7_MOVED = {
     "02888_HK": (288.95,  236.95,   340.94,   (233.97, 259.98, 285.97)),
     "D05_SI":   (44.44,    36.66,    52.21,   (56.16,  60.05,  63.93)),
@@ -399,7 +404,7 @@ _WAVE7_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -757,6 +762,10 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
             # Moved only by the sixth re-baseline (current share count).
             assert fx["base_iv"] == _current(name)[0], name      # Wave 7 moved AAPL, V, SCHW (2026-09-27)
             continue
+        if name in _WAVE8_MOVED:
+            # Wave 8 (2026-09-27): the S-REIT NAV leg on the live SES cohort cap rate.
+            assert fx["base_iv"] == _current(name)[0], name
+            continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
 
@@ -908,7 +917,7 @@ def test_the_sign_flips_changed_only_their_flag_text():
                 oc["weight_lost_vs_base"], name
             assert p["scenarios.bear.ordering_composition.single_method"] is True, name
             continue
-        if name in _TWO_TIER_MOVED or name in _SHARES_MOVED:
+        if name in _TWO_TIER_MOVED or name in _SHARES_MOVED or name in _WAVE8_MOVED:
             assert p["scenarios.bear.intrinsic_value"] == _current(name)[1], name
             continue
         assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED[name], name

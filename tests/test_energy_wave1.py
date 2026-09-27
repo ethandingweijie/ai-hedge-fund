@@ -85,7 +85,10 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
              "Entertainment", "Consumer Electronics", "Computer Hardware", "Hardware, Equipment & Parts",
              "Communication Equipment", "Telecommunications Services", "Information Technology Services",
              "Advertising Agencies"}                                            # tests/test_tech_wave7.py
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7
+    wave8 = {"REIT - Retail", "REIT - Industrial", "REIT - Office", "REIT - Residential", "REIT - Diversified",
+             "REIT - Healthcare Facilities", "REIT - Specialty", "REIT - Hotel & Motel", "Real Estate - Development",
+             "Real Estate - Diversified", "Real Estate - Services", "Residential Construction"}   # tests/test_realestate_wave8.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7 | wave8
 
 
 def test_scope_does_not_reach_other_industries():

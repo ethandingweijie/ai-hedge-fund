@@ -154,10 +154,12 @@ class TestTickerOverrides:
         """FMP's "Real Estate - Services" lumps a prime-retail landlord in with
         a brokerage platform and a property manager."""
         from src.data.industry_profile_map import profile_for_ticker
+        # Wave 8 (owner directory, 2026-09-27): Wharf REIC is a Hong Kong landlord (category 4), and the
+        # row itself now routes services firms to Real Estate Services instead of the advertising table.
         assert profile_for_ticker("01997.HK", "Real Estate - Services") == (
-            "RealEstate", "REIT")
+            "Property", "Landlord / Investment Property (HK)")
         assert profile_for_ticker("02423.HK", "Real Estate - Services") == (
-            "ProfessionalServices", "Ad / Consulting")
+            "Property", "Real Estate Services")
 
     def test_overrides_are_stored_canonicalised(self):
         from src.tools.ticker_canonical import canonical_ticker

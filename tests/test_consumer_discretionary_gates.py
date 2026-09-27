@@ -454,6 +454,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_BANK_IMPLIED_COE",
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
+        "GATE_DISTRESSED_DEVELOPER",
         # Eighteenth (2026-09-26, owner): Commercial Biotech drops the Forward P/E
         # leg when the forward multiple at spot exceeds 45x (or NTM EPS is not
         # positive) and rolls its weight into EV/Fwd Rev and rNPV; `applied` True.
@@ -508,7 +509,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 8   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26)
+    assert src.count('"applied": True,') == 9   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27)
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
@@ -1731,7 +1732,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (125, 39), (total, with_norm)   # Wave 6 +3; Wave 7 (2026-09-27) +4 profiles (Analog IDM, Media, Networking, Telecom Carrier), none normalised
+    assert (total, with_norm) == (129, 39), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 (2026-09-27) +4 profiles (HK/China developer, HK landlord, homebuilder, real estate services), none normalised
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2101,7 +2102,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (125, 33, 33, 10)   # Wave 7 (2026-09-27): Fabless, Equipment / EDA and Mature SaaS moved off trailing P/E to Forward P/E; +4 profiles
+    assert (tot, trail, elig, anchored) == (129, 33, 33, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 (2026-09-27) +4 profiles, none on trailing P/E
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2864,7 +2865,7 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
     # +3 / +3: 02357.HK, 02507.HK, 00232.HK pinned in Wave 3 (all HKD reporters).
     # 166/125 -> 174/133: eight HK health names pinned on the owner's Wave 5 taxonomy (2026-09-26).
-    assert len(hk) == 174 and len(missing) == 133, (len(hk), len(missing))
+    assert len(hk) == 198 and len(missing) == 157, (len(hk), len(missing))   # Wave 8 (2026-09-27): 24 HK real-estate pins from the owner's directory, none in the FX table
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")

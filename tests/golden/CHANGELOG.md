@@ -1538,3 +1538,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 7 technology and communications (owner decisions 2026-09-27; decision 2 = alternative): the static tech multiple table is a fallback behind the live cohort, and for Hyperscaler, Mature SaaS and Mature Platform the live cohort is the curated basket the table was re-derived from (AAPL EV/EBITDA leg on the six-name hyperscaler basket, IV 224.55->203.56); the growth premium is an absolute spread 1 + 2.5x(g - cohort g) capped 0.85-1.30 for every profile (02888.HK 287.71->288.95 and D05.SI 43.21->44.44 lift off the 0.65-0.79 ratio penalty to the 0.85 floor; SCHW 76.50->72.28 and COST 525.00->514.36 lose part of a ratio premium; V 451.18->444.53); NTM forward multiples on by default; the peak-consensus trigger is the Cyclical_Peak_Consensus regime flag (MU trace only, IV 182.26 unchanged); the ratio ladder compares revenue in USD; fourteen labels into routing scope with four new profiles -- every other fixture moves only on the constants digest
 
+## 2026-09-27T08:25:58+00:00
+
+- regenerated at HEAD: `ea69fede`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 8 real estate (owner decisions 2026-09-27, all seven; decision 3 = live cap rate and nav kind): the REIT NAV leg reads the live cohort's implied cap rate ahead of the sub-type table (C38U.SI S-REIT NAV leg on the SES REIT - Retail cohort 5.45% against the 6.5% default, IV 1.81->1.74); the sub-type table re-derived (healthcare 5.1%, retail 6.9%, office 6.5%, residential 6.4%, hospitality 9.1%, tower 5.1%); sub-type by label and pin; twelve labels into routing scope with four new property profiles and the owner's equity directory as pins; GATE_DISTRESSED_DEVELOPER; nav input kind -- every other fixture moves only on the constants digest
+

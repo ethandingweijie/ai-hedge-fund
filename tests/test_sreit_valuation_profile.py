@@ -60,7 +60,8 @@ def _no_deposited_report(monkeypatch):
         ("A17U.SI", "CapitaLand Ascendas", "industrial"),
         ("M44U.SI", "Mapletree Logistics", "logistics"),
         ("SK6U.SI", "Parkway Life",        "healthcare"),
-        ("CMOU.SI", "CDL Hospitality",     "hospitality"),
+        ("J85.SI",  "CDL Hospitality",     "hospitality"),       # Wave 8 directory (2026-09-27): CDL Hospitality Trusts is J85.SI
+        ("CMOU.SI", "Keppel Pacific Oak US REIT", "us_office"),   # the row had read CDL Hospitality; corrected against the owner's directory
         ("OXMU.SI", "Prime US REIT",       "us_office"),
         ("K71U.SI", "Keppel REIT",         "office"),
     ],

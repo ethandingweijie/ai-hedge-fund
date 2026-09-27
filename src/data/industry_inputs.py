@@ -30,7 +30,8 @@ from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
 KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp", "pipeline",
-         "embedded_value", "alt_manager")   # Wave 6 (owner, 2026-09-27)
+         "embedded_value", "alt_manager",   # Wave 6 (owner, 2026-09-27)
+         "nav")                             # Wave 8 (owner, 2026-09-27): published NAV / RNAV per share and cap rate
 
 #: Kinds that ARE guidance. Everywhere else a figure for a year that has not
 #: ended fails its period check; here one for a year that HAS ended does.
@@ -57,7 +58,7 @@ RESERVE_MEASURE_REMARK = (
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
 #: and NAV curves, where the audit trail can separate price from reserve life.
-NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager")
+NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager", "nav")
 
 #: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
 #: pre-fill whose segments sum to more than the group can only be rebuilt.
@@ -72,6 +73,9 @@ BOUNDS = {
     # Group embedded value / market cap: life insurers trade between a deep discount and a few
     # times EV (P/EV 0.3x to 3x). Wave 6, owner 2026-09-27.
     "embedded_value": ("market_cap", 0.3, 3.0),
+    # Total NAV / market cap: REITs and landlords trade from a premium to a deep discount to NAV
+    # (P/NAV 0.2x to 3x). Wave 8, owner 2026-09-27.
+    "nav": ("market_cap", 0.3, 5.0),
     # Forward distributable earnings / market cap: the inverse of P/DE, 7x to 50x.
     "alt_manager": ("market_cap", 0.02, 0.15),
     # Backlog / annual revenue: weeks of work (short-cycle services) to years (drillers).
@@ -225,7 +229,7 @@ def reconcile(kind: str, value: Optional[float], context: dict,
         # -- stay bound to years that have ended.
         # An embedded value is likewise a BALANCE at the latest period end (AIA, Ping An report it at
         # the interim too), so a figure a year past the last annual statement is the latest report.
-        hi = latest + 1 if kind in ("backlog", "embedded_value") else latest
+        hi = latest + 1 if kind in ("backlog", "embedded_value", "nav") else latest   # a NAV is a balance at the latest period end too (Wave 8)
         if kind in GUIDANCE_KINDS or kind in FORWARD_PERIOD_KINDS:
             # The opposite test: guidance is for a year that has NOT ended, and
             # stale guidance for a year already reported is an actual, not this.
@@ -530,6 +534,17 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                           "ev_total": _cf(data.get("ev_total")), "ev_per_share": _cf(data.get("ev_per_share")),
                           "vnb": _cf(data.get("vnb")),
                           "vnb_margin": ((data.get("vnb_margin") or {}).get("value") if isinstance(data.get("vnb_margin"), dict) else None)}
+            if kind == "nav":
+                # Wave 8 (owner, 2026-09-27): the published NAV / RNAV per share and total, the cap
+                # rate the valuer or the company states, with the basis and period.
+                def _cf(c):
+                    return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
+                             "period_label": c.get("period"), "source_url": c.get("source_url"), "quote": c.get("quote")}
+                            if isinstance(c, dict) else None)
+                detail = {"basis": data.get("basis"), "fiscal_year": data.get("fiscal_year"),
+                          "nav_total": _cf(data.get("nav_total")), "nav_per_share": _cf(data.get("nav_per_share")),
+                          "cap_rate": ((data.get("cap_rate") or {}).get("value") if isinstance(data.get("cap_rate"), dict) else None),
+                          "cap_rate_basis": ((data.get("cap_rate") or {}).get("basis") if isinstance(data.get("cap_rate"), dict) else None)}
             if kind == "alt_manager":
                 def _cf(c):
                     return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),

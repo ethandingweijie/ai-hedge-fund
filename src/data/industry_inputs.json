@@ -84,6 +84,94 @@
     "value_usd": 18788695590.0
    }
   },
+  "00004.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 7.6,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.4
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:44:19+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "2.46x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 2.4617
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "6.118725 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported shareholders' equity per share (net asset value per share)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Wharf (Holdings) Limited",
+    "data": {
+     "basis": "Company-reported shareholders' equity per share (net asset value per share)",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFk6fNoysuf6pATCwGX0atdC5W_ijslfMFGnNsjoImXKfW0QDJH5GLFyQWVNwIbBHIQec384gNU360PXzeHllu3cFl9QC7JcbZFxwx16u7VAjbpEAe1NogJOvqFVNncHlhUC1NrbBFDsA7UIrk3z7yLlkND3WW8BWbecLyxVBd_4nu4gJxlHMnwD7SAvf8=",
+      "period": "1H2026",
+      "quote": "As at 30 June 2026, shareholders' equity stood at HK$146.7 billion (December 2025: HK$146.7 billion), equivalent to HK$47.99 (December 2025: HK$48.01) per share.",
+      "scale": "units",
+      "source_url": "https://www.wharfholdings.com/storage/fm/PressRelease/2026-08/260811-whl-iresults-e.pdf",
+      "value": 47.99
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFk6fNoysuf6pATCwGX0atdC5W_ijslfMFGnNsjoImXKfW0QDJH5GLFyQWVNwIbBHIQec384gNU360PXzeHllu3cFl9QC7JcbZFxwx16u7VAjbpEAe1NogJOvqFVNncHlhUC1NrbBFDsA7UIrk3z7yLlkND3WW8BWbecLyxVBd_4nu4gJxlHMnwD7SAvf8=",
+      "period": "1H2026",
+      "quote": "As at 30 June 2026, shareholders' equity stood at HK$146.7 billion (December 2025: HK$146.7 billion), equivalent to HK$47.99 (December 2025: HK$48.01) per share.",
+      "scale": "bn",
+      "source_url": "https://www.wharfholdings.com/storage/fm/PressRelease/2026-08/260811-whl-iresults-e.pdf",
+      "value": 146.7
+     },
+     "notes": "Wharf (Holdings) Limited reports net asset value interchangeably with shareholders' equity attributable to equity shareholders (in the FY2025 results announcement, the company explicitly highlighted: 'Net asset value rose by 7% to HK$48.01 per share'). As at 30 June 2026, total equity including non-controlling interests stood at HK$152.5 billion. No single overall portfolio capitalisation rate is disclosed for the company."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 6.118725
+    },
+    "fmp_context_usd": {
+     "company": "Wharf (Holdings) Limited",
+     "depreciation_and_amortization": 89887500.0,
+     "market_cap": 7598047941.8175,
+     "net_ppe": 1516995000.0,
+     "operating_cash_flow": 512295000.0,
+     "period": "2025-12-31",
+     "revenue": 1402117500.0,
+     "shares": 3056027327.025641
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 60.8,
+    "value_usd": 18704250000.0
+   }
+  },
   "00006.HK": {
    "rate_base": {
     "basis": "actual",
@@ -140,6 +228,353 @@
     "ok": false,
     "secs": 78.4,
     "value_usd": 8299189290.0
+   }
+  },
+  "00012.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 16.18,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 3.28
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:45:09+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "2.56x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 2.5646
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "8.574375 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported net asset value per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Henderson Land Development Company Limited",
+    "data": {
+     "basis": "Company-reported net asset value per share",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNcvuYNPwE7z2-WEsI0Ktg07VTUXT8oY53xIJuUVBJqQCbJOX4DqcI_fyzo67RJf1wUnQWjdtiAoS4JGZgkRfJF4_e5lFdM3lNvLqT-6DpqqtHyQqMenPMX94iu4fx4-uTfYOAvRssQ5DjiP1JNA-QlZ2wKBWhRKSHv1GsjKCZhkLx8-CRkcBTGVjNnC38E7R-zsHlT_-ChybZJBK8nBT2xtlQLmBsUkkcVimQuuzV5tnO--37QHLuJv4zCSnUTG2ow-aNo3U=",
+      "period": "1H2026",
+      "quote": "At 30 June 2026 HK$ Net asset value per share 67.25",
+      "scale": "units",
+      "source_url": "https://prod-web-s3.s3.ap-east-1.amazonaws.com/2026/09/cd1ea3073a53e28abaddeb53dcbdeeac/Henderson-Land-Interim-Report-2026-English-Version-1.pdf",
+      "value": 67.25
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE9IrRUq9LuLylW9JHF3uLI1dnq7fgiBrcMcbiWvd0PPVxtTOIwL-CDVFPjqiUhLUrAMhA_AEe1VR-elNv9U0vfJWJTyeajAa3rHnIT-MUc67OXMoiIyVXfd-2vdr6bgEE27cA-nZL7Z00m4awubOpKWZSFRloRMR_IO8RpwsIZcV7J22M09ht0SuoJ3EXBfjMjJzFCtOCiqKCynwbFx7no7DR-UkNfjqaFDl1FhVp36oU2g8s4XLNt6Nu36fCXIWOeERGxi74=",
+      "period": "1H2026",
+      "quote": "Total equity attributable to equity shareholders of the Company 325,555",
+      "scale": "mn",
+      "source_url": "https://prod-web-s3.s3.ap-east-1.amazonaws.com/2026/09/cd1ea3073a53e28abaddeb53dcbdeeac/Henderson-Land-Interim-Report-2026-English-Version-1.pdf",
+      "value": 325555.0
+     },
+     "notes": "At 30 June 2026, Henderson Land Development Company Limited reported net asset value per share of HK$67.25, based on 4,841 million issued shares and total equity attributable to equity shareholders of HK$325,555 million. The company does not report a single portfolio-wide capitalisation rate, disclosing instead property segment ranges in its Level 3 valuation hierarchy (e.g., 2.75%–6.0% for Hong Kong retail)."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 8.574375
+    },
+    "fmp_context_usd": {
+     "company": "Henderson Land Development Company Limited",
+     "depreciation_and_amortization": 59797500.0,
+     "market_cap": 16184998820.4225,
+     "net_ppe": 895687500.0,
+     "operating_cash_flow": 1571437500.0,
+     "period": "2025-12-31",
+     "revenue": 3281977500.0,
+     "shares": 4841387003.012967
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 45.6,
+    "value_usd": 41508262500.0
+   }
+  },
+  "00016.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 39.57,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 12.06
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:35:58+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "2.04x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 2.0425
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "27.897000000000002 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "company-reported shareholders' equity per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "4.90%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Sun Hung Kai Properties Limited",
+    "data": {
+     "basis": "company-reported shareholders' equity per share",
+     "cap_rate": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHgA0992f23d-ZLf-vzu8cCu7Lbb1wTB-bekaXgOpAKLb7fEOr7_nS8Q13JpTfC700Y3c-NCDKq30wJcYiLKxes9K0eecdtH6wqIsZkLutY1LF66NgZWKXhJAktxJAldF9jrxsW3rm69jvnV4ew92y7B6JH46kAjC1UU-zImjWjxjyhoBKX51Y=",
+      "period": "FY2026",
+      "quote": "Set out below is the significant unobservable inputs used for fair value measurements: Weighted average Fair value capitalization rate 2026 Completed Hong Kong 284,126 4.9%",
+      "source_url": "https://www.shkp.com/sites/assets/files/2026-09/e_0016_2026%20Annual%20Results.pdf",
+      "value": 0.049
+     },
+     "fiscal_year": "FY2025/26",
+     "nav_per_share": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGSGtSPOhgwyBn7nWJioxsiN6ogof_tOeb3L4XRYb-i9MykzYUzf9N_JwgxEgFOyzzz0JJhMk-mU4wqZuFRoTIF9Io32kKF_4cvfIc9JPEKSZ0QQSPe0SbuMXEqwfiNVXLChPeHS9Ln81a42CEJrC2-yz0Oxusdvupx19uhSs3KmNIs7TNOmbfb",
+      "period": "FY2026",
+      "quote": "Shareholders' equity was HK$633.9 billion or HK$218.8 per share as at 30 June 2026 compared to HK$617.9 billion as at 30 June 2025.",
+      "scale": "units",
+      "source_url": "https://www.shkp.com/sites/assets/files/2026-09/e_0016_2026%20Annual%20Results.pdf",
+      "value": 218.8
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGSGtSPOhgwyBn7nWJioxsiN6ogof_tOeb3L4XRYb-i9MykzYUzf9N_JwgxEgFOyzzz0JJhMk-mU4wqZuFRoTIF9Io32kKF_4cvfIc9JPEKSZ0QQSPe0SbuMXEqwfiNVXLChPeHS9Ln81a42CEJrC2-yz0Oxusdvupx19uhSs3KmNIs7TNOmbfb",
+      "period": "FY2026",
+      "quote": "Shareholders' equity was HK$633.9 billion or HK$218.8 per share as at 30 June 2026 compared to HK$617.9 billion as at 30 June 2025.",
+      "scale": "bn",
+      "source_url": "https://www.shkp.com/sites/assets/files/2026-09/e_0016_2026%20Annual%20Results.pdf",
+      "value": 633.9
+     },
+     "notes": "Properties were valued by Knight Frank Petty Limited on a market value basis using the income capitalization method. The weighted average capitalization rate for completed investment properties as at 30 June 2026 was 4.9% for Hong Kong and 5.4% for Mainland China."
+    },
+    "engine_preview": {
+     "cap_rate": 0.049,
+     "nav_per_share_usd": 27.897000000000002
+    },
+    "fmp_context_usd": {
+     "company": "Sun Hung Kai Properties Limited",
+     "depreciation_and_amortization": 655095000.0,
+     "market_cap": 39569914086.4875,
+     "net_ppe": 6583590000.0,
+     "operating_cash_flow": 0.0,
+     "period": "2026-06-30",
+     "revenue": 12060607500.0,
+     "shares": 2897780273.9962654
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 28.7,
+    "value_usd": 80822250000.0
+   }
+  },
+  "00083.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 12.15,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.18
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:40:28+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.78x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.7778
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "2.3600250000000003 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Net book value of the Group attributable to the Company's shareholders",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Sino Land Company Limited",
+    "data": {
+     "basis": "Net book value of the Group attributable to the Company's shareholders",
+     "cap_rate": null,
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "HKD",
+      "period": "FY2025",
+      "quote": "Net book value of the Group attributable to the Company's shareholders was HK$18.51 per share as at 30th June, 2025 (HK$19.17 per share as at 30th. June, 2024).",
+      "scale": "units",
+      "source_url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0827/2025082700345.pdf",
+      "value": 18.51
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "period": "FY2025",
+      "quote": "Total assets and shareholders' funds of the Group were HK$183,613 million and HK$169,397 million, respectively.",
+      "scale": "mn",
+      "source_url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0827/2025082700345.pdf",
+      "value": 169397.0
+     },
+     "notes": "Sino Land Company Limited does not disclose a single overall portfolio capitalization rate. In Note 17 (Investment Properties) of the 2025 Annual Report, the independent valuers disclose Level 3 fair value capitalisation rate ranges by sector: In Hong Kong — Office/Industrial: 3% – 6%, Residential: 2% – 4%, Retail: 3% – 6%; Outside Hong Kong — Office: 4% – 7%."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 2.3600250000000003
+    },
+    "fmp_context_usd": {
+     "company": "Sino Land Company Limited",
+     "depreciation_and_amortization": 20145000.0,
+     "market_cap": 12148994529.0,
+     "net_ppe": 385560000.0,
+     "operating_cash_flow": 861900000.0,
+     "period": "2026-06-30",
+     "revenue": 1182307500.0,
+     "shares": 9586140000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 46.8,
+    "value_usd": 21598117500.0
+   }
+  },
+  "00688.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 17.33,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 25.03
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:38:02+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2023; FMP's latest reported year is 2025",
+      "ok": false
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "3.03x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 3.028
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "4.79502 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Audited net asset value attributable to the owners of the company per respective issued share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "China Overseas Land & Investment Ltd.",
+    "data": {
+     "basis": "Audited net asset value attributable to the owners of the company per respective issued share",
+     "cap_rate": null,
+     "fiscal_year": "FY2023",
+     "nav_per_share": {
+      "currency": "HKD",
+      "period": "FY2023",
+      "quote": "China Overseas Land & Investment Ltd. 0688.HK. ... Audited net asset value attributable to the owners of the company per respective issued share ... 37.608",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2024/0816/2024081600832.pdf",
+      "value": 37.608
+     },
+     "nav_total": null,
+     "notes": "Net asset value per share attributable to owners of China Overseas Land & Investment Ltd. (00688.HK) reported in the Independent Financial Adviser's market comparable analysis in the HKEX circular dated 16 August 2024, based on the latest published audited financial results of the company (FY2023). COLI does not disclose a portfolio-level capitalization rate."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 4.79502
+    },
+    "fmp_context_usd": {
+     "company": "China Overseas Land & Investment Ltd.",
+     "depreciation_and_amortization": 66818274.9,
+     "market_cap": 17331770321.8875,
+     "net_ppe": 1063901339.28,
+     "operating_cash_flow": 1481701596.18,
+     "period": "2025-12-31",
+     "revenue": 25032335746.86,
+     "shares": 10944883535.024155
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 59.9,
+    "value_usd": 52480935448.11153
    }
   },
   "00700.HK": {
@@ -368,6 +803,92 @@
     "value_usd": 122010448560.0
    }
   },
+  "00823.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 12.36,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.79
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:45:38+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2026",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.55x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.5479
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "7.363125 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "company-reported net asset value per unit attributable to unitholders",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Link Real Estate Investment Trust",
+    "data": {
+     "basis": "company-reported net asset value per unit attributable to unitholders",
+     "cap_rate": null,
+     "fiscal_year": "FY2025/2026",
+     "nav_per_share": {
+      "currency": "HKD",
+      "period": "FY2025/2026",
+      "quote": "Consequently, net assets attributable to Unitholders declined by 8.2% to HK$150,096 million (31 March 2025: HK$163,470 million), and net asset value per unit fell by 8.8% to HK$57.75 (31 March 2025: HK$63.30).",
+      "scale": "units",
+      "source_url": "https://www.linkreit.com",
+      "value": 57.75
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "period": "FY2025/2026",
+      "quote": "Consequently, net assets attributable to Unitholders declined by 8.2% to HK$150,096 million (31 March 2025: HK$163,470 million), and net asset value per unit fell by 8.8% to HK$57.75 (31 March 2025: HK$63.30).",
+      "scale": "mn",
+      "source_url": "https://www.linkreit.com",
+      "value": 150096.0
+     },
+     "notes": "As of 31 March 2026, Link REIT reports capitalisation rates by asset class and region rather than a single overall portfolio rate: Hong Kong retail at 3.7%-4.9%, Hong Kong car parks at 3.1%-5.0%, Hong Kong office at 3.8%, Chinese Mainland retail at 5.0%-5.5%, Chinese Mainland office at 5.4%, Chinese Mainland logistics at 5.7%-5.9%, Australia retail at 5.3%-5.5%, Australia office at 5.4%-6.8%, Australia logistics at 5.4%, Singapore retail at 4.1%-4.5%, and United Kingdom office at 10.0%."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 7.363125
+    },
+    "fmp_context_usd": {
+     "company": "Link Real Estate Investment Trust",
+     "depreciation_and_amortization": 11475000.0,
+     "market_cap": 12363126748.8525,
+     "net_ppe": 160777500.0,
+     "operating_cash_flow": 869040000.0,
+     "period": "2026-03-31",
+     "revenue": 1785382500.0,
+     "shares": 2619278767.9902754
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 24.2,
+    "value_usd": 19137240000.0
+   }
+  },
   "00883.HK": {
    "pv10": {
     "basis": "actual",
@@ -429,6 +950,94 @@
     "value_usd": 114797216730.0,
     "verification_note": "Asked twice, independently: both返回 RMB 767,823m, and the table's own arithmetic agrees (future net cash flows 1,229,516 less the 10% discount 461,693 = 767,823; 579,486 domestic + 188,337 overseas). That is US$114.8bn at 0.1495, against the owner's audited $60-75bn -- which would be roughly RMB 400-500bn, so the two are not the same year or the same basis. Left flagged rather than adjusted: the figure a filing prints is not overridden by a range.",
     "verified_at": "2026-09-20T02:52:51+00:00"
+   }
+  },
+  "00960.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 4.66,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 14.5
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:42:19+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "5.20x (plausible 0.3x to 5.0x)",
+      "ok": false,
+      "ratio": 5.2011
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "2.8470078 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported net assets per share (book NAV)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Longfor Group Holdings Limited",
+    "data": {
+     "basis": "Company-reported net assets per share (book NAV)",
+     "cap_rate": null,
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHoUSs4JOKPEMl6hpV6AUC-vCbHqV0xCpKUzdcRQUUNwpqXfpi5ELpBT04WoVjp7G47Kb2yC8icJh3xLer3w3gZHNt9YI7OIE2Kz6_bgO6hSHh5reYgM3Z_YMwqDWzeBeZzV2XjzVOTydQyK4xQLzJhIImx5nkuruiAhWbxKkoeJWBN",
+      "period": "FY2025",
+      "quote": "The following information has been extracted from public documents and the annual results for the year ended 31 December 2025 of Longfor published on 27 March 2026: ... Net assets per share 19.11",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0409/2026040902104.pdf",
+      "value": 19.11
+     },
+     "nav_total": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHcldmoS4CESN6C6fsXaqTXYcxMLzefKORmKfMTDfr1khsIo0Ww4RjHky5--XyTr9FbvkktlfFoQr5fQnFfACr8s_IjcKyk6hD9PGR0kMPmA7g67aXiLCat0IEl4CUizj9V7Sp4dPD-4YJ84IGSMWD5PoyCWhN3H3W0FtUW4L6INTYbrg==",
+      "period": "FY2025",
+      "quote": "Equity attributable to owners of the Company 162,809,853",
+      "scale": "thousands",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0428/2026042800003.pdf",
+      "value": 162809853.0
+     },
+     "notes": "Neither Longfor Group nor its independent valuer Savills Valuation and Professional Services Limited states a single blended capitalization rate for the entire portfolio. Instead, Note 12 to the FY2025 financial statements reports ranges of valuation yields across property segments and regions (for instance, term yields of 3.5%-6.0% and reversionary yields of 3.75%-6.5% for shopping malls)."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 2.8470078
+    },
+    "fmp_context_usd": {
+     "company": "Longfor Group Holdings Limited",
+     "depreciation_and_amortization": 48366952.92,
+     "market_cap": 4663533070.7925005,
+     "net_ppe": 349172619.9,
+     "operating_cash_flow": 3259138474.02,
+     "period": "2025-12-31",
+     "revenue": 14497039846.380001,
+     "shares": 6862425884.990619
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 49.9,
+    "value_usd": 24255411899.94
    }
   },
   "01093.HK": {
@@ -574,6 +1183,172 @@
     "ok": true,
     "secs": 33.9,
     "value_usd": 595920000.0
+   }
+  },
+  "01109.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 26.04,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 41.91
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:39:37+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.40x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.4005
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "5.114025 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Broker-appraised NAV per share (BOCI / 中银国际)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "China Resources Land Limited",
+    "data": {
+     "basis": "Broker-appraised NAV per share (BOCI / 中银国际)",
+     "cap_rate": null,
+     "fiscal_year": "FY2024",
+     "nav_per_share": {
+      "currency": "HKD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGNzAbwf7QthXKu5yi5johx3nBNt_XTntlaj60PGF7d-vWlo2nFjQL8GIpJXxnG7F9XTWiFxnvqa0yN_F9nKeHYuHn_9qfLoHznm866agrALsMtbJLqrFNdNHQt",
+      "period": "FY2024",
+      "quote": "中银国际将润地的每股资产净值（NAV）下调7.6%至每股40.11港元。",
+      "scale": "units",
+      "source_url": "https://www.guandian.cn/m/show/424139",
+      "value": 40.11
+     },
+     "nav_total": null,
+     "notes": "BOCI (Bank of China International) assessed China Resources Land's net asset value per share at HKD 40.11 in its research note. The report did not publish an aggregate NAV total or a portfolio capitalization rate."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 5.114025
+    },
+    "fmp_context_usd": {
+     "company": "China Resources Land Limited",
+     "depreciation_and_amortization": 228145588.32,
+     "market_cap": 26039338966.732502,
+     "net_ppe": 2900555234.46,
+     "operating_cash_flow": 5779403635.9800005,
+     "period": "2025-12-31",
+     "revenue": 41912662137.06,
+     "shares": 7130939579.015363
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 90.0,
+    "value_usd": 36467803280.574036
+   }
+  },
+  "01113.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 20.53,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 7.63
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:36:58+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "2.46x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 2.4625
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "14.443200000000001 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Shareholders' funds – book value per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "CK Asset Holdings Limited",
+    "data": {
+     "basis": "Shareholders' funds – book value per share",
+     "cap_rate": null,
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "HKD",
+      "period": "FY2025",
+      "quote": "Shareholders' funds – book value per share (Note 1), 113.28",
+      "scale": "units",
+      "source_url": "https://www.ckah.com",
+      "value": 113.28
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "period": "FY2025",
+      "quote": "Shareholders' funds. 371,228. 379,631. 385,844. 387,675. 396,442.",
+      "scale": "mn",
+      "source_url": "https://www.ckah.com",
+      "value": 396442.0
+     },
+     "notes": "Book value per share of HK$113.28 is calculated based on 3,499,778,333 shares in issue as at 31 December 2025. Total shareholders' funds were HK$396,442 million (with total equity of HK$408,681 million including perpetual capital securities of HK$7,929 million and non-controlling interests of HK$4,310 million). In Note 9 (Investment Properties) of the 2025 Annual Report, independent valuer Cushman & Wakefield Limited derived fair values of completed investment properties by adopting capitalisation rates ranging from 4% to 8%, and 4% for investment properties under development; no single portfolio-wide capitalisation rate was disclosed."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 14.443200000000001
+    },
+    "fmp_context_usd": {
+     "company": "CK Asset Holdings Limited",
+     "depreciation_and_amortization": 280372500.0,
+     "market_cap": 20526199923.045002,
+     "net_ppe": 9290670000.0,
+     "operating_cash_flow": 2380425000.0,
+     "period": "2025-12-31",
+     "revenue": 7629600000.0,
+     "shares": 3499778333.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 55.8,
+    "value_usd": 50546355000.0
    }
   },
   "01299.HK": {
@@ -924,6 +1699,180 @@
     "ok": true,
     "secs": 157.7,
     "value_usd": 39171034074.51573
+   }
+  },
+  "01972.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 17.85,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 2.05
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:43:13+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.95x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.9495
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "6.0027 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported equity attributable to the Company's shareholders per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Swire Properties Limited",
+    "data": {
+     "basis": "Company-reported equity attributable to the Company's shareholders per share",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "HKD",
+      "period": "1H2026",
+      "quote": "Equity attributable to the Company's shareholders per share (a), (d) 47.08",
+      "scale": "units",
+      "source_url": "https://ir.swireproperties.com/files/swireproperties/press-release/2026/20260806-interim-results-en.pdf",
+      "value": 47.08
+     },
+     "nav_total": {
+      "currency": "HKD",
+      "period": "1H2026",
+      "quote": "Total equity (including non-controlling interests) 272,975",
+      "scale": "mn",
+      "source_url": "https://ir.swireproperties.com/files/swireproperties/press-release/2026/20260806-interim-results-en.pdf",
+      "value": 272975.0
+     },
+     "notes": "At 30th June 2026, Swire Properties reported equity attributable to the Company's shareholders per share of HK$47.08 (compared with HK$46.80 at 31st December 2025). Total equity (including non-controlling interests) was HK$272,975 million. The company does not report a single portfolio-wide capitalisation rate; instead, independent valuer Cushman & Wakefield discloses ranges by portfolio segment: completed Hong Kong properties at 2.63% - 5.50%, completed Chinese Mainland properties at 5.50% - 6.50%, Hong Kong properties under development at 3.63%, and Chinese Mainland properties under development at 5.50% - 6.75%. In the 1H 2026 interim results, the company noted that 'the valuation of the investment property portfolio includes a reduction of 12.5 basis points in the capitalisation rates of certain office investment properties in Hong Kong.'"
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 6.0027
+    },
+    "fmp_context_usd": {
+     "company": "Swire Properties Limited",
+     "depreciation_and_amortization": 74842500.0,
+     "market_cap": 17852808867.84,
+     "net_ppe": 780300000.0,
+     "operating_cash_flow": 952552500.0,
+     "period": "2025-12-31",
+     "revenue": 2045227500.0,
+     "shares": 5757484800.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 49.4,
+    "value_usd": 34804312500.0
+   }
+  },
+  "02202.HK": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 5.47,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 34.78
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:41:25+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "2.78x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 2.7843
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "1.2752688 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported net assets per share attributable to equity shareholders (歸屬於上市公司股東的每股淨資產)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "China Vanke Co., Ltd.",
+    "data": {
+     "basis": "Company-reported net assets per share attributable to equity shareholders (歸屬於上市公司股東的每股淨資產)",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF7NiUV823HUIx3sB9ATmZ9_A5vUrA4itDRcjc5iTIAMwLrepHZ6ffDCleBfqsU5bDq_y62kSyU1HU7svwxyw5-T43th3gGpyBi4poaBsex7KK_L-sfuP3Zj1nugyCdpGBksMwbCGYRuS9MLTunb65coqEWOArw95eNyQqIveNLF5s9FiXeFzRKARRWkCLlcA==",
+      "period": "1H2026",
+      "quote": "歸屬於上市公司股東的每股淨資產 （人民幣元） 8.56",
+      "scale": "units",
+      "source_url": "https://newsfile.futunn.com/public/NN-PersistNoticeAttachment/7781/20260916/12333979-0.PDF",
+      "value": 8.56
+     },
+     "nav_total": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF7NiUV823HUIx3sB9ATmZ9_A5vUrA4itDRcjc5iTIAMwLrepHZ6ffDCleBfqsU5bDq_y62kSyU1HU7svwxyw5-T43th3gGpyBi4poaBsex7KK_L-sfuP3Zj1nugyCdpGBksMwbCGYRuS9MLTunb65coqEWOArw95eNyQqIveNLF5s9FiXeFzRKARRWkCLlcA==",
+      "period": "1H2026",
+      "quote": "本公司股東應佔權益總額 102,181,199",
+      "scale": "thousands",
+      "source_url": "https://newsfile.futunn.com/public/NN-PersistNoticeAttachment/7781/20260916/12333979-0.PDF",
+      "value": 102181199.0
+     },
+     "notes": "Figures are taken from China Vanke Co., Ltd.'s 2026 Interim Report for the six months ended 30 June 2026. The company does not report a property portfolio capitalization rate. For comparison, as at 31 December 2025 (FY2025), total equity attributable to shareholders was RMB 116,905,224 thousand, or RMB 9.80 per share."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 1.2752688
+    },
+    "fmp_context_usd": {
+     "company": "China Vanke Co., Ltd.",
+     "depreciation_and_amortization": 1542473070.84,
+     "market_cap": 5467426742.685,
+     "net_ppe": 5015166180.96,
+     "operating_cash_flow": -147210862.5,
+     "period": "2025-12-31",
+     "revenue": 34776813925.62,
+     "shares": 17538559662.16769
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 36.3,
+    "value_usd": 15222955027.02
    }
   },
   "02318.HK": {
@@ -2499,6 +3448,110 @@
    }
   },
   "5WH.SI": {},
+  "9CI.SI": {
+   "alt_manager": {
+    "anchors": {
+     "market_cap_usd_bn": 10.15,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.67
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T08:49:41+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "no cited amount of known scale and convertible currency",
+      "ok": false
+     },
+     {
+      "check": "FRE is a full-year figure",
+      "detail": "FRE missing",
+      "ok": null
+     },
+     {
+      "check": "forward period",
+      "detail": "stated for FY2026E",
+      "ok": true
+     },
+     {
+      "check": "P/DE range cited and plausible",
+      "detail": "midpoint 16.5x (Peer alternative asset manager forward P/DE multiple range applied across peers (KKR at a discount to Blackstone and premium to Brookfield))",
+      "ok": true
+     },
+     {
+      "check": "P/FRE range cited and plausible",
+      "detail": "midpoint 18.0x (Maybank IBG Research SOTP valuation sensitivity range of multiples applied to CLI fee-related business)",
+      "ok": true
+     },
+     {
+      "check": "FRE below DE",
+      "detail": "FRE None vs DE None (USD, totals or per share x shares)",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "CapitaLand Investment Limited",
+    "data": {
+     "de": null,
+     "de_per_share": null,
+     "fee_paying_aum": {
+      "currency": "SGD",
+      "period": "1H 2026",
+      "quote": "CLI ranks among Asia's largest real asset managers with S$128bn of funds under management (FUM) as at 30 June 2026",
+      "scale": "bn",
+      "source_url": "https://www.minichart.com.sg/2026/09/16/capitaland-investment-accumulate-rating-and-s3-45-target-price-in-focus/",
+      "value": 128.0
+     },
+     "fiscal_year": "FY2026E",
+     "fre": null,
+     "fre_per_share": null,
+     "net_accrued_carry": null,
+     "notes": "CapitaLand Investment Limited (CLI) is an Asian real estate investment manager reporting under Singapore FRS/IFRS and does not report US-style Distributable Earnings (DE) or capitalize accrued performance fees (net accrued carry) on its balance sheet. Instead, CLI reports Operating PATMI (guided to grow mid-single digits for FY2026) and Fee-Income Related Business (FRB) revenue/EBITDA. Sell-side analysts typically value CLI using sum-of-the-parts (SOTP) methodology, pegging its fee business to 14x-22x EV/EBITDA (with Maybank noting an average 26x for comparable global REIM peers) and tracking overall forward P/E around 21.5x-24.8x.",
+     "pde_multiple": {
+      "basis": "Peer alternative asset manager forward P/DE multiple range applied across peers (KKR at a discount to Blackstone and premium to Brookfield)",
+      "high": 18.0,
+      "low": 15.0,
+      "quote": "On valuation, KKR trades at a P/DE multiple of ~15-18x , which is a discount to Blackstone but a premium to Brookfield.",
+      "source_url": "https://koalagains.com/posts/brookfield-corporation-competitive-analysis-comparison-2026/"
+     },
+     "pfre_multiple": {
+      "basis": "Maybank IBG Research SOTP valuation sensitivity range of multiples applied to CLI fee-related business",
+      "high": 22.0,
+      "low": 14.0,
+      "quote": "Fig 47: Sensitivity of SOTP value to multiple applied to CLI's fee-related business. EV/EBITDA (x) 14 16 18 20 22",
+      "source_url": "https://rfs.maybank-ke.com/action/neva_open_pdf?action=open_pdf&id=cli_sp_20220209"
+     }
+    },
+    "engine_preview": {
+     "alt_de_fwd_total": null,
+     "alt_de_ps_fwd": null,
+     "alt_fre_fwd_total": null,
+     "alt_fre_ps_fwd": null,
+     "alt_net_accrued_carry_total": null,
+     "alt_pde_multiple": 16.5,
+     "alt_pfre_multiple": 18.0
+    },
+    "fmp_context_usd": {
+     "company": "CapitaLand Investment Limited",
+     "depreciation_and_amortization": 102567760.0,
+     "market_cap": 10153780955.2392,
+     "net_ppe": 427496160.0,
+     "operating_cash_flow": 384433360.0,
+     "period": "2025-12-31",
+     "revenue": 1670053680.0,
+     "shares": 4987867026.923077
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 54.7,
+    "value_usd": null
+   }
+  },
   "AMGN": {
    "pipeline": {
     "anchors": {
@@ -2747,6 +3800,86 @@
     "ok": true,
     "secs": 33.8,
     "value_usd": 15750000000.0
+   }
+  },
+  "AMT": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 78.76,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 10.65
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:32:11+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.39x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.3903
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "235.0 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Street consensus NAV estimate (analyst consensus appraised NAV from TIKR)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "American Tower Corporation",
+    "data": {
+     "basis": "Street consensus NAV estimate (analyst consensus appraised NAV from TIKR)",
+     "cap_rate": null,
+     "fiscal_year": "FY2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHP-0_5vbCyO1gaEjWfLMkgYoUNjK2jDL3FOB_TMA1RejQAHiJi-nrxtYLZq8yasp7k0Ze7OINYotvUY_7XHohfBJ55poju1DVB8KPTWU-mYoYZb1rKiLP9ny9AXefIwGwPl69Zr0Sfdxg3m5Hph1jgLqHFWUBDV7Q8hP-0HRRb63N1PTFplTrWhrC-BvFzjDL6fpAwt-kq_fUZFYnV3Z3x5jpzMG6igafHYAX0JElhVg==",
+      "period": "FY2026",
+      "quote": "AMT's current price-to-NAV of 0.78x, against a NAV estimate of around $235 per share in the TIKR Street Estimate table, is precisely that discount: a stock the private market would buy at a premium, trading in the public market at a discount to its own appraised value.",
+      "scale": "units",
+      "source_url": "https://www.tikr.com/blog/american-tower-stock-after-the-dish-default-a-71-return-case-built-on-infrastructure-compounding",
+      "value": 235.0
+     },
+     "nav_total": null,
+     "notes": "American Tower Corporation (AMT) is a US REIT reporting under US GAAP, which accounts for investment properties at historical cost less accumulated depreciation and does not report a company fair value NAV or portfolio cap rate. The figure cited represents the Wall Street consensus appraised NAV per share compiled by TIKR."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 235.0
+    },
+    "fmp_context_usd": {
+     "company": "American Tower Corporation",
+     "depreciation_and_amortization": 2041600000.0,
+     "market_cap": 78761218800.0,
+     "net_ppe": 28782800000.0,
+     "operating_cash_flow": 5464000000.0,
+     "period": "2025-12-31",
+     "revenue": 10645100000.0,
+     "shares": 465960000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 21.2,
+    "value_usd": 109500600000.0
    }
   },
   "APO": {
@@ -3824,6 +4957,86 @@
     "value_usd": 7272116776.379664
    }
   },
+  "C09.SI": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 5.78,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 2.81
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:46:10+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.30x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.3002
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "8.4089904 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported NAV per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "City Developments Limited",
+    "data": {
+     "basis": "Company-reported NAV per share",
+     "cap_rate": null,
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE4mQ9pEnM54JGgl3ga72uo8cJdpaFZogGuxcCuxWRX7XK-apLnmvfq7l9aPpyEmHAXbZdaa9m9vA6mRFYmJYe8RsViIwvFhnuB2dmUW13yX4I5kuXY81Srt7x67OkyOEVq71vihYHtEywzSKx_e87ANy_rAIzTmkHfqvQobdT5tIjNupYGpqibup2Vs0d7QL2WzqWprCwErTKnu6gIAg==",
+      "period": "FY2025",
+      "quote": "Net Asset Value (NAV) per share stood at $10.74 as of 31 December 2025.",
+      "scale": "units",
+      "source_url": "https://links.sgx.com/FileOpen/1_2H%202025_Interim%20FS.ashx?App=Announcement&FileID=876479",
+      "value": 10.74
+     },
+     "nav_total": null,
+     "notes": "City Developments Limited reports investment and hotel properties on a cost less accumulated depreciation basis. In the same FY2025 announcement, the company stated that factoring in fair value gains on investment properties yields an RNAV of S$17.99 per share, while factoring in fair value gains on investment properties and revaluation surpluses on hotel properties yields an RNAV of S$20.16 per share as of 31 December 2025. No group-wide portfolio capitalisation rate is disclosed."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 8.4089904
+    },
+    "fmp_context_usd": {
+     "company": "City Developments Limited",
+     "depreciation_and_amortization": 226853264.48,
+     "market_cap": 5777849846.78944,
+     "net_ppe": 4322361215.44,
+     "operating_cash_flow": -1471657879.68,
+     "period": "2025-12-31",
+     "revenue": 2808549552.32,
+     "shares": 893401400.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 27.4,
+    "value_usd": 7512603795.94656
+   }
+  },
   "CCJ": {
    "backlog": {
     "basis": "actual",
@@ -3921,6 +5134,90 @@
     "source": "sec_10k",
     "value_usd": 55962000000.0,
     "verified_at": "2026-09-20T02:52:51+00:00"
+   }
+  },
+  "DLR": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 66.08,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 6.11
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:32:38+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.92x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.9217
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "164.63 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "S&P Global Market Intelligence consensus NAV per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "5.00%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Digital Realty Trust, Inc.",
+    "data": {
+     "basis": "S&P Global Market Intelligence consensus NAV per share",
+     "cap_rate": {
+      "period": "July 2026",
+      "quote": "DLR's $3.5B acquisition from Blackstone secures 100% leased hyperscale data centers at a 6.5% cap rate, above its own implied 5%.",
+      "source_url": "https://seekingalpha.com/article/4703513-digital-realty-a-65-cap-rate-as-a-compass-ahead-of-the-july-23-earnings",
+      "value": 0.05
+     },
+     "fiscal_year": "July 2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "as of 7/31/2026",
+      "quote": "Digital Realty Trust, Inc. DLR. $188.52. $164.63. 14.51%. Data Center. Large Cap. ... REIT NAV Data as of 7/31/2026.",
+      "scale": "units",
+      "source_url": "https://seekingalpha.com/article/4715975-the-state-of-reits-august-2026-edition",
+      "value": 164.63
+     },
+     "nav_total": null,
+     "notes": "Digital Realty Trust, Inc. reports under US GAAP and does not publish a portfolio appraisal, company-wide NAV, or portfolio cap rate. Instead, it provides a 'Components of Net Asset Value (NAV)' schedule in its quarterly financial supplement for analysts to derive their own estimates. The NAV per share is the consensus analyst NAV estimate compiled by S&P Global Market Intelligence as of July 31, 2026. The 5.0% implied capitalization rate is from research analysis."
+    },
+    "engine_preview": {
+     "cap_rate": 0.05,
+     "nav_per_share_usd": 164.63
+    },
+    "fmp_context_usd": {
+     "company": "Digital Realty Trust, Inc.",
+     "depreciation_and_amortization": 1894636000.0,
+     "market_cap": 66081413717.0,
+     "net_ppe": 26433617000.0,
+     "operating_cash_flow": 2412136000.0,
+     "period": "2025-12-31",
+     "revenue": 6112692000.0,
+     "shares": 369976001.9987682
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 22.0,
+    "value_usd": 60909149209.057205
    }
   },
   "DUK": {
@@ -4085,6 +5382,90 @@
     "ok": true,
     "source": "sec_10k",
     "value_usd": 41317000000.0
+   }
+  },
+  "EQIX": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 99.47,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 9.26
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:31:46+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.05x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.0524
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "1060.95 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "analyst consensus NAV per share (compiled by S&P Global Market Intelligence)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "4.25%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Equinix, Inc.",
+    "data": {
+     "basis": "analyst consensus NAV per share (compiled by S&P Global Market Intelligence)",
+     "cap_rate": {
+      "period": "2026",
+      "quote": "DLR's implied cap rate is higher at ~5.5–6% versus EQIX's ~4–4.5% , meaning DLR looks cheaper on a pure real estate yield basis.",
+      "source_url": "https://koalagains.com",
+      "value": 0.0425
+     },
+     "fiscal_year": "Q2 2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "July 31, 2026",
+      "quote": "Equinix, Inc. (REIT). EQIX. $1,019.28. $1,060.95. -3.93%. Data Center. Large Cap.",
+      "scale": "units",
+      "source_url": "https://seekingalpha.com",
+      "value": 1060.95
+     },
+     "nav_total": null,
+     "notes": "Equinix, Inc. does not report a standalone net asset value or property portfolio cap rate. Instead, it provides a 'Components of Net Asset Value' schedule in its quarterly investor presentations (reporting Adjusted NOI, unstabilized properties at cost, CIP, and balance sheet items) to enable analysts to model NAV. The reported per-share NAV is the Wall Street analyst consensus NAV compiled by S&P Global Market Intelligence as of July 31, 2026."
+    },
+    "engine_preview": {
+     "cap_rate": 0.0425,
+     "nav_per_share_usd": 1060.95
+    },
+    "fmp_context_usd": {
+     "company": "Equinix, Inc.",
+     "depreciation_and_amortization": 2066000000.0,
+     "market_cap": 99468953223.0,
+     "net_ppe": 24976000000.0,
+     "operating_cash_flow": 3911000000.0,
+     "period": "2025-12-31",
+     "revenue": 9260000000.0,
+     "shares": 98671686.00011903
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 27.2,
+    "value_usd": 104685725261.8263
    }
   },
   "ET": {
@@ -4725,6 +6106,85 @@
     "value_usd": 0.0
    }
   },
+  "IRM": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 33.14,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 6.9
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:35:23+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.56x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.5614
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "62.53 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Consensus NAV per share estimate (S&P Global Market Intelligence)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Iron Mountain Incorporated",
+    "data": {
+     "basis": "Consensus NAV per share estimate (S&P Global Market Intelligence)",
+     "cap_rate": null,
+     "fiscal_year": "2Q2024",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "2Q2024",
+      "quote": "Iron Mountain Inc., a REIT focused on information management services, occupied the second position on the largest premium list, closing June 28 at $89.62, 43.3% above the consensus NAV estimate of $62.53.",
+      "scale": "units",
+      "source_url": "https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/nav-monitor-us-reit-discount-to-net-asset-value-falls-in-june-82337775",
+      "value": 62.53
+     },
+     "nav_total": null,
+     "notes": "Iron Mountain does not report a company net asset value (NAV) under US GAAP. S&P Global Market Intelligence compiles consensus NAV per share estimates from covering equity research analysts."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 62.53
+    },
+    "fmp_context_usd": {
+     "company": "Iron Mountain Incorporated",
+     "depreciation_and_amortization": 1063355000.0,
+     "market_cap": 33138298970.0,
+     "net_ppe": 12011521000.0,
+     "operating_cash_flow": 1339999000.0,
+     "period": "2025-12-31",
+     "revenue": 6901737000.0,
+     "shares": 297524681.00197524
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 19.8,
+    "value_usd": 18604218303.053513
+   }
+  },
   "JD": {
    "sotp": {
     "anchors": {
@@ -4740,6 +6200,7 @@
      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFRFSjRJ_fjjf2GjjMOQHkFYlksupjcp_5mKO76pOi-iMGEu3mRYIDRx0GD4xpa2ATOQlFfL7jdhqEYfAqzrDE5aO23UnWnELGoYLQxEEBexZveUJW_OjJgijYcoxX5Bh-g54Y9uA9TIQLtIo8A12A_aRBJTsWt7vhqKBRs-dB9_NrBMQuC0h9pSCSDJAK8qPUxp0WsB_cCq1v7U8w=": "https://www.futunn.com/403",
      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFoafCJWY1E9FWdeftu90_q2dsqQ803in8qXi5bQN9ChsVi3Rot6glfZFCi2zclt_0zhdiTqmFbajBuhVVMO4kZNH2VrvRgBhAdw6gRRqNQ-_ICqIBeGfUsf5nAeD7TDi6Ddol2e7ADQZPfZ2ZGeYqXkG0o0uKv": "https://uobkh.com.sg/strapi-uploads/JD_com_9618_HK_2a9275f95c.pdf",
      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGN9yClNaGesL36NG3yQEXu8AjGIUeTTRpkaAQbRwWlxtOPwuf5VKp4Fdb5dSPcBRcm4zozjJYeaLkkuEpdlWkkRvgvs_z-zT1GzbryzHNwlnHXJSAm4kfI5QG-eE37G6Ffqup1pe4nWM9-QheKEnnldbrNxeUKOB8CFtYWsovB6UxdYBidzlPSPZKVCOJRevjSVI0=": "https://seekingalpha.com/article/4946685-jdcom-at-a-turning-point-yet-still-deeply-discounted",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGOi7Mtzavgcb2Lbp1q3o98O3kbsTvmEcPg8gaQqkCjgWu4w0xKYLgZPV2fBxq7PKdLts1Qyvgbi3Gs_58Ne0ZNoR_ZLJns7yu3q6XgrS_k_f7wuF3SCCb7jaB1ZV1U9c7SiLdB135KBvJWT3bWxl6uaBhEeJf_nGX5wjj-m4DISlFHAXXAHmagbdFoqDGGh6VhHvayqR6qxtYSM-Rp0KZrUsMJTzdzSv4xWHCWOncYoo-HGn-4OftvmLPsLO9gCHgJC6o=": "https://www.theamericanreporter.com/2026/09/20/jingdong-logistics-offers-8-categories-of-international-logistics-services-across-25-markets/",
      "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHR5eVOFKdOpZDMNa39WVHJIMPzf8S6OGKbpNkpLUp4ESqsTgusR5izJ20HuGRo3lNE1wGQHjTuAbAFEuv_Sz_2lTveuyXYy62lDqVBUwkmNQTlXDJcdQ==": "https://ir.jd.com/node/11991/pdf"
     },
     "checks": [
@@ -5815,6 +7276,90 @@
     "value_usd": 105000000000.0
    }
   },
+  "O": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 51.79,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 5.75
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:34:28+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.26x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.2604
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "70.0 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Morningstar estimated net asset value per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "6.50%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Realty Income Corporation",
+    "data": {
+     "basis": "Morningstar estimated net asset value per share",
+     "cap_rate": {
+      "period": "FY2026",
+      "quote": "We estimate Realty Income's net asset value to be approximately $70 per share based on a 6.5% cap rate assumption.",
+      "source_url": "https://www.morningstar.com/stocks/this-dividend-aristocrat-offers-5-yield-looks-10-undervalued",
+      "value": 0.065
+     },
+     "fiscal_year": "FY2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "FY2026",
+      "quote": "We estimate Realty Income's net asset value to be approximately $70 per share based on a 6.5% cap rate assumption.",
+      "scale": "units",
+      "source_url": "https://www.morningstar.com/stocks/this-dividend-aristocrat-offers-5-yield-looks-10-undervalued",
+      "value": 70.0
+     },
+     "nav_total": null,
+     "notes": "As a US-listed REIT reporting under US GAAP, Realty Income Corporation does not report an official company net asset value (NAV) in its financial filings. The reported NAV per share and capitalization rate assumption are appraised research estimates from Morningstar."
+    },
+    "engine_preview": {
+     "cap_rate": 0.065,
+     "nav_per_share_usd": 70.0
+    },
+    "fmp_context_usd": {
+     "company": "Realty Income Corporation",
+     "depreciation_and_amortization": 2524200000.0,
+     "market_cap": 51790661220.0,
+     "net_ppe": 0.0,
+     "operating_cash_flow": 3994754000.0,
+     "period": "2025-12-31",
+     "revenue": 5749400000.0,
+     "shares": 932493000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 13.2,
+    "value_usd": 65274510000.0
+   }
+  },
   "OKE": {
    "maintenance_capex": {
     "built_at": "2026-09-19T18:00:11+00:00",
@@ -6344,6 +7889,174 @@
     "ok": true,
     "secs": 26.1,
     "value_usd": 17400000000.0
+   }
+  },
+  "PLD": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 124.13,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 8.79
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:31:14+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.92x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.9246
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "123.0 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Consensus Net Asset Value per share (compiled by FactSet, reported by Prologis)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "4.90%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Prologis, Inc.",
+    "data": {
+     "basis": "Consensus Net Asset Value per share (compiled by FactSet, reported by Prologis)",
+     "cap_rate": {
+      "period": "August 2026",
+      "quote": "The more conventionally valued REITs with the lowest implied cap rates are WELL (3.4%), Prologis (PLD) (4.9%), Equity LifeStyle Properties (ELS) (5.0%), and AHR (5.4%).",
+      "source_url": "https://seekingalpha.com/article/4722513-the-state-of-reits-september-2026-edition",
+      "value": 0.049
+     },
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "September 2025",
+      "quote": "$123. Consensus. Net Asset Value per share1. ... 1. Source: FactSet as of September 5, 2025.",
+      "scale": "units",
+      "source_url": "https://ir.prologis.com",
+      "value": 123.0
+     },
+     "nav_total": null,
+     "notes": "Prologis reports 'Net Asset Value Components' in its quarterly supplemental information rather than an aggregate company-calculated NAV total or per-share NAV. In its September 2025 Investor Presentation, Prologis reported the FactSet consensus Net Asset Value per share of $123. The implied capitalization rate of 4.9% (0.049) is compiled from S&P Global Market Intelligence as reported in The State of REITs (September 2026 edition)."
+    },
+    "engine_preview": {
+     "cap_rate": 0.049,
+     "nav_per_share_usd": 123.0
+    },
+    "fmp_context_usd": {
+     "company": "Prologis, Inc.",
+     "depreciation_and_amortization": 2626028000.0,
+     "market_cap": 124127100280.0,
+     "net_ppe": 80400207000.0,
+     "operating_cash_flow": 5008434000.0,
+     "period": "2025-12-31",
+     "revenue": 8790127000.0,
+     "shares": 933076000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 29.0,
+    "value_usd": 114768348000.0
+   }
+  },
+  "PSA": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 53.7,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 4.82
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:34:11+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.98x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.9827
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "283.0 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Wall Street research analyst estimated NAV per share (low of low-to-high range reviewed by Morgan Stanley in Form S-4)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "5.00%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Public Storage",
+    "data": {
+     "basis": "Wall Street research analyst estimated NAV per share (low of low-to-high range reviewed by Morgan Stanley in Form S-4)",
+     "cap_rate": {
+      "period": "FY2025",
+      "quote": "NAV for these purposes was defined as the total market value of the Company's assets, assuming a 5% cap rate, net of the Company's total liabilities.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1393311/000119312526128991/psa-20260325.htm",
+      "value": 0.05
+     },
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "1Q2026",
+      "quote": "Morgan Stanley also reviewed publicly available Wall Street research analyst estimates of NAV per share published prior to March 13, 2026 by Wall Street research analysts that cover both companies for each of NSA and Public Storage, which reflected low-to-high NAV per share estimates for NSA common shares and Public Storage common shares of $28.08 to $41.10 and $283.00 to $348.17, respectively.",
+      "scale": "units",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1393311/000119312526217125/d110345ds4.htm",
+      "value": 283.0
+     },
+     "nav_total": null,
+     "notes": "In Public Storage's Definitive Proxy Statement (Form DEF 14A filed March 27, 2026), the CHC Committee evaluated executive compensation using growth in NAV, defining NAV as 'the total market value of the Company's assets, assuming a 5% cap rate, net of the Company's total liabilities.' In Public Storage's Form S-4 registration statement (filed March 16, 2026), financial advisor Morgan Stanley compiled publicly available Wall Street research analyst estimates of NAV per share published prior to March 13, 2026, indicating a low-to-high range of $283.00 to $348.17 per common share."
+    },
+    "engine_preview": {
+     "cap_rate": 0.05,
+     "nav_per_share_usd": 283.0
+    },
+    "fmp_context_usd": {
+     "company": "Public Storage",
+     "depreciation_and_amortization": 1151840000.0,
+     "market_cap": 53699493720.0,
+     "net_ppe": 194355000.0,
+     "operating_cash_flow": 3186449000.0,
+     "period": "2025-12-31",
+     "revenue": 4824113000.0,
+     "shares": 186475999.99999997
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 56.2,
+    "value_usd": 52772707999.99999
    }
   },
   "RIG": {
@@ -6986,6 +8699,100 @@
     "value_usd": null
    }
   },
+  "SPG": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 66.42,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 6.36
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:33:10+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2022; FMP's latest reported year is 2025",
+      "ok": false
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.71x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.7093
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "125.88 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "appraised NAV from equity research report",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "6.00%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Simon Property Group, Inc.",
+    "data": {
+     "basis": "appraised NAV from equity research report",
+     "cap_rate": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGtcnP1MGPgPifabC3Akp3ZfFJ_9uOa0aPBkg6bS0BkMv9AnATTRWNECigCrrD6ZrjwW1TR9RJtnh7Iy89_rf5fJR0Vl0LEy3-9T39AKEq3ffavHXqfkLwNW3cp8b5Ex219d1lj1Hb37T00RcjE7ScaqVIg1I4J6F_YIK0bUMLT6A==",
+      "period": "FY2022",
+      "quote": "Accounting for future uncertainty we came to a 6% cap. This demonstrates a Price/Nav of 93.32%, NAV per Share of $125.88, and NAV of $47,113 ($mm).",
+      "source_url": "https://wertheim.fsu.edu/sites/g/files/upcbnu1771/files/SPG%20Analysis.pdf",
+      "value": 0.06
+     },
+     "fiscal_year": "FY2022",
+     "nav_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGtcnP1MGPgPifabC3Akp3ZfFJ_9uOa0aPBkg6bS0BkMv9AnATTRWNECigCrrD6ZrjwW1TR9RJtnh7Iy89_rf5fJR0Vl0LEy3-9T39AKEq3ffavHXqfkLwNW3cp8b5Ex219d1lj1Hb37T00RcjE7ScaqVIg1I4J6F_YIK0bUMLT6A==",
+      "period": "FY2022",
+      "quote": "This demonstrates a Price/Nav of 93.32%, NAV per Share of $125.88, and NAV of $47,113 ($mm).",
+      "scale": "units",
+      "source_url": "https://wertheim.fsu.edu/sites/g/files/upcbnu1771/files/SPG%20Analysis.pdf",
+      "value": 125.88
+     },
+     "nav_total": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGtcnP1MGPgPifabC3Akp3ZfFJ_9uOa0aPBkg6bS0BkMv9AnATTRWNECigCrrD6ZrjwW1TR9RJtnh7Iy89_rf5fJR0Vl0LEy3-9T39AKEq3ffavHXqfkLwNW3cp8b5Ex219d1lj1Hb37T00RcjE7ScaqVIg1I4J6F_YIK0bUMLT6A==",
+      "period": "FY2022",
+      "quote": "NAV @ 6.0% ($mm). 47,113.",
+      "scale": "mn",
+      "source_url": "https://wertheim.fsu.edu/sites/g/files/upcbnu1771/files/SPG%20Analysis.pdf",
+      "value": 47113.0
+     },
+     "notes": "As a US REIT reporting under US GAAP historical cost accounting, Simon Property Group does not disclose an official company-reported net asset value (NAV) or EPRA NAV in its SEC filings (Form 10-K / 10-Q). NAV figures and applied cap rates are sourced from external analyst research and consensus estimates."
+    },
+    "engine_preview": {
+     "cap_rate": 0.06,
+     "nav_per_share_usd": 125.88
+    },
+    "fmp_context_usd": {
+     "company": "Simon Property Group, Inc.",
+     "depreciation_and_amortization": 1426423000.0,
+     "market_cap": 66419439240.0,
+     "net_ppe": 31000491000.0,
+     "operating_cash_flow": 4477704000.0,
+     "period": "2025-12-31",
+     "revenue": 6364505000.0,
+     "shares": 324282000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 28.4,
+    "value_usd": 47113000000.0
+   }
+  },
   "TDG": {
    "backlog": {
     "basis": "actual",
@@ -7044,6 +8851,85 @@
     "ok": false,
     "secs": 700.0,
     "value_usd": 0.0
+   }
+  },
+  "U06.SI": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 3.51,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.61
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:46:35+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.96x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.9553
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "4.7917152 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "company-reported NAV per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Singapore Land Group Limited",
+    "data": {
+     "basis": "company-reported NAV per share",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "SGD",
+      "period": "1H2026",
+      "quote": "Net asset value per share grew to S$6.12 as at Jun 30, from S$6.01 as at Dec 31, 2025.",
+      "scale": "units",
+      "source_url": "https://www.businesstimes.com.sg/companies-markets/singapore-land-posts-90-higher-h1-net-profit-s2117-million",
+      "value": 6.12
+     },
+     "nav_total": null,
+     "notes": "Singapore Land Group Limited reported its unaudited interim results for the half year ended 30 June 2026, stating net asset value per share rose to S$6.12 as of 30 June 2026 compared to S$6.01 as of 31 December 2025. Total net asset value and a single portfolio capitalization rate were not disclosed."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 4.7917152
+    },
+    "fmp_context_usd": {
+     "company": "Singapore Land Group Limited",
+     "depreciation_and_amortization": 33358793.759999998,
+     "market_cap": 3511467804.41608,
+     "net_ppe": 766480257.92,
+     "operating_cash_flow": 218785644.64,
+     "period": "2025-12-31",
+     "revenue": 614778626.08,
+     "shares": 1432863361.9808307
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 20.5,
+    "value_usd": 6865873151.126648
    }
   },
   "VRTX": {
@@ -7329,6 +9215,176 @@
     "ok": true,
     "secs": 50.2,
     "value_usd": 23800000000.0
+   }
+  },
+  "VTR": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 42.12,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 5.83
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:34:59+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.67x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.6677
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "57.85 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Consensus Net Asset Value (NAV) per share estimate (S&P Global Market Intelligence)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "7.00%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Ventas, Inc.",
+    "data": {
+     "basis": "Consensus Net Asset Value (NAV) per share estimate (S&P Global Market Intelligence)",
+     "cap_rate": {
+      "period": "FY2025",
+      "quote": "Based on Green Street's estimates, as of November 30th WELL and VTR stood at 162%/71% premiums to NAV (based on cap rates of 6.7%/7.0% respectively).",
+      "source_url": "https://chiltonreit.com/seniors-housing-reits-generational-compounding-opportunity-december-2025/",
+      "value": 0.07
+     },
+     "fiscal_year": "FY2025",
+     "nav_per_share": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Ventas (VTR) - $77.38 closing price represents a 33.8% premium to $57.85 NAV consensus",
+      "scale": "units",
+      "source_url": "https://seekingalpha.com/news/4192080-reits-see-price-to-nav-valuations-decline-in-2025-report",
+      "value": 57.85
+     },
+     "nav_total": null,
+     "notes": "Ventas, Inc. does not report an official company NAV or portfolio appraisal in its financial statements. The consensus NAV per share is compiled by S&P Global Market Intelligence as of December 31, 2025. The valuation capitalization rate of 7.0% behind Green Street's NAV estimate (and corresponding 4.9% equity implied cap rate) is sourced from Green Street Advisors via Chilton Capital Management as of November 30, 2025."
+    },
+    "engine_preview": {
+     "cap_rate": 0.07,
+     "nav_per_share_usd": 57.85
+    },
+    "fmp_context_usd": {
+     "company": "Ventas, Inc.",
+     "depreciation_and_amortization": 1282940000.0,
+     "market_cap": 42121768800.0,
+     "net_ppe": 0.0,
+     "operating_cash_flow": 1680426000.0,
+     "period": "2025-12-31",
+     "revenue": 5833980000.0,
+     "shares": 486170000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 26.4,
+    "value_usd": 28124934500.0
+   }
+  },
+  "WELL": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 166.6,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 10.67
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T08:30:41+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "0.38x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 0.3763
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "87.0 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Appraised NAV per share (Green Street estimate compiled by Land & Buildings)",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "6.70%",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Welltower Inc.",
+    "data": {
+     "basis": "Appraised NAV per share (Green Street estimate compiled by Land & Buildings)",
+     "cap_rate": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHfU7WcE1VdlS4y51eEkTlXS0OIIzlwJ7quvC-PIETDwj0xQwR_ODB7jeO_27PkfrfH6DaFoM-kIJKtHrwsAHh1tg6vtxROyd0YnpCe3YP4VqAPL6jHxAagJYftLOq5g_usdJFZuskcM6QGbpWXj8A8s3x-MaJCB6Tf_bfxYGRfKacZ77OT1gKUCU4GMRLYChXhRdIRrsDNi7IZCjqN2VBFVA==",
+      "period": "November 2025",
+      "quote": "Based on Green Street's estimates, as of November 30th WELL and VTR stood at 162%/71% premiums to NAV (based on cap rates of 6.7%/7.0% respectively).",
+      "source_url": "https://chiltonreit.com/2025/12/01/seniors-housing-reits-generational-compounding-opportunity-december-2025/",
+      "value": 0.067
+     },
+     "fiscal_year": "1Q2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGx6Xv_pfzOF67ZMQzS9V_8cPJxme7RFFzkkxKuy160N50orUS3DIz96VHta6ts4v_8guiSS_kGhmimNUpkGybYyd_jq40BPDksFWgj3p4H3fFav5SQPqcuYrAt41Dzl7u3UwzlhXqRvpJAxq_Y5N5YGSnK5wDEg-6s7qUQrIt_WtCfQs020t9jcbLVdURv5kUsHXJDtLDrYw9wa4uYciNMj1HJF48MT0aqgGl6ISQyng==",
+      "period": "April 2026",
+      "quote": "YE 2025. $186. $80. 133%. Current. $211. $87. 144%. Welltower currently trades at approximately 144% above Green Street NAV.",
+      "scale": "units",
+      "source_url": "https://landandbuildings.com/wp-content/uploads/2026/04/LandB-White-Paper-Welltower-Compensation-Plan-Hubris-April-2026.pdf",
+      "value": 87.0
+     },
+     "nav_total": null,
+     "notes": "Welltower Inc. is a US equity REIT reporting under US GAAP and does not publish a company NAV or EPRA NRV/NTA. Third-party research reports rely on appraised NAV per share figures from Green Street (reported as $80/share at YE 2025 and $87/share as of April 2026 by Land & Buildings, with Green Street applying a 6.7% portfolio cap rate as cited by Chilton REIT). Total NAV was not explicitly stated."
+    },
+    "engine_preview": {
+     "cap_rate": 0.067,
+     "nav_per_share_usd": 87.0
+    },
+    "fmp_context_usd": {
+     "company": "Welltower Inc.",
+     "depreciation_and_amortization": 2138528000.0,
+     "market_cap": 166603454663.0,
+     "net_ppe": 2158045000.0,
+     "operating_cash_flow": 2881677000.0,
+     "period": "2025-12-31",
+     "revenue": 10667136000.0,
+     "shares": 720572010.9986593
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 20.8,
+    "value_usd": 62689764956.883354
    }
   },
   "WMB": {}

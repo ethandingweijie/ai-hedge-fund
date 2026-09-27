@@ -657,6 +657,17 @@ class AltManagerInputs(BaseModel):
     notes: Optional[str] = None
 
 
+class NavInputs(BaseModel):
+    """Wave 8 (owner, 2026-09-27): a property company's published net asset value, as the company or
+    its valuer states it, with the cap rate behind it when one is disclosed."""
+    fiscal_year: str = Field(description="The period the NAV is stated at, e.g. 'FY2025' or '1H2026'")
+    basis: str = Field(description="What the figure is: company-reported NAV per share, RNAV (revalued), EPRA NRV / NTA, appraised NAV from a broker or Green Street; the source's own label")
+    nav_total: Optional[Cited] = Field(default=None, description="Net asset value, TOTAL, in the source's currency and scale")
+    nav_per_share: Cited = Field(description="NAV / RNAV PER SHARE or per unit in the source's currency (scale 'units')")
+    cap_rate: Optional[CitedRatio] = Field(default=None, description="The capitalisation rate the valuer or company states for the portfolio, as a decimal (e.g. 0.052); the implied cap rate from a broker or Green Street when the company states none")
+    notes: Optional[str] = None
+
+
 def embedded_value_prompt(company: str, ticker: str, anchors: dict) -> str:
     return (
         f"You are collecting EMBEDDED VALUE inputs for the life insurer {company} ({ticker}).\n"
@@ -682,6 +693,33 @@ def alt_manager_prompt(company: str, ticker: str, anchors: dict) -> str:
         f"the company.\n{_AMOUNT_RULE}\n"
         f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
     )
+
+
+def nav_prompt(company: str, ticker: str, anchors: dict) -> str:
+    return (
+        f"You are collecting NET ASSET VALUE inputs for the property company or REIT {company} ({ticker}).\n"
+        "Report the net asset value PER SHARE (or per unit) and the TOTAL exactly as the company, its valuer or "
+        "a named research source states it at the latest annual or interim period -- company NAV, revalued NAV "
+        "(RNAV), EPRA NRV / NTA, or an appraised NAV from a broker or Green Street; say which. Report the "
+        "capitalisation rate the valuer or the company states for the portfolio (or the implied cap rate a "
+        "research source states when the company gives none), as a decimal. Cite every number from the results "
+        f"announcement, annual report, valuation report or research note. Do NOT value the company.\n{_AMOUNT_RULE}\n"
+        f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def nav_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
+    """Accepted nav input -> {nav_per_share (statement ccy), cap_rate, basis, period}."""
+    out: dict = {"basis": (data or {}).get("basis"), "period": (data or {}).get("fiscal_year")}
+    nps = amount((data or {}).get("nav_per_share"), fx_to_ccy)
+    if nps and nps > 0:
+        out["nav_per_share"] = nps
+    cr = (data or {}).get("cap_rate")
+    if isinstance(cr, dict) and isinstance(cr.get("value"), (int, float)):
+        v = float(cr["value"]); v = v / 100.0 if v > 1.0 else v
+        if 0.01 < v < 0.20:
+            out["cap_rate"] = v
+    return out
 
 
 def embedded_value_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
@@ -726,6 +764,7 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "pipeline": PipelineInputs,
     "embedded_value": EmbeddedValueInputs,   # Wave 6 (owner, 2026-09-27)
     "alt_manager": AltManagerInputs,
+    "nav": NavInputs,                        # Wave 8 (owner, 2026-09-27)
 }
 
 _INDUSTRY_ASK = {
@@ -749,6 +788,7 @@ _INDUSTRY_ASK = {
     "pipeline": "its late-stage pipeline assets with consensus peak sales and PTRS (see pipeline_prompt)",
     "embedded_value": "its group embedded value, per share and total, with VNB (see embedded_value_prompt)",
     "alt_manager": "its forward fee-related and distributable earnings with cited P/DE and P/FRE ranges (see alt_manager_prompt)",
+    "nav": "its published NAV / RNAV per share and the stated cap rate (see nav_prompt)",
     "fcf_guidance": (
         "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
         "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
@@ -779,6 +819,7 @@ _OVERLAY_ASK = {
     "pipeline": "peak sales",
     "embedded_value": "embedded value",       # NO_OVERLAY kinds: listed for the schema census only
     "alt_manager": "distributable earnings",
+    "nav": "net asset value",
     "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",
