@@ -102,7 +102,12 @@ Growth premium: the 0.85–1.30 band applies; REIT legs already run at premium 1
    Developer, Real Estate Services.
 6. Mortgage REITs out of scope (a Financials profile in a later wave) rather than on the REIT NAV.
 7. ~~CapitaLand Investment on the `alt_manager` kind (FRE and distributable earnings) rather than a new input.~~
-   Accepted by the owner, 2026-09-27.
+   Accepted by the owner, 2026-09-27; amended the same day (Option A): the `alt_manager` pre-fill came back
+   twice with no cited distributable-earnings amount, because the company reports fee income-related
+   business earnings and an investment book, not US-style DE. The SOTP leg on Real Estate Asset Manager
+   (SG) now reads the review-gated `sotp` input through SOTP (analyst) (fee business at a cited multiple,
+   the investment book, the listed REIT stakes at market), with the weight rolling into P/E (norm) until an
+   input is accepted; the failed `alt_manager` entry is omitted with the reason.
 
 
 ## 6. Decisions (owner, 2026-09-27) and what was built
@@ -110,7 +115,7 @@ Growth premium: the 0.85–1.30 band applies; REIT legs already run at premium 1
 "Proceed with all": decisions 2, 4, 5 and 6 as written; decision 1 amended to keep every name
 (CapitaLand Investment on the asset-manager profile with the `alt_manager` input, CBRE and D.R. Horton and
 Iron Mountain as tests of the new profiles, Vanke and Longfor behind a distress gate); decision 3 as both
-the live cap rate and the `nav` kind; decision 7 accepted. The owner's equity directory of the same day
+the live cap rate and the `nav` kind; decision 7 accepted and then amended (Option A): CapitaLand Investment's SOTP leg reads the `sotp` kind through SOTP (analyst) instead of the `alt_manager` kind, whose pre-fill returned no cited distributable-earnings amount twice. The owner's equity directory of the same day
 supplies the pins and the baskets, and its categories place the Hong Kong majors (Sun Hung Kai, CK Asset,
 Wharf REIC, Swire, Henderson, Hang Lung, Hysan, New World; Hongkong Land listed in Singapore) on the
 landlord profile and the China names on the developer profile.
@@ -142,7 +147,9 @@ income down more than 80% from the three-year peak with net debt above 0.75x equ
 RNAV legs down and records GATE_DISTRESSED_DEVELOPER and the `Distressed_Developer` regime flag. The
 `nav` review-gated kind (`NavInputs`, `nav_prompt`, `nav_to_engine`, bounds 0.3–5.0x market cap, balance
 period rule) with the Wave 8 pre-fill list in `scripts/build_industry_inputs.py` (23 published NAVs and
-CapitaLand Investment's `alt_manager`). Report family: the four profiles under "Property, REITs and
+CapitaLand Investment's `sotp`); the Real Estate Asset Manager (SG) profile's SOTP leg renamed from SOTP
+(published), which read a hand-typed broker table the ticker never had, to SOTP (analyst) with a
+`leg_fallback` into P/E (norm). Report family: the four profiles under "Property, REITs and
 holdcos".
 
 Tests: `tests/test_realestate_wave8.py` (scope and rows, the directory pins by category, the Singapore

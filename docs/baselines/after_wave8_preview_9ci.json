@@ -1,0 +1,58 @@
+{
+ "wave": "8",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "9CI.SI": {
+   "profile": "Real Estate Asset Manager (SG)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.4
+    },
+    {
+     "method": "SOTP (analyst)",
+     "value_key": "SOTP (analyst)",
+     "weight": 0.35
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.25
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 1.67,
+   "base": 1.9,
+   "bull": 2.19,
+   "scenarios_ordered": true,
+   "target_12m_base": 2.25,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 2.6,
+   "iv_vs_spot": -0.2692307692307693,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3625537022306029,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $1.67 vs price $2.62 on 2024-12-31 = 36% gap; 12m later the market was closer (38% vs 3%)",
+   "currency": "SGD",
+   "regime": null
+  }
+ }
+}

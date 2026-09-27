@@ -79,7 +79,10 @@ WAVE8 = {
     "nav": ["WELL", "PLD", "EQIX", "AMT", "DLR", "SPG", "PSA", "O", "VTR", "IRM",
             "00016.HK", "01113.HK", "00688.HK", "01109.HK", "00083.HK", "02202.HK", "00960.HK",
             "01972.HK", "00004.HK", "00012.HK", "00823.HK", "C09.SI", "U06.SI"],
-    "alt_manager": ["9CI.SI"],
+    # CapitaLand Investment: the `sotp` kind, not `alt_manager` (owner, 2026-09-27, Option A): the company
+    # reports fee income-related business earnings and an investment book, not US-style distributable
+    # earnings, and the alt_manager pre-fill came back twice with no cited DE amount.
+    "sotp": ["9CI.SI"],
 }
 WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6, "8": WAVE8}
 

@@ -65,7 +65,10 @@ def test_the_singapore_rows_from_the_directory():
     for t in ("F17.SI", "B61.SI", "H13.SI", "TQ5.SI", "U06.SI", "C09.SI", "U14.SI"):
         assert L[t][:2] == ("Property", "Property Developer (SG)"), t
     assert L["H78.SI"][:2] == ("Property", "Landlord / Investment Property (HK)")
-    assert L["9CI.SI"][:2] == ("Financials", "Real Estate Asset Manager (SG)")           # decision 7: the alt_manager input, not a new profile
+    assert L["9CI.SI"][:2] == ("Financials", "Real Estate Asset Manager (SG)")           # decision 7 as amended (Option A): the `sotp` input feeds SOTP (analyst)
+    ram = {m["name"]: m["weight"] for m in P["Financials"]["Real Estate Asset Manager (SG)"]["methods"]}
+    assert ram == {"P/E (norm)": 0.4, "SOTP (analyst)": 0.35, "DDM": 0.25}
+    assert P["Financials"]["Real Estate Asset Manager (SG)"]["leg_fallback"] == {"SOTP (analyst)": ["P/E (norm)"]}
     for t, sub_ in (("O5RU.SI", "Industrial"), ("DCRU.SI", "DataCentre"), ("C2PU.SI", "Healthcare"), ("AW9U.SI", "Healthcare"),
                     ("J85.SI", "Hospitality"), ("MXNU.SI", "European"), ("CMOU.SI", "US Office"), ("CWBU.SI", "European")):
         assert L[t][0] == "REIT" and L[t][1] == sub_, t

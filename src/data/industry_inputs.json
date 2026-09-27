@@ -3550,6 +3550,181 @@
     "ok": false,
     "secs": 54.7,
     "value_usd": null
+   },
+   "sotp": {
+    "anchors": {
+     "reported_currency": "SGD",
+     "revenue_latest_usd_bn": 1.67,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 1.78
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T09:21:15+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "1.06x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 1.0553
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 1.8bn USD vs FMP FY+1 consensus revenue 1.8bn (-1.0%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 0.9901
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2026E); latest reported year is 2025; not forward: FY2025",
+      "ok": false
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 2 segment(s) price (P/E, EV/Rev (cited, earnings non-positive))",
+      "ok": true
+     }
+    ],
+    "company": "CapitaLand Investment Limited",
+    "data": {
+     "associates_investments": {
+      "currency": "SGD",
+      "period": "FY2025",
+      "quote": "Associates and joint ventures ... S$13,502 million as at 31 December 2025",
+      "scale": "mn",
+      "source_url": "https://ir.capitalandinvest.com/misc/ar2025/",
+      "value": 13502.0
+     },
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "Maybank IBG Research and CGS International apply a 10% holding company discount to CapitaLand Investment's sum-of-the-parts RNAV to account for the conglomerate holdco structure and corporate unallocated overhead.",
+     "holdco_discount_pct": 0.1,
+     "listed_investments_at_market": {
+      "currency": "SGD",
+      "period": "FY2026E",
+      "quote": "Stakes in listed REITs: 7736... Market value. CICT 3941, CLAR 2007, CLAS 861, CLCT 292, CLINT 359, CMMT 252, C-REIT 24, Japan Hotel REIT 1",
+      "scale": "mn",
+      "source_url": "https://www.maybank-ke.com.sg/",
+      "value": 7736.0
+     },
+     "net_cash": {
+      "currency": "SGD",
+      "period": "FY2025",
+      "quote": "Net debt (defined as bank borrowings and debt securities, less cash and cash equivalents) increased by S$0.8 billion to S$5.8 billion as at 31 December 2025.",
+      "scale": "bn",
+      "source_url": "https://ir.capitalandinvest.com/misc/ar2025/",
+      "value": -5.8
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "period": "FY2024",
+        "quote": "EBITDA Margin: 37% for Fee Income-related Revenue by Segments",
+        "source_url": "https://ir.capitalandinvest.com/",
+        "value": 0.37
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Brokers benchmark CLI's asset-light fee businesses against global real estate investment managers (e.g. Brookfield, ESR, Blackstone) and lodging operators at 15x-20x forward P/E (or ~18x EBITDA in Maybank IBG SOTP).",
+       "multiple_high": 20.0,
+       "multiple_low": 15.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.poems.com.sg/stock-research/CapitaLand-Investment-Limited/",
+       "name": "Fee Income-related Business (FRB)",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "period": "FY2025",
+        "quote": "No standalone forward segment revenue forecast published; FY2025 actual: 'S$1.23B Up 6% YoY from S$1.17B in FY 2024. Growing Fee Revenue. Driven by new private funds, addition of SCCP and Wingate, stronger listed funds contributions and higher event-driven fees'",
+        "scale": "bn",
+        "source_url": "https://www.capitaland.com/en/about-capitaland/newsroom/news-releases/international/2026/february/capitaland-investment-posts-improved-fy-2025-operating-patmi-of-/",
+        "value": 1.23
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": 2.0,
+       "ev_sales_low": 1.0,
+       "ev_sales_source_url": "https://www.poems.com.sg/stock-research/CapitaLand-Investment-Limited/",
+       "multiple_basis": "Brokers value capital-intensive real estate investment business at 10x-14x forward earnings or a 15-30% discount to RNAV/book value to account for property revaluation cycles.",
+       "multiple_high": 14.0,
+       "multiple_low": 10.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.poems.com.sg/stock-research/CapitaLand-Investment-Limited/",
+       "name": "Real Estate Investment Business (REIB)",
+       "revenue_fwd": {
+        "currency": "SGD",
+        "period": "FY2025",
+        "quote": "No standalone forward segment revenue forecast published; FY2025 actual: 'REIB revenue for FY 2025 declined to S$1,021 million mainly due to the effects of the deconsolidation of CLAS and the absence of contribution from divested properties'",
+        "scale": "mn",
+        "source_url": "https://ir.capitalandinvest.com/misc/ar2025/",
+        "value": 1021.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "SGD bn",
+       "SGD mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.37,
+       "ev_rev_multiple": null,
+       "name": "Fee Income-related Business (FRB)",
+       "pe_multiple": 17.5,
+       "period_label": "FY2025",
+       "rationale": "pe 15.0-20.0x: Brokers benchmark CLI's asset-light fee businesses against global real estate investment managers (e.g. Brookfield, ESR, Blackstone) and lodging operators at 15x-20x forward P/E (or ~18x EBITDA in Maybank IBG SOTP).",
+       "revenue_fwd": 963040800.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_fallback_multiple": 1.5,
+       "ev_rev_multiple": null,
+       "name": "Real Estate Investment Business (REIB)",
+       "pe_multiple": 12.0,
+       "period_label": "FY2025",
+       "rationale": "pe 10.0-14.0x: Brokers value capital-intensive real estate investment business at 10x-14x forward earnings or a 15-30% discount to RNAV/book value to account for property revaluation cycles.",
+       "revenue_fwd": 799402160.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "CapitaLand Investment Limited",
+     "depreciation_and_amortization": 102567760.0,
+     "market_cap": 10153780955.2392,
+     "net_ppe": 427496160.0,
+     "operating_cash_flow": 384433360.0,
+     "period": "2025-12-31",
+     "revenue": 1670053680.0,
+     "shares": 4987867026.923077
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 73.2,
+    "value_usd": 1762442960.0
    }
   },
   "AMGN": {

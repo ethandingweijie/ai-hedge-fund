@@ -1489,13 +1489,19 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "rationale": "SG market infrastructure / exchange (SGX). Near-monopoly toll-road economics on a fixed cost base, so earnings multiples travel well and operating leverage is the swing factor. Primary metrics: SDAV, DDAV, clearing fee per contract, operating margin.",
         },
         "Real Estate Asset Manager (SG)": {
+            # Wave 8 (owner, 2026-09-27, Option A): the SOTP leg reads the review-gated `sotp` input
+            # (fee business at a cited multiple, the investment book, the listed REIT stakes at market)
+            # through SOTP (analyst); "SOTP (published)" read a hand-typed broker table this ticker never
+            # had, so the leg was uncomputable and P/E (norm) plus the DDM carried the blend (-72%).
+            # Without an accepted input the weight rolls into the anchor (leg_fallback).
             "methods": [
                 {"name": "P/E (norm)",          "weight": 0.4, "anchor": True, "implementable": True},
-                {"name": "SOTP (published)",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "SOTP (analyst)",      "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "DDM",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ['P/BV', 'EV/EBITDA'],
-            "rationale": "SG real estate asset manager (CapitaLand Investment). SOTP-anchored: recurring fee-related earnings capitalise at a different multiple from the balance-sheet co-investments they sit beside. Primary metrics: FRE, FUM, net gearing, investment-property fair value.",
+            "leg_fallback": {"SOTP (analyst)": ["P/E (norm)"]},
+            "rationale": "SG real estate asset manager (CapitaLand Investment). SOTP-anchored: recurring fee-related earnings capitalise at a different multiple from the balance-sheet co-investments they sit beside; the segments and multiple ranges are the owner-accepted `sotp` input. Primary metrics: FRE, FUM, net gearing, investment-property fair value.",
         },
         "Mortgage/GSE": {
             "methods": [

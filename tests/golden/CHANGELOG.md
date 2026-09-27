@@ -1546,3 +1546,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 8 real estate (owner decisions 2026-09-27, all seven; decision 3 = live cap rate and nav kind): the REIT NAV leg reads the live cohort's implied cap rate ahead of the sub-type table (C38U.SI S-REIT NAV leg on the SES REIT - Retail cohort 5.45% against the 6.5% default, IV 1.81->1.74); the sub-type table re-derived (healthcare 5.1%, retail 6.9%, office 6.5%, residential 6.4%, hospitality 9.1%, tower 5.1%); sub-type by label and pin; twelve labels into routing scope with four new property profiles and the owner's equity directory as pins; GATE_DISTRESSED_DEVELOPER; nav input kind -- every other fixture moves only on the constants digest
 
+## 2026-09-27T09:30:19+00:00
+
+- regenerated at HEAD: `35af44b2`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 8 amendment (owner, 2026-09-27, Option A): Real Estate Asset Manager (SG) reads the review-gated sotp input through SOTP (analyst) in place of the hand-typed published table the ticker never had, with the weight rolling into P/E (norm) until accepted; no fixture is on the profile, every fixture moves only on the constants digest
+
