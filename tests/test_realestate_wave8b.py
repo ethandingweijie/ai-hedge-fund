@@ -123,3 +123,19 @@ def test_the_quality_gate_reads_ffo_over_invested_capital_for_reits_and_flags_ou
     vals = rc.basket_field_values("US", ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC"), "p_ffo")
     assert all(3.0 <= v <= 120.0 for v in vals)
     assert rc.basket_field_values("US", (), "p_ffo") == []
+
+
+# ── the backfill must not supersede the exchange's own refresh (found at Wave 9 Stage 0) ─────
+
+def test_a_field_backfill_is_stamped_with_the_exchanges_current_refresh():
+    """`load_comps` skips a row older than the exchange's newest by more than an hour. A partial fill stamped
+    with the wall clock therefore superseded every other row of the exchange and sent every US name to its
+    static table (2026-09-27). The fill now carries the exchange's current refresh timestamp."""
+    import scripts.backfill_comps_field as bf
+    src = inspect.getsource(bf.main)
+    assert 'SELECT MAX(computed_at) AS m FROM regional_comps WHERE exchange = ? AND field != ?' in src
+    assert "now = (latest[\"m\"] if latest and latest[\"m\"] else None) or datetime.now(timezone.utc).isoformat()" in src
+    from src.data import regional_comps as rc
+    rows = rc.load_comps("US", "industry", "REIT - Retail", "all", 14)
+    if rows:                                                          # the local store may be empty on a fresh clone
+        assert "ev_ebitda" in rows and "p_ffo" in rows                # the fill and the refresh load together

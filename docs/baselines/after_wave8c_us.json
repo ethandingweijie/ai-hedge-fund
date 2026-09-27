@@ -1,0 +1,609 @@
+{
+ "wave": "8c-us",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "WELL": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 82.09,
+   "base": 94.07,
+   "bull": 106.06,
+   "scenarios_ordered": true,
+   "target_12m_base": 162.64,
+   "consensus": 258.08,
+   "iv_vs_consensus": -0.6355006199628022,
+   "spot": 231.21,
+   "iv_vs_spot": -0.593140435102288,
+   "consensus_spread": 0.1162,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.36980781153130815,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.19278232186696148,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $101.73 vs price $126.03 on 2024-12-31 = 19% gap; 12m later the market was closer (45% vs 32%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "PLD": {
+   "profile": "REIT",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.6
+    },
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 92.67,
+   "base": 102.85,
+   "bull": 113.18,
+   "scenarios_ordered": true,
+   "target_12m_base": 117.94,
+   "consensus": 155.15,
+   "iv_vs_consensus": -0.3370931356751531,
+   "spot": 133.03,
+   "iv_vs_spot": -0.2268661204239646,
+   "consensus_spread": 0.1663,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.23983242023847895,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.06691363571846194,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $112.77 vs price $105.70 on 2024-12-31 = 7% gap; 12m later the model was closer (12% vs 17%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "EQIX": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 775.26,
+   "base": 881.29,
+   "bull": 992.98,
+   "scenarios_ordered": true,
+   "target_12m_base": 944.68,
+   "consensus": 1246.25,
+   "iv_vs_consensus": -0.29284653961885665,
+   "spot": 1008.08,
+   "iv_vs_spot": -0.125773748115229,
+   "consensus_spread": 0.2363,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.24198194583751254,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.22434716177202146,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $731.36 vs price $942.89 on 2024-12-31 = 22% gap; 12m later the model was closer (5% vs 23%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "AMT": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 193.18,
+   "base": 219.25,
+   "bull": 245.12,
+   "scenarios_ordered": true,
+   "target_12m_base": 194.14,
+   "consensus": 209.89,
+   "iv_vs_consensus": 0.04459478774596226,
+   "spot": 169.03,
+   "iv_vs_spot": 0.29710702242205533,
+   "consensus_spread": 0.2417,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.07503930630330169,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.37902177955742933,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $252.93 vs price $183.41 on 2024-12-31 = 38% gap; 12m later the market was closer (44% vs 4%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "DLR": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 177.66,
+   "base": 205.11,
+   "bull": 234.84,
+   "scenarios_ordered": true,
+   "target_12m_base": 187.89,
+   "consensus": 222.35,
+   "iv_vs_consensus": -0.07753541713514722,
+   "spot": 178.61,
+   "iv_vs_spot": 0.1483679525222552,
+   "consensus_spread": 0.2449,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.15498088599055548,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.007584523788729954,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $175.99 vs price $177.33 on 2024-12-31 = 1% gap; 12m later model and market were level (14% vs 15%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "SPG": {
+   "profile": "REIT",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.6
+    },
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 221.43,
+   "base": 246.75,
+   "bull": 275.75,
+   "scenarios_ordered": true,
+   "target_12m_base": 225.78,
+   "consensus": 223.6,
+   "iv_vs_consensus": 0.10353309481216466,
+   "spot": 204.82,
+   "iv_vs_spot": 0.20471633629528374,
+   "consensus_spread": 0.0917,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.009749552772808645,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.14585117031335962,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $147.09 vs price $172.21 on 2024-12-31 = 15% gap; 12m later the market was closer (21% vs 7%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "PSA": {
+   "profile": "REIT",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.6
+    },
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 227.97,
+   "base": 250.38,
+   "bull": 275.48,
+   "scenarios_ordered": true,
+   "target_12m_base": 269.18,
+   "consensus": 328.33,
+   "iv_vs_consensus": -0.23741357780282035,
+   "spot": 287.97,
+   "iv_vs_spot": -0.1305344306698616,
+   "consensus_spread": 0.1402,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1801541132397283,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.04161376412084214,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $311.90 vs price $299.44 on 2024-12-31 = 4% gap; 12m later model and market were level (20% vs 15%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "O": {
+   "profile": "REIT",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "NAV (Cap Rates)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.6
+    },
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 45.67,
+   "base": 50.39,
+   "bull": 55.1,
+   "scenarios_ordered": true,
+   "target_12m_base": 52.97,
+   "consensus": 65.28,
+   "iv_vs_consensus": -0.2280943627450981,
+   "spot": 55.54,
+   "iv_vs_spot": -0.0927259632697155,
+   "consensus_spread": 0.1754,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.18857230392156865,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.19122521237522874,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $43.20 vs price $53.41 on 2024-12-31 = 19% gap; 12m later the market was closer (23% vs 5%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "VTR": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 71.53,
+   "base": 81.47,
+   "bull": 91.41,
+   "scenarios_ordered": true,
+   "target_12m_base": 84.83,
+   "consensus": 99.93,
+   "iv_vs_consensus": -0.1847293105173622,
+   "spot": 86.64,
+   "iv_vs_spot": -0.059672206832871666,
+   "consensus_spread": 0.1534,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.15110577404182934,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3960109694995341,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $82.21 vs price $58.89 on 2024-12-31 = 40% gap; 12m later the model was closer (6% vs 24%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CBRE": {
+   "profile": "Real Estate Services",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 91.5,
+   "base": 125.96,
+   "bull": 166.98,
+   "scenarios_ordered": true,
+   "target_12m_base": 131.67,
+   "consensus": 179.0,
+   "iv_vs_consensus": -0.29631284916201117,
+   "spot": 134.74,
+   "iv_vs_spot": -0.06516253525308013,
+   "consensus_spread": 0.3285,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.26441340782122913,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2447039675701351,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $99.16 vs price $131.29 on 2024-12-31 = 24% gap; 12m later the market was closer (38% vs 18%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "DHI": {
+   "profile": "Homebuilder / Land Developer",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/BV",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.35
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.2
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 133.18,
+   "base": 163.6,
+   "bull": 192.14,
+   "scenarios_ordered": true,
+   "target_12m_base": 149.24,
+   "consensus": 159.33,
+   "iv_vs_consensus": 0.026799723843594858,
+   "spot": 141.51,
+   "iv_vs_spot": 0.15610204225849778,
+   "consensus_spread": 0.1259,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.06332768467959582,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.18719506023864937,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $155.06 vs price $190.77 on 2024-09-30 = 19% gap; 12m later model and market were level (9% vs 13%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "IRM": {
+   "profile": "REIT (Specialty / OpCo)",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/FFO",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/FFO",
+     "value_key": "P/FFO",
+     "weight": 0.4
+    },
+    {
+     "method": "Forward EV/EBITDA",
+     "value_key": "Forward EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "NAV (Cap Rates)",
+     "value_key": "NAV (Cap Rates)",
+     "weight": 0.3
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 104.23,
+   "base": 117.78,
+   "bull": 132.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 113.62,
+   "consensus": 142.75,
+   "iv_vs_consensus": -0.17492119089316982,
+   "spot": 111.38,
+   "iv_vs_spot": 0.057460944514275525,
+   "consensus_spread": 0.2816,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.2040630472854641,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.08631273007886768,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $96.04 vs price $105.11 on 2024-12-31 = 9% gap; 12m later the model was closer (16% vs 27%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}

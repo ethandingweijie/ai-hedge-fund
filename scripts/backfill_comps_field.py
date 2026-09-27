@@ -98,7 +98,14 @@ def main() -> int:
     if not a.commit:
         print("dry run; --commit writes the member cells and the medians")
         return 0
-    now = datetime.now(timezone.utc).isoformat()
+    # A fill belongs to the exchange's CURRENT refresh, so it carries that refresh's timestamp. `load_comps`
+    # treats any row older than the exchange's newest by more than an hour as superseded; stamping a partial
+    # fill with the wall clock made every other row of the exchange read as superseded and sent every name on
+    # that exchange to its static table (found in Wave 9 Stage 0, 2026-09-27, after the Wave 8b p_ffo fill).
+    latest = (_db.query_one("SELECT MAX(computed_at) AS m FROM regional_comps WHERE exchange = ? AND field != ?",
+                            [a.exchange, a.field]) or {})
+    now = (latest["m"] if latest and latest["m"] else None) or datetime.now(timezone.utc).isoformat()
+    print(f"stamping the fill with the exchange's current refresh time {now}")
     written_cells = 0
     for r in rows:
         v = values.get(r["symbol"])

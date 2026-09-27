@@ -1,0 +1,123 @@
+== CAT | Capital Goods | IV 314.76 | anchor EV/EBITDA | spot 821.58 | ccy USD
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($67.6B revenue)
+   flag: Growth reinvestment NOT charged (observation only): at S/C 1.24 (revenue ÷ invested capital) and g=15.0%, a reinvestment charge would take +9.31% off the Yr-1 FCF margin, 11.31% → 2.00%. The published margin is 11.31% be
+   legs: {'DCF': 231.02, 'P/E': 366.89, 'FCF Yield': 338.3, 'ROIC vs WACC': 162.55, 'EV/EBITDA': 360.19, 'Forward P/E': 519.0, 'Forward EV/EBITDA': 496.11, 'SOTP (segments)': 308.24, 'SOTP 12m (probabilistic)': 342.23}
+   weights: [('EV/EBITDA', 0.4), ('FCF Yield', 0.3), ('ROIC vs WACC', 0.2), ('P/E', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (13.0, 'static', None), 'pe': (18.0, 'static', None), 'pb': (3.0, 'static', None), 'fcf_yield': (0.05, 'static', None), 'growth_avg': (0.06, 'static', None)}
+   route: ladder [('ladder', 'Capital Goods')] | premium 1.058 | flag None
+== ETN | Mature Platform | IV 204.8 | anchor DCF (FCF+) | spot 439.98 | ccy USD
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($27.4B revenue)
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature Platform' is not a capital-turnover profile, so revenue ÷ invested capital (0.92) is not a sales-to-capital ratio here and no deduction is computed. Measured for 
+   legs: {'DCF': 247.03, 'P/E': 209.33, 'EV/EBITDA': 222.86, 'DCF (FCF+)': 247.14, 'EPV': 55.18, 'Forward P/E': 257.82, 'Forward EV/EBITDA': 213.62, 'SOTP (segments)': 152.48, 'SOTP 12m (probabilistic)': 183.46}
+   weights: [('DCF (FCF+)', 0.5), ('P/E', 0.166667), ('EPV', 0.166667), ('EV/EBITDA', 0.166667)] | dropped: [('LBO Floor', 'uncomputable')]
+   mults: {'ev_ebitda': (18.028, 'profile', 'Mature Platform'), 'pe': (19.878, 'profile', 'Mature Platform'), 'pb': (7.269, 'profile', 'Mature Platform'), 'fcf_yield': (0.043, 'profile', 'Mature Platform'), 'growth_avg': (0.151, 'profile', 'Mature Platform'), 'pe_ntm': (19.023, 'profile', 'Mature Platform')}
+   route: ladder [('ladder', 'Mature Platform')] | premium 1.0 | flag None
+== WM | Levered Subscription | IV 107.4 | anchor DCF (Levered) | spot 206.83 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Levered Subscription' is not a capital-turnover profile, so revenue ÷ invested capital (0.77) is not a sales-to-capital ratio here and no deduction is computed. Measured
+   legs: {'DCF': 45.12, 'DCF (Levered)': 45.12, 'FCF Yield': 201.29, 'EV/EBITDA': 159.14, 'Forward P/E': 227.16, 'Forward EV/EBITDA': 374.98, 'SOTP (segments)': 139.94, 'SOTP 12m (probabilistic)': 149.28}
+   weights: [('DCF (Levered)', 0.5), ('EV/EBITDA', 0.375), ('Credit Metrics', 0.125)] | dropped: [('LBO Analysis', 'uncomputable')]
+   mults: {'ev_ebitda': (22.0, 'static', None), 'pe': (28.0, 'static', None), 'pb': (6.0, 'static', None), 'fcf_yield': (0.035, 'static', None), 'growth_avg': (0.12, 'static', None)}
+   route: ladder [('ladder', 'Levered Subscription')] | premium 1.0 | flag None
+== URI | Mature SaaS | IV 895.45 | anchor Forward P/E | spot 1047.06 | ccy USD
+   flag: Gate B (base): Forward ROIC (2.1% [Y10 projected]) < threshold (5.0%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature SaaS' is not a capital-turnover profile, so revenue ÷ invested capital (0.64) is not a sales-to-capital ratio here and no deduction is computed. Measured for refe
+   legs: {'Forward P/E': 756.69, 'EV/EBITDA': 1705.47, 'FCF Yield': 139.2, 'EPV': 264.58, 'Forward EV/EBITDA': 1193.55, 'SOTP (segments)': 692.5, 'SOTP 12m (probabilistic)': 788.07}
+   weights: [('Forward P/E', 0.5), ('EV/EBITDA', 0.285714), ('FCF Yield', 0.214286)] | dropped: [('DCF (2-stage)', 'non_positive')]
+   mults: {'ev_ebitda': (16.954, 'profile', 'Mature SaaS'), 'pe': (24.584, 'profile', 'Mature SaaS'), 'pb': (7.7, 'profile', 'Mature SaaS'), 'fcf_yield': (0.071, 'profile', 'Mature SaaS'), 'growth_avg': (0.136, 'profile', 'Mature SaaS'), 'pe_ntm': (15.294, 'profile', 'Mature SaaS')}
+   route: ladder [('ladder', 'Mature SaaS')] | premium 1.0 | flag None
+== CTAS | Mature Platform | IV 90.4 | anchor DCF (FCF+) | spot 199.91 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature Platform' is not a capital-turnover profile, so revenue ÷ invested capital (1.49) is not a sales-to-capital ratio here and no deduction is computed. Measured for 
+   legs: {'DCF': 98.96, 'P/E': 84.81, 'EV/EBITDA': 114.0, 'DCF (FCF+)': 98.96, 'EPV': 46.71, 'Forward P/E': 89.97, 'Forward EV/EBITDA': 94.05, 'SOTP (segments)': 135.95, 'SOTP 12m (probabilistic)': 174.88}
+   weights: [('DCF (FCF+)', 0.5), ('P/E', 0.166667), ('EPV', 0.166667), ('EV/EBITDA', 0.166667)] | dropped: [('LBO Floor', 'uncomputable')]
+   mults: {'ev_ebitda': (18.028, 'profile', 'Mature Platform'), 'pe': (19.878, 'profile', 'Mature Platform'), 'pb': (7.269, 'profile', 'Mature Platform'), 'fcf_yield': (0.043, 'profile', 'Mature Platform'), 'growth_avg': (0.151, 'profile', 'Mature Platform'), 'pe_ntm': (19.023, 'profile', 'Mature Platform')}
+   route: ladder [('ladder', 'Mature Platform')] | premium 0.854 | flag None
+== MMM | Levered Subscription | IV 67.49 | anchor DCF (Levered) | spot 169.5 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Levered Subscription' is not a capital-turnover profile, so revenue ÷ invested capital (2.01) is not a sales-to-capital ratio here and no deduction is computed. Measured
+   legs: {'DCF': 44.69, 'DCF (Levered)': 44.78, 'FCF Yield': 62.69, 'EV/EBITDA': 99.38, 'Forward P/E': 215.73, 'Forward EV/EBITDA': 273.99, 'SOTP (segments)': 105.25, 'SOTP 12m (probabilistic)': 130.21}
+   weights: [('DCF (Levered)', 0.5), ('EV/EBITDA', 0.375), ('Credit Metrics', 0.125)] | dropped: [('LBO Analysis', 'uncomputable')]
+   mults: {'ev_ebitda': (22.0, 'static', None), 'pe': (28.0, 'static', None), 'pb': (6.0, 'static', None), 'fcf_yield': (0.035, 'static', None), 'growth_avg': (0.12, 'static', None)}
+   route: ladder [('ladder', 'Levered Subscription')] | premium 0.862 | flag None
+== UPS | Rail / Logistics | IV 85.8 | anchor EV/EBITDA | spot 93.94 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Rail / Logistics' is not a capital-turnover profile, so revenue ÷ invested capital (2.08) is not a sales-to-capital ratio here and no deduction is computed. Measured for
+   legs: {'DCF': 108.36, 'EV/EBITDA': 81.19, 'P/BV': 37.33, 'FCF Yield': 83.65, 'P/E (norm)': 109.5, 'Forward P/E': 84.1, 'Forward EV/EBITDA': 87.17, 'SOTP (segments)': 193.81, 'SOTP 12m (probabilistic)': 206.59}
+   weights: [('EV/EBITDA', 0.35), ('FCF Yield', 0.25), ('P/E (norm)', 0.2), ('P/BV', 0.1), ('DCF', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (8.0, 'static', None), 'pe': (12.0, 'static', None), 'pb': (2.0, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.05, 'static', None)}
+   route: ladder [('ladder', 'Rail / Logistics')] | premium 0.975 | flag None
+== 01919.HK | Capital Goods | IV 29.9 | anchor EV/EBITDA | spot 16.59 | ccy HKD
+   flag: CAGR-divergence gate: NTM growth +13.2% → +5.0%; analyst bands scaled 0.38x (NTM consensus +13.2% diverges from historical CAGR -9.9% by 23.1pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Growth reinvestment NOT charged (observation only): at S/C 1.39 (revenue ÷ invested capital) and g=5.0%, a reinvestment charge would take +3.42% off the Yr-1 FCF margin, 25.70% → 22.28%. The published margin is 25.70% be
+   legs: {'DCF': 74.82, 'FCF Yield': 30.8, 'ROIC vs WACC': 25.93, 'P/E (norm)': 24.7, 'EV/EBITDA': 32.5, 'Forward P/E': 27.98, 'Forward EV/EBITDA': 31.69}
+   weights: [('EV/EBITDA', 0.4), ('FCF Yield', 0.3), ('ROIC vs WACC', 0.2), ('P/E (norm)', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (8.309, 'industry', 'Marine Shipping'), 'pe': (11.386, 'industry', 'Marine Shipping'), 'pb': (1.069, 'industry', 'Marine Shipping'), 'fcf_yield': (0.06, 'industry', 'Marine Shipping'), 'growth_avg': (-0.009, 'industry', 'Marine Shipping'), 'pe_ntm': (9.398, 'industry', 'Marine Shipping')}
+   route: ladder [('ladder', 'Capital Goods')] | premium 1.148 | flag None
+== LIN | Specialty Chemicals | IV 175.83 | anchor EV/EBITDA | spot 469.89 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Specialty Chemicals' is not a capital-turnover profile, so revenue ÷ invested capital (0.56) is not a sales-to-capital ratio here and no deduction is computed. Measured 
+   legs: {'DCF': 169.9, 'P/E': 178.94, 'FCF Yield': 191.55, 'ROIC': 150.71, 'EV/EBITDA': 171.91, 'Forward P/E': 214.56, 'Forward EV/EBITDA': 217.05, 'SOTP (segments)': 161.58, 'SOTP 12m (probabilistic)': 179.59}
+   weights: [('EV/EBITDA', 0.4), ('P/E', 0.3), ('FCF Yield', 0.2), ('ROIC', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (8.0, 'static', None), 'pe': (12.0, 'static', None), 'pb': (1.5, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.04, 'static', None)}
+   route: ladder [('ladder', 'Specialty Chemicals')] | premium 1.0 | flag None
+== DOW | Mature SaaS | IV 19.41 | anchor Forward P/E | spot 28.02 | ccy USD
+   flag: CAGR-divergence gate: NTM growth +9.2% → +5.0%; analyst bands scaled 0.54x (NTM consensus +9.2% diverges from historical CAGR -7.7% by 16.9pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Gate B (base): Forward ROIC (4.3% [Y10 projected]) < threshold (4.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature SaaS' is not a capital-turnover profile, so revenue ÷ invested capital (1.26) is not a sales-to-capital ratio here and no deduction is computed. Measured for refe
+   legs: {'DCF': 9.27, 'DCF (2-stage)': 11.36, 'Forward P/E': 36.03, 'EV/EBITDA': 2.41, 'Forward EV/EBITDA': 58.67, 'SOTP (segments)': 203.42, 'SOTP 12m (probabilistic)': 216.96}
+   weights: [('Forward P/E', 0.411765), ('DCF (2-stage)', 0.352941), ('EV/EBITDA', 0.235294)] | dropped: [('FCF Yield', 'uncomputable')]
+   mults: {'ev_ebitda': (16.954, 'profile', 'Mature SaaS'), 'pe': (24.584, 'profile', 'Mature SaaS'), 'pb': (7.7, 'profile', 'Mature SaaS'), 'fcf_yield': (0.071, 'profile', 'Mature SaaS'), 'growth_avg': (0.136, 'profile', 'Mature SaaS'), 'pe_ntm': (15.294, 'profile', 'Mature SaaS')}
+   route: ladder [('ladder', 'Mature SaaS')] | premium 1.0 | flag None
+== VMC | Mature SaaS | IV 138.54 | anchor Forward P/E | spot 245.0 | ccy USD
+   flag: Gate B (base): Forward ROIC (4.5% [Y10 projected]) < threshold (4.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature SaaS' is not a capital-turnover profile, so revenue ÷ invested capital (0.58) is not a sales-to-capital ratio here and no deduction is computed. Measured for refe
+   legs: {'DCF': 38.7, 'DCF (2-stage)': 38.88, 'Forward P/E': 139.26, 'EV/EBITDA': 299.62, 'FCF Yield': 121.4, 'EPV': 78.04, 'Forward EV/EBITDA': 180.9, 'SOTP (segments)': 191.53, 'SOTP 12m (probabilistic)': 198.15}
+   weights: [('Forward P/E', 0.35), ('DCF (2-stage)', 0.3), ('EV/EBITDA', 0.2), ('FCF Yield', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (16.954, 'profile', 'Mature SaaS'), 'pe': (24.584, 'profile', 'Mature SaaS'), 'pb': (7.7, 'profile', 'Mature SaaS'), 'fcf_yield': (0.071, 'profile', 'Mature SaaS'), 'growth_avg': (0.136, 'profile', 'Mature SaaS'), 'pe_ntm': (15.294, 'profile', 'Mature SaaS')}
+   route: ladder [('ladder', 'Mature SaaS')] | premium 1.0 | flag None
+== NUE | Specialty Chemicals | IV 163.66 | anchor EV/EBITDA | spot 247.25 | ccy USD
+   flag: CAGR-divergence gate: NTM growth +24.6% → +5.0%; analyst bands scaled 0.20x (NTM consensus +24.6% diverges from historical CAGR -2.9% by 27.5pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Growth reinvestment NOT leviable on this profile: 'Specialty Chemicals' is not a capital-turnover profile, so revenue ÷ invested capital (1.26) is not a sales-to-capital ratio here and no deduction is computed. Measured 
+   legs: {'DCF': 210.94, 'ROIC': 93.02, 'FCF Yield': 210.35, 'P/E (norm)': 213.62, 'EV/EBITDA': 120.51, 'Forward P/E': 227.06, 'Forward EV/EBITDA': 260.54, 'SOTP (segments)': 349.02, 'SOTP 12m (probabilistic)': 370.74}
+   weights: [('EV/EBITDA', 0.4), ('P/E (norm)', 0.3), ('FCF Yield', 0.2), ('ROIC', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (8.0, 'static', None), 'pe': (12.0, 'static', None), 'pb': (1.5, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.04, 'static', None)}
+   route: ladder [('ladder', 'Specialty Chemicals')] | premium 1.006 | flag None
+== NEM | Mining (Major) | IV 69.6 | anchor EV/EBITDA (norm) | spot 121.43 | ccy USD
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($22.1B revenue)
+   flag: Growth reinvestment NOT leviable on this profile: 'Mining (Major)' is not a capital-turnover profile, so revenue ÷ invested capital (0.69) is not a sales-to-capital ratio here and no deduction is computed. Measured for r
+   flag: Cyclical_Peak_Consensus: the peak-consensus trigger fired on this cyclical profile; the normalised anchor and the forward consensus describe different cycles and the name is scored apart
+   legs: {'DCF': 80.8, 'P/BV': 48.44, 'Depleting Asset DCF (Finite Life, No TV)': 96.97, 'EV/EBITDA (norm)': 59.44, 'Forward P/E': 118.94, 'Forward EV/EBITDA': 119.87, 'SOTP (segments)': 70.67, 'SOTP 12m (probabilistic)': 76.95, 'P/B-ROE (mid-cycle)': 16.01}
+   weights: [('EV/EBITDA (norm)', 0.6), ('Depleting Asset DCF (Finite Life, No TV)', 0.3), ('P/BV', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (6.0, 'static', None), 'pe': (12.0, 'static', None), 'pb': (1.5, 'static', None), 'fcf_yield': (0.07, 'static', None), 'growth_avg': (0.04, 'static', None)}
+   route: router [('router', 'Mining (Major)')] | premium 1.049 | flag Cyclical_Peak_Consensus
+== FCX | Mining (Major) | IV 24.47 | anchor EV/EBITDA (norm) | spot 72.3 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Mining (Major)' is not a capital-turnover profile, so revenue ÷ invested capital (0.95) is not a sales-to-capital ratio here and no deduction is computed. Measured for r
+   legs: {'DCF': 8.84, 'P/BV': 31.98, 'Depleting Asset DCF (Finite Life, No TV)': 12.47, 'EV/EBITDA (norm)': 29.22, 'Forward P/E': 35.59, 'Forward EV/EBITDA': 23.67, 'SOTP (segments)': 41.54, 'SOTP 12m (probabilistic)': 57.55}
+   weights: [('EV/EBITDA (norm)', 0.6), ('Depleting Asset DCF (Finite Life, No TV)', 0.3), ('P/BV', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (6.0, 'static', None), 'pe': (12.0, 'static', None), 'pb': (1.5, 'static', None), 'fcf_yield': (0.07, 'static', None), 'growth_avg': (0.04, 'static', None)}
+   route: router [('router', 'Mining (Major)')] | premium 1.0 | flag None
+== 00001.HK | Capital Goods | IV 36.28 | anchor EV/EBITDA | spot 67.95 | ccy HKD
+   flag: Gate B (base): Forward ROIC (4.1% [Y10 projected]) < threshold (4.1%) → TGR set to 0
+   flag: Growth reinvestment NOT charged (observation only): at S/C 0.37 (revenue ÷ invested capital) and g=11.9%, a reinvestment charge would take +11.84% off the Yr-1 FCF margin, 13.84% → 2.00%. The published margin is 13.84% b
+   legs: {'DCF': 100.24, 'FCF Yield': 60.07, 'ROIC vs WACC': 0.54, 'P/E (norm)': 35.86, 'EV/EBITDA': 36.42, 'Forward P/E': 64.27, 'Forward EV/EBITDA': 64.37}
+   weights: [('EV/EBITDA', 0.4), ('FCF Yield', 0.3), ('ROIC vs WACC', 0.2), ('P/E (norm)', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (8.452, 'industry', 'Conglomerates'), 'pe': (6.258, 'industry', 'Conglomerates'), 'pb': (0.409, 'industry', 'Conglomerates'), 'fcf_yield': (0.191, 'industry', 'Conglomerates'), 'growth_avg': (-0.006, 'industry', 'Conglomerates'), 'pe_ntm': (10.028, 'industry', 'Conglomerates')}
+   route: ladder [('ladder', 'Capital Goods')] | premium 1.0 | flag None
+== J36.SI | Conglomerate / Industrial (SG) | IV 51.53 | anchor EV/EBITDA | spot 55.86 | ccy USD
+   flag: Growth reinvestment NOT leviable on this profile: 'Conglomerate / Industrial (SG)' is not a capital-turnover profile, so revenue ÷ invested capital (0.89) is not a sales-to-capital ratio here and no deduction is computed
+   legs: {'DCF': 44.99, 'EV/EBITDA': 55.61, 'Forward P/E': 89.96}
+   weights: [('EV/EBITDA', 0.615385), ('DCF', 0.384615)] | dropped: [('SOTP (published)', 'uncomputable')]
+   mults: {'ev_ebitda': (10.853, 'sector', 'Industrials'), 'pe': (19.554, 'sector', 'Industrials'), 'pb': (1.927, 'sector', 'Industrials'), 'growth_avg': (0.076, 'sector', 'Industrials'), 'pe_ntm': (16.631, 'sector', 'Industrials'), 'fcf_yield': (0.049, 'sector', 'Industrials')}
+   route: router [('router', 'Conglomerate / Industrial (SG)')] | premium 1.0 | flag None
+== 00914.HK | Capital Goods | IV 25.42 | anchor EV/EBITDA | spot 15.69 | ccy HKD
+   flag: Cash-conversion (observed, not applied): FCF margin 8.0% vs 4.1% — reported FCF is 0.9x what a repeatable basis supports (ex-working-capital), so the excess is not projected
+   flag: Gate B (base): Forward ROIC (2.4% [Y10 projected]) < threshold (4.1%) → TGR set to 0
+   flag: Growth reinvestment NOT charged (observation only): at S/C 0.39 (revenue ÷ invested capital) and g=1.7%, a reinvestment charge would take +4.37% off the Yr-1 FCF margin, 7.98% → 3.60%. The published margin is 7.98% befor
+   legs: {'DCF': 25.14, 'P/E': 26.51, 'FCF Yield': 14.73, 'ROIC vs WACC': 23.69, 'EV/EBITDA': 34.03, 'Forward P/E': 20.86, 'Forward EV/EBITDA': 35.69}
+   weights: [('EV/EBITDA', 0.4), ('FCF Yield', 0.3), ('ROIC vs WACC', 0.2), ('P/E', 0.1)] | dropped: []
+   mults: {'ev_ebitda': (7.664, 'industry', 'Construction Materials'), 'pe': (14.496, 'industry', 'Construction Materials'), 'pb': (0.442, 'industry', 'Construction Materials'), 'fcf_yield': (0.105, 'industry', 'Construction Materials'), 'growth_avg': (-0.054, 'industry', 'Construction Materials'), 'pe_ntm': (9.749, 'sector', 'Basic Materials')}
+   route: ladder [('ladder', 'Capital Goods')] | premium 1.0 | flag None
+== 02899.HK | Mature SaaS | IV 37.21 | anchor Forward P/E | spot 32.5 | ccy HKD
+   flag: CAGR-divergence gate: NTM growth +31.7% → +16.6%; analyst bands scaled 0.52x (NTM consensus +31.7% diverges from historical CAGR +11.6% by 20.1pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($408.6B revenue)
+   flag: Growth reinvestment NOT leviable on this profile: 'Mature SaaS' is not a capital-turnover profile, so revenue ÷ invested capital (1.21) is not a sales-to-capital ratio here and no deduction is computed. Measured for refe
+   legs: {'DCF': 24.84, 'DCF (2-stage)': 27.6, 'Forward P/E': 41.16, 'EV/EBITDA': 33.22, 'FCF Yield': 52.52, 'EPV': 20.31, 'Forward EV/EBITDA': 41.86}
+   weights: [('Forward P/E', 0.35), ('DCF (2-stage)', 0.3), ('EV/EBITDA', 0.2), ('FCF Yield', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (9.91, 'industry', 'Gold'), 'pe': (16.797, 'industry', 'Gold'), 'pb': (4.185, 'industry', 'Gold'), 'fcf_yield': (0.037, 'industry', 'Gold'), 'growth_avg': (0.306, 'industry', 'Gold'), 'pe_ntm': (11.635, 'industry', 'Gold')}
+   route: ladder [('ladder', 'Mature SaaS')] | premium 1.0 | flag None

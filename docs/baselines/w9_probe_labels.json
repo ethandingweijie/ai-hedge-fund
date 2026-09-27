@@ -1,0 +1,779 @@
+{
+ "CAT": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Agricultural - Machinery",
+  "name": "Caterpillar Inc.",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "DE": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Agricultural - Machinery",
+  "name": "Deere & Company",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "PH": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Industrial - Machinery",
+  "name": "Parker-Hannifin Corporation",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "ETN": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Electrical Equipment & Parts",
+  "name": "Eaton Corporation plc",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "VRT": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Electrical Equipment & Parts",
+  "name": "Vertiv Holdings Co",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "PWR": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Engineering & Construction",
+  "name": "Quanta Services, Inc.",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "GWW": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Industrial - Distribution",
+  "name": "W.W. Grainger, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "URI": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Rental & Leasing Services",
+  "name": "United Rentals, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "WM": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Waste Management",
+  "name": "Waste Management, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "CTAS": {
+  "exchange": "NASDAQ",
+  "sector": "Industrials",
+  "industry": "Specialty Business Services",
+  "name": "Cintas Corporation",
+  "currency": "USD",
+  "row": [
+   "ProfessionalServices",
+   "IT Services"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "MMM": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "3M Company",
+  "currency": "USD",
+  "row": [
+   "Financials",
+   "Holding Company"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "HON": {
+  "exchange": "NASDAQ",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "Honeywell International Inc.",
+  "currency": "USD",
+  "row": [
+   "Financials",
+   "Holding Company"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "DAL": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Airlines, Airports & Air Services",
+  "name": "Delta Air Lines, Inc.",
+  "currency": "USD",
+  "row": [
+   "Transportation",
+   "Airlines"
+  ],
+  "pin": [
+   "Transportation",
+   "Airlines"
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "UNP": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Railroads",
+  "name": "Union Pacific Corporation",
+  "currency": "USD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "ODFL": {
+  "exchange": "NASDAQ",
+  "sector": "Industrials",
+  "industry": "Trucking",
+  "name": "Old Dominion Freight Line, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "UPS": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Integrated Freight & Logistics",
+  "name": "United Parcel Service, Inc.",
+  "currency": "USD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": [
+   "Transportation",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "FDX": {
+  "exchange": "NYSE",
+  "sector": "Industrials",
+  "industry": "Integrated Freight & Logistics",
+  "name": "FedEx Corporation",
+  "currency": "USD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": [
+   "Transportation",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "LIN": {
+  "exchange": "NASDAQ",
+  "sector": "Basic Materials",
+  "industry": "Chemicals - Specialty",
+  "name": "Linde plc",
+  "currency": "USD",
+  "row": [
+   "Materials",
+   "Specialty Chemicals"
+  ],
+  "pin": [
+   "Materials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "SHW": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Chemicals - Specialty",
+  "name": "The Sherwin-Williams Company",
+  "currency": "USD",
+  "row": [
+   "Materials",
+   "Specialty Chemicals"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "DOW": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Chemicals",
+  "name": "Dow Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "CTVA": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Agricultural Inputs",
+  "name": "Corteva, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "CRH": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Construction Materials",
+  "name": "CRH plc",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "VMC": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Construction Materials",
+  "name": "Vulcan Materials Company",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "NUE": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Steel",
+  "name": "Nucor Corporation",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "Materials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "FCX": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Copper",
+  "name": "Freeport-McMoRan Inc.",
+  "currency": "USD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "SCCO": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Copper",
+  "name": "Southern Copper Corporation",
+  "currency": "USD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "NEM": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Gold",
+  "name": "Newmont Corporation",
+  "currency": "USD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "AA": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Aluminum",
+  "name": "Alcoa Corporation",
+  "currency": "USD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "IP": {
+  "exchange": "NYSE",
+  "sector": "Basic Materials",
+  "industry": "Paper, Lumber & Forest Products",
+  "name": "International Paper Company",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "PKG": {
+  "exchange": "NYSE",
+  "sector": "Consumer Cyclical",
+  "industry": "Packaging & Containers",
+  "name": "Packaging Corporation of America",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "03808.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Agricultural - Machinery",
+  "name": "Sinotruk (Hong Kong) Limited",
+  "currency": "HKD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "02050.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Industrial - Machinery",
+  "name": "Zhejiang Sanhua Intelligent Controls Co. Ltd",
+  "currency": "HKD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "03750.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Electrical Equipment & Parts",
+  "name": "Contemporary Amperex Technology Co., Limited",
+  "currency": "HKD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00390.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Engineering & Construction",
+  "name": "China Railway Group Limited",
+  "currency": "HKD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00669.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Manufacturing - Tools & Accessories",
+  "name": "Techtronic Industries Company Limited",
+  "currency": "HKD",
+  "row": [
+   "Industrials",
+   "Capital Goods"
+  ],
+  "pin": [
+   "Consumer",
+   "Consumer Durables"
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00267.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "CITIC Limited",
+  "currency": "HKD",
+  "row": [
+   "Financials",
+   "Holding Company"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00001.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "CK Hutchison Holdings Limited",
+  "currency": "HKD",
+  "row": [
+   "Financials",
+   "Holding Company"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00177.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Industrial - Infrastructure Operations",
+  "name": "Jiangsu Expressway Company Limited",
+  "currency": "HKD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00293.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Airlines, Airports & Air Services",
+  "name": "Cathay Pacific Airways Limited",
+  "currency": "HKD",
+  "row": [
+   "Transportation",
+   "Airlines"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00066.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Railroads",
+  "name": "MTR Corporation Limited",
+  "currency": "HKD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01766.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Railroads",
+  "name": "CRRC Corporation Limited",
+  "currency": "HKD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01919.HK": {
+  "exchange": "HKSE",
+  "sector": "Industrials",
+  "industry": "Marine Shipping",
+  "name": "COSCO SHIPPING Holdings Co., Ltd.",
+  "currency": "HKD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00914.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Construction Materials",
+  "name": "Anhui Conch Cement Company Limited",
+  "currency": "HKD",
+  "row": null,
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "03993.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Industrial Materials",
+  "name": "CMOC Group Limited",
+  "currency": "HKD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01378.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Aluminum",
+  "name": "China Hongqiao Group Limited",
+  "currency": "HKD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00358.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Copper",
+  "name": "Jiangxi Copper Company Limited",
+  "currency": "HKD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "02899.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Gold",
+  "name": "Zijin Mining Group Co., Ltd.",
+  "currency": "HKD",
+  "row": [
+   "Resources",
+   "Mining (Major)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01772.HK": {
+  "exchange": "HKSE",
+  "sector": "Basic Materials",
+  "industry": "Chemicals",
+  "name": "Ganfeng Lithium Co., Limited",
+  "currency": "HKD",
+  "row": null,
+  "pin": [
+   "Industrials",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "BN4.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "Keppel Corporation Limited",
+  "currency": "SGD",
+  "row": [
+   "Industrials",
+   "Conglomerate / Industrial (SG)"
+  ],
+  "pin": [
+   "Industrials",
+   "Conglomerate / Industrial (SG)"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ },
+ "J36.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Conglomerates",
+  "name": "Jardine Matheson Holdings Limited",
+  "currency": "USD",
+  "row": [
+   "Industrials",
+   "Conglomerate / Industrial (SG)"
+  ],
+  "pin": [
+   "Industrials",
+   "Conglomerate / Industrial (SG)"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ },
+ "C6L.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Airlines, Airports & Air Services",
+  "name": "Singapore Airlines Limited",
+  "currency": "SGD",
+  "row": [
+   "Industrials",
+   "Aviation & Marine (SG)"
+  ],
+  "pin": [
+   "Industrials",
+   "Aviation & Marine (SG)"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ },
+ "BS6.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Industrial - Machinery",
+  "name": "Yangzijiang Shipbuilding (Holdings) Ltd.",
+  "currency": "SGD",
+  "row": [
+   "Industrials",
+   "Offshore Marine & Resources (SG)"
+  ],
+  "pin": [
+   "Industrials",
+   "Aviation & Marine (SG)"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ },
+ "C52.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "Railroads",
+  "name": "ComfortDelGro Corporation Limited",
+  "currency": "SGD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ },
+ "S58.SI": {
+  "exchange": "SES",
+  "sector": "Industrials",
+  "industry": "General Transportation",
+  "name": "SATS Ltd.",
+  "currency": "SGD",
+  "row": [
+   "Transportation",
+   "Rail / Logistics"
+  ],
+  "pin": [
+   "Industrials",
+   "Aerospace & Engineering (SG)"
+  ],
+  "in_scope": false,
+  "market": "SG"
+ }
+}

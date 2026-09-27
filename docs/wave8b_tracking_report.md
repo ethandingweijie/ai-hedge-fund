@@ -18,8 +18,8 @@ review-gated inputs accepted are run in an archive copy.
 | Step 3: FFO field + REIT (Specialty / OpCo) (A), inputs accepted (preview) | 10 of 12 | 20 of 32 | 16 of 34 | 2 | 2 |
 | Step 4: developer sub-cohorts (D) | 8 of 12 | 20 of 32 | 16 of 34 | 3 | 2 |
 | Step 4: developer sub-cohorts (D), inputs accepted (preview) | 10 of 12 | 21 of 32 | 16 of 34 | 2 | 2 |
-| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27) | 9 of 12 | 25 of 32 | 18 of 34 | 6 | 2 |
-| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27), inputs accepted (preview) | 10 of 12 | 27 of 32 | 18 of 34 | 2 | 2 |
+| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27) | 10 of 12 | 25 of 32 | 20 of 34 | 6 | 2 |
+| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27), inputs accepted (preview) | 11 of 12 | 27 of 32 | 20 of 34 | 2 | 2 |
 
 ## Step 1 (Bucket B): clean cash NOI
 
@@ -325,21 +325,36 @@ Hongkong Land −44% (x the HKSE development cohort's 0.40x; the market pays it 
 discount again deeper than the name's own). Pending their acceptance the three sit at −33%, −48% and −53%
 on P/B and the dividend, with the cap-rate NAV bypassed as decided.
 
+
+## Correction (found at Wave 9 Stage 0, 2026-09-27)
+
+`regional_comps.load_comps` skips any row older than the exchange's newest row by more than an hour. The
+step 3 P/FFO backfill stamped its 18 US rows with the wall clock, so from step 3 on every other US cohort row
+(the 22 September refresh) read as superseded and every US name priced its relative legs on the static
+tables. Production was never affected (its weekly job writes every field together, and the backfill script
+drops `DATABASE_URL`). The store rows were re-stamped onto the refresh they belong to, the script now stamps a
+fill with the exchange's current refresh time, a test pins both, and the twelve US names were re-measured under
+Wave 8c (`after_wave8c_us.json`, `after_wave8c_us_preview.json`); the Wave 8c rows of the summary table carry
+the repaired figures. The curated baskets (the eight operating REITs) read member rows the rule never touched,
+so the OpCo names did not move. What did: Realty Income +14% -> −9%, D.R. Horton −3% -> +16%, Public Storage
+−5% -> −13%, Simon +25% -> +20%, Prologis −21% -> −23%. The step 3 and step 4 US rows are left as measured and
+carry the same artifact; the Hong Kong and Singapore names were never affected.
+
 ## Per-ticker record (IV against spot at each stage)
 
 | Ticker | Profile now | vs spot Stage 0 | vs spot Wave 8 | vs spot Step 1 | vs spot Step 2 | vs spot Step 3 | vs spot Step 4 | vs spot 8c | vs cons (latest) | Flag (latest) |
 |---|---|---|---|---|---|---|---|---|---|---|
 | WELL | REIT (Specialty / OpCo) | -80% | -78% | -67% | -67% | -52% | -52% | -59% | -64% | — |
-| PLD | REIT | -18% | -17% | -32% | -32% | -37% | -37% | -21% | -32% | — |
+| PLD | REIT | -18% | -17% | -32% | -32% | -37% | -37% | -23% | -34% | — |
 | EQIX | REIT (Specialty / OpCo) | -29% | -35% | -29% | -29% | -11% | -11% | -13% | -29% | — |
 | AMT | REIT (Specialty / OpCo) | -42% | +4% | +26% | +26% | +56% | +56% | +30% | +4% | — |
 | DLR | REIT (Specialty / OpCo) | -6% | -7% | -10% | -10% | +8% | +8% | +15% | -8% | — |
-| SPG | REIT | +35% | +25% | -1% | -1% | -8% | -8% | +25% | +14% | — |
-| PSA | REIT | -11% | -10% | -45% | -45% | -46% | -46% | -5% | -16% | — |
-| O | REIT | +20% | +0% | +23% | +23% | +51% | +51% | +14% | -3% | — |
+| SPG | REIT | +35% | +25% | -1% | -1% | -8% | -8% | +20% | +10% | — |
+| PSA | REIT | -11% | -10% | -45% | -45% | -46% | -46% | -13% | -24% | — |
+| O | REIT | +20% | +0% | +23% | +23% | +51% | +51% | -9% | -23% | — |
 | VTR | REIT (Specialty / OpCo) | -45% | -37% | -37% | -37% | -9% | -9% | -6% | -18% | — |
-| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -8% | -8% | -8% | -30% | — |
-| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | -3% | -3% | -3% | -14% | — |
+| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -8% | -8% | -7% | -30% | — |
+| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | -3% | -3% | +16% | +3% | — |
 | IRM | REIT (Specialty / OpCo) | -61% | -45% | -54% | -54% | -3% | -3% | +6% | -17% | — |
 | 00016.HK | Landlord / Investment Property (HK) | +39% | -7% | -22% | -22% | -22% | -23% | -8% | — | — |
 | 01109.HK | Property Developer (HK / China) | +93% | +6% | +6% | +6% | +6% | +23% | +31% | — | — |
