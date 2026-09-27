@@ -46,11 +46,37 @@ def _pct(a, b):
     return (a / b - 1.0) if (a and b) else None
 
 
-def baseline_one(ticker: str, end: str, key: str) -> dict:
+def _label_sector(ticker: str) -> tuple:
+    """(FMP industry label, the sector of that label's routing row) from the local comps store.
+
+    Production classifies an unpinned name's sector with the LLM router before the pin table; this
+    harness has no router, and build_state_from_lookups falls back to "Tech" for any unpinned name,
+    which sends consumer, pharma and utility names down the Tech ladder (Wave 10 Stage 0, 2026-09-27).
+    Seeding the sector from the name's own label row is the router's best case, stated as such."""
+    import json as _json
+    from src.data import db as _db
+    sym = ticker
+    if ticker.endswith(".HK"):
+        sym = (ticker.split(".")[0].lstrip("0") or "0").zfill(4) + ".HK"
+    row = _db.query_one("SELECT key FROM regional_comps_members WHERE level='industry' AND symbol=? LIMIT 1", [sym])
+    label = dict(row)["key"] if row else None
+    m = _json.loads((ROOT / "src/data/industry_profile_map.json").read_text(encoding="utf-8"))
+    hit = (m.get("map") or {}).get(label or "")
+    return label, (hit[0] if hit else None)
+
+
+def baseline_one(ticker: str, end: str, key: str, sector_from_label: bool = False) -> dict:
     from src.agents.analysis import dcf_agent as d
     from src.memory.golden_state import build_state_from_lookups
 
     st = build_state_from_lookups(ticker, end, api_key=key)
+    seeded = None
+    if sector_from_label and not (st["data"].get("profile_names") or {}).get(ticker):
+        label, sec = _label_sector(ticker)
+        if sec:
+            st["data"]["sector"] = sec
+            st["data"]["sectors"] = {ticker: sec}
+            seeded = {"label": label, "sector": sec}
     with contextlib.redirect_stdout(io.StringIO()):
         dr = (d.run_dcf_agent(st)["data"]["dcf_range"].get(ticker) or {})
     base = dr.get("base") or {}
@@ -68,6 +94,7 @@ def baseline_one(ticker: str, end: str, key: str) -> dict:
     rt = dr.get("routing_trace") or {}
     ordered = None if None in (bear, iv, bull) else bool(bear <= iv <= bull)
     return {
+        "seeded_sector": seeded,
         "profile": dr.get("profile"),
         "routing_winner": rt.get("winner"),
         "industry_routing": (rt.get("industry_routing") or {}).get("enabled"),
@@ -122,6 +149,8 @@ def main() -> int:
     ap.add_argument("tickers", nargs="+")
     ap.add_argument("--wave", required=True)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--sector-from-label", action="store_true",
+                    help="seed an unpinned name's sector from its FMP label's routing row (the router's best case)")
     a = ap.parse_args()
     logging.disable(logging.CRITICAL)
     key = os.environ.get("FMP_API_KEY")
@@ -131,7 +160,7 @@ def main() -> int:
            "tickers": {}}
     for t in a.tickers:
         try:
-            out["tickers"][t] = baseline_one(t, end, key)
+            out["tickers"][t] = baseline_one(t, end, key, sector_from_label=a.sector_from_label)
         except Exception as exc:  # noqa: BLE001
             out["tickers"][t] = {"error": f"{type(exc).__name__}: {exc}"}
         r = out["tickers"][t]

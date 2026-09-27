@@ -1,0 +1,4548 @@
+{
+ "wave": "10",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "MELI": {
+   "seeded_sector": {
+    "label": "Specialty Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Consumer Growth",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.3125
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.1875
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E",
+     "weight": 0.2,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.8,
+   "methods_unavailable": [
+    "P/E"
+   ],
+   "bear": 3226.23,
+   "base": 4824.14,
+   "bull": 6779.27,
+   "scenarios_ordered": true,
+   "target_12m_base": 3288.38,
+   "consensus": 2144.44,
+   "iv_vs_consensus": 1.2496036261215049,
+   "spot": 1752.61,
+   "iv_vs_spot": 1.7525462025208123,
+   "consensus_spread": 0.2236,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.5334446289007853,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 10.17339305443965,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $18999.68 vs price $1700.44 on 2024-12-31 = 1017% gap; 12m later the market was closer (843% vs 16%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ORLY": {
+   "seeded_sector": {
+    "label": "Specialty Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 47.68,
+   "base": 70.06,
+   "bull": 94.9,
+   "scenarios_ordered": true,
+   "target_12m_base": 80.5,
+   "consensus": 107.3,
+   "iv_vs_consensus": -0.34706430568499536,
+   "spot": 86.115,
+   "iv_vs_spot": -0.1864367415665098,
+   "consensus_spread": 0.246,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.24976700838769805,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1292425136516851,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $68.83 vs price $79.05 on 2024-12-31 = 13% gap; 12m later the market was closer (25% vs 13%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "01880.HK": {
+   "seeded_sector": {
+    "label": "Specialty Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 34.51,
+   "base": 43.22,
+   "bull": 57.14,
+   "scenarios_ordered": true,
+   "target_12m_base": 44.79,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 45.64,
+   "iv_vs_spot": -0.05302366345311138,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.0797546492603169,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $48.87 vs price $53.10 on 2024-12-31 = 8% gap; 12m later the market was closer (38% vs 33%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "09896.HK": {
+   "seeded_sector": {
+    "label": "Specialty Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 25.75,
+   "base": 48.06,
+   "bull": 92.78,
+   "scenarios_ordered": true,
+   "target_12m_base": 32.71,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 17.36,
+   "iv_vs_spot": 1.7684331797235027,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.37569641805578485,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $48.97 vs price $35.60 on 2025-06-30 = 38% gap; 12m later the market was closer (108% vs 51%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "06288.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 1176.1,
+   "base": 1862.49,
+   "bull": 2943.5,
+   "scenarios_ordered": true,
+   "target_12m_base": 948.2,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 33.92,
+   "iv_vs_spot": 53.90831367924528,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3019681867787551,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $16.40 vs price $23.50 on 2024-08-30 = 30% gap; 12m later the market was closer (33% vs 4%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "01368.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 3.09,
+   "base": 4.01,
+   "bull": 4.93,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.62,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 3.41,
+   "iv_vs_spot": 0.17595307917888547,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2973471549637755,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $3.96 vs price $5.64 on 2024-12-31 = 30% gap; 12m later the market was closer (25% vs 6%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "TJX": {
+   "seeded_sector": {
+    "label": "Apparel - Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 51.94,
+   "base": 73.07,
+   "bull": 98.78,
+   "scenarios_ordered": true,
+   "target_12m_base": 101.58,
+   "consensus": 174.15,
+   "iv_vs_consensus": -0.5804191788687914,
+   "spot": 130.1,
+   "iv_vs_spot": -0.43835511145272865,
+   "consensus_spread": 0.3386,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.41670973298880276,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.48083154137943823,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $64.79 vs price $124.79 on 2025-01-31 = 48% gap; 12m later the market was closer (57% vs 17%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ROST": {
+   "seeded_sector": {
+    "label": "Apparel - Retail",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 102.99,
+   "base": 156.76,
+   "bull": 210.83,
+   "scenarios_ordered": true,
+   "target_12m_base": 196.44,
+   "consensus": 274.14,
+   "iv_vs_consensus": -0.42817538483986284,
+   "spot": 236.12,
+   "iv_vs_spot": -0.33610028798915814,
+   "consensus_spread": 0.161,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.28343182315605164,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.36189964424377663,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $96.07 vs price $150.56 on 2025-01-31 = 36% gap; 12m later the market was closer (49% vs 20%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "03998.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 5.81,
+   "base": 8.96,
+   "bull": 20.0,
+   "scenarios_ordered": true,
+   "target_12m_base": 6.46,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 3.97,
+   "iv_vs_spot": 1.256926952141058,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.8761432775052038,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $11.48 vs price $3.99 on 2025-03-31 = 188% gap; 12m later the market was closer (187% vs 0%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02232.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 6.63,
+   "base": 9.07,
+   "bull": 12.04,
+   "scenarios_ordered": true,
+   "target_12m_base": 7.69,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 6.31,
+   "iv_vs_spot": 0.43740095087163255,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5556724872973757,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $6.80 vs price $4.37 on 2024-12-31 = 56% gap; 12m later the model was closer (1% vs 35%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "RL": {
+   "seeded_sector": {
+    "label": "Apparel - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 231.96,
+   "base": 334.75,
+   "bull": 480.74,
+   "scenarios_ordered": true,
+   "target_12m_base": 349.28,
+   "consensus": 456.67,
+   "iv_vs_consensus": -0.26697615345873393,
+   "spot": 357.1,
+   "iv_vs_spot": -0.06258751050126021,
+   "consensus_spread": 0.2788,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.23515886745352232,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.07473813969683475,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $231.80 vs price $215.68 on 2025-03-28 = 7% gap; 12m later model and market were level (29% vs 34%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "LEVI": {
+   "seeded_sector": {
+    "label": "Apparel - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 15.18,
+   "base": 19.49,
+   "bull": 24.33,
+   "scenarios_ordered": true,
+   "target_12m_base": 19.65,
+   "consensus": 28.8,
+   "iv_vs_consensus": -0.3232638888888889,
+   "spot": 19.74,
+   "iv_vs_spot": -0.012664640324214771,
+   "consensus_spread": 0.459,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.31770833333333337,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.45308944651029914,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $9.55 vs price $17.46 on 2024-11-29 = 45% gap; 12m later the market was closer (57% vs 21%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "DECK": {
+   "seeded_sector": {
+    "label": "Apparel - Footwear & Accessories",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 97.47,
+   "base": 134.13,
+   "bull": 174.2,
+   "scenarios_ordered": true,
+   "target_12m_base": 106.4,
+   "consensus": 117.13,
+   "iv_vs_consensus": 0.1451378809869377,
+   "spot": 78.67,
+   "iv_vs_spot": 0.7049701283843903,
+   "consensus_spread": 0.4889,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.09160761546999052,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.23191528053113528,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $137.74 vs price $111.81 on 2025-03-31 = 23% gap; 12m later the market was closer (38% vs 12%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CROX": {
+   "seeded_sector": {
+    "label": "Apparel - Footwear & Accessories",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.555556
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.444444
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E (Premium)",
+     "weight": 0.5,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "Brand Val",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.45,
+   "methods_unavailable": [
+    "P/E (Premium)",
+    "Brand Val"
+   ],
+   "bear": 108.05,
+   "base": 108.05,
+   "bull": 172.54,
+   "scenarios_ordered": true,
+   "target_12m_base": 119.81,
+   "consensus": 136.78,
+   "iv_vs_consensus": -0.21004532826436617,
+   "spot": 126.14,
+   "iv_vs_spot": -0.14341208181385767,
+   "consensus_spread": 0.0844,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.12406784617634159,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.7362895855013742,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $409.24 vs price $109.53 on 2024-12-31 = 274% gap; 12m later the market was closer (379% vs 28%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "02313.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Footwear & Accessories",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 32.12,
+   "base": 45.3,
+   "bull": 60.2,
+   "scenarios_ordered": true,
+   "target_12m_base": 38.01,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 34.08,
+   "iv_vs_spot": 0.329225352112676,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.32522196534501513,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $41.84 vs price $62.00 on 2024-12-31 = 33% gap; 12m later the market was closer (32% vs 1%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00551.HK": {
+   "seeded_sector": {
+    "label": "Apparel - Footwear & Accessories",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 7.6,
+   "base": 12.16,
+   "bull": 20.93,
+   "scenarios_ordered": true,
+   "target_12m_base": 12.39,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 12.51,
+   "iv_vs_spot": -0.027977617905675434,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.18136842853747817,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $20.56 vs price $17.40 on 2024-12-31 = 18% gap; 12m later the market was closer (29% vs 9%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "RACE": {
+   "seeded_sector": {
+    "label": "Auto - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 114.42,
+   "base": 160.78,
+   "bull": 218.06,
+   "scenarios_ordered": true,
+   "target_12m_base": 286.06,
+   "consensus": 473.75,
+   "iv_vs_consensus": -0.660622691292876,
+   "spot": 411.33,
+   "iv_vs_spot": -0.6091216298349258,
+   "consensus_spread": 0.1518,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.39617941952506597,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.4926265482930652,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $215.55 vs price $424.84 on 2024-12-31 = 49% gap; 12m later the market was closer (42% vs 15%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HMC": {
+   "seeded_sector": {
+    "label": "Auto - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.533333
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.133333
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.133333
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.75,
+   "methods_unavailable": [
+    "P/E"
+   ],
+   "bear": 64.75,
+   "base": 79.62,
+   "bull": 94.5,
+   "scenarios_ordered": true,
+   "target_12m_base": 56.28,
+   "consensus": 34.0,
+   "iv_vs_consensus": 1.341764705882353,
+   "spot": 32.93,
+   "iv_vs_spot": 1.4178560583054969,
+   "consensus_spread": 0.0325,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.6552941176470588,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.301188968163908,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $89.56 vs price $27.13 on 2025-03-31 = 230% gap; 12m later the market was closer (268% vs 12%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "09973.HK": {
+   "seeded_sector": {
+    "label": "Auto - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 78.01,
+   "base": 112.51,
+   "bull": 165.95,
+   "scenarios_ordered": true,
+   "target_12m_base": 68.66,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 24.8,
+   "iv_vs_spot": 3.536693548387097,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 invalid T-1 price",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02333.HK": {
+   "seeded_sector": {
+    "label": "Auto - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 17.62,
+   "base": 33.33,
+   "bull": 59.55,
+   "scenarios_ordered": true,
+   "target_12m_base": 20.28,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 7.23,
+   "iv_vs_spot": 3.609958506224066,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.303884239647476,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $31.47 vs price $13.66 on 2024-12-31 = 130% gap; 12m later the market was closer (106% vs 11%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "C07.SI": {
+   "seeded_sector": {
+    "label": "Auto - Manufacturers",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 21.59,
+   "base": 33.85,
+   "bull": 54.56,
+   "scenarios_ordered": true,
+   "target_12m_base": 29.18,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 26.66,
+   "iv_vs_spot": 0.26969242310577646,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 3.1407329853422863,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $117.31 vs price $28.33 on 2024-12-31 = 314% gap; 12m later the market was closer (247% vs 16%)",
+   "currency": "SGD",
+   "regime": null
+  },
+  "02338.HK": {
+   "seeded_sector": {
+    "label": "Auto - Parts",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 27.7,
+   "base": 49.36,
+   "bull": 82.29,
+   "scenarios_ordered": true,
+   "target_12m_base": 35.44,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 27.94,
+   "iv_vs_spot": 0.7666428060128847,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 5.766875721690227,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $80.39 vs price $11.88 on 2024-12-31 = 577% gap; 12m later the market was closer (326% vs 37%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "03606.HK": {
+   "seeded_sector": {
+    "label": "Auto - Parts",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 38.58,
+   "base": 64.8,
+   "bull": 113.4,
+   "scenarios_ordered": true,
+   "target_12m_base": 58.17,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 54.6,
+   "iv_vs_spot": 0.18681318681318682,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.28242384990442604,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $71.75 vs price $55.95 on 2024-12-31 = 28% gap; 12m later the model was closer (7% vs 17%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "GPC": {
+   "seeded_sector": {
+    "label": "Auto - Parts",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.444444
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.277778
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.166667
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.111111
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "ROIC vs WACC",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [],
+   "bear": 60.82,
+   "base": 60.82,
+   "bull": 82.8,
+   "scenarios_ordered": true,
+   "target_12m_base": 95.22,
+   "consensus": 145.75,
+   "iv_vs_consensus": -0.5827101200686107,
+   "spot": 129.61,
+   "iv_vs_spot": -0.5307460844070674,
+   "consensus_spread": 0.1245,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.34668953687821613,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2952640306958699,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $82.28 vs price $116.76 on 2024-12-31 = 30% gap; 12m later the market was closer (33% vs 5%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "MGA": {
+   "seeded_sector": {
+    "label": "Auto - Parts",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 53.08,
+   "base": 67.39,
+   "bull": 83.58,
+   "scenarios_ordered": true,
+   "target_12m_base": 65.84,
+   "consensus": 69.1,
+   "iv_vs_consensus": -0.02474674384949338,
+   "spot": 65.0,
+   "iv_vs_spot": 0.03676923076923089,
+   "consensus_spread": 0.0631,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.04717800289435592,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9309297928072735,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $80.69 vs price $41.79 on 2024-12-31 = 93% gap; 12m later the market was closer (51% vs 22%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CMG": {
+   "seeded_sector": {
+    "label": "Restaurants",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 16.45,
+   "base": 23.73,
+   "bull": 31.17,
+   "scenarios_ordered": true,
+   "target_12m_base": 27.53,
+   "consensus": 42.41,
+   "iv_vs_consensus": -0.44046215515208675,
+   "spot": 31.325,
+   "iv_vs_spot": -0.24245810055865924,
+   "consensus_spread": 0.3539,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.3508606460740391,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5931215434341581,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $24.53 vs price $60.30 on 2024-12-31 = 59% gap; 12m later the model was closer (34% vs 63%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "YUM": {
+   "seeded_sector": {
+    "label": "Restaurants",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 70.68,
+   "base": 119.17,
+   "bull": 184.13,
+   "scenarios_ordered": true,
+   "target_12m_base": 131.88,
+   "consensus": 172.38,
+   "iv_vs_consensus": -0.3086785009861933,
+   "spot": 138.72,
+   "iv_vs_spot": -0.14093137254901955,
+   "consensus_spread": 0.2426,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.23494604942568742,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.285953869762984,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $95.80 vs price $134.16 on 2024-12-31 = 29% gap; 12m later the market was closer (37% vs 11%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "01364.HK": {
+   "seeded_sector": {
+    "label": "Restaurants",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 12.27,
+   "base": 19.98,
+   "bull": 31.25,
+   "scenarios_ordered": true,
+   "target_12m_base": 21.06,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 21.64,
+   "iv_vs_spot": -0.07670979667282807,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 invalid T-1 price",
+   "currency": "HKD",
+   "regime": null
+  },
+  "09658.HK": {
+   "seeded_sector": {
+    "label": "Restaurants",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 8.1,
+   "base": 14.2,
+   "bull": 26.83,
+   "scenarios_ordered": true,
+   "target_12m_base": 11.07,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 9.39,
+   "iv_vs_spot": 0.5122470713525025,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.12747866238485048,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $24.80 vs price $22.00 on 2024-12-31 = 13% gap; 12m later the market was closer (95% vs 73%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02282.HK": {
+   "seeded_sector": {
+    "label": "Gambling, Resorts & Casinos",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 6.92,
+   "base": 10.02,
+   "bull": 13.35,
+   "scenarios_ordered": true,
+   "target_12m_base": 9.75,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 9.6,
+   "iv_vs_spot": 0.043749999999999956,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 10.355221060377511,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $112.87 vs price $9.94 on 2024-12-31 = 1036% gap; 12m later the market was closer (761% vs 24%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "01128.HK": {
+   "seeded_sector": {
+    "label": "Gambling, Resorts & Casinos",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 1.57,
+   "base": 3.48,
+   "bull": 5.4,
+   "scenarios_ordered": true,
+   "target_12m_base": 4.56,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 5.14,
+   "iv_vs_spot": -0.32295719844357973,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.05634543455793623,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $5.69 vs price $5.39 on 2024-12-31 = 6% gap; 12m later the model was closer (4% vs 9%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "LVS": {
+   "seeded_sector": {
+    "label": "Gambling, Resorts & Casinos",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 27.81,
+   "base": 41.17,
+   "bull": 53.09,
+   "scenarios_ordered": true,
+   "target_12m_base": 39.75,
+   "consensus": 59.78,
+   "iv_vs_consensus": -0.3113081298093008,
+   "spot": 38.99,
+   "iv_vs_spot": 0.05591177224929478,
+   "consensus_spread": 0.5332,
+   "regime_flag": "Growth_Inflection_Speculative",
+   "pt_vs_consensus": -0.335061893609903,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.35952799125031687,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $32.89 vs price $51.36 on 2024-12-31 = 36% gap; 12m later the market was closer (49% vs 21%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "MGM": {
+   "seeded_sector": {
+    "label": "Gambling, Resorts & Casinos",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.666667
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.333333
+    }
+   ],
+   "proxied_weight": 0.3333,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.4,
+     "reason": "non_positive"
+    },
+    {
+     "method": "DCF (FCF+)",
+     "weight": 0.3,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.3,
+   "methods_unavailable": [],
+   "bear": null,
+   "base": null,
+   "bull": null,
+   "scenarios_ordered": null,
+   "target_12m_base": null,
+   "consensus": 48.61,
+   "iv_vs_consensus": null,
+   "spot": null,
+   "iv_vs_spot": null,
+   "consensus_spread": 0.492,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": false,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.3671937798632854,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $82.02 vs price $34.65 on 2024-12-31 = 137% gap; 12m later the market was closer (125% vs 5%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "09992.HK": {
+   "seeded_sector": {
+    "label": "Leisure",
+    "sector": "Consumer"
+   },
+   "profile": "Consumer Growth",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.25
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 55.36,
+   "base": 100.58,
+   "bull": 323.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 134.07,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 152.1,
+   "iv_vs_spot": -0.338724523339908,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 3.426489502889482,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $396.83 vs price $89.65 on 2024-12-31 = 343% gap; 12m later the market was closer (111% vs 52%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02331.HK": {
+   "seeded_sector": {
+    "label": "Leisure",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 22.25,
+   "base": 30.62,
+   "bull": 42.55,
+   "scenarios_ordered": true,
+   "target_12m_base": 21.43,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 12.24,
+   "iv_vs_spot": 1.5016339869281046,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.2910899994541387,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $37.71 vs price $16.46 on 2024-12-31 = 129% gap; 12m later the market was closer (102% vs 12%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "AS": {
+   "seeded_sector": {
+    "label": "Leisure",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 13.62,
+   "base": 18.32,
+   "bull": 23.01,
+   "scenarios_ordered": true,
+   "target_12m_base": 23.05,
+   "consensus": 44.22,
+   "iv_vs_consensus": -0.5857078245137947,
+   "spot": 27.77,
+   "iv_vs_spot": -0.3402952826791501,
+   "consensus_spread": 0.5924,
+   "regime_flag": "Growth_Inflection_Speculative",
+   "pt_vs_consensus": -0.4787426503844414,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6423614174732258,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $10.00 vs price $27.96 on 2024-12-31 = 64% gap; 12m later the market was closer (73% vs 25%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HAS": {
+   "seeded_sector": {
+    "label": "Leisure",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 1.0
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E (Premium)",
+     "weight": 0.5,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "EV/EBIT",
+     "weight": 0.25,
+     "reason": "non_positive"
+    },
+    {
+     "method": "Brand Val",
+     "weight": 0.05,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.2,
+   "methods_unavailable": [
+    "P/E (Premium)",
+    "Brand Val"
+   ],
+   "bear": null,
+   "base": null,
+   "bull": null,
+   "scenarios_ordered": null,
+   "target_12m_base": null,
+   "consensus": 107.6,
+   "iv_vs_consensus": null,
+   "spot": null,
+   "iv_vs_spot": null,
+   "consensus_spread": 0.2215,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": false,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.08805945852990764,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $51.71 vs price $56.70 on 2024-12-27 = 9% gap; 12m later the market was closer (38% vs 32%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "01929.HK": {
+   "seeded_sector": {
+    "label": "Luxury Goods",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 6.98,
+   "base": 10.78,
+   "bull": 15.33,
+   "scenarios_ordered": true,
+   "target_12m_base": 10.9,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 10.97,
+   "iv_vs_spot": -0.017319963536919003,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.14461516306642785,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $7.54 vs price $8.81 on 2025-03-31 = 14% gap; 12m later the market was closer (31% vs 19%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "01913.HK": {
+   "seeded_sector": {
+    "label": "Luxury Goods",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 24.8,
+   "base": 38.23,
+   "bull": 58.76,
+   "scenarios_ordered": true,
+   "target_12m_base": 38.52,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 38.68,
+   "iv_vs_spot": -0.011633919338159382,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.14300969424527063,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $68.75 vs price $60.15 on 2024-12-31 = 14% gap; 12m later the market was closer (53% vs 34%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "06181.HK": {
+   "seeded_sector": {
+    "label": "Luxury Goods",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.444444
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.277778
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.166667
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.111111
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "FCF Yield",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "FCF Yield"
+   ],
+   "bear": 187.54,
+   "base": 257.36,
+   "bull": 343.89,
+   "scenarios_ordered": true,
+   "target_12m_base": 311.21,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 340.2,
+   "iv_vs_spot": -0.24350382128159898,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6311053731347355,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $88.98 vs price $241.20 on 2024-12-31 = 63% gap; 12m later the market was closer (86% vs 61%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "TPR": {
+   "seeded_sector": {
+    "label": "Luxury Goods",
+    "sector": "Consumer"
+   },
+   "profile": "Luxury Goods",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (Premium)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (Premium)",
+     "value_key": "P/E (Premium)",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/EBIT",
+     "value_key": "EV/EBIT",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF (LTG)",
+     "value_key": "DCF (LTG)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "P/E",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0.05,
+   "proxied_legs": [
+    "Brand Val <- P/E"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 107.36,
+   "base": 148.99,
+   "bull": 197.54,
+   "scenarios_ordered": true,
+   "target_12m_base": 126.17,
+   "consensus": 174.64,
+   "iv_vs_consensus": -0.1468735684837379,
+   "spot": 113.88,
+   "iv_vs_spot": 0.3083069898138393,
+   "consensus_spread": 0.5335,
+   "regime_flag": "Growth_Inflection_Speculative",
+   "pt_vs_consensus": -0.27754237288135586,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.7563392224147903,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $21.23 vs price $87.11 on 2025-06-27 = 76% gap; 12m later the market was closer (85% vs 40%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "SIG": {
+   "seeded_sector": {
+    "label": "Luxury Goods",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 139.34,
+   "base": 175.77,
+   "bull": 214.73,
+   "scenarios_ordered": true,
+   "target_12m_base": 138.98,
+   "consensus": 121.83,
+   "iv_vs_consensus": 0.4427480916030535,
+   "spot": 102.195,
+   "iv_vs_spot": 0.7199471598414797,
+   "consensus_spread": 0.1921,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.14076992530575394,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.8220150024185635,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $167.15 vs price $59.23 on 2025-01-31 = 182% gap; 12m later the market was closer (81% vs 36%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "AGS.SI": {
+   "seeded_sector": null,
+   "profile": "Agribusiness & Food (SG)",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.45
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.35
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 3.24,
+   "base": 3.93,
+   "bull": 5.05,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.35,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 2.78,
+   "iv_vs_spot": 0.41366906474820153,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.325616776967213,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $3.63 vs price $1.56 on 2025-03-28 = 133% gap; 12m later the market was closer (58% vs 32%)",
+   "currency": "SGD",
+   "regime": null
+  },
+  "00069.HK": {
+   "seeded_sector": {
+    "label": "Travel Lodging",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.3
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.4,
+     "reason": "non_positive"
+    },
+    {
+     "method": "ROIC vs WACC",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.5,
+   "methods_unavailable": [],
+   "bear": 1.96,
+   "base": 3.82,
+   "bull": 5.68,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.79,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 3.78,
+   "iv_vs_spot": 0.010582010582010692,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.10314383568734097,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $5.85 vs price $5.30 on 2024-12-31 = 10% gap; 12m later the market was closer (23% vs 12%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00045.HK": {
+   "seeded_sector": {
+    "label": "Travel Lodging",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.571429
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.428571
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.2,
+     "reason": "non_positive"
+    },
+    {
+     "method": "ROIC",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [],
+   "bear": 3.06,
+   "base": 3.06,
+   "bull": 4.29,
+   "scenarios_ordered": true,
+   "target_12m_base": 4.28,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 5.49,
+   "iv_vs_spot": -0.4426229508196722,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 33.61004909325445,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $215.27 vs price $6.22 on 2024-12-31 = 3361% gap; 12m later the market was closer (3543% vs 5%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "MAR": {
+   "seeded_sector": {
+    "label": "Travel Lodging",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 133.36,
+   "base": 200.28,
+   "bull": 287.4,
+   "scenarios_ordered": true,
+   "target_12m_base": 276.15,
+   "consensus": 386.71,
+   "iv_vs_consensus": -0.48209252411367687,
+   "spot": 352.03,
+   "iv_vs_spot": -0.43107121552140437,
+   "consensus_spread": 0.0985,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.2858989940782499,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.19423556225358246,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $333.12 vs price $278.94 on 2024-12-31 = 19% gap; 12m later model and market were level (7% vs 10%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HLT": {
+   "seeded_sector": {
+    "label": "Travel Lodging",
+    "sector": "Consumer"
+   },
+   "profile": "Consumer Growth",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.5
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.3125
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.1875
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "P/E",
+     "weight": 0.2,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.8,
+   "methods_unavailable": [
+    "P/E"
+   ],
+   "bear": 74.44,
+   "base": 163.64,
+   "bull": 516.23,
+   "scenarios_ordered": true,
+   "target_12m_base": 261.35,
+   "consensus": 348.11,
+   "iv_vs_consensus": -0.529918703857976,
+   "spot": 313.96,
+   "iv_vs_spot": -0.47878710663778823,
+   "consensus_spread": 0.1088,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.24923156473528474,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6545102348888971,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $408.93 vs price $247.16 on 2024-12-31 = 65% gap; 12m later the market was closer (42% vs 14%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "OU8.SI": {
+   "seeded_sector": {
+    "label": "Travel Lodging",
+    "sector": "Consumer"
+   },
+   "profile": "Consumer Growth",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.533333
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.266667
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/Revenue",
+     "weight": 0.25,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.75,
+   "methods_unavailable": [],
+   "bear": 9.2,
+   "base": 13.52,
+   "bull": 20.37,
+   "scenarios_ordered": true,
+   "target_12m_base": 7.5,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 1.48,
+   "iv_vs_spot": 8.135135135135135,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 8.738184985210248,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $9.35 vs price $0.96 on 2024-12-31 = 874% gap; 12m later the market was closer (598% vs 28%)",
+   "currency": "SGD",
+   "regime": null
+  },
+  "RCL": {
+   "seeded_sector": {
+    "label": "Travel Services",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 122.26,
+   "base": 181.48,
+   "bull": 240.69,
+   "scenarios_ordered": true,
+   "target_12m_base": 212.09,
+   "consensus": 348.18,
+   "iv_vs_consensus": -0.4787753460853582,
+   "spot": 242.7,
+   "iv_vs_spot": -0.2522455706633704,
+   "consensus_spread": 0.4346,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.39086104888276174,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3012683377150595,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $161.19 vs price $230.69 on 2024-12-31 = 30% gap; 12m later the market was closer (42% vs 17%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "VIK": {
+   "seeded_sector": {
+    "label": "Travel Services",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 26.23,
+   "base": 36.06,
+   "bull": 45.9,
+   "scenarios_ordered": true,
+   "target_12m_base": 58.18,
+   "consensus": 106.5,
+   "iv_vs_consensus": -0.6614084507042253,
+   "spot": 80.3,
+   "iv_vs_spot": -0.5509339975093399,
+   "consensus_spread": 0.3263,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.4537089201877934,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5831535152510863,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $18.37 vs price $44.06 on 2024-12-31 = 58% gap; 12m later the market was closer (74% vs 38%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00300.HK": {
+   "seeded_sector": {
+    "label": "Furnishings, Fixtures & Appliances",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 47.82,
+   "base": 97.8,
+   "bull": 144.4,
+   "scenarios_ordered": true,
+   "target_12m_base": 96.21,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 95.35,
+   "iv_vs_spot": 0.025694808599895147,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6534040027153921,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $124.91 vs price $75.55 on 2024-12-31 = 65% gap; 12m later the market was closer (47% vs 11%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "01999.HK": {
+   "seeded_sector": {
+    "label": "Furnishings, Fixtures & Appliances",
+    "sector": "Consumer"
+   },
+   "profile": "Household / Personal",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "Forward P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.3
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC",
+     "value_key": "ROIC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 3.29,
+   "base": 4.54,
+   "bull": 6.35,
+   "scenarios_ordered": true,
+   "target_12m_base": 3.59,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 2.65,
+   "iv_vs_spot": 0.7132075471698114,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3078675438903634,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $5.87 vs price $4.49 on 2025-03-31 = 31% gap; 12m later the market was closer (36% vs 4%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "SN": {
+   "seeded_sector": {
+    "label": "Furnishings, Fixtures & Appliances",
+    "sector": "Consumer"
+   },
+   "profile": "Traditional Retail",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.25
+    },
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.15
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 51.49,
+   "base": 68.86,
+   "bull": 90.95,
+   "scenarios_ordered": true,
+   "target_12m_base": 123.3,
+   "consensus": 202.18,
+   "iv_vs_consensus": -0.6594124047878129,
+   "spot": 177.74,
+   "iv_vs_spot": -0.6125801732868235,
+   "consensus_spread": 0.1375,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.39014739341181126,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.5373066692766089,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $45.05 vs price $97.36 on 2024-12-31 = 54% gap; 12m later the market was closer (60% vs 13%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "SGI": {
+   "seeded_sector": {
+    "label": "Furnishings, Fixtures & Appliances",
+    "sector": "Consumer"
+   },
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 28.92,
+   "base": 46.67,
+   "bull": 80.82,
+   "scenarios_ordered": true,
+   "target_12m_base": 57.9,
+   "consensus": 94.5,
+   "iv_vs_consensus": -0.5061375661375661,
+   "spot": 63.95,
+   "iv_vs_spot": -0.27021110242376856,
+   "consensus_spread": 0.4777,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.38730158730158737,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.78450903153977,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $12.22 vs price $56.69 on 2024-12-31 = 78% gap; 12m later the market was closer (86% vs 37%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "01276.HK": {
+   "seeded_sector": {
+    "label": "Drug Manufacturers - Specialty & Generic",
+    "sector": "Biopharma"
+   },
+   "profile": "CDMO / Life Science Tools",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 30.88,
+   "base": 43.27,
+   "bull": 58.59,
+   "scenarios_ordered": true,
+   "target_12m_base": 44.51,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 45.18,
+   "iv_vs_spot": -0.04227534307215575,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 invalid T-1 price",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00867.HK": {
+   "seeded_sector": {
+    "label": "Drug Manufacturers - Specialty & Generic",
+    "sector": "Biopharma"
+   },
+   "profile": "CDMO / Life Science Tools",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 10.51,
+   "base": 14.21,
+   "bull": 18.09,
+   "scenarios_ordered": true,
+   "target_12m_base": 12.3,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 10.4,
+   "iv_vs_spot": 0.3663461538461539,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.2303514370867645,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $16.84 vs price $7.55 on 2024-12-31 = 123% gap; 12m later the model was closer (31% vs 41%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "TAK": {
+   "seeded_sector": {
+    "label": "Drug Manufacturers - Specialty & Generic",
+    "sector": "Biopharma"
+   },
+   "profile": "Large Cap Pharma",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.8
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "DCF",
+     "weight": 0.2,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.5,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 12.56,
+   "base": 17.34,
+   "bull": 22.11,
+   "scenarios_ordered": true,
+   "target_12m_base": 18.33,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 18.86,
+   "iv_vs_spot": -0.08059384941675507,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.06060180040960462,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $13.97 vs price $14.87 on 2025-03-31 = 6% gap; 12m later model and market were level (25% vs 20%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "TEVA": {
+   "seeded_sector": {
+    "label": "Drug Manufacturers - Specialty & Generic",
+    "sector": "Biopharma"
+   },
+   "profile": "Large Cap Pharma",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.8
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "DCF",
+     "weight": 0.2,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.5,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 28.46,
+   "base": 38.71,
+   "bull": 48.95,
+   "scenarios_ordered": true,
+   "target_12m_base": 39.02,
+   "consensus": 45.8,
+   "iv_vs_consensus": -0.15480349344978162,
+   "spot": 39.19,
+   "iv_vs_spot": -0.012248022454707796,
+   "consensus_spread": 0.1687,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.14803493449781646,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.8491070278538659,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $40.75 vs price $22.04 on 2024-12-31 = 85% gap; 12m later model and market were level (31% vs 29%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "HLN": {
+   "seeded_sector": {
+    "label": "Drug Manufacturers - Specialty & Generic",
+    "sector": "Biopharma"
+   },
+   "profile": "CDMO / Life Science Tools",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 8.38,
+   "base": 12.04,
+   "bull": 16.0,
+   "scenarios_ordered": true,
+   "target_12m_base": 10.23,
+   "consensus": 10.2,
+   "iv_vs_consensus": 0.18039215686274512,
+   "spot": 9.26,
+   "iv_vs_spot": 0.30021598272138217,
+   "consensus_spread": 0.1015,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.002941176470588447,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.12909944052747194,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $10.77 vs price $9.54 on 2024-12-31 = 13% gap; 12m later model and market were level (7% vs 6%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "06618.HK": {
+   "seeded_sector": {
+    "label": "Medical - Pharmaceuticals",
+    "sector": "Biopharma"
+   },
+   "profile": "Large Cap Pharma",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.571429
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.285714
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.142857
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 24.41,
+   "base": 33.88,
+   "bull": 45.05,
+   "scenarios_ordered": true,
+   "target_12m_base": 34.66,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 35.08,
+   "iv_vs_spot": -0.03420752565564411,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3158134127815879,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $36.97 vs price $28.10 on 2024-12-31 = 32% gap; 12m later the model was closer (33% vs 49%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "00874.HK": {
+   "seeded_sector": {
+    "label": "Medical - Pharmaceuticals",
+    "sector": "Biopharma"
+   },
+   "profile": "Large Cap Pharma",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.571429
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.285714
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.142857
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 25.81,
+   "base": 37.74,
+   "bull": 52.87,
+   "scenarios_ordered": true,
+   "target_12m_base": 25.37,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 12.99,
+   "iv_vs_spot": 1.9053117782909932,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.0995764372441443,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $38.21 vs price $18.20 on 2024-12-31 = 110% gap; 12m later the market was closer (116% vs 3%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "RPRX": {
+   "seeded_sector": {
+    "label": "Medical - Pharmaceuticals",
+    "sector": "Biopharma"
+   },
+   "profile": "CDMO / Life Science Tools",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.35
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.25
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 43.92,
+   "base": 64.52,
+   "bull": 86.65,
+   "scenarios_ordered": true,
+   "target_12m_base": 60.42,
+   "consensus": 62.67,
+   "iv_vs_consensus": 0.02951970639859569,
+   "spot": 58.21,
+   "iv_vs_spot": 0.10840061845043802,
+   "consensus_spread": 0.0766,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.03590234561991379,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.9438475321012604,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $49.59 vs price $25.51 on 2024-12-31 = 94% gap; 12m later the model was closer (28% vs 34%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CORT": {
+   "seeded_sector": {
+    "label": "Medical - Pharmaceuticals",
+    "sector": "Biopharma"
+   },
+   "profile": "MedTech / Devices",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/Revenue",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/Revenue",
+     "value_key": "EV/Revenue",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (5-yr)",
+     "value_key": "DCF (5-yr)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "ROIC vs WACC",
+     "value_key": "ROIC vs WACC",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 68.71,
+   "base": 95.61,
+   "bull": 125.82,
+   "scenarios_ordered": true,
+   "target_12m_base": 108.93,
+   "consensus": 125.33,
+   "iv_vs_consensus": -0.23713396632889172,
+   "spot": 116.1,
+   "iv_vs_spot": -0.17648578811369509,
+   "consensus_spread": 0.0795,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.1308545440038298,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.45428410682518616,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $73.28 vs price $50.39 on 2024-12-31 = 45% gap; 12m later the market was closer (111% vs 45%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00003.HK": {
+   "seeded_sector": {
+    "label": "Regulated Gas",
+    "sector": "Energy"
+   },
+   "profile": "Regulated Utility",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/Rate Base",
+     "value_key": "P/BV",
+     "weight": 0.388889
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.333333
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.277778
+    }
+   ],
+   "proxied_weight": 0.3889,
+   "proxied_legs": [
+    "P/Rate Base <- P/BV"
+   ],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.1,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [],
+   "bear": 3.14,
+   "base": 3.74,
+   "bull": 5.76,
+   "scenarios_ordered": true,
+   "target_12m_base": 5.41,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 7.08,
+   "iv_vs_spot": -0.47175141242937846,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.499191393465601,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $3.11 vs price $6.21 on 2024-12-31 = 50% gap; 12m later the market was closer (56% vs 11%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02688.HK": {
+   "seeded_sector": {
+    "label": "Regulated Gas",
+    "sector": "Energy"
+   },
+   "profile": "Merchant Power",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.45
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.25
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.15
+    },
+    {
+     "method": "Power Price DCF",
+     "value_key": "Power Price DCF",
+     "weight": 0.15
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 54.94,
+   "base": 82.66,
+   "bull": 122.11,
+   "scenarios_ordered": true,
+   "target_12m_base": 65.71,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 48.76,
+   "iv_vs_spot": 0.6952420016406891,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.46603287739638954,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $81.88 vs price $55.85 on 2024-12-31 = 47% gap; 12m later model and market were level (18% vs 19%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "ATO": {
+   "seeded_sector": {
+    "label": "Regulated Gas",
+    "sector": "Energy"
+   },
+   "profile": "Merchant Power",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.6
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.2
+    },
+    {
+     "method": "Power Price DCF",
+     "value_key": "Power Price DCF",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "FCF Yield",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.75,
+   "methods_unavailable": [
+    "FCF Yield"
+   ],
+   "bear": 70.64,
+   "base": 104.91,
+   "bull": 155.68,
+   "scenarios_ordered": true,
+   "target_12m_base": 131.06,
+   "consensus": 185.0,
+   "iv_vs_consensus": -0.432918918918919,
+   "spot": 157.21,
+   "iv_vs_spot": -0.33267603841994786,
+   "consensus_spread": 0.1768,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.2915675675675675,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.2751546284236139,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $100.54 vs price $138.71 on 2024-09-30 = 28% gap; 12m later the market was closer (41% vs 19%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "NI": {
+   "seeded_sector": {
+    "label": "Regulated Gas",
+    "sector": "Energy"
+   },
+   "profile": "Regulated Utility",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/Rate Base",
+     "value_key": "P/BV",
+     "weight": 0.388889
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.333333
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.277778
+    }
+   ],
+   "proxied_weight": 0.3889,
+   "proxied_legs": [
+    "P/Rate Base <- P/BV"
+   ],
+   "dropped_legs": [
+    {
+     "method": "DCF",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "DCF"
+   ],
+   "bear": 24.09,
+   "base": 30.69,
+   "bull": 40.54,
+   "scenarios_ordered": true,
+   "target_12m_base": 36.36,
+   "consensus": 50.71,
+   "iv_vs_consensus": -0.3947939262472885,
+   "spot": 39.415,
+   "iv_vs_spot": -0.22136242547253582,
+   "consensus_spread": 0.2866,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.28298166042200756,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.18484856918667553,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $29.96 vs price $36.76 on 2024-12-31 = 18% gap; 12m later the market was closer (28% vs 12%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "00916.HK": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "Regulated Utility",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/Rate Base",
+     "value_key": "P/BV",
+     "weight": 0.35
+    },
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.3
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.25
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.35,
+   "proxied_legs": [
+    "P/Rate Base <- P/BV"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 5.5,
+   "base": 7.71,
+   "bull": 12.37,
+   "scenarios_ordered": true,
+   "target_12m_base": 6.44,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 5.16,
+   "iv_vs_spot": 0.4941860465116279,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.600379797845627,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $10.31 vs price $6.44 on 2024-12-31 = 60% gap; 12m later the market was closer (55% vs 3%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "03868.HK": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "Merchant Power",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.529412
+    },
+    {
+     "method": "FCF Yield",
+     "value_key": "FCF Yield",
+     "weight": 0.294118
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.176471
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "Power Price DCF",
+     "weight": 0.15,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.85,
+   "methods_unavailable": [],
+   "bear": 1.59,
+   "base": 2.25,
+   "bull": 2.92,
+   "scenarios_ordered": true,
+   "target_12m_base": 1.52,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 0.785,
+   "iv_vs_spot": 1.8662420382165603,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.6223908810220853,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $2.86 vs price $0.79 on 2024-12-31 = 262% gap; 12m later the market was closer (160% vs 28%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "ENLT": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "Merchant Power",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.6
+    },
+    {
+     "method": "Forward P/E",
+     "value_key": "Forward P/E",
+     "weight": 0.2
+    },
+    {
+     "method": "Power Price DCF",
+     "value_key": "Power Price DCF",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "FCF Yield",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.75,
+   "methods_unavailable": [
+    "FCF Yield"
+   ],
+   "bear": 16.1,
+   "base": 45.72,
+   "bull": 58.36,
+   "scenarios_ordered": true,
+   "target_12m_base": 57.59,
+   "consensus": 93.75,
+   "iv_vs_consensus": -0.51232,
+   "spot": 69.47,
+   "iv_vs_spot": -0.3418741902979704,
+   "consensus_spread": 0.3495,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.38570666666666664,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6788655117483436,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $5.54 vs price $17.25 on 2024-12-31 = 68% gap; 12m later the market was closer (88% vs 62%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BEPI": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "Merchant Power",
+   "routing_winner": "ladder",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 1.0
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "FCF Yield",
+     "weight": 0.25,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "Forward P/E",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "Power Price DCF",
+     "weight": 0.15,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.45,
+   "methods_unavailable": [
+    "FCF Yield",
+    "Forward P/E",
+    "Power Price DCF"
+   ],
+   "bear": -103.25,
+   "base": 13.04,
+   "bull": 42.11,
+   "scenarios_ordered": true,
+   "target_12m_base": 15.09,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 16.19,
+   "iv_vs_spot": -0.19456454601605944,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 T-1 model returned non-positive IV",
+   "currency": "USD",
+   "regime": null
+  },
+  "LULU": {
+   "seeded_sector": null,
+   "profile": "Apparel / Athletic Wear",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "EV/EBITDA",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.4
+    },
+    {
+     "method": "DCF (FCF+)",
+     "value_key": "DCF (FCF+)",
+     "weight": 0.3
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "Brand Val",
+     "value_key": "EV/Revenue",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0.1,
+   "proxied_legs": [
+    "Brand Val <- EV/Revenue"
+   ],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 141.91,
+   "base": 197.46,
+   "bull": 304.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 149.38,
+   "consensus": 97.67,
+   "iv_vs_consensus": 1.0217057438312684,
+   "spot": 101.3,
+   "iv_vs_spot": 0.9492596248766043,
+   "consensus_spread": -0.0358,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.5294358554315552,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1787889279620815,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $488.25 vs price $414.20 on 2025-01-31 = 18% gap; 12m later the market was closer (173% vs 131%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ZTS": {
+   "seeded_sector": null,
+   "profile": "Large Cap Pharma",
+   "routing_winner": "router",
+   "industry_routing": false,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E",
+     "value_key": "P/E",
+     "weight": 0.571429
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.285714
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.142857
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "rNPV (Pipeline)",
+     "weight": 0.3,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.7,
+   "methods_unavailable": [
+    "rNPV (Pipeline)"
+   ],
+   "bear": 104.77,
+   "base": 137.65,
+   "bull": 172.53,
+   "scenarios_ordered": true,
+   "target_12m_base": 104.35,
+   "consensus": 87.33,
+   "iv_vs_consensus": 0.5762051986717052,
+   "spot": 71.05,
+   "iv_vs_spot": 0.9373680506685433,
+   "consensus_spread": 0.2291,
+   "regime_flag": null,
+   "pt_vs_consensus": 0.19489293484484138,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.1347043338472896,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $140.98 vs price $162.93 on 2024-12-31 = 13% gap; 12m later the model was closer (12% vs 29%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}
