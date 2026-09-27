@@ -60,6 +60,7 @@ import { ExportFab } from '@/components/report/ExportFab';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
+import { blendLeg, legWeight, SOTP_ANALYST_LEGS, SOTP_SEGMENT_LEGS } from '@/lib/blendLegs';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
@@ -650,13 +651,18 @@ function ValuationBody({
           Present only when the SOTP extractor produced assumptions for this
           ticker (dcf_range[ticker].sotp_breakdown). Stacks below whichever
           sector branch rendered above; the DCF methodology panel follows. ── */}
-      {dcfRange?.sotp_breakdown && <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />}
-      {dcfRange?.segment_sotp && <SegmentSotpPanel sotp={dcfRange.segment_sotp} />}
+      {/* Owner, 2026-09-27 (MOH): only a SOTP leg that carries weight is shown. */}
+      {(() => { const _l = blendLeg(dcfRange, SOTP_ANALYST_LEGS); return _l && dcfRange?.sotp_breakdown ? (
+        <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} weight={legWeight(dcfRange, _l)} />
+      ) : null; })()}
+      {(() => { const _l = blendLeg(dcfRange, SOTP_SEGMENT_LEGS); return _l && dcfRange?.segment_sotp ? (
+        <SegmentSotpPanel sotp={dcfRange.segment_sotp} weight={legWeight(dcfRange, _l)} />
+      ) : null; })()}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
       {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
-      {sectorCard && <SectorValuationCard payload={sectorCard} />}
+      {sectorCard && <SectorValuationCard payload={sectorCard} dcfRange={dcfRange} />}
 
       {isRunning && !haveAny && (
         <p className="text-center text-[11px] text-muted-foreground/70 pt-2">

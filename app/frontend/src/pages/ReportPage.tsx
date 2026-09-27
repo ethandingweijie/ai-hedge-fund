@@ -44,6 +44,7 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
+import { blendLeg, legWeight, SOTP_ANALYST_LEGS, SOTP_SEGMENT_LEGS } from '@/lib/blendLegs';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
@@ -1399,12 +1400,13 @@ export function ReportPage() {
                 breakdown, NAV bridge, multiple basis, scenario TPs. Stacks
                 below whichever valuation branch rendered above, mirroring
                 V2ReportView; the DCF methodology panel follows. */}
-            {dcfRange?.sotp_breakdown && (
-              <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
-            )}
-            {dcfRange?.segment_sotp && (
-              <SegmentSotpPanel sotp={dcfRange.segment_sotp} />
-            )}
+            {/* Owner, 2026-09-27 (MOH): only a SOTP leg that carries weight is shown. */}
+            {(() => { const _l = blendLeg(dcfRange, SOTP_ANALYST_LEGS); return _l && dcfRange?.sotp_breakdown ? (
+              <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} weight={legWeight(dcfRange, _l)} />
+            ) : null; })()}
+            {(() => { const _l = blendLeg(dcfRange, SOTP_SEGMENT_LEGS); return _l && dcfRange?.segment_sotp ? (
+              <SegmentSotpPanel sotp={dcfRange.segment_sotp} weight={legWeight(dcfRange, _l)} />
+            ) : null; })()}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards
@@ -1417,7 +1419,8 @@ export function ReportPage() {
                 Financials card had to be mounted around. */}
             {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[liveTicker]
               && <SectorValuationCard
-                   payload={(data.sector_card as Record<string, SectorCardPayload>)[liveTicker]} />}
+                   payload={(data.sector_card as Record<string, SectorCardPayload>)[liveTicker]}
+                   dcfRange={dcfRange} />}
           </div>
           <div className="flex flex-col gap-2">
             {renderSection('power_law', 'Power Law', (

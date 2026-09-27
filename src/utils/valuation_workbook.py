@@ -232,6 +232,27 @@ class _Book:
     def scen(self, s: str) -> dict:
         return self.dr.get(s) or {}
 
+    def in_blend(self, leg: str) -> bool:
+        """True when the leg carries weight in any scenario (owner, 2026-09-27: the workbook rebuilds
+        the valuation that was computed; a leg computed only for display is not rebuilt or listed).
+        A run with no weight record at all keeps every leg, as before."""
+        blend = getattr(self, "_blend", None)
+        if blend is None:
+            blend = set()
+            seen = False
+            for sc in SCENARIOS:
+                d = self.scen(sc)
+                eff = d.get("effective_weights") or []
+                if eff:
+                    seen = True
+                    blend |= {(e.get("value_key") or e.get("method")) for e in eff if (e.get("weight") or 0) > 0}
+                elif d.get("methods_used"):
+                    seen = True
+                    blend |= set(d.get("methods_used") or [])
+            self._blend = blend if seen else None
+            blend = self._blend
+        return True if blend is None else leg in blend
+
     def sheet(self, name: str, desc: str) -> _Sheet:
         self.tabs.append((name, desc))
         return _Sheet(self.wb.create_sheet(name))
@@ -1009,6 +1030,8 @@ class _Book:
             legs = self.scen(s).get("leg_inputs") or {}
             table = self.scen(s).get("method_iv_table") or {}
             for leg in (list(legs) or list(table)):
+                if not self.in_blend(leg):
+                    continue
                 tr = legs.get(leg) or {}
                 kind = tr.get("kind")
                 if kind in ("dcf", "ggm", "sotp"):
@@ -1172,7 +1195,7 @@ class _Book:
         r = 4
         for s in SCENARIOS:
             for name, tr in (self.scen(s).get("leg_inputs") or {}).items():
-                if tr.get("kind") != "sotp":
+                if tr.get("kind") != "sotp" or not self.in_blend(name):
                     continue
                 t = tr.get("table") or {}
                 sh.section(r, f"{s.upper()} — {name} ({tr.get('source')})", 9); r += 1

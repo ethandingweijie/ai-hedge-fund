@@ -30,6 +30,7 @@
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DcfRange, ReitBreakdown } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
+import { blendLeg, legValue, legWeight, NAV_DISPLAY_LEGS } from '@/lib/blendLegs';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -57,17 +58,25 @@ const PIE_COLORS_BLUE = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
 
 // ── 1. NAV per share hero — mirrors "12-Month Price Target" card ────────
 
-function NAVHeroCard({ rb, price, sym }: {
+// Owner, 2026-09-27 (MOH): the headline is the NAV leg the blend used, at its own value and
+// weight -- or no headline at all. It used to print its own EBITDA / cap-rate NAV, which no leg
+// priced. `aligned` marks runs whose NOI / cap rate / GAV were re-read from that leg's trace;
+// an archived run keeps the leg's value but not the display-only bridge.
+function NAVHeroCard({ rb, price, sym, navLeg, navPs, weight }: {
   rb: ReitBreakdown; price: number | undefined; sym: string;
+  navLeg: string; navPs: number; weight: number | null;
 }) {
-  const navPs = rb.nav_per_share;
-  const upside = (navPs && price) ? (navPs - price) / price : null;
-  const gav = rb.gross_asset_value ?? (rb.noi && rb.cap_rate_used ? rb.noi / rb.cap_rate_used : null);
+  const aligned = rb.nav_method != null;
+  const upside = price ? (navPs - price) / price : null;
+  const gav = aligned ? rb.gross_asset_value : null;
   const shares = rb.shares;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 text-center">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>Net Asset Value / Share</p>
+      <p className="text-xs text-muted-foreground -mt-2 mb-2">
+        {navLeg}{weight != null && weight > 0 ? ` · ${(weight * 100).toFixed(0)}% of the valuation` : ''}
+      </p>
       <p className="text-5xl font-bold tabular-nums text-foreground">
         {fmtMoney(navPs, sym)}
       </p>
@@ -107,8 +116,8 @@ function NAVHeroCard({ rb, price, sym }: {
         </div>
       </div>
 
-      {/* Derivation formula footer */}
-      {shares && shares > 0 && (
+      {/* Derivation formula footer -- only where the bridge is the leg's own */}
+      {aligned && navLeg === 'NAV (Cap Rates)' && shares && shares > 0 && (
         <p className="text-[11px] text-muted-foreground mt-4 font-mono">
           NAV = NOI / cap − debt + cash ÷ {(shares / 1e6).toFixed(1)}M sh
         </p>
@@ -360,6 +369,8 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
 function CapRateScenarios({ rb, sym, price }: {
   rb: ReitBreakdown; sym: string; price: number | undefined;
 }) {
+  // A sensitivity of the NAV leg the blend used (its NOI and cap rate), never of a display NAV.
+  if (rb.nav_method !== 'NAV (Cap Rates)') return null;
   if (!rb.noi || !rb.cap_rate_used || !rb.shares) return null;
   const baseCap = rb.cap_rate_used;
   const debt = rb.total_debt ?? 0;
@@ -469,10 +480,15 @@ export function REITValuationPanel({ dcfRange, currentPrice, ticker }: REITValua
   const rb = dcfRange?.reit_breakdown;
   const sym = currencySymbol(ticker);
   if (!dcfRange || !rb) return null;
+  const navLeg = blendLeg(dcfRange, NAV_DISPLAY_LEGS);
+  const navPs = navLeg ? (legValue(dcfRange, 'base', navLeg) ?? (rb.nav_method ? rb.nav_per_share ?? null : null)) : null;
 
   return (
     <div className="flex flex-col gap-4">
-      <NAVHeroCard rb={rb} price={currentPrice} sym={sym} />
+      {navLeg && navPs != null && (
+        <NAVHeroCard rb={rb} price={currentPrice} sym={sym}
+                     navLeg={navLeg} navPs={navPs} weight={legWeight(dcfRange, navLeg)} />
+      )}
       <REITKeyStats rb={rb} price={currentPrice} sym={sym} ticker={ticker} />
       {rb.npi_history && rb.npi_history.length > 0 && (
         <HistoryChart

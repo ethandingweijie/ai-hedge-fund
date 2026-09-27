@@ -1471,20 +1471,25 @@ def _section_2f(
     aw6 = [page_w * 0.25, page_w * 0.08, page_w * 0.17, page_w * 0.17, page_w * 0.17, page_w * 0.16]
     method_rows = [method_header]
 
-    # Legs computed but carrying no weight are cross-checks: listed after the
-    # blend under their own heading, never interleaved with the legs that vote.
-    _xchk = set(base.get("cross_check_methods") or [])
-    _in_blend = [mn for mn in all_method_names if mn not in _xchk]
-    _xchk_names = [mn for mn in all_method_names if mn in _xchk]
-    _ordered_names = _in_blend + ([None] if _xchk_names else []) + _xchk_names
+    # Owner, 2026-09-27 (MOH): only the legs that carry weight are listed, at the share of the
+    # blend they carried. Legs computed but not weighted (the former "cross-checks") are not
+    # printed: the report shows the valuation that was computed, nothing computed for display.
+    _eff_w: dict[str, float] = {}
+    for _e in base.get("effective_weights") or []:
+        _k = _e.get("value_key") or _e.get("method")
+        if _k:
+            _eff_w[_k] = _eff_w.get(_k, 0.0) + float(_e.get("weight") or 0.0)
+    _blend = _legs_in_blend({"bear": bear, "base": base, "bull": bull})
+    if _blend:
+        _ordered_names = [mn for mn in all_method_names if mn in _blend]
+    else:
+        _xchk = set(base.get("cross_check_methods") or [])
+        _ordered_names = [mn for mn in all_method_names if mn not in _xchk]
     for mn in _ordered_names:
-        if mn is None:
-            method_rows.append([
-                Paragraph("<i>Cross-checks (computed, not in the blend)</i>", styles["RptBody"]),
-                "", "", "", "", ""])
-            continue
-        w = _pw_map.get(mn) if mn not in _xchk else None
-        wt_str = (f"{w/total_weight:.0%}" if w else "—") if mn not in _xchk else "x-check"
+        w = _eff_w.get(mn)
+        if w is None and _pw_map.get(mn):
+            w = _pw_map[mn] / total_weight
+        wt_str = f"{w:.0%}" if w else "—"
         b_iv  = bear_method_ivs.get(mn)
         ba_iv = base_method_ivs.get(mn)
         bu_iv = bull_method_ivs.get(mn)
@@ -1995,6 +2000,43 @@ _SEG_TYPE_LABEL = {
 }
 
 
+_SOTP_ANALYST_LEGS = frozenset({"SOTP (analyst)", "Analyst SOTP"})
+_SOTP_SEGMENT_LEGS = frozenset({"SOTP (segments)", "Sum of Parts", "SOTP", "SOTP (Segments)"})
+
+
+def _legs_in_blend(dcf_t: dict) -> dict:
+    """Legs carrying weight in any scenario: value key -> largest weight (owner, 2026-09-27:
+    the report prints the valuation that was computed, never a leg computed only for display).
+    Read off the scenarios rather than a payload flag, so an archived run follows the same rule."""
+    out: dict = {}
+    for s in ("bear", "base", "bull"):
+        sc = (dcf_t or {}).get(s) or {}
+        eff = sc.get("effective_weights") or []
+        if eff:
+            for e in eff:
+                k = e.get("value_key") or e.get("method")
+                w = e.get("weight") or 0.0
+                if k and w > 0:
+                    out[k] = max(out.get(k, 0.0), float(w))
+        else:
+            for k in sc.get("methods_used") or []:
+                out.setdefault(k, 0.0)
+    return out
+
+
+def _sotp_analyst_declared(dcf_t: dict) -> bool:
+    pw = ((dcf_t or {}).get("base") or {}).get("profile_weights")
+    if not pw:
+        return True                                # no weight record (legacy payload): keep the block
+    return any(isinstance(m, dict) and m.get("name") in _SOTP_ANALYST_LEGS for m in pw)
+
+
+def _leg_carries_weight(dcf_t: dict, names: frozenset) -> bool:
+    """True when one of `names` carries weight, or when the payload records no weights at all."""
+    blend = _legs_in_blend(dcf_t)
+    return (not blend) or bool(set(blend) & names)
+
+
 def _degraded_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """Owner, 2026-09-26: a Degraded analyst SOTP prints its rows and the reason
     each segment could not price, and says plainly that no per-share value is
@@ -2002,7 +2044,7 @@ def _degraded_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     in a flag the PDF never printed."""
     d = dcf_t.get("sotp_analyst_degraded") or {}
     rows = d.get("rows") or []
-    if not rows:
+    if not rows or not _sotp_analyst_declared(dcf_t):
         return []
     st_l = ParagraphStyle("_dsl", fontName="Helvetica", fontSize=6.5, leading=8)
     st_lb = ParagraphStyle("_dslb", parent=st_l, fontName="Helvetica-Bold")
@@ -2033,6 +2075,8 @@ def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """
     b = dcf_t.get("sotp_breakdown") or {}
     rows = b.get("rows") or []
+    if not _leg_carries_weight(dcf_t, _SOTP_ANALYST_LEGS):
+        rows = []                                  # not in the blend: no analyst SOTP table
     if not rows or b.get("per_share_reporting") is None:
         return _degraded_sotp_block_pdf(dcf_t, styles, width)
     ccy = b.get("reporting_currency") or ""
@@ -2095,7 +2139,7 @@ def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """
     b = dcf_t.get("segment_sotp") or {}
     rows = b.get("segments") or []
-    if not rows:
+    if not rows or not _leg_carries_weight(dcf_t, _SOTP_SEGMENT_LEGS):
         return []
     # The report's price currency is already set for this ticker by
     # _set_price_currency; the block is in that same currency.

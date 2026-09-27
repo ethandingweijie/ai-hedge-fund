@@ -30,6 +30,7 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DcfRange, BankBreakdown } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
+import { BANK_DISPLAY_LEG, inBlend, legValue, legWeight } from '@/lib/blendLegs';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -58,29 +59,34 @@ const SECTION_HEADING_CLS =
 
 // ── 1. P/TBV Fair Value Hero ──────────────────────────────────────────────
 
-function PTBVHeroCard({ bb, price, sym, ticker }: {
-  bb: BankBreakdown; price: number | undefined; sym: string; ticker: string;
+// Owner, 2026-09-27 (MOH): the headline is the GGM (P/B) leg the blend used, at its own value and
+// weight. It used to print tangible book x a justified P/TBV of its own -- a figure no leg priced
+// (the leg is total book x target P/B). With no GGM leg in the blend there is no fair-value headline.
+function PTBVHeroCard({ bb, price, sym, ticker, dcfRange }: {
+  bb: BankBreakdown; price: number | undefined; sym: string; ticker: string; dcfRange: DcfRange;
 }) {
-  const fairValue = bb.fair_value_per_share;
+  const inValuation = inBlend(dcfRange, [BANK_DISPLAY_LEG]);
+  const fairValue = inValuation ? legValue(dcfRange, 'base', BANK_DISPLAY_LEG) : null;
+  const weight = inValuation ? legWeight(dcfRange, BANK_DISPLAY_LEG) : null;
+  const fairMult = fairValue != null && bb.bvps ? fairValue / bb.bvps : null;
   const upside = (fairValue && price) ? (fairValue - price) / price : null;
-  // This profile does not value the bank on P/TBV, so headlining a P/TBV fair
-  // value contradicts the methodology card. Keep the book and capital stats
-  // below — those hold regardless of which multiple does the valuing.
-  const ptbvExcluded = bb.ptbv_excluded === true;
+  const ptbvExcluded = fairValue == null;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 text-center">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>
-        {ptbvExcluded ? `Book & Capital — ${ticker}` : `P/TBV Fair Value — ${ticker}`}
+        {ptbvExcluded ? `Book & Capital — ${ticker}` : `Justified P/B Fair Value — ${ticker}`}
       </p>
       {ptbvExcluded ? (
         <p className="text-sm text-muted-foreground">
-          Valued on {bb.primary_anchor ?? 'GGM (P/B)'} — P/TBV is excluded for this
-          profile{bb.profile ? ` (${bb.profile})` : ''}, which carries negligible
-          goodwill, so tangible and total book coincide.
+          No book-multiple leg carries weight for this bank; the methods that
+          value it are listed under Valuation Methodology.
         </p>
       ) : (
         <>
+          <p className="text-xs text-muted-foreground -mt-2 mb-2">
+            {BANK_DISPLAY_LEG}{weight != null && weight > 0 ? ` · ${(weight * 100).toFixed(0)}% of the valuation` : ''}
+          </p>
           <p className="text-5xl font-bold tabular-nums text-foreground">
             {fmtMoney(fairValue, sym)}
           </p>
@@ -160,16 +166,10 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         </div>
       </div>
 
-      {!ptbvExcluded && bb.fair_p_tbv != null && bb.tbv_per_share != null && (
+      {!ptbvExcluded && fairMult != null && bb.bvps != null && (
         <p className="text-[11px] text-muted-foreground mt-4 font-mono">
-          {bb.ggm_terminal_growth != null ? (
-            <>
-              Fair = TBV × (ROE−g) / (CoE−g) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x
-              {'  ·  '}g {fmtPct(bb.ggm_terminal_growth, 1)}
-            </>
-          ) : (
-            <>Fair = TBV × (1 + (ROE−CoE) / CoE) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x</>
-          )}
+          Fair = BVPS × (ROE−g) / (CoE−g) = {fmtMoney(bb.bvps, sym)} × {fairMult.toFixed(2)}x
+          {bb.ggm_terminal_growth != null && <>{'  ·  '}g {fmtPct(bb.ggm_terminal_growth, 1)}</>}
         </p>
       )}
       {bb.ggm_provenance != null && bb.ggm_provenance.length > 0 && (
@@ -594,7 +594,7 @@ export function BankValuationPanel({ dcfRange, currentPrice, ticker }: BankValua
   // NIMSensitivityTile beneath the chart when research data is available.
   return (
     <div className="flex flex-col gap-4">
-      <PTBVHeroCard bb={bb} price={currentPrice} sym={sym} ticker={ticker} />
+      <PTBVHeroCard bb={bb} price={currentPrice} sym={sym} ticker={ticker} dcfRange={dcfRange} />
       <BankKeyStats bb={bb} sym={sym} />
       <ROEGauge bb={bb} />
       <CapitalReturnCard bb={bb} sym={sym} />

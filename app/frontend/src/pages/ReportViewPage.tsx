@@ -29,6 +29,7 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
+import { blendLeg, legWeight, SOTP_ANALYST_LEGS, SOTP_SEGMENT_LEGS } from '@/lib/blendLegs';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel } from '@/components/report/IndustryBriefPanel';
@@ -344,15 +345,16 @@ export function ReportViewPage() {
         {/* GS-style SOTP report card (task #28) - present only when the DCF
             engine ran with SOTP (analyst) assumptions: business-unit
             breakdown, NAV bridge, multiple basis, scenario TPs. */}
-        {dcfRange?.sotp_breakdown && (
-          <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
-        )}
+        {/* Owner, 2026-09-27 (MOH): only a SOTP leg that carries weight is shown. */}
+        {(() => { const _l = blendLeg(dcfRange, SOTP_ANALYST_LEGS); return _l && dcfRange?.sotp_breakdown ? (
+          <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} weight={legWeight(dcfRange, _l)} />
+        ) : null; })()}
 
         {/* Segment SOTP — business segments on their own EV/EBITDA bands.
             Separate from the analyst SOTP above: a name can have either. */}
-        {dcfRange?.segment_sotp && (
-          <SegmentSotpPanel sotp={dcfRange.segment_sotp} />
-        )}
+        {(() => { const _l = blendLeg(dcfRange, SOTP_SEGMENT_LEGS); return _l && dcfRange?.segment_sotp ? (
+          <SegmentSotpPanel sotp={dcfRange.segment_sotp} weight={legWeight(dcfRange, _l)} />
+        ) : null; })()}
 
         {/* Full width: this is the 6-column scenario table that was being
             squeezed into a 403px column, wrapping its headers onto three
@@ -365,7 +367,8 @@ export function ReportViewPage() {
             adjustment bridge stop being crushed into a narrow column. */}
         {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker]
           && <SectorValuationCard
-               payload={(data.sector_card as Record<string, SectorCardPayload>)[ticker]} />}
+               payload={(data.sector_card as Record<string, SectorCardPayload>)[ticker]}
+               dcfRange={dcfRange} />}
 
         {/* ── Decision ───────────────────────────────────────────────────── */}
         <SectionAnchor id="decision" label="Decision" />

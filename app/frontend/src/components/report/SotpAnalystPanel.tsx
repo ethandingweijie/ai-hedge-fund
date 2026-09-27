@@ -349,7 +349,9 @@ function ScenarioStrip({ breakdown, sym }: { breakdown: SotpBreakdown; sym: stri
 }
 
 /* ── Main panel ───────────────────────────────────────────────────────── */
-export function SotpAnalystPanel({ breakdown }: { breakdown: SotpBreakdown }) {
+export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdown; weight?: number | null }) {
+  // Mounted only when SOTP (analyst) carries weight in the blend (owner, 2026-09-27; lib/blendLegs).
+  const w = weight ?? breakdown.weight ?? null;
   const ccy = (breakdown.reporting_currency ?? 'USD').toUpperCase();
   const sym = CCY_SYM[ccy] ?? `${ccy} `;
   const usd = '$';
@@ -360,7 +362,9 @@ export function SotpAnalystPanel({ breakdown }: { breakdown: SotpBreakdown }) {
   return (
     <Card className="p-5">
       {/* 1. Header + valuation sentence */}
-      <div className={LABEL_CLS}>Sum-of-the-Parts (Analyst)</div>
+      <div className={LABEL_CLS}>
+        Sum-of-the-Parts (Analyst){w != null && w > 0 ? ` · ${(w * 100).toFixed(0)}% of the valuation` : ''}
+      </div>
       {breakdown.sentence && (
         <p className="mt-2 text-[12.5px] font-medium leading-relaxed text-foreground/90">
           {breakdown.sentence}

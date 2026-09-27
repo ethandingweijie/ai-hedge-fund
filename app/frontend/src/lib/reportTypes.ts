@@ -181,6 +181,9 @@ export interface ReitBreakdown {
   gross_asset_value?: number | null;
   nav_total?: number | null;
   nav_per_share?: number | null;
+  /** The NAV leg the blend used (2026-09-27); null = no NAV leg carries weight, no NAV headline. */
+  nav_method?: string | null;
+  nav_weight?: number | null;
   // Historical series for CLINT-style time-series bar charts
   npi_history?: Array<{ period: string; value: number | null }>;
   dpu_history?: Array<{ period: string; value: number | null }>;
@@ -219,6 +222,9 @@ export interface BankBreakdown {
   // P/TBV-based Fair Value (Gordon-growth identity)
   fair_p_tbv?: number | null;
   fair_value_per_share?: number | null;
+  /** The leg behind the fair-value headline (GGM (P/B)) and its blend weight (2026-09-27). */
+  fair_value_method?: string | null;
+  fair_value_weight?: number | null;
   // True when this profile's method set deliberately excludes P/TBV (SG
   // money-center banks: GGM P/B supersedes it and they carry no goodwill).
   // The panel then drops the fair-value headline but keeps the book and
@@ -324,6 +330,11 @@ export interface SegmentSotp {
   currency?: string | null;
   segments: SegmentSotpRow[];
   total_ev?: number | null;
+  /** The parts summed before the growth premium; shares of EV are measured against it. */
+  sum_of_parts_ev?: number | null;
+  growth_premium?: number | null;
+  /** The leg's weight in the blend -- the block is only published when it carries one. */
+  weight?: number | null;
   value_per_share?: number | null;
   shares?: number | null;
   priced_share_of_revenue?: number | null;
@@ -387,6 +398,8 @@ export interface SotpScenario {
 }
 
 export interface SotpBreakdown {
+  /** SOTP (analyst)'s weight in the blend -- only published when it carries one (2026-09-27). */
+  weight?: number | null;
   method?: string;
   sentence?: string;
   reporting_currency?: string;
@@ -512,7 +525,9 @@ export interface DcfRange {
   // untyped/unused on the frontend. See DcfMethodologyPanel.
   profile_rationale?: string;         // why this profile/method mix was chosen
   data_source?: 'guided' | 'analyst' | 'historical' | string;  // growth-rate provenance
-  c_macro?: number;                   // macro-regime WACC modifier applied
+  c_macro?: number;                   // macro confidence modifier; moves value only on the DCF fallback
+  /** True when no profile resolved and the pure-DCF fallback priced the name. */
+  profile_fallback_used?: boolean;
   calibration_error?: boolean;        // true when the DCF failed an internal sanity check
   calibration_note?: string;          // human-readable explanation when calibration_error is set
 }

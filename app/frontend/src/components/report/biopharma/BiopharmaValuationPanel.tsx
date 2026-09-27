@@ -35,6 +35,9 @@
 
 import type { DcfRange, BiopharmaPipelineAsset } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
+import { blendLeg, legValue, legWeight } from '@/lib/blendLegs';
+
+const RNPV_LEGS = ['rNPV (Pipeline)', 'rNPV'];
 import { ResearchNarrativeCard } from '@/components/report/shared/ResearchNarrativeCard';
 
 // ── Phase → PoS mapping (mirrors backend PHASE_POS_TABLE in dcf_agent.py) ──
@@ -166,10 +169,14 @@ function riskAdjNpvBn(asset: BiopharmaPipelineAsset): number {
 
 // ── Panel 1. rNPV Header ──────────────────────────────────────────────────
 
-function RNPVHeader({ dcfRange, currentPrice, sym }: {
-  dcfRange: DcfRange; currentPrice: number | undefined; sym: string;
+// Owner, 2026-09-27 (MOH): the header is the engine's rNPV leg at its own value and weight. It used
+// to label the BLENDED intrinsic value "Pipeline rNPV / share" and split it into pipeline and cash
+// on the assumption that the blend was all rNPV.
+function RNPVHeader({ dcfRange, currentPrice, sym, leg }: {
+  dcfRange: DcfRange; currentPrice: number | undefined; sym: string; leg: string;
 }) {
-  const iv = dcfRange.base?.intrinsic_value ?? null;
+  const iv = legValue(dcfRange, 'base', leg);
+  const weight = legWeight(dcfRange, leg);
   const netDebt = dcfRange.net_debt ?? 0;
   const shares = dcfRange.shares_outstanding ?? 0;
   const upside = (iv != null && currentPrice && currentPrice > 0)
@@ -178,17 +185,14 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
 
   // Cash per share = -net_debt / shares (negative net debt = net cash)
   const netCashPerShare = (shares > 0) ? (-netDebt) / shares : null;
-  // Pipeline rNPV/sh + legacy rev NPV ≈ IV - net cash/share
-  const pipelineAndLegacyPerShare = (iv != null && netCashPerShare != null)
-    ? iv - netCashPerShare
-    : null;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-baseline justify-between">
         <p className={SECTION_HEADING_CLS}>Pipeline rNPV / share</p>
         <span className="text-[10px] text-muted-foreground">
-          base case · WACC {fmtPct(dcfRange.wacc, 1)}
+          {leg}{weight != null && weight > 0 ? ` · ${(weight * 100).toFixed(0)}% of the valuation` : ''}
+          {' '}· base case · WACC {fmtPct(dcfRange.wacc, 1)}
         </span>
       </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
@@ -202,12 +206,6 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-        <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pipeline + Legacy</p>
-          <p className="font-semibold tabular-nums text-foreground">
-            {fmtMoney(pipelineAndLegacyPerShare, sym)}/sh
-          </p>
-        </div>
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Net Cash</p>
           <p className={`font-semibold tabular-nums ${
@@ -237,21 +235,21 @@ function PipelineTable({ assets, sym }: {
     );
   }
 
-  // Rank assets by risk-adjusted NPV descending
+  // Ranked by risk-weighted peak sales (peak x probability of success). The per-asset rNPV this
+  // table used to print was computed in the browser, not by the engine, and is not shown (owner,
+  // 2026-09-27): the engine's rNPV is the header above.
   const ranked = assets.map(a => ({
     asset: a,
-    rnpv_bn: riskAdjNpvBn(a),
     pos: posForAsset(a),
-  })).sort((a, b) => b.rnpv_bn - a.rnpv_bn);
-
-  const totalRnpv = ranked.reduce((s, r) => s + r.rnpv_bn, 0);
+    weighted: (peakBn(a) ?? 0) * posForAsset(a),
+  })).sort((a, b) => b.weighted - a.weighted);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <p className={SECTION_HEADING_CLS}>Pipeline Assets</p>
         <span className="text-[10px] text-muted-foreground">
-          {ranked.length} assets · {sym}{totalRnpv.toFixed(2)}B rNPV
+          {ranked.length} assets
         </span>
       </div>
       <div className="overflow-x-auto -mx-4 px-4">
@@ -261,12 +259,11 @@ function PipelineTable({ assets, sym }: {
               <th className="text-left py-2 pr-2 font-semibold">Asset</th>
               <th className="text-left py-2 pr-2 font-semibold">Phase</th>
               <th className="text-right py-2 pr-2 font-semibold">Peak</th>
-              <th className="text-right py-2 pr-2 font-semibold">PoS</th>
-              <th className="text-right py-2 font-semibold">rNPV</th>
+              <th className="text-right py-2 font-semibold">PoS</th>
             </tr>
           </thead>
           <tbody>
-            {ranked.map(({ asset, rnpv_bn, pos }, i) => {
+            {ranked.map(({ asset, pos }, i) => {
               const phase = normPhase(asset.phase);
               const chipCls = PHASE_COLORS[phase] ?? PHASE_COLORS.preclinical;
               return (
@@ -293,28 +290,17 @@ function PipelineTable({ assets, sym }: {
                   <td className="py-2 pr-2 text-right font-mono tabular-nums text-foreground">
                     {(() => { const pk = peakBn(asset); return pk != null ? `${sym}${pk.toFixed(1)}B` : '—'; })()}
                   </td>
-                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-foreground">
+                  <td className="py-2 text-right font-mono tabular-nums text-foreground">
                     {(pos * 100).toFixed(0)}%
-                  </td>
-                  <td className="py-2 text-right font-mono tabular-nums font-semibold text-foreground">
-                    {sym}{rnpv_bn.toFixed(2)}B
                   </td>
                 </tr>
               );
             })}
-            <tr className="border-t-2 border-border font-semibold bg-muted/50">
-              <td className="py-2 pr-2 text-foreground" colSpan={4}>
-                Total rNPV
-              </td>
-              <td className="py-2 text-right font-mono tabular-nums text-foreground">
-                {sym}{totalRnpv.toFixed(2)}B
-              </td>
-            </tr>
           </tbody>
         </table>
       </div>
       <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
-        rNPV = Peak × PoS × op_margin × ramp_profile × discount · PoS from BIO 2011-2020 × TA multiplier
+        PoS from BIO 2011-2020 phase success rates × therapeutic-area multiplier
       </p>
     </div>
   );
@@ -530,7 +516,12 @@ export function BiopharmaValuationPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {dcfRange?.base?.intrinsic_value != null && <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} />}
+      {(() => {
+        const leg = blendLeg(dcfRange, RNPV_LEGS);
+        return dcfRange && leg && legValue(dcfRange, 'base', leg) != null
+          ? <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} leg={leg} />
+          : null;
+      })()}
       <PipelineTable assets={assets} sym={sym} />
       <CatalystsTimeline assets={assets} sym={sym} />
 

@@ -2277,6 +2277,95 @@ def _sotp_parts(segments: dict[str, float], tier: str = "default",
     return _reconcile_segment_ebitda(parts, company_ebitda)
 
 
+#: Every spelling of the segment SOTP leg (see `_compute_method_value`).
+_SOTP_SEGMENT_METHOD_NAMES: frozenset[str] = frozenset(
+    {"SOTP (segments)", "Sum of Parts", "SOTP", "SOTP (Segments)"})
+#: The NAV legs a REIT / landlord / developer panel may headline, most specific first.
+_NAV_DISPLAY_LEGS: tuple[str, ...] = ("NAV (Cap Rates)", "RNAV (published)", "NAV (published)", "NAV", "RNAV")
+#: The bank leg whose justified P/TBV the bank panel headlines.
+_BANK_DISPLAY_LEG = "GGM (P/B)"
+
+
+def _blend_legs(scenario_results: dict) -> dict[str, float]:
+    """Legs that carry weight in the published blend: value key -> largest weight across scenarios.
+
+    Owner, 2026-09-27 (MOH): the report shows the valuation that was computed, never a figure
+    computed only to be shown. A panel, a hero number or a table row is published only for a leg
+    in this set, and it prints that leg's own value and weight.
+    """
+    out: dict[str, float] = {}
+    for s in ("bear", "base", "bull"):
+        sc = (scenario_results or {}).get(s) or {}
+        eff = sc.get("effective_weights") or []
+        if eff:
+            for e in eff:
+                k = e.get("value_key") or e.get("method")
+                w = e.get("weight") or 0.0
+                if k and w > 0:
+                    out[k] = max(out.get(k, 0.0), float(w))
+        else:
+            for k in sc.get("methods_used") or []:
+                out.setdefault(k, 0.0)
+    return out
+
+
+def _base_leg_value(scenario_results: dict, leg: str) -> Optional[float]:
+    v = (((scenario_results or {}).get("base") or {}).get("method_iv_table") or {}).get(leg)
+    return float(v) if isinstance(v, (int, float)) else None
+
+
+def _align_reit_breakdown(rb: Optional[dict], scenario_results: dict, legs: dict[str, float],
+                          shares: Optional[float]) -> Optional[dict]:
+    """The REIT panel's NAV headline is the NAV leg the blend used, or nothing.
+
+    Before 2026-09-27 the panel printed its own EBITDA / cap-rate NAV, a figure no leg priced
+    (the NAV leg reads clean NOI, the live cohort cap rate and, where accepted, the published NAV)."""
+    if not rb:
+        return rb
+    rb = dict(rb)
+    leg = next((k for k in _NAV_DISPLAY_LEGS if k in legs), None)
+    val = _base_leg_value(scenario_results, leg) if leg else None
+    tr = ((((scenario_results or {}).get("base") or {}).get("leg_inputs") or {}).get(leg) or {}) if leg else {}
+    rb["nav_method"] = leg if val is not None else None
+    rb["nav_weight"] = legs.get(leg) if val is not None else None
+    rb["nav_per_share"] = round(val, 2) if val is not None else None
+    rb["nav_total"] = round(val * shares, 0) if (val is not None and shares) else None
+    if val is not None:
+        # The hero, the NAV bridge and the cap-rate sensitivity print the leg's own inputs.
+        if isinstance(tr.get("gross_asset_value"), (int, float)):
+            rb["gross_asset_value"] = round(float(tr["gross_asset_value"]), 0)
+        if isinstance(tr.get("noi"), (int, float)):
+            rb["noi"] = float(tr["noi"])
+            rb["noi_basis"] = tr.get("noi_basis")
+        if isinstance(tr.get("cap_rate"), (int, float)):
+            rb["cap_rate_used"] = float(tr["cap_rate"])
+            rb["cap_rate_source"] = tr.get("cap_rate_source")
+        if isinstance(tr.get("total_debt"), (int, float)):
+            rb["total_debt"] = float(tr["total_debt"])
+    if val is None:
+        rb["gross_asset_value"] = None           # no NAV leg in the blend: no NAV bridge either
+    return rb
+
+
+def _align_bank_breakdown(bb: Optional[dict], scenario_results: dict,
+                          legs: dict[str, float]) -> Optional[dict]:
+    """The bank panel's fair-value headline is the GGM (P/B) leg the blend used, or nothing."""
+    if not bb:
+        return bb
+    bb = dict(bb)
+    val = _base_leg_value(scenario_results, _BANK_DISPLAY_LEG) if _BANK_DISPLAY_LEG in legs else None
+    tr = ((((scenario_results or {}).get("base") or {}).get("leg_inputs") or {}).get(_BANK_DISPLAY_LEG) or {})
+    bb["fair_value_method"] = _BANK_DISPLAY_LEG if val is not None else None
+    bb["fair_value_weight"] = legs.get(_BANK_DISPLAY_LEG) if val is not None else None
+    bb["fair_value_per_share"] = round(val, 2) if val is not None else None
+    if val is not None and isinstance(tr.get("target_pb"), (int, float)):
+        bb["fair_p_tbv"] = round(float(tr["target_pb"]), 4)
+    if val is None:
+        bb["fair_p_tbv"] = None
+        bb["ptbv_excluded"] = True               # the panel shows Book & Capital, no fair value
+    return bb
+
+
 def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
                         currency: Optional[str]) -> Optional[dict]:
     """The segment SOTP as the report and the PDF render it, or None.
@@ -2292,6 +2381,12 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
     if not parts:
         return None
     total_ev = float(leg.get("metric_value") or 0.0)
+    # The leg multiplies the SUM of the parts by the growth premium; the parts themselves are
+    # pre-premium. Shares are measured against that sum, and the premium is its own line --
+    # dividing pre-premium parts by the post-premium total read as 117.6% on MOH (0.85 premium).
+    _gp = leg.get("growth_premium")
+    _gp = float(_gp) if isinstance(_gp, (int, float)) and _gp > 0 else 1.0
+    parts_ev = total_ev / _gp
     rows = []
     for p in parts:
         ev = float(p.get("ev") or 0.0)
@@ -2311,7 +2406,7 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
             "reconciliation_scaler": p.get("reconciliation_scaler"),
             "multiple": p.get("multiple"),
             "ev": ev,
-            "share_of_ev": (ev / total_ev) if total_ev > 0 else None,
+            "share_of_ev": (ev / parts_ev) if parts_ev > 0 else None,
             "note": p.get("note"),
         })
     # The check the owner asked to be standing (2026-09-20): a sum of the parts
@@ -2343,6 +2438,8 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
         "currency": currency,
         "segments": rows,
         "total_ev": total_ev,
+        "sum_of_parts_ev": parts_ev,
+        "growth_premium": _gp,
         "value_per_share": leg.get("value"),
         "shares": shares,
         "priced_share_of_revenue": leg.get("priced_share_of_revenue"),
@@ -2353,13 +2450,26 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
                                          and _priced_rev >= 0.999),
             "reminders": _reminders,
         },
-        "basis_note": ("Segment EBITDA is estimated as segment revenue x the margin "
-                       "its peer basket implies; it is not a disclosed figure. "
-                       "Multiples are owner-set through-cycle EV/EBITDA bands, "
-                       f"applied at the {_SEGMENT_BAND_POSITION} end of each band "
-                       "unless the owner has accepted a dynamic multiple for the "
-                       "segment type, which the row then says."),
+        "basis_note": _segment_basis_note(rows),
     }
+
+
+def _segment_basis_note(rows: list[dict]) -> str:
+    """What the rows were actually valued on -- EV/Revenue, EV/EBITDA bands, or both."""
+    bases = {r.get("basis") for r in rows}
+    notes = []
+    if "ev_ebitda" in bases:
+        notes.append("EV/EBITDA rows: segment EBITDA is estimated as segment revenue x the margin its "
+                     "peer basket implies (not a disclosed figure), at an owner-set through-cycle band, "
+                     f"applied at the {_SEGMENT_BAND_POSITION} end unless the owner has accepted a dynamic "
+                     "multiple for the segment type, which the row then says.")
+    if "ev_revenue" in bases:
+        notes.append("EV/Revenue rows: segment revenue x the EV/Revenue multiple for the segment type "
+                     "at the company's segment tier.")
+    if "carrying_value" in bases:
+        notes.append("Carrying-value rows: equity-accounted segments held at the assets the filing discloses.")
+    notes.append("The sum of the parts is multiplied by the growth premium to give the enterprise value.")
+    return " ".join(notes)
 
 
 def _sotp_enterprise_value(
@@ -16147,6 +16257,27 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception:                       # a verdict must never fail a run
             _rating_state = {"state": "rated"}
 
+        # Owner, 2026-09-27 (MOH): no display-only valuation. Every block below is published only
+        # for a leg that carries weight, and prints that leg's value.
+        _legs_in_blend = _blend_legs(scenario_results)
+        reit_breakdown = _align_reit_breakdown(reit_breakdown, scenario_results, _legs_in_blend, shares)
+        bank_breakdown = _align_bank_breakdown(bank_breakdown, scenario_results, _legs_in_blend)
+        _sotp_analyst_weight = max((w for k, w in _legs_in_blend.items() if k in _SOTP_ANALYST_METHOD_NAMES),
+                                   default=None)
+        _sotp_analyst_declared = any(
+            (m.get("name") in _SOTP_ANALYST_METHOD_NAMES)
+            for m in ((scenario_results.get("base") or {}).get("profile_weights") or []) if isinstance(m, dict))
+        _segment_weight = max((w for k, w in _legs_in_blend.items() if k in _SOTP_SEGMENT_METHOD_NAMES),
+                              default=None)
+        if sotp_breakdown is not None:
+            sotp_breakdown = ({**sotp_breakdown, "weight": _sotp_analyst_weight}
+                              if _sotp_analyst_weight is not None else None)
+        _segment_sotp_pub = None
+        if _segment_weight is not None:
+            _segment_sotp_pub = _segment_sotp_block((scenario_results.get("base") or {}), shares, _output_currency)
+            if _segment_sotp_pub:
+                _segment_sotp_pub["weight"] = _segment_weight
+
         dcf_range[ticker] = {
             **scenario_results,
             "rating_state":       _rating_state,
@@ -16217,11 +16348,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "sotp_breakdown":     sotp_breakdown,
             # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
             # its rows and reason so both renderers can show WHY it did not price.
+            # Published only when the profile declared SOTP (analyst): it explains why a declared leg
+            # did not price, which is part of the valuation; otherwise it would be display only.
             "sotp_analyst_degraded": (
                 {k: (most_recent.get("sotp_analyst_degraded") or {}).get(k)
                  for k in ("rows", "degraded_segments", "degraded_reason", "associates", "net_cash",
                            "minority_interest", "segment_value", "fx_to_reporting", "shares")}
-                if isinstance(most_recent.get("sotp_analyst_degraded"), dict) else None),
+                if (isinstance(most_recent.get("sotp_analyst_degraded"), dict) and _sotp_analyst_declared) else None),
             # D3: loud-degradation metadata — True when the intended profile
             # did not resolve and a fallback path ran; list of declared
             # profile methods that produced no value in the base scenario.
@@ -16242,9 +16375,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # on. Distinct from `sotp_breakdown`, which is the ANALYST SOTP
             # (BABA, 09988.HK, 09618.HK) and carries forward estimates and
             # elasticities this one has no equivalent of.
-            "segment_sotp":          _segment_sotp_block(
-                                         (scenario_results.get("base") or {}), shares,
-                                         _output_currency),
+            "segment_sotp":          _segment_sotp_pub,
             # B1 prediction ledger -- see _param_version / _consensus_at_run.
             "routing_trace":         {**_routing_trace,
                                       "final_sector": sector,

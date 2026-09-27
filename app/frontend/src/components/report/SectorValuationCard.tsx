@@ -20,7 +20,8 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import type { SectorCardPayload, SectorKpi, SectorKpiAccent } from '@/lib/reportTypes';
+import type { DcfRange, SectorCardPayload, SectorKpi, SectorKpiAccent } from '@/lib/reportTypes';
+import { legsInBlend } from '@/lib/blendLegs';
 
 const accentBg: Record<SectorKpiAccent, string> = {
   blue:   'from-blue-500/15 to-blue-500/0 border-blue-500/30',
@@ -75,10 +76,16 @@ function statusBadge(k: SectorKpi): { label: StatusLabel; variant: StatusVariant
 
 interface Props {
   payload?: SectorCardPayload | null;
+  /** The engine's result, so the method strip lists the legs that carried weight. */
+  dcfRange?: DcfRange | null;
 }
 
-export function SectorValuationCard({ payload }: Props) {
+export function SectorValuationCard({ payload, dcfRange }: Props) {
   if (!payload || !payload.groups || payload.groups.length === 0) return null;
+  // Owner, 2026-09-27 (MOH): this strip used to print the KPI framework's hard-coded
+  // `anchor_methods`, which could name methods the engine did not use (a bank's P/TBV where
+  // the blend excludes it). It now lists the legs that carried weight, at their weights.
+  const legs = Array.from(legsInBlend(dcfRange)).sort((a, b) => b[1] - a[1]);
 
   return (
     <Card className="overflow-hidden">
@@ -92,23 +99,25 @@ export function SectorValuationCard({ payload }: Props) {
         </div>
         <div className="text-xl font-bold tracking-tight mt-0.5">
           {payload.ticker}{' '}
-          <span className="text-muted-foreground text-xs font-normal">Sector Valuation</span>
+          <span className="text-muted-foreground text-xs font-normal">Sector KPIs</span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-1">
-            Anchors
-          </span>
-          {payload.anchor_methods.map((m, i) => (
-            <Badge
-              key={m}
-              variant={i === 0 ? 'success' : 'outline'}
-              className="h-5 px-2 text-[11px]"
-            >
-              {m}
-            </Badge>
-          ))}
-        </div>
+        {legs.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-1">
+              Methods used
+            </span>
+            {legs.map(([m, w], i) => (
+              <Badge
+                key={m}
+                variant={i === 0 ? 'success' : 'outline'}
+                className="h-5 px-2 text-[11px]"
+              >
+                {m}{w > 0 ? ` · ${(w * 100).toFixed(0)}%` : ''}
+              </Badge>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Themed groups */}

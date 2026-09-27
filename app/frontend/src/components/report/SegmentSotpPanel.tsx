@@ -16,6 +16,12 @@
  * The estimated-EBITDA caveat is shown, not buried: segment EBITDA is not
  * disclosed in these filings, and a reader has to know that the middle column
  * is derived rather than reported.
+ *
+ * Owner, 2026-09-27 (MOH): mounted only when the segment leg carries weight in
+ * the blend (see lib/blendLegs), and it says what that weight is. Shares of EV
+ * are measured against the sum of the parts; the growth premium the leg applies
+ * to that sum is its own line (MOH read 117.6% dividing pre-premium parts by the
+ * post-premium total).
  */
 
 import { Card } from '@/components/ui/card';
@@ -66,10 +72,25 @@ const TYPE_LABEL: Record<string, string> = {
   non_business: 'Not a business',
 };
 
-export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
+function basisSubtitle(rows: SegmentSotp['segments']): string {
+  const bases = new Set(rows.map((r) => r.basis));
+  if (bases.has('ev_ebitda') && bases.has('ev_revenue')) {
+    return 'Each segment valued on its own basis: a through-cycle EV/EBITDA band, or an EV/Revenue multiple for its business type.';
+  }
+  if (bases.has('ev_revenue')) return 'Each segment valued at an EV/Revenue multiple for its business type.';
+  return 'Each segment valued on a through-cycle EV/EBITDA band for its own business type.';
+}
+
+export function SegmentSotpPanel({ sotp, weight }: { sotp: SegmentSotp; weight?: number | null }) {
   const sym = CCY_SYM[(sotp.currency ?? 'USD').toUpperCase()] ?? '$';
   const rows = sotp.segments ?? [];
   if (!rows.length) return null;
+  // The parts sum BEFORE the growth premium; the leg's EV is that sum x the premium.
+  const partsEv = sotp.sum_of_parts_ev ?? rows.reduce((a, r) => a + (r.ev ?? 0), 0);
+  const premium = sotp.growth_premium
+    ?? (partsEv > 0 && sotp.total_ev != null ? sotp.total_ev / partsEv : 1);
+  const share = (ev?: number | null) => (ev != null && partsEv > 0 ? ev / partsEv : null);
+  const w = weight ?? sotp.weight ?? null;
 
   // Any estimated EBITDA on the table means the caveat has to be on it too.
   const anyEstimated = rows.some((r) => r.ebitda != null);
@@ -90,10 +111,7 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <div className={LABEL_CLS}>Sum of the parts — by business segment</div>
-          <div className="text-sm text-muted-foreground mt-1">
-            Each segment valued on a through-cycle EV/EBITDA band for its own
-            business type.
-          </div>
+          <div className="text-sm text-muted-foreground mt-1">{basisSubtitle(rows)}</div>
         </div>
         <div className="text-right">
           <div className="text-2xl font-semibold tabular-nums">
@@ -102,7 +120,9 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
                   minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : '—'}
           </div>
-          <div className={LABEL_CLS}>per share</div>
+          <div className={LABEL_CLS}>
+            per share{w != null && w > 0 ? ` · ${(w * 100).toFixed(0)}% of the valuation` : ''}
+          </div>
         </div>
       </div>
 
@@ -136,16 +156,28 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
                 <td className="text-right tabular-nums py-2">{fmtBn(r.ebitda, sym)}</td>
                 <td className="text-right tabular-nums py-2">{multipleCell(r)}</td>
                 <td className="text-right tabular-nums py-2">{fmtBn(r.ev, sym)}</td>
-                <td className="text-right tabular-nums py-2">{fmtPct(r.share_of_ev)}</td>
+                <td className="text-right tabular-nums py-2">{fmtPct(share(r.ev))}</td>
               </tr>
             ))}
+            <tr className="font-medium border-t border-border/60">
+              <td className="py-2">Sum of the parts</td>
+              <td colSpan={4} />
+              <td className="text-right tabular-nums py-2">{fmtBn(partsEv, sym)}</td>
+              <td className="text-right tabular-nums py-2">{fmtPct(partsEv > 0 ? 1 : null)}</td>
+            </tr>
+            {Math.abs(premium - 1) > 1e-6 && (
+              <tr className="text-muted-foreground">
+                <td className="py-2">Growth premium</td>
+                <td colSpan={4} />
+                <td className="text-right tabular-nums py-2">×{premium.toFixed(2)}</td>
+                <td />
+              </tr>
+            )}
             <tr className="font-semibold">
-              <td className="py-2">Total enterprise value</td>
+              <td className="py-2">Enterprise value</td>
               <td colSpan={4} />
               <td className="text-right tabular-nums py-2">{fmtBn(sotp.total_ev, sym)}</td>
-              <td className="text-right tabular-nums py-2">
-                {fmtPct(sotp.checks?.share_of_ev_sum ?? null)}
-              </td>
+              <td />
             </tr>
           </tbody>
         </table>
@@ -159,7 +191,7 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
               <div className="tabular-nums text-sm">{fmtBn(r.ev, sym)}</div>
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
-              {TYPE_LABEL[r.type ?? ''] ?? r.type} · {fmtPct(r.share_of_ev)} of EV
+              {TYPE_LABEL[r.type ?? ''] ?? r.type} · {fmtPct(share(r.ev))} of the parts
               {r.multiple_source?.startsWith('dynamic') && ' · dynamic multiple'}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
@@ -181,8 +213,18 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
             )}
           </div>
         ))}
-        <div className="flex items-baseline justify-between pt-1 text-sm font-semibold">
-          <span>Total enterprise value</span>
+        <div className="flex items-baseline justify-between pt-1 text-sm">
+          <span>Sum of the parts</span>
+          <span className="tabular-nums">{fmtBn(partsEv, sym)}</span>
+        </div>
+        {Math.abs(premium - 1) > 1e-6 && (
+          <div className="flex items-baseline justify-between text-sm text-muted-foreground">
+            <span>Growth premium</span>
+            <span className="tabular-nums">×{premium.toFixed(2)}</span>
+          </div>
+        )}
+        <div className="flex items-baseline justify-between text-sm font-semibold">
+          <span>Enterprise value</span>
           <span className="tabular-nums">{fmtBn(sotp.total_ev, sym)}</span>
         </div>
       </div>
@@ -202,10 +244,17 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
       )}
 
       <div className="space-y-1 text-[11px] text-muted-foreground">
-        {(sotp.checks?.reminders ?? []).map((r, i) => (
-          <div key={`chk-${i}`} className="font-medium text-foreground">{r}</div>
-        ))}
-        {anyEstimated && <div>{sotp.basis_note}</div>}
+        {(sotp.checks?.reminders ?? [])
+          // Archived runs measured shares against the post-premium total; the table above no longer does.
+          .filter((r) => !r.startsWith('Segment shares of enterprise value sum to'))
+          .map((r, i) => (
+            <div key={`chk-${i}`} className="font-medium text-foreground">{r}</div>
+          ))}
+        {/* Archived runs carry an EV/EBITDA-only note even when every row was priced on revenue. */}
+        {(anyEstimated || rows.some((r) => r.basis === 'ev_revenue')) && sotp.basis_note
+          && (anyEstimated || !sotp.basis_note.startsWith('Segment EBITDA is estimated')) && (
+          <div>{sotp.basis_note}</div>
+        )}
         {rows.some((r) => r.ebitda_margin_source) && (
           <div>
             Margin sources:{' '}

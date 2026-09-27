@@ -9,6 +9,8 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { DcfRange } from '@/lib/reportTypes';
+import { DCF_FAMILY_LEGS, inBlend, legValue } from '@/lib/blendLegs';
+import { currencySymbol } from '@/lib/utils';
 
 interface DcfMethodologyPanelProps {
   dcfRange?: DcfRange | null;
@@ -97,8 +99,14 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   const methodBadges: Array<{ name: string; weight?: number }> = (() => {
     const eff = dcfRange.base?.effective_weights;
     if (eff && eff.length > 0) {
+      // Keyed on the leg that was computed (value_key): a proxied row carries its weight on the
+      // leg that stood in for it, and that leg's value is what the method table records.
       const by = new Map<string, number>();
-      for (const e of eff) by.set(e.method, (by.get(e.method) ?? 0) + (e.weight ?? 0));
+      for (const e of eff) {
+        if (!(e.weight > 0)) continue;
+        const k = e.value_key || e.method;
+        by.set(k, (by.get(k) ?? 0) + (e.weight ?? 0));
+      }
       return Array.from(by, ([name, weight]) => ({ name, weight }));
     }
     const pw = dcfRange.base?.profile_weights;
@@ -109,7 +117,13 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
     return (dcfRange.base?.methods_used ?? []).map((name) => ({ name }));
   })();
 
-  const hasScenarioData = SCENARIOS.some(({ key }) => dcfRange[key]);
+  // Owner, 2026-09-27 (MOH): the DCF assumptions table is shown only when a DCF leg carries weight;
+  // for a profile that excludes DCF those growth and margin paths value nothing.
+  const hasScenarioData = SCENARIOS.some(({ key }) => dcfRange[key]) && inBlend(dcfRange, DCF_FAMILY_LEGS);
+  const sym = currencySymbol(ticker);
+  const fmtIv = (v: number | null | undefined) =>
+    v == null || !Number.isFinite(v) ? '—'
+      : `${sym}${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <Card className="p-4">
@@ -159,12 +173,14 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
             <span className="font-medium">{pct(dcfRange.wacc)}</span>
           </span>
         )}
-        {dcfRange.c_macro != null && dcfRange.c_macro !== 0 && (
-          <span title="Macro-regime adjustment applied to the base discount rate">
-            <span className="text-muted-foreground">Macro modifier:</span>{' '}
-            <span className="font-medium">
-              {dcfRange.c_macro > 0 ? '+' : ''}{(dcfRange.c_macro * 100).toFixed(2)}pp
-            </span>
+        {/* The macro confidence modifier cancels out of every weighted blend (it scales each
+            bucket uniformly); it moves the value only on the no-profile DCF fallback, where it
+            multiplies the DCF. Shown only there, as the multiplier it is (owner, 2026-09-27:
+            it used to read "-20.00pp applied to the discount rate", which it never was). */}
+        {dcfRange.profile_fallback_used === true && dcfRange.c_macro != null && dcfRange.c_macro !== 0 && (
+          <span title="Macro-regime multiplier applied to the fallback DCF value">
+            <span className="text-muted-foreground">Macro multiplier:</span>{' '}
+            <span className="font-medium">×{(1 + dcfRange.c_macro).toFixed(2)}</span>
           </span>
         )}
         {src && (
@@ -219,16 +235,47 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
         </div>
       )}
 
+      {/* The valuation as computed: each leg that carries weight, its share of the blend and its
+          value in each scenario, then the blended value. Nothing here is computed for display. */}
       {methodBadges.length > 0 && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground mr-1">
-            Methods (base case)
-          </span>
-          {methodBadges.map((m) => (
-            <Badge key={m.name} variant="outline" className="h-5 px-2 text-[10px]">
-              {m.name}{m.weight != null ? ` · ${(m.weight * 100).toFixed(0)}%` : ''}
-            </Badge>
-          ))}
+        <div className="mt-4 overflow-x-auto">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+            Methods used
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border">
+                <th className="text-left font-medium py-1 pr-1.5 sm:pr-3">Method</th>
+                <th className="text-right font-medium py-1 px-1.5 sm:px-3">Weight</th>
+                <th className="text-right font-medium py-1 px-1.5 sm:px-3">Bear</th>
+                <th className="text-right font-medium py-1 px-1.5 sm:px-3">Base</th>
+                <th className="text-right font-medium py-1 pl-1.5 sm:pl-3">Bull</th>
+              </tr>
+            </thead>
+            <tbody>
+              {methodBadges.map((m) => (
+                <tr key={m.name} className="border-b border-border/50">
+                  <td className="py-1.5 pr-1.5 sm:pr-3 font-medium">{m.name}</td>
+                  <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">
+                    {m.weight != null ? `${(m.weight * 100).toFixed(0)}%` : '—'}
+                  </td>
+                  <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">{fmtIv(legValue(dcfRange, 'bear', m.name))}</td>
+                  <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">{fmtIv(legValue(dcfRange, 'base', m.name))}</td>
+                  <td className="text-right py-1.5 pl-1.5 sm:pl-3 tabular-nums">{fmtIv(legValue(dcfRange, 'bull', m.name))}</td>
+                </tr>
+              ))}
+              <tr className="font-semibold">
+                <td className="py-1.5 pr-1.5 sm:pr-3">Intrinsic value</td>
+                <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">100%</td>
+                <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">{fmtIv(dcfRange.bear?.intrinsic_value)}</td>
+                <td className="text-right py-1.5 px-1.5 sm:px-3 tabular-nums">{fmtIv(dcfRange.base?.intrinsic_value)}</td>
+                <td className="text-right py-1.5 pl-1.5 sm:pl-3 tabular-nums">{fmtIv(dcfRange.bull?.intrinsic_value)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Weights are the base case's; each value is that method's per-share result in the scenario.
+          </p>
         </div>
       )}
 
