@@ -1,0 +1,490 @@
+{
+ "WELL": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Healthcare Facilities",
+  "name": "Welltower Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "PLD": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Industrial",
+  "name": "Prologis, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "EQIX": {
+  "exchange": "NASDAQ",
+  "sector": "Real Estate",
+  "industry": "REIT - Specialty",
+  "name": "Equinix, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "AMT": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Specialty",
+  "name": "American Tower Corporation",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "DLR": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Specialty",
+  "name": "Digital Realty Trust, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "SPG": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Retail",
+  "name": "Simon Property Group, Inc.",
+  "currency": "USD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "PSA": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Industrial",
+  "name": "Public Storage",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   "REIT"
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "O": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Retail",
+  "name": "Realty Income Corporation",
+  "currency": "USD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "VTR": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Healthcare Facilities",
+  "name": "Ventas, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "US"
+ },
+ "CBRE": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Services",
+  "name": "CBRE Group, Inc.",
+  "currency": "USD",
+  "row": [
+   "ProfessionalServices",
+   "Ad / Consulting"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "DHI": {
+  "exchange": "NYSE",
+  "sector": "Consumer Cyclical",
+  "industry": "Residential Construction",
+  "name": "D.R. Horton, Inc.",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "IRM": {
+  "exchange": "NYSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Specialty",
+  "name": "Iron Mountain Incorporated",
+  "currency": "USD",
+  "row": null,
+  "pin": null,
+  "in_scope": false,
+  "market": "US"
+ },
+ "00016.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Sun Hung Kai Properties Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01109.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "China Resources Land Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01113.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "CK Asset Holdings Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "01972.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Swire Properties Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00688.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "China Overseas Land & Investment Ltd.",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00012.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Diversified",
+  "name": "Henderson Land Development Company Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": [
+   "RealEstate",
+   ""
+  ],
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00823.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "REIT - Retail",
+  "name": "Link Real Estate Investment Trust",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00083.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Sino Land Company Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00004.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Wharf (Holdings) Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "02202.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "China Vanke Co., Ltd.",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "00960.HK": {
+  "exchange": "HKSE",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Longfor Group Holdings Limited",
+  "currency": "HKD",
+  "row": [
+   "RealEstate",
+   "REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "HK"
+ },
+ "H78.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "Hongkong Land Holdings Limited",
+  "currency": "USD",
+  "row": [
+   "Property",
+   "Property Developer (SG)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "C38U.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Retail",
+  "name": "CapitaLand Integrated Commercial Trust",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "9CI.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Services",
+  "name": "CapitaLand Investment Limited",
+  "currency": "SGD",
+  "row": [
+   "Property",
+   "Real Estate Agency (SG)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "A17U.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Industrial",
+  "name": "CapitaLand Ascendas REIT",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "C09.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "City Developments Limited",
+  "currency": "SGD",
+  "row": [
+   "Property",
+   "Property Developer (SG)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "U14.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Development",
+  "name": "UOL Group Limited",
+  "currency": "SGD",
+  "row": [
+   "Property",
+   "Property Developer (SG)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "N2IU.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Diversified",
+  "name": "Mapletree Pan Asia Commercial Trust",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "M44U.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Industrial",
+  "name": "Mapletree Logistics Trust",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "ME8U.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Industrial",
+  "name": "Mapletree Industrial Trust",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "AJBU.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "REIT - Diversified",
+  "name": "Keppel DC REIT",
+  "currency": "SGD",
+  "row": [
+   "RealEstate",
+   "S-REIT"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ },
+ "U06.SI": {
+  "exchange": "SES",
+  "sector": "Real Estate",
+  "industry": "Real Estate - Diversified",
+  "name": "Singapore Land Group Limited",
+  "currency": "SGD",
+  "row": [
+   "Property",
+   "Property Developer (SG)"
+  ],
+  "pin": null,
+  "in_scope": false,
+  "market": "SG"
+ }
+}
