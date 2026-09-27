@@ -1554,3 +1554,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 8 amendment (owner, 2026-09-27, Option A): Real Estate Asset Manager (SG) reads the review-gated sotp input through SOTP (analyst) in place of the hand-typed published table the ticker never had, with the weight rolling into P/E (norm) until accepted; no fixture is on the profile, every fixture moves only on the constants digest
 
+## 2026-09-27T10:36:10+00:00
+
+- regenerated at HEAD: `3da3c337`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 8b step 1 (owner decision B, 2026-09-27): clean cash NOI = revenue - cost of revenue on the REIT and landlord NAV legs, EBITDA only as the fallback where cost of revenue is missing; C38U.SI's S-REIT NAV leg moves on the cleaner NOI (IV 1.74 -> 1.76); every other fixture moves only on the constants digest
+

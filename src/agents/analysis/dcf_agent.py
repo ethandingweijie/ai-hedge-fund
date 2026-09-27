@@ -4345,15 +4345,30 @@ def _compute_reit_metrics(
     elif ffo is not None:
         affo = ffo   # no capex info → AFFO = FFO (loose)
 
-    # NOI ≈ EBITDA (limitation noted in docstring). For pure-play REITs
-    # reporting Operating Income directly, EBITDA is a close proxy since
-    # interest/tax are below the line and D&A adds back non-cash.
-    noi = ebitda if ebitda and ebitda > 0 else None
+    # Wave 8b step 1 (owner decision B, 2026-09-27): clean cash NOI = revenue - cost of revenue,
+    # universally for the REIT and landlord profiles. Property-level cost of revenue is the direct
+    # operating expense (repairs, utilities, ground rent, property taxes); statutory EBITDA carried
+    # the IAS 40 fair-value change and impairments through the income statement, which drove Swire's
+    # and Henderson's NOI negative and Link's to nothing. EBITDA is the fallback only where cost of
+    # revenue is zero or missing, and the basis is recorded for the trace.
+    cor = most_recent.get("cost_of_revenue")
+    noi, noi_basis = None, None
+    if rev and rev > 0 and isinstance(cor, (int, float)) and cor != 0:
+        _clean = float(rev) - abs(float(cor))
+        if _clean > 0:
+            noi, noi_basis = _clean, "clean NOI (revenue - cost of revenue)"
+    if noi is None:
+        if ebitda and ebitda > 0:
+            noi, noi_basis = ebitda, ("EBITDA (fallback: cost of revenue missing)" if not cor
+                                      else "EBITDA (fallback: revenue - cost of revenue not positive)")
+        else:
+            noi_basis = "none (no cost of revenue; EBITDA not positive)"
 
     return {
         "ffo":                         ffo,
         "affo":                        affo,
         "noi":                         noi,
+        "noi_basis":                   noi_basis,
         "normalized_maintenance_capex": maint_capex,
         "maint_capex_pct_used":        maint_pct,
     }
@@ -7369,7 +7384,11 @@ def _compute_method_value(
         if not cap_rate:
             cap_rate, _cap_src = mults["cap_rate"], f"sub-type table ({reit_subtype})"
         most_recent["_nav_cap_rate_used"] = {"cap_rate": cap_rate, "source": _cap_src}
-        _leg_trace(kind="nav", cap_rate=cap_rate, cap_rate_source=_cap_src, subtype=reit_subtype)
+        _reit_pre = _compute_reit_metrics(most_recent, subtype=reit_subtype)
+        _leg_trace(kind="nav", cap_rate=cap_rate, cap_rate_source=_cap_src, subtype=reit_subtype,
+                   noi=_reit_pre.get("noi"), noi_basis=_reit_pre.get("noi_basis"),
+                   gross_asset_value=((_reit_pre.get("noi") or 0.0) / cap_rate) if cap_rate else None,
+                   total_debt=most_recent.get("total_debt"), cash=most_recent.get("cash_and_equivalents"))
 
         _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
         noi = _reit.get("noi")
@@ -12103,7 +12122,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"P/AFFO {_mults['p_affo']:.0f}x | maint_capex "
                 f"{_reit_m['maint_capex_pct_used']:.1%} rev | "
                 f"FFO={_fmt_b(_reit_m['ffo'])} AFFO={_fmt_b(_reit_m['affo'])} "
-                f"NOI={_fmt_b(_reit_m['noi'])}"
+                f"NOI={_fmt_b(_reit_m['noi'])} [{_reit_m.get('noi_basis')}]"
             )
 
             _rm_override = (reit_metrics_all or {}).get(ticker) or {}
