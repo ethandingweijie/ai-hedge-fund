@@ -36,7 +36,7 @@ def test_unmapped_industry_returns_none_rather_than_guessing():
 
 def test_known_rows_route_where_a_practitioner_would():
     """Spot-checks on the names the ladder got wrong."""
-    assert profile_for_industry("Auto - Manufacturers") == ("Consumer", "Automotive & EV")
+    assert profile_for_industry("Auto - Manufacturers") == ("Industrials", "Automotive (OEM)")   # Wave 10 (owner, 2026-09-27), decision 2; EV names by pin
     assert profile_for_industry("Gold") == ("Resources", "Precious Metals")        # Wave 9 (2026-09-27): metals split from Mining (Major)
     assert profile_for_industry("Insurance - Life") == ("Financials", "Insurance")
     assert profile_for_industry("Financial - Data & Stock Exchanges") == (

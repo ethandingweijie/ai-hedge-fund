@@ -320,6 +320,8 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     # feedstock and metal cycles, containerboard); the fade and the peak trigger apply.
     "Container & Bulk Shipping", "Commodity Chemicals & Ag Inputs", "Packaging & Paper",
     "Base Metals", "Precious Metals", "Diversified Miners",
+    # Wave 10 (owner, 2026-09-27): the production, Macau and cruise cycles.
+    "Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",
     "Upstream Oil & Gas",
     "Integrated Oil & Gas",
     "Refining & Marketing",
@@ -412,6 +414,7 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Mining (Major)",
     "Container & Bulk Shipping", "Commodity Chemicals & Ag Inputs", "Packaging & Paper",   # Wave 9
     "Base Metals", "Precious Metals", "Diversified Miners",                                # Wave 9
+    "Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",              # Wave 10
     "Memory / DRAM-NAND",
     "Digital Asset Mining",
     # Wave 2: a policy-cycle hardware maker. Every cyclical gets the fade
@@ -8273,7 +8276,9 @@ def _basket_rank(peer: dict, field: str) -> int:
 #: when there is one and the proxy when there is not. "P/Rate Base" needs an
 #: accepted rate base plus an owner-set cost of equity, and prices as P/BV --
 #: exactly as before -- for every ticker that has neither.
-_PER_TICKER_METHODS = _LOOKTHROUGH_METHODS | frozenset({"P/Rate Base"})
+#: Wave 10 (owner, 2026-09-27): the HK hotel owners' published-NAV anchor is declared with P/BV as its
+#: proxy, so the real leg is computed beside it and wins whenever an input is accepted.
+_PER_TICKER_METHODS = _LOOKTHROUGH_METHODS | frozenset({"P/Rate Base", "RNAV (published)"})
 
 
 def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",

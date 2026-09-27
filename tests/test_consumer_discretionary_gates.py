@@ -1418,6 +1418,9 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
     # Wave 2 power & transition (owner-confirmed 2026-09-21) added one, the hardware OEM profile.
     assert sorted(users) == [
         ("Consumer", "Agribusiness & Food Processing", "EV/EBITDA (norm)"),   # Wave 4: cyclical by design
+        ("Consumer", "Auto Parts & Suppliers", "EV/EBITDA (norm)"),          # Wave 10: the production, Macau and cruise cycles
+        ("Consumer", "Casinos & Integrated Resorts", "EV/EBITDA (norm)"),
+        ("Consumer", "Cruise Lines", "EV/EBITDA (norm)"),
         ("Crypto", "Digital Asset Mining", "EV/EBITDA (norm)"),
         ("Energy", "Clean Tech / Power Equipment OEM", "EV/EBITDA (norm)"),
         ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
@@ -1441,7 +1444,7 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
     # Wave 4 (2026-09-26): Agribusiness & Food Processing is the one Consumer
     # profile on the normalised EBITDA branch, by design (crush-spread cycle).
     assert consumer_vocab & norm_ev == {"EV/EBITDA (norm)"}
-    assert len(_consumer_profiles()) == 16   # +3 Wave 4 profiles (2026-09-26)
+    assert len(_consumer_profiles()) == 24   # Wave 10 (2026-09-27): +8 consumer profiles (the Travel & Dining split, Auto Parts & Suppliers, Leisure Products & Brands); +3 Wave 4 profiles (2026-09-26)
 
 
 def test_the_normalizers_outlier_floor_is_relative_and_the_absolute_floor_is_gone():
@@ -1740,7 +1743,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (135, 43), (total, with_norm)   # 2026-09-27: 14 unrouted profiles removed (-2 with a normalised leg: EM Bank (Premium), Neo/Challenger); Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
+    assert (total, with_norm) == (145, 46), (total, with_norm)   # Wave 10 (owner, 2026-09-27): +10 profiles, +3 with a normalised leg; 2026-09-27: 14 unrouted profiles removed (-2 with a normalised leg: EM Bank (Premium), Neo/Challenger); Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1764,7 +1767,7 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 17, spellings     # Wave 9 (2026-09-27): +Container & Bulk Shipping, +Commodity Chemicals & Ag Inputs, +Packaging & Paper, +Base Metals, +Diversified Miners     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
+    assert spellings.get("EV/EBITDA (norm)") == 20, spellings     # Wave 10 (owner, 2026-09-27): +Auto Parts & Suppliers, +Casinos, +Cruise Lines;     # Wave 9 (2026-09-27): +Container & Bulk Shipping, +Commodity Chemicals & Ag Inputs, +Packaging & Paper, +Base Metals, +Diversified Miners     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
     assert spellings.get("P/E (norm)") == 30, spellings  # 2026-09-27: 14 unrouted profiles removed (owner): -EM Bank (Premium), -Neo/Challenger            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer; Wave 9 (2026-09-27): +Airlines, +Steel / Metals, +Commodity Chemicals & Ag Inputs
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
@@ -2110,7 +2113,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (135, 27, 27, 8)  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
+    assert (tot, trail, elig, anchored) == (145, 26, 26, 8)   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2871,7 +2874,7 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
     # +3 / +3: 02357.HK, 02507.HK, 00232.HK pinned in Wave 3 (all HKD reporters).
     # 166/125 -> 174/133: eight HK health names pinned on the owner's Wave 5 taxonomy (2026-09-26).
-    assert len(hk) == 211 and len(missing) == 170, (len(hk), len(missing))   # Wave 8: 24 HK real-estate pins; Wave 9 (2026-09-27): 13 HK industrial / materials / metals pins, none in the FX table
+    assert len(hk) == 212 and len(missing) == 171, (len(hk), len(missing))   # Wave 10 (owner, 2026-09-27): +01276.HK (Hengrui)   # Wave 8: 24 HK real-estate pins; Wave 9 (2026-09-27): 13 HK industrial / materials / metals pins, none in the FX table
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")
@@ -2959,9 +2962,9 @@ def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
     assert lk["BIRK"][1] == "Apparel / Athletic Wear"
 
     consumer = [v for v in lk.values() if v[0] == "Consumer"]
-    assert len(consumer) == 83     # JD -> Tech (2026-09-26); COST pinned Membership (Wave 4); DIS -> Tech / Media & Streaming (Wave 7, 2026-09-27)
-    assert sum(1 for v in consumer if v[1]) == 43   # +COST pin (Wave 4); DIS pin left for Tech / Media & Streaming (Wave 7)
-    assert sum(1 for v in consumer if not v[1]) == 40   # JD -> Tech / China Internet Platform (owner, 2026-09-26)
+    assert len(consumer) == 90     # Wave 10 (owner, 2026-09-27): +RACE, HLN, the cruise lines (5) as Consumer pins; JD -> Tech (2026-09-26); COST pinned Membership (Wave 4); DIS -> Tech / Media & Streaming (Wave 7, 2026-09-27)
+    assert sum(1 for v in consumer if v[1]) == 51   # Wave 10 (owner, 2026-09-27): +7 new Consumer pins, +Li Ning 02331.HK filled; +COST pin (Wave 4); DIS pin left for Tech / Media & Streaming (Wave 7)
+    assert sum(1 for v in consumer if not v[1]) == 39   # Wave 10 (owner, 2026-09-27): Li Ning 02331.HK filled (decision 6); JD -> Tech / China Internet Platform (owner, 2026-09-26)
 
 
 def test_the_pins_override_a_classification_that_would_otherwise_move():

@@ -1924,6 +1924,16 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "Long-term contracts (PPAs) provide visibility for project-level cash flow modeling.",
         },
+        "City Gas Distribution (HK / China)": {
+            # Wave 10 (owner, 2026-09-27), decision 3: the HK market row for Regulated Gas; US gas utilities stay on Regulated Utility.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "DDM", "weight": 0.3, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Hong Kong and China city-gas distributors are not rate-base regulated (connection fees and a gas-sales spread): forward earnings, EBITDA and the dividend, over the China city-gas basket.",
+        },
         # Wave 2 (owner, 2026-09-21). Solar, wind and fuel-cell HARDWARE makers:
         # Enphase, First Solar, Nextracker, Bloom. They had been pinned to IPP
         # and priced on a PPA-backed DCF, a generator's method. The owner's test
@@ -2390,6 +2400,16 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "dilution). When rNPV returns None, weight flows to P/E/DCF/EV/EBITDA."
             ),
         },
+        "Specialty & Generic Pharma": {
+            # Wave 10 (owner, 2026-09-27), decision 3: the Drug Manufacturers - Specialty & Generic and Medical - Pharmaceuticals rows. Zoetis and Elanco sit here.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Generics, specialty and animal-health drug makers: forward earnings, EBITDA and free cash; no rNPV leg, which has nothing to price on a generics book.",
+        },
         "MedTech / Devices": {
             "methods": [
                 {"name": "EV/Revenue",   "weight": 0.40, "anchor": True,  "implementable": True},
@@ -2610,15 +2630,15 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Traditional Retail": {
             "methods": [
-                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True,
-                 "note": "renamed from EV/EBITDAR 2026-09-26: leases in net debt, no rent add-back"},
-                {"name": "P/E",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "EV/Revenue",   "weight": 0.15, "anchor": False, "implementable": True, "note": "GMV-driven e-commerce"},
-                {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
-                {"name": "FCF Yield",    "weight": 0.10, "anchor": False, "implementable": True},
+                # Wave 10 (owner, 2026-09-27, decision 5): EV/Revenue and ROIC vs WACC out -- a revenue
+                # multiple on a retailer rewards low margins; forward earnings and free cash in.
+                {"name": "Forward EV/EBITDA", "weight": 0.40, "anchor": True,  "implementable": True,
+                 "note": "leases in net debt, no rent add-back"},
+                {"name": "Forward P/E",  "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",    "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Normalizes for heavy lease use; ROIC tests expansion and capital efficiency.",
+            "rationale": "Store-based retail on forward EBITDA (leases in net debt) and forward earnings, free cash as the check; off-price and auto-parts retail price on their own sub-cohorts.",
         },
         "Luxury Goods": {
             "methods": [
@@ -2769,6 +2789,86 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "asset-heavy operators (DIS parks, casinos).  EV/EBITDA normalizes "
                 "across CapEx profiles.  P/E captures franchise economics (MCD, SBUX)."
             ),
+        },
+        "Restaurants": {
+            # Wave 10 (owner, 2026-09-27), decision 1: Travel & Dining split. MCD, SBUX and the HK chains re-pinned here.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Restaurant operators and franchisors: forward EBITDA and earnings, free cash as the check; US franchisors price on the QSR franchisor sub-cohort, everyone else on the label.",
+        },
+        "Casinos & Integrated Resorts": {
+            # Wave 10 (owner, 2026-09-27), decision 1. Galaxy and Sands China re-pinned here.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA (norm)", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Casino and integrated-resort operators: forward EBITDA, a normalised EBITDA for the Macau cycle, free cash.",
+        },
+        "Lodging (Asset-Light)": {
+            # Wave 10 (owner, 2026-09-27), decision 1. H World re-pinned here (an HK-listed franchisor, not an owner).
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Hotel franchisors and managers (fee streams, little owned real estate) on the asset-light basket's forward multiples.",
+        },
+        "Hotel Owner-Operator (HK)": {
+            # Wave 10 (owner, 2026-09-27), decision 1: the HK market row for Travel Lodging. SGX hotel owners keep Specialised Accommodation (SG).
+            "methods": [
+                {"name": "RNAV (published)", "weight": 0.5, "anchor": True, "implementable": False, "proxy": "P/BV", "note": "the published NAV once an input is accepted; book (P/BV) prices the weight until then"},
+                {"name": "EV/EBITDA", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "DDM", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Hong Kong hotel owners trade on their real estate (0.2-0.3x book): a published NAV when accepted, book until then, EBITDA and the dividend beside it.",
+        },
+        "Online Travel": {
+            # Wave 10 (owner, 2026-09-27), decision 1: the Travel Services row. Booking, Airbnb, Trip.com and Tongcheng re-pinned here.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "Forward EV/EBITDA", "weight": 0.4, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Online travel agencies and platforms on forward earnings and EBITDA over the online-travel basket.",
+        },
+        "Cruise Lines": {
+            # Wave 10 (owner, 2026-09-27), decision 1: Royal Caribbean, Carnival, Norwegian, Viking, Lindblad pinned.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA (norm)", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Capital-intensive, levered cruise operators: forward EBITDA, a normalised EBITDA through the cycle, forward earnings, over the cruise basket.",
+        },
+        "Auto Parts & Suppliers": {
+            # Wave 10 (owner, 2026-09-27), decision 3: the Auto - Parts row (was Consumer Durables).
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Auto suppliers ride the production cycle: normalised EBITDA, forward earnings, free cash.",
+        },
+        "Leisure Products & Brands": {
+            # Wave 10 (owner, 2026-09-27), decision 3: the Leisure row (was Consumer Growth, whose table listed P/E and excluded it).
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "Forward EV/EBITDA", "weight": 0.4, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Toys, sporting goods and leisure brands on forward earnings and EBITDA, free cash as the check.",
         },
     },
 
@@ -3716,6 +3816,17 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Base Metals": {"ev_ebitda": 12.5, "pe": 18.9, "ev_revenue": 4.6, "pb": 3.17, "fcf_yield": 0.037, "growth_avg": 0.105, "pe_ntm": 19.0, "ev_ebitda_ntm": 7.7},
     "Precious Metals": {"ev_ebitda": 8.4, "pe": 15.4, "ev_revenue": 5.2, "pb": 3.11, "fcf_yield": 0.067, "growth_avg": 0.285, "pe_ntm": 10.9, "ev_ebitda_ntm": 6.3},
     "Diversified Miners": {"ev_ebitda": 8.0, "pe": 25.3, "ev_revenue": 3.3, "pb": 3.85, "fcf_yield": 0.052, "growth_avg": 0.0, "pe_ntm": 17.7, "ev_ebitda_ntm": 8.2},
+    # Wave 10 (owner, 2026-09-27): read off the comps store on the day (cohort all); fallbacks behind the live cohort.
+    "Restaurants": {"ev_ebitda": 15.0, "pe": 20.5, "ev_revenue": 2.3, "pb": 6.83, "fcf_yield": 0.044, "growth_avg": 0.086, "pe_ntm": 19.8, "ev_ebitda_ntm": 13.2},
+    "Casinos & Integrated Resorts": {"ev_ebitda": 9.5, "pe": 16.5, "ev_revenue": 2.2, "pb": 3.7, "fcf_yield": 0.055, "growth_avg": 0.109, "pe_ntm": 14.5, "ev_ebitda_ntm": 8.2},
+    "Lodging (Asset-Light)": {"ev_ebitda": 14.9, "pe": 28.5, "ev_revenue": 4.1, "pb": 6.47, "fcf_yield": 0.045, "growth_avg": 0.111, "pe_ntm": 19.5, "ev_ebitda_ntm": 11.5},
+    "Hotel Owner-Operator (HK)": {"ev_ebitda": 11.4, "pe": 13.9, "ev_revenue": 3.5, "pb": 0.24, "fcf_yield": 0.104, "growth_avg": 0.169},
+    "Online Travel": {"ev_ebitda": 12.5, "pe": 17.3, "ev_revenue": 2.4, "pb": 2.76, "fcf_yield": 0.076, "growth_avg": 0.189, "pe_ntm": 12.9, "ev_ebitda_ntm": 7.9},
+    "Cruise Lines": {"ev_ebitda": 12.5, "pe": 17.3, "ev_revenue": 2.4, "pb": 2.76, "fcf_yield": 0.076, "growth_avg": 0.189, "pe_ntm": 12.9, "ev_ebitda_ntm": 7.9},
+    "Auto Parts & Suppliers": {"ev_ebitda": 10.6, "pe": 17.1, "ev_revenue": 1.0, "pb": 1.71, "fcf_yield": 0.084, "growth_avg": 0.031, "pe_ntm": 10.4, "ev_ebitda_ntm": 5.5},
+    "Leisure Products & Brands": {"ev_ebitda": 11.9, "pe": 19.5, "ev_revenue": 2.2, "pb": 2.72, "fcf_yield": 0.089, "growth_avg": 0.018, "pe_ntm": 16.4, "ev_ebitda_ntm": 9.8},
+    "City Gas Distribution (HK / China)": {"ev_ebitda": 10.4, "pe": 10.1, "ev_revenue": 1.1, "pb": 0.76, "fcf_yield": 0.078, "growth_avg": 0.01, "pe_ntm": 8.7, "ev_ebitda_ntm": 5.5},
+    "Specialty & Generic Pharma": {"ev_ebitda": 13.2, "pe": 34.6, "ev_revenue": 3.2, "pb": 2.19, "fcf_yield": 0.051, "growth_avg": 0.07, "pe_ntm": 14.5, "ev_ebitda_ntm": 9.7},
     "REIT (Specialty / OpCo)":             {"ev_ebitda": 19.5, "pe": 31.1, "ev_revenue": 10.8, "pb": 7.2, "fcf_yield": 0.05, "growth_avg": 0.035, "pe_ntm": 31.7, "ev_ebitda_ntm": 18.3},   # Wave 8b: US REIT - Specialty large, 2026-09-27
     "Real Estate Services":                {"ev_ebitda": 14.9, "pe": 40.2, "ev_revenue": 1.3, "pb": 1.8, "fcf_yield": 0.05, "growth_avg": 0.073, "pe_ntm": 15.7, "ev_ebitda_ntm": 8.9},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
@@ -3898,6 +4009,12 @@ SUBCOHORT_BASKETS: dict[str, list[str]] = {
     "STEEL - MINIMILL (EAF)":   ["NUE", "STLD", "CMC", "CRS", "SIM"],
     "STEEL - INTEGRATED":       ["MT", "CLF", "PKX", "TX", "GGB", "SID"],
     "AGGREGATES":               ["VMC", "MLM", "CRH", "EXP", "ACA"],
+    # Wave 10 (owner, 2026-09-27): QSR franchisors (decision 1); off-price retail, auto aftermarket and the
+    # US renewable owners populated to five names or more from the store (decision 4: "suggest and populate").
+    "QSR FRANCHISORS":          ["MCD", "YUM", "QSR", "DPZ", "WEN"],
+    "OFF-PRICE RETAIL":         ["TJX", "ROST", "BURL", "OLLI", "FIVE"],
+    "AUTO AFTERMARKET":         ["ORLY", "AZO", "GPC", "LKQ", "VVV", "DRVN"],
+    "US RENEWABLE OWNERS":      ["BEPC", "CWEN", "XIFR", "ORA", "ENLT"],
 }
 SUBCOHORT_OF: dict[str, str] = {t: k for k, ts in SUBCOHORT_BASKETS.items() for t in ts}
 
@@ -3948,6 +4065,18 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Base Metals": ["SCCO", "FCX", "TECK", "AA", "01378.HK", "00358.HK"],
     "Precious Metals": ["NEM", "AEM", "B", "WPM", "02899.HK"],
     "Diversified Miners": ["BHP", "RIO", "VALE", "03993.HK"],
+    # Wave 10 (2026-09-27)
+    "Restaurants": ["MCD", "YUM", "QSR", "DPZ", "CMG", "DRI"],
+    "Casinos & Integrated Resorts": ["LVS", "WYNN", "MGM", "00027.HK", "01928.HK"],
+    "Lodging (Asset-Light)": ["MAR", "HLT", "IHG", "H", "WH", "CHH"],
+    "Hotel Owner-Operator (HK)": ["00045.HK", "00069.HK", "01221.HK", "01270.HK", "00199.HK"],
+    "Online Travel": ["BKNG", "EXPE", "ABNB", "TCOM", "MMYT", "TRIP"],
+    "Cruise Lines": ["RCL", "CCL", "NCLH", "VIK", "LIND"],
+    "Auto Parts & Suppliers": ["MGA", "BWA", "APTV", "ALV", "LKQ"],
+    "Leisure Products & Brands": ["HAS", "MAT", "AS", "GOLF", "09992.HK"],
+    "City Gas Distribution (HK / China)": ["00003.HK", "02688.HK", "00392.HK", "01193.HK", "00384.HK"],
+    "Specialty & Generic Pharma": ["TEVA", "ZTS", "VTRS", "ELAN", "ANIP"],
+
 
     # Owner Wave 6 (2026-09-27)
     "Card Issuer & Consumer Lender": ["AXP", "COF", "SYF", "DFS", "ALLY"],
@@ -5485,11 +5614,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "BABA":  ("Tech", "China Internet Platform", "Software (Internet)",   "Alibaba ADR — owner profile 2026-09-26; accepted Gemini SOTP"),
     "JD":    ("Tech", "China Internet Platform", "Retail (General)",      "JD.com — owner profile 2026-09-26 (retail, logistics, new businesses as parts)"),
     # ── Travel & Dining (profile override) ────────────────────────────────
-    "MCD":   ("Consumer", "Travel & Dining", "Restaurant/Dining",        "McDonald's — franchise royalty model"),
-    "SBUX":  ("Consumer", "Travel & Dining", "Restaurant/Dining",        "Starbucks — global coffeehouse"),
     "DIS": ('Tech', 'Media & Streaming', 'Entertainment', 'Walt Disney -- media (Wave 7; the parks pin on Travel & Dining is retired)'),
-    "ABNB":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Airbnb — asset-light travel platform"),
-    "BKNG":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Booking Holdings — OTA platform"),
     # ── Apparel & Footwear ────────────────────────────────────────────────
     # NKE, LULU and BIRK are pinned. The pins STAY, but the reason they were
     # originally needed is now history and is recorded as such rather than left
@@ -5665,6 +5790,24 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "SRC":   ("RealEstate", "",                   "R.E.I.T.",                         "Spirit Realty (legacy ticker — now acquired by O) — net-lease"),
     "BNL":   ("RealEstate", "",                   "R.E.I.T.",                         "Broadstone Net Lease REIT — single-tenant net lease"),
     "VTR": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Healthcare Facilities", "Ventas (Wave 8 owner directory, 2026-09-27)"),
+    "LQDA": ("Biopharma", "Commercial Biotech", "Medical - Pharmaceuticals", "Liquidia (Wave 10 (owner, 2026-09-27))"),
+    "KNSA": ("Biopharma", "Commercial Biotech", "Medical - Pharmaceuticals", "Kiniksa Pharmaceuticals (Wave 10 (owner, 2026-09-27))"),
+    "CORT": ("Biopharma", "Commercial Biotech", "Medical - Pharmaceuticals", "Corcept Therapeutics (Wave 10 (owner, 2026-09-27))"),
+    "HLN": ("Consumer", "Household / Personal", "Drug Manufacturers - Specialty & Generic", "Haleon (consumer health) (Wave 10 (owner, 2026-09-27))"),
+    "GPC": ("Industrials", "Industrial Distribution", "Auto - Parts", "Genuine Parts (NAPA distribution) (Wave 10 (owner, 2026-09-27))"),
+    "SE": ("Tech", "Hyper-Growth Platform", "Specialty Retail", "Sea Limited (commerce, gaming, fintech) (Wave 10 (owner, 2026-09-27))"),
+    "MELI": ("Tech", "Hyper-Growth Platform", "Specialty Retail", "MercadoLibre (commerce + fintech platform) (Wave 10 (owner, 2026-09-27))"),
+    "ZTS": ("Biopharma", "Specialty & Generic Pharma", "Drug Manufacturers - Specialty & Generic", "Zoetis (animal health) (Wave 10 (owner, 2026-09-27))"),
+    "RACE": ("Consumer", "Luxury Goods", "Auto - Manufacturers", "Ferrari (a luxury P/E, not an OEM multiple) (Wave 10 (owner, 2026-09-27))"),
+    "LIND": ("Consumer", "Cruise Lines", "Travel Services", "Lindblad Expeditions (Wave 10 (owner, 2026-09-27))"),
+    "VIK": ("Consumer", "Cruise Lines", "Travel Services", "Viking Holdings (Wave 10 (owner, 2026-09-27))"),
+    "NCLH": ("Consumer", "Cruise Lines", "Travel Services", "Norwegian Cruise Line (Wave 10 (owner, 2026-09-27))"),
+    "CCL": ("Consumer", "Cruise Lines", "Travel Services", "Carnival (Wave 10 (owner, 2026-09-27))"),
+    "RCL": ("Consumer", "Cruise Lines", "Travel Services", "Royal Caribbean (Wave 10 (owner, 2026-09-27))"),
+    "ABNB": ("Consumer", "Online Travel", "Travel Services", "Airbnb (Wave 10 (owner, 2026-09-27))"),
+    "BKNG": ("Consumer", "Online Travel", "Travel Services", "Booking Holdings (Wave 10 (owner, 2026-09-27))"),
+    "SBUX": ("Consumer", "Restaurants", "Restaurants", "Starbucks (Wave 10 (owner, 2026-09-27))"),
+    "MCD": ("Consumer", "Restaurants", "Restaurants", "McDonald's (franchisor) (Wave 10 (owner, 2026-09-27))"),
     "VALE": ("Resources", "Diversified Miners", "Industrial Materials", "Vale (Wave 9 (owner, 2026-09-27))"),
     "RIO": ("Resources", "Diversified Miners", "Industrial Materials", "Rio Tinto (Wave 9 (owner, 2026-09-27))"),
     "BHP": ("Resources", "Diversified Miners", "Industrial Materials", "BHP (Wave 9 (owner, 2026-09-27))"),
@@ -5799,7 +5942,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # (strategic_router._SECTOR_PROFILE_DEFAULT). Result was every Managed
     # Care KPI (medical_loss_ratio, members_yoy, medicare_advantage_mix_pct)
     # showing FALLBACK USED on the dashboard.
-    "ZTS":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Zoetis — animal health pharma; routed to Large Cap Pharma to avoid Managed Care misclassification"),
     "NVO":   ("Biopharma", "",               "Drugs (Pharmaceutical)", "Novo Nordisk ADR — GLP-1/obesity; 20-F filer (DKK reporting currency)"),
     "TXG":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "10X Genomics — single-cell/spatial genomics instruments; tools co, NOT drug developer"),
     "MRK":   ("Biopharma", "Large Cap Pharma",               "Drugs (Pharmaceutical)",    "Merck"),
@@ -6024,6 +6166,18 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # Real Estate
     "01113.HK": ("Property", "Landlord / Investment Property (HK)", "Real Estate - Diversified", "CK Asset Holdings (Wave 8 owner directory, 2026-09-27, category 4)"),
+    "06618.HK": ("HealthcareServices", "Pharma Distribution", "Medical - Pharmaceuticals", "JD Health (online pharmacy) (Wave 10 (owner, 2026-09-27))"),
+    "02331.HK": ("Consumer", "Apparel / Athletic Wear", "Leisure", "Li Ning (sportswear beside ANTA) (Wave 10 (owner, 2026-09-27))"),
+    "01276.HK": ("Biopharma", "Large Cap Pharma", "Drug Manufacturers - Specialty & Generic", "Jiangsu Hengrui (China innovator) (Wave 10 (owner, 2026-09-27))"),
+    "00780.HK": ("Consumer", "Online Travel", "Travel Services", "Tongcheng Travel (Wave 10 (owner, 2026-09-27))"),
+    "09961.HK": ("Consumer", "Online Travel", "Travel Services", "Trip.com (Wave 10 (owner, 2026-09-27))"),
+    "01179.HK": ("Consumer", "Lodging (Asset-Light)", "Travel Lodging", "H World (franchisor) (Wave 10 (owner, 2026-09-27))"),
+    "01928.HK": ("Consumer", "Casinos & Integrated Resorts", "Gambling, Resorts & Casinos", "Sands China (Wave 10 (owner, 2026-09-27))"),
+    "00027.HK": ("Consumer", "Casinos & Integrated Resorts", "Gambling, Resorts & Casinos", "Galaxy Entertainment (Wave 10 (owner, 2026-09-27))"),
+    "02150.HK": ("Consumer", "Restaurants", "Restaurants", "Nayuki (Wave 10 (owner, 2026-09-27))"),
+    "09922.HK": ("Consumer", "Restaurants", "Restaurants", "Jiumaojiu (Wave 10 (owner, 2026-09-27))"),
+    "06862.HK": ("Consumer", "Restaurants", "Restaurants", "Haidilao (Wave 10 (owner, 2026-09-27))"),
+    "09987.HK": ("Consumer", "Restaurants", "Restaurants", "Yum China (Wave 10 (owner, 2026-09-27))"),
     "02899.HK": ("Resources", "Precious Metals", "Gold", "Zijin Mining (Wave 9 (owner, 2026-09-27))"),
     "00358.HK": ("Resources", "Base Metals", "Copper", "Jiangxi Copper (Wave 9 (owner, 2026-09-27))"),
     "02600.HK": ("Resources", "Base Metals", "Aluminum", "Chalco (Wave 9 (owner, 2026-09-27))"),
@@ -6086,7 +6240,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "02359.HK": ("Biopharma", "CDMO / Life Science Tools",  "CRO/CDMO",                 "Wuxi AppTec"),
     "02196.HK": ("Biopharma", "Large Cap Pharma",  "Pharmaceutical",           "Fosun Pharma"),
     "06185.HK": ("Biopharma",   "",  "Biotech/Vaccine",          "CanSino Biologics"),
-    "06618.HK": ("Biopharma",   "",  "Health Platform",          "JD Health"),
     "01093.HK": ("Biopharma", "Large Cap Pharma", "Pharmaceutical",    "CSPC Pharmaceutical -- Wave 5: a drug maker labelled Biotechnology"),
     "03692.HK": ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)", "Hansoh Pharma"),
     "03320.HK": ("HealthcareServices", "Pharma Distribution", "Medical - Distribution", "CR Pharmaceutical -- distributor; owner re-route 2026-09-26 off the provider profile"),
@@ -6128,7 +6281,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # names in the consumer-discretionary brief were authorised. They remain on
     # the band-pass and are the obvious next rows if this pin holds up.
     "02020.HK": ("Consumer", "Apparel / Athletic Wear", "Sportswear", "Anta Sports — pinned; premium domestic brand, P/E ~25x near US level. Classified as Luxury Goods (50% trailing `P/E (Premium)`) before the pin"),
-    "02331.HK": ("Consumer",    "",  "Sportswear",               "Li Ning"),
     "02313.HK": ("Consumer",    "",  "Apparel/Mfg",              "Shenzhou International — OEM apparel manufacturing"),
     "01368.HK": ("Consumer",    "",  "Sportswear",               "Xtep International"),
     "03998.HK": ("Consumer",    "",  "Apparel",                  "Bosideng — down jacket brand"),
@@ -6157,15 +6309,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "00175.HK": ("Consumer",    "Automotive & EV", "Auto & Truck",    "Geely Automobile — traditional + EV transition"),
     "09866.HK": ("Consumer",    "Automotive & EV", "EV / Auto",       "NIO — premium EV; battery swap model"),
     # Consumer — Travel & Dining (profile override)
-    "09961.HK": ("Consumer",    "Travel & Dining", "OTA/Travel",      "Trip.com Group — China OTA platform"),
-    "00027.HK": ("Consumer",    "Travel & Dining", "Gaming & Leisure","Galaxy Entertainment — Macau casino"),
-    "01928.HK": ("Consumer",    "Travel & Dining", "Gaming & Leisure","Sands China — Macau casino"),
-    "06862.HK": ("Consumer",    "Travel & Dining", "Restaurant",      "Haidilao — hotpot chain; P/E ~30x premium"),
-    "01179.HK": ("Consumer",    "Travel & Dining", "Hotels",          "H World Group — hotel chain"),
-    "09922.HK": ("Consumer",    "Travel & Dining", "Restaurant",      "Jiumaojiu Group — multi-brand restaurants"),
-    "09987.HK": ("Consumer",    "Travel & Dining", "Restaurant",      "Yum China — KFC/Pizza Hut China"),
-    "02150.HK": ("Consumer",    "Travel & Dining", "F&B / Cafe",      "Nayuki Holdings — tea chain"),
-    "00780.HK": ("Consumer",    "Travel & Dining", "Travel & Tourism","Tongcheng Travel — OTA"),
     # Consumer — Food & Beverage / Other
     "09992.HK": ("Consumer",    "",  "Toys & IP",                "Pop Mart International"),
     "00322.HK": ("Consumer",    "",  "Food & Beverage",          "Tingyi"),

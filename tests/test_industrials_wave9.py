@@ -74,7 +74,7 @@ def test_the_thirty_two_labels_are_in_scope_on_their_rows():
     import json
     from pathlib import Path
     raw = json.loads((Path(ipm.__file__).parent / "industry_profile_map.json").read_text(encoding="utf-8"))
-    assert raw["version"] == 23
+    assert raw["version"] >= 23          # Wave 10 (owner, 2026-09-27) moved it to 24
     assert set(_WAVE9_ROWS) <= set(raw["routing_scope"])
     assert m is not None
 
@@ -201,8 +201,8 @@ def test_catl_is_carved_out_and_the_us_electrical_cohort_is_sigma_trimmed():
 
 
 def test_the_sub_cohorts_split_ltl_truckload_parcel_minimills_integrated_and_aggregates():
-    assert set(sp.SUBCOHORT_BASKETS) == {"LTL", "TRUCKLOAD", "PARCEL & LOGISTICS", "STEEL - MINIMILL (EAF)",
-                                         "STEEL - INTEGRATED", "AGGREGATES"}
+    assert {"LTL", "TRUCKLOAD", "PARCEL & LOGISTICS", "STEEL - MINIMILL (EAF)",
+            "STEEL - INTEGRATED", "AGGREGATES"} <= set(sp.SUBCOHORT_BASKETS)     # Wave 10 (owner, 2026-09-27) added its own
     assert sp.SUBCOHORT_OF["ODFL"] == "LTL" and sp.SUBCOHORT_OF["UPS"] == "PARCEL & LOGISTICS"
     assert sp.SUBCOHORT_OF["NUE"] == "STEEL - MINIMILL (EAF)" and sp.SUBCOHORT_OF["MT"] == "STEEL - INTEGRATED"
     assert sp.SUBCOHORT_OF["VMC"] == "AGGREGATES"

@@ -206,12 +206,15 @@ def test_traditional_retail_is_the_only_consumer_profile_with_no_dcf_leg():
                         if isinstance(m, dict))}
     without = sorted(set(INDUSTRY_VALUATION_PROFILES["Consumer"]) - dcf_names)
     # Wave 4 (2026-09-26): Tobacco has no DCF leg by design (FCF Yield anchor, DDM).
-    assert without == ["Tobacco", "Traditional Retail"], without
+    # Wave 10 (owner, 2026-09-27): the Travel & Dining split, Auto Parts & Suppliers and Leisure Products & Brands price on
+    # multiples and exclude DCF, as the owner's tables specify.
+    assert without == ["Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",
+                       "Hotel Owner-Operator (HK)", "Leisure Products & Brands", "Lodging (Asset-Light)",
+                       "Online Travel", "Restaurants", "Tobacco", "Traditional Retail"], without
     tr = {m["name"]: m["weight"]
           for m in INDUSTRY_VALUATION_PROFILES["Consumer"]["Traditional Retail"]["methods"]}
     # 2026-09-26 (audit A5): the anchor is named EV/EBITDA, which is what it computes.
-    assert tr == {"EV/EBITDA": 0.4, "P/E": 0.25, "EV/Revenue": 0.15,
-                  "ROIC vs WACC": 0.1, "FCF Yield": 0.1}, tr
+    assert tr == {"Forward EV/EBITDA": 0.4, "Forward P/E": 0.35, "FCF Yield": 0.25}, tr   # Wave 10 (owner, 2026-09-27), decision 5
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -440,6 +443,9 @@ class TestMarginAxisMonotonicity:
             "Online Gaming / Sports Betting",
             # Wave 4 (2026-09-26): reached by industry rows and pins, never by the ladder.
             "Agribusiness & Food Processing", "Grocery & Discount Retail", "Tobacco",
+            # Wave 10 (owner, 2026-09-27): reached by industry rows and pins, never by the ladder.
+            "Restaurants", "Casinos & Integrated Resorts", "Lodging (Asset-Light)", "Hotel Owner-Operator (HK)",
+            "Online Travel", "Cruise Lines", "Auto Parts & Suppliers", "Leisure Products & Brands",
         }, sorted(set(INDUSTRY_VALUATION_PROFILES["Consumer"]) - set(witnesses))
         for name, (cagr, fcf) in witnesses.items():
             de = 2.0 if name == "Automotive & EV" else D_TO_E
@@ -605,7 +611,10 @@ class TestTheKnownResiduals:
         `[0.03, 0.05)`, and the second exposure worth knowing about is cliff (ii),
         which needs a 40% CAGR and neither sportswear peer is near it.
         """
-        for t in ("02331.HK", "01368.HK"):
+        # Wave 10 (owner, 2026-09-27), decision 6: Li Ning is pinned to Apparel / Athletic Wear beside ANTA, so only Xtep
+        # still reaches the ladder; the premise holds for the one unpinned peer.
+        assert TICKER_SECTOR_LOOKUP["02331.HK"][1] == "Apparel / Athletic Wear"
+        for t in ("01368.HK",):
             assert t in TICKER_SECTOR_LOOKUP, t
             sector, profile = TICKER_SECTOR_LOOKUP[t][0], TICKER_SECTOR_LOOKUP[t][1]
             assert sector == "Consumer", (t, sector)
@@ -855,7 +864,7 @@ class TestTheSignatureIsBackwardCompatible:
         assert get_wacc_profile_for_ticker("2020.HK") == ("Tech", "")
         # The two unpinned peers carry an empty override, so production DOES run
         # the ladder for them. That is the vulnerability the owner named.
-        assert get_wacc_profile_for_ticker("02331.HK") == ("Consumer", "")
+        assert get_wacc_profile_for_ticker("02331.HK") == ("Consumer", "Apparel / Athletic Wear")   # Wave 10 (owner, 2026-09-27): pinned
         assert get_wacc_profile_for_ticker("01368.HK") == ("Consumer", "")
         # Wave 4 (owner, 2026-09-26): COST is pinned Membership / Subscription
         # Retail, shipped with the Discount Stores row it shares with WMT.
@@ -1023,7 +1032,9 @@ class TestTheGoldenBlindSpot:
         fixture in the basket is insulated from the golden suite, so any future
         classifier change to any sector branch ships with the same zero coverage.
         """
-        assert "MELI" not in TICKER_SECTOR_LOOKUP
+        # Wave 10 (owner, 2026-09-27), decision 6: MELI is pinned to the profile its ladder reached, so the fixture no longer
+        # depends on the ladder; the reproduction below still holds.
+        assert TICKER_SECTOR_LOOKUP["MELI"][1] == "Hyper-Growth Platform"
         got = classify_valuation_profile("Tech", 0.4219, 0.3028, 1.6882, False,
                                          revenue_base=28.89e9)
         archived = json.loads(
@@ -1113,7 +1124,7 @@ class TestTheOpsSpellingsAreInTheSwap:
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
         # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
-        assert (tot, trail, elig, anchored) == (135, 27, 27, 8)   # 2026-09-27: 14 unrouted profiles removed; Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
+        assert (tot, trail, elig, anchored) == (145, 26, 26, 8)   # Wave 10 (2026-09-27): +10 profiles, Traditional Retail left trailing P/E; 2026-09-27: 14 unrouted profiles removed; Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
         assert sorted(consumer_anchors) == [
             # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
             # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E

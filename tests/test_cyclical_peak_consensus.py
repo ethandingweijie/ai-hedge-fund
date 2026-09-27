@@ -290,6 +290,8 @@ def test_the_cyclical_profiles_are_the_ones_the_plans_name():
         # Wave 3 (owner framework 2026-09-22): the delivery cycle is the premise.
         "Commercial Aerospace & Engines",
         "Agribusiness & Food Processing",    # Wave 4 (2026-09-26): crush spreads and protein margins mean-revert
+        # Wave 10 (owner, 2026-09-27): the production, Macau and cruise cycles.
+        "Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",
         # Wave 9 (owner, 2026-09-27): metals, shipping, commodity chemicals and paper price mid-cycle.
         "Base Metals", "Precious Metals", "Diversified Miners", "Container & Bulk Shipping",
         "Commodity Chemicals & Ag Inputs", "Packaging & Paper"})

@@ -136,7 +136,7 @@ def test_zts_fixture_meta_check_failure_captured_in_audit():
     audit, err = _exec_phase_10_5_hookpoint(fixture, ["ZTS"])
     assert err is None
     assert audit["ZTS"]["meta_check"]["passed"] is False
-    assert audit["ZTS"]["meta_check"]["suggested_profile"] == "Large Cap Pharma"
+    assert audit["ZTS"]["meta_check"]["suggested_profile"] == "Specialty & Generic Pharma"   # Wave 10 (owner, 2026-09-27): ZTS re-pinned
 
 
 # ── pipeline.py source-level regression checks ─────────────────────────────

@@ -300,6 +300,12 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Mature SaaS":                 {"US": ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")},
     "Mature Platform":             {"US": ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")},
     "REIT (Specialty / OpCo)":     {"US": ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")},   # Wave 8b step 3
+    # Wave 10 (owner, 2026-09-27): decisions 1, 3 and 4 (online travel and cruise populated to five or more)
+    "Lodging (Asset-Light)":       {"US": ("MAR", "HLT", "IHG", "H", "WH", "CHH")},
+    "Online Travel":               {"US": ("BKNG", "EXPE", "ABNB", "TCOM", "MMYT", "TRIP")},
+    "Cruise Lines":                {"US": ("RCL", "CCL", "NCLH", "VIK", "LIND")},
+    "City Gas Distribution (HK / China)": {"HKSE": ("0003.HK", "2688.HK", "0392.HK", "1193.HK", "0384.HK")},
+    "Specialty & Generic Pharma":  {"US": ("TEVA", "ZTS", "VTRS", "ELAN", "ANIP")},
     # Wave 8c (owner verdict C1): the Tier-1 landlords' own median carries their P/B and so the P/NAV read
     # on a published NAV; the broad HKSE diversified label sat at 0.30x with small-cap illiquidity in it.
     "Landlord / Investment Property (HK)": {"HKSE": ("00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK")},

@@ -86,7 +86,7 @@ REPORT_FAMILIES: dict[str, dict] = {
                      "Refining & Marketing", "Oilfield Services & Drilling", "Energy Tech Licensor",
                      "Upstream Oil & Gas", "Integrated Oil & Gas", "Coal", "Mining (Major)", "Offshore Marine & Resources (SG)",
                      "Base Metals", "Precious Metals", "Diversified Miners",   # Wave 9
-                     "Digital Asset Mining"],
+                     "Digital Asset Mining", "City Gas Distribution (HK / China)"],
         "rows": ["revenue", "ebitda", "fcf", "capex", "net_debt", "nd_ebitda"],
         "exposition": ["EV/EBITDA (norm) with the normalisation window stated", "PV-10 coverage", "SOTP (segments) for refiners", "rate base for utilities"],
         "skeleton": ["rating", "mid-cycle multiple and where the cycle sits", "volume and price", "capital return", "risk"],
@@ -96,7 +96,7 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["Packaged Consumer & Lifestyle (SG)", "Agribusiness & Food (SG)", "Food & Beverage", "Agribusiness & Food Processing",
                      "Grocery & Discount Retail", "Tobacco", "Apparel / Athletic Wear", "Household / Personal", "Traditional Retail",
                      "Luxury Goods", "Consumer Growth", "Membership / Subscription Retail", "Consumer Durables", "Automotive & EV",
-                     "Online Gaming / Sports Betting", "Travel & Dining", "Local Services & Instant Retail"],
+                     "Online Gaming / Sports Betting", "Travel & Dining", "Local Services & Instant Retail", "Restaurants", "Casinos & Integrated Resorts", "Lodging (Asset-Light)", "Hotel Owner-Operator (HK)", "Online Travel", "Cruise Lines", "Auto Parts & Suppliers", "Leisure Products & Brands"],
         "rows": ["revenue", "ebit_m", "fcf", "net_debt", "dps"],
         "exposition": ["Forward P/E against the NTM basket", "DDM at cost of equity where declared", "EV/EBITDA (norm) for cyclicals"],
         "skeleton": ["rating", "forward multiple against the basket", "volume/price and margin", "payout", "risk"],
@@ -105,7 +105,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     "Health care": {
         "profiles": ["Pre-approval Biotech", "Commercial Biotech", "Large Cap Pharma", "Managed Care", "MedTech / Devices",
                      "Surgical Robotics / Capital Systems", "CDMO / Life Science Tools", "Healthcare Providers / Services",
-                     "Pharma Distribution", "Healthcare Provider (SG)"],
+                     "Pharma Distribution", "Healthcare Provider (SG)", "Specialty & Generic Pharma"],
         "rows": ["revenue", "ebit_m", "ni", "fcf", "net_debt"],
         "exposition": ["rNPV state (accepted or quarantined, and what it covers)", "the Forward P/E sanity gate when it fires",
                        "the structural flag on managed care"],

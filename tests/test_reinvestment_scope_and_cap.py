@@ -121,7 +121,8 @@ class TestTheAllowlistIsTheOwnersList:
         # 117 -> 120 with Wave 6's Card Issuer & Consumer Lender, Insurance Broker, Financial Data & Ratings (2026-09-27).
         # 120 -> 124 with Wave 7's Analog / Mixed-signal IDM, Media & Streaming, Networking & Communication Equipment, Telecom Carrier (2026-09-27).
         # 148 -> 135 with the 14 unrouted profiles removed (owner, 2026-09-27; the Biopharma Managed Care copy shared its name).
-        assert len(every) == 135, (   # Wave 8: +4 property profiles; Wave 8b step 3: +1; Wave 9 (2026-09-27): +19 industrial, materials, metals, transport and holdco profiles
+        # 135 -> 145 with Wave 10 (owner, 2026-09-27)'s ten profiles.
+        assert len(every) == 145, (   # Wave 8: +4 property profiles; Wave 8b step 3: +1; Wave 9 (2026-09-27): +19 industrial, materials, metals, transport and holdco profiles
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:

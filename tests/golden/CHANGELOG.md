@@ -1594,3 +1594,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: 14 unrouted profiles removed (owner, 2026-09-27): EM Bank (Premium), Neo/Challenger, EPC Contractor, Animal Health, Medical Devices, the Biopharma copy of Managed Care, Payment Processors, OSAT / Packaging, Pre-Revenue Tech, Early Platform, High-Growth Tech / AI, Levered Subscription, Stable Growth and Backlog-Gated Long Cycle with its gate and constants block; no fixture sits on any of them, so only the constants digest in param_version moves
 
+## 2026-09-27T16:03:28+00:00
+
+- regenerated at HEAD: `a064e86a`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 10 (owner, 2026-09-27, decisions 1-7): seventeen out-of-scope labels enter routing_scope with ten new profiles, Traditional Retail re-specified, pins ahead of scope (MELI, SE, Li Ning, Ferrari, GPC, Haleon, JD Health, three biotechs, the Travel & Dining re-pins, the cruise lines, Hengrui, Zoetis) and five-name baskets; no fixture's valuation moves -- the constants/profile digest in param_version moves on every fixture, BABA and 09988.HK record the Specialty Retail row firing before their China Internet Platform pin wins, and MELI's winner is now its pin (same Hyper-Growth Platform profile)
+

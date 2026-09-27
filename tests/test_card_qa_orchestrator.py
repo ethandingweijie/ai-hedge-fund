@@ -100,7 +100,7 @@ def test_zts_meta_check_fails_no_card_audits_attempted():
     assert len(audit["human_review_flags"]) == 1
     flag = audit["human_review_flags"][0]
     assert flag["reason"] == "classification_likely_wrong"
-    assert flag["suggested_profile"] == "Large Cap Pharma"
+    assert flag["suggested_profile"] == "Specialty & Generic Pharma"   # Wave 10 (owner, 2026-09-27): ZTS re-pinned
     # CRUCIAL: no LLM calls fired (short-circuit worked)
     assert spy["calls"] == 0
     # No budget consumed

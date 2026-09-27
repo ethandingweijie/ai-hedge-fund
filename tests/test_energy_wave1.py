@@ -95,7 +95,12 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
              "Railroads", "Trucking", "Integrated Freight & Logistics", "Marine Shipping", "Chemicals", "Agricultural Inputs",
              "Chemicals - Specialty", "Construction Materials", "Packaging & Containers", "Paper, Lumber & Forest Products",
              "Industrial Materials", "Steel", "Aluminum", "Copper", "Gold", "Other Precious Metals", "Silver"}   # tests/test_industrials_wave9.py
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7 | wave8 | wave9
+    wave10 = {"Specialty Retail", "Apparel - Retail", "Apparel - Manufacturers", "Apparel - Footwear & Accessories",
+              "Auto - Manufacturers", "Auto - Parts", "Restaurants", "Gambling, Resorts & Casinos", "Leisure", "Luxury Goods",
+              "Travel Lodging", "Travel Services", "Furnishings, Fixtures & Appliances",
+              "Drug Manufacturers - Specialty & Generic", "Medical - Pharmaceuticals", "Regulated Gas",
+              "Renewable Utilities"}                                            # tests/test_consumer_wave10.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7 | wave8 | wave9 | wave10
 
 
 def test_scope_does_not_reach_other_industries():

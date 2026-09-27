@@ -33,9 +33,10 @@
     "v20: Wave 6 financials (owner decisions 2026-09-27). Eleven Financials labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ladder (Ping An, China Life, AIA on Money Center Bank; COF and SYF on Mature Platform with a DCF on a lender; MMC, AON, SPGI, MSCI on Mature Platform; BRK-B a Hyperscaler). Rows: Banks - Regional -> Super-Regional Bank (was EM Bank; the HK market map keeps EM Bank for HK regionals); Banks (the SG string) -> Money Center Bank, SG market map -> Money Center Bank (SG); Financial - Credit Services -> Card Issuer & Consumer Lender (new profile; V, MA keep Payment Networks pins); Insurance - Diversified -> Insurance (P&C) (was the life profile); Insurance - Brokers -> Insurance Broker (new profile). Pins: PGR, CB, AIG, TRV -> Insurance (P&C); AIA, China Life, Ping An, Great Eastern -> Insurance (life, embedded value input); USB, PNC, TFC -> Super-Regional Bank; SPGI, MSCI -> Financial Data & Ratings (new); 00388.HK -> Market Infrastructure; BRK-B -> Holding Company (look-through sotp pre-fill). Cut from the wave: J36.SI, BN4.SI (Wave 9), 00945.HK (MFC.TO is the primary line). Conglomerates stays out of scope. Decision 5: comps_exchange_overrides sends S68.SI (SGX) to the US Financial - Data & Stock Exchanges cohort for its peer basket, a documented exception to the one-market rule -- SES has no exchange cohort and its sector rung is banks at 9.8x; the industry label is the same string in both markets.",
     "v21: Wave 7 technology and communications (owner decisions 2026-09-27). Fourteen labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ratio ladder, whose Tech branch compared a venue-currency revenue to a US$100bn line (Lenovo, NetEase, Kuaishou, BYD Electronic became hyperscalers). Rows: Telecommunications Services -> Telecom Carrier (new; Stable Growth stays as a profile); Entertainment and Electronic Gaming & Multimedia -> Media & Streaming (new); Communication Equipment -> Networking & Communication Equipment (new); Information Technology Services -> IT Services; Advertising Agencies -> Ad / Consulting; Consumer Electronics -> Consumer Electronics / Hardware Ecosystem (AAPL keeps its Hyperscaler pin). HK market map: Internet Content & Information and Electronic Gaming & Multimedia -> China Internet Platform (Baidu, Kuaishou, NetEase join Tencent); Computer Hardware and Hardware, Equipment & Parts -> Consumer Electronics / Hardware Ecosystem. Pins: TXN ADI NXPI MCHP ON -> Analog / Mixed-signal IDM (new); LRCX KLAC TER -> Equipment / EDA; T VZ TMUS CMCSA CHTR and the three China carriers -> Telecom Carrier; NFLX DIS WBD EA TTWO -> Media & Streaming; CSCO ANET CIEN MSI JNPR -> Networking; ACN IBM CTSH INFY -> IT Services; SMIC and Hua Hong -> IDM / Foundry. Cut from the wave: 00020.HK, CJLU.SI, AIY.SI. Engine: the static tech table is a fallback (decision 2, alternative), NTM forward multiples on, Cyclical_Peak_Consensus regime flag, growth premium in absolute-spread form capped 0.85-1.30, the ladder compares revenue in USD.",
     "v22: Wave 8 real estate (owner decisions 2026-09-27, all seven; decision 1 amended to keep every name, decision 3 both). Twelve labels enter routing_scope: the eight REIT labels -> RealEstate / REIT (REIT - Mortgage stays out: a levered spread business for a Financials wave); Real Estate - Development -> Homebuilder / Land Developer (US) and Property Developer (HK / China) by the HK market map; Real Estate - Diversified -> REIT (US) and Landlord / Investment Property (HK); Real Estate - Services -> Real Estate Services (US, HK) with the SG agency row kept; Residential Construction -> Homebuilder / Land Developer. The SG market map already routes S-REITs and developers and now applies (labels in scope). REIT sub-type comes from the label and dcf_agent._REIT_SUBTYPE_PINS, not the keyword classifier.",
-    "v23: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27). Thirty-two labels enter routing_scope (the 29 rows of the Stage 1 table cover 32 FMP labels). Conglomerates -> Blended Industrial OpCo in the US and Asian Holding Company (Look-Through) on HK and SG; Industrial Materials -> Diversified Miners; Specialty Business Services -> Industrial Route & Uniform Services with RELX / TRI (Information Services) and Copart / RB Global (Marketplace) pinned; Marine Shipping -> Container & Bulk Shipping; Integrated Freight & Trucking -> Trucking & Parcel Logistics; metals split into Base Metals, Precious Metals and Diversified Miners."
+    "v23: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27). Thirty-two labels enter routing_scope (the 29 rows of the Stage 1 table cover 32 FMP labels). Conglomerates -> Blended Industrial OpCo in the US and Asian Holding Company (Look-Through) on HK and SG; Industrial Materials -> Diversified Miners; Specialty Business Services -> Industrial Route & Uniform Services with RELX / TRI (Information Services) and Copart / RB Global (Marketplace) pinned; Marine Shipping -> Container & Bulk Shipping; Integrated Freight & Trucking -> Trucking & Parcel Logistics; metals split into Base Metals, Precious Metals and Diversified Miners.",
+    "v24: Wave 10 (owner, 2026-09-27, decisions 1-3 and 5-7). Seventeen labels whose rows sat outside routing_scope enter it. Travel & Dining split: Restaurants, Casinos & Integrated Resorts, Lodging (Asset-Light) with an HK row to Hotel Owner-Operator (HK), and Travel Services -> Online Travel (cruise lines pinned). Auto - Manufacturers -> Automotive (OEM); Auto - Parts -> Auto Parts & Suppliers; Leisure -> Leisure Products & Brands; the two pharma labels -> Specialty & Generic Pharma; HK Regulated Gas -> City Gas Distribution (HK / China). The dead Other Industrial Metals & Mining row is deleted."
   ],
-  "version": 23,
+  "version": 24,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -66,12 +67,12 @@
       "Asset Manager"
     ],
     "Auto - Manufacturers": [
-      "Consumer",
-      "Automotive & EV"
+      "Industrials",
+      "Automotive (OEM)"
     ],
     "Auto - Parts": [
       "Consumer",
-      "Consumer Durables"
+      "Auto Parts & Suppliers"
     ],
     "Banks - Diversified": [
       "Financials",
@@ -127,7 +128,7 @@
     ],
     "Drug Manufacturers - Specialty & Generic": [
       "Biopharma",
-      "Large Cap Pharma"
+      "Specialty & Generic Pharma"
     ],
     "Electrical Equipment & Parts": [
       "Industrials",
@@ -155,7 +156,7 @@
     ],
     "Gambling, Resorts & Casinos": [
       "Consumer",
-      "Travel & Dining"
+      "Casinos & Integrated Resorts"
     ],
     "Gold": [
       "Resources",
@@ -207,7 +208,7 @@
     ],
     "Leisure": [
       "Consumer",
-      "Consumer Growth"
+      "Leisure Products & Brands"
     ],
     "Luxury Goods": [
       "Consumer",
@@ -235,7 +236,7 @@
     ],
     "Medical - Pharmaceuticals": [
       "Biopharma",
-      "Large Cap Pharma"
+      "Specialty & Generic Pharma"
     ],
     "Oil & Gas Integrated": [
       "Resources",
@@ -244,10 +245,6 @@
     "Oil & Gas Refining & Marketing": [
       "Energy",
       "Refining & Marketing"
-    ],
-    "Other Industrial Metals & Mining": [
-      "Resources",
-      "Mining (Major)"
     ],
     "Other Precious Metals": [
       "Resources",
@@ -291,7 +288,7 @@
     ],
     "Restaurants": [
       "Consumer",
-      "Travel & Dining"
+      "Restaurants"
     ],
     "Security & Protection Services": [
       "Industrials",
@@ -351,11 +348,11 @@
     ],
     "Travel Lodging": [
       "Consumer",
-      "Travel & Dining"
+      "Lodging (Asset-Light)"
     ],
     "Travel Services": [
       "Consumer",
-      "Travel & Dining"
+      "Online Travel"
     ],
     "Oil & Gas Drilling": [
       "Energy",
@@ -745,6 +742,14 @@
       "Conglomerates": [
         "Financials",
         "Asian Holding Company (Look-Through)"
+      ],
+      "Travel Lodging": [
+        "Consumer",
+        "Hotel Owner-Operator (HK)"
+      ],
+      "Regulated Gas": [
+        "Energy",
+        "City Gas Distribution (HK / China)"
       ]
     },
     "SG": {
@@ -765,8 +770,8 @@
         "Airlines"
       ],
       "Auto - Manufacturers": [
-        "Consumer",
-        "Automotive & EV"
+        "Industrials",
+        "Automotive (OEM)"
       ],
       "Banks - Regional": [
         "Financials",
@@ -818,7 +823,7 @@
       ],
       "Gambling, Resorts & Casinos": [
         "Consumer",
-        "Travel & Dining"
+        "Casinos & Integrated Resorts"
       ],
       "General Transportation": [
         "Transportation",
@@ -902,7 +907,7 @@
       ],
       "Restaurants": [
         "Consumer",
-        "Travel & Dining"
+        "Restaurants"
       ],
       "Semiconductors": [
         "Tech",
@@ -938,7 +943,12 @@
     "Agricultural Inputs",
     "Airlines, Airports & Air Services",
     "Aluminum",
+    "Apparel - Footwear & Accessories",
+    "Apparel - Manufacturers",
+    "Apparel - Retail",
     "Asset Management",
+    "Auto - Manufacturers",
+    "Auto - Parts",
     "Banks",
     "Banks - Diversified",
     "Banks - Regional",
@@ -957,6 +967,7 @@
     "Copper",
     "Discount Stores",
     "Drug Manufacturers - General",
+    "Drug Manufacturers - Specialty & Generic",
     "Electrical Equipment & Parts",
     "Electronic Gaming & Multimedia",
     "Engineering & Construction",
@@ -966,6 +977,8 @@
     "Financial - Data & Stock Exchanges",
     "Food Confectioners",
     "Food Distribution",
+    "Furnishings, Fixtures & Appliances",
+    "Gambling, Resorts & Casinos",
     "Gold",
     "Grocery Stores",
     "Hardware, Equipment & Parts",
@@ -983,6 +996,8 @@
     "Insurance - Property & Casualty",
     "Integrated Freight & Logistics",
     "Internet Content & Information",
+    "Leisure",
+    "Luxury Goods",
     "Manufacturing - Metal Fabrication",
     "Manufacturing - Tools & Accessories",
     "Marine Shipping",
@@ -992,6 +1007,7 @@
     "Medical - Distribution",
     "Medical - Healthcare Plans",
     "Medical - Instruments & Supplies",
+    "Medical - Pharmaceuticals",
     "Oil & Gas Drilling",
     "Oil & Gas Equipment & Services",
     "Oil & Gas Exploration & Production",
@@ -1015,8 +1031,11 @@
     "Real Estate - Diversified",
     "Real Estate - Services",
     "Regulated Electric",
+    "Regulated Gas",
+    "Renewable Utilities",
     "Rental & Leasing Services",
     "Residential Construction",
+    "Restaurants",
     "Security & Protection Services",
     "Semiconductor Equipment & Materials",
     "Semiconductors",
@@ -1025,9 +1044,12 @@
     "Software - Infrastructure",
     "Solar",
     "Specialty Business Services",
+    "Specialty Retail",
     "Steel",
     "Telecommunications Services",
     "Tobacco",
+    "Travel Lodging",
+    "Travel Services",
     "Trucking",
     "Waste Management"
   ],

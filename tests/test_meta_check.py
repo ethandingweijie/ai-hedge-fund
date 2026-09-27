@@ -74,8 +74,8 @@ def test_meta_check_fails_on_zts_misclassification():
     }}
     result = run_meta_check(state, "ZTS")
     assert result["passed"] is False
-    assert result["suggested_profile"] == "Large Cap Pharma"
-    assert any("ZTS" in i and "Large Cap Pharma" in i for i in result["issues"])
+    assert result["suggested_profile"] == "Specialty & Generic Pharma"   # Wave 10 (owner, 2026-09-27): ZTS re-pinned
+    assert any("ZTS" in i and "Specialty & Generic Pharma" in i for i in result["issues"])
 
 
 def test_meta_check_fails_on_profile_sector_mismatch_without_override():
@@ -113,7 +113,7 @@ def test_zts_fixture_fails_meta_check_with_correct_suggestion():
     fixture = _load_fixture("ZTS__b91aa9b4.json")
     result = run_meta_check(fixture, "ZTS")
     assert result["passed"] is False
-    assert result["suggested_profile"] == "Large Cap Pharma"
+    assert result["suggested_profile"] == "Specialty & Generic Pharma"   # Wave 10 (owner, 2026-09-27): ZTS re-pinned
 
 
 def test_mrna_fixture_passes_meta_check():
