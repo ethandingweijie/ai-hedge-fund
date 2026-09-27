@@ -39,7 +39,7 @@ def test_every_financials_label_is_in_scope_and_routes():
     for label, target in LABELS.items():
         assert label in scope, label
         assert ipm.profile_for_industry(label) == target, label
-    assert "Conglomerates" not in scope                                  # J36.SI, BN4.SI: Wave 9
+    assert "Conglomerates" in scope and ipm.profile_for_ticker("J36.SI", "Conglomerates") == ("Financials", "Asian Holding Company (Look-Through)")   # Wave 9 (2026-09-27) brought them in
     assert ipm.market_map("SG")["Banks"] == ("Financials", "Money Center Bank (SG)")
     assert ipm.market_map("HK")["Banks - Regional"] == ("Financials", "EM Bank")
     assert ipm.profile_for_ticker("D05.SI", "Banks") == ("Financials", "Money Center Bank (SG)")

@@ -1,7 +1,7 @@
 {
   "ticker": "FCX",
-  "captured_at": "2026-09-16T13:24:49+00:00",
-  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "captured_at": "2026-09-27T13:07:50+00:00",
+  "commit": "c5a7dbd6fd90eac9e190455fdde01233f7bff1d1",
   "end_date": "2026-09-16",
   "state_source": "lookup_tables",
   "source_run_id": null,
@@ -16,13 +16,13 @@
     "src.memory.calibration.active_version": 1,
     "src.memory.calibration.apply_profile_weights": 1,
     "src.memory.calibration.iv_multiplier": 1,
-    "src.tools.api._fmp_get": 16,
+    "src.tools.api._fmp_get": 15,
     "src.tools.fred.get_fred_spread": 1
   },
-  "recorded_calls": 26,
+  "recorded_calls": 25,
   "replay": {
-    "base_iv": 25.58,
-    "profile": "Mining (Major)",
+    "base_iv": 39.27,
+    "profile": "Base Metals",
     "skip_reason": null
   }
 }

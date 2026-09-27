@@ -120,7 +120,7 @@ class TestTheAllowlistIsTheOwnersList:
         # 116 -> 117 with Surgical Robotics / Capital Systems (owner split, 2026-09-26); still not.
         # 117 -> 120 with Wave 6's Card Issuer & Consumer Lender, Insurance Broker, Financial Data & Ratings (2026-09-27).
         # 120 -> 124 with Wave 7's Analog / Mixed-signal IDM, Media & Streaming, Networking & Communication Equipment, Telecom Carrier (2026-09-27).
-        assert len(every) == 129, (   # Wave 8 (2026-09-27): +4 property profiles; Wave 8b step 3: +REIT (Specialty / OpCo)
+        assert len(every) == 148, (   # Wave 8: +4 property profiles; Wave 8b step 3: +1; Wave 9 (2026-09-27): +19 industrial, materials, metals, transport and holdco profiles
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:
@@ -423,7 +423,7 @@ class TestTheInvariantsAreNotDuplicated:
         # added without a record.
         # FIVE since 2026-09-19: GATE_DETERMINISTIC_KPI_PRECEDENCE was retired
         # with the composite it measured.
-        assert src.count('"applied": True,') == 9   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27)
+        assert src.count('"applied": True,') == 11   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):
         """Out-of-scope names get one sentence; in-scope names get the paragraph.

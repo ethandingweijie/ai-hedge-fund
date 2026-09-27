@@ -37,7 +37,7 @@ def test_unmapped_industry_returns_none_rather_than_guessing():
 def test_known_rows_route_where_a_practitioner_would():
     """Spot-checks on the names the ladder got wrong."""
     assert profile_for_industry("Auto - Manufacturers") == ("Consumer", "Automotive & EV")
-    assert profile_for_industry("Gold") == ("Resources", "Mining (Major)")
+    assert profile_for_industry("Gold") == ("Resources", "Precious Metals")        # Wave 9 (2026-09-27): metals split from Mining (Major)
     assert profile_for_industry("Insurance - Life") == ("Financials", "Insurance")
     assert profile_for_industry("Financial - Data & Stock Exchanges") == (
         "Financials", "Market Infrastructure")
@@ -204,7 +204,7 @@ class TestIndustryRoutingWiring:
         got = d._industry_routed_profile("02259.HK", "Tech")
         assert got is not None
         sector, profile, data = got
-        assert (sector, profile) == ("Resources", "Mining (Major)")
+        assert (sector, profile) == ("Resources", "Precious Metals")   # Wave 9 (2026-09-27)
         assert data and data.get("methods")
 
     def test_a_lookup_failure_does_not_abort_the_run(self, monkeypatch):
@@ -277,10 +277,10 @@ class TestAnchorImplementabilityGuard:
         from src.agents.analysis import dcf_agent as d
         monkeypatch.setattr("src.tools.api.get_company_industry",
                             lambda t, api_key=None: "Conglomerates")
-        # Conglomerates -> Financials/Holding Company. Wave 6 (2026-09-27) made the anchor
-        # implementable (SOTP (analyst), the accepted look-through), so the guard is exercised
-        # on the live row with the flag forced off for this test only.
-        row = P["Financials"]["Holding Company"]["methods"][0]
+        # Conglomerates on HK -> Financials / Asian Holding Company (Look-Through) (Wave 9, 2026-09-27). Its anchor
+        # is implementable (SOTP (analyst), the accepted look-through), so the guard is exercised on the live
+        # row with the flag forced off for this test only.
+        row = P["Financials"]["Asian Holding Company (Look-Through)"]["methods"][0]
         assert row["name"] == "SOTP (analyst)" and row["implementable"]
         monkeypatch.setitem(row, "implementable", False)
         assert d._industry_routed_profile("00267.HK", "Financials") is None
@@ -290,7 +290,7 @@ class TestAnchorImplementabilityGuard:
         monkeypatch.setattr("src.tools.api.get_company_industry",
                             lambda t, api_key=None: "Gold")
         got = d._industry_routed_profile("02259.HK", "Materials")
-        assert got and got[1] == "Mining (Major)"
+        assert got and got[1] == "Precious Metals"            # Wave 9 (2026-09-27): Gold left Mining (Major)
 
 
 class TestPlatformsMislabelledAsRetail:

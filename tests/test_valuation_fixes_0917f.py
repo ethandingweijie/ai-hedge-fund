@@ -123,7 +123,7 @@ _LIVE_COHORT = {
     #            basis      level     cohort   peers
     "02888_HK": ("industry", "all",   7),
     "09988_HK": ("industry", "large", 9),
-    "BN4_SI":   ("sector",   "large", 11),
+    "BN4_SI":   ("sector",   "large", 10),   # 11 until the Wave 9 re-record (2026-09-27) on the 2026-09-22 SES store
     "C38U_SI":  ("industry", "all",   5),
     "D05_SI":   ("sector",   "all",   9),
 }
@@ -139,6 +139,10 @@ _SIZE_MATCHED_BY_3A = {
 
 #: The one fixture with no peer set at all, so `_sector_g_avg` is the default.
 _DEFAULT_G_AVG = 0.08
+
+#: Wave 9 (2026-09-27): BN4.SI re-recorded on the 2026-09-22 SES store; its size-matched sector/large
+#: average is 0.0763 on 10 peers. The item-3a move (0.0643 -> 0.0793) stays in the table as history.
+_WAVE9_G_AVG = {"BN4_SI": 0.0763}
 
 #: Gate B still fires on these eight, so each carries the flag prose to compare
 #: the persisted field against.
@@ -794,6 +798,11 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
         # now exists, which is the opposite of the condition this test was written under.
         assert b["basis"] == "profile" and b["key"] == "Hyperscaler / Tech Conglomerate" and b["peer_count"] == 6, (name, b)
         return
+    if name == "FCX":
+        # Wave 9 (2026-09-27): FCX re-routed to Base Metals and resolves the live US Copper cohort (seven
+        # names); the static fill was the condition before a live copper cohort was read.
+        assert b["basis"] == "industry" and b["key"] == "Copper" and b["peer_count"] == 7, (name, b)
+        return
     assert b == {"basis": "static", "cohort": "US", "peer_count": None}, (name, b)
 
 
@@ -838,6 +847,7 @@ def test_the_two_cohorts_item_3a_moved_moved_to_the_numbers_measured(name, expec
     `growth_premium`, no leg multiple, no IV and no 12m target moved, and
     `base_iv` is bit-identical on all fourteen fixtures."""
     _, to, peers_before = expected
+    to = _WAVE9_G_AVG.get(name, to)
     p = _proj(name)
     for s in _SCENARIOS:
         assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(to, abs=5e-5), s
@@ -875,8 +885,12 @@ def test_u96_and_bn4_share_a_profile_but_not_a_sector_growth_average():
     routes, one measured from a size-matched peer set and one a constant that no
     input can move, and the assertion is that they still differ."""
     u, b = _proj("U96_SI"), _proj("BN4_SI")
-    assert u["profile"] == b["profile"] == "Conglomerate / Industrial (SG)"
-    assert b["scenarios.bear.sector_g_avg"] == pytest.approx(0.0793, abs=5e-5)
+    # Wave 9 (2026-09-27): BN4.SI left `Conglomerate / Industrial (SG)` for Asian Holding Company
+    # (Look-Through), so the shared-profile half of the A/B is history. The half that matters holds:
+    # one average is measured from live peers, the other is the constant no input can move.
+    assert u["profile"] == "Conglomerate / Industrial (SG)"
+    assert b["profile"] == "Asian Holding Company (Look-Through)"
+    assert b["scenarios.bear.sector_g_avg"] == pytest.approx(_WAVE9_G_AVG["BN4_SI"], abs=5e-5)
     assert u["scenarios.bear.sector_g_avg"] == _DEFAULT_G_AVG
     assert b["scenarios.bear.sector_g_avg"] != _DEFAULT_G_AVG
     assert _basis("BN4_SI", "bear") is not None

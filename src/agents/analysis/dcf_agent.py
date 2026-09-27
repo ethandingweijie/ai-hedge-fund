@@ -320,6 +320,10 @@ _BACKLOG_VISIBILITY_PROFILES: frozenset[str] = frozenset({
 _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Memory / DRAM-NAND",
     "Mining (Major)",
+    # Wave 9 (owner, 2026-09-27): the peak-rate multiple is prohibited on these (the shipping clamp, the
+    # feedstock and metal cycles, containerboard); the fade and the peak trigger apply.
+    "Container & Bulk Shipping", "Commodity Chemicals & Ag Inputs", "Packaging & Paper",
+    "Base Metals", "Precious Metals", "Diversified Miners",
     "Upstream Oil & Gas",
     "Integrated Oil & Gas",
     "Refining & Marketing",
@@ -410,6 +414,8 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Oilfield Services & Drilling",
     "Coal",
     "Mining (Major)",
+    "Container & Bulk Shipping", "Commodity Chemicals & Ag Inputs", "Packaging & Paper",   # Wave 9
+    "Base Metals", "Precious Metals", "Diversified Miners",                                # Wave 9
     "Memory / DRAM-NAND",
     "Digital Asset Mining",
     # Wave 2: a policy-cycle hardware maker. Every cyclical gets the fade
@@ -4157,6 +4163,21 @@ _LIVE_CAP_LABEL_PREFIXES = ("REIT", "Real Estate - Diversified")
 #: and an appraised US NAV stays at par.
 _P_NAV_CALIBRATED_EXCHANGES = ("HKSE", "SES")
 _NAV_PRIMARY_BAND = 0.30
+#: Wave 9 (owner, 2026-09-27).
+_MARGIN_PEAK_WINDOW = 7             # years of operating margin the median and sigma are read over
+_MARGIN_PEAK_SIGMA = 1.5            # above median + 1.5 sigma the EBITDA and P/E legs move to mid-cycle
+_MARGIN_PEAK_SWAPS = {"Forward EV/EBITDA": "EV/EBITDA (norm)", "EV/EBITDA": "EV/EBITDA (norm)", "P/E": "P/E (norm)"}
+_BACKLOG_MULTIPLE_COVER = 1.2       # funded backlog / trailing revenue under which the multiple scales down linearly
+_EBITDA_BRIDGE_PROFILES = frozenset({"Capital Goods", "Long-Cycle E&C", "Equipment Rental", "Industrial Distribution",
+                                     "Airlines", "Rail / Logistics", "Trucking & Parcel Logistics", "Container & Bulk Shipping"})
+_EBITDA_BRIDGE_FLAG = 0.10          # Gate 0: a feed EBITDA more than 10% from the operating bridge is flagged
+_MAINT_CAPEX_CEILING_PROFILES = frozenset({"Aggregates & Cement", "Diversified Miners", "Packaging & Paper", "Waste & Environmental Services"})
+_MAINT_CAPEX_CEILING_K = 1.0        # PROPOSED: maintenance capex <= 1.0 x D&A (the owner named the index, not the multiple)
+_ASIAN_HOLDCO_DISCOUNT_BAND = (0.25, 0.40)
+#: Profiles on which a published NAV is read at the cohort's P/NAV (property: book is NAV there). Every other
+#: profile reads an accepted NAV (a miner's reserve NAV, a fleet value) at par.
+_P_NAV_PROFILES = frozenset({"REIT", "S-REIT", "REIT (Specialty / OpCo)", "Landlord / Investment Property (HK)",
+                             "Property Developer (HK / China)", "Property Developer (SG)"})
 _REIT_OUTLIER_SIGMA = 2.5           # Wave 8c (owner verdict A): the outlier flag's threshold, flag only            # Wave 8c (owner verdict C3): the validation band a computed NAV must sit inside to stand
 _P_NAV_WINDOW_DAYS = 365          # four quarters: one audit and reporting cycle (owner, 2026-09-27)
 
@@ -4213,9 +4234,11 @@ def _cohort_p_nav_4q(peer: Optional[dict]) -> Optional[dict]:
         return None
 
 
-def _calibrated_published_nav(most_recent: dict, peer: Optional[dict], raw: float, leg: str) -> float:
-    """The published NAV the leg prices: raw x cohort P/NAV on a fair-value exchange, raw at par elsewhere."""
-    cal = _cohort_p_nav_4q(peer)
+def _calibrated_published_nav(most_recent: dict, peer: Optional[dict], raw: float, leg: str,
+                              profile_name: Optional[str] = None) -> float:
+    """The published NAV the leg prices: raw x cohort P/NAV on a fair-value exchange, raw at par elsewhere.
+    Wave 9: only a property profile reads P/B as P/NAV; a miner's reserve NAV or a fleet value is at par."""
+    cal = _cohort_p_nav_4q(peer) if (profile_name is None or profile_name in _P_NAV_PROFILES) else None
     if cal and cal.get("median"):
         value = float(raw) * float(cal["median"])
         most_recent["_nav_calibration"] = {"leg": leg, "raw_published_nav": float(raw), "cohort_p_nav_median_4q": cal["median"],
@@ -4230,6 +4253,64 @@ def _calibrated_published_nav(most_recent: dict, peer: Optional[dict], raw: floa
                                        "window": "par: US GAAP book is historic cost, P/B is not P/NAV"}
     _leg_trace(kind="nav", nav_source="owner-accepted nav input (par)", raw_published_nav=float(raw), calibrated_nav=float(raw))
     return float(raw)
+
+
+def _backlog_multiple_scale(ticker: str, revenue: Optional[float], ccy: Optional[str]) -> tuple[float, dict]:
+    """Wave 9 (owner, 2026-09-27): EV/EBITDA scales down linearly when the accepted funded backlog covers
+    under 1.2x trailing revenue (scale = cover / 1.2, at most 1). No accepted backlog: unscaled, recorded."""
+    try:
+        from src.data import industry_inputs as _ii9
+        bl = _ii9.accepted_detail(ticker, "backlog", ccy or "USD")
+    except Exception:                                      # noqa: BLE001
+        bl = None
+    if not bl or not isinstance(bl.get("value"), (int, float)) or not revenue or revenue <= 0:
+        return 1.0, {"cover": None, "scale": 1.0, "basis": "no accepted backlog input; the multiple is unscaled"}
+    cover = float(bl["value"]) / float(revenue)
+    scale = min(1.0, cover / _BACKLOG_MULTIPLE_COVER)
+    return scale, {"cover": round(cover, 3), "scale": round(scale, 4), "threshold": _BACKLOG_MULTIPLE_COVER,
+                   "basis": f"accepted backlog {cover:.2f}x trailing revenue against the owner's {_BACKLOG_MULTIPLE_COVER}x"}
+
+
+def _margin_peak(series: list[dict]) -> dict:
+    """Wave 9: the latest operating margin against the median and sigma of up to the prior seven years."""
+    ms = []
+    for r in (series or []):
+        rev, ebit = r.get("revenue"), r.get("ebit")
+        if isinstance(rev, (int, float)) and rev > 0 and isinstance(ebit, (int, float)):
+            ms.append(ebit / rev)
+    if len(ms) < 4:
+        return {"fired": False, "reason": f"{len(ms)} years of margin history; four needed", "years": len(ms)}
+    latest, hist = ms[-1], ms[-(_MARGIN_PEAK_WINDOW + 1):-1]
+    hs = sorted(hist); med = hs[len(hs) // 2] if len(hs) % 2 else (hs[len(hs) // 2 - 1] + hs[len(hs) // 2]) / 2.0
+    mean = sum(hist) / len(hist); sd = (sum((x - mean) ** 2 for x in hist) / max(len(hist) - 1, 1)) ** 0.5
+    fired = sd > 0 and latest > med + _MARGIN_PEAK_SIGMA * sd
+    return {"fired": bool(fired), "latest": round(latest, 4), "median": round(med, 4), "sigma": round(sd, 4),
+            "years": len(hist), "threshold": round(med + _MARGIN_PEAK_SIGMA * sd, 4)}
+
+
+def _index_asian_holdco_discount(ticker: str, assumptions: dict) -> tuple[dict, Optional[str]]:
+    """Wave 9 (owner, 2026-09-27): an Asian holding company's look-through carries a holdco discount indexed
+    to its exchange's conglomerate P/B (discount = 1 - median P/B) and held inside the owner's 25-40% band."""
+    try:
+        from src.data.sector_profiles import get_wacc_profile_for_ticker, SGX_TICKER_SECTOR_LOOKUP
+        t = (ticker or "").upper()
+        prof = (SGX_TICKER_SECTOR_LOOKUP.get(t) or (None, None))[1] if t.endswith(".SI") else get_wacc_profile_for_ticker(t)[1]
+        if prof != "Asian Holding Company (Look-Through)" or not isinstance(assumptions, dict):
+            return assumptions, None
+        from src.data.regional_comps import label_member_symbols, basket_field_values
+        ex = "SES" if t.endswith(".SI") else "HKSE"
+        vals = sorted(basket_field_values(ex, tuple(label_member_symbols(ex, "Conglomerates")), "pb"))
+        if len(vals) < 3:
+            return assumptions, None
+        med = vals[len(vals) // 2] if len(vals) % 2 else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2.0
+        raw = 1.0 - med
+        lo, hi = _ASIAN_HOLDCO_DISCOUNT_BAND
+        pct = min(hi, max(lo, raw))
+        out = dict(assumptions); out["holdco_discount_pct"] = pct
+        return out, (f"Holdco discount {pct:.0%}: indexed to the {ex} conglomerate median P/B {med:.2f}x (implied {raw:.0%}), "
+                     f"held inside the owner's {lo:.0%}-{hi:.0%} band (Wave 9)")
+    except Exception:                                      # noqa: BLE001
+        return assumptions, None
 
 
 def _live_reit_cap_rate(peer: Optional[dict]) -> Optional[tuple[float, str]]:
@@ -6059,6 +6140,15 @@ def _compute_method_value(
     before reaching here by the caller — so this function only sees implementable
     method names or proxy names.
     """
+    _cmv_args = dict(locals())                 # Wave 9: the backlog-gated multiple re-dispatches EV/EBITDA
+    if method_name == "Backlog-Gated EV/EBITDA":
+        _bg_base = _compute_method_value(**{**_cmv_args, "method_name": "EV/EBITDA"})
+        if _bg_base is None:
+            return None
+        _bg_scale, _bg_rec = _backlog_multiple_scale(ticker, revenue_base, reported_currency)
+        most_recent["_backlog_multiple_gate"] = _bg_rec
+        _leg_trace(kind="backlog_multiple", ev_ebitda_value=_bg_base, **_bg_rec)
+        return _bg_base * _bg_scale
     peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
                                      ticker=ticker, market_cap=market_cap)
     # Owner-set discount on PEER multiples for one ticker (valuation_constants
@@ -7240,6 +7330,14 @@ def _compute_method_value(
         fcf = most_recent.get("fcf_owner_earnings") or most_recent.get("free_cash_flow")
         _fcf_label = ("FCF, owner earnings (TTM)"
                       if most_recent.get("fcf_owner_earnings") else "FCF (TTM)")
+        # Wave 9 (owner guardrail, 2026-09-27): heavy-asset processors deduct capex only up to a ceiling of
+        # D&A x _MAINT_CAPEX_CEILING_K (PROPOSED 1.0), so growth capex does not read as a lower free cash yield.
+        if profile_name in _MAINT_CAPEX_CEILING_PROFILES:
+            _ocf9, _cx9, _da9 = (most_recent.get("operating_cash_flow"), most_recent.get("capital_expenditure"),
+                                 most_recent.get("depreciation_and_amortization"))
+            if all(isinstance(x, (int, float)) for x in (_ocf9, _cx9, _da9)):
+                fcf = float(_ocf9) - min(abs(float(_cx9)), _MAINT_CAPEX_CEILING_K * abs(float(_da9)))
+                _fcf_label = f"FCF, capex capped at {_MAINT_CAPEX_CEILING_K:g}x D&A (TTM)"
         # On a cyclical the same normalisation the EV/EBITDA and P/E legs use --
         # mean margin on revenue over five years, IQR-trimmed -- so the whole
         # blend stands on one basis. Anywhere else the TTM figure is the right
@@ -7459,7 +7557,7 @@ def _compute_method_value(
             return None
         _rn = most_recent.get("rnav_per_share_published")
         if isinstance(_rn, (int, float)) and _rn > 0:
-            return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)")   # Wave 8b step 2
+            return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)", profile_name)   # Wave 8b step 2; Wave 9 profile gate
         return None
 
     if method_name in {"NAV (Cap Rates)", "NAV"}:
@@ -11079,6 +11177,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker, _ticker_sotp)
             if _holdco_flag:
                 ticker_forward_flags.append(_holdco_flag)
+            _ticker_sotp, _asia_hc_flag = _index_asian_holdco_discount(ticker, _ticker_sotp)
+            if _asia_hc_flag:
+                ticker_forward_flags.append(_asia_hc_flag)
             _ticker_sotp, _sotp_gate_flag = _gate_live_sotp(
                 ticker, _ticker_sotp, shares, net_debt)
             if _sotp_gate_flag:
@@ -12193,6 +12294,25 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # and maintenance capex % for AFFO compute. Falls to "default" on no
         # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
         # dispatches don't re-classify.
+        # Wave 9 (owner guardrail, 2026-09-27): EBITDA through the operating bridge for capital goods, transport and
+        # rental -- operating income plus D&A -- instead of the feed's EBITDA; the feed value is kept on the record
+        # and a gap over 10% is flagged (Gate 0). Lease liabilities are already inside FMP's total debt.
+        if profile_name in _EBITDA_BRIDGE_PROFILES:
+            _oi9 = most_recent.get("operating_income")
+            if not isinstance(_oi9, (int, float)):
+                _oi9 = most_recent.get("ebit")
+            _da9 = most_recent.get("depreciation_and_amortization")
+            _fe9 = most_recent.get("ebitda")
+            if isinstance(_oi9, (int, float)) and isinstance(_da9, (int, float)):
+                _br9 = float(_oi9) + abs(float(_da9))
+                if _br9 > 0:
+                    _gap9 = (abs(_fe9 - _br9) / _br9) if isinstance(_fe9, (int, float)) else None
+                    most_recent["_ebitda_bridge"] = {"feed_ebitda": _fe9, "bridge_ebitda": _br9, "gap": _gap9}
+                    most_recent["ebitda"] = _br9
+                    if _gap9 is not None and _gap9 > _EBITDA_BRIDGE_FLAG:
+                        ticker_forward_flags.append(
+                            f"EBITDA bridge: the feed's EBITDA {_fe9:,.0f} sits {_gap9:.0%} from operating income + D&A "
+                            f"{_br9:,.0f}; the bridge prices (Wave 9 guardrail)")
         # Wave 8 (owner decision 5, 2026-09-27): a distressed HK / China developer publishes no value
         # on book; the P/BV anchor and the RNAV leg stand down and the run carries the flag.
         if profile_name == "Property Developer (HK / China)":
@@ -12982,6 +13102,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if _pe_norm_swaps:
             _pe_norm_methods = _apply_pe_norm_swaps(
                 _pe_norm_methods, _pe_norm_swaps)
+        # Wave 9 (owner, 2026-09-27): GATE_MARGIN_PEAK. A capital-goods margin above its seven-year median by more
+        # than 1.5 sigma moves the EBITDA and P/E legs onto mid-cycle earnings for every scenario.
+        _mp9 = None
+        if (profile_data or {}).get("margin_peak_gate"):
+            _mp9 = _margin_peak(series)
+            most_recent["_margin_peak"] = _mp9
+            if _mp9.get("fired"):
+                _present9 = {m.get("name") for m in _pe_norm_methods if isinstance(m, dict)}
+                _mp_swaps = [{"from": f, "to": t} for f, t in _MARGIN_PEAK_SWAPS.items()
+                             if f in _present9 and t not in _present9 and t not in _pe_norm_excluded]
+                if _mp_swaps:
+                    _pe_norm_methods = _apply_pe_norm_swaps(_pe_norm_methods, _mp_swaps)
+                    _pe_norm_flag = (_pe_norm_flag + " " if _pe_norm_flag else "") + (
+                        f"Margin peak: operating margin {_mp9['latest']:.1%} is above its {_mp9['years']}-year median "
+                        f"{_mp9['median']:.1%} + {_MARGIN_PEAK_SIGMA} sigma ({_mp9['threshold']:.1%}); "
+                        + ", ".join(f"{s['from']} -> {s['to']}" for s in _mp_swaps) + " (GATE_MARGIN_PEAK)")
             _legs_txt = ", ".join(
                 f"{s['from']}→{s['to']} w={s['weight']:.2f}"
                 + (" (anchor)" if s["anchor"] else "")
@@ -15857,6 +15993,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "gated_output_path_b": None,
                     "basis": f"{_sf_name}: profile-declared structural observation; no weight",
                     "applied": False,
+                })
+            # Wave 9 (owner, 2026-09-27): the margin-peak gate and the backlog-gated multiple, recorded.
+            if (most_recent.get("_margin_peak") or {}).get("fired"):
+                _mpr = most_recent["_margin_peak"]
+                gate_evaluations.append({
+                    "gate_id": "GATE_MARGIN_PEAK", "metric": "operating_margin_vs_7y_median",
+                    "raw_input_path_a": _mpr.get("latest"), "gated_output_path_b": _mpr.get("threshold"),
+                    "basis": f"owner rule: margin above its {_mpr.get('years')}-year median + {_MARGIN_PEAK_SIGMA} sigma moves the EBITDA and P/E legs to mid-cycle",
+                    "applied": True,
+                })
+            _bgr = most_recent.get("_backlog_multiple_gate") or {}
+            if _bgr.get("cover") is not None:
+                gate_evaluations.append({
+                    "gate_id": "GATE_BACKLOG_MULTIPLE", "metric": "backlog_cover_of_trailing_revenue",
+                    "raw_input_path_a": _bgr.get("cover"), "gated_output_path_b": _bgr.get("scale"),
+                    "basis": f"owner rule: EV/EBITDA scales linearly under {_BACKLOG_MULTIPLE_COVER}x cover",
+                    "applied": True,
                 })
             # Wave 8c (owner verdict A): an operating REIT whose own P/FFO sits more than 2.5 sigma from the
             # basket's is flagged; the value is untouched (Welltower at 49x against a 27.5x basket).

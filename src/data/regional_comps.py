@@ -393,6 +393,46 @@ def developer_cluster_multiples(exchange: str, ticker: str, *, band: float = DEV
     return out
 
 
+def label_member_symbols(exchange: str, label: str) -> list[str]:
+    """The store's member symbols of one industry label (cohort all), store form."""
+    _ensure_table()
+    try:
+        rows = _db.query("SELECT DISTINCT symbol FROM regional_comps_members WHERE exchange = ? AND level = 'industry' "
+                         "AND key = ? AND cohort = 'all'", [exchange, label]) or []
+    except Exception:                                      # noqa: BLE001
+        return []
+    return [dict(r)["symbol"] for r in rows]
+
+
+def label_multiples_ruled(exchange: str, label: str, rule: dict, max_age_days: float = MAX_AGE_DAYS) -> dict[str, dict]:
+    """Wave 9 (owner, 2026-09-27): a label's medians recomputed from its members with `rule["exclude"]`
+    carved out and, when `rule["trim_field"]` is set, every member above median + trim_sigma x sigma on that
+    field dropped. Basis "profile", key names the rule so the trace says which cohort priced the name."""
+    def _store(sym: str) -> str:
+        s_ = str(sym).upper()
+        return (s_.split(".")[0].lstrip("0") or "0").zfill(4) + ".HK" if s_.endswith(".HK") else s_
+    members = label_member_symbols(exchange, label)
+    excl = {_store(x) for x in (rule.get("exclude") or [])}
+    keep = [s for s in members if s not in excl]
+    trimmed: list[str] = []
+    tf, ts = rule.get("trim_field"), rule.get("trim_sigma")
+    if tf and ts and keep:
+        vals = {s: v for s, v in zip(keep, [basket_field_values(exchange, (s,), tf, max_age_days) for s in keep]) if v}
+        xs = sorted(v[0] for v in vals.values())
+        if len(xs) >= 4:
+            med = xs[len(xs) // 2] if len(xs) % 2 else (xs[len(xs) // 2 - 1] + xs[len(xs) // 2]) / 2.0
+            mean = sum(xs) / len(xs)
+            sd = (sum((x - mean) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
+            trimmed = [s for s, v in vals.items() if sd > 0 and v[0] > med + ts * sd]
+            keep = [s for s in keep if s not in trimmed]
+    if not excl and not trimmed:
+        return {}
+    tag = []
+    if excl: tag.append("ex " + ", ".join(sorted(excl)))
+    if trimmed: tag.append(f"trimmed >{ts:g} sigma on {tf}: " + ", ".join(sorted(trimmed)))
+    return basket_multiples(exchange, tuple(keep), f"{label} ({'; '.join(tag)})", max_age_days=max_age_days)
+
+
 def basket_field_values(exchange: str, syms: tuple, field: str, max_age_days: float = MAX_AGE_DAYS) -> list[float]:
     """The in-band values of one field across a basket's members (for a dispersion read), canonical or
     store symbol forms accepted."""

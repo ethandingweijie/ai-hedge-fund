@@ -63,7 +63,7 @@ def test_a_published_nav_is_read_at_the_cohort_p_nav_on_fair_value_exchanges_and
     assert d._calibrated_published_nav(mr2, us, 87.0, "NAV (Cap Rates)") == 87.0 and mr2["_nav_calibration"]["cohort_p_nav_median_4q"] is None
     src = inspect.getsource(d._compute_method_value)
     assert 'return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")' in src
-    assert 'return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)")' in src
+    assert 'return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)", profile_name)' in src   # Wave 9: only a property profile reads P/B as P/NAV
 
 
 # ── step 3 (A): the FFO field, the live P/FFO leg, the REIT (Specialty / OpCo) profile ────────

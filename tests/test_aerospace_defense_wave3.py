@@ -91,11 +91,13 @@ def test_the_pins_are_the_owners_placements():
 
 
 def test_sia_engineering_is_routed_by_ticker_and_the_airlines_label_never_enters_scope():
-    """`Airlines, Airports & Air Services` maps to Transportation/Airlines for US
-    carriers; putting the label in scope would move Delta and United."""
+    """`Airlines, Airports & Air Services` maps to Transportation/Airlines for US carriers. Wave 9 (owner,
+    2026-09-27) put the label in scope with the airlines on it, and SIA Engineering (an MRO) keeps its Wave 3
+    profile through an explicit ticker override rather than through the label staying out."""
     assert ipm.in_routing_scope("S59.SI", "Airlines, Airports & Air Services")
     assert ipm.profile_for_ticker("S59.SI", "Airlines, Airports & Air Services") == ("Industrials", "Aviation & Marine (SG)")
-    assert "Airlines, Airports & Air Services" not in ipm.routing_scope()
+    assert "Airlines, Airports & Air Services" in ipm.routing_scope()
+    assert ipm.ticker_overrides()["S59.SI"] == ("Industrials", "Aviation & Marine (SG)")
     assert ipm.profile_for_industry("Airlines, Airports & Air Services") == ("Transportation", "Airlines")
 
 

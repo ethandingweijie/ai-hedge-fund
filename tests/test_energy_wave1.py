@@ -88,11 +88,18 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
     wave8 = {"REIT - Retail", "REIT - Industrial", "REIT - Office", "REIT - Residential", "REIT - Diversified",
              "REIT - Healthcare Facilities", "REIT - Specialty", "REIT - Hotel & Motel", "Real Estate - Development",
              "Real Estate - Diversified", "Real Estate - Services", "Residential Construction"}   # tests/test_realestate_wave8.py
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7 | wave8
+    wave9 = {"Agricultural - Machinery", "Industrial - Machinery", "Electrical Equipment & Parts", "Manufacturing - Tools & Accessories",
+             "Manufacturing - Metal Fabrication", "Security & Protection Services", "Engineering & Construction",
+             "Industrial - Pollution & Treatment Controls", "Waste Management", "Industrial - Distribution", "Rental & Leasing Services",
+             "Specialty Business Services", "Conglomerates", "Industrial - Infrastructure Operations", "Airlines, Airports & Air Services",
+             "Railroads", "Trucking", "Integrated Freight & Logistics", "Marine Shipping", "Chemicals", "Agricultural Inputs",
+             "Chemicals - Specialty", "Construction Materials", "Packaging & Containers", "Paper, Lumber & Forest Products",
+             "Industrial Materials", "Steel", "Aluminum", "Copper", "Gold", "Other Precious Metals", "Silver"}   # tests/test_industrials_wave9.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6 | wave7 | wave8 | wave9
 
 
 def test_scope_does_not_reach_other_industries():
-    for other in ("Electrical Equipment & Parts", "Uranium", "Conglomerates"):   # Software - Application entered scope in Wave 7, Banks - Diversified in Wave 6 (2026-09-27)
+    for other in ("Uranium", "Staffing & Employment Services", "Consulting Services"):   # Wave 9 took Electrical Equipment and Conglomerates; Uranium stays with the Wave 2 pins; staffing and consulting are Wave 10   # Software - Application entered scope in Wave 7, Banks - Diversified in Wave 6 (2026-09-27)
         assert not ipm.in_routing_scope("XYZ", other)
 
 

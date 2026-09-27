@@ -59,9 +59,9 @@ def test_every_sgx_ticker_routes_deterministically(ticker):
         ("S68.SI", "Market Infrastructure (SG)"),
         ("9CI.SI", "Real Estate Asset Manager (SG)"),
         ("Z74.SI", "Telco / Infrastructure (SG)"),
-        ("BN4.SI", "Conglomerate / Industrial (SG)"),
+        ("BN4.SI", "Asian Holding Company (Look-Through)"),   # Wave 9 (2026-09-27): the Asian look-through
         ("S63.SI", "Aerospace & Engineering (SG)"),
-        ("C6L.SI", "Aviation & Marine (SG)"),
+        ("C6L.SI", "Airlines"),                             # Wave 9 (2026-09-27): SIA on the Airlines table
         ("C09.SI", "Property Developer (SG)"),
         ("F34.SI", "Agribusiness & Food (SG)"),
         ("V03.SI", "Tech Manufacturing / EMS (SG)"),
@@ -84,7 +84,9 @@ def test_aviation_and_aerospace_are_separate_profiles():
     assert sia != steng
     aviation = {k["key"] for k in SECTOR_KPI_FRAMEWORK[sia]["kpis"]}
     aero = {k["key"] for k in SECTOR_KPI_FRAMEWORK[steng]["kpis"]}
-    assert "passenger_load_factor" in aviation and "passenger_load_factor" not in aero
+    # Wave 9 (2026-09-27): Singapore Airlines prices on the Airlines profile, whose KPI spec names the load factor
+    # `load_factor_pct`; the Aviation & Marine (SG) spelling was `passenger_load_factor`.
+    assert ({"passenger_load_factor", "load_factor_pct"} & aviation) and not ({"passenger_load_factor", "load_factor_pct"} & aero)
     assert "mro_turnaround_days" in aero and "mro_turnaround_days" not in aviation
 
 

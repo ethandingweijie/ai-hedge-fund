@@ -1,12 +1,12 @@
 {
   "ticker": "BN4.SI",
-  "captured_at": "2026-09-16T13:23:42+00:00",
-  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "captured_at": "2026-09-27T13:08:10+00:00",
+  "commit": "c5a7dbd6fd90eac9e190455fdde01233f7bff1d1",
   "end_date": "2026-09-16",
   "state_source": "prod_web_run",
-  "source_run_id": "a59493af-1075-4220-a787-2e27755ec7f0",
-  "source_run_at": "2026-09-16T07:06:23.579830",
-  "archive_run_id": "14a49410-a23e-4a52-b4c1-9d45e40dc7ff",
+  "source_run_id": "a5ffd5b5-7dcc-4f69-bae9-b176c83110d0",
+  "source_run_at": "2026-09-19T12:10:59.257209",
+  "archive_run_id": "e092660b-72bf-4d3f-9d3a-9711ae3348d8",
   "targets_hit": {
     "src.memory.analyst_basis.get_analyst_basis": 1,
     "src.memory.analyst_basis.method_disagrees": 1,
@@ -23,8 +23,8 @@
   },
   "recorded_calls": 24,
   "replay": {
-    "base_iv": 5.83,
-    "profile": "Conglomerate / Industrial (SG)",
+    "base_iv": 10.4,
+    "profile": "Asian Holding Company (Look-Through)",
     "skip_reason": null
   }
 }

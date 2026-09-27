@@ -2265,7 +2265,7 @@
     "symbol": "BN4.SI",
     "date": "2026-09-16",
     "price": 11.1,
-    "volume": 4081200
+    "volume": 4081600
    }
   ]
  },
@@ -2275,30 +2275,74 @@
   "result": "SGD"
  },
  {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"BN4.SI\"}, [\"api_key\", \"<redacted>\"]]]",
+  "target": "src.tools.api._fmp_get",
+  "result": [
+   {
+    "symbol": "BN4.SI",
+    "price": 11.3,
+    "marketCap": 20346872592,
+    "beta": 0.519,
+    "lastDividend": 0.36,
+    "range": "8.8-13.25",
+    "change": 0.01,
+    "changePercentage": 0.08857396,
+    "volume": 2633300,
+    "averageVolume": 3875120,
+    "companyName": "Keppel Corporation Limited",
+    "currency": "SGD",
+    "cik": null,
+    "isin": "SG1U68934629",
+    "cusip": null,
+    "exchangeFullName": "Stock Exchange of Singapore",
+    "exchange": "SES",
+    "industry": "Conglomerates",
+    "website": "https://www.keppel.com",
+    "description": "Keppel Corporation Limited, a Singapore-based investment holding company established in 1968, maintains a global presence with significant operations in diverse sectors, including offshore and marine, real estate, infrastructure, and strategic investments. Its activities extend across various regions such as China, Hong Kong, and Brazil. Within its offshore and marine division, Keppel specializes in the design, engineering, construction, fabrication, and maintenance of sophisticated assets like offshore production facilities, drilling rigs, power barges, and custom vessels. This segment also constructs platforms for the oil and gas industry, conducts general shipyard operations, procures and supplies vital steel components, and offers a full range of marine services, including ship repair, new construction, conversions, vessel ownership, and chartering. The company's real estate arm focuses on property investment, management, and development, particularly in residential projects. It also manages investment funds, operates golf clubs, and owns and manages hotels. Keppel's infrastructure portfolio is extensive, encompassing the development of district heating and cooling systems, power generation and supply, and the trading of gaseous fuels. It further includes the distribution of IT products, retail sales of telecommunication products, and the provision of fixed and other telecommunications services. This segment also offers heavy-lift equipment and related services, project management, procurement, towage, financial services, REIT management, logistics, and warehousing. Additionally, Keppel is deeply involved in environmental infrastructure, solid waste treatment, and advancing renewable energy initiatives.",
+    "ceo": "Chin Hua Loh",
+    "sector": "Industrials",
+    "country": "SG",
+    "fullTimeEmployees": "4964",
+    "phone": "65 6270 6666",
+    "address": "No. 18-01 Keppel Bay Tower",
+    "city": "Singapore",
+    "state": "CE",
+    "zip": "098632",
+    "image": "https://images.financialmodelingprep.com/symbol/BN4.SI.png",
+    "ipoDate": "2007-05-02",
+    "defaultImage": false,
+    "isEtf": false,
+    "isActivelyTrading": true,
+    "isAdr": false,
+    "isFund": false
+   }
+  ]
+ },
+ {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/analyst-estimates\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"BN4.SI\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "BN4.SI",
     "date": "2028-12-31",
-    "revenueLow": 6723630329,
-    "revenueHigh": 9898622602,
+    "revenueLow": 6723631049,
+    "revenueHigh": 9898623662,
     "revenueAvg": 8625944326,
-    "ebitdaLow": 2099587424,
-    "ebitdaHigh": 2459511290,
+    "ebitdaLow": 2099703192,
+    "ebitdaHigh": 2459673365,
     "ebitdaAvg": 2383817549,
-    "ebitLow": 1624199395,
-    "ebitHigh": 1984123261,
+    "ebitLow": 1624315163,
+    "ebitHigh": 1984285336,
     "ebitAvg": 1908429520,
-    "netIncomeLow": 978027804,
-    "netIncomeHigh": 1262337149,
+    "netIncomeLow": 978119251,
+    "netIncomeHigh": 1262465175,
     "netIncomeAvg": 1202545510,
-    "sgaExpenseLow": 411962271,
-    "sgaExpenseHigh": 606496617,
+    "sgaExpenseLow": 411962315,
+    "sgaExpenseHigh": 606496681,
     "sgaExpenseAvg": 528518589,
     "epsAvg": 0.60662,
-    "epsHigh": 0.6902,
-    "epsLow": 0.53475,
+    "epsHigh": 0.69027,
+    "epsLow": 0.5348,
     "numAnalystsRevenue": 11,
     "numAnalystsEps": 8
    },
@@ -2308,45 +2352,45 @@
     "revenueLow": 6448419095,
     "revenueHigh": 8840420630,
     "revenueAvg": 7847497761,
-    "ebitdaLow": 1868298838,
-    "ebitdaHigh": 2257373179,
+    "ebitdaLow": 1868414607,
+    "ebitdaHigh": 2257535255,
     "ebitdaAvg": 2144836568,
-    "ebitLow": 1488565171,
-    "ebitHigh": 1877639512,
+    "ebitLow": 1488680940,
+    "ebitHigh": 1877801588,
     "ebitAvg": 1765102901,
-    "netIncomeLow": 870888264,
-    "netIncomeHigh": 1178224014,
+    "netIncomeLow": 870979712,
+    "netIncomeHigh": 1178352040,
     "netIncomeAvg": 1089329630,
     "sgaExpenseLow": 395099856,
     "sgaExpenseHigh": 541659725,
     "sgaExpenseAvg": 480822538,
     "epsAvg": 0.56042,
-    "epsHigh": 0.64421,
-    "epsLow": 0.47617,
+    "epsHigh": 0.64428,
+    "epsLow": 0.47622,
     "numAnalystsRevenue": 15,
     "numAnalystsEps": 11
    },
    {
     "symbol": "BN4.SI",
     "date": "2026-12-31",
-    "revenueLow": 6212036248,
-    "revenueHigh": 8216240559,
+    "revenueLow": 6212050392,
+    "revenueHigh": 8216259266,
     "revenueAvg": 7195124996,
-    "ebitdaLow": 1180401958,
-    "ebitdaHigh": 2067303450,
+    "ebitdaLow": 1180286190,
+    "ebitdaHigh": 2066956144,
     "ebitdaAvg": 1826685432,
-    "ebitLow": 900878612,
-    "ebitHigh": 1787780104,
+    "ebitLow": 900762844,
+    "ebitHigh": 1787432798,
     "ebitAvg": 1547162086,
-    "netIncomeLow": 406665698,
-    "netIncomeHigh": 1107242698,
+    "netIncomeLow": 406574251,
+    "netIncomeHigh": 1106968356,
     "netIncomeAvg": 917174860,
-    "sgaExpenseLow": 380616487,
-    "sgaExpenseHigh": 503415707,
+    "sgaExpenseLow": 380617354,
+    "sgaExpenseHigh": 503416854,
     "sgaExpenseAvg": 440851130,
     "epsAvg": 0.46849,
-    "epsHigh": 0.6054,
-    "epsLow": 0.22235,
+    "epsHigh": 0.60525,
+    "epsLow": 0.2223,
     "numAnalystsRevenue": 14,
     "numAnalystsEps": 9
    },
@@ -2381,19 +2425,19 @@
     "revenueHigh": 7994689254,
     "revenueAvg": 7045174216,
     "ebitdaLow": 1486926461,
-    "ebitdaHigh": 1936640277,
+    "ebitdaHigh": 1936663430,
     "ebitdaAvg": 1763313083,
     "ebitLow": 1279410461,
-    "ebitHigh": 1729124277,
+    "ebitHigh": 1729147430,
     "ebitAvg": 1555797083,
     "netIncomeLow": 687243997,
-    "netIncomeHigh": 1042479791,
+    "netIncomeHigh": 1042498080,
     "netIncomeAvg": 905566000,
     "sgaExpenseLow": 389529919,
     "sgaExpenseHigh": 489841080,
     "sgaExpenseAvg": 431663525,
     "epsAvg": 0.48387,
-    "epsHigh": 0.56999,
+    "epsHigh": 0.57,
     "epsLow": 0.37576,
     "numAnalystsRevenue": 12,
     "numAnalystsEps": 10
@@ -2487,33 +2531,38 @@
   "result": null
  },
  {
-  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [\"P/BV\"], \"methods\": [{\"anchor\": true, \"implementable\": true, \"name\": \"EV/EBITDA\", \"weight\": 0.4}, {\"anchor\": false, \"implementable\": true, \"name\": \"SOTP (published)\", \"weight\": 0.35}, {\"anchor\": false, \"implementable\": true, \"name\": \"DCF\", \"weight\": 0.25}], \"rationale\": \"SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). EV/EBITDA-anchored with a published-SOTP secondary. ROIC vs WACC was dropped as the EVA proxy: on the BN4.SI forward run it returned S$1.90 against EV/EBITDA S$10.91 and a published SOTP of S$10.70, so at any material weight it dragged the blend toward a number no method supported. EVA remains the right lens for a conglomerate; this engine implementation is not it. EV/EBITDA-anchored with SOTP secondary \\u2014 the house method is SOTP, but `segment_breakdown` is populated solely from FMP revenue-product-segmentation, which returns nothing for SGX, so an SOTP anchor would silently never fire and the weights would renormalise onto the secondaries. SOTP contributes the moment segment data exists. Per-segment bases (PE, net book value, discount to book, mark-to-market) with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion.\"}, \"Industrials\", \"Conglomerate / Industrial (SG)\", [\"active\", null]]]",
+  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [\"DCF\"], \"leg_fallback\": {\"SOTP (analyst)\": [\"P/BV\"]}, \"methods\": [{\"anchor\": true, \"implementable\": true, \"name\": \"SOTP (analyst)\", \"weight\": 0.6}, {\"anchor\": false, \"implementable\": true, \"name\": \"P/BV\", \"weight\": 0.25}, {\"anchor\": false, \"implementable\": true, \"name\": \"DDM\", \"weight\": 0.15}], \"rationale\": \"CK Hutchison, CITIC, Jardine Matheson, Keppel: a look-through SOTP from the review-gated `sotp` input with the holdco discount indexed to the exchange's conglomerate P/B and held inside the owner's 25-40% band; until an input is accepted the look-through weight rolls into P/B on the exchange's conglomerate cohort.\"}, \"Financials\", \"Asian Holding Company (Look-Through)\", [\"active\", null]]]",
   "target": "src.memory.calibration.apply_profile_weights",
   "result": {
    "methods": [
     {
-     "name": "EV/EBITDA",
-     "weight": 0.4,
+     "name": "SOTP (analyst)",
+     "weight": 0.6,
      "anchor": true,
      "implementable": true
     },
     {
-     "name": "SOTP (published)",
-     "weight": 0.35,
+     "name": "P/BV",
+     "weight": 0.25,
      "anchor": false,
      "implementable": true
     },
     {
-     "name": "DCF",
-     "weight": 0.25,
+     "name": "DDM",
+     "weight": 0.15,
      "anchor": false,
      "implementable": true
     }
    ],
    "excluded": [
-    "P/BV"
+    "DCF"
    ],
-   "rationale": "SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). EV/EBITDA-anchored with a published-SOTP secondary. ROIC vs WACC was dropped as the EVA proxy: on the BN4.SI forward run it returned S$1.90 against EV/EBITDA S$10.91 and a published SOTP of S$10.70, so at any material weight it dragged the blend toward a number no method supported. EVA remains the right lens for a conglomerate; this engine implementation is not it. EV/EBITDA-anchored with SOTP secondary \u2014 the house method is SOTP, but `segment_breakdown` is populated solely from FMP revenue-product-segmentation, which returns nothing for SGX, so an SOTP anchor would silently never fire and the weights would renormalise onto the secondaries. SOTP contributes the moment segment data exists. Per-segment bases (PE, net book value, discount to book, mark-to-market) with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion."
+   "leg_fallback": {
+    "SOTP (analyst)": [
+     "P/BV"
+    ]
+   },
+   "rationale": "CK Hutchison, CITIC, Jardine Matheson, Keppel: a look-through SOTP from the review-gated `sotp` input with the holdco discount indexed to the exchange's conglomerate P/B and held inside the owner's 25-40% band; until an input is accepted the look-through weight rolls into P/B on the exchange's conglomerate cohort."
   }
  },
  {
@@ -2522,9 +2571,9 @@
   "result": null
  },
  {
-  "key": "[\"src.tools.fred.get_fred_spread\", [\"BAMLC0A3CA\"]]",
+  "key": "[\"src.tools.fred.get_fred_spread\", [\"BAMLC0A1CAAA\"]]",
   "target": "src.tools.fred.get_fred_spread",
-  "result": 0.68
+  "result": 0.4
  },
  {
   "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"BN4.SI\", [\"limit\", 1]]]",
@@ -2608,53 +2657,9 @@
   }
  },
  {
-  "key": "[\"src.memory.analyst_basis.method_disagrees\", [{\"as_of\": \"2025-08-12\", \"house\": \"Phillip Securities Research\", \"method\": \"sotp\", \"multiple_basis\": \"pe\", \"price_target\": 10.7, \"price_target_currency\": \"SGD\", \"rating\": \"BUY\", \"raw\": \"SOTP valuation; includes 15x PE for Infrastructure, NBV for Non-core, 30% discount to book for Real Estate, 20x PE for Asset Management, mark-to-market for Listed entities, mark-to-valuation for Private funds, 15x PE for Connectivity, minus group net debt and corporate cost.\", \"target_multiple\": 15.0}, \"EV/EBITDA\"]]",
+  "key": "[\"src.memory.analyst_basis.method_disagrees\", [{\"as_of\": \"2025-08-12\", \"house\": \"Phillip Securities Research\", \"method\": \"sotp\", \"multiple_basis\": \"pe\", \"price_target\": 10.7, \"price_target_currency\": \"SGD\", \"rating\": \"BUY\", \"raw\": \"SOTP valuation; includes 15x PE for Infrastructure, NBV for Non-core, 30% discount to book for Real Estate, 20x PE for Asset Management, mark-to-market for Listed entities, mark-to-valuation for Private funds, 15x PE for Connectivity, minus group net debt and corporate cost.\", \"target_multiple\": 15.0}, \"SOTP (analyst)\"]]",
   "target": "src.memory.analyst_basis.method_disagrees",
-  "result": true
- },
- {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"BN4.SI\"}, [\"api_key\", \"<redacted>\"]]]",
-  "target": "src.tools.api._fmp_get",
-  "result": [
-   {
-    "symbol": "BN4.SI",
-    "price": 11.1,
-    "marketCap": 19986750953,
-    "beta": 0.519,
-    "lastDividend": 0.36,
-    "range": "8.63-13.25",
-    "change": -0.1,
-    "changePercentage": -0.89286,
-    "volume": 4081600,
-    "averageVolume": 4041662,
-    "companyName": "Keppel Corporation Limited",
-    "currency": "SGD",
-    "cik": null,
-    "isin": "SG1U68934629",
-    "cusip": null,
-    "exchangeFullName": "Stock Exchange of Singapore",
-    "exchange": "SES",
-    "industry": "Conglomerates",
-    "website": "https://www.keppel.com",
-    "description": "Keppel Corporation Limited, a Singapore-based investment holding company established in 1968, maintains a global presence with significant operations in diverse sectors, including offshore and marine, real estate, infrastructure, and strategic investments. Its activities extend across various regions such as China, Hong Kong, and Brazil. Within its offshore and marine division, Keppel specializes in the design, engineering, construction, fabrication, and maintenance of sophisticated assets like offshore production facilities, drilling rigs, power barges, and custom vessels. This segment also constructs platforms for the oil and gas industry, conducts general shipyard operations, procures and supplies vital steel components, and offers a full range of marine services, including ship repair, new construction, conversions, vessel ownership, and chartering. The company's real estate arm focuses on property investment, management, and development, particularly in residential projects. It also manages investment funds, operates golf clubs, and owns and manages hotels. Keppel's infrastructure portfolio is extensive, encompassing the development of district heating and cooling systems, power generation and supply, and the trading of gaseous fuels. It further includes the distribution of IT products, retail sales of telecommunication products, and the provision of fixed and other telecommunications services. This segment also offers heavy-lift equipment and related services, project management, procurement, towage, financial services, REIT management, logistics, and warehousing. Additionally, Keppel is deeply involved in environmental infrastructure, solid waste treatment, and advancing renewable energy initiatives.",
-    "ceo": "Chin Hua Loh",
-    "sector": "Industrials",
-    "country": "SG",
-    "fullTimeEmployees": "4964",
-    "phone": "65 6270 6666",
-    "address": "No. 18-01 Keppel Bay Tower",
-    "city": "Singapore",
-    "state": "CE",
-    "zip": "098632",
-    "image": "https://images.financialmodelingprep.com/symbol/BN4.SI.png",
-    "ipoDate": "2007-05-02",
-    "defaultImage": false,
-    "isEtf": false,
-    "isActivelyTrading": true,
-    "isAdr": false,
-    "isFund": false
-   }
-  ]
+  "result": false
  },
  {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"BN4.SI\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",

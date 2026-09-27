@@ -377,6 +377,10 @@ BALANCE_SHEET_FINANCIAL_UNCLASSIFIED: dict[str, str] = {
     # would assert a fact about CapitaLand Investment's balance sheet that this
     # file has not checked.
     "Real Estate Asset Manager (SG)": "no EV/DCF/FCF leg in the profile; strip would be a no-op",
+    # Wave 9 (2026-09-27): SOTP (analyst) + P/BV + DDM, DCF excluded. Same reasoning as the line above; the
+    # Tier 1 "Holding Company" precedent is noted for the owner, not applied, because Tier 1 would also stop
+    # the shadow EV legs the report table shows for these names.
+    "Asian Holding Company (Look-Through)": "no EV/DCF/FCF leg in the profile; strip would be a no-op",
 }
 
 
@@ -1794,6 +1798,17 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["DCF"],
             "rationale": "Valuation is a sum of its parts; NAV discount reflects liquidity/management/tax frictions.",
         },
+        "Asian Holding Company (Look-Through)": {
+            # Wave 9 (owner, 2026-09-27): mandatory look-through for the Asian holding companies.
+            "methods": [
+                {"name": "SOTP (analyst)", "weight": 0.6, "anchor": True, "implementable": True},
+                {"name": "P/BV", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DDM", "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"SOTP (analyst)": ["P/BV"]},
+            "rationale": "CK Hutchison, CITIC, Jardine Matheson, Keppel: a look-through SOTP from the review-gated `sotp` input with the holdco discount indexed to the exchange's conglomerate P/B and held inside the owner's 25-40% band; until an input is accepted the look-through weight rolls into P/B on the exchange's conglomerate cohort.",
+        },
         "Card Issuer & Consumer Lender": {
             # Owner Wave 6 (2026-09-27): AXP, COF, SYF. A lender's free cash flow is loan growth
             # with the sign flipped (COF's DCF leg reached 795/share at Stage 0), so no cash-flow
@@ -3060,14 +3075,115 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "rationale": "A multi-year contracted order book with price escalation is the structural visibility a cash-flow forecast rests on; forward legs carry the earnings inflection trailing ones cannot.",
         },
         "Capital Goods": {
+            # Wave 9 (owner, 2026-09-27): General Machinery & Tools -- CAT, DE, PH, TT, SNA, ETN, VRT, CRRC.
+            # GATE_MARGIN_PEAK: an operating margin above its 7-year median by more than 1.5 sigma moves the
+            # EBITDA and P/E legs onto mid-cycle earnings.
             "methods": [
-                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "FCF Yield",    "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "ROIC vs WACC", "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/E",          "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "Forward EV/EBITDA", "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "P/E",               "weight": 0.40, "anchor": False, "implementable": True},
+                {"name": "EV/EBIT",           "weight": 0.20, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Efficiency focused; ROIC/WACC spread is the ultimate driver of multiple expansion.",
+            "margin_peak_gate": True,
+            "rationale": "Machinery and tools priced on forward EBITDA, earnings and EBIT; a margin at a cyclical peak is priced on mid-cycle earnings.",
+        },
+        "Long-Cycle E&C": {
+            # Wave 9 (owner, 2026-09-27): PWR, China Railway, China Railway Construction. GATE_BACKLOG_MULTIPLE reads the accepted `backlog` input.
+            "methods": [
+                {"name": "Backlog-Gated EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "P/BV", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Engineering and construction on contracted work: EV/EBITDA scaled down linearly when the accepted funded backlog covers under 1.2x trailing revenue, next year's earnings, book as the contractor's floor.",
+        },
+        "Industrial Distribution": {
+            # Wave 9 (owner, 2026-09-27): GWW, FAST, FERG, WCC, WSO.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "MRO and industrial distribution: forward EBITDA and earnings, free cash as the working-capital check; the cash conversion cycle is recorded against the cohort's.",
+        },
+        "Equipment Rental": {
+            # Wave 9 (owner, 2026-09-27): URI, AerCap, Sunbelt, Herc, GATX.
+            "methods": [
+                {"name": "EV/EBITDA", "weight": 0.6, "anchor": True, "implementable": True},
+                {"name": "P/BV", "weight": 0.2, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Fleet rental: EV/EBITDA with lease liabilities inside EV (FMP total debt carries them), book as the fleet floor, forward earnings; fleet disposal margins are not in the feed and are recorded as not read.",
+        },
+        "Waste & Environmental Services": {
+            # Wave 9 (owner, 2026-09-27): WM, RSG, WCN, Veralto (pollution controls rides with waste).
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Route and landfill annuities: forward EBITDA, free cash after a maintenance-capex ceiling at D&A, forward earnings.",
+        },
+        "Toll Road / Infrastructure (HK)": {
+            # Wave 9 (owner, 2026-09-27): Jiangsu Expressway, Zhejiang Expressway. The owner's row lists P/B .20 beside 'ignore standard book value'; built as weighted, flagged.
+            "methods": [
+                {"name": "DDM", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "P/BV", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "HK / China expressways: the dividend the concessions pay, EV/EBITDA, book. Concession expiry dates are not in the feed; the amortisation of the multiple toward expiry awaits a review-gated input.",
+        },
+        "Industrial Route & Uniform Services": {
+            # Wave 9 (owner, 2026-09-27): Cintas, UniFirst, Rollins (Specialty Business Services, tri-split).
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "EV/EBIT", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Route-density businesses (uniforms, pest control, facilities): forward EBITDA, EBIT, earnings; the operating margin is recorded against the basket's as the route-density cross-check.",
+        },
+        "Information Services": {
+            # Wave 9 (owner, 2026-09-27): RELX, Thomson Reuters (Specialty Business Services, tri-split).
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.4, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Asset-light B2B information: forward earnings, EBITDA, FCF conversion; ROIIC is computed from the statements and recorded against the owner's 20% line.",
+        },
+        "Marketplace / Salvage Platform": {
+            # Wave 9 (owner, 2026-09-27): Copart, RB Global. Weights PROPOSED, not owner-set.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.4, "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Transaction marketplaces (salvage auctions): weights PROPOSED (the owner named the basis, gross transaction volume margins and inventory turnover, not weights); GTV is not in the feed and is recorded as not read.",
+        },
+        "Blended Industrial OpCo": {
+            # Wave 9 (owner, 2026-09-27): 3M, Honeywell. GE is a Wave 3 name (Commercial Aerospace & Engines) and stays there.
+            "methods": [
+                {"name": "Forward EV/EBIT", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.5, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "US operating conglomerates on one entity: forward EV/EBITA (EV/EBIT) and EV/FCF; weights PROPOSED at 50 / 50; litigation and pension liabilities are not separated in the feed and are recorded as not adjusted.",
+        },
+        "Battery & Energy Storage": {
+            # Wave 9 (owner, 2026-09-27): CATL, carved out of the Electrical Equipment & Parts median (COHORT_RULES).
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.6, "anchor": True, "implementable": True},
+                {"name": "EV/Revenue", "weight": 0.4, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Battery makers on a growth-adjusted forward EBITDA and sales multiple; weights PROPOSED at 60 / 40. The owner's pure-play comps (LG Energy Solution, Samsung SDI) are not in the comps store (no Korean market); until a review-gated peer input exists the multiples read the HKSE Electrical Equipment cohort with CATL carved out.",
         },
     },
 
@@ -3349,35 +3465,58 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Transportation": {
         "Airlines": {
             "methods": [
-                {"name": "EV/EBITDA",    "weight": 0.50, "anchor": True,  "implementable": True,
-                 "note": "renamed from EV/EBITDAR 2026-09-26: lease normalisation unimplemented, leases in net debt"},
-                {"name": "FCF Yield",    "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/BV (Fleet)", "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "P/E",          "weight": 0.10, "anchor": False, "implementable": True},
+                # Wave 9 (owner, 2026-09-27): Forward EV/EBITDAR .50 as Forward EV/EBITDA with lease liabilities
+                # inside EV (FMP total debt carries them: the IFRS 16 / ASC 842 equivalent of capitalising rent),
+                # P/B .30, mid-cycle P/E .20. Fuel hedges are not in the feed.
+                {"name": "Forward EV/EBITDA", "weight": 0.50, "anchor": True,  "implementable": True},
+                {"name": "P/BV",              "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",        "weight": 0.20, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Lease-adjusted EBITDAR normalises for aircraft financing structure; FCF validates cash conversion.",
         },
         "Rail / Logistics": {
             "methods": [
-                {"name": "EV/EBITDA", "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "FCF Yield", "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E",       "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/BV",      "weight": 0.10, "anchor": False, "implementable": True, "note": "through-cycle asset floor for shipping"},
-                {"name": "DCF",       "weight": 0.10, "anchor": False, "implementable": True},
+                # Wave 9 (owner, 2026-09-27): Railroads -- operating-ratio adjusted EV/EBITDA .50 (the operating
+                # ratio is recorded against the owner's 65% line; the escalator's size is not set), Forward P/E
+                # .35, EV/FCF .15. Shipping and parcel left this row for their own profiles.
+                {"name": "EV/EBITDA",   "weight": 0.50, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",   "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Regulated networks with stable volumes support EBITDA multiples; FCF yield reflects high capex.",
+        },
+        "Trucking & Parcel Logistics": {
+            # Wave 9 (owner, 2026-09-27): ODFL, XPO, UPS, FDX; SUBCOHORT_BASKETS split LTL / TL / parcel.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "EV/EBIT", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "LTL, truckload and parcel networks, each on its own sub-cohort (LTL asset-dense with protected pricing; TL; parcel and contract logistics); tonnage and yield are not in the feed.",
+        },
+        "Container & Bulk Shipping": {
+            # Wave 9 (owner, 2026-09-27): COSCO, OOIL, Frontline, Matson. Cyclical.
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "RNAV (published)", "weight": 0.5, "anchor": False, "implementable": True, "scenario_invariant": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["EV/EBITDA (norm)"]},
+            "rationale": "Shipping on through-cycle EBITDA and fleet fair value (a review-gated NAV); a peak-rate multiple is prohibited by the cyclical set; the NAV leg's weight rolls into the through-cycle leg until an input is accepted.",
         },
     },
 
     "Materials": {
         "Steel / Metals": {
             "methods": [
+                # Wave 9 (owner, 2026-09-27): mid-cycle EV/EBITDA .50, P/B .30, through-cycle P/E .20; minimills
+                # and integrated mills price on separate sub-cohorts (SUBCOHORT_BASKETS).
                 {"name": "EV/EBITDA (Norm)", "weight": 0.50, "anchor": True,  "implementable": True,  "note": "dispatched directly to the normalised-EBITDA branch — the capital-N spelling is a branch literal, not a proxy, and mid-cycle EBITDA is what the rationale below asks for"},
-                {"name": "P/BV",             "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "FCF Yield",        "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "P/E",              "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "P/BV",             "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",       "weight": 0.20, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Normalised mid-cycle EBITDA smooths commodity price volatility; P/BV provides asset floor.",
@@ -3391,6 +3530,37 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": [],
             "rationale": "Speciality premium is captured through earnings multiples; ROIC tests pricing power vs. cost of capital.",
+        },
+        "Commodity Chemicals & Ag Inputs": {
+            # Wave 9 (owner, 2026-09-27): DOW, DD, CTVA, CF, MOS, Ganfeng. Cyclical.
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "P/BV", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Commodity chemicals and fertilisers on normalised EBITDA through the feedstock cycle, book, mid-cycle earnings; feedstock spread curves are not in the feed.",
+        },
+        "Aggregates & Cement": {
+            # Wave 9 (owner, 2026-09-27): CRH, VMC, MLM, Anhui Conch; SUBCOHORT_BASKETS: aggregates.
+            "methods": [
+                {"name": "Forward EV/EBITDA", "weight": 0.55, "anchor": True, "implementable": True},
+                {"name": "RNAV (published)", "weight": 0.25, "anchor": False, "implementable": True, "scenario_invariant": True},
+                {"name": "Forward P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["Forward EV/EBITDA"]},
+            "rationale": "Quarries and cement on forward EBITDA, an asset-replacement NAV (review-gated), forward earnings; aggregates and cement price on separate cohorts (the permit-scarcity premium).",
+        },
+        "Packaging & Paper": {
+            # Wave 9 (owner, 2026-09-27): IP, PKG, SW, AMCR. Cyclical.
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "EV/EBIT", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "rationale": "Containerboard, packaging and paper on mid-cycle EBITDA, EBIT, forward earnings; the industry mill operating rate is not in the feed, so the owner's 88% gate is recorded as not read.",
         },
     },
 
@@ -3457,6 +3627,38 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "finite-life DCF because reserves end; dividend leg because the "
                 "Chinese majors pay out most of earnings."
             ),
+        },
+        "Base Metals": {
+            # Wave 9 (owner, 2026-09-27): SCCO, FCX, Alcoa, Hongqiao, Jiangxi Copper. Cyclical.
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "RNAV (published)", "weight": 0.3, "anchor": False, "implementable": True, "scenario_invariant": True},
+                {"name": "EV/OCF", "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["EV/EBITDA (norm)"]},
+            "rationale": "Copper and aluminium on resource-normalised EBITDA, a reserve NAV (review-gated), price to cash flow as EV/OCF; C1 cash costs are not in the feed.",
+        },
+        "Precious Metals": {
+            # Wave 9 (owner, 2026-09-27): NEM, AEM, Zijin. Cyclical.
+            "methods": [
+                {"name": "RNAV (published)", "weight": 0.6, "anchor": True, "implementable": True, "scenario_invariant": True},
+                {"name": "EV/EBITDA", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/OCF", "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["EV/EBITDA"]},
+            "rationale": "Gold and precious metals on P/NAV of proven and probable reserves (review-gated; mine life and jurisdiction sit inside the NAV), EV/EBITDA, forward price to cash flow as EV/OCF; the NAV leg's weight rolls into EV/EBITDA until an input is accepted.",
+        },
+        "Diversified Miners": {
+            # Wave 9 (owner, 2026-09-27): re-indexed from Materials / Industrial Materials to Metals & Mining. Cyclical.
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "RNAV (published)", "weight": 0.5, "anchor": False, "implementable": True, "scenario_invariant": True},
+            ],
+            "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["EV/EBITDA (norm)"]},
+            "rationale": "BHP, Rio, Vale, CMOC on 3-to-5-year mid-cycle EBITDA (the engine's normalisation window is the 5-year IQR-filtered mean margin) and a reserve NAV (review-gated); commodity price decks are not modelled, so the trailing-five-year anchor is the earnings window, not a price assumption.",
         },
         "Mining (Major)": {
             "methods": [
@@ -3663,6 +3865,26 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Property Developer (HK / China)":     {"ev_ebitda": 11.8, "pe": 14.9, "ev_revenue": 3.6, "pb": 0.4, "fcf_yield": 0.068, "growth_avg": -0.009, "pe_ntm": 12.8, "ev_ebitda_ntm": 10.4},
     "Landlord / Investment Property (HK)": {"ev_ebitda": 16.2, "pe": 50.0, "ev_revenue": 5.3, "pb": 0.3, "fcf_yield": 0.015, "growth_avg": 0.006},
     "Homebuilder / Land Developer":        {"ev_ebitda": 11.9, "pe": 13.7, "ev_revenue": 1.4, "pb": 1.2, "fcf_yield": 0.056, "growth_avg": 0.009, "pe_ntm": 12.4, "ev_ebitda_ntm": 10.9},
+    # Wave 9 (2026-09-27): read off the comps store on the day (cohort all); fallbacks behind the live cohort.
+    "Long-Cycle E&C": {"ev_ebitda": 21.3, "pe": 28.8, "ev_revenue": 2.0, "pb": 6.04, "fcf_yield": 0.042, "growth_avg": 0.131, "pe_ntm": 20.7, "ev_ebitda_ntm": 13.3},
+    "Industrial Distribution": {"ev_ebitda": 16.0, "pe": 26.6, "ev_revenue": 1.5, "pb": 4.06, "fcf_yield": 0.04, "growth_avg": 0.051, "pe_ntm": 21.6, "ev_ebitda_ntm": 15.4},
+    "Equipment Rental": {"ev_ebitda": 10.6, "pe": 22.9, "ev_revenue": 3.2, "pb": 2.45, "fcf_yield": 0.075, "growth_avg": 0.052, "pe_ntm": 16.9, "ev_ebitda_ntm": 8.4},
+    "Waste & Environmental Services": {"ev_ebitda": 15.7, "pe": 29.7, "ev_revenue": 4.3, "pb": 4.22, "fcf_yield": 0.043, "growth_avg": 0.071, "pe_ntm": 29.7, "ev_ebitda_ntm": 13.8},
+    "Toll Road / Infrastructure (HK)": {"ev_ebitda": 11.0, "pe": 10.4, "ev_revenue": 5.6, "pb": 0.72, "fcf_yield": 0.103, "growth_avg": 0.04},
+    "Industrial Route & Uniform Services": {"ev_ebitda": 13.2, "pe": 25.3, "ev_revenue": 2.8, "pb": 2.63, "fcf_yield": 0.054, "growth_avg": 0.097, "pe_ntm": 17.7, "ev_ebitda_ntm": 11.3},
+    "Information Services": {"ev_ebitda": 13.2, "pe": 25.3, "ev_revenue": 2.8, "pb": 2.63, "fcf_yield": 0.054, "growth_avg": 0.097, "pe_ntm": 17.7, "ev_ebitda_ntm": 11.3},
+    "Marketplace / Salvage Platform": {"ev_ebitda": 13.2, "pe": 25.3, "ev_revenue": 2.8, "pb": 2.63, "fcf_yield": 0.054, "growth_avg": 0.097, "pe_ntm": 17.7, "ev_ebitda_ntm": 11.3},
+    "Blended Industrial OpCo": {"ev_ebitda": 11.9, "pe": 18.5, "ev_revenue": 2.4, "pb": 1.55, "fcf_yield": 0.055, "growth_avg": 0.001, "pe_ntm": 18.8, "ev_ebitda_ntm": 11.4},
+    "Battery & Energy Storage": {"ev_ebitda": 11.5, "pe": 15.2, "ev_revenue": 1.6, "pb": 1.74, "fcf_yield": 0.041, "growth_avg": 0.167, "pe_ntm": 8.1, "ev_ebitda_ntm": 4.6},
+    "Asian Holding Company (Look-Through)": {"ev_ebitda": 8.8, "pe": 5.7, "ev_revenue": 2.2, "pb": 0.41, "fcf_yield": 0.187, "growth_avg": 0.022, "pe_ntm": 10.0, "ev_ebitda_ntm": 7.0},
+    "Trucking & Parcel Logistics": {"ev_ebitda": 11.7, "pe": 50.4, "ev_revenue": 1.1, "pb": 2.08, "fcf_yield": 0.052, "growth_avg": -0.033, "pe_ntm": 22.4, "ev_ebitda_ntm": 7.6},
+    "Container & Bulk Shipping": {"ev_ebitda": 6.3, "pe": 7.3, "ev_revenue": 3.3, "pb": 1.79, "fcf_yield": 0.072, "growth_avg": 0.026, "pe_ntm": 9.2, "ev_ebitda_ntm": 5.4},
+    "Commodity Chemicals & Ag Inputs": {"ev_ebitda": 10.5, "pe": 12.5, "ev_revenue": 0.9, "pb": 1.2, "fcf_yield": 0.099, "growth_avg": -0.091, "pe_ntm": 9.2, "ev_ebitda_ntm": 7.4},
+    "Aggregates & Cement": {"ev_ebitda": 13.1, "pe": 22.4, "ev_revenue": 3.1, "pb": 3.38, "fcf_yield": 0.044, "growth_avg": 0.027, "pe_ntm": 17.9, "ev_ebitda_ntm": 10.9},
+    "Packaging & Paper": {"ev_ebitda": 9.7, "pe": 17.6, "ev_revenue": 1.4, "pb": 1.69, "fcf_yield": 0.079, "growth_avg": 0.0, "pe_ntm": 13.4, "ev_ebitda_ntm": 7.6},
+    "Base Metals": {"ev_ebitda": 12.5, "pe": 18.9, "ev_revenue": 4.6, "pb": 3.17, "fcf_yield": 0.037, "growth_avg": 0.105, "pe_ntm": 19.0, "ev_ebitda_ntm": 7.7},
+    "Precious Metals": {"ev_ebitda": 8.4, "pe": 15.4, "ev_revenue": 5.2, "pb": 3.11, "fcf_yield": 0.067, "growth_avg": 0.285, "pe_ntm": 10.9, "ev_ebitda_ntm": 6.3},
+    "Diversified Miners": {"ev_ebitda": 8.0, "pe": 25.3, "ev_revenue": 3.3, "pb": 3.85, "fcf_yield": 0.052, "growth_avg": 0.0, "pe_ntm": 17.7, "ev_ebitda_ntm": 8.2},
     "REIT (Specialty / OpCo)":             {"ev_ebitda": 19.5, "pe": 31.1, "ev_revenue": 10.8, "pb": 7.2, "fcf_yield": 0.05, "growth_avg": 0.035, "pe_ntm": 31.7, "ev_ebitda_ntm": 18.3},   # Wave 8b: US REIT - Specialty large, 2026-09-27
     "Real Estate Services":                {"ev_ebitda": 14.9, "pe": 40.2, "ev_revenue": 1.3, "pb": 1.8, "fcf_yield": 0.05, "growth_avg": 0.073, "pe_ntm": 15.7, "ev_ebitda_ntm": 8.9},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
@@ -3835,6 +4057,29 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
 #: down; the distress gate still runs on the name itself.
 DEVELOPER_CLUSTER_PROFILES = ("Property Developer (HK / China)",)
 
+#: Wave 9 (owner, 2026-09-27): a name in a sub-cohort prices its relative legs on that sub-cohort's median,
+#: ahead of its label (LTL is asset-dense with protected pricing; minimills price on scrap-margin elasticity;
+#: aggregates quarries earn a permit-scarcity premium over cement). Members are names the comps store carries.
+SUBCOHORT_BASKETS: dict[str, list[str]] = {
+    "LTL":                      ["ODFL", "SAIA", "XPO", "ARCB", "TFII"],
+    "TRUCKLOAD":                ["KNX", "WERN", "SNDR", "HTLD", "MRTN"],
+    "PARCEL & LOGISTICS":       ["UPS", "FDX", "ZTO", "EXPD", "CHRW", "GXO"],
+    "STEEL - MINIMILL (EAF)":   ["NUE", "STLD", "CMC", "CRS", "SIM"],
+    "STEEL - INTEGRATED":       ["MT", "CLF", "PKX", "TX", "GGB", "SID"],
+    "AGGREGATES":               ["VMC", "MLM", "CRH", "EXP", "ACA"],
+}
+SUBCOHORT_OF: dict[str, str] = {t: k for k, ts in SUBCOHORT_BASKETS.items() for t in ts}
+
+#: Wave 9 (owner, 2026-09-27): label-cohort medians recomputed from members with named members carved out
+#: and outliers trimmed. CATL is carved out of the HKSE Electrical Equipment median (it is the size of the rest
+#: of the cohort); the US Electrical Equipment median trims any member whose forward EV/EBITDA sits more than
+#: 2 sigma above the median (the owner named Vertiv; on 2026-09-27 Vertiv sits at the median and Bloom Energy
+#: is the member the rule removes).
+COHORT_RULES: dict[tuple[str, str], dict] = {
+    ("HKSE", "Electrical Equipment & Parts"): {"exclude": ["03750.HK"]},
+    ("US", "Electrical Equipment & Parts"):   {"trim_field": "ev_ebitda_ntm", "trim_sigma": 2.0},
+}
+
 SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Tech":                 ["MSFT", "GOOGL", "ORCL", "ADBE", "CRM", "IBM", "SAP"],
     "Consumer":             ["PG", "KO", "PEP", "WMT", "TGT", "COST", "CL"],
@@ -3852,6 +4097,27 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Homebuilder / Land Developer": ["DHI", "LEN", "NVR", "PHM", "TOL", "MTH", "KBH", "TMHC"],
     "Real Estate Services": ["CBRE", "JLL", "CWK", "CIGI"],
     "REIT (Specialty / OpCo)": ["WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC"],   # Wave 8b step 3
+    # Wave 9 (2026-09-27)
+    "Long-Cycle E&C": ["PWR", "FIX", "EME", "MTZ", "ACM", "J"],
+    "Industrial Distribution": ["GWW", "FAST", "FERG", "WCC", "WSO"],
+    "Equipment Rental": ["URI", "SUNB", "AER", "HRI", "GATX"],
+    "Waste & Environmental Services": ["WM", "RSG", "WCN", "CLH", "GFL"],
+    "Toll Road / Infrastructure (HK)": ["00177.HK", "00576.HK", "00548.HK", "00995.HK", "00107.HK"],
+    "Industrial Route & Uniform Services": ["CTAS", "UNF", "ROL", "ARMK", "ABM"],
+    "Information Services": ["RELX", "TRI", "SPGI", "MCO", "VRSK", "FDS"],
+    "Marketplace / Salvage Platform": ["CPRT", "RBA"],
+    "Blended Industrial OpCo": ["MMM", "HON", "EMR", "ITW", "DOV"],
+    "Battery & Energy Storage": ["03750.HK"],
+    "Asian Holding Company (Look-Through)": ["00001.HK", "00267.HK", "J36.SI", "BN4.SI"],
+    "Trucking & Parcel Logistics": ["ODFL", "XPO", "SAIA", "UPS", "FDX"],
+    "Container & Bulk Shipping": ["01919.HK", "00316.HK", "FRO", "MATX", "ZIM"],
+    "Commodity Chemicals & Ag Inputs": ["DOW", "DD", "CE", "CTVA", "CF", "MOS"],
+    "Aggregates & Cement": ["VMC", "MLM", "CRH", "EXP", "ACA"],
+    "Packaging & Paper": ["IP", "PKG", "SW", "AMCR", "BALL"],
+    "Base Metals": ["SCCO", "FCX", "TECK", "AA", "01378.HK", "00358.HK"],
+    "Precious Metals": ["NEM", "AEM", "B", "WPM", "02899.HK"],
+    "Diversified Miners": ["BHP", "RIO", "VALE", "03993.HK"],
+
     # Owner Wave 6 (2026-09-27)
     "Card Issuer & Consumer Lender": ["AXP", "COF", "SYF", "DFS", "ALLY"],
     "Insurance Broker":     ["MMC", "AON", "AJG", "BRO", "WTW"],
@@ -4102,6 +4368,24 @@ def get_sector_peer_multiples(
         _pb = profile_basket_multiples(_market or "US", profile_name)
         if _pb:
             regional = {**(regional or {}), **_pb}
+    except Exception:                                      # noqa: BLE001
+        pass
+    # Wave 9 (owner, 2026-09-27): the label cohort with carve-outs and a sigma trim, then a per-ticker
+    # sub-cohort; both ahead of the plain label median, both named on the basis.
+    try:
+        if ticker:
+            from src.data.regional_comps import get_fmp_classification, label_multiples_ruled, basket_multiples
+            _lab9 = (get_fmp_classification(ticker) or {}).get("industry") or ""
+            _rule9 = COHORT_RULES.get((_market or "US", _lab9))
+            if _rule9:
+                _lr = label_multiples_ruled(_market or "US", _lab9, _rule9)
+                if _lr:
+                    regional = {**(regional or {}), **_lr}
+            _sc9 = SUBCOHORT_OF.get((ticker or "").upper())
+            if _sc9:
+                _scb = basket_multiples(_market or "US", tuple(SUBCOHORT_BASKETS[_sc9]), _sc9)
+                if _scb:
+                    regional = {**(regional or {}), **_scb}
     except Exception:                                      # noqa: BLE001
         pass
     # Wave 8c (owner verdict D): a developer prices on the cluster of solvent peers around its own P/B,
@@ -5363,7 +5647,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     #     software/data subscription (Westlaw, Refinitiv) which fits Mature SaaS.
     #   • LIF kept as Hyper-Growth Platform — Life360 IS consumer subscription
     #     with disclosed subscriber/ARPU metrics that fit the platform spec.
-    "TRI":   ("ProfessionalServices", "IT Services", "Information Services", "Thomson Reuters — Westlaw + Refinitiv + Reuters; recurring B2B information-services subscription"),
     "GTM":   ("Tech", "Mature SaaS", "Software (System & Application)", "ZoomInfo Technologies — enterprise B2B SaaS (sales intelligence); slowing growth + strong FCF + PE-era leverage"),
     "LIF":   ("Tech", "Hyper-Growth Platform", "Software (Internet)",            "Life360 — consumer-subscription family-tracking platform; high subscriber growth"),
 
@@ -5552,6 +5835,58 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "SRC":   ("RealEstate", "",                   "R.E.I.T.",                         "Spirit Realty (legacy ticker — now acquired by O) — net-lease"),
     "BNL":   ("RealEstate", "",                   "R.E.I.T.",                         "Broadstone Net Lease REIT — single-tenant net lease"),
     "VTR": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Healthcare Facilities", "Ventas (Wave 8 owner directory, 2026-09-27)"),
+    "VALE": ("Resources", "Diversified Miners", "Industrial Materials", "Vale (Wave 9 (owner, 2026-09-27))"),
+    "RIO": ("Resources", "Diversified Miners", "Industrial Materials", "Rio Tinto (Wave 9 (owner, 2026-09-27))"),
+    "BHP": ("Resources", "Diversified Miners", "Industrial Materials", "BHP (Wave 9 (owner, 2026-09-27))"),
+    "AEM": ("Resources", "Precious Metals", "Gold", "Agnico Eagle (Wave 9 (owner, 2026-09-27))"),
+    "NEM": ("Resources", "Precious Metals", "Gold", "Newmont (Wave 9 (owner, 2026-09-27))"),
+    "AA": ("Resources", "Base Metals", "Aluminum", "Alcoa (Wave 9 (owner, 2026-09-27))"),
+    "SCCO": ("Resources", "Base Metals", "Copper", "Southern Copper (Wave 9 (owner, 2026-09-27))"),
+    "FCX": ("Resources", "Base Metals", "Copper", "Freeport-McMoRan — copper/gold (Wave 9 (owner, 2026-09-27))"),
+    "MT": ("Materials", "Steel / Metals", "Steel", "ArcelorMittal (integrated) (Wave 9 (owner, 2026-09-27))"),
+    "STLD": ("Materials", "Steel / Metals", "Steel", "Steel Dynamics (minimill) (Wave 9 (owner, 2026-09-27))"),
+    "NUE": ("Materials", "Steel / Metals", "Steel", "Nucor (minimill) (Wave 9 (owner, 2026-09-27))"),
+    "PKG": ("Materials", "Packaging & Paper", "Packaging & Containers", "Packaging Corp of America (Wave 9 (owner, 2026-09-27))"),
+    "IP": ("Materials", "Packaging & Paper", "Paper, Lumber & Forest Products", "International Paper (Wave 9 (owner, 2026-09-27))"),
+    "MLM": ("Materials", "Aggregates & Cement", "Construction Materials", "Martin Marietta (Wave 9 (owner, 2026-09-27))"),
+    "VMC": ("Materials", "Aggregates & Cement", "Construction Materials", "Vulcan Materials (Wave 9 (owner, 2026-09-27))"),
+    "CRH": ("Materials", "Aggregates & Cement", "Construction Materials", "CRH (Wave 9 (owner, 2026-09-27))"),
+    "CTVA": ("Materials", "Commodity Chemicals & Ag Inputs", "Agricultural Inputs", "Corteva (Wave 9 (owner, 2026-09-27))"),
+    "DOW": ("Materials", "Commodity Chemicals & Ag Inputs", "Chemicals", "Dow (Wave 9 (owner, 2026-09-27))"),
+    "SHW": ("Materials", "Specialty Chemicals", "Chemicals - Specialty", "Sherwin-Williams (Wave 9 (owner, 2026-09-27))"),
+    "LIN": ("Materials", "Specialty Chemicals", "Chemicals - Specialty", "Linde (Wave 9 (owner, 2026-09-27))"),
+    "FDX": ("Transportation", "Trucking & Parcel Logistics", "Integrated Freight & Logistics", "FedEx (parcel) (Wave 9 (owner, 2026-09-27))"),
+    "UPS": ("Transportation", "Trucking & Parcel Logistics", "Integrated Freight & Logistics", "UPS (parcel) (Wave 9 (owner, 2026-09-27))"),
+    "XPO": ("Transportation", "Trucking & Parcel Logistics", "Trucking", "XPO (LTL) (Wave 9 (owner, 2026-09-27))"),
+    "ODFL": ("Transportation", "Trucking & Parcel Logistics", "Trucking", "Old Dominion (LTL) (Wave 9 (owner, 2026-09-27))"),
+    "CSX": ("Transportation", "Rail / Logistics", "Railroads", "CSX (Wave 9 (owner, 2026-09-27))"),
+    "UNP": ("Transportation", "Rail / Logistics", "Railroads", "Union Pacific (Wave 9 (owner, 2026-09-27))"),
+    "UAL": ("Transportation", "Airlines", "Airlines, Airports & Air Services", "United Airlines (Wave 9 (owner, 2026-09-27))"),
+    "DAL": ("Transportation", "Airlines", "Airlines, Airports & Air Services", "Delta Air Lines (Wave 9 (owner, 2026-09-27))"),
+    "HON": ("Industrials", "Blended Industrial OpCo", "Conglomerates", "Honeywell (Wave 9 (owner, 2026-09-27))"),
+    "MMM": ("Industrials", "Blended Industrial OpCo", "Conglomerates", "3M (litigation and pension not separated in the feed) (Wave 9 (owner, 2026-09-27))"),
+    "RBA": ("Industrials", "Marketplace / Salvage Platform", "Specialty Business Services", "RB Global (Wave 9 (owner, 2026-09-27))"),
+    "CPRT": ("Industrials", "Marketplace / Salvage Platform", "Specialty Business Services", "Copart (Wave 9 (owner, 2026-09-27))"),
+    "TRI": ("Industrials", "Information Services", "Specialty Business Services", "Thomson Reuters (Wave 9 (owner, 2026-09-27))"),
+    "RELX": ("Industrials", "Information Services", "Specialty Business Services", "RELX (Wave 9 (owner, 2026-09-27))"),
+    "ROL": ("Industrials", "Industrial Route & Uniform Services", "Specialty Business Services", "Rollins (Wave 9 (owner, 2026-09-27))"),
+    "UNF": ("Industrials", "Industrial Route & Uniform Services", "Specialty Business Services", "UniFirst (Wave 9 (owner, 2026-09-27))"),
+    "CTAS": ("Industrials", "Industrial Route & Uniform Services", "Specialty Business Services", "Cintas (Wave 9 (owner, 2026-09-27))"),
+    "VLTO": ("Industrials", "Waste & Environmental Services", "Industrial - Pollution & Treatment Controls", "Veralto (Wave 9 (owner, 2026-09-27))"),
+    "RSG": ("Industrials", "Waste & Environmental Services", "Waste Management", "Republic Services (Wave 9 (owner, 2026-09-27))"),
+    "WM": ("Industrials", "Waste & Environmental Services", "Waste Management", "Waste Management (Wave 9 (owner, 2026-09-27))"),
+    "AER": ("Industrials", "Equipment Rental", "Rental & Leasing Services", "AerCap (Wave 9 (owner, 2026-09-27))"),
+    "URI": ("Industrials", "Equipment Rental", "Rental & Leasing Services", "United Rentals (Wave 9 (owner, 2026-09-27))"),
+    "FAST": ("Industrials", "Industrial Distribution", "Industrial - Distribution", "Fastenal (Wave 9 (owner, 2026-09-27))"),
+    "GWW": ("Industrials", "Industrial Distribution", "Industrial - Distribution", "W.W. Grainger (Wave 9 (owner, 2026-09-27))"),
+    "PWR": ("Industrials", "Long-Cycle E&C", "Engineering & Construction", "Quanta Services (Wave 9 (owner, 2026-09-27))"),
+    "VRT": ("Industrials", "Capital Goods", "Electrical Equipment & Parts", "Vertiv (Wave 9 (owner, 2026-09-27))"),
+    "ETN": ("Industrials", "Capital Goods", "Electrical Equipment & Parts", "Eaton (Wave 9 (owner, 2026-09-27))"),
+    "SNA": ("Industrials", "Capital Goods", "Manufacturing - Tools & Accessories", "Snap-on (Wave 9 (owner, 2026-09-27))"),
+    "TT": ("Industrials", "Capital Goods", "Industrial - Machinery", "Trane Technologies (Wave 9 (owner, 2026-09-27))"),
+    "PH": ("Industrials", "Capital Goods", "Industrial - Machinery", "Parker-Hannifin (Wave 9 (owner, 2026-09-27))"),
+    "DE": ("Industrials", "Capital Goods", "Agricultural - Machinery", "Deere (Wave 9 (owner, 2026-09-27))"),
+    "CAT": ("Industrials", "Capital Goods", "Agricultural - Machinery", "Caterpillar (Wave 9 (owner, 2026-09-27))"),
     "CSGP": ("Property", "Real Estate Services", "Real Estate - Services", "CoStar Group (data and marketplace; platform economics, flagged) (Wave 8 owner directory, 2026-09-27)"),
     "ZG": ("Property", "Real Estate Services", "Real Estate - Services", "Zillow Group A (Wave 8 owner directory, 2026-09-27)"),
     "Z": ("Property", "Real Estate Services", "Real Estate - Services", "Zillow Group (portal; platform economics, flagged) (Wave 8 owner directory, 2026-09-27)"),
@@ -5722,21 +6057,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "KTOS":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "Kratos — drones, hypersonics, microwave electronics"),
     "AVAV":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "AeroVironment — tactical UAS and loitering munitions"),
     "RKLB":  ("Industrials", "Defense Tech & Space",  "Aerospace/Defense",  "Rocket Lab — launch and space systems"),
-    "CAT":   ("Industrials", "",  "Machinery",          "Caterpillar"),
-    "DE":    ("Industrials", "",  "Machinery",          "Deere & Company"),
     "GE":    ("Industrials", "Commercial Aerospace & Engines",  "Aerospace/Defense", "GE Aerospace — engines; P/E and EV/EBITDA on aftermarket service margins"),
     "GEV":   ("Industrials", "Capital Goods",  "Electrical Equipment", "GE Vernova — wind/gas turbine OEM + grid electrification; book-to-bill driven"),
-    "HON":   ("Industrials", "",  "Electrical Equipment", "Honeywell"),
-    "UPS":   ("Transportation", "", "Transportation",   "United Parcel Service"),
-    "FDX":   ("Transportation", "", "Transportation",   "FedEx"),
-    "DAL":   ("Transportation", "Airlines", "Air Transport", "Delta Air Lines"),
-    "UAL":   ("Transportation", "Airlines", "Air Transport", "United Airlines"),
 
     # ── Materials / Resources ─────────────────────────────────────────────────
-    "LIN":   ("Materials",  "",  "Chemical (Specialty)",  "Linde plc"),
-    "NUE":   ("Materials",  "",  "Steel",                 "Nucor — steel mini-mills"),
-    "FCX":   ("Resources",  "Mining (Major)",      "Metals & Mining",       "Freeport-McMoRan — copper/gold"),
-    "NEM":   ("Resources",  "Mining (Major)",      "Precious Metals",       "Newmont Mining"),
     "XOM":   ("Resources",  "Integrated Oil & Gas", "Oil/Gas (Integrated)",  "ExxonMobil — integrated O&G (Wave 1, 2026-09-20)"),
     "CVX":   ("Resources",  "Integrated Oil & Gas", "Oil/Gas (Integrated)",  "Chevron — integrated (Wave 1, 2026-09-20)"),
     "COP":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "ConocoPhillips — pure-play E&P"),
@@ -5870,6 +6194,25 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # Real Estate
     "01113.HK": ("Property", "Landlord / Investment Property (HK)", "Real Estate - Diversified", "CK Asset Holdings (Wave 8 owner directory, 2026-09-27, category 4)"),
+    "02899.HK": ("Resources", "Precious Metals", "Gold", "Zijin Mining (Wave 9 (owner, 2026-09-27))"),
+    "00358.HK": ("Resources", "Base Metals", "Copper", "Jiangxi Copper (Wave 9 (owner, 2026-09-27))"),
+    "02600.HK": ("Resources", "Base Metals", "Aluminum", "Chalco (Wave 9 (owner, 2026-09-27))"),
+    "01378.HK": ("Resources", "Base Metals", "Aluminum", "China Hongqiao (Wave 9 (owner, 2026-09-27))"),
+    "03993.HK": ("Resources", "Diversified Miners", "Industrial Materials", "CMOC (Wave 9 (owner, 2026-09-27))"),
+    "01772.HK": ("Materials", "Commodity Chemicals & Ag Inputs", "Chemicals", "Ganfeng Lithium (Wave 9 (owner, 2026-09-27))"),
+    "00914.HK": ("Materials", "Aggregates & Cement", "Construction Materials", "Anhui Conch (cement) (Wave 9 (owner, 2026-09-27))"),
+    "00316.HK": ("Transportation", "Container & Bulk Shipping", "Marine Shipping", "OOIL (Wave 9 (owner, 2026-09-27))"),
+    "01919.HK": ("Transportation", "Container & Bulk Shipping", "Marine Shipping", "COSCO Shipping (Wave 9 (owner, 2026-09-27))"),
+    "00066.HK": ("Transportation", "Rail / Logistics", "Railroads", "MTR (Wave 9 (owner, 2026-09-27))"),
+    "00293.HK": ("Transportation", "Airlines", "Airlines, Airports & Air Services", "Cathay Pacific (Wave 9 (owner, 2026-09-27))"),
+    "00576.HK": ("Industrials", "Toll Road / Infrastructure (HK)", "Industrial - Infrastructure Operations", "Zhejiang Expressway (Wave 9 (owner, 2026-09-27))"),
+    "00177.HK": ("Industrials", "Toll Road / Infrastructure (HK)", "Industrial - Infrastructure Operations", "Jiangsu Expressway (Wave 9 (owner, 2026-09-27))"),
+    "00267.HK": ("Financials", "Asian Holding Company (Look-Through)", "Conglomerates", "CITIC (Wave 9 (owner, 2026-09-27))"),
+    "00001.HK": ("Financials", "Asian Holding Company (Look-Through)", "Conglomerates", "CK Hutchison (Wave 9 (owner, 2026-09-27))"),
+    "01186.HK": ("Industrials", "Long-Cycle E&C", "Engineering & Construction", "China Railway Construction (Wave 9 (owner, 2026-09-27))"),
+    "00390.HK": ("Industrials", "Long-Cycle E&C", "Engineering & Construction", "China Railway Group (Wave 9 (owner, 2026-09-27))"),
+    "01766.HK": ("Industrials", "Capital Goods", "Railroads", "CRRC (rail equipment maker under the Railroads label) (Wave 9 (owner, 2026-09-27))"),
+    "03750.HK": ("Industrials", "Battery & Energy Storage", "Electrical Equipment & Parts", "CATL (carved out of the electrical cohort) (Wave 9 (owner, 2026-09-27))"),
     "02423.HK": ("Property", "Real Estate Services", "Real Estate - Services", "KE Holdings / Beike (HK line) (Wave 8 owner directory, 2026-09-27, category 7)"),
     "06049.HK": ("Property", "Real Estate Services", "Real Estate - Services", "Poly Property Services (Wave 8 owner directory, 2026-09-27, category 7)"),
     "02669.HK": ("Property", "Real Estate Services", "Real Estate - Services", "China Overseas Property (Wave 8 owner directory, 2026-09-27, category 7)"),
@@ -6013,16 +6356,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "02333.HK": ("Industrials", "",  "Auto & Truck",             "Great Wall Motor"),
     "02618.HK": ("Industrials", "",  "Logistics",                "JD Logistics"),
     "02057.HK": ("Industrials", "",  "Express Delivery",         "ZTO Express"),
-    "01919.HK": ("Industrials", "",  "Shipping",                 "COSCO Shipping Holdings"),
     "01138.HK": ("Industrials", "",  "Shipping / Tankers",       "COSCO Shipping Energy"),
     "00656.HK": ("Industrials", "",  "Conglomerate",             "Fosun International"),
-    "00001.HK": ("Industrials", "",  "Diversified",              "CK Hutchison Holdings"),
-    "03750.HK": ("Industrials", "",  "EV Battery",               "CATL HK listing"),
 
     # Materials
-    "00914.HK": ("Industrials", "",  "Cement",                   "Anhui Conch Cement"),
-    "02600.HK": ("Industrials", "",  "Metals & Mining",          "Aluminum Corp of China"),
-    "01772.HK": ("Industrials", "",  "Battery/Lithium",          "Ganfeng Lithium"),
     "09696.HK": ("Industrials", "",  "Battery/Lithium",          "Tianqi Lithium"),
     "06865.HK": ("Industrials", "",  "Specialty Glass",          "Flat Glass Group"),
     "00868.HK": ("Industrials", "",  "Specialty Glass",          "Xinyi Glass"),
@@ -6387,8 +6724,6 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "Z74.SI":  ("Telco", "Telco / Infrastructure (SG)",            "Telecom Services",       "SingTel"),
     "CC3.SI":  ("Telco", "Telco / Infrastructure (SG)",            "Telecom Services",       "StarHub"),
     # Industrials
-    "C6L.SI":  ("Industrials", "Aviation & Marine (SG)",    "Air Transport",          "Singapore Airlines"),
-    "BN4.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Keppel Corporation"),
     "BS6.SI":  ("Industrials", "Aviation & Marine (SG)","Shipbuilding",          "Yangzijiang Shipbuilding"),
     "U96.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Utilities & Energy",     "Sembcorp Industries"),
     "S63.SI":  ("Industrials", "Aerospace & Engineering (SG)",    "Aerospace & Defence",    "ST Engineering"),
@@ -6397,7 +6732,6 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # sub-industry field already said Transportation while the profile put it
     # on SOTP (published), which ComfortDelGro does not publish.
     "C52.SI":  ("Transportation", "Rail / Logistics",              "Public Transit",         "ComfortDelGro"),
-    "J36.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine Matheson"),
     "J37.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine C&C"),
     "S51.SI":  ("Industrials", "Aviation & Marine (SG)",     "Marine & Offshore",      "Seatrium"),
     "MR7.SI":  ("Industrials", "Aviation & Marine (SG)",     "Marine Services",        "Marco Polo Marine"),
@@ -6444,6 +6778,9 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "T82U.SI": ("REIT",        "Commercial", "Commercial REIT",        "Suntec REIT"),
     "K71U.SI": ("REIT",        "Office",     "Office REIT",            "Keppel REIT"),
     "AJBU.SI": ("REIT",        "DataCentre", "Data Centre REIT",       "Keppel DC REIT"),
+    "C6L.SI": ("Transportation", "Airlines", "Airlines", "Singapore Airlines (Wave 9 (owner, 2026-09-27))"),
+    "BN4.SI": ("Financials", "Asian Holding Company (Look-Through)", "Conglomerates", "Keppel (Wave 9 (owner, 2026-09-27))"),
+    "J36.SI": ("Financials", "Asian Holding Company (Look-Through)", "Conglomerates", "Jardine Matheson (Wave 9 (owner, 2026-09-27))"),
     "H78.SI": ("Property", "Landlord / Investment Property (HK)", "Real Estate Development","Hongkong Land (Wave 8 directory, category 4: HK landlord listed in SG)"),
     "U06.SI": ("Property", "Property Developer (SG)",  "Real Estate Development","Singapore Land Group (Wave 8)"),
     "TQ5.SI": ("Property", "Property Developer (SG)",  "Real Estate Development","Frasers Property (Wave 8 directory)"),

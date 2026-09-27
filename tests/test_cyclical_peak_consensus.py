@@ -289,7 +289,10 @@ def test_the_cyclical_profiles_are_the_ones_the_plans_name():
         "Clean Tech / Power Equipment OEM",
         # Wave 3 (owner framework 2026-09-22): the delivery cycle is the premise.
         "Commercial Aerospace & Engines",
-        "Agribusiness & Food Processing"})   # Wave 4 (2026-09-26): crush spreads and protein margins mean-revert
+        "Agribusiness & Food Processing",    # Wave 4 (2026-09-26): crush spreads and protein margins mean-revert
+        # Wave 9 (owner, 2026-09-27): metals, shipping, commodity chemicals and paper price mid-cycle.
+        "Base Metals", "Precious Metals", "Diversified Miners", "Container & Bulk Shipping",
+        "Commodity Chemicals & Ag Inputs", "Packaging & Paper"})
     for name in _CYCLICAL_PROFILES:
         _profile(name)          # raises if the taxonomy drifted
 
@@ -321,8 +324,13 @@ def test_profiles_already_normalised_swap_nothing():
 
 
 def test_steel_keeps_its_capital_n_anchor_and_swaps_only_pe():
+    # Wave 9 (owner, 2026-09-27): Steel / Metals is EV/EBITDA (Norm) .50, P/BV .30, P/E (norm) .20. The P/E leg is
+    # normalised in the profile itself, so the swap that used to move it has nothing left to move; the
+    # capital-N anchor still does not match the swap's exact-name table and stays as it is.
     got = _mid_cycle_leg_swaps(_profile("Steel / Metals"), "Steel / Metals")
-    assert [(s["from"], s["to"]) for s in got] == [("P/E", "P/E (norm)")]
+    assert got == []
+    names = {m["name"] for m in _profile("Steel / Metals")["methods"]}
+    assert {"EV/EBITDA (Norm)", "P/E (norm)"} <= names and "P/E" not in names
 
 
 def test_airlines_anchor_now_swaps_to_the_normalised_ebitda_like_every_cyclical():
@@ -331,8 +339,13 @@ def test_airlines_anchor_now_swaps_to_the_normalised_ebitda_like_every_cyclical(
     EBITDA flowed straight through a 0.50 anchor. Renamed to what it computes,
     the anchor joins the mid-cycle swap like every other cyclical profile. This
     is a disclosed valuation change for airlines, recorded in the delta report."""
+    # Wave 9 (owner, 2026-09-27): Airlines is Forward EV/EBITDA .50, P/BV .30, P/E (norm) .20. The anchor is a
+    # forward-consensus leg, which the trailing-peak swap does not touch, and the P/E leg is already normalised,
+    # so nothing is swapped. The 2026-09-26 rename history above stays as the record of why the swap mattered.
     got = _mid_cycle_leg_swaps(_profile("Airlines"), "Airlines")
-    assert [(s["from"], s["to"]) for s in got] == [("EV/EBITDA", "EV/EBITDA (norm)"), ("P/E", "P/E (norm)")]
+    assert got == []
+    names = [m["name"] for m in _profile("Airlines")["methods"]]
+    assert names[0] == "Forward EV/EBITDA" and "P/E (norm)" in names and "EV/EBITDA" not in names
 
 
 def test_upstream_oil_and_gas_has_nothing_to_swap():

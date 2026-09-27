@@ -199,8 +199,13 @@ def test_the_measured_labels_route_and_are_in_scope_and_the_shared_labels_are_no
     from src.data import industry_profile_map as m
     for label, target in WAVE_ROWS.items():
         assert m.profile_for_industry(label) == target and label in m.routing_scope()
-    # Bloom, NuScale and GE Vernova share these with hundreds of unrelated industrials.
-    assert not {"Electrical Equipment & Parts", "Industrial - Machinery"} & m.routing_scope()
+    # Bloom, NuScale and GE Vernova share these with hundreds of unrelated industrials. Wave 9 (owner,
+    # 2026-09-27) brought both labels into scope on Capital Goods; the Wave 2 names keep their profiles by pin,
+    # which beats the row.
+    assert {"Electrical Equipment & Parts", "Industrial - Machinery"} <= m.routing_scope()
+    assert m.profile_for_industry("Electrical Equipment & Parts") == ("Industrials", "Capital Goods")
+    from src.data.sector_profiles import get_wacc_profile_for_ticker
+    assert get_wacc_profile_for_ticker("BE")[1] == OEM            # the pin runs after the router in run_dcf_agent
     assert m.profile_for_industry("Uranium") is None       # no profile yet: P/NAV needs inputs
 
 

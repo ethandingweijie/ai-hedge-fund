@@ -75,7 +75,7 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["REIT", "S-REIT", "Property Developer (SG)", "Real Estate Agency (SG)", "Specialised Accommodation (SG)",
                      "Holding Company", "Aerospace Holdco (HK)", "Conglomerate / Industrial (SG)",
                      "Property Developer (HK / China)", "Landlord / Investment Property (HK)", "Homebuilder / Land Developer", "Real Estate Services",
-                     "REIT (Specialty / OpCo)"],   # Wave 8, Wave 8b step 3
+                     "REIT (Specialty / OpCo)", "Asian Holding Company (Look-Through)"],   # Wave 8, Wave 8b step 3, Wave 9
         "rows": ["revenue", "ni", "equity", "bvps", "dps", "nd_equity"],
         "exposition": ["NAV discount", "SOTP look-through with the accepted inputs", "gearing"],
         "skeleton": ["rating", "price against NAV", "portfolio or subsidiary drivers", "distributions and gearing", "risk"],
@@ -85,6 +85,7 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["Regulated Utility", "Merchant Power", "IPP", "Clean Tech / Power Equipment OEM", "Midstream / Pipelines",
                      "Refining & Marketing", "Oilfield Services & Drilling", "EPC Contractor", "Energy Tech Licensor",
                      "Upstream Oil & Gas", "Integrated Oil & Gas", "Coal", "Mining (Major)", "Offshore Marine & Resources (SG)",
+                     "Base Metals", "Precious Metals", "Diversified Miners",   # Wave 9
                      "Digital Asset Mining"],
         "rows": ["revenue", "ebitda", "fcf", "capex", "net_debt", "nd_ebitda"],
         "exposition": ["EV/EBITDA (norm) with the normalisation window stated", "PV-10 coverage", "SOTP (segments) for refiners", "rate base for utilities"],
@@ -115,7 +116,13 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["Aerospace & Engineering (SG)", "Aviation & Marine (SG)", "Defense Primes", "Commercial Aerospace & Engines",
                      "Niche Aerospace Components", "Defense Tech & Space", "General Aviation (HK)", "GA Engines & Aftermarket (HK)",
                      "Automotive (OEM)", "Backlog-Gated Long Cycle", "Capital Goods", "Airlines", "Rail / Logistics",
-                     "Steel / Metals", "Specialty Chemicals", "Electronic Materials & Industrial Diversified"],
+                     "Steel / Metals", "Specialty Chemicals", "Electronic Materials & Industrial Diversified",
+                     # Wave 9 (2026-09-27)
+                     "Long-Cycle E&C", "Industrial Distribution", "Equipment Rental", "Waste & Environmental Services",
+                     "Toll Road / Infrastructure (HK)", "Industrial Route & Uniform Services", "Information Services",
+                     "Marketplace / Salvage Platform", "Blended Industrial OpCo", "Battery & Energy Storage",
+                     "Trucking & Parcel Logistics", "Container & Bulk Shipping", "Commodity Chemicals & Ag Inputs",
+                     "Aggregates & Cement", "Packaging & Paper"],
         "rows": ["revenue", "ebit_m", "fcf", "net_debt", "nd_ebitda"],
         "exposition": ["backlog-coverage DCF with the accepted backlog named", "EV/EBIT (norm)"],
         "skeleton": ["rating", "backlog visibility", "margin", "capital", "risk"],

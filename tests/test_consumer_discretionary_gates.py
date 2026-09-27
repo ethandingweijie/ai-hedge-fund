@@ -445,6 +445,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     #       1.4% -> 7.3%). Neither fires on any of the golden fixtures.
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
+        "GATE_BACKLOG_MULTIPLE",
         "GATE_BACKLOG_VISIBILITY",
         "GATE_BALANCE_SHEET_FINANCIAL",
         "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
@@ -470,6 +471,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # each of the three long-cycle eligibility rules with its reading and
         # threshold. `applied` is the verdict, so it is an expression, not a literal.
         "GATE_LONG_CYCLE_ELIGIBILITY",
+        "GATE_MARGIN_PEAK",
         "GATE_MARGIN_TURNAROUND",
         "GATE_PT_IV_BAND",
         "GATE_REIT_MULTIPLE_OUTLIER",
@@ -510,7 +512,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 9   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27)
+    assert src.count('"applied": True,') == 11   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
@@ -1421,13 +1423,18 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
         ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
         ("Energy", "Refining & Marketing", "EV/EBITDA (norm)"),
         ("Industrials", "Defense Primes", "EV/EBITDA (norm)"),      # Wave 3: through-cycle check on the primes
+        ("Materials", "Commodity Chemicals & Ag Inputs", "EV/EBITDA (norm)"),   # Wave 9 (2026-09-27): the cyclical materials and metals
+        ("Materials", "Packaging & Paper", "EV/EBITDA (norm)"),
         ("Materials", "Steel / Metals", "EV/EBITDA (Norm)"),
+        ("Resources", "Base Metals", "EV/EBITDA (norm)"),
         ("Resources", "Coal", "EV/EBITDA (norm)"),
+        ("Resources", "Diversified Miners", "EV/EBITDA (norm)"),
         ("Resources", "Integrated Oil & Gas", "EV/EBITDA (norm)"),
         ("Resources", "Mining (Major)", "EV/EBITDA (norm)"),
         ("Resources", "Upstream Oil & Gas", "EV/EBITDA (norm)"),
         ("Tech", "China Internet Platform", "EV/EBITDA (norm)"),
         ("Tech", "Local Services & Instant Retail", "EV/EBITDA (norm)"),
+        ("Transportation", "Container & Bulk Shipping", "EV/EBITDA (norm)"),   # Wave 9
     ], users
     consumer_vocab = {m["name"] for d in _consumer_profiles().values()
                       for m in d.get("methods", [])}
@@ -1733,7 +1740,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (130, 39), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 (2026-09-27) +REIT (Specialty / OpCo), none normalised
+    assert (total, with_norm) == (149, 45), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1757,9 +1764,9 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
-    assert spellings.get("EV/EBITDA (norm)") == 12, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
+    assert spellings.get("EV/EBITDA (norm)") == 17, spellings     # Wave 9 (2026-09-27): +Container & Bulk Shipping, +Commodity Chemicals & Ag Inputs, +Packaging & Paper, +Base Metals, +Diversified Miners     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 29, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer (2026-09-27)
+    assert spellings.get("P/E (norm)") == 32, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer; Wave 9 (2026-09-27): +Airlines, +Steel / Metals, +Commodity Chemicals & Ag Inputs
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
@@ -2103,7 +2110,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (130, 33, 33, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1, none on trailing P/E
+    assert (tot, trail, elig, anchored) == (149, 31, 31, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2591,7 +2598,7 @@ def test_every_blend_that_values_the_profile_reads_the_promoted_rows():
     # ── (1) computed once, above the loop ─────────────────────────────────
     assert body.count("_pe_normalization_deviation(") == 1
     assert body.count("_pe_norm_leg_swaps(") == 1
-    assert body.count("_apply_pe_norm_swaps(") == 1
+    assert body.count("_apply_pe_norm_swaps(") == 2          # Wave 9: the margin-peak gate rewrites the same rows through the same helper
     assert body.count('for scenario in ("base", "bear", "bull"):') == 1
 
     # On comment-stripped lines, and that is not stylistic. The `_cyc_rec`
@@ -2866,7 +2873,7 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     # +1 / +1: 00006.HK (Power Assets, HKD reporter) pinned in Wave 2.
     # +3 / +3: 02357.HK, 02507.HK, 00232.HK pinned in Wave 3 (all HKD reporters).
     # 166/125 -> 174/133: eight HK health names pinned on the owner's Wave 5 taxonomy (2026-09-26).
-    assert len(hk) == 198 and len(missing) == 157, (len(hk), len(missing))   # Wave 8 (2026-09-27): 24 HK real-estate pins from the owner's directory, none in the FX table
+    assert len(hk) == 211 and len(missing) == 170, (len(hk), len(missing))   # Wave 8: 24 HK real-estate pins; Wave 9 (2026-09-27): 13 HK industrial / materials / metals pins, none in the FX table
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")

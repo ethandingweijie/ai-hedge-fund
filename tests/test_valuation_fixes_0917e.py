@@ -392,6 +392,15 @@ _WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
 _WAVE8_MOVED = {
     "C38U_SI":  (1.74,     1.34,     2.20,    (1.80,  2.00,  2.23)),   # Wave 8c verdict B2 (2026-09-27): the S-REIT NAV leg on the V2 NOI rule
 }
+#: Wave 9 (2026-09-27, owner's Stage 1 / Stage 3 decisions): FCX re-routes to Base Metals (EV/EBITDA (norm)
+#: .50 anchor, RNAV .30 falling back to the normalised leg without a reviewed NAV, EV/OCF .20) and prices on
+#: the live Copper cohort; BN4.SI re-routes to Asian Holding Company (Look-Through) (SOTP (analyst) .60 falling
+#: back to P/BV without a reviewed SOTP, P/BV .25, DDM .15). The EV/EBITDA leg that failed its bridge in BN4's
+#: bear case is no longer in the profile, so the ordering clamp stops firing (bear 7.97 < base 10.40).
+_WAVE9_MOVED = {
+    "FCX":      (68.06,    47.89,    88.23,   (63.76, 70.82, 77.88)),
+    "BN4_SI":   (10.40,     7.97,    13.34,   (10.00, 10.86, 11.88)),
+}
 _WAVE7_MOVED = {
     "02888_HK": (288.95,  236.95,   340.94,   (233.97, 259.98, 285.97)),
     "D05_SI":   (44.44,    36.66,    52.21,   (56.16,  60.05,  63.93)),
@@ -404,7 +413,7 @@ _WAVE7_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -881,6 +890,14 @@ def test_the_sign_flips_changed_only_their_flag_text():
             assert _BEAR_IV_UNMOVED["FCX"] == 16.06
             assert p["scenarios.bear.intrinsic_value"] == _current("FCX")[1]   # 16.95 -> 14.48 (2026-09-26)
             continue
+        if name in _WAVE9_MOVED:
+            # Wave 9 (2026-09-27): BN4.SI re-routed to Asian Holding Company (Look-Through); the bear case
+            # no longer loses a leg to the bridge, the clamp does not fire, the pre-clamp history stays.
+            assert _BEAR_IV_UNMOVED[name] == _ORDERING_CLAMPED[name]["pre_clamp_bear_iv"], name
+            assert p["scenarios.bear.intrinsic_value"] == _current(name)[1], name
+            assert p.get("scenarios.bear.intrinsic_value_unclamped") is None, name
+            assert p["scenarios.bear.intrinsic_value"] < p["scenarios.base.intrinsic_value"], name
+            continue
         if name in _ORDERING_CLAMPED:
             oc = _ORDERING_CLAMPED[name]
             # Both halves again: the × 10 fix left BN4_SI at 7.37, and that is
@@ -948,7 +965,11 @@ def test_the_ordering_clamp_fired_on_exactly_one_of_the_fourteen():
         for scen in ("bear", "base", "bull"):
             if p.get(f"scenarios.{scen}.intrinsic_value_unclamped") is not None:
                 clamped.append((name, scen))
-    assert clamped == [("BN4_SI", "bear")], clamped
+    # Wave 9 (2026-09-27): BN4.SI left the profile whose EV/EBITDA leg failed its bear bridge, so the
+    # clamp fires on no fixture. The one-name history stays in `_ORDERING_CLAMPED`; the invariant itself
+    # keeps its synthetic coverage in tests/test_scenario_ordering_invariant.py.
+    assert "BN4_SI" in _ORDERING_CLAMPED
+    assert clamped == [], clamped
 
 
 def test_bull_quality_gate_unbinds_on_exactly_six_not_nine():
@@ -1005,6 +1026,7 @@ def test_fcx_bull_premium_came_off_its_clamp_ceiling():
     p = _proj("FCX")
     assert p["scenarios.bull.growth_premium"] == 1.0
     assert _PREFIX["FCX"][3] == 1.8
+    assert _REMEDIATION_MOVED["FCX"][2] == 44.60, "the pre-Wave-9 bull stays as history"
     assert 46.92 / 72.62 == pytest.approx(1 - 0.354, abs=5e-4), (
         "the cumulative cut from the pre-fix 72.62, × 10 fix and floor re-baseline")
     assert p["scenarios.bull.intrinsic_value"] == _current("FCX")[2]     # 47.08 -> 44.60 (minority interest, 2026-09-26)
@@ -1049,7 +1071,10 @@ def test_fcx_12m_band_fires_for_the_first_time():
     assert _FLOOR_MOVED["FCX"]["targets"] == (18.66, 24.89, 31.11)
     assert p["12m_pt_method"].startswith("convergence toward intrinsic value")
     assert (p["12m_targets.bear"], p["12m_targets.base"], p["12m_targets.bull"]) == \
-           _TWO_TIER_TARGETS_UNMOVED_IV["FCX"]
+           _current("FCX")[3]
+    # Wave 9 (2026-09-27) moved the IV the targets converge to (Base Metals on the live Copper cohort);
+    # the rule and the no-band facts are unchanged.
+    assert _TWO_TIER_TARGETS_UNMOVED_IV["FCX"] == (41.92, 46.84, 56.98)
     assert "pt_over_scenario_iv" not in p["gate_metrics"]
     for scen in _SCENARIOS:
         assert not any("VALIDATION ERROR" in f
@@ -1326,9 +1351,9 @@ def test_the_leg_table_is_a_superset_of_the_weighted_set():
                 reverse[(name, scen)] = sorted(used - table)
             forward += bool(table - used)
     assert forward == 42, forward
+    # Wave 9 (2026-09-27): BN4.SI's two reverse pairs ((bear, EV/EBITDA), (base, DCF)) left with its
+    # re-route to Asian Holding Company (Look-Through); every weighted leg now has a table entry.
     assert reverse == {
-        ("BN4_SI", "bear"): ["EV/EBITDA"],
-        ("BN4_SI", "base"): ["DCF"],
         ("MELI", "bear"): ["Power Law Score"],
         ("MELI", "base"): ["Power Law Score"],
         ("MELI", "bull"): ["Power Law Score"],

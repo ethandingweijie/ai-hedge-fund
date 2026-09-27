@@ -1,53 +1,85 @@
 {
- "comp_age_days": 3.2,
+ "comp_age_days": 5.91,
  "fields": {
   "ev_ebitda": {
    "basis": "sector",
    "cohort": "large",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 8.2892
+   "peer_count": 10,
+   "value": 10.8529
+  },
+  "ev_ebitda_ntm": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "SES",
+   "key": "Industrials",
+   "peer_count": 9,
+   "value": 7.3513
+  },
+  "ev_ocf": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Industrials",
+   "peer_count": 14,
+   "value": 6.8582
   },
   "ev_revenue": {
    "basis": "sector",
    "cohort": "large",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 1.4434
+   "peer_count": 10,
+   "value": 1.913
   },
   "fcf_yield": {
    "basis": "sector",
-   "cohort": "large",
+   "cohort": "all",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 0.037
+   "peer_count": 9,
+   "value": 0.0493
   },
   "growth_avg": {
    "basis": "sector",
    "cohort": "large",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 0.0793
+   "peer_count": 10,
+   "value": 0.0763
   },
   "pb": {
    "basis": "sector",
    "cohort": "large",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 1.9315
+   "peer_count": 10,
+   "value": 1.9269
   },
   "pe": {
    "basis": "sector",
    "cohort": "large",
    "exchange": "SES",
    "key": "Industrials",
-   "peer_count": 11,
-   "value": 18.9522
+   "peer_count": 10,
+   "value": 19.5538
+  },
+  "pe_ntm": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "SES",
+   "key": "Industrials",
+   "peer_count": 9,
+   "value": 16.631
+  },
+  "roic": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "SES",
+   "key": "Industrials",
+   "peer_count": 10,
+   "value": 0.0509
   }
  }
 }

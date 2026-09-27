@@ -1578,3 +1578,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 8c (owner verdicts, 2026-09-27): NOI rule V2 -- clean NOI only where EBITDA is not positive or under half of clean NOI, EBITDA otherwise (C38U.SI's S-REIT NAV leg returns to the EBITDA basis, IV 1.76 -> 1.74); the P/NAV read off the curated HK landlord basket and the sector rung for thin cohorts; a computed NAV inside the band stands over a published one; the REIT quality gate on FFO over invested capital with the REIT_Multiple_Outlier flag; developers on the solvent-peer P/B cluster around their own multiple -- every other fixture moves only on the constants digest
 
+## 2026-09-27T13:15:03+00:00
+
+- regenerated at HEAD: `c5a7dbd6`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27): FCX re-pinned Mining (Major) -> Base Metals (EV/EBITDA (norm) .50, reserve NAV .30 rolling into the normalised leg until accepted, EV/OCF .20) and BN4.SI re-pinned Conglomerate / Industrial (SG) -> Asian Holding Company (Look-Through) (SOTP (analyst) .60 rolling into P/B until accepted, P/B .25, DDM .15); both fixtures re-recorded at their 2026-09-16 end date because their recorded calls were keyed on the old profiles (FCX 24.31 -> 68.06, BN4.SI 5.90 -> 10.40); note the replay prices FCX's normalised leg on the plain Copper cohort (12.5x) where a live run reads the dynamic through-cycle multiple (7.4x, live IV 39.27) -- a pre-existing harness gap on every normalised leg; every other fixture moves only on the constants digest
+

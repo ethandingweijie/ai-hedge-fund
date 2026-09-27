@@ -1,4 +1,93 @@
 {
  "comp_age_days": null,
- "fields": {}
+ "fields": {
+  "ev_ebit": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 13.8508
+  },
+  "ev_ebitda": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 7,
+   "value": 12.5206
+  },
+  "ev_ebitda_ntm": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 7.7239
+  },
+  "ev_ocf": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 13.8688
+  },
+  "ev_revenue": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 4.6097
+  },
+  "fcf_yield": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 0.0374
+  },
+  "growth_avg": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 7,
+   "value": 0.1047
+  },
+  "pb": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 7,
+   "value": 3.17
+  },
+  "pe": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 5,
+   "value": 18.8578
+  },
+  "pe_ntm": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 6,
+   "value": 19.004
+  },
+  "roic": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "US",
+   "key": "Copper",
+   "peer_count": 7,
+   "value": 0.088
+  }
+ }
 }
