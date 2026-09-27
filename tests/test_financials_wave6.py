@@ -109,7 +109,7 @@ def test_sgx_takes_the_global_exchange_basket_by_a_documented_exception():
     assert "market = comps_exchange_for(ticker) or market" in src
 
 
-def test_the_pnc_calibration_row_is_proposed_from_the_cohort():
+def test_the_pnc_calibration_row_is_the_owner_accepted_cohort_derivation():   # accepted 2026-09-27
     c = d._BANK_PROFILE_CALIBRATION["Insurance (P&C)"]
     assert (c["p_tbv"], c["pe"], c["coe"], c["target_roe"]) == (2.2, 11.4, 0.09, 0.15)
 

@@ -131,7 +131,7 @@ for SPGI and MSCI; Alt Asset Manager re-specified on P/DE (Forward) .40, SOTP (F
 P/E .20, DDM .10, fed by the `alt_manager` kind (forward FRE and DE, totals or per share, cited P/DE and
 P/FRE ranges); Insurance (life) on Embedded Value .35 from the `embedded_value` kind, P/BV .40, P/E (ops)
 .20, DDM .05, Combined Ratio Gate removed; Insurance (P&C) with `leg_fallback` rolling the Combined Ratio
-Gate into P/E (ops) and a PROPOSED calibration row; Holding Company anchored on SOTP (analyst) .70 with a
+Gate into P/E (ops) and a calibration row (2.2x / 11.4x / 9.0% / 15% RoTE; proposed and accepted by the owner on 2026-09-27); Holding Company anchored on SOTP (analyst) .70 with a
 `listed_investments_at_market` field on the SOTP input for the Berkshire look-through; the bank
 calibration table re-derived as in section 2a (Money Center 2.2x / 14.2x / 9.3%, Super-Regional 1.6x /
 11.6x, Investment Bank 2.4x / 15.3x / 9.5%, EM Bank 0.6x / 7.3x / 9.75% with RoTE 10.5%, EM Premium 1.0x /

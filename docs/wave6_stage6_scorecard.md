@@ -122,7 +122,7 @@ associates ($19.9bn) and not the $300bn listed portfolio, so the SOTP input now 
 
 1. Accept or revoke the eight pre-fills on the Model Accuracy gate (four life insurers, three alt
    managers, Berkshire); MetLife's fails by design (no group EV) and can be omitted.
-2. The PROPOSED Insurance (P&C) calibration row (2.2x / 11.4x / 9.0% / 15%).
+2. ~~The PROPOSED Insurance (P&C) calibration row (2.2x / 11.4x / 9.0% / 15%).~~ Accepted by the owner, 2026-09-27.
 3. AXP's placement: keep on Card Issuer & Consumer Lender with the flag, or a premium-franchise pin.
 4. GS and MS: the Investment Bank calibration (2.4x tangible, 9.5%) still leaves −31% and −44%; the
    market's 2.5-3.0x is a fee-franchise premium the book-anchored legs do not carry.

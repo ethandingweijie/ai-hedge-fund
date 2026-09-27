@@ -1473,11 +1473,27 @@ class _Book:
 
     # ── Summary ─────────────────────────────────────────────────────────────
     def summary_tab(self, sh: _Sheet) -> None:
-        sh.title(f"{self.ticker} — Valuation output", f"Currency {self.ccy}. All figures link to the tab that "
-                                                      "derives them.")
+        sh.title(f"{self.ticker} — Valuation output", f"Currency {self.ccy}. Column B links to the tab that "
+                                                      "derives each figure and recalculates in Excel; the "
+                                                      "'engine' columns carry the run's static values for "
+                                                      "viewers that do not calculate formulas.")
         A = self.A
+        # Owner, 2026-09-27: a phone preview of the JPM workbook showed 0.00 on every
+        # Summary line -- openpyxl writes formulas without cached results, so a viewer
+        # with no calculation engine renders them as zero. The static engine values sit
+        # beside the links; the links stay the audit trail.
+        _b = self.dr.get("base") or {}
+        _pb = self.dr.get("pt_bridge") or {}
+        _spot_v = _pb.get("spot") or self.dr.get("current_price")
+        _iv_v = _b.get("intrinsic_value")
+        _tgt_v = ((self.dr.get("12m_targets") or {}).get("base")
+                  or ((_pb.get("scenarios") or {}).get("base") or {}).get("target"))
+        _ret_v = (float(_tgt_v) / float(_spot_v) - 1.0) if _tgt_v and _spot_v else None
+        _tables = {s: ((self.dr.get(s) or {}).get("method_iv_table") or {}) for s in SCENARIOS}
+        _ivs = {s: (self.dr.get(s) or {}).get("intrinsic_value") for s in SCENARIOS}
         r = 4
         sh.section(r, "Headline", 6); r += 1
+        sh.put(r - 1, 3, "engine (static)").font = Font(color=BLACK, italic=True)
         # Owner, 2026-09-26: an Unrated name publishes no headline IV and no
         # target; the rebuilt blend stays on its own tab as an indicative figure.
         _rs = self.dr.get("rating_state") or {}
@@ -1488,16 +1504,19 @@ class _Book:
                ("12-month target", "N/A — Unrated" if _unrated
                 else (("=" + self.target_cell) if self.target_cell else None), None if _unrated else NUM),
                ("Implied return to target", "N/A" if _unrated else f"=IFERROR(B{r + 2}/B{r}-1,0)", None if _unrated else PCT))
-        for lab, v, fmt in _hl:
+        _hl_static = (_spot_v, None if _unrated else _iv_v, None if _unrated else _tgt_v, None if _unrated else _ret_v)
+        for (lab, v, fmt), sv in zip(_hl, _hl_static):
             sh.label(r, 1, lab, bold=True)
             sh.put(r, 2, v, fmt, bold=True)
+            if isinstance(sv, (int, float)):
+                sh.put(r, 3, float(sv), fmt).font = Font(color=BLUE)
             r += 1
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)
         r += 2
         # Football field: bear–bull range per leg, plus DCF and the blend.
         sh.section(r, "Football field (value per share, bear to bull)", 6); r += 1
-        sh.header(r, ["Method", "Low", "High", "Range", "Base"])
+        sh.header(r, ["Method", "Low", "High", "Range", "Base", "Low (engine)", "High (engine)", "Base (engine)"])
         ff_first = r + 1
         entries = []
         for leg, by in self.leg_range.items():
@@ -1513,6 +1532,15 @@ class _Book:
             sh.put(r, 3, "=MAX(" + ",".join(refs) + ")", NUM)
             sh.put(r, 4, f"=C{r}-B{r}", NUM)
             sh.put(r, 5, ("=" + by["base"]) if "base" in by else None, NUM)
+            _vals = ([_ivs[s] for s in SCENARIOS] if name == "Blended intrinsic value"
+                     else [_tables[s].get(name) for s in SCENARIOS])
+            _vals = [float(x) for x in _vals if isinstance(x, (int, float))]
+            if _vals:
+                for col, x in ((6, min(_vals)), (7, max(_vals))):
+                    sh.put(r, col, x, NUM).font = Font(color=BLUE)
+                _bv = (_ivs.get("base") if name == "Blended intrinsic value" else _tables["base"].get(name))
+                if isinstance(_bv, (int, float)):
+                    sh.put(r, 8, float(_bv), NUM).font = Font(color=BLUE)
         ff_last = r
         if ff_last >= ff_first:
             chart = BarChart()
@@ -1531,7 +1559,7 @@ class _Book:
             chart.series[0].graphicalProperties.line.noFill = True
             chart.legend = None
             chart.height, chart.width = 8, 18
-            sh.ws.add_chart(chart, f"H4")
+            sh.ws.add_chart(chart, f"J4")
         r += 2
         sh.section(r, "DCF summary (base)", 6); r += 1
         d = self.dcf.get("base")
@@ -1553,13 +1581,17 @@ class _Book:
             r += 1
         r += 1
         sh.section(r, "Target derivation (base)", 6); r += 1
-        for lab, v, fmt in (("Spot", "=" + A["spot"], NUM),
-                            ("Capture", "=" + A["capture"], PCT),
-                            ("Intrinsic value — base", ("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None, NUM),
-                            ("Base target = spot + capture × (IV − spot)", "='Target'!$C$6", NUM),
-                            ("Probability-weighted target", ("=" + self.target_cell) if self.target_cell else None, NUM)):
+        _cap_v = _pb.get("capture")
+        _bt_v = ((_pb.get("scenarios") or {}).get("base") or {}).get("target")
+        for lab, v, fmt, sv in (("Spot", "=" + A["spot"], NUM, _spot_v),
+                                ("Capture", "=" + A["capture"], PCT, _cap_v),
+                                ("Intrinsic value — base", ("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None, NUM, _iv_v),
+                                ("Base target = spot + capture × (IV − spot)", "='Target'!$C$6", NUM, _bt_v),
+                                ("Probability-weighted target", ("=" + self.target_cell) if self.target_cell else None, NUM, _tgt_v)):
             sh.label(r, 1, lab, indent=1)
             sh.put(r, 2, v, fmt)
+            if isinstance(sv, (int, float)):
+                sh.put(r, 3, float(sv), fmt).font = Font(color=BLUE)
             r += 1
         # Owner rule 2 (2026-09-23): a constant running under
         # OWNER_OVERRIDE_PENDING is stated here with the leg's sensitivity.
@@ -1575,7 +1607,7 @@ class _Book:
                 sh.put(r, 3, o.get("leg_at_high"), NUM)
                 sh.note(r, 4, f"leg at {lo}x / {hi}x; baseline runs at {o.get('peg')}x until signed off")
                 r += 1
-        sh.widths({"A": 44, "B": 16, "C": 18, "D": 12, "E": 12})
+        sh.widths({"A": 44, "B": 16, "C": 18, "D": 12, "E": 12, "F": 13, "G": 13, "H": 13})
 
 
 def _col(letter: str) -> int:

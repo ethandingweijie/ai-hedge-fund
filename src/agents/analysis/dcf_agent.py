@@ -4535,10 +4535,10 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     # Owner Wave 6 (2026-09-27): card issuers and consumer lenders on the bank block. P/TBV and P/E
     # from the US Financial - Credit Services cohort (1.27x / 10.9x); RoTE 18% is the AXP 33% /
     # SYF 20% / COF 10% span's centre; RWA density ~85% for card books. PROPOSED.
-    # Wave 6 (2026-09-27), PROPOSED: the P&C GGM had been reading the "default" row (RoTE 11%,
-    # CoE 10%, P/B 1.14x) for a cohort at 2.18x book and 11.4x (US Insurance - Property &
-    # Casualty, n=20; ROE median ~15%: PGR 30%+, TRV 17%, CB 13%, AIG 8%). CoE 9.0% is the
-    # Stage 3 CAPM proposal for P&C. Owner to accept or re-set.
+    # Wave 6 (2026-09-27): the P&C GGM had been reading the "default" row (RoTE 11%, CoE 10%,
+    # P/B 1.14x) for a cohort at 2.18x book and 11.4x (US Insurance - Property & Casualty,
+    # n=20; ROE median ~15%: PGR 30%+, TRV 17%, CB 13%, AIG 8%). CoE 9.0% from the Stage 3
+    # CAPM derivation. Proposed and ACCEPTED by the owner on 2026-09-27.
     "Insurance (P&C)":      {"target_roe": 0.15, "coe": 0.090, "p_tbv": 2.2, "pe": 11.4, "fade_years": 5,
                               "target_cet1": 0.0, "rwa_to_assets": 0.0, "terminal_spread": 0.0, "ggm_g": 0.03},
     "Card Issuer & Consumer Lender": {"target_roe": 0.18, "coe": 0.100, "p_tbv": 1.3, "pe": 10.9, "fade_years": 5,
