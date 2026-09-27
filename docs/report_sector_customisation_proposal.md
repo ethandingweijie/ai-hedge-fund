@@ -96,3 +96,16 @@ family's rows.
   ratios: RoE, EBIT and FCF margin, SBC and capex intensity, net debt to EBITDA and to equity). The
   exposition, skeleton and signals fields are declared per family and not yet consumed (build steps 3
   and 4). Step 1, the narrative-fidelity guard, is not built.
+
+- 2026-09-27 (later): owner "develop industry specific PM agent architecture ... use industry specific
+  language", then "use family writer profiles rather than family agents". Built as writer PROFILES on the
+  one existing PM agent (`src/agents/pm/industry_pm.py`): (1) desk rules and vocabulary per family
+  appended to the system prompt, in the owner's focus order (energy, aerospace and defence, consumer
+  staples, health care, technology; banks, insurance, fee financials, property shorter); (2) a
+  deterministic family checklist computed from the valuation record (anchor and where it sits, legs
+  with their multiples and sources, gates and flags, the cycle or backlog or pipeline state the desk
+  leads with) appended to the anchors; (3) the number guard: every number in the draft must appear in
+  the inputs the writer was given, one retry naming the offenders, then the sentences that still carry
+  them are removed; the verdict is stored as `rationale_fidelity` on the decision. The density rule now
+  reads "from the anchors, the family checklist or the research digest supplied". No per-industry
+  agent exists. Tests: `tests/test_industry_pm.py`.

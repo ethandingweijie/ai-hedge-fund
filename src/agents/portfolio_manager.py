@@ -23,7 +23,9 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "Thesis-density rule — every theme MUST:\n"
     "- open with the theme itself (no heading labels),\n"
     "- cite at least TWO specific figures with units (e.g. \"rev +18% y/y\", "
-    "\"24x fwd P/E\", \"$15.5B net cash\", \"PT $186\"),\n"
+    "\"24x fwd P/E\", \"$15.5B net cash\", \"PT $186\") taken from the anchors, "
+    "the family checklist or the research digest supplied -- never a figure that is "
+    "not in them; a theme with no supplied figure states its point without one,\n"
     "- end with the implication for the stock (what it means for the "
     "position).\n"
     "Theme 1 states the single dominant theme driving the stock right now. "
@@ -1188,6 +1190,21 @@ def run_advanced_portfolio_manager(state) -> dict:
 
         _digest = _build_research_digest(state, ticker)
         _quant_block = _quant_block_text(ticker, state, scenario)
+        # Owner, 2026-09-27: the desk's talking points, computed from the valuation
+        # record with their numbers, so the writer narrates measured figures.
+        try:
+            from src.data.report_families import report_family_for as _rff2
+            from src.agents.pm.industry_pm import family_checklist as _fam_check, checklist_block as _fam_block
+            _dr_for_check = (state["data"].get("dcf_range") or {}).get(ticker) or {}
+            _fam_for_check = _rff2((state["data"].get("profile_names") or {}).get(ticker)
+                                   or state["data"].get("profile_name") or _dr_for_check.get("profile"))
+            _ccy_for_check = _dr_for_check.get("reported_currency") or state["data"].get("reported_currency") or "USD"
+            _sym_for_check = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£"}.get(str(_ccy_for_check).upper(), str(_ccy_for_check).upper() + " ")
+            _quant_block = _quant_block + "\n" + _fam_block(
+                _fam_for_check, _fam_check(_fam_for_check, _dr_for_check, scenario,
+                                           state["data"].get("sector_kpis") or {}, _sym_for_check))
+        except Exception:                                  # noqa: BLE001
+            pass
         _macro_line = _macro_one_liner(state)
 
         # Catalyst continuity: this run's bull-case catalyst alongside the
@@ -1299,11 +1316,21 @@ def run_advanced_portfolio_manager(state) -> dict:
             or state["data"].get("profile_name")
             or ""
         )
+        # Owner, 2026-09-27: the write-up is industry-specific. The profile's report
+        # family selects the desk rules and vocabulary (src/agents/pm/industry_pm.py);
+        # the bank addendum that used to hang off "Bank" in the profile name is the
+        # Banks family entry there. Every family carries the fidelity rule.
         _system_prompt = _PM_RATIONALE_SYSTEM_PROMPT
-        if ("Bank" in _profile_for_prompt
-                or _profile_for_prompt in {"Bank / Lending Institution",
-                                           "Mortgage/GSE"}):
-            _system_prompt = _system_prompt + _PM_BANK_RATIONALE_ADDENDUM
+        try:
+            from src.data.report_families import report_family_for as _rff
+            from src.agents.pm.industry_pm import family_addendum as _fam_add
+            _family = _rff(_profile_for_prompt)
+            _system_prompt = _system_prompt + _fam_add(_family)
+        except Exception:                                  # noqa: BLE001
+            _family = None
+            if ("Bank" in _profile_for_prompt
+                    or _profile_for_prompt in {"Bank / Lending Institution", "Mortgage/GSE"}):
+                _system_prompt = _system_prompt + _PM_BANK_RATIONALE_ADDENDUM
 
         template = ChatPromptTemplate.from_messages([
             ("system", _system_prompt),
@@ -1352,6 +1379,10 @@ def run_advanced_portfolio_manager(state) -> dict:
             "stop_loss": stop_loss,
             "price_target": price_target,
         })
+        try:
+            _inputs_text = "\n".join(str(getattr(m, "content", m)) for m in prompt.to_messages())
+        except Exception:                                  # noqa: BLE001
+            _inputs_text = ""
 
         decision: AdvancedPortfolioDecision = call_llm(
             prompt=prompt,
@@ -1370,6 +1401,32 @@ def run_advanced_portfolio_manager(state) -> dict:
         )
 
         d = decision.model_dump()
+        # Owner, 2026-09-27: every number in the thesis must be in the inputs the
+        # writer was given. One retry naming the offenders, then the sentences
+        # that still carry them are removed before publication. The verdict is
+        # kept on the decision for the report and the ledger.
+        try:
+            from src.agents.pm.industry_pm import number_guard as _ng, strip_offending as _strip, retry_instruction as _retry_txt
+            _verdict = _ng(d.get("rationale") or "", _inputs_text)
+            _retried = False
+            if not _verdict["ok"] and _inputs_text:
+                from langchain_core.messages import HumanMessage as _HM
+                _retried = True
+                _decision2 = call_llm(
+                    prompt=prompt.to_messages() + [_HM(content=_retry_txt(_verdict))],
+                    pydantic_model=AdvancedPortfolioDecision, agent_name=agent_id, state=state,
+                    default_factory=lambda: decision)
+                _d2 = _decision2.model_dump()
+                _v2 = _ng(_d2.get("rationale") or "", _inputs_text)
+                if len(_v2["offending_numbers"]) <= len(_verdict["offending_numbers"]):
+                    d, _verdict = _d2, _v2
+            _removed = list(_verdict.get("offending_sentences") or [])
+            if not _verdict["ok"]:
+                d["rationale"] = _strip(d.get("rationale") or "", _verdict)
+            d["rationale_fidelity"] = {"checked": _verdict.get("checked"), "offending_numbers": _verdict.get("offending_numbers"),
+                                       "removed_sentences": _removed, "retried": _retried, "family": _family}
+        except Exception:                                  # noqa: BLE001
+            pass
         # Pin deterministic values — the LLM sometimes misinterprets the
         # position_size_pct format (e.g. returns 7.5 instead of 0.075).
         # Python-computed values always win over LLM interpretation.
