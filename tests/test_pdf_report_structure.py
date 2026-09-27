@@ -151,7 +151,7 @@ def test_a_bank_report_shows_book_not_free_cash_flow(tmp_path):
                                           "net_debt": 599e9})
     path = tmp_path / "bank.pdf"
     pdf_report.generate_pdf_report(res, str(path), open_after=False)
-    text = "\n".join(p.get_text() for p in fitz.open(str(path)))
+    text = " ".join("\n".join(p.get_text() for p in fitz.open(str(path))).split())   # labels wrap in the narrow column
     assert "Book value / share" in text and "Dividends / share" in text and "Total equity" in text
     kf = text[text.index("Key financials"): text.index("Key financials") + 600]
     assert "FCF" not in kf and "Net debt" not in kf
@@ -159,6 +159,6 @@ def test_a_bank_report_shows_book_not_free_cash_flow(tmp_path):
     res2 = _result()
     path2 = tmp_path / "corp.pdf"
     pdf_report.generate_pdf_report(res2, str(path2), open_after=False)
-    text2 = "\n".join(p.get_text() for p in fitz.open(str(path2)))
+    text2 = " ".join("\n".join(p.get_text() for p in fitz.open(str(path2))).split())   # labels wrap in the narrow column
     kf2 = text2[text2.index("Key financials"): text2.index("Key financials") + 600]
     assert "FCF" in kf2 and "Book value / share" not in kf2
