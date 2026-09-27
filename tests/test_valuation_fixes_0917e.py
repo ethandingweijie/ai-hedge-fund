@@ -397,6 +397,12 @@ _WAVE8_MOVED = {
 #: the live Copper cohort; BN4.SI re-routes to Asian Holding Company (Look-Through) (SOTP (analyst) .60 falling
 #: back to P/BV without a reviewed SOTP, P/BV .25, DDM .15). The EV/EBITDA leg that failed its bridge in BN4's
 #: bear case is no longer in the profile, so the ordering clamp stops firing (bear 7.97 < base 10.40).
+#: Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform reads a curated China
+#: internet basket (regional_comps.PROFILE_PEER_BASKETS) instead of FMP's Specialty Retail label.
+_CIP_BASKET_MOVED = {
+    "BABA":     (134.23,   86.37,   195.59,   (101.56, 118.31, 139.79)),
+    "09988_HK": (132.14,   65.97,   211.17,   (94.13,  117.29, 144.95)),
+}
 _WAVE9_MOVED = {
     "FCX":      (68.06,    47.89,    88.23,   (63.76, 70.82, 77.88)),
     "BN4_SI":   (10.40,     7.97,    13.34,   (10.00, 10.86, 11.88)),
@@ -413,7 +419,7 @@ _WAVE7_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)

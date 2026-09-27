@@ -1602,3 +1602,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 10 (owner, 2026-09-27, decisions 1-7): seventeen out-of-scope labels enter routing_scope with ten new profiles, Traditional Retail re-specified, pins ahead of scope (MELI, SE, Li Ning, Ferrari, GPC, Haleon, JD Health, three biotechs, the Travel & Dining re-pins, the cruise lines, Hengrui, Zoetis) and five-name baskets; no fixture's valuation moves -- the constants/profile digest in param_version moves on every fixture, BABA and 09988.HK record the Specialty Retail row firing before their China Internet Platform pin wins, and MELI's winner is now its pin (same Hyper-Growth Platform profile)
 
+## 2026-09-27T16:24:26+00:00
+
+- regenerated at HEAD: `d442a7c1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: China Internet Platform prices its relative legs on a curated China internet basket instead of FMP's Specialty Retail label (owner, 2026-09-28: Alibaba is not specialty retail). BABA base IV 166.74 -> 134.23 (the US label cohort had priced its normalised legs at 20.8x P/E / 14.1x EV/EBITDA against the peers' 15.6x / 10.4x; 12m target 138.24 -> 118.31); 09988.HK 129.26 -> 132.14 (P/E (norm) leg 92.25 -> 79.53 on the HK basket, the other relative legs re-priced on the same peers). Every other fixture unchanged.
+

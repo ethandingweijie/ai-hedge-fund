@@ -122,7 +122,7 @@ _US = ("AAPL", "BABA", "COST", "FCX", "MELI", "MU", "SCHW", "V")
 _LIVE_COHORT = {
     #            basis      level     cohort   peers
     "02888_HK": ("industry", "all",   7),
-    "09988_HK": ("industry", "large", 9),
+    "09988_HK": ("profile",  "all",   8),     # (industry, large, 9) until the China internet basket (owner, 2026-09-28)
     "BN4_SI":   ("sector",   "large", 10),   # 11 until the Wave 9 re-record (2026-09-27) on the 2026-09-22 SES store
     "C38U_SI":  ("industry", "all",   5),
     "D05_SI":   ("sector",   "all",   9),
@@ -782,10 +782,10 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
     change a US name's cohort, because there is no live cohort to change."""
     b = _basis(name, "bear")
     if name == "BABA":
-        # Re-recorded 2026-09-26 with a fresh US comps store: BABA now resolves a
-        # live `Specialty Retail` large cohort. The other six keep the static
-        # fill their original capture recorded.
-        assert b["basis"] == "industry" and b["cohort"] == "large" and b["peer_count"] == 10, (name, b)
+        # Re-recorded 2026-09-26 with a fresh US comps store: BABA resolved a live
+        # `Specialty Retail` large cohort (10 peers). Owner, 2026-09-28: Alibaba is not
+        # specialty retail -- it now reads the curated China internet basket (6 names).
+        assert b["basis"] == "profile" and b["key"] == "China Internet Platform" and b["peer_count"] == 6, (name, b)
         return
     if name == "COST":
         # Re-recorded 2026-09-26 on the Wave 4 pin: a live `Discount Stores` cohort.
@@ -834,10 +834,11 @@ def test_the_cohort_is_size_matched_exactly_where_a_large_rung_is_stored():
     HKSE Financial Services stores 20 at `large`. The ladder takes the 7."""
     size_matched = sorted(n for n in _LIVE_COHORT
                           if _basis(n, "bear")["cohort"] == "large")
-    assert size_matched == sorted(_SIZE_MATCHED_BY_3A)
+    # 09988.HK left the size-matched industry rung for the China internet basket (owner, 2026-09-28).
+    assert size_matched == sorted(set(_SIZE_MATCHED_BY_3A) - {"09988_HK"})
     assert sorted(n for n in _LIVE_COHORT
                   if _basis(n, "bear")["cohort"] == "all") \
-        == ["02888_HK", "C38U_SI", "D05_SI"]
+        == ["02888_HK", "09988_HK", "C38U_SI", "D05_SI"]   # 09988.HK: the China internet basket's `all` cohort (owner, 2026-09-28)
 
 
 @pytest.mark.parametrize("name,expected", sorted(_SIZE_MATCHED_BY_3A.items()))
@@ -848,6 +849,14 @@ def test_the_two_cohorts_item_3a_moved_moved_to_the_numbers_measured(name, expec
     `base_iv` is bit-identical on all fourteen fixtures."""
     _, to, peers_before = expected
     to = _WAVE9_G_AVG.get(name, to)
+    if name == "09988_HK":
+        # Owner, 2026-09-28: the China internet basket replaced the size-matched Specialty Retail rung;
+        # item 3a's move (0.0625 -> 0.1359 on 9 large-cohort peers) stays as history.
+        p = _proj(name)
+        for s in _SCENARIOS:
+            assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(0.0877, abs=5e-5), s
+            assert _basis(name, s)["basis"] == "profile" and _basis(name, s)["key"] == "China Internet Platform", s
+        return
     p = _proj(name)
     for s in _SCENARIOS:
         assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(to, abs=5e-5), s
