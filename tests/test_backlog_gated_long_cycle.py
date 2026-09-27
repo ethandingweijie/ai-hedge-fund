@@ -1,14 +1,11 @@
-"""Backlog-Gated Long Cycle: a profile reached only through an eligibility gate,
-and an FCF-guidance overlay that fades.
+"""The FCF-guidance overlay that fades (owner, 2026-09-22).
 
-Owner, 2026-09-22. GE Vernova published $318 against a $955 quote on Capital
-Goods because every weighted leg was trailing while the two legs that see its
-earnings inflection carried no weight. The profile weights the order book and
-the forward legs, and is kept apart from short-cycle industrials (Dover,
-Illinois Tool Works) by three rules on owner-accepted filing figures.
+"A 25% FCF margin cannot and should not be held flat across a 10-year DCF ... Contract liabilities
+represent cash borrowed from the future." The overlay is consumed by the Backlog-coverage DCF leg.
 
-On the guidance: "A 25% FCF margin cannot and should not be held flat across a
-10-year DCF ... Contract liabilities represent cash borrowed from the future."
+The Backlog-Gated Long Cycle profile and its eligibility gate were removed on 2026-09-27 (owner:
+remove the profiles no routing row or pin reached); its gate tests went with it, and one test
+below pins that the gate cannot quietly return.
 """
 import inspect
 
@@ -17,76 +14,15 @@ import pytest
 from src.agents.analysis import dcf_agent
 from src.data import valuation_constants as vc
 
-PROFILE = "Backlog-Gated Long Cycle"
-elig = vc.long_cycle_eligibility
 fade = vc.fcf_guidance_margin_schedule
 
 
-# ── eligibility ──────────────────────────────────────────────────────────────
-
-def test_ge_vernova_clears_all_three_rules_on_its_filed_figures():
-    """Backlog $176.3bn / $46.3bn consensus forward sales; FY2025 orders $59.3bn /
-    $38.07bn revenue; contract liabilities $25.8bn / ($19.1bn + $10.4bn)."""
-    v = elig(sector="Industrials", backlog_coverage=176.284 / 46.29, book_to_bill=59.3 / 38.07,
-             contract_liability_share=25.77 / 29.53)
-    assert v["eligible"] and v["profile"] == PROFILE and [c["ok"] for c in v["checks"]] == [True, True, True]
-
-
-@pytest.mark.parametrize("kw,why", [
-    (dict(backlog_coverage=2.9, book_to_bill=1.6, contract_liability_share=0.9), "under three years of work"),
-    (dict(backlog_coverage=4.0, book_to_bill=1.26, contract_liability_share=0.9), "orders are not outrunning sales"),
-    (dict(backlog_coverage=4.0, book_to_bill=1.6, contract_liability_share=0.3), "customers are not funding the build"),
-    (dict(backlog_coverage=3.0, book_to_bill=1.5, contract_liability_share=0.5), "AT the thresholds is not above them"),
-])
-def test_failing_any_one_rule_keeps_the_name_where_it_was(kw, why):
-    assert not elig(sector="Industrials", **kw)["eligible"], why
-
-
-def test_a_rule_that_cannot_be_checked_is_a_rule_that_fails():
-    """Eligibility is a claim about the company; one that cannot be checked is not made."""
-    v = elig(sector="Industrials", backlog_coverage=4.6, book_to_bill=None, contract_liability_share=0.87)
-    assert not v["eligible"] and v["checks"][1] == {"rule": "book-to-bill", "value": None, "minimum": 1.5, "ok": False}
-
-
-def test_a_short_cycle_sector_is_out_of_scope_whatever_its_figures():
-    assert not elig(sector="Tech", backlog_coverage=9, book_to_bill=9, contract_liability_share=9)["eligible"]
-    assert elig(sector="Energy", backlog_coverage=9, book_to_bill=9, contract_liability_share=9)["eligible"]
-
-
-def test_the_share_is_measured_against_working_capital_assets_not_net_working_capital():
-    """For exactly these companies the advances drive NET working capital to zero
-    or below (GE Vernova FY2025: -$0.75bn). A share of a negative number says nothing."""
-    assert "receivables plus inventory" in vc.load()["backlog_gated_long_cycle"]["contract_liability_share_definition"]
-
-
-# ── the profile ──────────────────────────────────────────────────────────────
-
-def test_the_profile_is_the_owners_table_and_its_anchor_is_computable():
+def test_the_long_cycle_profile_and_its_gate_are_gone():
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
-    got = [(m["name"], m["weight"], bool(m.get("anchor")), m["implementable"]) for m in P["Industrials"][PROFILE]["methods"]]
-    assert got == [("Backlog-coverage DCF", 0.35, True, True), ("Forward EV/EBITDA", 0.25, False, True),
-                   ("Forward P/E", 0.20, False, True), ("EV/EBITDA", 0.20, False, True)]
-    assert {m[0]: m[1] for m in got} == vc.load()["backlog_gated_long_cycle"]["methods"]
-
-
-def test_no_row_pin_or_classifier_reaches_it_only_the_gate_does():
-    from itertools import product
-    from src.data import industry_profile_map as ipm
-    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP, classify_valuation_profile
-    assert PROFILE not in {p for _, p in ipm.industry_map().values()}
-    assert PROFILE not in {p for _, p in ipm.ticker_overrides().values()}
-    assert PROFILE not in {v[1] for v in TICKER_SECTOR_LOOKUP.values()}
-    for cagr, fcf, de in product((-0.1, 0.05, 0.5), (-0.2, 0.1), (0.0, 3.0)):
-        assert classify_valuation_profile("Industrials", cagr, fcf, de) != PROFILE
-    src = inspect.getsource(dcf_agent._long_cycle_gate)
-    assert 'accepted_detail(ticker, "backlog", ccy)' in src          # review-gated: no accepted backlog, no gate
-    assert "if not bl or not bl.get" in src
-
-
-def test_book_to_bill_is_cited_or_derived_from_accepted_orders_and_the_record_says_which():
-    src = inspect.getsource(dcf_agent._long_cycle_gate)
-    assert 'bl["orders"] / revenue_base' in src and '"book_to_bill_basis"' in src
-    assert '"gate_id": "GATE_LONG_CYCLE_ELIGIBILITY"' in src and '"applied": v["eligible"]' in src
+    assert all("Backlog-Gated Long Cycle" not in ps for ps in P.values())
+    assert not hasattr(dcf_agent, "_long_cycle_gate") and not hasattr(vc, "long_cycle_eligibility")
+    assert "backlog_gated_long_cycle" not in vc.load()
+    assert "GATE_LONG_CYCLE_ELIGIBILITY" not in inspect.getsource(dcf_agent)
 
 
 # ── the fade ─────────────────────────────────────────────────────────────────
@@ -138,7 +74,7 @@ def test_the_scenarios_stay_ordered_under_the_faded_overlay(monkeypatch):
         vals.append(dcf_agent._compute_method_value(
             method_name="Backlog-coverage DCF", most_recent=row, revenue_base=4e10, shares=2.7e8, net_debt=-9e9,
             market_cap=2.5e11, wacc=0.0825, growth_base=0.05, fcf_margin_base=0.0731, tgr=0.02, fcf_floor=0.0,
-            sector="Industrials", scenario=scen, profile_name=PROFILE,
+            sector="Industrials", scenario=scen, profile_name="Defense Primes",   # a profile that declares the leg
             projection={"growth_schedule": [0.05] * 10, "margin_delta_absolute": md}))
     assert vals[0] < vals[1] < vals[2]
 

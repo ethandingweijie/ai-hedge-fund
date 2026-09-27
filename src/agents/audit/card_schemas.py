@@ -157,9 +157,9 @@ def _is_bank(state: dict, ticker: str) -> bool:
         "Regional Bank",
         "Super-Regional Bank",
         "Investment Bank",
-        "EM Bank",          # also matches "EM Bank (Premium)"
+        "EM Bank",
         "Bank / Lending Institution",
-        "Neo/Challenger",   # neobanks
+
     )
     if not _matches_any(profile, bank_profiles):
         return False

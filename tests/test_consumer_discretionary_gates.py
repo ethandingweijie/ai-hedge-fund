@@ -470,7 +470,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # Fourteenth (2026-09-22): records, for a name with an accepted backlog,
         # each of the three long-cycle eligibility rules with its reading and
         # threshold. `applied` is the verdict, so it is an expression, not a literal.
-        "GATE_LONG_CYCLE_ELIGIBILITY",
+        # GATE_LONG_CYCLE_ELIGIBILITY removed 2026-09-27 with the Backlog-Gated Long Cycle profile
         "GATE_MARGIN_PEAK",
         "GATE_MARGIN_TURNAROUND",
         "GATE_PT_IV_BAND",
@@ -1740,7 +1740,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (149, 45), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
+    assert (total, with_norm) == (135, 43), (total, with_norm)   # 2026-09-27: 14 unrouted profiles removed (-2 with a normalised leg: EM Bank (Premium), Neo/Challenger); Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1766,7 +1766,7 @@ def test_the_normalized_leg_names_are_not_case_consistent():
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
     assert spellings.get("EV/EBITDA (norm)") == 17, spellings     # Wave 9 (2026-09-27): +Container & Bulk Shipping, +Commodity Chemicals & Ag Inputs, +Packaging & Paper, +Base Metals, +Diversified Miners     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 32, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer; Wave 9 (2026-09-27): +Airlines, +Steel / Metals, +Commodity Chemicals & Ag Inputs
+    assert spellings.get("P/E (norm)") == 30, spellings  # 2026-09-27: 14 unrouted profiles removed (owner): -EM Bank (Premium), -Neo/Challenger            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer; Wave 9 (2026-09-27): +Airlines, +Steel / Metals, +Commodity Chemicals & Ag Inputs
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
@@ -2110,7 +2110,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (149, 31, 31, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
+    assert (tot, trail, elig, anchored) == (135, 27, 27, 8)  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2122,7 +2122,6 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
         ("Membership / Subscription Retail", "P/E", 0.4),
     ], consumer_anchors
     assert sorted(added_anchors) == [
-        ("Biopharma", "Managed Care", "P/E (Ops)", 0.4),
         ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4),
         ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4),
     ], added_anchors
@@ -2238,7 +2237,6 @@ def test_the_ops_spellings_are_now_in_the_swap():
                     carriers.append((sec, pn, m["name"], m["weight"],
                                      bool(m.get("anchor"))))
     assert sorted(carriers) == [
-        ("Biopharma", "Managed Care", "P/E (Ops)", 0.4, True),
         ("Financials", "Insurance", "P/E (ops)", 0.2, False),     # Wave 6 (2026-09-27): life profile re-weighted, CR gate removed
         ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
         ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
@@ -2246,7 +2244,7 @@ def test_the_ops_spellings_are_now_in_the_swap():
         ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
     ], carriers
     # The six are the whole of the former gap, and the gap is now closed.
-    assert len(carriers) == 37 - 31
+    assert len(carriers) == 37 - 31 - 1   # the Biopharma copy of Managed Care removed 2026-09-27
     assert all(c[2] in dcf_agent._PE_NORM_SWAP_LEGS for c in carriers)
     # None of the six also carries a normalized leg, so the first-wins dedup is
     # still vacuous after the widening and the three new anchors cannot collide

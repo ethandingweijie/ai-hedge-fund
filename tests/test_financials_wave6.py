@@ -130,7 +130,7 @@ def test_the_bank_calibration_is_the_owner_accepted_table():
     assert (c["Super-Regional Bank"]["p_tbv"], c["Super-Regional Bank"]["pe"]) == (1.6, 11.6)
     assert (c["Investment Bank"]["p_tbv"], c["Investment Bank"]["pe"], c["Investment Bank"]["coe"]) == (2.4, 15.3, 0.095)
     assert (c["EM Bank"]["p_tbv"], c["EM Bank"]["coe"], c["EM Bank"]["target_roe"]) == (0.6, 0.0975, 0.105)   # zero China/HK premium
-    assert (c["EM Bank (Premium)"]["p_tbv"], c["EM Bank (Premium)"]["coe"]) == (1.0, 0.0975)
+    assert "EM Bank (Premium)" not in c        # profile removed 2026-09-27 (no row or pin reached it)
     assert (c["Money Center Bank (EU)"]["p_tbv"], c["Money Center Bank (EU)"]["target_roe"]) == (1.3, 0.15)
     assert (c["Money Center Bank (SG)"]["p_tbv"], c["Money Center Bank (SG)"]["coe"]) == (1.9, 0.088)      # broker table CoE kept
 

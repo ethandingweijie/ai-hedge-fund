@@ -406,7 +406,6 @@ PR6_NEW_PROFILES = [
     "Mining (Major)",
     "Fabless",
     "IDM / Foundry",
-    "Stable Growth",         # Telco
     "Automotive & EV",
     "Managed Care",
 ]
@@ -434,7 +433,6 @@ def test_pr6_profile_has_overlay(profile):
     ("Mining (Major)",      "aisc_per_oz"),
     ("Fabless",             "data_center_revenue_pct"),
     ("IDM / Foundry",       "wafer_capacity_kwspm"),
-    ("Stable Growth",       "arpu_usd"),
     ("Automotive & EV",     "auto_gross_margin_ex_credits"),
     ("Managed Care",        "medical_loss_ratio"),
 ])
@@ -898,10 +896,8 @@ def test_explicit_fmt_key_overrides_heuristic():
 _HEALTHCARE_SERVICES_PROFILES = {
     "Managed Care",
     "Healthcare Providers / Services",
-    "Medical Devices",
-    "Animal Health",
     "Pharma Distribution",
-}
+}   # Medical Devices and Animal Health removed 2026-09-27 (owner: no row or pin reached them)
 
 
 def test_healthcareservices_profiles_registered_in_framework():
@@ -944,25 +940,26 @@ def test_resolve_profile_spec_normalises_whitespace_and_case():
     """The card lookup must tolerate whitespace / case drift in profile_name,
     and return (None, None) for genuinely unknown profiles."""
     from src.data.sector_kpi_framework import _resolve_profile_spec
-    assert _resolve_profile_spec("Animal Health")[0] == "Animal Health"
-    assert _resolve_profile_spec("  Animal   Health ")[0] == "Animal Health"
-    assert _resolve_profile_spec("animal health")[0] == "Animal Health"
+    assert _resolve_profile_spec("Pharma Distribution")[0] == "Pharma Distribution"
+    assert _resolve_profile_spec("  Pharma   Distribution ")[0] == "Pharma Distribution"
+    assert _resolve_profile_spec("pharma distribution")[0] == "Pharma Distribution"
     assert _resolve_profile_spec("Totally Bogus Profile") == (None, None)
     assert _resolve_profile_spec("") == (None, None)
 
 
 def test_render_card_payload_healthcareservices_reports_correct_sector():
-    """An Animal Health card must render sector='HealthcareServices' (not the
-    old 'Biopharma'), proving the Managed Care sector move + sibling profiles."""
+    """A HealthcareServices card must render sector='HealthcareServices' (not the
+    old 'Biopharma'), proving the Managed Care sector move + sibling profiles. (Animal Health,
+    the profile this used, was removed 2026-09-27; Pharma Distribution carries the check.)"""
     state = {"data": {"framework_metrics_all": {"ZTS": {
         "organic_revenue_growth_pct": 0.08,
         "operating_margin_pct": 0.36,
         "net_debt_to_ebitda": 2.1,
     }}}}
-    payload = render_card_payload("Animal Health", state, "ZTS")
+    payload = render_card_payload("Pharma Distribution", state, "ZTS")
     assert payload is not None
     assert payload["sector"] == "HealthcareServices"
-    assert payload["profile_name"] == "Animal Health"
+    assert payload["profile_name"] == "Pharma Distribution"
     # No insurer KPIs leaked in
     all_keys = {kp["key"] for g in payload["groups"] for kp in g["kpis"]}
     assert "medical_loss_ratio" not in all_keys

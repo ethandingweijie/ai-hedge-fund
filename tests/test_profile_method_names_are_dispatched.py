@@ -337,8 +337,6 @@ def test_both_fixed_names_reach_the_branch_set_they_claim():
 _PROXY_EQUIVALENCES = {
     "Power Price DCF":  ("DCF",       "Energy",       "Merchant Power"),
     "PPA-backed DCF":   ("DCF",       "Energy",       "IPP"),
-    "Backlog DCF":      ("DCF",       "Energy",       "EPC Contractor"),
-    "Unit Econ DCF":    ("DCF",       "Tech",         "Early Platform"),
     # "EV/EBITDAR" renamed to EV/EBITDA in every profile 2026-09-26 (audit A5)
 }
 
@@ -393,5 +391,5 @@ def test_which_profiles_put_their_anchor_on_a_proxied_name():
         where = f"{sector} / {profile}: {m['name']} w={m.get('weight')}"
         (dcf_anchored if _PROXY_EQUIVALENCES[m["name"]][0] == "DCF"
          else ebitdar_anchored).append(where)
-    assert len(dcf_anchored) == 2, dcf_anchored
+    assert len(dcf_anchored) == 1, dcf_anchored   # EPC Contractor removed 2026-09-27
     assert len(ebitdar_anchored) == 0, ebitdar_anchored   # EV/EBITDAR renamed to EV/EBITDA (2026-09-26)

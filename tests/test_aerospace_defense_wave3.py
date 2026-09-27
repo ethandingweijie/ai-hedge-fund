@@ -202,10 +202,11 @@ def test_the_peg_constant_is_recorded_with_its_market_derivation_for_the_owner_t
 
 def test_defense_primes_take_the_owners_terminal_growth_after_the_profile_is_final():
     assert dcf_agent._PROFILE_TGR[PRIMES] == {"bear": 0.020, "base": 0.0275, "bull": 0.030}
+    # The long-cycle gate that used to sit ahead of this was removed on 2026-09-27 with its profile;
+    # the per-profile TGR still resolves after the profile is final and before calibration.
     src = inspect.getsource(dcf_agent.run_dcf_agent)
-    gate = src.index("Backlog-Gated Long Cycle: eligibility is a GATE")
     tgr = src.index("if profile_name in _PROFILE_TGR:")
-    assert gate < tgr < src.index("# B4: an ACTIVE calibration")
+    assert tgr < src.index("# B4: an ACTIVE calibration")
 
 
 def test_the_sotp_legs_read_owner_accepted_gemini_inputs_and_nothing_else():

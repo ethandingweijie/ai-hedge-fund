@@ -309,7 +309,7 @@ def test_super_regional_bank_now_matches_bank_card():
 
 def test_em_bank_matches_bank_card():
     """EM Bank and EM Bank (Premium) both route to bank_card."""
-    for profile in ("EM Bank", "EM Bank (Premium)"):
+    for profile in ("EM Bank", "EM Bank (Premium)"):   # the second name still matches by prefix; its profile was removed 2026-09-27
         state = {
             "data": {
                 "sectors":       {"X": "Financials"},

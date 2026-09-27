@@ -185,7 +185,6 @@ _MARGIN_DELTA_MULT = {"bear": 0.80, "base": 1.00, "bull": 1.20}
 _GROWTH_DECAY_DELTA: dict[str, float] = {
     "Growth SaaS":                              0.17,  # 28% → ~5% by Y10
     "Hyper-Growth Platform":                    0.15,  # slower decay (network effects)
-    "High-Growth Tech / AI":                    0.12,  # longest S-curve
     "Cybersecurity / Mission-Critical SaaS":    0.15,
 }
 
@@ -196,13 +195,10 @@ _GROWTH_DECAY_DELTA: dict[str, float] = {
 _TERMINAL_MULTIPLE_CONVERGENCE: dict[str, str] = {
     "Growth SaaS":                              "Mature SaaS",
     "Hyper-Growth Platform":                    "Mature SaaS",
-    "High-Growth Tech / AI":                    "Mature SaaS",
     "Cybersecurity / Mission-Critical SaaS":    "Mature SaaS",
     "Mature SaaS":                              "Mature SaaS",
     "Mature Platform":                          "Mature Platform",
     "Hyperscaler / Tech Conglomerate":          "Hyperscaler / Tech Conglomerate",
-    "Early Platform":                           "default",
-    "Levered Subscription":                     "Levered Subscription",
 }
 
 # Option III Spec 3 — two-stage WACC fade. Apply +250 bps to first 3 years for
@@ -213,7 +209,7 @@ _EARLY_STAGE_WACC_YEARS   = 3
 _EARLY_STAGE_PROFILES: set[str] = {
     "Growth SaaS",
     "Hyper-Growth Platform",
-    "High-Growth Tech / AI",
+    
     "Cybersecurity / Mission-Critical SaaS",
 }
 
@@ -228,7 +224,7 @@ _EARLY_STAGE_PROFILES: set[str] = {
 _HIGH_SBC_PROFILES: set[str] = {
     "Growth SaaS",
     "Hyper-Growth Platform",
-    "High-Growth Tech / AI",
+    
     "Cybersecurity / Mission-Critical SaaS",
 }
 
@@ -4711,17 +4707,8 @@ _TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
         "ev_ebitda": 55.0, "ev_revenue": 25.0, "pe": 80.0, "p_s": 22.5, "ev_ebit": 66.0,
     },
     # High-Growth Tech / AI (pre-revenue or negative FCF) — reverse DCF preferred
-    "High-Growth Tech / AI": {
-        "ev_ebitda": 65.0, "ev_revenue": 30.0, "pe": 100.0, "p_s": 27.0, "ev_ebit": 78.0,
-    },
     # Early Platform (GMV-model) — Airbnb, Uber, DoorDash
-    "Early Platform": {
-        "ev_ebitda": 25.0, "ev_revenue": 4.0, "pe": 35.0, "p_s": 3.6, "ev_ebit": 30.0,
-    },
     # Levered Subscription — Comcast, Netflix
-    "Levered Subscription": {
-        "ev_ebitda": 12.0, "ev_revenue": 4.0, "pe": 18.0, "p_s": 3.6, "ev_ebit": 14.0,
-    },
     # Default Tech fallback — matches prior sector-level numbers
     "default": {
         "ev_ebitda": 22.0, "ev_revenue": 6.5, "pe": 28.0, "p_s": 5.9, "ev_ebit": 26.0,
@@ -4932,8 +4919,6 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
                               "target_cet1": 0.105, "rwa_to_assets": 0.65, "terminal_spread": 0.0, "ggm_g": 0.04},
     # EM Bank Premium — India private sector (HDFC, ICICI, Kotak) —
     # credit-to-GDP gap supports sustained 16-18% ROE
-    "EM Bank (Premium)":    {"target_roe": 0.14, "coe": 0.0975, "p_tbv": 1.0, "pe": 8.0, "fade_years": 7,   # CMB 1.0x book, RoTE 14% (owner Wave 6)
-                              "target_cet1": 0.115, "rwa_to_assets": 0.62, "terminal_spread": 0.010, "ggm_g": 0.05},
     # Investment banks — cyclical (GS, MS)
     "Investment Bank":      {"target_roe": 0.13, "coe": 0.095, "p_tbv": 2.4, "pe": 15.3, "fade_years": 5,   # Capital Markets 3.2x book / 15.3x; GS 2.5x, MS 3.0x TBV (owner Wave 6)
                               "target_cet1": 0.13, "rwa_to_assets": 0.40, "terminal_spread": 0.005, "ggm_g": 0.03},
@@ -4941,8 +4926,6 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     "Mortgage/GSE":         {"target_roe": 0.09, "coe": 0.110, "p_tbv": 0.8, "pe": 9.0,  "fade_years": 5,
                               "target_cet1": 0.08, "rwa_to_assets": 0.50, "terminal_spread": 0.0, "ggm_g": 0.02},
     # Neo/Challenger banks — J-curve ROEs, extended fade
-    "Neo/Challenger":       {"target_roe": 0.18, "coe": 0.120, "p_tbv": 2.8, "pe": 22.0, "fade_years": 10,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.45, "terminal_spread": 0.0, "ggm_g": 0.05},
     # Brokerage (SCHW, IBKR) — fee + NII blended
     "Brokerage":            {"target_roe": 0.16, "coe": 0.100, "p_tbv": 2.8, "pe": 18.0, "fade_years": 5,
                               "target_cet1": 0.10, "rwa_to_assets": 0.35, "terminal_spread": 0.005, "ggm_g": 0.035},
@@ -8210,46 +8193,6 @@ def _bound_growth_schedule(schedule: list[float],
                           "bound": "floor" if new > g else "ceiling"})
             out[i] = new
     return out, moved
-
-
-def _long_cycle_gate(ticker: str, sector: str, most_recent: dict, revenue_base: float,
-                     end_date: str, forward_consensus: Optional[dict]) -> Optional[dict]:
-    """{eligible, profile, record, flag} for a name with an ACCEPTED backlog, else None.
-
-    Forward sales are consensus NTM revenue when the run has it, else the
-    revenue base (and the record says which). Book-to-bill is the company's
-    cited figure, else accepted orders over the revenue of the year they were
-    booked in. The contract-liability share is read by src/data/long_cycle.py.
-    """
-    from src.data import industry_inputs as _ii_lc
-    from src.data import valuation_constants as _vc_lc
-    ccy = most_recent.get("_values_currency") or "USD"
-    bl = _ii_lc.accepted_detail(ticker, "backlog", ccy)
-    if not bl or not bl.get("value") or not revenue_base or revenue_base <= 0:
-        return None
-    fwd = ((forward_consensus or {}).get("revenue") or {}).get("base")
-    fwd_basis = "consensus NTM revenue"
-    if not (isinstance(fwd, (int, float)) and fwd > 0):
-        fwd, fwd_basis = revenue_base, "latest revenue (no consensus revenue on this run)"
-    b2b, b2b_basis = bl.get("book_to_bill"), "cited by the company"
-    if not b2b and bl.get("orders"):
-        b2b, b2b_basis = bl["orders"] / revenue_base, f"accepted orders ({bl.get('orders_period')}) / revenue"
-    from src.data.long_cycle import contract_liability_share
-    _cl = contract_liability_share(ticker, end_date)
-    share = _cl["share"] if _cl else None
-    v = _vc_lc.long_cycle_eligibility(sector=sector, backlog_coverage=bl["value"] / fwd,
-                                      book_to_bill=b2b, contract_liability_share=share)
-    parts = "; ".join(f"{c['rule']} {c['value'] if c['value'] is not None else 'not available'} "
-                      f"(> {c['minimum']}) {'ok' if c['ok'] else 'FAILS'}" for c in v["checks"])
-    verdict = (f"eligible -> {v['profile']}" if v["eligible"]
-               else "NOT eligible" + ("" if v["sector_in_scope"] else f" (sector {sector} out of scope)"))
-    return {"eligible": v["eligible"], "profile": v["profile"],
-            "flag": f"Backlog-Gated Long Cycle: {verdict}. {parts}.",
-            "record": {"gate_id": "GATE_LONG_CYCLE_ELIGIBILITY", "metric": "long_cycle_eligibility",
-                       "raw_input_path_a": None, "gated_output_path_b": None,
-                       "checks": v["checks"], "forward_sales_basis": fwd_basis,
-                       "book_to_bill_basis": b2b_basis if b2b else None,
-                       "basis": parts, "applied": v["eligible"]}}
 
 
 #: Forward legs on forward multiples (owner rule 2026-09-21: "default to NTM
@@ -12239,24 +12182,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # but its historical t1_row carries no sotp_assumptions → method
         # value None → skipped and renormalized → T-1 calibration and
         # every no-SOTP ticker stay bit-identical.
-        # ── Backlog-Gated Long Cycle: eligibility is a GATE (owner, 2026-09-22) ──
-        # Evaluated only for a name with an owner-ACCEPTED backlog, so it costs
-        # nothing and changes nothing for everyone else. All three rules must hold
-        # on figures that exist; a missing one fails.
-        try:
-            _lc = _long_cycle_gate(ticker, sector, most_recent, revenue_base, end_date,
-                                   forward_consensus)
-            if _lc:
-                gate_evaluations.append(_lc["record"])
-                ticker_forward_flags.append(_lc["flag"])
-                if _lc["eligible"]:
-                    _lc_data = (INDUSTRY_VALUATION_PROFILES.get(sector) or {}).get(_lc["profile"]) \
-                        or INDUSTRY_VALUATION_PROFILES["Industrials"].get(_lc["profile"])
-                    if _lc_data:
-                        profile_name, profile_data = _lc["profile"], _lc_data
-        except Exception:                                  # noqa: BLE001
-            pass
-
         # Per-profile terminal growth (owner, 2026-09-22), now that the profile
         # is final. The sector table stands for every profile not listed.
         if profile_name in _PROFILE_TGR:
@@ -14088,7 +14013,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "Growth SaaS",
                     "Cybersecurity / Mission-Critical SaaS",
                     "Hyper-Growth Platform",
-                    "High-Growth Tech / AI",
+                    
                 }
                 if _is_reit_profile:
                     growth_premium = max(0.85, min(1.20, _gp_raw))

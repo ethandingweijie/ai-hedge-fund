@@ -131,7 +131,6 @@ _ENERGY_PROFILE_WACC: dict[str, float] = {
     # 8.99%, D/(D+E)=10.7%. NOT Green & Renewable Energy (6.04%, 53% debt):
     # that row is generators, and a manufacturer does not carry their leverage.
     "Clean Tech / Power Equipment OEM": 0.090,
-    "EPC Contractor":    0.087,  # project execution risk; Damo Eng/Construction 8.69%
     # Wave 1 oil & gas (owner-approved 2026-09-20). Damodaran Jan 2026:
     #   Oil/Gas Distribution 5.78% D/(D+E)=36.9%; Oilfield Svcs/Equip. 7.04%
     #   D/(D+E)=27.2%. Damodaran publishes no refining row: refiners take the
@@ -148,7 +147,6 @@ _ENERGY_LEVERAGE_CAP: dict[str, float] = {
     "Regulated Utility": 0.015,  # regulatory oversight limits excess risk; tight cap
     "IPP":               0.020,  # PPA visibility compresses the max addendum
     "Merchant Power":    0.035,  # full commodity exposure → wider cap
-    "EPC Contractor":    0.030,
     "Midstream / Pipelines":        0.020,  # structural leverage (D/(D+E) 37%), fee-based
     "Refining & Marketing":         0.035,  # full crack-spread exposure
     "Oilfield Services & Drilling": 0.035,  # full activity-cycle exposure
@@ -312,9 +310,9 @@ BALANCE_SHEET_FINANCIAL_PROFILES: frozenset[str] = frozenset({
     # profile later cannot silently reintroduce the defect.
     "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)",
     "Regional Bank", "Super-Regional Bank",
-    "EM Bank", "EM Bank (Premium)",
+    "EM Bank", 
     "Bank / Lending Institution",
-    "Investment Bank", "Neo/Challenger", "Mortgage/GSE",
+    "Investment Bank", "Mortgage/GSE",
     # Insurance — float is the funding.
     "Insurance", "Insurance (P&C)",
     # Holdco — SOTP/NAV is the instrument; an EV multiple double-counts the
@@ -502,7 +500,7 @@ def get_wacc(sector: str, leverage: float = 0.0,
       risk-off adds +150 bps (widen ERP); risk-on subtracts 50 bps.
 
     profile: optional valuation profile name.
-      Energy:     "Regulated Utility" | "IPP" | "Merchant Power" | "EPC Contractor"
+      Energy:     "Regulated Utility" | "IPP" | "Merchant Power"
       Financials: "Money Center Bank" | "Regional Bank" | "Insurance" |
                   "Asset Manager" | "Investment Bank" | "FinTech" | "Mortgage/GSE" |
                   "Payment Networks" | "Market Infrastructure" | "Brokerage"
@@ -624,7 +622,6 @@ _ENERGY_PROFILE_CREDIT_BUCKET: dict[str, str] = {
     "Regulated Utility":   "Utility",
     "IPP":                 "Utility",    # PPA-backed, semi-regulated
     "Merchant Power":      "Industrial",
-    "EPC Contractor":      "Industrial",
     "Energy Tech Licensor":"Industrial",
     "Midstream / Pipelines":        "Industrial",
     "Refining & Marketing":         "Industrial",
@@ -1679,17 +1676,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "EM SOE banks (ICBC/CCB/BOC/ABC). Target ROE 14% (high NIM), CoE 13% (national-service risk premium), P/TBV 1.2x, CET1 10.5%.",
         },
-        "EM Bank (Premium)": {
-            "methods": [
-                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
-                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
-            ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
-            "rationale": "EM Premium — India private banks (HDFC/ICICI/Kotak) sustain 16-18% ROE on credit-to-GDP gap. 7-year fade, P/TBV 2.0x.",
-        },
         "Investment Bank": {
             "methods": [
                 {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
@@ -1700,17 +1686,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "Investment Bank (GS/MS). Target ROE 13% (cyclical), CoE 11% (trading VaR premium), P/TBV 1.2x, RWA proxy 0.40x (market-risk-weighted).",
-        },
-        "Neo/Challenger": {
-            "methods": [
-                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
-                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
-            ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
-            "rationale": "Neo/Challenger (NU/SOFI) — J-curve ROE. Target 18%, P/TBV 2.8x, 10-year fade (extended because current ROE still ramping).",
         },
         "Insurance (P&C)": {
             "methods": [
@@ -2031,16 +2006,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "pre-fill otherwise)."
             ),
         },
-        "EPC Contractor": {
-            "methods": [
-                {"name": "Backlog DCF",  "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by DCF"},
-                {"name": "EV/Backlog",   "weight": 0.30, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-                {"name": "EV/EBITDA",    "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "Rev DCF",      "weight": 0.05, "anchor": False, "implementable": True},
-            ],
-            "excluded": [],
-            "rationale": "Order backlog is the leading indicator of revenue; burn rate determines near-term value.",
-        },
         "Energy Tech Licensor": {
             "methods": [
                 {"name": "Licensing NPV",  "weight": 0.50, "anchor": True,  "implementable": False, "proxy": "EPV"},
@@ -2340,16 +2305,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "shadow_methods": ["EPV"],
             "rationale": "Mature software is priced on forward earnings and free cash flow; EPV stays as a published cross-check on the sustainability of current earnings.",
         },
-        "High-Growth Tech / AI": {
-            "methods": [
-                {"name": "Reverse DCF",      "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "TAM Penetration",  "weight": 0.30, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-                {"name": "EV/NTM Rev",       "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "SOTP (published)",             "weight": 0.10, "anchor": False, "implementable": False, "proxy": "EPV"},
-            ],
-            "excluded": [],
-            "rationale": "High uncertainty in terminal states requires modeling backward from market share assumptions.",
-        },
         "Hyper-Growth Platform": {
             "methods": [
                 {"name": "DCF (FCF+)",      "weight": 0.45, "anchor": True,  "implementable": True},
@@ -2371,26 +2326,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": [],
             "rationale": "Predictable cash flows allow for standard 2-stage DCF to be the primary anchor.",
-        },
-        "Early Platform": {
-            "methods": [
-                {"name": "GMV-TAM Pen",   "weight": 0.40, "anchor": True,  "implementable": False, "proxy": "EV/NTM Revenue"},
-                {"name": "Unit Econ DCF", "weight": 0.30, "anchor": False, "implementable": True,  "note": "proxied by DCF"},
-                {"name": "Rev DCF (GMV)", "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EV/GMV",        "weight": 0.10, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-            ],
-            "excluded": [],
-            "rationale": "Unit economics (LTV/CAC) at the transaction level matter more than consolidated P&L.",
-        },
-        "Levered Subscription": {
-            "methods": [
-                {"name": "DCF (Levered)",  "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",      "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "LBO Analysis",   "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "Credit Metrics", "weight": 0.10, "anchor": False, "implementable": False, "proxy": "FCF Yield"},
-            ],
-            "excluded": [],
-            "rationale": "Focus on ability to service debt (DSCR) and equity value post-interest payments.",
         },
     },
 
@@ -2454,21 +2389,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "but uses base 8.5% WACC since diversified cash flows fund R&D without "
                 "dilution). When rNPV returns None, weight flows to P/E/DCF/EV/EBITDA."
             ),
-        },
-        "Managed Care": {
-            "methods": [
-                {"name": "P/E (Ops)",  "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "DCF",        "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EPV",        "weight": 0.10, "anchor": False, "implementable": True},
-            ],
-            "excluded": [],
-            "rationale": "Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy.",
-            # Owner, 2026-09-26: "keep valuation intact; emit structural flag Trough MLR Cycle".
-            # Observation only, on every run of the profile until the owner retires it.
-            "structural_flags": [{"name": "Trough MLR Cycle",
-                                  "note": "2025-26 Medicare Advantage and exchange medical loss ratios sit at a "
-                                          "cycle trough; the earnings-based legs price a recovery in operating EPS"}],
         },
         "MedTech / Devices": {
             "methods": [
@@ -2555,32 +2475,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "Capital-intensive, leverage-sensitive — EV/EBITDA anchors; DCF captures "
                 "same-facility volume + reimbursement. This is the SAFE GENERIC default for "
                 "HealthcareServices names without a more specific sub-profile."
-            ),
-        },
-        "Medical Devices": {
-            "methods": [
-                {"name": "EV/Revenue",   "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "P/E",          "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "DCF (5-yr)",   "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
-            ],
-            "excluded": [],
-            "rationale": (
-                "MedTech routed to HealthcareServices. High R&D + recurring consumables "
-                "(razor-blade) drive premium revenue multiples and long-cycle growth."
-            ),
-        },
-        "Animal Health": {
-            "methods": [
-                {"name": "P/E",        "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "DCF",        "weight": 0.30, "anchor": False, "implementable": True},
-            ],
-            "excluded": ["rNPV", "EV/R&D"],
-            "rationale": (
-                "Animal-health pharma & diagnostics (ZTS, IDXX, ELAN). High-margin, "
-                "companion-animal-mix driven, with NO human clinical pipeline — so rNPV / "
-                "EV/R&D (Biopharma anchors) are excluded; steady EPS + DCF apply."
             ),
         },
         "Pharma Distribution": {
@@ -3064,16 +2958,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # `backlog_gated_long_cycle`): backlog > 3.0x forward sales, book-to-bill
         # > 1.5x, contract liabilities > 50% of receivables plus inventory -- all
         # on owner-ACCEPTED filing figures. Fail one and the name stays where it was.
-        "Backlog-Gated Long Cycle": {
-            "methods": [
-                {"name": "Backlog-coverage DCF", "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "Forward EV/EBITDA",    "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "Forward P/E",          "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",            "weight": 0.20, "anchor": False, "implementable": True},
-            ],
-            "excluded": ["FCF Yield", "ROIC vs WACC"],
-            "rationale": "A multi-year contracted order book with price escalation is the structural visibility a cash-flow forecast rests on; forward legs carry the earnings inflection trailing ones cannot.",
-        },
         "Capital Goods": {
             # Wave 9 (owner, 2026-09-27): General Machinery & Tools -- CAT, DE, PH, TT, SNA, ETN, VRT, CRRC.
             # GATE_MARGIN_PEAK: an operating margin above its 7-year median by more than 1.5 sigma moves the
@@ -3216,40 +3100,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["EPV", "P/BV"],
             "rationale": "Carriers: EV/EBITDA on the market's carrier cohort, free-cash yield and the dividend; capex intensity and the spectrum cycle are the risks.",
         },
-        "Stable Growth": {
-            "methods": [
-                {"name": "EV/EBITDA",     "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "DDM",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "DCF (2-stage)", "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "EPV",           "weight": 0.15, "anchor": False, "implementable": True},
-            ],
-            "excluded": [],
-            "rationale": (
-                "Telcos are valued on EV/EBITDA and dividend yield: the asset base is "
-                "capital-intensive and the equity story is cash return, so EBITDA "
-                "multiples and the distribution are what the market actually prices. "
-                "This profile previously anchored on EPV with NO EV/EBITDA and NO DDM "
-                "in the method set at all -- an earnings-power floor as the primary "
-                "estimate for a regulated-utility-like cash machine, which is a floor "
-                "presented as a valuation. EPV is retained as the no-growth floor it "
-                "is, at a weight that reflects that role. DCF still carries the value "
-                "of future reinvestment."
-            ),
-        },
     },
 
     # ── CRYPTO ────────────────────────────────────────────────────────────────
     "Crypto": {
-        "Pre-Revenue Tech": {
-            "methods": [
-                {"name": "Scenario IV",     "weight": 0.50, "anchor": True,  "implementable": False, "proxy": "DCF"},
-                {"name": "Comp Trans",      "weight": 0.20, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-                {"name": "Rev DCF (Mkt Sh)","weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "TAM Pen",         "weight": 0.10, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-            ],
-            "excluded": [],
-            "rationale": "In the absence of cash, value is derived from binary success/failure probability nodes.",
-        },
         "Digital Asset Mining": {
             "methods": [
                 {"name": "P/BV",            "weight": 0.35, "anchor": True,  "implementable": True},
@@ -3701,16 +3555,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "Pre-bonus EBIT normalises for variable staff compensation; FCF yield tests cash conversion quality.",
         },
-        "Payment Processors": {
-            "methods": [
-                {"name": "EV/Gross Profit", "weight": 0.40, "anchor": True,  "implementable": False, "proxy": "EV/Revenue"},
-                {"name": "EV/Volume",       "weight": 0.30, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
-                {"name": "DCF",             "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "Rule of 40",      "weight": 0.10, "anchor": False, "implementable": False, "proxy": "FCF Yield"},
-            ],
-            "excluded": [],
-            "rationale": "Network-effect businesses trade on volume and take-rate expansion; DCF anchors terminal value.",
-        },
         # ── IT Services ──────────────────────────────────────────────────
         # Human-capital businesses (marginal cost > 0). Separated from Tech
         # because scalable IP (marginal cost ~ 0) requires different multiples.
@@ -3818,19 +3662,6 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "Semi equipment (ASML, AMAT, LRCX, KLAC) and EDA (SNPS, CDNS) are "
                 "asset-lighter with strong FCF. P/E anchors with DCF as primary check. "
                 "Equipment demand is cyclical but less volatile than memory."
-            ),
-        },
-        "OSAT / Packaging": {
-            "methods": [
-                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "P/E",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/BV",         "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "FCF Yield",    "weight": 0.15, "anchor": False, "implementable": True},
-            ],
-            "excluded": ["EPV"],
-            "rationale": (
-                "OSAT providers (ASX, AMKR) are asset-heavy with thin margins. "
-                "EV/EBITDA anchors; P/BV provides asset floor for capital-intensive operations."
             ),
         },
     },
@@ -4823,8 +4654,8 @@ _SECTOR_PROFILE_DEFAULT = {
     "HealthcareServices": "Healthcare Providers / Services",
     "Consumer": "Consumer Growth",
     "Industrials": "Capital Goods",
-    "Telco": "Stable Growth",
-    "Crypto": "Pre-Revenue Tech",
+    "Telco": "Telecom Carrier",
+    "Crypto": "Crypto Exchange",
     "RealEstate": "REIT",
     # SGX classifies developers under "Property", separate from REITs.
     "Property": "Property Developer (SG)",
@@ -4889,8 +4720,11 @@ def classify_valuation_profile(
         return ""
 
     if _is_tech:
+        # High-Growth Tech / AI, Early Platform and Levered Subscription were removed (owner,
+        # 2026-09-27: profiles no row or pin reached). Their rungs fold into Growth SaaS; a levered
+        # name falls through to the rungs below.
         if is_pre_revenue or (fcf_margin < -0.15 and revenue_cagr > 0.40):
-            return "High-Growth Tech / AI"
+            return "Growth SaaS"
         if revenue_cagr > 0.20 and fcf_margin < 0.05:
             return "Growth SaaS"
         # Hyper-Growth Platform: high revenue growth AND high FCF margin.
@@ -4902,9 +4736,7 @@ def classify_valuation_profile(
         # (Uber, Airbnb, DoorDash, Palantir). FCF margin 5–15%, still building cash flows.
         # Uses >= 0.20 (inclusive) so companies at exactly 20% CAGR are captured correctly.
         if revenue_cagr >= 0.20 and 0.05 <= fcf_margin < 0.15:
-            return "Early Platform"
-        if debt_to_equity > 2.0:
-            return "Levered Subscription"
+            return "Growth SaaS"
         # Hyperscaler / Tech Conglomerate: mega-cap tech with massive CapEx.
         # Gate: revenue > $100B (catches MSFT $282B, AMZN $717B, GOOGL $403B,
         # META $201B). ORCL ($57B) misses but routes to Levered Sub (D/E 5.1).
@@ -5168,8 +5000,6 @@ def classify_valuation_profile(
         # Rung 10 — Traditional Retail.
         return "Traditional Retail"
 
-    # NOTE: "Backlog-Gated Long Cycle" is never returned from here. It is reached
-    # only through dcf_agent's eligibility gate, on owner-accepted filing figures.
     if sector == "Industrials":
         # A business model is never inferred from a ratio (owner, 2026-09-21).
         # This ladder used to read: D/E > 1.5 -> Automotive (OEM); revenue CAGR
@@ -5182,11 +5012,14 @@ def classify_valuation_profile(
         # is priced on the sector's generic method set.
         return "Capital Goods"
 
+    # Stable Growth and Pre-Revenue Tech removed (owner, 2026-09-27). An unmapped telco is a
+    # carrier; an unmapped crypto name with revenue is most often a venue. A pre-revenue name is
+    # Unrated before any profile would price it.
     if sector == "Telco":
-        return "Stable Growth"
+        return "Telecom Carrier"
 
     if sector == "Crypto":
-        return "Pre-Revenue Tech"
+        return "Crypto Exchange"
 
     if _is_reit:
         return "REIT"
@@ -5210,9 +5043,7 @@ def classify_valuation_profile(
         return "Upstream Oil & Gas"
 
     if sector == "ProfessionalServices":
-        # Payment processors grow faster and trade on volume multiples
-        if revenue_cagr > 0.12:
-            return "Payment Processors"
+        # Payment Processors removed (owner, 2026-09-27); processors are pinned where they matter.
         # IT Services: human-capital businesses with moderate margins
         # ACN ($70B), IBM ($68B), CTSH ($21B), INFY ($19B), WIT ($901B TWD)
         # Differentiate from Ad/Consulting by: higher revenue base, lower margins
@@ -5224,8 +5055,7 @@ def classify_valuation_profile(
         # OSAT: low FCF + low margins + asset-heavy packaging
         # ASX (FCM -3%, D/E 1.0), AMKR (FCM 3%, D/E 0.8)
         # Must exclude IDMs (INTC) which also have negative FCF but high revenue
-        if fcf_margin < 0.05 and debt_to_equity > 0.5 and (not revenue_base or revenue_base < 30e9):
-            return "OSAT / Packaging"
+        # OSAT / Packaging removed (owner, 2026-09-27): a packaging house falls to IDM / Foundry.
         # IDM / Foundry: CapEx-heavy with suppressed FCF (<15%)
         # MU (FCM 5%), INTC (FCM -9%), TXN (FCM 15%), GFS (FCM 15%)
         # ARM (FCM 4%) also lands here — IP-light but low FCM due to R&D spend

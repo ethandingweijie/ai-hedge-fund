@@ -88,7 +88,7 @@ def test_the_new_profiles_and_forward_anchors_are_the_owner_spec():
         assert sum(_w(sec, name).values()) == pytest.approx(1.0)
         assert name in sp.SECTOR_PEER_MULTIPLES and name in sp.SECTOR_PEER_BASKETS
         assert rf.report_family_for(name) == "Technology, telecom and media"
-    assert P["Telco"]["Stable Growth"]                               # the old row's profile stays for names that still use it
+    assert "Stable Growth" not in P["Telco"]                         # removed 2026-09-27 (no row or pin reached it)
 
 
 # ── decision 2, alternative: the static table is the fallback ────────────────
@@ -111,7 +111,7 @@ def test_the_static_tech_table_is_a_fallback_not_an_override():
     src2 = inspect.getsource(d._terminal_multiple_ev_revenue)
     assert '_live_mature_ev_revenue(convergence, peer) or mature_mults["ev_revenue"]' in src2
     # with no market basis to look up from, the fallback is the table (test doubles never hit FMP)
-    assert d._live_mature_ev_revenue("Levered Subscription", {}) is None
+    assert d._live_mature_ev_revenue("No Basket Profile", {}) is None   # was Levered Subscription, removed 2026-09-27
 
 
 def test_ntm_forward_multiples_are_on_unless_switched_off(monkeypatch):

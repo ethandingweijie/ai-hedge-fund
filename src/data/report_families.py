@@ -43,8 +43,8 @@ _R = {
 REPORT_FAMILIES: dict[str, dict] = {
     "Banks": {
         "profiles": ["Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Regional Bank",
-                     "Super-Regional Bank", "EM Bank", "EM Bank (Premium)", "Bank / Lending Institution",
-                     "Investment Bank", "Neo/Challenger", "Mortgage/GSE", "Card Issuer & Consumer Lender"],
+                     "Super-Regional Bank", "EM Bank", "Bank / Lending Institution",
+                     "Investment Bank", "Mortgage/GSE", "Card Issuer & Consumer Lender"],
         "rows": ["revenue", "ni", "equity", "bvps", "dps", "roe"],
         "exposition": ["GGM inputs (RoTE, CoE, g, target P/B) against spot P/TBV", "residual-income fade",
                        "excess capital", "implied-CoE flag when it fires"],
@@ -64,7 +64,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     "Fee financials": {
         "profiles": ["Asset Manager", "Alt Asset Manager", "Payment Networks", "Market Infrastructure",
                      "Market Infrastructure (SG)", "Brokerage", "FinTech", "Fintech/Stablecoin", "Insurance Broker",
-                     "Financial Data & Ratings", "Payment Processors", "WealthTech & Specialty Financials (SG)",
+                     "Financial Data & Ratings", "WealthTech & Specialty Financials (SG)",
                      "Real Estate Asset Manager (SG)", "Crypto Exchange"],
         "rows": ["revenue", "ebitda", "ni", "fcf", "net_debt"],
         "exposition": ["P/DE on the accepted input (alts)", "Forward P/E and EV/EBITDA against the basket (fee platforms)"],
@@ -83,7 +83,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     },
     "Energy and resources": {
         "profiles": ["Regulated Utility", "Merchant Power", "IPP", "Clean Tech / Power Equipment OEM", "Midstream / Pipelines",
-                     "Refining & Marketing", "Oilfield Services & Drilling", "EPC Contractor", "Energy Tech Licensor",
+                     "Refining & Marketing", "Oilfield Services & Drilling", "Energy Tech Licensor",
                      "Upstream Oil & Gas", "Integrated Oil & Gas", "Coal", "Mining (Major)", "Offshore Marine & Resources (SG)",
                      "Base Metals", "Precious Metals", "Diversified Miners",   # Wave 9
                      "Digital Asset Mining"],
@@ -105,7 +105,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     "Health care": {
         "profiles": ["Pre-approval Biotech", "Commercial Biotech", "Large Cap Pharma", "Managed Care", "MedTech / Devices",
                      "Surgical Robotics / Capital Systems", "CDMO / Life Science Tools", "Healthcare Providers / Services",
-                     "Medical Devices", "Animal Health", "Pharma Distribution", "Healthcare Provider (SG)"],
+                     "Pharma Distribution", "Healthcare Provider (SG)"],
         "rows": ["revenue", "ebit_m", "ni", "fcf", "net_debt"],
         "exposition": ["rNPV state (accepted or quarantined, and what it covers)", "the Forward P/E sanity gate when it fires",
                        "the structural flag on managed care"],
@@ -115,7 +115,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     "Industrials, materials and transport": {
         "profiles": ["Aerospace & Engineering (SG)", "Aviation & Marine (SG)", "Defense Primes", "Commercial Aerospace & Engines",
                      "Niche Aerospace Components", "Defense Tech & Space", "General Aviation (HK)", "GA Engines & Aftermarket (HK)",
-                     "Automotive (OEM)", "Backlog-Gated Long Cycle", "Capital Goods", "Airlines", "Rail / Logistics",
+                     "Automotive (OEM)", "Capital Goods", "Airlines", "Rail / Logistics",
                      "Steel / Metals", "Specialty Chemicals", "Electronic Materials & Industrial Diversified",
                      # Wave 9 (2026-09-27)
                      "Long-Cycle E&C", "Industrial Distribution", "Equipment Rental", "Waste & Environmental Services",
@@ -131,10 +131,10 @@ REPORT_FAMILIES: dict[str, dict] = {
     "Technology, telecom and media": {
         "profiles": ["AI Infrastructure / Neocloud", "Consumer Electronics / Hardware Ecosystem", "China Internet Platform",
                      "Tech Manufacturing / EMS (SG)", "Growth SaaS", "Hyperscaler / Tech Conglomerate",
-                     "Cybersecurity / Mission-Critical SaaS", "Mature SaaS", "High-Growth Tech / AI", "Hyper-Growth Platform",
-                     "Mature Platform", "Early Platform", "Levered Subscription", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND",
-                     "Equipment / EDA", "OSAT / Packaging", "Telco / Infrastructure (SG)", "Stable Growth", "Ad / Consulting",
-                     "IT Services", "Pre-Revenue Tech", "BTC Treasury / Proxy",
+                     "Cybersecurity / Mission-Critical SaaS", "Mature SaaS", "Hyper-Growth Platform",
+                     "Mature Platform", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND",
+                     "Equipment / EDA", "Telco / Infrastructure (SG)", "Ad / Consulting",
+                     "IT Services", "BTC Treasury / Proxy",
                      "Analog / Mixed-signal IDM", "Media & Streaming", "Networking & Communication Equipment", "Telecom Carrier"],   # Wave 7
         "rows": ["revenue", "ebit_m", "fcf_m", "sbc_pct", "capex_pct", "net_debt"],
         "exposition": ["forward anchor against the live basket", "the terminal convergence stated", "SBC treatment stated"],

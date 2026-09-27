@@ -94,33 +94,6 @@ def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
 
 
-def long_cycle_eligibility(*, sector: Optional[str], backlog_coverage: Optional[float],
-                           book_to_bill: Optional[float], contract_liability_share: Optional[float],
-                           doc: Optional[dict] = None) -> dict:
-    """{eligible, profile, checks} for the Backlog-Gated Long Cycle profile.
-
-    All three rules must hold, on figures that exist. A rule whose input is
-    MISSING fails: eligibility is a claim about the company, and a claim that
-    cannot be checked is not made. `checks` names each rule, its reading and its
-    threshold, so a valuation can say exactly why a name did or did not qualify.
-    """
-    cfg = (doc or load()).get("backlog_gated_long_cycle") or {}
-    rules = (
-        ("backlog coverage of forward sales", backlog_coverage, cfg.get("min_backlog_coverage_forward_sales")),
-        ("book-to-bill", book_to_bill, cfg.get("min_book_to_bill")),
-        ("contract liabilities / (receivables + inventory)", contract_liability_share,
-         cfg.get("min_contract_liability_share")),
-    )
-    checks = []
-    for name, value, floor in rules:
-        ok = (isinstance(value, (int, float)) and isinstance(floor, (int, float)) and value > floor)
-        checks.append({"rule": name, "value": (round(float(value), 4) if isinstance(value, (int, float)) else None),
-                       "minimum": floor, "ok": bool(ok)})
-    in_sector = (sector in (cfg.get("sectors") or [])) if sector else False
-    return {"eligible": bool(cfg) and in_sector and all(c["ok"] for c in checks),
-            "profile": cfg.get("profile"), "sector_in_scope": in_sector, "checks": checks}
-
-
 def fcf_guidance_margin_schedule(guided_margin: Optional[float], years: int = 10,
                                  doc: Optional[dict] = None) -> Optional[dict]:
     """{schedule, explicit_margin, floor, ...} for an accepted FCF guidance, or None.

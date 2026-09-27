@@ -536,9 +536,9 @@ def test_a_bank_with_nothing_to_strip_still_classifies_as_financial():
     future EV-based computation key off the classification, not the record."""
     for profile_name in ("Money Center Bank", "Money Center Bank (SG)",
                          "Money Center Bank (EU)", "Regional Bank",
-                         "Super-Regional Bank", "EM Bank", "EM Bank (Premium)",
+                         "Super-Regional Bank", "EM Bank",     # EM Bank (Premium), Neo/Challenger removed 2026-09-27
                          "Bank / Lending Institution", "Investment Bank",
-                         "Neo/Challenger", "Mortgage/GSE", "Insurance",
+                         "Mortgage/GSE", "Insurance",
                          "Insurance (P&C)", "Holding Company", "Brokerage",
                          "WealthTech & Specialty Financials (SG)"):
         out, rec, exc, fin = _gate(profile_name, SCHW)
@@ -627,7 +627,7 @@ def test_a_tier_1_profile_with_nothing_to_strip_records_nothing():
                          "Regional Bank", "Insurance", "Insurance (P&C)",
                          "Mortgage/GSE", "Holding Company",
                          "Bank / Lending Institution", "Investment Bank",
-                         "Neo/Challenger", "EM Bank", "EM Bank (Premium)",
+                         "EM Bank",                           # EM Bank (Premium), Neo/Challenger removed 2026-09-27
                          "Super-Regional Bank", "Alt Asset Manager",
                          "WealthTech & Specialty Financials (SG)"):
         out, rec, exc, _fin = _gate(profile_name, SCHW)

@@ -1372,70 +1372,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
     # ── Telco (T, VZ, TMUS, BCE, CHL) ─────────────────────────────────────
-    "Stable Growth": {
-        "sector":         "Telco",
-        "anchor_methods": ["DCF", "DDM", "EV/EBITDA"],
-        "kpis": [
-            {
-                "key":             "arpu_usd",
-                "mandatory":       True,
-                "search_phrases":  ["ARPU", "average revenue per user"],
-                "compute_hint":    "Blended monthly ARPU (USD or local currency)",
-                "clamp":           (5.0, 200.0),
-                "extractor_only":  True,
-                "fallback":        "use TTM revenue / subscribers from FMP + flag",
-            },
-            {
-                "key":             "postpaid_net_adds_qtr",
-                "mandatory":       True,
-                "search_phrases":  ["postpaid net adds", "net additions"],
-                "compute_hint":    "Postpaid net adds latest quarter (thousands)",
-                "clamp":           (-2000.0, 2000.0),
-                "extractor_only":  True,
-            },
-            {
-                "key":             "churn_pct_monthly",
-                "mandatory":       True,
-                "search_phrases":  ["postpaid churn", "monthly churn"],
-                "compute_hint":    "Postpaid monthly churn (decimal — 0.009 = 0.9%)",
-                "clamp":           (0.005, 0.05),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "fivg_coverage_pct",
-                "mandatory":       False,
-                "search_phrases":  ["5G coverage", "5G population"],
-                "compute_hint":    "% of population covered by 5G network",
-                "clamp":           (0.0, 1.0),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "capex_intensity_pct",
-                "mandatory":       False,
-                "search_phrases":  ["capex intensity", "capex / revenue"],
-                "compute_hint":    "Capex / revenue (FMP-derivable cross-check)",
-                "clamp":           (0.10, 0.30),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "debt_to_ebitda",
-                "mandatory":       True,
-                "search_phrases":  ["debt to EBITDA", "leverage ratio", "debt/EBITDA"],
-                "compute_hint":    "Total debt / TTM EBITDA — FMP-augmented (telco typically 2.5-4.0x)",
-                "clamp":           (0.0, 12.0),
-                "source":          "F",
-                "extractor_only":  False,
-            },
-        ],
-        "source_priority": [
-            "Q4 earnings call subscriber metrics",
-            "Latest 10-K",
-            "Industry trackers (Strand Consult, Gartner)",
-        ],
-    },
 
     # ── Consumer: Automotive & EV (TSLA, F, GM, RIVN, LCID) ───────────────
     "Automotive & EV": {
@@ -1655,154 +1591,12 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     # MedTech in the HealthcareServices sector (distinct from Biopharma's
     # "MedTech / Devices"). Premium revenue multiples; gross-margin + leverage
     # driven (ISRG, EW, ZBH-style names that route as HealthcareServices).
-    "Medical Devices": {
-        "sector":         "HealthcareServices",
-        "anchor_methods": ["EV/Revenue", "P/E (ops)", "DCF"],
-        "kpis": [
-            {
-                "key":             "organic_revenue_growth_pct",
-                "mandatory":       True,
-                "search_phrases":  ["organic revenue growth", "constant-currency revenue growth",
-                                    "underlying revenue growth"],
-                "compute_hint":    "Organic (constant-currency) revenue growth YoY (decimal)",
-                "clamp":           (-0.15, 0.40),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "gross_margin_pct",
-                "mandatory":       True,
-                "search_phrases":  ["gross margin", "adjusted gross margin"],
-                "compute_hint":    "Gross profit / revenue (decimal)",
-                "clamp":           (0.0, 0.90),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "grossProfitMarginTTM",
-                "decimal_format":  True,
-            },
-            {
-                "key":             "operating_margin_pct",
-                "mandatory":       False,
-                "search_phrases":  ["operating margin", "adjusted operating margin"],
-                "compute_hint":    "Operating income / revenue (decimal)",
-                "clamp":           (-0.20, 0.45),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "operatingProfitMarginTTM",
-                "decimal_format":  True,
-            },
-            {
-                "key":             "rd_intensity_pct",
-                "mandatory":       False,
-                "search_phrases":  ["R&D as % of revenue", "research and development intensity"],
-                "compute_hint":    "R&D expense / revenue (decimal)",
-                "clamp":           (0.0, 0.30),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "recurring_revenue_pct",
-                "mandatory":       False,
-                "search_phrases":  ["recurring revenue", "consumables revenue mix",
-                                    "razor-blade revenue"],
-                "compute_hint":    "Recurring / consumables revenue as % of total (decimal)",
-                "clamp":           (0.0, 1.0),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "net_debt_to_ebitda",
-                "mandatory":       True,
-                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
-                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
-                "clamp":           (-1.0, 10.0),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "netDebtToEBITDATTM",
-            },
-        ],
-        "source_priority": [
-            "Latest 10-K + Q earnings (organic growth + margin)",
-            "Investor day pipeline + recurring-revenue mix",
-        ],
-    },
 
     # ── HealthcareServices: Animal Health ─────────────────────────────────
     # Animal-health pharma & diagnostics (ZTS, IDXX, ELAN). High-margin,
     # companion-animal-mix driven; NO human clinical pipeline. This profile
     # exists so animal-health names no longer inherit Managed Care insurer
     # KPIs when routed to HealthcareServices.
-    "Animal Health": {
-        "sector":         "HealthcareServices",
-        "anchor_methods": ["P/E (ops)", "EV/EBITDA", "DCF"],
-        "kpis": [
-            {
-                "key":             "organic_revenue_growth_pct",
-                "mandatory":       True,
-                "search_phrases":  ["organic revenue growth", "constant-currency revenue growth",
-                                    "operational revenue growth"],
-                "compute_hint":    "Organic (constant-currency) revenue growth YoY (decimal)",
-                "clamp":           (-0.10, 0.30),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "companion_animal_mix_pct",
-                "mandatory":       False,
-                "search_phrases":  ["companion animal mix", "companion animal revenue",
-                                    "pet vs livestock mix"],
-                "compute_hint":    "Companion-animal (higher-margin) revenue as % of total (decimal)",
-                "clamp":           (0.0, 1.0),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "operating_margin_pct",
-                "mandatory":       True,
-                "search_phrases":  ["operating margin", "adjusted operating margin"],
-                "compute_hint":    "Operating income / revenue (decimal)",
-                "clamp":           (0.0, 0.50),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "operatingProfitMarginTTM",
-                "decimal_format":  True,
-            },
-            {
-                "key":             "gross_margin_pct",
-                "mandatory":       False,
-                "search_phrases":  ["gross margin", "adjusted gross margin"],
-                "compute_hint":    "Gross profit / revenue (decimal)",
-                "clamp":           (0.0, 0.90),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "grossProfitMarginTTM",
-                "decimal_format":  True,
-            },
-            {
-                "key":             "rd_intensity_pct",
-                "mandatory":       False,
-                "search_phrases":  ["R&D as % of revenue", "research and development intensity"],
-                "compute_hint":    "R&D expense / revenue (decimal)",
-                "clamp":           (0.0, 0.20),
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             "net_debt_to_ebitda",
-                "mandatory":       True,
-                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
-                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
-                "clamp":           (-1.0, 8.0),
-                "source":          "F",
-                "extractor_only":  False,
-                "fmp_field":       "netDebtToEBITDATTM",
-            },
-        ],
-        "source_priority": [
-            "Latest 10-K + Q earnings (organic growth + margin)",
-            "Investor day companion-animal mix + pipeline",
-        ],
-    },
 
     # ── HealthcareServices: Pharma Distribution ───────────────────────────
     # Drug distributors / PBMs-distribution (MCK, COR/Cencora, CAH). Razor-thin
@@ -2552,17 +2346,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Crypto ──────────────────────────────────────────────────
     # ── G4: Pre-Revenue / Network Tech (Protocol / L1 / L2 plays —
     # Solana-style, DePIN, Filecoin, Helium etc.) ────────────────────────
-    'Pre-Revenue Tech': {
-        "sector":         'Crypto',
-        "anchor_methods": ['Scenario Intrinsic Value', 'Comparable Transactions', 'Revenue DCF', 'TAM Penetration'],
-        "kpis": [
-            {"key": 'active_developer_growth_yoy', "mandatory": True, "search_phrases": ['active ecosystem developers growth','GitHub contributor growth','developer commits YOY'], "compute_hint": '(current_devs/prior_devs)-1 (decimal)', "clamp": (-0.50, 5.0), "source": 'W', "extractor_only": True, "decimal_format": True},
-            {"key": 'tam_penetration_pct',         "mandatory": True, "search_phrases": ['market share of total addressable volume','protocol penetration rate','adoption share of target market'], "compute_hint": 'protocol_volume/TAM (decimal)', "clamp": (0.0, 0.50), "source": 'W', "extractor_only": True, "decimal_format": True},
-            {"key": 'cash_runway_years',           "mandatory": True, "search_phrases": ['cash runway months','months of cash','liquidity runway'], "compute_hint": 'FMP-augmented from cash + burn rate', "clamp": (0.0, 99.0), "source": 'F', "extractor_only": False},
-            {"key": 'token_velocity',              "mandatory": False, "search_phrases": ['on-chain transaction volume vs market cap'], "source": 'W', "extractor_only": True},
-        ],
-        "source_priority": ['Ecosystem developer activity', 'Protocol volume logs', 'Cash runway disclosures'],
-    },
 
     # ── G1: Crypto Exchange (COIN, Kraken-public, Robinhood-crypto-arm) ──
     # 2026 driver: Institutional AUM Flow (not retail hype).
@@ -2607,51 +2390,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
 # ── Energy ──────────────────────────────────────────────────
-    'EPC Contractor': {
-        "sector":         'Energy',
-        "anchor_methods": ['Backlog DCF', 'EV/EBITDA', 'P/E (ops)'],
-        "kpis": [
-            {
-                "key":             'backlog_burn_rate_pct',
-                "mandatory":       True,
-                "search_phrases":  ['backlog execution rate', 'revenue as % of opening backlog', 'project burn rate'],
-                "compute_hint":    'annual_revenue / opening_backlog_balance (decimal — slow burn = long visibility)',
-                "clamp":           (0.0, 1.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'order_backlog_usd',
-                "mandatory":       True,
-                "search_phrases":  ['total contracted backlog', 'remaining performance obligations', 'order book value'],
-                "clamp":           (1e8, 1e11),
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'backlog_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['backlog growth YoY', 'order book expansion', 'contracted backlog change'],
-                "compute_hint":    'YoY change in order_backlog_usd (decimal)',
-                "clamp":           (-0.50, 1.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'project_gross_margin',
-                "mandatory":       True,
-                "search_phrases":  ['weighted average project margin', 'project gross margin', 'EPC margin'],
-                "compute_hint":    'Weighted average project gross margin (decimal — negative = death spiral)',
-                "clamp":           (-0.20, 0.30),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-        ],
-        "source_priority": ['Contract award announcements', 'Project burn rate disclosures', 'Project gross margin schedule'],
-    },
 
     'Energy Tech Licensor': {
         "sector":         'Energy',
@@ -2998,57 +2736,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "source_priority": ['Statutory Filings (NSE/BSE/SGX)', 'CET1 ratio + CASA disclosures'],
     },
 
-    'EM Bank (Premium)': {
-        "sector":         'Financials',
-        "anchor_methods": ['Residual Income', 'P/TBV'],
-        "kpis": [
-            {
-                "key":             'casa_ratio_pct',
-                "mandatory":       True,
-                "search_phrases":  ['CASA ratio', 'current and savings account mix'],
-                "clamp":           (0.2, 0.6),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'roa_pct',
-                "mandatory":       True,
-                "search_phrases":  ['Return on Assets', 'ROA'],
-                "compute_hint":    'Net income / total assets (decimal — 0.02 = 2.0%; premium EM banks generate >2%)',
-                "clamp":           (0.0, 0.05),
-                "source":          'H',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'cet1_ratio',
-                "mandatory":       True,
-                "search_phrases":  ['CET1 ratio', 'Common Equity Tier 1'],
-                "clamp":           (0.05, 0.25),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'provision_coverage_ratio',
-                "mandatory":       False,
-                "search_phrases":  ['PCR', 'NPL coverage'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'npl_ratio_pct',
-                "mandatory":       False,
-                "search_phrases":  ['non-performing loan ratio', 'gross NPL'],
-                "clamp":           (0.0, 0.15),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-        ],
-        "source_priority": ['Statutory Filings (NSE/BSE/SGX)', 'CET1 + ROA disclosures'],
-    },
 
     'FinTech': {
         "sector":         'Financials',
@@ -3357,70 +3044,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "source_priority": ['SEC 10-K/Q', 'FHFA Monthly Summary Reports', 'Quarterly Credit Supplements'],
     },
 
-    'Neo/Challenger': {
-        "sector":         'Financials',
-        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
-        "kpis": [
-            {
-                "key":             'cost_to_serve_per_user',
-                "mandatory":       True,
-                "search_phrases":  ['operating cost per active user', 'service cost per head', 'opex per customer'],
-                "compute_hint":    'total_operating_expenses / total_active_users (USD)',
-                "clamp":           (1.0, 100.0),
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'arpu_monthly_usd',
-                "mandatory":       True,
-                "search_phrases":  ['average revenue per active user', 'monthly ARPU'],
-                "compute_hint":    'Monthly ARPU in USD (annualised /12)',
-                "clamp":           (1.0, 500.0),
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'unit_econ_ratio',
-                "mandatory":       True,
-                "search_phrases":  ['ARPU to cost-to-serve ratio', 'unit economics multiple',
-                                    'revenue per user vs cost per user'],
-                "compute_hint":    'arpu_monthly_usd / cost_to_serve_per_user — Elite (>10x): NuBank standard',
-                "clamp":           (0.1, 50.0),
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'equity_to_assets_pct',
-                "mandatory":       True,
-                "search_phrases":  ['shareholders equity / total assets', 'tangible common equity ratio',
-                                    'capital ratio'],
-                "compute_hint":    'CET1 proxy when neobank lacks full banking license (decimal)',
-                "clamp":           (0.0, 0.50),
-                "source":          'F',
-                "extractor_only":  False,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'net_income_pct',
-                "mandatory":       True,
-                "search_phrases":  ['net income margin', 'GAAP net margin', 'cash burn rate',
-                                    'profitable / unprofitable status'],
-                "compute_hint":    'Net income / total revenue (decimal — negative if burning cash)',
-                "clamp":           (-1.00, 0.50),
-                "source":          'F',
-                "extractor_only":  False,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'deposit_beta_pct',
-                "mandatory":       False,
-                "search_phrases":  ['rate pass-through to depositors', 'deposit beta'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
-        ],
-        "source_priority": ['Cost-to-serve per user', 'Monthly ARPU', 'Equity / total assets (capital cushion)', 'Net income margin (cash-burn signal)'],
-    },
 
     'Payment Networks': {
         "sector":         'Financials',
@@ -3783,17 +3406,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "source_priority": ['Earnings Presentations', 'Statutory Filings', 'Leverage'],
     },
 
-    'Payment Processors': {
-        "sector":         'ProfessionalServices',
-        "anchor_methods": ['EV/Gross Profit', 'EV/Volume', 'DCF (FCF)', 'Rule of 40'],
-        "kpis": [
-            {"key": 'tpv_growth_yoy',       "mandatory": True, "search_phrases": ['Total Processing Volume growth','processed volume YOY'], "compute_hint": '(current_tpv/prior_tpv)-1', "clamp": (-0.20, 1.5), "source": 'W', "extractor_only": True, "decimal_format": True},
-            {"key": 'blended_take_rate_bps',"mandatory": True, "search_phrases": ['net take rate in basis points','blended fee margin'], "compute_hint": '(total_revenue/TPV)*10000 — bps', "clamp": (5, 500), "source": 'W', "extractor_only": True},
-            {"key": 'net_debt_to_ebitda',   "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
-            {"key": 'e_commerce_volume_mix',"mandatory": False, "search_phrases": ['online vs card-present volume'], "source": 'W', "extractor_only": True},
-        ],
-        "source_priority": ['TPV growth', 'Take rate (bps)', 'Leverage'],
-    },
 
 # ── Semiconductor ──────────────────────────────────────────────────
     'Equipment / EDA': {
@@ -3844,151 +3456,9 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "source_priority": ['Book-to-bill press releases', 'Service revenue mix disclosures', 'R&D intensity (10-K)'],
     },
 
-    'OSAT / Packaging': {
-        "sector":         'Semiconductor',
-        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'P/BV', 'FCF Yield'],
-        "kpis": [
-            {
-                "key":             'advanced_packaging_revenue_pct',
-                "mandatory":       True,
-                "search_phrases":  ['2.5D/3D packaging revenue share', 'CoWoS and advanced packaging mix', 'high-end packaging contribution', 'AI packaging revenue %'],
-                "compute_hint":    'advanced_packaging_revenue / total_revenue (decimal — >50% AI-leverage elite)',
-                "clamp":           (0.0, 0.95),
-                "source":          'H',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'wafer_test_utilization_pct',
-                "mandatory":       True,
-                "search_phrases":  ['test and assembly utilization rate', 'backend utilization', 'factory operating level'],
-                "compute_hint":    'actual_wafer_starts / total_wafer_capacity (decimal)',
-                "clamp":           (0.30, 1.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'capital_intensity_pct',
-                "mandatory":       True,
-                "search_phrases":  ['capex as % of revenue', 'capital intensity', 'capex/sales ratio'],
-                "compute_hint":    'capex / TTM revenue (decimal — FMP-augmented; OSAT typically 15-30%)',
-                "clamp":           (0.0, 0.50),
-                "source":          'F',
-                "extractor_only":  False,
-                "decimal_format":  True,
-            },
-        ],
-        "source_priority": ['Advanced packaging revenue share (CoWoS / 2.5D / 3D)', 'Backend utilization disclosures', 'Capex-to-sales intensity'],
-    },
 
 # ── Tech ──────────────────────────────────────────────────
-    'Early Platform': {
-        "sector":         'Tech',
-        "anchor_methods": ['GMV-TAM Penetration', 'DCF', 'EV/NTM Revenue'],
-        "kpis": [
-            {
-                "key":             'gmv_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY'],
-                "clamp":           (-0.20, 10.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'unit_economics_ratio',
-                "mandatory":       True,
-                "search_phrases":  ['LTV to CAC ratio', 'lifetime value over acquisition cost',
-                                    'unit economics multiple'],
-                "compute_hint":    'Customer LTV / CAC — Elite >5x, In-band 2-3.4x, Burn-and-pray <2x',
-                "clamp":           (0.1, 30.0),
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'gross_margin_pct',
-                "mandatory":       True,
-                "search_phrases":  ['gross margin', 'gross profit margin', 'GAAP gross margin'],
-                "compute_hint":    '(Revenue - COGS) / Revenue (decimal — ABNB ~83%, MELI ~50%, DASH ~50%)',
-                "clamp":           (0.0, 1.00),
-                "source":          'F',
-                "extractor_only":  False,
-                "fmp_field":       'grossProfitMarginTTM',
-                "decimal_format":  True,
-            },
-            {
-                "key":             'customer_acquisition_cost_usd',
-                "mandatory":       False,
-                "search_phrases":  ['CAC', 'blended acquisition cost'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'burn_rate_monthly_usd',
-                "mandatory":       False,
-                "search_phrases":  ['monthly cash burn', 'net cash consumption'],
-                "source":          'H',
-                "extractor_only":  True,
-            },
-        ],
-        "source_priority": ['GMV growth disclosures', 'LTV / CAC ratio (investor day decks)', 'Gross margin trend'],
-    },
 
-    'High-Growth Tech / AI': {
-        "sector":         'Tech',
-        "anchor_methods": ['Reverse DCF', 'TAM Penetration', 'EV/NTM Revenue'],
-        "kpis": [
-            {
-                "key":             'rpo_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['Remaining Performance Obligations growth', 'RPO YOY', 'backlog expansion'],
-                "clamp":           (-0.20, 2.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'net_retention_pct',
-                "mandatory":       True,
-                "search_phrases":  ['Net Revenue Retention', 'NRR', 'net dollar retention'],
-                "clamp":           (0.7, 1.8),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'gross_margin_pct',
-                "mandatory":       True,
-                "search_phrases":  ['gross margin', 'gross profit margin'],
-                "compute_hint":    'GAAP gross margin (decimal — NVDA 75% / PLTR 88% fortress; SMCI 15% commodity weak)',
-                "clamp":           (0.0, 1.0),
-                "source":          'F',
-                "extractor_only":  False,
-                "fmp_field":       'grossProfitMarginTTM',
-                "decimal_format":  True,
-            },
-            {
-                "key":             'customer_concentration_pct',
-                "mandatory":       True,
-                "search_phrases":  ['top-3 customer concentration', 'top-10 customer revenue %',
-                                    'largest customer revenue percentage'],
-                "compute_hint":    'Top-3 customer revenue / total revenue (decimal — >40% triggers AI Commodity cap)',
-                "clamp":           (0.0, 1.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'customer_acquisition_cost_usd',
-                "mandatory":       False,
-                "search_phrases":  ['CAC', 'blended acquisition cost'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
-        ],
-        "source_priority": ['RPO disclosures (10-Q)', 'Gross margin trend (segment if disclosed)', 'Customer concentration footnotes'],
-    },
 
     'Hyper-Growth Platform': {
         "sector":         'Tech',
@@ -4027,59 +3497,6 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "source_priority": ['Take-rate expansion (bps) disclosures', 'Rule of 40 score (investor day)', 'Contribution margin per segment'],
     },
 
-    'Levered Subscription': {
-        "sector":         'Tech',
-        "anchor_methods": ['DCF (Levered)', 'EV/EBITDA', 'LBO Analysis', 'Credit Metrics'],
-        "kpis": [
-            {
-                "key":             'arpu_monthly_usd_growth',
-                "mandatory":       True,
-                "search_phrases":  ['ARPU growth YoY', 'monthly ARPU growth',
-                                    'average revenue per user growth', 'ARPU trend'],
-                "compute_hint":    'Annualised growth in monthly ARPU (decimal — NFLX 2024 ~10% from price hikes + ad tier)',
-                "clamp":           (-0.30, 0.50),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'subscriber_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['paid subscriber growth', 'net subscriber additions YoY',
-                                    'global subscriber base growth'],
-                "compute_hint":    'YoY growth in paid subscribers (decimal — NFLX 2024 ~14%, DISH/SIRI negative)',
-                "clamp":           (-0.30, 0.50),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'net_debt_to_ebitda',
-                "mandatory":       True,
-                "search_phrases":  ['net leverage ratio', 'Net Debt / Adjusted EBITDA', 'leverage covenant'],
-                "compute_hint":    '(total_debt - cash) / LTM_EBITDA — NFLX <2x fortress, DISH >5.5x distressed',
-                "clamp":           (-1.0, 12.0),
-                "source":          'F',
-                "extractor_only":  False,
-                "fmp_field":       'netDebtToEBITDATTM',
-            },
-            {
-                "key":             'fcf_debt_service_coverage',
-                "mandatory":       True,
-                "search_phrases":  ['FCF / interest expense', 'debt service coverage ratio'],
-                "source":          'F',
-                "extractor_only":  False,
-            },
-            {
-                "key":             'cost_of_debt_pct',
-                "mandatory":       False,
-                "search_phrases":  ['weighted-average cost of debt', 'interest rate on borrowings'],
-                "source":          'F',
-                "extractor_only":  False,
-            },
-        ],
-        "source_priority": ['ARPU + subscriber count disclosures (10-Q)', 'Net debt-to-EBITDA (leverage covenants)', 'Debt service coverage ratios'],
-    },
 
     'Mature Platform': {
         "sector":         'Tech',

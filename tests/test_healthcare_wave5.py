@@ -133,7 +133,9 @@ def test_the_surgical_robotics_profile_is_proposed_and_pins_isrg_and_medbot():
 
 
 def test_managed_care_declares_the_trough_mlr_structural_flag_on_both_copies():
-    for sec in ("Biopharma", "HealthcareServices"):
+    # The Biopharma copy was removed 2026-09-27 (no row or pin reached it); MOH prices on this one.
+    assert "Managed Care" not in P["Biopharma"]
+    for sec in ("HealthcareServices",):
         flags = P[sec]["Managed Care"]["structural_flags"]
         assert [f["name"] for f in flags] == ["Trough MLR Cycle"]
         assert P[sec]["Managed Care"]["methods"][0] == {"name": "P/E (Ops)", "weight": 0.40, "anchor": True, "implementable": True}

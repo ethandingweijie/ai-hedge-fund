@@ -1113,7 +1113,7 @@ class TestTheOpsSpellingsAreInTheSwap:
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
         # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
-        assert (tot, trail, elig, anchored) == (149, 31, 31, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
+        assert (tot, trail, elig, anchored) == (135, 27, 27, 8)   # 2026-09-27: 14 unrouted profiles removed; Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
         assert sorted(consumer_anchors) == [
             # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
             # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
@@ -1123,7 +1123,6 @@ class TestTheOpsSpellingsAreInTheSwap:
         # The three the widening added, all at 0.40, none Consumer.
         added = sorted(a for a in anchors if a[2] in ("P/E (ops)", "P/E (Ops)"))
         assert added == [
-            ("Biopharma", "Managed Care", "P/E (Ops)", 0.4),
             ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4),
             ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4),
         ], added
@@ -1146,14 +1145,13 @@ class TestTheOpsSpellingsAreInTheSwap:
                         carriers.append((sec, pn, m["name"], m["weight"],
                                          bool(m.get("anchor"))))
         assert sorted(carriers) == [
-            ("Biopharma", "Managed Care", "P/E (Ops)", 0.4, True),
             ("Financials", "Insurance", "P/E (ops)", 0.2, False),   # Wave 6 (2026-09-27): life profile re-weighted
             ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
             ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
             ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),
             ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
         ], carriers
-        assert len(carriers) == 37 - 31
+        assert len(carriers) == 37 - 31 - 1   # the Biopharma copy of Managed Care removed 2026-09-27
         # All six are now swappable, which is the widening in one assertion.
         from src.agents.analysis import dcf_agent
         assert ops <= set(dcf_agent._PE_NORM_SWAP_LEGS)

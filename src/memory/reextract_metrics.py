@@ -255,7 +255,7 @@ def _decide_sector_extractor(
     effective_profile = profile_name or ""
 
     if is_tech_sector(sector):
-        _is_saas = effective_profile not in {"", "Levered Subscription"}
+        _is_saas = effective_profile not in {""}
         if not _is_saas and ticker:
             try:
                 from src.data.sector_profiles import TICKER_SECTOR_LOOKUP

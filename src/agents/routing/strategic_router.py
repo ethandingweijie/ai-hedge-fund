@@ -44,12 +44,12 @@ _SECTOR_PROFILE_DEFAULT: dict[str, str] = {
     "Materials":            "Specialty Chemicals",
     "Energy":               "Regulated Utility",
     "Resources":            "Mining (Major)",
-    "Telco":                "Stable Growth",
+    "Telco":                "Telecom Carrier",
     "RealEstate":           "REIT",
     "REIT":                 "REIT",
     "ProfessionalServices": "IT Services",
     "Transportation":       "Rail / Logistics",
-    "Crypto":               "Pre-Revenue Tech",
+    "Crypto":               "Crypto Exchange",
     # Safe generic for HealthcareServices — was "Managed Care", which gave any
     # un-overridden health name (animal health, distributors, providers) insurer
     # KPIs. "Healthcare Providers / Services" is margin/leverage-driven with no

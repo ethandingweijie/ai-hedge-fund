@@ -1586,3 +1586,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27): FCX re-pinned Mining (Major) -> Base Metals (EV/EBITDA (norm) .50, reserve NAV .30 rolling into the normalised leg until accepted, EV/OCF .20) and BN4.SI re-pinned Conglomerate / Industrial (SG) -> Asian Holding Company (Look-Through) (SOTP (analyst) .60 rolling into P/B until accepted, P/B .25, DDM .15); both fixtures re-recorded at their 2026-09-16 end date because their recorded calls were keyed on the old profiles (FCX 24.31 -> 68.06, BN4.SI 5.90 -> 10.40); note the replay prices FCX's normalised leg on the plain Copper cohort (12.5x) where a live run reads the dynamic through-cycle multiple (7.4x, live IV 39.27) -- a pre-existing harness gap on every normalised leg; every other fixture moves only on the constants digest
 
+## 2026-09-27T15:11:03+00:00
+
+- regenerated at HEAD: `19468819`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: 14 unrouted profiles removed (owner, 2026-09-27): EM Bank (Premium), Neo/Challenger, EPC Contractor, Animal Health, Medical Devices, the Biopharma copy of Managed Care, Payment Processors, OSAT / Packaging, Pre-Revenue Tech, Early Platform, High-Growth Tech / AI, Levered Subscription, Stable Growth and Backlog-Gated Long Cycle with its gate and constants block; no fixture sits on any of them, so only the constants digest in param_version moves
+

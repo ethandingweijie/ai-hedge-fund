@@ -590,10 +590,8 @@ _SECTOR_PROFILE_PROMPTS: dict[tuple[str, str], str] = {
     ("Financials", "Regional Bank"):            _BANK_KPI_PROMPT,
     ("Financials", "Super-Regional Bank"):      _BANK_KPI_PROMPT,
     ("Financials", "EM Bank"):                  _BANK_KPI_PROMPT,
-    ("Financials", "EM Bank (Premium)"):        _BANK_KPI_PROMPT,
     ("Financials", "Investment Bank"):          _BANK_KPI_PROMPT,
     ("Financials", "Brokerage"):                _BANK_KPI_PROMPT,
-    ("Financials", "Neo/Challenger"):           _BANK_KPI_PROMPT,
     ("Financials", "Mortgage/GSE"):             _BANK_KPI_PROMPT,
 
     # ── Financials — non-banks ──
@@ -617,9 +615,6 @@ _SECTOR_PROFILE_PROMPTS: dict[tuple[str, str], str] = {
     ("Tech",       "Growth SaaS"):                     _TECH_GROWTH_SAAS_KPI_PROMPT,
     ("Tech",       "Cybersecurity / Mission-Critical SaaS"): _TECH_GROWTH_SAAS_KPI_PROMPT,
     ("Tech",       "Hyper-Growth Platform"):           _TECH_GROWTH_SAAS_KPI_PROMPT,
-    ("Tech",       "High-Growth Tech / AI"):           _TECH_GROWTH_SAAS_KPI_PROMPT,
-    ("Tech",       "Early Platform"):                  _TECH_GROWTH_SAAS_KPI_PROMPT,
-    ("Tech",       "Levered Subscription"):            _TECH_GENERIC_KPI_PROMPT,
     ("Tech",       ""):                                 _TECH_GENERIC_KPI_PROMPT,
 
     # ── Sector fallbacks (used when profile_name is empty/unknown) ──
@@ -898,7 +893,7 @@ def needs_extractor(
         # pipeline_assets gates on sector only — leave as-is.
         return is_biopharma_sector(sector)
     if extractor == "saas_metrics":
-        _is_saas_profile = is_tech_sector(sector) and profile_name not in {"", "Levered Subscription"}
+        _is_saas_profile = is_tech_sector(sector) and profile_name not in {""}
         if not _is_saas_profile and ticker:
             # Last-resort fallback when strategic_router's profile
             # pre-classification failed silently: consult the canonical

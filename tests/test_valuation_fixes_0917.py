@@ -58,8 +58,8 @@ RELEASED_PROFILES = (
 #: construction, no measurement needed.
 KEPT_TIER1 = (
     "Money Center Bank", "Money Center Bank (SG)", "Money Center Bank (EU)",
-    "Regional Bank", "Super-Regional Bank", "EM Bank", "EM Bank (Premium)",
-    "Investment Bank", "Mortgage/GSE", "Neo/Challenger", "Insurance",
+    "Regional Bank", "Super-Regional Bank", "EM Bank",       # EM Bank (Premium), Neo/Challenger removed 2026-09-27
+    "Investment Bank", "Mortgage/GSE", "Insurance",
     "Brokerage", "Bank / Lending Institution",
 )
 
@@ -421,12 +421,13 @@ def test_the_owners_brokerage_remedy_names_legs_the_profile_does_not_declare():
     assert "Forward P/E" not in brokerage
     assert "P/E (norm)" in brokerage
 
-    # Measured, not recalled: both legs are declared by exactly the same ten
-    # bank profiles, so the owner's phrase names one bank-only mechanism twice.
+    # Measured, not recalled: both legs are declared by exactly the same eight
+    # bank profiles (ten until EM Bank (Premium) and Neo/Challenger were removed,
+    # 2026-09-27), so the owner's phrase names one bank-only mechanism twice.
     _banks = [
-        "Bank / Lending Institution", "EM Bank", "EM Bank (Premium)",
+        "Bank / Lending Institution", "EM Bank",
         "Investment Bank", "Money Center Bank", "Money Center Bank (EU)",
-        "Money Center Bank (SG)", "Neo/Challenger", "Regional Bank",
+        "Money Center Bank (SG)", "Regional Bank",
         "Super-Regional Bank",
     ]
     assert sorted(ri) == _banks

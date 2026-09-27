@@ -882,7 +882,7 @@ async def backfill_convergence_cap(request: Request,
     HIGH_SBC = {
         "Growth SaaS",
         "Hyper-Growth Platform",
-        "High-Growth Tech / AI",
+        
         "Cybersecurity / Mission-Critical SaaS",
     }
 

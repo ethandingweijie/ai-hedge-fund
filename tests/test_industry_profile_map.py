@@ -58,8 +58,10 @@ class TestTelcoProfile:
     every market routed through it.
     """
 
+    # Stable Growth was removed on 2026-09-27 (owner: no row or pin reached it); an unmapped telco
+    # now defaults to Telecom Carrier (Wave 7), which keeps the same premise.
     def _methods(self):
-        return {m["name"]: m for m in P["Telco"]["Stable Growth"]["methods"]}
+        return {m["name"]: m for m in P["Telco"]["Telecom Carrier"]["methods"]}
 
     def test_anchored_on_ev_ebitda(self):
         m = self._methods()
@@ -70,14 +72,14 @@ class TestTelcoProfile:
         m = self._methods()
         assert "DDM" in m and m["DDM"]["implementable"] is True
 
-    def test_epv_is_retained_as_a_floor_not_the_anchor(self):
-        m = self._methods()
-        assert m["EPV"]["anchor"] is False
-        assert m["EPV"]["weight"] < m["EV/EBITDA"]["weight"]
+    def test_the_telco_default_is_the_carrier_profile(self):
+        from src.data.sector_profiles import _SECTOR_PROFILE_DEFAULT
+        assert "Stable Growth" not in P["Telco"]
+        assert _SECTOR_PROFILE_DEFAULT["Telco"] == "Telecom Carrier"
 
     def test_weights_sum_to_one(self):
         assert round(sum(m["weight"] for m in
-                         P["Telco"]["Stable Growth"]["methods"]), 6) == 1.0
+                         P["Telco"]["Telecom Carrier"]["methods"]), 6) == 1.0
 
 
 def test_resources_profiles_are_no_longer_proxied():

@@ -1515,7 +1515,7 @@ def run_advanced_pipeline(
                 _BANK_PROFILES = {
                     "Money Center Bank", "Money Center Bank (EU)",
                     "Regional Bank", "Super-Regional Bank",
-                    "EM Bank", "EM Bank (Premium)",
+                    "EM Bank", 
                     "Bank / Lending Institution",
                     "Investment Bank", "Mortgage/GSE",
                 }
