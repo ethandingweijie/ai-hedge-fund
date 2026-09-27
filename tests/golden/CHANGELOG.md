@@ -1570,3 +1570,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 8b step 3 (owner decision A, 2026-09-27): passive REIT profile at NAV .60 / P/FFO .40, the REIT (Specialty / OpCo) profile for the eight operating and infrastructure REITs on the live eight-name P/FFO basket, the p_ffo comps field; no fixture is on either profile, every fixture moves only on the constants digest
 
+## 2026-09-27T11:59:24+00:00
+
+- regenerated at HEAD: `1c288cf7`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 8c (owner verdicts, 2026-09-27): NOI rule V2 -- clean NOI only where EBITDA is not positive or under half of clean NOI, EBITDA otherwise (C38U.SI's S-REIT NAV leg returns to the EBITDA basis, IV 1.76 -> 1.74); the P/NAV read off the curated HK landlord basket and the sector rung for thin cohorts; a computed NAV inside the band stands over a published one; the REIT quality gate on FFO over invested capital with the REIT_Multiple_Outlier flag; developers on the solvent-peer P/B cluster around their own multiple -- every other fixture moves only on the constants digest
+

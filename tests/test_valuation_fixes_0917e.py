@@ -390,7 +390,7 @@ _WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
 #: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
 #: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
 _WAVE8_MOVED = {
-    "C38U_SI":  (1.76,     1.36,     2.22,    (1.81,  2.01,  2.24)),   # Wave 8b step 1 (2026-09-27): clean NOI on the S-REIT NAV leg
+    "C38U_SI":  (1.74,     1.34,     2.20,    (1.80,  2.00,  2.23)),   # Wave 8c verdict B2 (2026-09-27): the S-REIT NAV leg on the V2 NOI rule
 }
 _WAVE7_MOVED = {
     "02888_HK": (288.95,  236.95,   340.94,   (233.97, 259.98, 285.97)),
@@ -564,8 +564,11 @@ def test_project_dcf_still_drifts_on_the_legacy_per_year_branch():
 def test_forward_roic_is_overwritten_before_the_quality_gate_reads_it():
     """Source ORDER is the coupling; if this ever inverts, bull stops moving."""
     src = _engine_src()
+    # Wave 8c (owner verdict A, 2026-09-27): the gate reads `_roic_for_gate`, which is `forward_roic` for
+    # every profile but a REIT (there it is FFO over invested capital); the ordering coupling is the same.
     assert src.index("forward_roic = _forward_roic_proj") < \
-           src.index("_quality = min(1.0, (forward_roic - wacc) / wacc)")
+           src.index("_roic_for_gate = forward_roic") < \
+           src.index("_quality = min(1.0, (_roic_for_gate - wacc) / wacc)")
 
 
 def test_the_bull_gate_b_threshold_is_minus_infinity():

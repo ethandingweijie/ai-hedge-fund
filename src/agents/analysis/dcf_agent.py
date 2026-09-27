@@ -4156,6 +4156,8 @@ _LIVE_CAP_LABEL_PREFIXES = ("REIT", "Real Estate - Diversified")
 #: NAV (IFRS fair-value reporters: HKSE, SES). US GAAP book is historic cost, so P/B is not P/NAV there
 #: and an appraised US NAV stays at par.
 _P_NAV_CALIBRATED_EXCHANGES = ("HKSE", "SES")
+_NAV_PRIMARY_BAND = 0.30
+_REIT_OUTLIER_SIGMA = 2.5           # Wave 8c (owner verdict A): the outlier flag's threshold, flag only            # Wave 8c (owner verdict C3): the validation band a computed NAV must sit inside to stand
 _P_NAV_WINDOW_DAYS = 365          # four quarters: one audit and reporting cycle (owner, 2026-09-27)
 
 
@@ -4168,7 +4170,12 @@ def _cohort_p_nav_4q(peer: Optional[dict]) -> Optional[dict]:
     try:
         b = ((peer or {}).get("_comp_basis") or {}).get("pb") or {}
         ex, key = str(b.get("exchange") or ""), str(b.get("key") or "")
-        if ex not in _P_NAV_CALIBRATED_EXCHANGES or b.get("basis") not in ("industry", "profile"):
+        if ex not in _P_NAV_CALIBRATED_EXCHANGES or b.get("basis") not in ("industry", "profile", "sector"):
+            return None
+        # Wave 8c (owner verdict C2): the store resolves `pb` on the sector rung when the label cohort is
+        # thin (under its peer floor of five; Link REIT's `REIT - Retail` on HKSE has three), and par is a
+        # structurally wrong fallback for an Asian property name, so the sector rung's P/B is read instead.
+        if b.get("basis") == "sector" and key != "Real Estate":
             return None
         # an industry cohort must be a real-estate label; a curated or sub-cohort basket ("profile" basis:
         # DEV_HK_DIVERSIFIED, DEV_MAINLAND_SOE, a landlord basket) is a real-estate cohort by construction
@@ -4355,6 +4362,14 @@ def _classify_reit_subtype(ticker: str, notes: str = "", industry: Optional[str]
     return "default"
 
 
+#: Wave 8c (owner verdict B2): EBITDA under this fraction of clean NOI is the revaluation signature.
+_NOI_V2_DEPRESSED_RATIO = 0.5
+
+#: Wave 8c (owner verdict B2, constraint): asset-turnover hybrids whose revenue carries development sales.
+#: Their operational cap-rate NAV is bypassed; the published / reported NAV is the designated anchor.
+_HYBRID_DEVELOPERS = frozenset({"01113.HK", "H78.SI", "U14.SI"})
+
+
 def _compute_reit_metrics(
     most_recent: dict,
     subtype: str = "default",
@@ -4424,18 +4439,28 @@ def _compute_reit_metrics(
     # the IAS 40 fair-value change and impairments through the income statement, which drove Swire's
     # and Henderson's NOI negative and Link's to nothing. EBITDA is the fallback only where cost of
     # revenue is zero or missing, and the basis is recorded for the trace.
+    # Wave 8c (owner verdict B2, 2026-09-27): the two bases fail in opposite directions. Statutory EBITDA
+    # carries the IAS 40 fair-value change (Swire, Henderson, Link: NOI negative or nothing), and FMP's cost
+    # of revenue carries depreciation on several US REITs (Public Storage, Prologis: clean NOI understated)
+    # or almost nothing on others (American Tower, Realty Income: overstated). Rule V2: clean NOI is used
+    # only where EBITDA shows the revaluation signature -- not positive, or under half of clean NOI --
+    # and EBITDA otherwise; clean NOI alone where EBITDA is missing; the basis is recorded.
     cor = most_recent.get("cost_of_revenue")
-    noi, noi_basis = None, None
+    _clean = None
     if rev and rev > 0 and isinstance(cor, (int, float)) and cor != 0:
-        _clean = float(rev) - abs(float(cor))
-        if _clean > 0:
-            noi, noi_basis = _clean, "clean NOI (revenue - cost of revenue)"
-    if noi is None:
-        if ebitda and ebitda > 0:
-            noi, noi_basis = ebitda, ("EBITDA (fallback: cost of revenue missing)" if not cor
-                                      else "EBITDA (fallback: revenue - cost of revenue not positive)")
+        _c = float(rev) - abs(float(cor))
+        _clean = _c if _c > 0 else None
+    noi, noi_basis = None, None
+    if isinstance(ebitda, (int, float)) and ebitda > 0:
+        if _clean is not None and ebitda < _NOI_V2_DEPRESSED_RATIO * _clean:
+            noi, noi_basis = _clean, f"clean NOI (revenue - cost of revenue; EBITDA {ebitda / _clean:.2f}x of it shows the revaluation signature)"
         else:
-            noi_basis = "none (no cost of revenue; EBITDA not positive)"
+            noi, noi_basis = float(ebitda), ("EBITDA (V2: not depressed against clean NOI)" if _clean is not None
+                                             else "EBITDA (cost of revenue missing)")
+    elif _clean is not None:
+        noi, noi_basis = _clean, "clean NOI (revenue - cost of revenue; EBITDA not positive)"
+    else:
+        noi_basis = "none (EBITDA not positive; no positive revenue - cost of revenue)"
 
     return {
         "ffo":                         ffo,
@@ -7137,6 +7162,9 @@ def _compute_method_value(
     # Wave 8: a distressed developer's book is not an anchor (GATE_DISTRESSED_DEVELOPER).
     if method_name == "P/BV" and most_recent.get("_distressed_developer"):
         return None
+    # Wave 8c (owner verdict D, contagion invariant): no solvent peer in the developer basket, no multiple.
+    if method_name == "P/BV" and isinstance(peer, dict) and peer.get("_pb_withheld"):
+        return None
     if method_name in {"P/BV", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium * _own_disc
@@ -7435,11 +7463,15 @@ def _compute_method_value(
         return None
 
     if method_name in {"NAV (Cap Rates)", "NAV"}:
-        # Wave 8 (owner decision 3b): an owner-accepted published NAV per share prices ahead of the
-        # computed one; the computed NAV stays in the trace as the cross-check.
         _pub = most_recent.get("nav_per_share_published")
-        if isinstance(_pub, (int, float)) and _pub > 0:
-            return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")   # Wave 8b step 2
+        _has_pub = isinstance(_pub, (int, float)) and _pub > 0
+        # Wave 8c (owner verdict B2, constraint): a hybrid developer's operational NAV is bypassed; the
+        # published NAV is its anchor when accepted, and the leg is empty until then.
+        if str(ticker or most_recent.get("_ticker") or "").upper() in _HYBRID_DEVELOPERS:     # `_ticker` is set only on the REIT path; the landlord and SG developer profiles reach here without it
+            if _has_pub:
+                return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")
+            _leg_trace(kind="nav", nav_source="bypassed: hybrid developer (owner verdict B2); the published NAV is the anchor")
+            return None
         reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
             most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
         )
@@ -7466,14 +7498,30 @@ def _compute_method_value(
 
         _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
         noi = _reit.get("noi")
-        if noi is None or noi <= 0 or cap_rate <= 0 or shares <= 0:
-            return None
-
-        total_debt = most_recent.get("total_debt") or 0.0
-        cash = most_recent.get("cash_and_equivalents") or 0.0
-        gross_asset_value = noi / cap_rate
-        nav = gross_asset_value - total_debt + cash
-        return max(nav / shares, 0.0)
+        _computed = None
+        if noi is not None and noi > 0 and cap_rate > 0 and shares > 0:
+            total_debt = most_recent.get("total_debt") or 0.0
+            cash = most_recent.get("cash_and_equivalents") or 0.0
+            gross_asset_value = noi / cap_rate
+            _computed = max((gross_asset_value - total_debt + cash) / shares, 0.0)
+            if _computed <= 0:
+                _computed = None
+        if not _has_pub:
+            return _computed
+        # Wave 8c (owner verdict C3): a computed cap-rate NAV inside the +/-30% band stands as primary and
+        # the published NAV x cohort P/NAV is the cross-check; outside the band, or with no computed NAV,
+        # the published figure prices (Wave 8 decision 3b as amended).
+        _spot = (market_cap / shares) if market_cap and shares else None
+        _cal = _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")
+        if _computed and _spot and abs(_computed / _spot - 1.0) <= _NAV_PRIMARY_BAND:
+            most_recent["_nav_precedence"] = {"primary": "computed cap-rate NAV", "computed": _computed,
+                                              "published_calibrated_crosscheck": _cal, "spot": _spot}
+            _leg_trace(kind="nav", nav_precedence="computed NAV inside the band stands; published x P/NAV is the cross-check",
+                       computed_nav=_computed, published_calibrated=_cal)
+            return _computed
+        most_recent["_nav_precedence"] = {"primary": "published NAV x cohort P/NAV", "computed": _computed,
+                                          "published_calibrated": _cal, "spot": _spot}
+        return _cal
 
     # ── P/FFO — REIT cash-earnings multiple ────────────────────────────────
     # FFO (Funds From Operations) adds back real-estate depreciation, which
@@ -13750,11 +13798,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     1.0 + _GROWTH_SPREAD_K * (g - _sector_g_avg)
                     if isinstance(_sector_g_avg, (int, float)) else 1.0
                 )
-                if forward_roic is not None and wacc > 0:
-                    if forward_roic <= wacc:
+                # Wave 8c (owner verdict A, 2026-09-27): a REIT's return for the quality gate is FFO over
+                # invested capital. GAAP ROIC on a capital-heavy operator is EBIT over depreciated capital
+                # (Welltower 1.0%, Equinix 1.0% against a 5.5 to 7.5% WACC), which pinned every REIT at
+                # premium 1.0 and kept the forward-growth escalator off the FFO multiple. The spread stays
+                # ROIC - WACC, so the gate's logic is unchanged across the peer set.
+                _roic_for_gate = forward_roic
+                if is_reit_sector(sector) or "REIT" in (profile_name or ""):
+                    try:
+                        _ffo_g = _compute_reit_metrics(most_recent, subtype=most_recent.get("_reit_subtype") or "default").get("ffo")
+                        _ic_g = most_recent.get("invested_capital")
+                        if not (isinstance(_ic_g, (int, float)) and _ic_g > 0):
+                            _ic_g = ((most_recent.get("total_equity") or 0.0) + (most_recent.get("total_debt") or 0.0)
+                                     - (most_recent.get("cash_and_equivalents") or 0.0))
+                        if isinstance(_ffo_g, (int, float)) and _ffo_g > 0 and isinstance(_ic_g, (int, float)) and _ic_g > 0:
+                            _roic_for_gate = _ffo_g / _ic_g
+                            most_recent["_reit_roic_ffo"] = {"ffo": _ffo_g, "invested_capital": _ic_g,
+                                                             "roic_ffo": _roic_for_gate, "gaap_forward_roic": forward_roic, "wacc": wacc}
+                    except Exception:                      # noqa: BLE001
+                        pass
+                if _roic_for_gate is not None and wacc > 0:
+                    if _roic_for_gate <= wacc:
                         _gp_raw = 1.0
                     else:
-                        _quality = min(1.0, (forward_roic - wacc) / wacc)
+                        _quality = min(1.0, (_roic_for_gate - wacc) / wacc)
                         _gp_raw = 1.0 + (_gp_raw_growth - 1.0) * _quality
                 else:
                     _gp_raw = _gp_raw_growth
@@ -15791,6 +15858,34 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "basis": f"{_sf_name}: profile-declared structural observation; no weight",
                     "applied": False,
                 })
+            # Wave 8c (owner verdict A): an operating REIT whose own P/FFO sits more than 2.5 sigma from the
+            # basket's is flagged; the value is untouched (Welltower at 49x against a 27.5x basket).
+            try:
+                if (profile_name == "REIT (Specialty / OpCo)" and isinstance(_spot_price, (int, float)) and _spot_price > 0
+                        and shares and shares > 0):
+                    from src.data.regional_comps import PROFILE_PEER_BASKETS as _PPB, basket_field_values as _bfv
+                    _ffo_o = _compute_reit_metrics(most_recent, subtype=most_recent.get("_reit_subtype") or "default").get("ffo")
+                    _syms = (_PPB.get(profile_name) or {}).get("US") or ()
+                    _vals = _bfv("US", tuple(_syms), "p_ffo") if _syms else []
+                    if isinstance(_ffo_o, (int, float)) and _ffo_o > 0 and len(_vals) >= 4:
+                        _own = (_spot_price * shares) / _ffo_o
+                        _mean = sum(_vals) / len(_vals)
+                        _sd = (sum((v - _mean) ** 2 for v in _vals) / (len(_vals) - 1)) ** 0.5
+                        _z = (_own - _mean) / _sd if _sd > 0 else 0.0
+                        most_recent["_reit_multiple_outlier"] = {"own_p_ffo": _own, "basket_mean": _mean, "basket_sd": _sd, "z": _z, "n": len(_vals)}
+                        if abs(_z) > _REIT_OUTLIER_SIGMA:
+                            _b_sr.setdefault("forward_flags", []).append(
+                                f"REIT_Multiple_Outlier: own P/FFO {_own:.1f}x is {_z:+.1f} sigma from the basket "
+                                f"(mean {_mean:.1f}x, sigma {_sd:.1f}x, n={len(_vals)}); the market prices this name outside its peer "
+                                f"fundamentals and the basket anchor cannot reach it; valuation unchanged")
+                            gate_evaluations.append({
+                                "gate_id": "GATE_REIT_MULTIPLE_OUTLIER", "metric": "own_p_ffo_z_score",
+                                "raw_input_path_a": round(_own, 2), "gated_output_path_b": round(_z, 2),
+                                "basis": f"owner threshold {_REIT_OUTLIER_SIGMA} sigma against the REIT (Specialty / OpCo) basket; flag only",
+                                "applied": False,
+                            })
+            except Exception:                              # noqa: BLE001
+                pass
             # Wave 8 (owner decision 5, 2026-09-27): the distress rule fired on a developer; the
             # book anchor stood down, no value is published on book, the name is scored apart.
             if most_recent.get("_distressed_developer"):

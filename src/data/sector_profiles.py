@@ -3827,16 +3827,13 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
 # this basket) should accumulate fresh cache entries quickly. Until then,
 # every field just falls back to the static table, so this can never make a
 # valuation worse than today's baseline, only better once data exists.
-#: Wave 8b step 4 (owner decision D, 2026-09-27): the developer sub-cohorts. A name in one prices its
-#: relative legs (P/B first) on its sub-cohort's median with loss-makers excluded before the median
-#: (`regional_comps.basket_multiples(..., exclude_loss_makers=True)`), so a distressed private developer
-#: cannot drag a solvent peer's multiple to liquidation levels. The distress gate still runs on the name.
-DEVELOPER_SUBCOHORTS: dict[str, list[str]] = {
-    "DEV_MAINLAND_SOE":     ["00688.HK", "01109.HK", "00123.HK", "01908.HK", "03900.HK"],
-    "DEV_MAINLAND_PRIVATE": ["00960.HK", "02202.HK", "01030.HK"],
-    "DEV_HK_DIVERSIFIED":   ["00016.HK", "01113.HK", "00012.HK", "00004.HK", "00017.HK"],
-}
-DEVELOPER_SUBCOHORT_OF: dict[str, str] = {t: k for k, ts in DEVELOPER_SUBCOHORTS.items() for t in ts}
+#: Wave 8c (owner verdict D, 2026-09-27): a HK / China developer prices its relative legs on the market's
+#: own axis -- the solvent developers whose P/B sits within +/-0.15x of its own
+#: (`regional_comps.developer_cluster_multiples`) -- and the ownership sub-cohorts of Wave 8b step 4 are
+#: retired (China Overseas Land at 0.28x sat with China Resources Land at 0.70x in one "SOE" sub-cohort).
+#: The contagion invariant stands: a basket with no solvent name yields no multiple and the P/B leg stands
+#: down; the distress gate still runs on the name itself.
+DEVELOPER_CLUSTER_PROFILES = ("Property Developer (HK / China)",)
 
 SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Tech":                 ["MSFT", "GOOGL", "ORCL", "ADBE", "CRM", "IBM", "SAP"],
@@ -4107,15 +4104,17 @@ def get_sector_peer_multiples(
             regional = {**(regional or {}), **_pb}
     except Exception:                                      # noqa: BLE001
         pass
-    # Wave 8b step 4 (owner decision D): a developer in a sub-cohort prices on that sub-cohort's median,
-    # loss-makers excluded before the median (the contagion rule), ahead of the label and the profile basket.
+    # Wave 8c (owner verdict D): a developer prices on the cluster of solvent peers around its own P/B,
+    # ahead of the label; with no solvent peer in the basket the P/B multiple is withheld.
     try:
-        _sc_key = DEVELOPER_SUBCOHORT_OF.get((ticker or "").upper())
-        if _sc_key:
-            from src.data.regional_comps import basket_multiples
-            _sc = basket_multiples(_market or "HKSE", tuple(DEVELOPER_SUBCOHORTS[_sc_key]), _sc_key, exclude_loss_makers=True)
-            if _sc:
-                regional = {**(regional or {}), **_sc}
+        if profile_name in DEVELOPER_CLUSTER_PROFILES and (_market or "HKSE") == "HKSE" and ticker:
+            from src.data.regional_comps import developer_cluster_multiples
+            _cl = developer_cluster_multiples("HKSE", ticker)
+            if _cl.get("_withheld"):
+                regional = {k: v for k, v in (regional or {}).items() if k != "pb"}
+                regional["_pb_withheld"] = _cl["_withheld"]
+            elif _cl:
+                regional = {**(regional or {}), **_cl}
     except Exception:                                      # noqa: BLE001
         pass
 

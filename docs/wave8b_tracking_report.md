@@ -18,6 +18,8 @@ review-gated inputs accepted are run in an archive copy.
 | Step 3: FFO field + REIT (Specialty / OpCo) (A), inputs accepted (preview) | 10 of 12 | 20 of 32 | 16 of 34 | 2 | 2 |
 | Step 4: developer sub-cohorts (D) | 8 of 12 | 20 of 32 | 16 of 34 | 3 | 2 |
 | Step 4: developer sub-cohorts (D), inputs accepted (preview) | 10 of 12 | 21 of 32 | 16 of 34 | 2 | 2 |
+| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27) | 9 of 12 | 25 of 32 | 18 of 34 | 6 | 2 |
+| Wave 8c: verdicts B2, C1-C3, A, D (2026-09-27), inputs accepted (preview) | 10 of 12 | 27 of 32 | 18 of 34 | 2 | 2 |
 
 ## Step 1 (Bucket B): clean cash NOI
 
@@ -267,41 +269,97 @@ with the contagion rule. Four findings came out of the measurements and each is 
 Nothing in these four was tuned to the answer; each was built as decided, measured, and the measurement is
 the record.
 
+## Wave 8c: the owner's verdicts on the four decisions (2026-09-27)
+
+Built, in one pass on the Wave 8b engine, measured once over the 34 names (the "Wave 8c" rows in the summary
+table) with a sixteen-name verification (`docs/baselines/w8c_verify.log`):
+
+- **B2.** NOI is clean (revenue less cost of revenue) only where EBITDA shows the revaluation signature
+  (not positive, or under half of clean NOI); EBITDA otherwise; the basis names the ratio. Constraint: the
+  asset-turnover hybrids (CK Asset, Hongkong Land, UOL) bypass the operational cap-rate NAV; their
+  published NAV is the anchor when accepted and the leg is empty until then.
+- **C1.** The Tier-1 landlords' curated basket (the owner's category 4 list) carries their P/B and so the
+  P/NAV read on a published NAV (0.40x on the day, against the broad label's 0.30x).
+- **C2.** A thin label cohort (under the store's peer floor of five) falls to the exchange's real-estate
+  sector rung for the P/NAV read (HKSE 0.42x today), not to par.
+- **C3.** A computed cap-rate NAV inside ±30% of spot stands as primary; the published NAV x P/NAV is the
+  cross-check on the trace; outside the band, or with no computed NAV, the published figure prices.
+- **A.** The growth premium's quality gate reads a REIT's return as FFO over invested capital, spread
+  against WACC (`_reit_roic_ffo` on the record); an OpCo name whose own P/FFO sits more than 2.5 sigma from
+  the basket's is flagged `REIT_Multiple_Outlier` (GATE_REIT_MULTIPLE_OUTLIER, flag only).
+- **D.** The ownership sub-cohorts are retired. A developer prices its relative legs on the solvent
+  developers whose P/B sits within ±0.15x of its own (`developer_cluster_multiples`, floor three, the
+  broad HKSE development and diversified basket); the contagion invariant stands: a basket with no solvent
+  name yields no multiple and the P/B leg stands down. Goldens: C38U.SI 1.76 -> 1.74 (its S-REIT NAV leg
+  returns to the EBITDA basis under V2).
+
+Verification, inputs pending:
+
+| Name | Wave 8b step 4 | Wave 8c | What the verdict did |
+|---|---|---|---|
+| Public Storage | −45% | −5% | V2 reads EBITDA (cost of revenue carries depreciation) |
+| Prologis | −32% | −21% | V2 reads EBITDA |
+| Realty Income | +23% | +14% | V2 reads EBITDA |
+| Link REIT | −3% | −2% | V2 keeps clean NOI (EBITDA negative) |
+| City Developments | −14% | −14% | computed NAV stands (C3) |
+| China Overseas Land | +66% | +3% | the cluster around its own 0.30x (eleven solvent peers at 0.295x) replaces the SOE median 0.61x |
+| China Resources Land | +23% | +31% | the cluster around its own 0.61x (four names at 0.54x) |
+| Iron Mountain | −3% | +6% | FFO-based gate (FFO over invested capital) |
+| American Tower | +56% | +30% | V2 reads EBITDA for the tower NOI |
+| Welltower | −52% | −59% | the FFO-based return (about 6%) still sits at or under WACC, so the escalator stays closed; the market pays 49x FFO against a 27.5x basket |
+| Ventas | −9% | −6% | |
+| CK Asset | +160% | −33% pending; its published NAV is the anchor (bypass) | |
+| Hongkong Land | −25% | −53% pending; published NAV is the anchor | |
+| UOL | +38% | −48% pending; published NAV is the anchor | |
+| Sun Hung Kai | −23% | −8% | landlord basket P/B 0.40x (C1) |
+| Swire | −33% | −34% | |
+
+The first Wave 8c pass keyed the hybrid bypass on a field the landlord and SG developer profiles never
+set, so CK Asset, Hongkong Land and UOL still computed a cap-rate NAV in that pass; the bypass now keys on
+the leg's own ticker, the three were re-measured and their files supersede the main pass in the table.
+
+**The hybrids with their published NAVs accepted** (`docs/baselines/after_wave8c_hybrids_preview.json`;
+Hongkong Land's and UOL's book NAVs were built for this and join the gate at 23 NAV pre-fills): CK Asset
+−21% (book NAV HK$ per share x the landlord basket's 0.40x), UOL −22% (x the SES developer cohort's 0.59x),
+Hongkong Land −44% (x the HKSE development cohort's 0.40x; the market pays it about 0.58x book, the cohort
+discount again deeper than the name's own). Pending their acceptance the three sit at −33%, −48% and −53%
+on P/B and the dividend, with the cap-rate NAV bypassed as decided.
+
 ## Per-ticker record (IV against spot at each stage)
 
-| Ticker | Profile now | vs spot Stage 0 | vs spot Wave 8 | vs spot Step 1 | vs spot Step 2 | vs spot Step 3 | vs spot Step 4 | vs cons (latest) | Flag (latest) |
-|---|---|---|---|---|---|---|---|---|---|
-| WELL | REIT (Specialty / OpCo) | -80% | -78% | -67% | -67% | -52% | -52% | -57% | — |
-| PLD | REIT | -18% | -17% | -32% | -32% | -37% | -37% | -46% | — |
-| EQIX | REIT (Specialty / OpCo) | -29% | -35% | -29% | -29% | -11% | -11% | -28% | — |
-| AMT | REIT (Specialty / OpCo) | -42% | +4% | +26% | +26% | +56% | +56% | +25% | — |
-| DLR | REIT (Specialty / OpCo) | -6% | -7% | -10% | -10% | +8% | +8% | -13% | — |
-| SPG | REIT | +35% | +25% | -1% | -1% | -8% | -8% | -15% | — |
-| PSA | REIT | -11% | -10% | -45% | -45% | -46% | -46% | -53% | — |
-| O | REIT | +20% | +0% | +23% | +23% | +51% | +51% | +28% | — |
-| VTR | REIT (Specialty / OpCo) | -45% | -37% | -37% | -37% | -9% | -9% | -21% | — |
-| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -8% | -8% | -30% | — |
-| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | -3% | -3% | -14% | — |
-| IRM | REIT (Specialty / OpCo) | -61% | -45% | -54% | -54% | -3% | -3% | -24% | — |
-| 00016.HK | Landlord / Investment Property (HK) | +39% | -7% | -22% | -22% | -22% | -23% | — | — |
-| 01109.HK | Property Developer (HK / China) | +93% | +6% | +6% | +6% | +6% | +23% | — | — |
-| 01113.HK | Landlord / Investment Property (HK) | +49% | +14% | +161% | +161% | +161% | +160% | — | — |
-| 01972.HK | Landlord / Investment Property (HK) | -79% | -39% | -33% | -33% | -33% | -33% | — | — |
-| 00688.HK | Property Developer (HK / China) | +85% | +32% | +32% | +32% | +32% | +66% | — | — |
-| 00012.HK | Landlord / Investment Property (HK) | -36% | -41% | -41% | -41% | -41% | -27% | — | — |
-| 00823.HK | REIT | — | — | -3% | -3% | -2% | -2% | — | — |
-| 00083.HK | Landlord / Investment Property (HK) | -0% | -27% | -37% | -37% | -37% | -37% | — | — |
-| 00004.HK | Landlord / Investment Property (HK) | -37% | -53% | -5% | -5% | -5% | -6% | — | — |
-| 02202.HK | Property Developer (HK / China) | — | — | — | — | — | — | — | Distressed_Developer |
-| 00960.HK | Property Developer (HK / China) | — | — | — | — | — | — | — | Distressed_Developer |
-| H78.SI | Landlord / Investment Property (HK) | -10% | -25% | -62% | -62% | -62% | -62% | — | — |
-| C38U.SI | S-REIT | -20% | -23% | -22% | -22% | -22% | -22% | — | — |
-| 9CI.SI | Real Estate Asset Manager (SG) | -72% | -72% | -68% | -68% | -68% | -68% | — | — |
-| A17U.SI | S-REIT | +17% | +18% | +25% | +25% | +25% | +25% | — | — |
-| C09.SI | Property Developer (SG) | -64% | -64% | -14% | -14% | -14% | -14% | — | — |
-| U14.SI | Property Developer (SG) | +17% | +15% | +38% | +38% | +38% | +38% | — | — |
-| N2IU.SI | S-REIT | -30% | -8% | +7% | +7% | +7% | +7% | — | — |
-| M44U.SI | S-REIT | +14% | +15% | +13% | +13% | +13% | +13% | — | — |
-| ME8U.SI | S-REIT | +6% | +8% | +18% | +18% | +18% | +18% | — | — |
-| AJBU.SI | S-REIT | +33% | +26% | +5% | +5% | +5% | +5% | — | — |
-| U06.SI | Property Developer (SG) | +9% | -5% | -21% | -21% | -21% | -21% | — | — |
+| Ticker | Profile now | vs spot Stage 0 | vs spot Wave 8 | vs spot Step 1 | vs spot Step 2 | vs spot Step 3 | vs spot Step 4 | vs spot 8c | vs cons (latest) | Flag (latest) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| WELL | REIT (Specialty / OpCo) | -80% | -78% | -67% | -67% | -52% | -52% | -59% | -64% | — |
+| PLD | REIT | -18% | -17% | -32% | -32% | -37% | -37% | -21% | -32% | — |
+| EQIX | REIT (Specialty / OpCo) | -29% | -35% | -29% | -29% | -11% | -11% | -13% | -29% | — |
+| AMT | REIT (Specialty / OpCo) | -42% | +4% | +26% | +26% | +56% | +56% | +30% | +4% | — |
+| DLR | REIT (Specialty / OpCo) | -6% | -7% | -10% | -10% | +8% | +8% | +15% | -8% | — |
+| SPG | REIT | +35% | +25% | -1% | -1% | -8% | -8% | +25% | +14% | — |
+| PSA | REIT | -11% | -10% | -45% | -45% | -46% | -46% | -5% | -16% | — |
+| O | REIT | +20% | +0% | +23% | +23% | +51% | +51% | +14% | -3% | — |
+| VTR | REIT (Specialty / OpCo) | -45% | -37% | -37% | -37% | -9% | -9% | -6% | -18% | — |
+| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -8% | -8% | -8% | -30% | — |
+| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | -3% | -3% | -3% | -14% | — |
+| IRM | REIT (Specialty / OpCo) | -61% | -45% | -54% | -54% | -3% | -3% | +6% | -17% | — |
+| 00016.HK | Landlord / Investment Property (HK) | +39% | -7% | -22% | -22% | -22% | -23% | -8% | — | — |
+| 01109.HK | Property Developer (HK / China) | +93% | +6% | +6% | +6% | +6% | +23% | +31% | — | — |
+| 01113.HK | Landlord / Investment Property (HK) | +49% | +14% | +161% | +161% | +161% | +160% | -33% | — | — |
+| 01972.HK | Landlord / Investment Property (HK) | -79% | -39% | -33% | -33% | -33% | -33% | -34% | — | — |
+| 00688.HK | Property Developer (HK / China) | +85% | +32% | +32% | +32% | +32% | +66% | +3% | — | — |
+| 00012.HK | Landlord / Investment Property (HK) | -36% | -41% | -41% | -41% | -41% | -27% | -28% | — | — |
+| 00823.HK | REIT | — | — | -3% | -3% | -2% | -2% | -2% | — | — |
+| 00083.HK | Landlord / Investment Property (HK) | -0% | -27% | -37% | -37% | -37% | -37% | -28% | — | — |
+| 00004.HK | Landlord / Investment Property (HK) | -37% | -53% | -5% | -5% | -5% | -6% | -6% | — | — |
+| 02202.HK | Property Developer (HK / China) | — | — | — | — | — | — | — | — | Distressed_Developer |
+| 00960.HK | Property Developer (HK / China) | — | — | — | — | — | — | — | — | Distressed_Developer |
+| H78.SI | Landlord / Investment Property (HK) | -10% | -25% | -62% | -62% | -62% | -62% | -53% | — | — |
+| C38U.SI | S-REIT | -20% | -23% | -22% | -22% | -22% | -22% | -23% | — | — |
+| 9CI.SI | Real Estate Asset Manager (SG) | -72% | -72% | -68% | -68% | -68% | -68% | -68% | — | — |
+| A17U.SI | S-REIT | +17% | +18% | +25% | +25% | +25% | +25% | +18% | — | — |
+| C09.SI | Property Developer (SG) | -64% | -64% | -14% | -14% | -14% | -14% | -14% | — | — |
+| U14.SI | Property Developer (SG) | +17% | +15% | +38% | +38% | +38% | +38% | -48% | — | — |
+| N2IU.SI | S-REIT | -30% | -8% | +7% | +7% | +7% | +7% | -8% | — | — |
+| M44U.SI | S-REIT | +14% | +15% | +13% | +13% | +13% | +13% | +15% | — | — |
+| ME8U.SI | S-REIT | +6% | +8% | +18% | +18% | +18% | +18% | +8% | — | — |
+| AJBU.SI | S-REIT | +33% | +26% | +5% | +5% | +5% | +5% | +26% | — | — |
+| U06.SI | Property Developer (SG) | +9% | -5% | -21% | -21% | -21% | -21% | -5% | — | — |

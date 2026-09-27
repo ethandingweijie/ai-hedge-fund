@@ -21,7 +21,12 @@ def test_clean_noi_is_revenue_less_cost_of_revenue_with_ebitda_as_the_fallback()
     assert d._compute_reit_metrics({"revenue": 100.0, "cost_of_revenue": -30.0, "ebitda": 5.0}, subtype="retail")["noi"] == pytest.approx(70.0)
     # no cost of revenue: EBITDA, and the basis says so
     m2 = d._compute_reit_metrics({"revenue": 100.0, "cost_of_revenue": None, "ebitda": 60.0}, subtype="retail")
-    assert m2["noi"] == 60.0 and "fallback: cost of revenue missing" in m2["noi_basis"]
+    assert m2["noi"] == 60.0 and "cost of revenue missing" in m2["noi_basis"]
+    # Wave 8c (owner verdict B2): EBITDA not depressed against clean NOI -> EBITDA (Public Storage, Prologis:
+    # FMP's cost of revenue carries depreciation, so clean NOI understates)
+    m4 = d._compute_reit_metrics({"revenue": 100.0, "cost_of_revenue": 60.0, "ebitda": 55.0}, subtype="self_storage")
+    assert m4["noi"] == 55.0 and m4["noi_basis"].startswith("EBITDA (V2")
+    assert d._NOI_V2_DEPRESSED_RATIO == 0.5 and "01113.HK" in d._HYBRID_DEVELOPERS
     # cost of revenue above revenue and no positive EBITDA: nothing, stated
     m3 = d._compute_reit_metrics({"revenue": 100.0, "cost_of_revenue": 120.0, "ebitda": None}, subtype="retail")
     assert m3["noi"] is None and m3["noi_basis"].startswith("none")
@@ -45,7 +50,9 @@ def test_a_published_nav_is_read_at_the_cohort_p_nav_on_fair_value_exchanges_and
     cal = d._cohort_p_nav_4q(hk)
     assert cal and cal["exchange"] == "HKSE" and 0.2 < cal["median"] < 0.5 and cal["points"] >= 0
     assert d._cohort_p_nav_4q(us) is None                       # US GAAP book is historic cost: P/B is not P/NAV
-    assert d._cohort_p_nav_4q(sector_rung) is None              # a whole-sector rung is not a cohort P/NAV
+    cal_s = d._cohort_p_nav_4q(sector_rung)                    # Wave 8c (verdict C2): a thin label cohort falls to the exchange's real-estate sector rung, not to par
+    assert cal_s and cal_s["key"] == "Real Estate" and 0.3 < cal_s["median"] < 0.7
+    assert d._cohort_p_nav_4q({"pb": 1.0, "_comp_basis": {"pb": {"basis": "sector", "key": "Technology", "exchange": "HKSE"}}}) is None
     assert d._P_NAV_WINDOW_DAYS == 365 and d._P_NAV_CALIBRATED_EXCHANGES == ("HKSE", "SES")
     mr = {}
     v = d._calibrated_published_nav(mr, hk, 100.0, "NAV (Cap Rates)")
@@ -83,31 +90,36 @@ def test_the_ffo_field_and_the_opco_profile_are_the_owner_spec():
     assert d._classify_reit_subtype("AMT", "", industry="REIT - Specialty") == "tower"
 
 
-# ── step 4 (D): developer sub-cohorts with the contagion rule ────────────────────────────────
+# ── step 4 (D) as amended by verdict D: the market's own axis ─────────────────────────────────
 
-def test_the_developer_sub_cohorts_price_on_their_own_median_with_loss_makers_excluded():
+def test_a_developer_prices_on_the_solvent_peers_around_its_own_book_multiple():
     from src.data import regional_comps as rc
     from src.data import sector_profiles as sp
-    assert set(sp.DEVELOPER_SUBCOHORTS) == {"DEV_MAINLAND_SOE", "DEV_MAINLAND_PRIVATE", "DEV_HK_DIVERSIFIED"}
-    assert sp.DEVELOPER_SUBCOHORT_OF["00688.HK"] == "DEV_MAINLAND_SOE" and sp.DEVELOPER_SUBCOHORT_OF["02202.HK"] == "DEV_MAINLAND_PRIVATE"
-    assert sp.DEVELOPER_SUBCOHORT_OF["00016.HK"] == "DEV_HK_DIVERSIFIED" and "01810.HK" not in sp.DEVELOPER_SUBCOHORT_OF
-    # the store keeps four-digit HK codes; the basket is written canonically and reported canonically
-    r = rc.basket_multiples("HKSE", ("00688.HK", "01109.HK", "00123.HK", "01908.HK", "03900.HK"), "DEV_MAINLAND_SOE", exclude_loss_makers=True)
-    if r:                                                             # the local store may be empty on a fresh clone
+    assert sp.DEVELOPER_CLUSTER_PROFILES == ("Property Developer (HK / China)",)
+    assert not hasattr(sp, "DEVELOPER_SUBCOHORT_OF")                 # the ownership sub-cohorts are retired
+    assert rc.DEVELOPER_CLUSTER_BAND == 0.15 and rc.DEVELOPER_CLUSTER_MIN == 3
+    r = rc.developer_cluster_multiples("HKSE", "00688.HK")
+    if r and not r.get("_withheld"):                               # the local store may be empty on a fresh clone
         pb = r["pb"]
-        assert pb["basis"] == "profile" and pb["key"] == "DEV_MAINLAND_SOE" and pb["cohort"] == "all"
-        assert all(m.startswith("0") and m.endswith(".HK") and len(m) == 8 for m in pb["members"])
-        assert "excluded_loss_makers" in pb and not (set(pb["members"]) & set(pb["excluded_loss_makers"]))
-    assert rc.basket_multiples("HKSE", (), "x") == {}
-    # the A&D and OpCo baskets still resolve through the same function
-    assert "return basket_multiples(exchange, tuple(syms), profile or \"\", max_age_days=max_age_days)" in inspect.getsource(rc.profile_basket_multiples)
+        assert pb["basis"] == "profile" and pb["key"].startswith("DEV_CLUSTER") and "00688.HK" in pb["members"]
+        assert not (set(pb["members"]) & set(pb["excluded_loss_makers"]))
+        own = float(pb["key"].split("own ")[1].rstrip("x)"))
+        assert abs(pb["value"] - own) <= 0.15 + 1e-9                # the cluster median sits inside the band around the name's own
+    assert rc.developer_cluster_multiples("HKSE", "ZZZZ.HK") in ({}, ) or rc.developer_cluster_multiples("HKSE", "ZZZZ.HK").get("_withheld") is None
+    # the contagion invariant: no solvent name -> withheld, and the P/B leg reads it
+    assert rc.developer_cluster_multiples("HKSE", "00688.HK", labels=("No Such Label",)) == {"_withheld": {"reason": "no solvent name in the developer basket", "basket": ["No Such Label"], "members": 0}}
+    assert 'if method_name == "P/BV" and isinstance(peer, dict) and peer.get("_pb_withheld"):' in inspect.getsource(d._compute_method_value)
     src = inspect.getsource(sp.get_sector_peer_multiples)
-    assert "DEVELOPER_SUBCOHORT_OF.get((ticker or \"\").upper())" in src and "exclude_loss_makers=True" in src
+    assert "developer_cluster_multiples(\"HKSE\", ticker)" in src and '_pb_withheld' in src
 
 
-def test_the_p_nav_read_follows_a_sub_cohort_basket_too():
-    """Step 4's sub-cohorts carry a 'profile' basis with a key of their own; the step 2 read must take the
-    basket's P/B (live, no history yet) rather than fall back to par."""
-    cal = d._cohort_p_nav_4q({"pb": 0.402, "_comp_basis": {"pb": {"basis": "profile", "key": "DEV_HK_DIVERSIFIED", "exchange": "HKSE", "cohort": "all"}}})
-    assert cal and cal["median"] == pytest.approx(0.402) and cal["points"] == 0 and "live P/B" in cal["window"]
-    assert d._cohort_p_nav_4q({"pb": 7.2, "_comp_basis": {"pb": {"basis": "profile", "key": "REIT (Specialty / OpCo)", "exchange": "US"}}}) is None
+# ── verdict A: the quality gate reads a REIT's return on FFO ──────────────────────────────────
+
+def test_the_quality_gate_reads_ffo_over_invested_capital_for_reits_and_flags_outliers():
+    from src.data import regional_comps as rc
+    src = inspect.getsource(d.run_dcf_agent)
+    assert "_roic_for_gate = _ffo_g / _ic_g" in src and "if _roic_for_gate <= wacc:" in src
+    assert '"gate_id": "GATE_REIT_MULTIPLE_OUTLIER"' in src and d._REIT_OUTLIER_SIGMA == 2.5
+    vals = rc.basket_field_values("US", ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC"), "p_ffo")
+    assert all(3.0 <= v <= 120.0 for v in vals)
+    assert rc.basket_field_values("US", (), "p_ffo") == []

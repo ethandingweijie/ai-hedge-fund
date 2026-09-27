@@ -1,0 +1,125 @@
+== PSA | REIT | IV 274.25 | anchor NAV (Cap Rates) | spot 287.97 | ccy USD
+   flag: REIT sub-type: self_storage | cap_rate 5.50% | P/FFO 19x | P/AFFO 21x | maint_capex 3.0% rev | FFO=$2.94B AFFO=$2.79B NOI=$3.25B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT' is not a capital-turnover profile, so revenue ÷ invested capital (0.25) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference o
+   legs: {'P/FFO': 290.66, 'NAV (Cap Rates)': 263.31, 'Forward P/E': 154.93, 'Forward EV/EBITDA': 258.03, 'SOTP (segments)': 31.86, 'SOTP 12m (probabilistic)': 29.92}
+   weights: [('NAV (Cap Rates)', 0.6), ('P/FFO', 0.4)] | dropped: []
+   mults: {'ev_ebitda': (15.0, 'static', None), 'pe': (14.0, 'static', None), 'pb': (1.0, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.03, 'static', None)}
+   route: router [('router', 'REIT')] | premium 1.102 | flag None
+== PLD | REIT | IV 105.64 | anchor NAV (Cap Rates) | spot 133.03 | ccy USD
+   flag: REIT sub-type: industrial | cap_rate 5.40% | P/FFO 18x | P/AFFO 20x | maint_capex 3.0% rev | FFO=$6.04B AFFO=$6.04B NOI=$7.20B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT' is not a capital-turnover profile, so revenue ÷ invested capital (0.10) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference o
+   legs: {'P/FFO': 105.52, 'NAV (Cap Rates)': 105.71, 'Forward P/E': 50.18, 'Forward EV/EBITDA': 66.32}
+   weights: [('NAV (Cap Rates)', 0.6), ('P/FFO', 0.4)] | dropped: []
+   mults: {'ev_ebitda': (15.0, 'static', None), 'pe': (14.0, 'static', None), 'pb': (1.0, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.03, 'static', None)}
+   route: router [('router', 'REIT')] | premium 0.974 | flag None
+== AMT | REIT (Specialty / OpCo) | IV 219.25 | anchor P/FFO | spot 169.03 | ccy USD
+   flag: REIT sub-type: tower | cap_rate 5.10% | P/FFO 20x | P/AFFO 22x | maint_capex 3.0% rev | FFO=$4.59B AFFO=$4.27B NOI=$6.12B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.23) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'Forward EV/EBITDA': 206.26, 'P/FFO': 246.23, 'NAV (Cap Rates)': 196.27, 'Forward P/E': 318.66}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 0.907 | flag None
+== O | REIT | IV 63.14 | anchor NAV (Cap Rates) | spot 55.54 | ccy USD
+   flag: REIT sub-type: net_lease | cap_rate 5.00% | P/FFO 16x | P/AFFO 18x | maint_capex 1.0% rev | FFO=$3.53B AFFO=$3.53B NOI=$3.55B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT' is not a capital-turnover profile, so revenue ÷ invested capital (0.08) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference o
+   legs: {'P/FFO': 47.16, 'NAV (Cap Rates)': 73.79, 'Forward P/E': 21.29, 'Forward EV/EBITDA': 68.03, 'SOTP (segments)': 24.73, 'SOTP 12m (probabilistic)': 25.18}
+   weights: [('NAV (Cap Rates)', 0.6), ('P/FFO', 0.4)] | dropped: []
+   mults: {'ev_ebitda': (15.0, 'static', None), 'pe': (14.0, 'static', None), 'pb': (1.0, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.03, 'static', None)}
+   route: router [('router', 'REIT')] | premium 1.0 | flag None
+== IRM | REIT (Specialty / OpCo) | IV 117.78 | anchor P/FFO | spot 111.38 | ccy USD
+   flag: REIT sub-type: specialty | cap_rate 5.70% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$1.17B AFFO=$893M NOI=$2.08B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Gate B (base): Forward ROIC (1.5% [Y10 projected]) < threshold (2.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.39) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'Forward EV/EBITDA': 155.87, 'P/FFO': 110.95, 'NAV (Cap Rates)': 88.8, 'Forward P/E': 128.47, 'SOTP (segments)': 2.16, 'SOTP 12m (probabilistic)': 12.55}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.025 | flag None
+== WELL | REIT (Specialty / OpCo) | IV 94.07 | anchor P/FFO | spot 231.21 | ccy USD
+   flag: REIT sub-type: healthcare | cap_rate 5.10% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$3.08B AFFO=$3.04B NOI=$2.31B [EBITDA (V2: not depressed against clean NOI)]
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($10.7B revenue)
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.18) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'Forward EV/EBITDA': 110.93, 'P/FFO': 117.57, 'NAV (Cap Rates)': 45.88, 'Forward P/E': 143.14, 'SOTP (segments)': 19.08, 'SOTP 12m (probabilistic)': 27.35}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== VTR | REIT (Specialty / OpCo) | IV 81.47 | anchor P/FFO | spot 86.64 | ccy USD
+   flag: REIT sub-type: healthcare | cap_rate 5.10% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$1.63B AFFO=$1.40B NOI=$2.24B [EBITDA (cost of revenue missing)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.23) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'Forward EV/EBITDA': 70.54, 'P/FFO': 95.57, 'NAV (Cap Rates)': 73.62, 'Forward P/E': 30.38, 'SOTP (segments)': 15.77, 'SOTP 12m (probabilistic)': 22.53}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.034 | flag None
+== 01113.HK | Landlord / Investment Property (HK) | IV 119.32 | anchor NAV (Cap Rates) | spot 46.0 | ccy HKD
+   flag: Gate B (base): Forward ROIC (1.7% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.14) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'DDM': 16.19, 'P/BV': 45.47, 'NAV (Cap Rates)': 252.05, 'Forward P/E': 54.56, 'Forward EV/EBITDA': 88.0}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (20.971, 'profile', 'Landlord / Investment Property (HK)'), 'pe': (19.634, 'profile', 'Landlord / Investment Property (HK)'), 'pb': (0.397, 'profile', 'Landlord / Investment Property (HK)'), 'fcf_yield': (0.078, 'profile', 'Landlord / Investment Property (HK)'), 'growth_avg': (0.009, 'profile', 'Landlord / Investment Property (HK)'), 'pe_ntm': (13.925, 'profile', 'Landlord / Investment Property (HK)')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (HK / China)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== H78.SI | Landlord / Investment Property (HK) | IV 6.41 | anchor NAV (Cap Rates) | spot 8.57 | ccy USD
+   flag: Cash-conversion (observed, not applied): FCF margin 31.3% vs 19.1% — reported FCF is 1.5x what a repeatable basis supports (ex-working-capital), so the excess is not projected
+   flag: Gate B (base): Forward ROIC (1.1% [Y10 projected]) < threshold (3.4%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.04) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'DDM': 2.33, 'P/BV': 5.71, 'NAV (Cap Rates)': 10.01, 'Forward P/E': 4.02, 'Forward EV/EBITDA': 2.96}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (11.766, 'industry', 'Real Estate - Development'), 'pe': (14.932, 'industry', 'Real Estate - Development'), 'pb': (0.404, 'industry', 'Real Estate - Development'), 'fcf_yield': (0.068, 'industry', 'Real Estate - Development'), 'growth_avg': (-0.009, 'industry', 'Real Estate - Development'), 'pe_ntm': (12.798, 'industry', 'Real Estate - Development')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (SG)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== U14.SI | Property Developer (SG) | IV 9.75 | anchor NAV | spot 8.46 | ccy SGD
+   flag: CAGR-divergence gate: NTM growth -14.5% → -8.4%; analyst bands shifted +6.1% (NTM consensus -14.5% sits 21.1pp below historical CAGR +6.6% and below the -5.0% downside floor on a non-cyclical profile with positive secula
+   flag: Gate B (base): Forward ROIC (2.9% [Y10 projected]) < threshold (3.4%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (SG)' is not a capital-turnover profile, so revenue ÷ invested capital (0.21) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'DDM': 2.18, 'P/E (norm)': 7.15, 'NAV': 14.13, 'Forward P/E': 6.13, 'Forward EV/EBITDA': 19.16}
+   weights: [('NAV', 0.55), ('DDM', 0.25), ('P/E (norm)', 0.2)] | dropped: []
+   mults: {'ev_ebitda': (21.854, 'industry', 'Real Estate - Development'), 'pe': (11.111, 'industry', 'Real Estate - Development'), 'pb': (0.592, 'industry', 'Real Estate - Development'), 'fcf_yield': (0.034, 'industry', 'Real Estate - Development'), 'growth_avg': (-0.009, 'industry', 'Real Estate - Development'), 'pe_ntm': (16.896, 'sector', 'Real Estate')}
+   route: router [('router', 'Property Developer (SG)')] | premium 1.0 | flag None
+== 00016.HK | Landlord / Investment Property (HK) | IV 98.74 | anchor NAV (Cap Rates) | spot 107.1 | ccy HKD
+   flag: Gate B (base): Forward ROIC (2.5% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.13) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'DDM': 26.05, 'P/BV': 87.52, 'NAV (Cap Rates)': 161.68, 'Forward P/E': 116.05, 'Forward EV/EBITDA': 158.9}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (20.971, 'profile', 'Landlord / Investment Property (HK)'), 'pe': (19.634, 'profile', 'Landlord / Investment Property (HK)'), 'pb': (0.397, 'profile', 'Landlord / Investment Property (HK)'), 'fcf_yield': (0.078, 'profile', 'Landlord / Investment Property (HK)'), 'growth_avg': (0.009, 'profile', 'Landlord / Investment Property (HK)'), 'pe_ntm': (13.925, 'profile', 'Landlord / Investment Property (HK)')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (HK / China)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== 00823.HK | REIT | IV 36.34 | anchor NAV (Cap Rates) | spot 37.02 | ccy HKD
+   flag: REIT sub-type: retail | cap_rate 6.90% | P/FFO 14x | P/AFFO 15x | maint_capex 5.5% rev | FFO=$-7.31B AFFO=$-7.35B NOI=$10.12B [clean NOI (revenue - cost of revenue; EBITDA not positive)]
+   flag: Gate B (base): Forward ROIC (0.6% [Y10 projected]) < threshold (3.1%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT' is not a capital-turnover profile, so revenue ÷ invested capital (0.07) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference o
+   flag: Single-method blend: only NAV (Cap Rates) (NAV (Cap Rates), multi) contributed a value — 60% of the profile's intended weight survived, so the published IV is that one method and not an average of views
+   legs: {'NAV (Cap Rates)': 36.34, 'Forward P/E': 33.41, 'Forward EV/EBITDA': 25.09}
+   weights: [('NAV (Cap Rates)', 1.0)] | dropped: [('P/FFO', 'uncomputable')]
+   mults: {'ev_ebitda': (14.274, 'sector', 'Real Estate'), 'pe': (19.634, 'sector', 'Real Estate'), 'pb': (0.512, 'sector', 'Real Estate'), 'fcf_yield': (0.068, 'sector', 'Real Estate'), 'growth_avg': (0.025, 'sector', 'Real Estate'), 'pe_ntm': (13.458, 'sector', 'Real Estate')}
+   route: router [('router', 'REIT')] | premium 1.0 | flag None
+== 01972.HK | Landlord / Investment Property (HK) | IV 16.14 | anchor NAV (Cap Rates) | spot 24.32 | ccy HKD
+   flag: CAGR-divergence gate: NTM growth +17.7% → +5.0%; analyst bands scaled 0.28x (NTM consensus +17.7% diverges from historical CAGR -0.5% by 18.2pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Gate B (base): Forward ROIC (1.3% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Landlord / Investment Property (HK)' is not a capital-turnover profile, so revenue ÷ invested capital (0.05) is not a sales-to-capital ratio here and no deduction is com
+   legs: {'DDM': 10.32, 'P/BV': 18.68, 'NAV (Cap Rates)': 18.61, 'Forward P/E': 20.01, 'Forward EV/EBITDA': 29.83}
+   weights: [('NAV (Cap Rates)', 0.4), ('P/BV', 0.3), ('DDM', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (20.971, 'profile', 'Landlord / Investment Property (HK)'), 'pe': (19.634, 'profile', 'Landlord / Investment Property (HK)'), 'pb': (0.397, 'profile', 'Landlord / Investment Property (HK)'), 'fcf_yield': (0.078, 'profile', 'Landlord / Investment Property (HK)'), 'growth_avg': (0.009, 'profile', 'Landlord / Investment Property (HK)'), 'pe_ntm': (13.925, 'profile', 'Landlord / Investment Property (HK)')}
+   route: ticker_override [('router', 'Landlord / Investment Property (HK)'), ('industry_map', 'Property Developer (HK / China)'), ('ticker_override', 'Landlord / Investment Property (HK)')] | premium 1.0 | flag None
+== C09.SI | Property Developer (SG) | IV 7.07 | anchor NAV | spot 8.26 | ccy SGD
+   flag: CAGR-divergence gate: NTM growth +22.8% → +5.0%; analyst bands scaled 0.22x (NTM consensus +22.8% diverges from historical CAGR -14.8% by 37.6pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Gate B (base): Forward ROIC (0.7% [Y10 projected]) < threshold (3.4%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (SG)' is not a capital-turnover profile, so revenue ÷ invested capital (0.16) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'DDM': 1.88, 'P/E (norm)': 4.35, 'NAV': 10.42, 'Forward P/E': 5.79, 'Forward EV/EBITDA': 22.58}
+   weights: [('NAV', 0.55), ('DDM', 0.25), ('P/E (norm)', 0.2)] | dropped: []
+   mults: {'ev_ebitda': (21.854, 'industry', 'Real Estate - Development'), 'pe': (11.111, 'industry', 'Real Estate - Development'), 'pb': (0.592, 'industry', 'Real Estate - Development'), 'fcf_yield': (0.034, 'industry', 'Real Estate - Development'), 'growth_avg': (-0.009, 'industry', 'Real Estate - Development'), 'pe_ntm': (16.896, 'sector', 'Real Estate')}
+   route: router [('router', 'Property Developer (SG)')] | premium 1.0 | flag None
+== 00688.HK | Property Developer (HK / China) | IV 12.82 | anchor P/BV | spot 12.42 | ccy HKD
+   flag: Cash-conversion (observed, not applied): FCF margin 10.1% vs 7.6% — reported FCF is 1.4x what a repeatable basis supports (ex-working-capital), so the excess is not projected
+   flag: CAGR-divergence gate: NTM growth +7.0% → +5.0%; analyst bands scaled 0.71x (NTM consensus +7.0% diverges from historical CAGR -8.7% by 15.8pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)
+   flag: Gate B (base): Forward ROIC (2.1% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.32) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   legs: {'Forward P/E': 16.92, 'P/BV': 13.26, 'DDM': 5.48, 'Forward EV/EBITDA': 22.53}
+   weights: [('P/BV', 0.65), ('Forward P/E', 0.2), ('DDM', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (14.274, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)'), 'pe': (20.182, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)'), 'pb': (0.295, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)'), 'fcf_yield': (0.096, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)'), 'growth_avg': (-0.007, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)'), 'pe_ntm': (12.47, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.30x)')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag None
+== 01109.HK | Property Developer (HK / China) | IV 37.4 | anchor P/BV | spot 28.64 | ccy HKD
+   flag: CAGR-divergence gate: NTM growth -13.8% → -12.7%; analyst bands shifted +1.2% (NTM consensus -13.8% sits 16.2pp below historical CAGR +2.3% and below the -5.0% downside floor on a non-cyclical profile with positive secul
+   flag: Gate B (base): Forward ROIC (4.4% [Y10 projected]) < threshold (4.6%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'Property Developer (HK / China)' is not a capital-turnover profile, so revenue ÷ invested capital (0.61) is not a sales-to-capital ratio here and no deduction is compute
+   flag: RNAV (published): no input this run; its weight (w=0.25) rolls into P/BV (profile leg_fallback); the blend uses the rolled rows
+   legs: {'Forward P/E': 55.74, 'P/BV': 37.08, 'DDM': 14.34, 'Forward EV/EBITDA': 12.14}
+   weights: [('P/BV', 0.65), ('Forward P/E', 0.2), ('DDM', 0.15)] | dropped: []
+   mults: {'ev_ebitda': (14.53, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)'), 'pe': (17.793, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)'), 'pb': (0.538, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)'), 'fcf_yield': (0.054, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)'), 'growth_avg': (0.058, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)'), 'pe_ntm': (14.9, 'profile', 'DEV_CLUSTER (P/B within +/-0.15x of own 0.61x)')}
+   route: router [('router', 'Property Developer (HK / China)')] | premium 1.0 | flag None

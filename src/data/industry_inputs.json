@@ -6172,6 +6172,86 @@
     "value_usd": 12000000000.0
    }
   },
+  "H78.SI": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 18.27,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.49
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T12:07:10+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.72x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.7165
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "14.71 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported net asset value per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Hongkong Land Holdings Limited",
+    "data": {
+     "basis": "Company-reported net asset value per share",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEXBQ3tRjWgR7c0cL6v7isQ7hewq4hvRcQYZKhP6A1JOe7i80Z9RAO0YP8ekrwHXIgYCrMY1E4iIBy88sKt_UpsVj_f0Ple1sVAM6qeDRwKphZbqK82G7HbUYdy4QqL7HaeQXRESScoztPTy5fIL6GUqJRCS2xfyeMVSjyTs-iiJRCy16WNyryD2MypTDs2Znc5Il8XZe-v6v-1tDL1IlAp2bKzG6Zw0cNiPQIKIG9lxhhWdGs=",
+      "period": "1H2026",
+      "quote": "Net asset value per share at June 30 was US$14.71, compared with US$14.30 at the end of 2025.",
+      "scale": "units",
+      "source_url": "https://www.theedgesingapore.com/capital/results/hongkong-lands-underlying-profit-rose-11-y-o-y-1h2026-office-recovery-central",
+      "value": 14.71
+     },
+     "nav_total": null,
+     "notes": "For 1H2026 (six months ended 30 June 2026), Hongkong Land reported a net asset value per share of US$14.71. At the prior full year ended 31 December 2025 (FY2025), company-reported NAV per share was US$14.30 and total shareholders' funds were US$30,798 million. Hongkong Land does not publish a single overall capitalization rate for the entire portfolio; rather, independent valuer Jones Lang LaSalle applies capitalization rate ranges across property segments and geographies (e.g., 2.90% to 6.00% for office and 3.50% to 5.00% for retail across Hong Kong, Singapore, and Chinese mainland)."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 14.71
+    },
+    "fmp_context_usd": {
+     "company": "Hongkong Land Holdings Limited",
+     "depreciation_and_amortization": 14100000.0,
+     "market_cap": 18265755200.0,
+     "net_ppe": 369200000.0,
+     "operating_cash_flow": 584400000.0,
+     "period": "2025-12-31",
+     "revenue": 1487100000.0,
+     "shares": 2131360000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 44.1,
+    "value_usd": 31352305600.0
+   }
+  },
   "HAL": {},
   "HEI": {
    "backlog": {
@@ -9105,6 +9185,92 @@
     "ok": true,
     "secs": 20.5,
     "value_usd": 6865873151.126648
+   }
+  },
+  "U14.SI": {
+   "nav": {
+    "anchors": {
+     "market_cap_usd_bn": 5.61,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 2.53
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T12:07:47+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "nav / market_cap",
+      "detail": "1.68x (plausible 0.3x to 5.0x)",
+      "ok": true,
+      "ratio": 1.6797
+     },
+     {
+      "check": "NAV per share cited",
+      "detail": "11.118032 USD/share",
+      "ok": true
+     },
+     {
+      "check": "NAV basis stated",
+      "detail": "Company-reported net asset value per share",
+      "ok": true
+     },
+     {
+      "check": "cap rate plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "UOL Group Limited",
+    "data": {
+     "basis": "Company-reported net asset value per share",
+     "cap_rate": null,
+     "fiscal_year": "1H2026",
+     "nav_per_share": {
+      "currency": "SGD",
+      "period": "1H2026",
+      "quote": "Net asset value per share rose 2 per cent to S$14.20, from S$13.92 previously.",
+      "scale": "units",
+      "source_url": "https://www.businesstimes.com.sg/companies-markets/uol-h1-net-profit-rises-23-s2522-million-joint-venture-profits",
+      "value": 14.2
+     },
+     "nav_total": {
+      "currency": "SGD",
+      "period": "1H2026",
+      "quote": "The Group's shareholders' funds increased from $11.78 billion as at 31 December 2025 to $12.03 billion as at 30 June 2026",
+      "scale": "bn",
+      "source_url": "https://links.sgx.com/FileOpen/Supplemental_Listing_Document_UOL.pdf",
+      "value": 12.03
+     },
+     "notes": "For 1H2026 ended 30 June 2026, UOL Group reported NAV per share of S$14.20 (up from S$13.92 as at 31 December 2025) and NTA per share of S$14.16 (up from S$13.88 as at 31 December 2025). Total equity at FY2025 was S$16,668 million. In research coverage dated April 2026, Citi reported an RNAV for UOL of S$17.67 per share. UOL does not disclose a single blended capitalisation rate for its overall portfolio in its results releases."
+    },
+    "engine_preview": {
+     "cap_rate": null,
+     "nav_per_share_usd": 11.118032
+    },
+    "fmp_context_usd": {
+     "company": "UOL Group Limited",
+     "depreciation_and_amortization": 105287763.03999999,
+     "market_cap": 5607712716.30248,
+     "net_ppe": 2328408727.84,
+     "operating_cash_flow": 990277629.52,
+     "period": "2025-12-31",
+     "revenue": 2532159191.6,
+     "shares": 846595232.0330968
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 31.5,
+    "value_usd": 9419008800.0
    }
   },
   "VRTX": {

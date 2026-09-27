@@ -971,5 +971,8 @@ def test_the_quality_gate_still_reads_the_variable_it_publishes():
     arithmetic reached the multiples blend, and it is unchanged by persisting the
     value — pinned so the coupling stays deliberate."""
     src = inspect.getsource(dcf_agent.run_dcf_agent)
-    assert "_quality = min(1.0, (forward_roic - wacc) / wacc)" in src
-    assert "if forward_roic <= wacc:" in src
+    # Wave 8c (owner verdict A, 2026-09-27): the gate reads `_roic_for_gate`, which IS `forward_roic` on every
+    # profile but a REIT (FFO over invested capital there); the published variable is still what the gate reads.
+    assert "_roic_for_gate = forward_roic" in src
+    assert "_quality = min(1.0, (_roic_for_gate - wacc) / wacc)" in src
+    assert "if _roic_for_gate <= wacc:" in src          # Wave 8c verdict A: the gate variable

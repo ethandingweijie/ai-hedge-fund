@@ -78,7 +78,8 @@ WAVE6 = {
 WAVE8 = {
     "nav": ["WELL", "PLD", "EQIX", "AMT", "DLR", "SPG", "PSA", "O", "VTR", "IRM",
             "00016.HK", "01113.HK", "00688.HK", "01109.HK", "00083.HK", "02202.HK", "00960.HK",
-            "01972.HK", "00004.HK", "00012.HK", "00823.HK", "C09.SI", "U06.SI"],
+            "01972.HK", "00004.HK", "00012.HK", "00823.HK", "C09.SI", "U06.SI",
+            "H78.SI", "U14.SI"],   # Wave 8c verdict B2: the hybrids' published NAV is their anchor
     # CapitaLand Investment: the `sotp` kind, not `alt_manager` (owner, 2026-09-27, Option A): the company
     # reports fee income-related business earnings and an investment book, not US-style distributable
     # earnings, and the alt_manager pre-fill came back twice with no cited DE amount.

@@ -300,6 +300,9 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Mature SaaS":                 {"US": ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")},
     "Mature Platform":             {"US": ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")},
     "REIT (Specialty / OpCo)":     {"US": ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")},   # Wave 8b step 3
+    # Wave 8c (owner verdict C1): the Tier-1 landlords' own median carries their P/B and so the P/NAV read
+    # on a published NAV; the broad HKSE diversified label sat at 0.30x with small-cap illiquidity in it.
+    "Landlord / Investment Property (HK)": {"HKSE": ("00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK")},
 }
 
 
@@ -311,6 +314,120 @@ def profile_basket_multiples(exchange: str, profile: Optional[str],
     if not syms:
         return {}
     return basket_multiples(exchange, tuple(syms), profile or "", max_age_days=max_age_days)
+
+
+#: Wave 8c (owner verdict D): the developer cluster's basket and band.
+DEVELOPER_CLUSTER_LABELS = ("Real Estate - Development", "Real Estate - Diversified")
+DEVELOPER_CLUSTER_BAND = 0.15        # +/- trailing book multiple around the name's own
+DEVELOPER_CLUSTER_MIN = 3
+
+
+def developer_cluster_multiples(exchange: str, ticker: str, *, band: float = DEVELOPER_CLUSTER_BAND,
+                                labels: tuple = DEVELOPER_CLUSTER_LABELS, max_age_days: float = MAX_AGE_DAYS) -> dict:
+    """Medians over the solvent developers whose P/B sits within `band` of the name's own.
+
+    Ownership is not the axis the market prices on (China Overseas Land at 0.28x sat with China Resources
+    Land at 0.70x in one state-owned sub-cohort); asset quality, tier exposure and balance-sheet liquidity
+    are, and the name's own book multiple is where the market has already priced them. Returns {} when the
+    name has no stored P/B or fewer than DEVELOPER_CLUSTER_MIN peers sit in the band (the label cohort
+    then applies), and {"_withheld": {...}} when the basket has no solvent member at all: no multiple is
+    synthesised and the P/B leg stands down (the contagion invariant)."""
+    _ensure_table()
+    def _store_symbol(sym: str) -> str:
+        s_ = str(sym).upper()
+        if s_.endswith(".HK"):
+            digits = s_.split(".")[0].lstrip("0") or "0"
+            return digits.zfill(4) + ".HK"
+        return s_
+    def _canon(sym: str) -> str:
+        s_ = str(sym).upper()
+        if s_.endswith(".HK"):
+            return s_.split(".")[0].zfill(5) + ".HK"
+        return s_
+    try:
+        marks = ",".join("?" for _ in labels)
+        rows = _db.query(
+            f"SELECT symbol, metrics_json, computed_at FROM regional_comps_members "
+            f"WHERE exchange = ? AND level = 'industry' AND cohort = 'all' AND key IN ({marks})", [exchange, *labels]) or []
+    except Exception:                                      # noqa: BLE001
+        return {}
+    members: dict[str, dict] = {}
+    for r in rows:
+        r = dict(r)
+        age = _age_days(r.get("computed_at") or "")
+        if r["symbol"] in members or (age is not None and age > max_age_days):
+            continue
+        try:
+            members[r["symbol"]] = json.loads(r["metrics_json"] or "{}")
+        except (TypeError, ValueError):
+            continue
+    own_row = members.get(_store_symbol(ticker))
+    own_pb = ((own_row or {}).get("pb") or {}).get("value")
+    def _solvent(m: dict) -> bool:
+        pe = (m.get("pe") or {})
+        return bool(pe.get("in_band")) and isinstance(pe.get("value"), (int, float)) and pe["value"] > 0
+    solvent = {s: m for s, m in members.items() if _solvent(m)}
+    if not solvent:
+        return {"_withheld": {"reason": "no solvent name in the developer basket", "basket": list(labels), "members": len(members)}}
+    if not isinstance(own_pb, (int, float)) or own_pb <= 0:
+        return {}
+    cluster = {s: m for s, m in solvent.items()
+               if isinstance((m.get("pb") or {}).get("value"), (int, float)) and abs(m["pb"]["value"] - own_pb) <= band
+               and s != _store_symbol(ticker)}
+    cluster[_store_symbol(ticker)] = own_row                # the name sits in its own cluster
+    if len(cluster) < DEVELOPER_CLUSTER_MIN:
+        return {}
+    key = f"DEV_CLUSTER (P/B within +/-{band:.2f}x of own {own_pb:.2f}x)"
+    out: dict = {}
+    for field in FIELDS:
+        vals, used = [], []
+        for s, m in cluster.items():
+            cell = (m.get(field) or {})
+            if cell.get("in_band") and isinstance(cell.get("value"), (int, float)):
+                vals.append(float(cell["value"])); used.append(_canon(s))
+        if len(vals) < DEVELOPER_CLUSTER_MIN:
+            continue
+        out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all", "peer_count": len(vals),
+                      "key": key, "exchange": exchange, "members": used,
+                      "excluded_loss_makers": sorted(_canon(s) for s in members if s not in solvent)}
+    return out
+
+
+def basket_field_values(exchange: str, syms: tuple, field: str, max_age_days: float = MAX_AGE_DAYS) -> list[float]:
+    """The in-band values of one field across a basket's members (for a dispersion read), canonical or
+    store symbol forms accepted."""
+    if not syms:
+        return []
+    _ensure_table()
+    def _store_symbol(sym: str) -> str:
+        s_ = str(sym).upper()
+        if s_.endswith(".HK"):
+            digits = s_.split(".")[0].lstrip("0") or "0"
+            return digits.zfill(4) + ".HK"
+        return s_
+    store = tuple({_store_symbol(x) for x in syms})
+    try:
+        marks = ",".join("?" for _ in store)
+        rows = _db.query(f"SELECT symbol, metrics_json, computed_at FROM regional_comps_members WHERE exchange = ? AND symbol IN ({marks})",
+                         [exchange, *store]) or []
+    except Exception:                                      # noqa: BLE001
+        return []
+    seen, out = set(), []
+    for r in rows:
+        r = dict(r)
+        if r["symbol"] in seen:
+            continue
+        age = _age_days(r.get("computed_at") or "")
+        if age is not None and age > max_age_days:
+            continue
+        seen.add(r["symbol"])
+        try:
+            cell = (json.loads(r["metrics_json"] or "{}").get(field) or {})
+        except (TypeError, ValueError):
+            continue
+        if cell.get("in_band") and isinstance(cell.get("value"), (int, float)):
+            out.append(float(cell["value"]))
+    return out
 
 
 def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: float = MAX_AGE_DAYS,
