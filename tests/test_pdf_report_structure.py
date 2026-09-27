@@ -136,3 +136,29 @@ def test_target_bridge_is_the_capture_rule(pdf):
     text = "\n".join(pdf)
     assert "capture 50% of the gap to fair value" in text
     assert "forward sector multiples" not in text
+
+
+
+def test_a_bank_report_shows_book_not_free_cash_flow(tmp_path):
+    """Owner, 2026-09-27: the JPM production report printed FCF -147.8bn and net debt
+    599bn in Key financials. A balance-sheet financial shows the book it is valued on."""
+    import fitz
+    res = _result()
+    res["dcf_range"][T]["profile"] = "Money Center Bank"
+    for fy in ("FY2023", "FY2024", "FY2025"):
+        res["raw_financials"][fy].update({"total_equity": 300e9, "shares_outstanding": 2.8e9,
+                                          "book_value_per_share": 107.1, "dividends_per_share": 5.0,
+                                          "net_debt": 599e9})
+    path = tmp_path / "bank.pdf"
+    pdf_report.generate_pdf_report(res, str(path), open_after=False)
+    text = "\n".join(p.get_text() for p in fitz.open(str(path)))
+    assert "Book value / share" in text and "Dividends / share" in text and "Total equity" in text
+    kf = text[text.index("Key financials"): text.index("Key financials") + 600]
+    assert "FCF" not in kf and "Net debt" not in kf
+    # and an operating company keeps the corporate rows
+    res2 = _result()
+    path2 = tmp_path / "corp.pdf"
+    pdf_report.generate_pdf_report(res2, str(path2), open_after=False)
+    text2 = "\n".join(p.get_text() for p in fitz.open(str(path2)))
+    kf2 = text2[text2.index("Key financials"): text2.index("Key financials") + 600]
+    assert "FCF" in kf2 and "Book value / share" not in kf2

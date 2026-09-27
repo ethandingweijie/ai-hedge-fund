@@ -591,7 +591,18 @@ def _peer_comparison_table(
 
 
 # ── Key Financials Table (item 15) ─────────────────────────────────────────────
-def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5) -> "Table | None":
+def _is_balance_sheet_financial_profile(profile_name) -> bool:
+    """Banks, insurers, GSEs, holdcos and brokerages: the Tier 1 set the engine's
+    balance-sheet-financial gate keys off, plus the Wave 6 card issuers."""
+    try:
+        from src.data.sector_profiles import BALANCE_SHEET_FINANCIAL_PROFILES
+        return (profile_name or "") in BALANCE_SHEET_FINANCIAL_PROFILES
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
+def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5,
+                          bank: bool = False) -> "Table | None":
     """Compact multi-year historical financials table (Revenue / Net Income / FCF / Net Debt).
     Returns None if raw_financials is absent or contains no parseable year-keyed data.
     `page_w` is the width available; `years` the most recent fiscal years shown.
@@ -637,13 +648,40 @@ def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5) 
             Paragraph(_fmt_billions(v), styles["RptValue"]) for v in values
         ]
 
-    rows = [
-        hdr,
-        _data_row("Revenue",          [_get(fy, "revenue")          for fy in fy_keys]),
-        _data_row("Net Income",        [_get(fy, "net_income")        for fy in fy_keys]),
-        _data_row("FCF",               [_fcf(fy)                      for fy in fy_keys]),
-        _data_row("Net debt", [_get(fy, "net_debt")          for fy in fy_keys]),
-    ]
+    if bank:
+        # Owner, 2026-09-27 (JPM production report review): a bank generates cash by
+        # gathering deposits and writing loans, so corporate free cash flow and net debt
+        # are uninformative for it (JPM printed FCF -147.8bn and net debt 599bn). The
+        # balance-sheet financials show the book they are valued on instead.
+        def _per_share_row(label, key, fallback_num=None):
+            vals = []
+            for fy in fy_keys:
+                v = _get(fy, key)
+                if v is None and fallback_num:
+                    num, den = _get(fy, fallback_num), _get(fy, "shares_outstanding")
+                    try:
+                        v = float(num) / float(den) if num is not None and den else None
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        v = None
+                vals.append(v)
+            return [Paragraph(label, styles["RptBody"])] + [
+                Paragraph(("%.2f" % float(v)) if isinstance(v, (int, float)) else "n/a", styles["RptValue"]) for v in vals]
+        rows = [
+            hdr,
+            _data_row("Revenue",          [_get(fy, "revenue")    for fy in fy_keys]),
+            _data_row("Net Income",        [_get(fy, "net_income") for fy in fy_keys]),
+            _data_row("Total equity",      [_get(fy, "total_equity") for fy in fy_keys]),
+            _per_share_row("Book value / share", "book_value_per_share", fallback_num="total_equity"),
+            _per_share_row("Dividends / share", "dividends_per_share"),
+        ]
+    else:
+        rows = [
+            hdr,
+            _data_row("Revenue",          [_get(fy, "revenue")          for fy in fy_keys]),
+            _data_row("Net Income",        [_get(fy, "net_income")        for fy in fy_keys]),
+            _data_row("FCF",               [_fcf(fy)                      for fy in fy_keys]),
+            _data_row("Net debt", [_get(fy, "net_debt")          for fy in fy_keys]),
+        ]
 
     label_w = page_w * (0.34 if page_w < 260 else 0.22)
     data_w  = (page_w - label_w) / len(fy_keys)
@@ -2568,7 +2606,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         if _ph:
             col += [Paragraph("12-month price", styles["RptLabel"]), Spacer(1, 2),
                     _PriceSparkline(_ph, decisions.get(t, {}).get("price_target"), width), Spacer(1, 6)]
-        _kf = _key_financials_table(raw_financials, styles, width, years=3)
+        _kf = _key_financials_table(raw_financials, styles, width, years=3,
+                                    bank=_is_balance_sheet_financial_profile(((result.get("dcf_range") or {}).get(t) or {}).get("profile")))
         if _kf:
             col += [Paragraph("Key financials", styles["RptLabel"]), Spacer(1, 2), _kf, Spacer(1, 6)]
         col += _intel_compact(short_interest.get(t) or {}, earnings_qual.get(t) or {},
