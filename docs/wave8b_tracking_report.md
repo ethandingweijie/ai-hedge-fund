@@ -14,6 +14,8 @@ review-gated inputs accepted are run in an archive copy.
 | Step 1: clean NOI (B) | 6 of 12 | 19 of 32 | 17 of 34 | 3 | 2 |
 | Step 2: cohort P/NAV (C) | 6 of 12 | 19 of 32 | 17 of 34 | 3 | 2 |
 | Step 2: cohort P/NAV (C), inputs accepted (preview) | 9 of 12 | 19 of 32 | 17 of 34 | 2 | 2 |
+| Step 3: FFO field + REIT (Specialty / OpCo) (A) | 8 of 12 | 19 of 32 | 16 of 34 | 3 | 2 |
+| Step 3: FFO field + REIT (Specialty / OpCo) (A), inputs accepted (preview) | 10 of 12 | 20 of 32 | 16 of 34 | 2 | 2 |
 
 ## Step 1 (Bucket B): clean cash NOI
 
@@ -112,41 +114,113 @@ Two readings for the owner, both derivations rather than defects:
    changed here.
 Link REIT stays at +49% at par (the thin-cohort question above).
 
+## Step 3 (Bucket A): the FFO field, the live P/FFO leg, REIT (Specialty / OpCo)
+
+Built: `p_ffo` joins the comps fields (price / (net income + D&A) on the latest annual cash-flow statement,
+the Nareit definition; band 3 to 120x), read for REIT-labelled members only, one cash-flow call each, in
+the weekly refresh and in `scripts/backfill_comps_field.py` (which filled the local store on 2026-09-27:
+146 US REIT members, 137 fetched, 128 in band, 18 label medians). The P/FFO leg reads the live cohort
+first (a curated basket, else the label's industry cohort) and the April table only as the fallback, with
+the growth premium (forward EPS growth against the cohort) as the escalator on either basis; the source is
+on the leg trace. `REIT (Specialty / OpCo)` (P/FFO .40 anchor, Forward EV/EBITDA .30, NAV (Cap Rates) .30
+on clean NOI) takes Welltower, Ventas, Iron Mountain, Equinix, Digital Realty, American Tower, Crown Castle
+and SBA, and its curated eight-name basket is the cohort the anchor reads: **27.5x trailing P/FFO on the
+day**, measured, not set. The passive REIT profile is NAV .60 / P/FFO .40 (it was .50 / .30 / .15 / .05).
+FMP publishes no FFO line and no forward FFO, so the anchor is trailing FFO with forward EPS growth as
+the escalator, as decided.
+
+The market's trailing P/FFO by cohort (US, 2026-09-27; the April table paid 11 to 23x):
+
+| Label | all | large | April table |
+|---|---|---|---|
+| REIT - Healthcare Facilities | 14.7x (14) | 20.9x (8) | 15x |
+| REIT - Specialty | 16.1x (14) | 20.1x (8) | 22x data centre, 15x default |
+| REIT - Industrial | 16.6x (15) | 16.7x (7) | 18x |
+| REIT - Retail | 12.8x (20) | 12.5x (10) | 14x retail, 16x net lease |
+| REIT - Residential | 11.7x (13) | 12.1x (7) | 17x |
+| REIT - Diversified | 10.8x (15) | 14.4x (7) | 15x |
+| REIT - Office | 8.6x (11) | 10.0x (6) | 12x |
+| REIT - Hotel & Motel | 9.8x (11) | 10.2x (5) | 11x |
+| OpCo basket (eight names) | 27.5x (8) | | |
+
+Two things the table says before the measurement does. The cohort medians sit at or below the April table
+for most labels, so the live basis will not by itself lift Welltower and Ventas toward a market that pays
+them 49x and 24x: the basket's 27.5x is the operating REITs' own median and the escalator is what is left.
+And the residential and office cohorts trade well below the table, so the passive REITs on those labels
+will move down on the live basis. Both are what "measured, not set" means.
+
+Verification on the eight OpCo names and one passive REIT (`docs/baselines/w8b_step3_verify.log`):
+
+| Name | Step 2 (pending) | Step 3 | P/FFO leg | Forward EV/EBITDA leg | Clean-NOI NAV leg |
+|---|---|---|---|---|---|
+| Welltower | −67% | −52% (111 against 231) | 118 at 27.5x | 111 | 103 |
+| Ventas | −37% | −9% | 92 | 67 | 74 |
+| Iron Mountain | −54% | −3% | 108 | 150 | 66 |
+| Equinix | −29% | −11% | 954 | 899 | 832 |
+| Digital Realty | −7% | +8% | 239 | 170 | 157 |
+| American Tower | +26% | +56% | 271 | 238 | 277 (clean NOI overstated, step 1) |
+| Crown Castle | — | +17% | 71 | 79 | 91 |
+| SBA | — | +29% | 354 | 139 | 103 |
+| Prologis (passive, 60 / 40) | −32% | −37% | 108 at the live 16.6x industrial | | 67 (clean NOI understated, step 1) |
+
+Six of the eight operating names land inside the band on the basket's own multiple; Welltower closes 15
+points and stays outside because the market pays it 49x FFO against the basket's 27.5x; American Tower and
+SBA overshoot, the towers' clean NOI (step 1) and a P/FFO that sits on their FFO after heavy amortisation.
+
+**The escalator does not fire on a REIT, and this is structural.** The growth premium's quality gate reads
+`forward_roic <= wacc -> premium 1.0`, and a REIT's forward ROIC is EBIT over depreciated invested capital
+(Welltower 1.0%, Equinix 1.0% against a 5.5 to 7.5% WACC), so every REIT prices at premium 1.0 and the
+forward-EPS-growth escalator the decision named never reaches the FFO multiple. A REIT's return should be
+read on FFO over invested capital (or the gate skipped for the OpCo profile); that is a method decision for
+the owner, recorded here and not built. Until then the OpCo anchor is the basket median with no growth
+term, which is why Welltower stops at −52%.
+
+Passive REITs on the live P/FFO move with their cohorts (residential 11.7x and office 8.6x sit under the
+April table; industrial 16.6x and retail 12.8x near it), and Prologis carries step 1's understated NOI
+through the .60 NAV leg: −37%.
+
+**Preview with the 21 pre-fills accepted** (`docs/baselines/after_wave8b_step3_preview.json`): the OpCo
+names move as in the verification with their appraised NAVs beside the live multiple (Iron Mountain −49% ->
+−4%, Ventas −40% -> −14%, Equinix −12% -> −4%, Digital Realty −2% -> +10%, Welltower −68% -> −54%, American
+Tower +25% -> +48%); the passive names shift with their cohorts (Public Storage −7% -> −1%, Realty Income
++16% -> +10%). Eleven of twenty within the band (ten at step 2). Link REIT's par NAV now sits at +56% as
+its P/FFO leg computes on the live cohort.
+
 ## Per-ticker record (IV against spot at each stage)
 
-| Ticker | Profile now | vs spot Stage 0 | vs spot Wave 8 | vs spot Step 1 | vs spot Step 2 | vs cons (latest) | Flag (latest) |
-|---|---|---|---|---|---|---|---|
-| WELL | REIT | -80% | -78% | -67% | -67% | -70% | — |
-| PLD | REIT | -18% | -17% | -32% | -32% | -41% | — |
-| EQIX | REIT | -29% | -35% | -29% | -29% | -42% | — |
-| AMT | REIT | -42% | +4% | +26% | +26% | +1% | — |
-| DLR | REIT | -6% | -7% | -10% | -10% | -28% | — |
-| SPG | REIT | +35% | +25% | -1% | -1% | -10% | — |
-| PSA | REIT | -11% | -10% | -45% | -45% | -52% | — |
-| O | REIT | +20% | +0% | +23% | +23% | +5% | — |
-| VTR | REIT | -45% | -37% | -37% | -37% | -45% | — |
-| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -30% | — |
-| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | +3% | — |
-| IRM | REIT | -61% | -45% | -54% | -54% | -64% | — |
-| 00016.HK | Landlord / Investment Property (HK) | +39% | -7% | -22% | -22% | — | — |
-| 01109.HK | Property Developer (HK / China) | +93% | +6% | +6% | +6% | — | — |
-| 01113.HK | Landlord / Investment Property (HK) | +49% | +14% | +161% | +161% | — | — |
-| 01972.HK | Landlord / Investment Property (HK) | -79% | -39% | -33% | -33% | — | — |
-| 00688.HK | Property Developer (HK / China) | +85% | +32% | +32% | +32% | — | — |
-| 00012.HK | Landlord / Investment Property (HK) | -36% | -41% | -41% | -41% | — | — |
-| 00823.HK | REIT | — | — | -3% | -3% | — | — |
-| 00083.HK | Landlord / Investment Property (HK) | -0% | -27% | -37% | -37% | — | — |
-| 00004.HK | Landlord / Investment Property (HK) | -37% | -53% | -5% | -5% | — | — |
-| 02202.HK | Property Developer (HK / China) | — | — | — | — | — | Distressed_Developer |
-| 00960.HK | Property Developer (HK / China) | — | — | — | — | — | Distressed_Developer |
-| H78.SI | Landlord / Investment Property (HK) | -10% | -25% | -62% | -62% | — | — |
-| C38U.SI | S-REIT | -20% | -23% | -22% | -22% | — | — |
-| 9CI.SI | Real Estate Asset Manager (SG) | -72% | -72% | -68% | -68% | — | — |
-| A17U.SI | S-REIT | +17% | +18% | +25% | +25% | — | — |
-| C09.SI | Property Developer (SG) | -64% | -64% | -14% | -14% | — | — |
-| U14.SI | Property Developer (SG) | +17% | +15% | +38% | +38% | — | — |
-| N2IU.SI | S-REIT | -30% | -8% | +7% | +7% | — | — |
-| M44U.SI | S-REIT | +14% | +15% | +13% | +13% | — | — |
-| ME8U.SI | S-REIT | +6% | +8% | +18% | +18% | — | — |
-| AJBU.SI | S-REIT | +33% | +26% | +5% | +5% | — | — |
-| U06.SI | Property Developer (SG) | +9% | -5% | -21% | -21% | — | — |
+| Ticker | Profile now | vs spot Stage 0 | vs spot Wave 8 | vs spot Step 1 | vs spot Step 2 | vs spot Step 3 | vs cons (latest) | Flag (latest) |
+|---|---|---|---|---|---|---|---|---|
+| WELL | REIT (Specialty / OpCo) | -80% | -78% | -67% | -67% | -52% | -57% | — |
+| PLD | REIT | -18% | -17% | -32% | -32% | -37% | -46% | — |
+| EQIX | REIT (Specialty / OpCo) | -29% | -35% | -29% | -29% | -11% | -28% | — |
+| AMT | REIT (Specialty / OpCo) | -42% | +4% | +26% | +26% | +56% | +25% | — |
+| DLR | REIT (Specialty / OpCo) | -6% | -7% | -10% | -10% | +8% | -13% | — |
+| SPG | REIT | +35% | +25% | -1% | -1% | -8% | -15% | — |
+| PSA | REIT | -11% | -10% | -45% | -45% | -46% | -53% | — |
+| O | REIT | +20% | +0% | +23% | +23% | +51% | +28% | — |
+| VTR | REIT (Specialty / OpCo) | -45% | -37% | -37% | -37% | -9% | -21% | — |
+| CBRE | Real Estate Services | -4% | -7% | -7% | -7% | -8% | -30% | — |
+| DHI | Homebuilder / Land Developer | +5% | +16% | +16% | +16% | -3% | -14% | — |
+| IRM | REIT (Specialty / OpCo) | -61% | -45% | -54% | -54% | -3% | -24% | — |
+| 00016.HK | Landlord / Investment Property (HK) | +39% | -7% | -22% | -22% | -22% | — | — |
+| 01109.HK | Property Developer (HK / China) | +93% | +6% | +6% | +6% | +6% | — | — |
+| 01113.HK | Landlord / Investment Property (HK) | +49% | +14% | +161% | +161% | +161% | — | — |
+| 01972.HK | Landlord / Investment Property (HK) | -79% | -39% | -33% | -33% | -33% | — | — |
+| 00688.HK | Property Developer (HK / China) | +85% | +32% | +32% | +32% | +32% | — | — |
+| 00012.HK | Landlord / Investment Property (HK) | -36% | -41% | -41% | -41% | -41% | — | — |
+| 00823.HK | REIT | — | — | -3% | -3% | -2% | — | — |
+| 00083.HK | Landlord / Investment Property (HK) | -0% | -27% | -37% | -37% | -37% | — | — |
+| 00004.HK | Landlord / Investment Property (HK) | -37% | -53% | -5% | -5% | -5% | — | — |
+| 02202.HK | Property Developer (HK / China) | — | — | — | — | — | — | Distressed_Developer |
+| 00960.HK | Property Developer (HK / China) | — | — | — | — | — | — | Distressed_Developer |
+| H78.SI | Landlord / Investment Property (HK) | -10% | -25% | -62% | -62% | -62% | — | — |
+| C38U.SI | S-REIT | -20% | -23% | -22% | -22% | -22% | — | — |
+| 9CI.SI | Real Estate Asset Manager (SG) | -72% | -72% | -68% | -68% | -68% | — | — |
+| A17U.SI | S-REIT | +17% | +18% | +25% | +25% | +25% | — | — |
+| C09.SI | Property Developer (SG) | -64% | -64% | -14% | -14% | -14% | — | — |
+| U14.SI | Property Developer (SG) | +17% | +15% | +38% | +38% | +38% | — | — |
+| N2IU.SI | S-REIT | -30% | -8% | +7% | +7% | +7% | — | — |
+| M44U.SI | S-REIT | +14% | +15% | +13% | +13% | +13% | — | — |
+| ME8U.SI | S-REIT | +6% | +8% | +18% | +18% | +18% | — | — |
+| AJBU.SI | S-REIT | +33% | +26% | +5% | +5% | +5% | — | — |
+| U06.SI | Property Developer (SG) | +9% | -5% | -21% | -21% | -21% | — | — |

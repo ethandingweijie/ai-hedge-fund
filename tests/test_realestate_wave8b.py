@@ -57,3 +57,27 @@ def test_a_published_nav_is_read_at_the_cohort_p_nav_on_fair_value_exchanges_and
     src = inspect.getsource(d._compute_method_value)
     assert 'return _calibrated_published_nav(most_recent, peer, float(_pub), "NAV (Cap Rates)")' in src
     assert 'return _calibrated_published_nav(most_recent, peer, float(_rn), "RNAV (published)")' in src
+
+
+# ── step 3 (A): the FFO field, the live P/FFO leg, the REIT (Specialty / OpCo) profile ────────
+
+def test_the_ffo_field_and_the_opco_profile_are_the_owner_spec():
+    from src.data import regional_comps as rc
+    from src.data import report_families as rf
+    from src.data import sector_profiles as sp
+    assert "p_ffo" in rc.FIELDS and rc._BANDS["p_ffo"] == (3.0, 120.0)
+    assert rc._FFO_LABEL_PREFIXES == ("REIT",)
+    assert rc.fetch_p_ffo("X", None) is None                          # no market cap, no multiple, no call
+    assert "if symbol in _FFO_SYMBOLS and _km_row:" in inspect.getsource(rc.fetch_name_multiples)
+    P = sp.INDUSTRY_VALUATION_PROFILES["RealEstate"]
+    assert {m["name"]: m["weight"] for m in P["REIT"]["methods"]} == {"NAV (Cap Rates)": 0.6, "P/FFO": 0.4}
+    assert {m["name"]: m["weight"] for m in P["REIT (Specialty / OpCo)"]["methods"]} == {"P/FFO": 0.4, "Forward EV/EBITDA": 0.3, "NAV (Cap Rates)": 0.3}
+    assert rc.PROFILE_PEER_BASKETS["REIT (Specialty / OpCo)"]["US"] == ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")
+    assert [sp.get_wacc_profile_for_ticker(t)[1] for t in ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")] == ["REIT (Specialty / OpCo)"] * 8
+    assert sp.get_wacc_profile_for_ticker("PLD")[1] == "REIT" and sp.get_wacc_profile_for_ticker("PSA")[1] == "REIT"
+    assert rf.report_family_for("REIT (Specialty / OpCo)") == "Property, REITs and holdcos"
+    src = inspect.getsource(d._compute_method_value)
+    assert '_live_pffo = peer.get("p_ffo") if _basket_rank(peer, "p_ffo") >= 1 else None' in src
+    assert "mult = _pffo_base * sm * growth_premium" in src
+    # the sub-type cap rate still comes from the pins for the OpCo names
+    assert d._classify_reit_subtype("AMT", "", industry="REIT - Specialty") == "tower"

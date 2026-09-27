@@ -44,9 +44,10 @@ def test_the_twelve_labels_route_and_mortgage_reits_stay_out():
 
 DIRECTORY = {   # the owner's categories, 2026-09-27
     ("RealEstate", "REIT"): ["PLD", "REXR", "FR", "STAG", "O", "SPG", "KIM", "FRT", "ADC", "NNN", "AVB", "EQR", "ESS", "CPT", "MAA",
-                             "INVH", "AMH", "WELL", "VTR", "HR", "OHI", "EQIX", "DLR", "PSA", "EXR", "CUBE", "ARE", "BXP", "KRC", "HIW",
-                             "VICI", "GLPI", "AMT", "CCI", "SBAC", "IRM",
+                             "INVH", "AMH", "HR", "OHI", "PSA", "EXR", "CUBE", "ARE", "BXP", "KRC", "HIW", "VICI", "GLPI",
                              "00823.HK", "02778.HK", "00435.HK", "00808.HK", "00778.HK", "00405.HK", "87001.HK", "01426.HK", "01503.HK"],
+    # Wave 8b step 3 (owner decision A): the operating / infrastructure REITs on their own profile
+    ("RealEstate", "REIT (Specialty / OpCo)"): ["WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC"],
     ("Property", "Landlord / Investment Property (HK)"): ["00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK", "00004.HK", "00083.HK"],
     ("Property", "Property Developer (HK / China)"): ["01109.HK", "00688.HK", "00123.HK", "00960.HK", "01908.HK", "03900.HK", "02202.HK", "01030.HK"],
     ("Property", "Homebuilder / Land Developer"): ["DHI", "LEN", "NVR", "PHM", "TOL", "MTH", "KBH", "TMHC"],

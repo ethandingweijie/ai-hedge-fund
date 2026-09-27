@@ -3311,10 +3311,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "REIT": {
             "methods": [
-                {"name": "NAV (Cap Rates)", "weight": 0.50, "anchor": True,  "implementable": True,  "scenario_invariant": True},
-                {"name": "P/FFO",           "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/AFFO",          "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "DDM",             "weight": 0.05, "anchor": False, "implementable": True},
+                # Wave 8b step 3 (owner decision A, 2026-09-27): passive REITs at 60 / 40 (were .50 / .30 /
+                # .15 / .05 with P/AFFO and DDM); the operating REITs moved to REIT (Specialty / OpCo).
+                {"name": "NAV (Cap Rates)", "weight": 0.6, "anchor": True,  "implementable": True, "scenario_invariant": True},
+                {"name": "P/FFO",           "weight": 0.4, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF", "P/BV"],
             "rationale": (
@@ -3328,6 +3328,21 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "excluded — DCF is irrelevant for high-payout trusts, P/BV is "
                 "superseded by NAV."
             ),
+        },
+        "REIT (Specialty / OpCo)": {
+            # Wave 8b step 3 (owner decision A, 2026-09-27): Welltower, Ventas (senior-housing operating
+            # portfolios), Iron Mountain, Equinix, Digital Realty, American Tower, Crown Castle, SBA
+            # (digital infrastructure). High operating leverage platforms the market prices on FFO growth
+            # and an enterprise multiple, not on a passive cap-rate NAV: trailing synthetic P/FFO on the
+            # live eight-name basket (measured, never a set band) with forward EPS growth as the
+            # escalator, Forward EV/EBITDA for the capital structure, the clean-NOI NAV for the assets.
+            "methods": [
+                {"name": "P/FFO",             "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "Forward EV/EBITDA", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "NAV (Cap Rates)",   "weight": 0.30, "anchor": False, "implementable": True, "scenario_invariant": True},
+            ],
+            "excluded": ["DCF", "P/BV", "P/AFFO", "DDM"],
+            "rationale": "Operating / infrastructure REIT: FFO multiple on the live specialty basket, forward EBITDA multiple for the platform, cap-rate NAV on clean NOI for the assets.",
         },
     },
 
@@ -3648,6 +3663,7 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Property Developer (HK / China)":     {"ev_ebitda": 11.8, "pe": 14.9, "ev_revenue": 3.6, "pb": 0.4, "fcf_yield": 0.068, "growth_avg": -0.009, "pe_ntm": 12.8, "ev_ebitda_ntm": 10.4},
     "Landlord / Investment Property (HK)": {"ev_ebitda": 16.2, "pe": 50.0, "ev_revenue": 5.3, "pb": 0.3, "fcf_yield": 0.015, "growth_avg": 0.006},
     "Homebuilder / Land Developer":        {"ev_ebitda": 11.9, "pe": 13.7, "ev_revenue": 1.4, "pb": 1.2, "fcf_yield": 0.056, "growth_avg": 0.009, "pe_ntm": 12.4, "ev_ebitda_ntm": 10.9},
+    "REIT (Specialty / OpCo)":             {"ev_ebitda": 19.5, "pe": 31.1, "ev_revenue": 10.8, "pb": 7.2, "fcf_yield": 0.05, "growth_avg": 0.035, "pe_ntm": 31.7, "ev_ebitda_ntm": 18.3},   # Wave 8b: US REIT - Specialty large, 2026-09-27
     "Real Estate Services":                {"ev_ebitda": 14.9, "pe": 40.2, "ev_revenue": 1.3, "pb": 1.8, "fcf_yield": 0.05, "growth_avg": 0.073, "pe_ntm": 15.7, "ev_ebitda_ntm": 8.9},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
@@ -3827,6 +3843,7 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Landlord / Investment Property (HK)": ["00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK"],
     "Homebuilder / Land Developer": ["DHI", "LEN", "NVR", "PHM", "TOL", "MTH", "KBH", "TMHC"],
     "Real Estate Services": ["CBRE", "JLL", "CWK", "CIGI"],
+    "REIT (Specialty / OpCo)": ["WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC"],   # Wave 8b step 3
     # Owner Wave 6 (2026-09-27)
     "Card Issuer & Consumer Lender": ["AXP", "COF", "SYF", "DFS", "ALLY"],
     "Insurance Broker":     ["MMC", "AON", "AJG", "BRO", "WTW"],
@@ -5513,7 +5530,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "WPC":   ("RealEstate", "",                   "R.E.I.T.",                         "W. P. Carey REIT — diversified net-lease"),
     "SRC":   ("RealEstate", "",                   "R.E.I.T.",                         "Spirit Realty (legacy ticker — now acquired by O) — net-lease"),
     "BNL":   ("RealEstate", "",                   "R.E.I.T.",                         "Broadstone Net Lease REIT — single-tenant net lease"),
-    "VTR": ("RealEstate", "REIT", "REIT - Healthcare Facilities", "Ventas (Wave 8 owner directory, 2026-09-27)"),
+    "VTR": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Healthcare Facilities", "Ventas (Wave 8 owner directory, 2026-09-27)"),
     "CSGP": ("Property", "Real Estate Services", "Real Estate - Services", "CoStar Group (data and marketplace; platform economics, flagged) (Wave 8 owner directory, 2026-09-27)"),
     "ZG": ("Property", "Real Estate Services", "Real Estate - Services", "Zillow Group A (Wave 8 owner directory, 2026-09-27)"),
     "Z": ("Property", "Real Estate Services", "Real Estate - Services", "Zillow Group (portal; platform economics, flagged) (Wave 8 owner directory, 2026-09-27)"),
@@ -5532,10 +5549,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "NVR": ("Property", "Homebuilder / Land Developer", "Residential Construction", "NVR (Wave 8 owner directory, 2026-09-27)"),
     "LEN": ("Property", "Homebuilder / Land Developer", "Residential Construction", "Lennar (Wave 8 owner directory, 2026-09-27)"),
     "DHI": ("Property", "Homebuilder / Land Developer", "Residential Construction", "D.R. Horton (Wave 8 owner directory, 2026-09-27)"),
-    "IRM": ("RealEstate", "REIT", "REIT - Specialty", "Iron Mountain (Wave 8 owner directory, 2026-09-27)"),
-    "SBAC": ("RealEstate", "REIT", "REIT - Specialty", "SBA Communications (tower) (Wave 8 owner directory, 2026-09-27)"),
-    "CCI": ("RealEstate", "REIT", "REIT - Specialty", "Crown Castle (tower) (Wave 8 owner directory, 2026-09-27)"),
-    "AMT": ("RealEstate", "REIT", "REIT - Specialty", "American Tower (tower) (Wave 8 owner directory, 2026-09-27)"),
+    "IRM": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "Iron Mountain (Wave 8 owner directory, 2026-09-27)"),
+    "SBAC": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "SBA Communications (tower) (Wave 8 owner directory, 2026-09-27)"),
+    "CCI": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "Crown Castle (tower) (Wave 8 owner directory, 2026-09-27)"),
+    "AMT": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "American Tower (tower) (Wave 8 owner directory, 2026-09-27)"),
     "GLPI": ("RealEstate", "REIT", "REIT - Diversified", "Gaming and Leisure Properties (gaming net lease) (Wave 8 owner directory, 2026-09-27)"),
     "VICI": ("RealEstate", "REIT", "REIT - Diversified", "VICI Properties (gaming net lease) (Wave 8 owner directory, 2026-09-27)"),
     "HIW": ("RealEstate", "REIT", "REIT - Office", "Highwoods Properties (Wave 8 owner directory, 2026-09-27)"),
@@ -5545,11 +5562,11 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "CUBE": ("RealEstate", "REIT", "REIT - Industrial", "CubeSmart (self storage) (Wave 8 owner directory, 2026-09-27)"),
     "EXR": ("RealEstate", "REIT", "REIT - Industrial", "Extra Space Storage (self storage) (Wave 8 owner directory, 2026-09-27)"),
     "PSA": ("RealEstate", "REIT", "REIT - Industrial", "Public Storage (self storage) (Wave 8 owner directory, 2026-09-27)"),
-    "DLR": ("RealEstate", "REIT", "REIT - Specialty", "Digital Realty (data centre) (Wave 8 owner directory, 2026-09-27)"),
-    "EQIX": ("RealEstate", "REIT", "REIT - Specialty", "Equinix (data centre) (Wave 8 owner directory, 2026-09-27)"),
+    "DLR": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "Digital Realty (data centre) (Wave 8 owner directory, 2026-09-27)"),
+    "EQIX": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Specialty", "Equinix (data centre) (Wave 8 owner directory, 2026-09-27)"),
     "OHI": ("RealEstate", "REIT", "REIT - Healthcare Facilities", "Omega Healthcare (Wave 8 owner directory, 2026-09-27)"),
     "HR": ("RealEstate", "REIT", "REIT - Healthcare Facilities", "Healthcare Realty Trust (Wave 8 owner directory, 2026-09-27)"),
-    "WELL": ("RealEstate", "REIT", "REIT - Healthcare Facilities", "Welltower (Wave 8 owner directory, 2026-09-27)"),
+    "WELL": ("RealEstate", "REIT (Specialty / OpCo)", "REIT - Healthcare Facilities", "Welltower (Wave 8 owner directory, 2026-09-27)"),
     "AMH": ("RealEstate", "REIT", "REIT - Residential", "American Homes 4 Rent (Wave 8 owner directory, 2026-09-27)"),
     "INVH": ("RealEstate", "REIT", "REIT - Residential", "Invitation Homes (Wave 8 owner directory, 2026-09-27)"),
     "MAA": ("RealEstate", "REIT", "REIT - Residential", "Mid-America Apartment (Wave 8 owner directory, 2026-09-27)"),

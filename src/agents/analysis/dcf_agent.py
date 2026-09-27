@@ -7481,7 +7481,16 @@ def _compute_method_value(
             most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
         )
         mults = _REIT_SUBTYPE_MULTIPLES.get(reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
-        mult = mults["p_ffo"] * sm * growth_premium
+        # Wave 8b step 3 (owner decision A): the live cohort's trailing synthetic P/FFO first (a curated
+        # basket or the label's industry cohort), the April table as the fallback; the growth premium
+        # (forward EPS growth against the cohort) is the escalator on either basis.
+        _live_pffo = peer.get("p_ffo") if _basket_rank(peer, "p_ffo") >= 1 else None
+        _pffo_base = float(_live_pffo) if isinstance(_live_pffo, (int, float)) and _live_pffo > 0 else mults["p_ffo"]
+        _leg_trace(kind="p_ffo", multiple_base=_pffo_base,
+                   multiple_source=(f"live {((peer.get('_comp_basis') or {}).get('p_ffo') or {}).get('key')} cohort P/FFO"
+                                    if _live_pffo else f"sub-type table ({reit_subtype})"),
+                   growth_premium=growth_premium, scenario_band=sm)
+        mult = _pffo_base * sm * growth_premium
 
         _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
         ffo = _reit.get("ffo")

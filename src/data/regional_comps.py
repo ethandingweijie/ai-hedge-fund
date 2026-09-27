@@ -223,6 +223,11 @@ _BANDS: dict[str, tuple[float, float]] = {
     #     ev_ebit = evToEBITDATTM x ebitdaMarginTTM / ebitMarginTTM
     # None when the EBIT margin is not positive (a loss-maker has no EV/EBIT).
     "ev_ebit":       (0.5, 120.0),
+    # Wave 8b step 3 (owner decision A, 2026-09-27): trailing synthetic FFO multiple, price / (net income +
+    # D&A), the Nareit definition on the latest annual statements. Read for REIT-labelled members only (one
+    # cash-flow call each), so the REIT profiles price their FFO leg on the live cohort instead of the
+    # April table. FMP publishes no FFO line and no forward FFO; the forward escalator is the growth premium.
+    "p_ffo":         (3.0, 120.0),
 }
 
 #: A consensus figure resting on fewer analysts than this is one broker's model,
@@ -294,6 +299,7 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Hyperscaler / Tech Conglomerate": {"US": ("AAPL", "MSFT", "GOOG", "META", "AMZN", "ORCL")},
     "Mature SaaS":                 {"US": ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")},
     "Mature Platform":             {"US": ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")},
+    "REIT (Specialty / OpCo)":     {"US": ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")},   # Wave 8b step 3
 }
 
 
@@ -607,6 +613,26 @@ def ntm_enabled() -> bool:
     return os.environ.get("COMPS_NTM_DISABLED", "").strip().lower() not in ("1", "true", "yes", "on")
 
 
+#: Wave 8b step 3: the members whose trailing P/FFO the refresh reads (filled per refresh from the
+#: REIT-labelled baskets; `p_ffo_for_all` forces the extra call for every symbol, for a targeted backfill).
+_FFO_SYMBOLS: set[str] = set()
+_FFO_LABEL_PREFIXES = ("REIT",)
+
+
+def fetch_p_ffo(symbol: str, market_cap: Optional[float]) -> Optional[float]:
+    """price / (net income + D&A) on the latest annual cash-flow statement, or None."""
+    if not market_cap or market_cap <= 0:
+        return None
+    cf = _fmp_get(f"{_STABLE}/cash-flow-statement", {"symbol": symbol, "period": "annual", "limit": 1}, api_key=None)
+    if not (isinstance(cf, list) and cf):
+        return None
+    ni, da = _safe_float(cf[0].get("netIncome")), _safe_float(cf[0].get("depreciationAndAmortization"))
+    if ni is None or da is None:
+        return None
+    ffo = ni + abs(da)
+    return (float(market_cap) / ffo) if ffo > 0 else None
+
+
 def fetch_name_multiples(symbol: str) -> Optional[dict]:
     """TTM multiples, mean revenue growth and NTM multiples for one name.
 
@@ -642,6 +668,9 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
                 if v is not None]
         if vals:
             out["growth_avg"] = sum(vals) / len(vals)
+
+    if symbol in _FFO_SYMBOLS and _km_row:
+        out["p_ffo"] = fetch_p_ffo(symbol, _safe_float(_km_row.get("marketCap")))
 
     if ntm_enabled() and (_km_row or _rt_row):
         est = _fmp_get(f"{_STABLE}/analyst-estimates",
@@ -1203,6 +1232,10 @@ def refresh_regional_comps(
 
     universe = dedupe_universe(universe, exclude_names=exclude)
     industry_baskets, sector_baskets, symbols = build_baskets(universe)
+    # Wave 8b step 3: the REIT-labelled members take the extra cash-flow call for p_ffo.
+    _FFO_SYMBOLS.clear()
+    _FFO_SYMBOLS.update(r["symbol"] for key, rows in industry_baskets.items()
+                        if str(key).startswith(_FFO_LABEL_PREFIXES) for r in rows if r.get("symbol"))
 
     metrics = _fetch_all(symbols, max_workers=max_workers)
 

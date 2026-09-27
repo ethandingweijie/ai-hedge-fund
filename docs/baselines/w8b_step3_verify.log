@@ -1,0 +1,67 @@
+== WELL | REIT (Specialty / OpCo) | IV 111.18 | anchor P/FFO | spot 231.21 | ccy USD
+   flag: REIT sub-type: healthcare | cap_rate 5.10% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$3.08B AFFO=$3.04B NOI=$4.18B [clean NOI (revenue - cost of revenue)]
+   flag: Revenue-scale cap on analyst bands: base growth capped to 15.0% ($10.7B revenue)
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.18) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 102.92, 'Forward EV/EBITDA': 110.93, 'P/FFO': 117.57, 'Forward P/E': 143.14, 'SOTP (segments)': 19.08, 'SOTP 12m (probabilistic)': 27.35}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== VTR | REIT (Specialty / OpCo) | IV 79.22 | anchor P/FFO | spot 86.64 | ccy USD
+   flag: REIT sub-type: healthcare | cap_rate 5.10% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$1.63B AFFO=$1.40B NOI=$2.24B [EBITDA (fallback: revenue - cost of revenue not positive)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.23) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 73.62, 'Forward EV/EBITDA': 67.27, 'P/FFO': 92.39, 'Forward P/E': 29.37, 'SOTP (segments)': 14.32, 'SOTP 12m (probabilistic)': 22.53}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== IRM | REIT (Specialty / OpCo) | IV 108.19 | anchor P/FFO | spot 111.38 | ccy USD
+   flag: REIT sub-type: specialty | cap_rate 5.70% | P/FFO 15x | P/AFFO 17x | maint_capex 4.0% rev | FFO=$1.17B AFFO=$893M NOI=$1.77B [clean NOI (revenue - cost of revenue)]
+   flag: Gate B (base): Forward ROIC (1.5% [Y10 projected]) < threshold (2.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.39) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 65.86, 'Forward EV/EBITDA': 150.44, 'P/FFO': 108.24, 'Forward P/E': 125.33, 'SOTP (segments)': 0.49, 'SOTP 12m (probabilistic)': 12.55}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== EQIX | REIT (Specialty / OpCo) | IV 900.94 | anchor P/FFO | spot 1008.08 | ccy USD
+   flag: REIT sub-type: data_center | cap_rate 5.00% | P/FFO 22x | P/AFFO 25x | maint_capex 2.0% rev | FFO=$3.42B AFFO=$3.23B NOI=$4.75B [clean NOI (revenue - cost of revenue)]
+   flag: Gate B (base): Forward ROIC (1.0% [Y10 projected]) < threshold (2.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.26) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 832.48, 'Forward EV/EBITDA': 899.08, 'P/FFO': 953.68, 'Forward P/E': 868.36, 'SOTP (segments)': 65.84, 'SOTP 12m (probabilistic)': 96.98}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== DLR | REIT (Specialty / OpCo) | IV 193.42 | anchor P/FFO | spot 178.61 | ccy USD
+   flag: REIT sub-type: data_center | cap_rate 5.00% | P/FFO 22x | P/AFFO 25x | maint_capex 2.0% rev | FFO=$3.20B AFFO=$3.20B NOI=$3.39B [clean NOI (revenue - cost of revenue)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.14) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 156.99, 'Forward EV/EBITDA': 169.72, 'P/FFO': 238.5, 'Forward P/E': 137.06, 'SOTP (segments)': 48.48, 'SOTP 12m (probabilistic)': 69.56}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== AMT | REIT (Specialty / OpCo) | IV 262.98 | anchor P/FFO | spot 169.03 | ccy USD
+   flag: REIT sub-type: tower | cap_rate 5.10% | P/FFO 20x | P/AFFO 22x | maint_capex 3.0% rev | FFO=$4.59B AFFO=$4.27B NOI=$7.84B [clean NOI (revenue - cost of revenue)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.23) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 277.49, 'Forward EV/EBITDA': 237.78, 'P/FFO': 271.0, 'Forward P/E': 350.71}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 0.999 | flag None
+== CCI | REIT (Specialty / OpCo) | IV 79.49 | anchor P/FFO | spot 67.84 | ccy USD
+   flag: REIT sub-type: tower | cap_rate 5.10% | P/FFO 20x | P/AFFO 22x | maint_capex 3.0% rev | FFO=$1.13B AFFO=$1.01B NOI=$2.82B [clean NOI (revenue - cost of revenue)]
+   flag: Gate B (base): Forward ROIC (2.7% [Y10 projected]) < threshold (2.9%) → TGR set to 0
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.15) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 90.66, 'Forward EV/EBITDA': 79.06, 'P/FFO': 71.42, 'Forward P/E': 96.83}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 1.0 | flag None
+== SBAC | REIT (Specialty / OpCo) | IV 214.27 | anchor P/FFO | spot 166.15 | ccy USD
+   flag: REIT sub-type: tower | cap_rate 5.10% | P/FFO 20x | P/AFFO 22x | maint_capex 3.0% rev | FFO=$1.53B AFFO=$1.45B NOI=$1.17B [clean NOI (revenue - cost of revenue)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT (Specialty / OpCo)' is not a capital-turnover profile, so revenue ÷ invested capital (0.28) is not a sales-to-capital ratio here and no deduction is computed. Measu
+   legs: {'NAV (Cap Rates)': 102.58, 'Forward EV/EBITDA': 139.05, 'P/FFO': 354.46, 'Forward P/E': 346.11}
+   weights: [('P/FFO', 0.4), ('Forward EV/EBITDA', 0.3), ('NAV (Cap Rates)', 0.3)] | dropped: []
+   mults: {'ev_ebitda': (21.995, 'profile', 'REIT (Specialty / OpCo)'), 'pe': (75.742, 'profile', 'REIT (Specialty / OpCo)'), 'pb': (3.508, 'profile', 'REIT (Specialty / OpCo)'), 'fcf_yield': (0.038, 'profile', 'REIT (Specialty / OpCo)'), 'growth_avg': (0.089, 'profile', 'REIT (Specialty / OpCo)'), 'pe_ntm': (50.39, 'profile', 'REIT (Specialty / OpCo)')}
+   route: ticker_override [('router', 'REIT (Specialty / OpCo)'), ('industry_map', 'REIT'), ('ticker_override', 'REIT (Specialty / OpCo)')] | premium 0.892 | flag None
+== PLD | REIT | IV 83.42 | anchor NAV (Cap Rates) | spot 133.03 | ccy USD
+   flag: REIT sub-type: industrial | cap_rate 5.40% | P/FFO 18x | P/AFFO 20x | maint_capex 3.0% rev | FFO=$6.04B AFFO=$6.04B NOI=$5.24B [clean NOI (revenue - cost of revenue)]
+   flag: Growth reinvestment NOT leviable on this profile: 'REIT' is not a capital-turnover profile, so revenue ÷ invested capital (0.10) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference o
+   legs: {'P/FFO': 108.33, 'NAV (Cap Rates)': 66.81, 'Forward P/E': 51.52, 'Forward EV/EBITDA': 69.21}
+   weights: [('NAV (Cap Rates)', 0.6), ('P/FFO', 0.4)] | dropped: []
+   mults: {'ev_ebitda': (15.0, 'static', None), 'pe': (14.0, 'static', None), 'pb': (1.0, 'static', None), 'fcf_yield': (0.065, 'static', None), 'growth_avg': (0.03, 'static', None)}
+   route: router [('router', 'REIT')] | premium 1.0 | flag None

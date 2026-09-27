@@ -84,11 +84,14 @@ def test_sreit_profile_is_ddm_anchored():
 
 
 def test_us_reit_profile_is_unchanged():
-    """The US REIT row must keep its NAV-anchored, P/FFO-weighted shape."""
+    """The US REIT row must keep its NAV-anchored, P/FFO-weighted shape.
+
+    Wave 8b step 3 (owner decision A, 2026-09-27): the passive REIT profile is NAV .60 / P/FFO .40 (it was
+    .50 / .30 / .15 / .05 with P/AFFO and DDM); the operating REITs moved to REIT (Specialty / OpCo)."""
     spec = INDUSTRY_VALUATION_PROFILES["RealEstate"]["REIT"]
     methods = {m["name"]: m["weight"] for m in spec["methods"]}
-    assert methods["NAV (Cap Rates)"] == 0.50
-    assert methods["P/FFO"] == 0.30
+    assert methods["NAV (Cap Rates)"] == 0.60
+    assert methods["P/FFO"] == 0.40
     assert "P/FFO" not in spec["excluded"]
 
 

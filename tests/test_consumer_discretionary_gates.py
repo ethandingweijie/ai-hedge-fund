@@ -1732,7 +1732,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (129, 39), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 (2026-09-27) +4 profiles (HK/China developer, HK landlord, homebuilder, real estate services), none normalised
+    assert (total, with_norm) == (130, 39), (total, with_norm)   # Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 (2026-09-27) +REIT (Specialty / OpCo), none normalised
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2102,7 +2102,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (129, 33, 33, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 (2026-09-27) +4 profiles, none on trailing P/E
+    assert (tot, trail, elig, anchored) == (130, 33, 33, 10)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1, none on trailing P/E
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
