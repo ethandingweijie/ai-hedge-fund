@@ -71,7 +71,7 @@ def test_the_pins_ahead_of_scope(ticker, profile):
     (("Consumer", "Restaurants"), {"Forward EV/EBITDA": .45, "Forward P/E": .35, "FCF Yield": .20}, "Forward EV/EBITDA"),
     (("Consumer", "Casinos & Integrated Resorts"), {"Forward EV/EBITDA": .50, "EV/EBITDA (norm)": .30, "FCF Yield": .20}, "Forward EV/EBITDA"),
     (("Consumer", "Lodging (Asset-Light)"), {"Forward EV/EBITDA": .50, "Forward P/E": .30, "FCF Yield": .20}, "Forward EV/EBITDA"),
-    (("Consumer", "Hotel Owner-Operator (HK)"), {"RNAV (published)": .50, "EV/EBITDA": .30, "DDM": .20}, "RNAV (published)"),
+    (("Consumer", "Hotel Owner-Operator (HK)"), {"RNAV (published)": .50, "EV/EBITDA": .30, "DDM": .20}, "EV/EBITDA"),   # anchor flag on a computable leg
     (("Consumer", "Online Travel"), {"Forward P/E": .40, "Forward EV/EBITDA": .40, "FCF Yield": .20}, "Forward P/E"),
     (("Consumer", "Cruise Lines"), {"Forward EV/EBITDA": .50, "EV/EBITDA (norm)": .30, "Forward P/E": .20}, "Forward EV/EBITDA"),
     (("Consumer", "Auto Parts & Suppliers"), {"EV/EBITDA (norm)": .45, "Forward P/E": .35, "FCF Yield": .20}, "EV/EBITDA (norm)"),

@@ -2822,9 +2822,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Hotel Owner-Operator (HK)": {
             # Wave 10 (owner, 2026-09-27), decision 1: the HK market row for Travel Lodging. SGX hotel owners keep Specialised Accommodation (SG).
+            # The anchor flag sits on EV/EBITDA, not on the proxied NAV row: industry routing declines a profile
+            # whose anchor resolves to a proxy (the Wave 2 P/Rate Base precedent). Weights are the owner's.
             "methods": [
-                {"name": "RNAV (published)", "weight": 0.5, "anchor": True, "implementable": False, "proxy": "P/BV", "note": "the published NAV once an input is accepted; book (P/BV) prices the weight until then"},
-                {"name": "EV/EBITDA", "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "RNAV (published)", "weight": 0.5, "anchor": False, "implementable": False, "proxy": "P/BV", "note": "the published NAV once an input is accepted; book (P/BV) prices the weight until then"},
+                {"name": "EV/EBITDA", "weight": 0.3, "anchor": True, "implementable": True},
                 {"name": "DDM", "weight": 0.2, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF"],
