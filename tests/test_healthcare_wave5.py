@@ -35,7 +35,7 @@ def test_every_health_label_is_in_scope_and_routes():
     for label, target in LABELS.items():
         assert label in scope, label
         assert ipm.profile_for_industry(label) == target, label
-    assert "Software - Application" not in scope                     # VEEV stays on Tech; out of the wave
+    assert ipm.profile_for_industry("Software - Application") == ("Tech", "Mature SaaS")   # VEEV stays on Tech; in scope since Wave 7 (2026-09-27), not a health row
     assert ipm.market_map("SG")["Medical - Care Facilities"] == ("Healthcare", "Healthcare Provider (SG)")
 
 

@@ -461,9 +461,12 @@ class TestTencentIsTheExceptionInsideACorrectRow:
 
     def test_peers_still_take_the_row(self):
         from src.data.industry_profile_map import profile_for_ticker
+        # Wave 7 (owner decision 6, 2026-09-27): the HK market map sends the label to China
+        # Internet Platform (Baidu, Kuaishou join Tencent); the US row itself is unchanged.
         for peer in ("01024.HK", "01698.HK"):
             assert profile_for_ticker(peer, "Internet Content & Information") == (
-                "Tech", "Mature Platform"), peer
+                "Tech", "China Internet Platform"), peer
+        assert profile_for_ticker("SPOT", "Internet Content & Information") == ("Tech", "Mature Platform")
 
     def test_tencent_overrides_to_the_conglomerate_profile(self):
         from src.data.industry_profile_map import profile_for_ticker

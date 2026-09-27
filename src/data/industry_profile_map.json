@@ -30,9 +30,10 @@
     "v17: Wave 4 consumer staples (owner universe 2026-09-26: 21 names; BF-B and 06808.HK cut, MDLZ kept). Eleven staples labels enter routing_scope -- until now none was in scope, so the map's own rows for beverages, packaged foods, household, tobacco and food distribution were never applied and 20 of 23 names fell to the ratio ladder (Coca-Cola as Luxury Goods, Mondelez as Mature SaaS). New rows: Agricultural Farm Products -> Agribusiness & Food Processing (SG keeps Agribusiness & Food (SG) by market); Wineries and Confectioners -> Food & Beverage (pooled families for the thin baskets); Discount Stores, Grocery Stores and Food Distribution -> Grocery & Discount Retail (Food Distribution moves off Traditional Retail); Tobacco -> Tobacco (owner: a standalone profile, not Household). Department Stores stays rowless (Sun Art cut). COST is pinned Membership / Subscription Retail in the same commit as the Discount Stores row; WMT's pin moves from Traditional Retail to Grocery & Discount Retail; EL keeps its Luxury Goods pin (owner, 2026-09-26: prestige beauty is brand economics, not household scale).",
     "v18: Wave 5 health care (owner spec 2026-09-26). Seven health labels enter routing_scope -- as in Wave 4, none was in scope and 12 of 16 names fell to the ratio ladder (Vertex on MedTech, Medtronic on Large Cap Pharma, Baxter on Mature SaaS). New rows: Medical - Devices -> Biopharma / MedTech / Devices; Medical - Healthcare Plans -> HealthcareServices / Managed Care. Biotechnology keeps Pre-approval Biotech as its default row; commercial biotechs (VRTX, 01801.HK) are pinned to the new Commercial Biotech profile. Pins off the rows: MDT, SYK, BAX, 00853.HK -> MedTech / Devices (00853.HK produced no value on Pre-approval Biotech); 01093.HK -> Large Cap Pharma (a drug maker labelled Biotechnology); 02269.HK -> CDMO / Life Science Tools (a CDMO labelled Biotechnology). BSL.SI reaches Healthcare Provider (SG) by the SG market row. VEEV stays on Tech / Mature SaaS (health-care software; out of the Wave 5 scorecard). Software - Application is not brought into scope.",
     "v19: Wave 5 refinements (owner, 2026-09-26). Medical - Distribution -> HealthcareServices / Pharma Distribution joins routing_scope: Sinopharm (01099.HK) and CR Pharmaceutical (03320.HK) had been placed on the provider profile and priced +165% and +233% against spot on a hospital cohort; the HK Medical - Distribution cohort has 7 members. Pins: 01666.HK (Tong Ren Tang Technologies, a TCM manufacturer) moves from MedTech / Devices to Large Cap Pharma; ISRG and 02252.HK move to the new Surgical Robotics / Capital Systems profile (method table PROPOSED). Commercial Biotech declares a Forward P/E sanity gate (45x, roll into EV/Fwd Rev and rNPV); Managed Care declares the structural flag Trough MLR Cycle. 01666.HK also takes the HK Drug Manufacturers - Specialty & Generic peer basket (n=17, P/E 18.0x) through comps_industry_overrides: its FMP label, Drug Manufacturers - General, has 3 HK members, so the P/E and FCF-yield rungs fell to the HKSE Healthcare sector median (24.9x, biotech-heavy).",
-    "v20: Wave 6 financials (owner decisions 2026-09-27). Eleven Financials labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ladder (Ping An, China Life, AIA on Money Center Bank; COF and SYF on Mature Platform with a DCF on a lender; MMC, AON, SPGI, MSCI on Mature Platform; BRK-B a Hyperscaler). Rows: Banks - Regional -> Super-Regional Bank (was EM Bank; the HK market map keeps EM Bank for HK regionals); Banks (the SG string) -> Money Center Bank, SG market map -> Money Center Bank (SG); Financial - Credit Services -> Card Issuer & Consumer Lender (new profile; V, MA keep Payment Networks pins); Insurance - Diversified -> Insurance (P&C) (was the life profile); Insurance - Brokers -> Insurance Broker (new profile). Pins: PGR, CB, AIG, TRV -> Insurance (P&C); AIA, China Life, Ping An, Great Eastern -> Insurance (life, embedded value input); USB, PNC, TFC -> Super-Regional Bank; SPGI, MSCI -> Financial Data & Ratings (new); 00388.HK -> Market Infrastructure; BRK-B -> Holding Company (look-through sotp pre-fill). Cut from the wave: J36.SI, BN4.SI (Wave 9), 00945.HK (MFC.TO is the primary line). Conglomerates stays out of scope. Decision 5: comps_exchange_overrides sends S68.SI (SGX) to the US Financial - Data & Stock Exchanges cohort for its peer basket, a documented exception to the one-market rule -- SES has no exchange cohort and its sector rung is banks at 9.8x; the industry label is the same string in both markets."
+    "v20: Wave 6 financials (owner decisions 2026-09-27). Eleven Financials labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ladder (Ping An, China Life, AIA on Money Center Bank; COF and SYF on Mature Platform with a DCF on a lender; MMC, AON, SPGI, MSCI on Mature Platform; BRK-B a Hyperscaler). Rows: Banks - Regional -> Super-Regional Bank (was EM Bank; the HK market map keeps EM Bank for HK regionals); Banks (the SG string) -> Money Center Bank, SG market map -> Money Center Bank (SG); Financial - Credit Services -> Card Issuer & Consumer Lender (new profile; V, MA keep Payment Networks pins); Insurance - Diversified -> Insurance (P&C) (was the life profile); Insurance - Brokers -> Insurance Broker (new profile). Pins: PGR, CB, AIG, TRV -> Insurance (P&C); AIA, China Life, Ping An, Great Eastern -> Insurance (life, embedded value input); USB, PNC, TFC -> Super-Regional Bank; SPGI, MSCI -> Financial Data & Ratings (new); 00388.HK -> Market Infrastructure; BRK-B -> Holding Company (look-through sotp pre-fill). Cut from the wave: J36.SI, BN4.SI (Wave 9), 00945.HK (MFC.TO is the primary line). Conglomerates stays out of scope. Decision 5: comps_exchange_overrides sends S68.SI (SGX) to the US Financial - Data & Stock Exchanges cohort for its peer basket, a documented exception to the one-market rule -- SES has no exchange cohort and its sector rung is banks at 9.8x; the industry label is the same string in both markets.",
+    "v21: Wave 7 technology and communications (owner decisions 2026-09-27). Fourteen labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ratio ladder, whose Tech branch compared a venue-currency revenue to a US$100bn line (Lenovo, NetEase, Kuaishou, BYD Electronic became hyperscalers). Rows: Telecommunications Services -> Telecom Carrier (new; Stable Growth stays as a profile); Entertainment and Electronic Gaming & Multimedia -> Media & Streaming (new); Communication Equipment -> Networking & Communication Equipment (new); Information Technology Services -> IT Services; Advertising Agencies -> Ad / Consulting; Consumer Electronics -> Consumer Electronics / Hardware Ecosystem (AAPL keeps its Hyperscaler pin). HK market map: Internet Content & Information and Electronic Gaming & Multimedia -> China Internet Platform (Baidu, Kuaishou, NetEase join Tencent); Computer Hardware and Hardware, Equipment & Parts -> Consumer Electronics / Hardware Ecosystem. Pins: TXN ADI NXPI MCHP ON -> Analog / Mixed-signal IDM (new); LRCX KLAC TER -> Equipment / EDA; T VZ TMUS CMCSA CHTR and the three China carriers -> Telecom Carrier; NFLX DIS WBD EA TTWO -> Media & Streaming; CSCO ANET CIEN MSI JNPR -> Networking; ACN IBM CTSH INFY -> IT Services; SMIC and Hua Hong -> IDM / Foundry. Cut from the wave: 00020.HK, CJLU.SI, AIY.SI. Engine: the static tech table is a fallback (decision 2, alternative), NTM forward multiples on, Cyclical_Peak_Consensus regime flag, growth premium in absolute-spread form capped 0.85-1.30, the ladder compares revenue in USD."
   ],
-  "version": 20,
+  "version": 21,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -112,7 +113,7 @@
     ],
     "Consumer Electronics": [
       "Tech",
-      "Hyperscaler / Tech Conglomerate"
+      "Consumer Electronics / Hardware Ecosystem"
     ],
     "Copper": [
       "Resources",
@@ -320,7 +321,27 @@
     ],
     "Telecommunications Services": [
       "Telco",
-      "Stable Growth"
+      "Telecom Carrier"
+    ],
+    "Entertainment": [
+      "Tech",
+      "Media & Streaming"
+    ],
+    "Electronic Gaming & Multimedia": [
+      "Tech",
+      "Media & Streaming"
+    ],
+    "Communication Equipment": [
+      "Tech",
+      "Networking & Communication Equipment"
+    ],
+    "Information Technology Services": [
+      "ProfessionalServices",
+      "IT Services"
+    ],
+    "Advertising Agencies": [
+      "ProfessionalServices",
+      "Ad / Consulting"
     ],
     "Tobacco": [
       "Consumer",
@@ -574,6 +595,22 @@
       "Banks - Regional": [
         "Financials",
         "EM Bank"
+      ],
+      "Internet Content & Information": [
+        "Tech",
+        "China Internet Platform"
+      ],
+      "Electronic Gaming & Multimedia": [
+        "Tech",
+        "China Internet Platform"
+      ],
+      "Computer Hardware": [
+        "Tech",
+        "Consumer Electronics / Hardware Ecosystem"
+      ],
+      "Hardware, Equipment & Parts": [
+        "Tech",
+        "Consumer Electronics / Hardware Ecosystem"
       ]
     },
     "SG": {
@@ -793,6 +830,20 @@
     "Insurance - Brokers",
     "Asset Management",
     "Financial - Data & Stock Exchanges",
+    "Semiconductors",
+    "Semiconductor Equipment & Materials",
+    "Software - Infrastructure",
+    "Software - Application",
+    "Internet Content & Information",
+    "Electronic Gaming & Multimedia",
+    "Entertainment",
+    "Consumer Electronics",
+    "Computer Hardware",
+    "Hardware, Equipment & Parts",
+    "Communication Equipment",
+    "Telecommunications Services",
+    "Information Technology Services",
+    "Advertising Agencies",
     "Medical - Healthcare Plans",
     "Medical - Instruments & Supplies",
     "Oil & Gas Drilling",

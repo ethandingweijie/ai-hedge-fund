@@ -2281,17 +2281,43 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "demand. Gate B uses forward Y10 ROIC projection to avoid the 'Capex vs OpEx trap' on scaling infra-SaaS."
             ),
         },
-        "Mature SaaS": {
+        "Media & Streaming": {
+            # Wave 7 (owner, 2026-09-27): NFLX, DIS, WBD, EA, TTWO; NetEase by HK market map goes
+            # to China Internet Platform. Basket 21.7x NTM P/E, 13.9x NTM EV/EBITDA on 2026-09-27.
             "methods": [
-                {"name": "EPV",           "weight": 0.30, "anchor": True,  "implementable": True},
-                {"name": "DCF (2-stage)", "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E",           "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "EV/Revenue",    "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",     "weight": 0.10, "anchor": False, "implementable": True},
-                {"name": "LBO Floor",     "weight": 0.05, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",    "weight": 0.10, "anchor": False, "implementable": True},
             ],
-            "excluded": [],
-            "rationale": "Earnings Power Value tests the sustainability of current earnings without growth assumptions.",
+            "excluded": ["EPV", "LBO Floor"],
+            "rationale": "Content and streaming: subscriber and engagement economics on forward earnings and EBITDA; content amortisation makes trailing P/E and EPV unreliable.",
+        },
+        "Networking & Communication Equipment": {
+            # Wave 7 (owner, 2026-09-27): CSCO, ANET, CIEN, MSI, JNPR. Basket 24.4x NTM P/E,
+            # 18.4x NTM EV/EBITDA on 2026-09-27.
+            "methods": [
+                {"name": "Forward P/E",  "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",    "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EPV", "LBO Floor"],
+            "rationale": "Networking and communication equipment: product cycles with recurring software and service attach; forward earnings anchor, EBITDA and cash yield as checks.",
+        },
+        "Mature SaaS": {
+            # Wave 7 (owner, 2026-09-27): the EPV anchor on GAAP EBIT put ServiceNow at -66%
+            # and let Adobe's DCF run to +71%. Forward P/E anchors on the live basket;
+            # EPV and LBO Floor are cross-checks. Basket 15.3x NTM / 24.6x trailing.
+            "methods": [
+                {"name": "Forward P/E",   "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "DCF (2-stage)", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",     "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",     "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E"],
+            "shadow_methods": ["EPV"],
+            "rationale": "Mature software is priced on forward earnings and free cash flow; EPV stays as a published cross-check on the sustainability of current earnings.",
         },
         "High-Growth Tech / AI": {
             "methods": [
@@ -3055,6 +3081,19 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["P/BV"],
             "rationale": "SG telco / infrastructure (Singtel, StarHub, NetLink, Keppel Infra). SOTP-anchored: regional associates and concession assets valued separately from the domestic core. Primary metrics: EV/EBITDA, FCF yield, ARPU, core dividend yield, capex-to-revenue.",
         },
+        "Telecom Carrier": {
+            # Wave 7 (owner, 2026-09-27): T, VZ, TMUS, CMCSA, CHTR; China Mobile, Telecom, Unicom
+            # by row in the HK cohort (4.8x EV/EBITDA, 13.9x NTM P/E); US 5.9x / 9.2x / 11% FCF
+            # yield. Capex-heavy: cash yield and payout price it, not EBIT capitalisation.
+            "methods": [
+                {"name": "EV/EBITDA",     "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "FCF Yield",     "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DDM",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF (2-stage)", "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EPV", "P/BV"],
+            "rationale": "Carriers: EV/EBITDA on the market's carrier cohort, free-cash yield and the dividend; capex intensity and the spectrum cycle are the risks.",
+        },
         "Stable Growth": {
             "methods": [
                 {"name": "EV/EBITDA",     "weight": 0.35, "anchor": True,  "implementable": True},
@@ -3424,14 +3463,30 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     #   - Earnings volatility that makes EPV (perpetuity assumption) nonsensical
     # EV/EBITDA anchors because it strips CapEx distortion. EPV excluded.
     "Semiconductor": {
-        "Fabless": {
+        "Analog / Mixed-signal IDM": {
+            # Wave 7 (owner, 2026-09-27): TXN, ADI, NXPI, MCHP, ON. Mid-cycle margins on owned
+            # fabs; the market pays for the next two years (25.7x NTM against 43x trailing on
+            # 2026-09-27). Statics from the TXN/ADI basket.
             "methods": [
-                {"name": "P/E",          "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.35, "anchor": True,  "implementable": True},
                 {"name": "EV/EBITDA",    "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "EV/Revenue",   "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",    "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            "excluded": ["EPV", "LBO Floor"],
+            "excluded": ["EPV", "LBO Floor", "P/E"],
+            "rationale": "Analog and mixed-signal IDMs: long product lives, owned capacity, mid-cycle margins; forward earnings anchor with cash yield as the cycle check.",
+        },
+        "Fabless": {
+            # Wave 7 (owner, 2026-09-27): the anchor moves from trailing P/E to Forward P/E.
+            # Stage 0 priced AMD at -77% and AVGO at -42% on trailing earnings in a market
+            # that pays for FY+1/FY+2 (Fabless basket 31.6x NTM against 65.8x trailing).
+            "methods": [
+                {"name": "Forward P/E",    "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "DCF",            "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",      "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/NTM Revenue", "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EPV", "LBO Floor", "P/E"],
             "rationale": (
                 "Fabless semis (NVDA, AVGO, QCOM, AMD, MRVL) have high margins and "
                 "low CapEx. P/E anchors because earnings are the primary value driver. "
@@ -3473,13 +3528,15 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ),
         },
         "Equipment / EDA": {
+            # Wave 7 (owner, 2026-09-27): Forward P/E anchor. ASML landed on its own Forward
+            # P/E cross-check at Stage 0 while the trailing anchor put it at -27%.
             "methods": [
-                {"name": "P/E",          "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.35, "anchor": True,  "implementable": True},
                 {"name": "DCF",          "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "EV/EBITDA",    "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",    "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            "excluded": [],
+            "excluded": ["P/E"],
             "rationale": (
                 "Semi equipment (ASML, AMAT, LRCX, KLAC) and EDA (SNPS, CDNS) are "
                 "asset-lighter with strong FCF. P/E anchors with DCF as primary check. "
@@ -3521,6 +3578,11 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # Surgical Robotics (PROPOSED 2026-09-26): ISRG's own trading in the comps store on
     # 2026-09-26 (n=1, the only scaled robotics name); a cross-check basis, never an anchor.
     "Surgical Robotics / Capital Systems": {"ev_ebitda": 30.8, "pe": 45.3, "ev_revenue": 12.6, "pb": 10.0, "fcf_yield": 0.015, "growth_avg": 0.15},
+    # Wave 7 (owner, 2026-09-27): basket medians read from the comps store on 2026-09-27.
+    "Analog / Mixed-signal IDM": {"ev_ebitda": 29.0, "pe": 43.2, "ev_revenue": 13.6, "pb": 6.0, "fcf_yield": 0.02, "growth_avg": 0.08, "pe_ntm": 25.7, "ev_ebitda_ntm": 18.6},
+    "Media & Streaming":     {"ev_ebitda": 17.5, "pe": 22.3, "ev_revenue": 4.7, "pb": 3.5, "fcf_yield": 0.04, "growth_avg": 0.08, "pe_ntm": 21.7, "ev_ebitda_ntm": 13.9},
+    "Networking & Communication Equipment": {"ev_ebitda": 22.3, "pe": 35.6, "ev_revenue": 6.9, "pb": 5.0, "fcf_yield": 0.03, "growth_avg": 0.09, "pe_ntm": 24.4, "ev_ebitda_ntm": 18.4},
+    "Telecom Carrier":       {"ev_ebitda": 5.9, "pe": 8.3, "ev_revenue": 2.5, "pb": 1.5, "fcf_yield": 0.11, "growth_avg": 0.01, "pe_ntm": 9.2, "ev_ebitda_ntm": 6.3},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
     # Wave 5 (2026-09-26): read from the US Biotechnology basket that day (n13-17).
@@ -3689,6 +3751,11 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Biopharma":            ["PFE", "MRK", "ABBV", "BMY", "LLY", "JNJ", "GSK"],
     "MedTech / Devices":    ["MDT", "SYK", "BSX", "ZBH", "EW", "ABT"],
     "Surgical Robotics / Capital Systems": ["ISRG", "PRCT", "02252.HK"],
+    # Wave 7 (owner, 2026-09-27)
+    "Analog / Mixed-signal IDM": ["TXN", "ADI", "NXPI", "MCHP", "ON"],
+    "Media & Streaming":     ["NFLX", "DIS", "WBD", "EA", "TTWO", "SPOT"],
+    "Networking & Communication Equipment": ["CSCO", "ANET", "CIEN", "MSI", "JNPR"],
+    "Telecom Carrier":       ["T", "VZ", "TMUS", "CMCSA", "CHTR"],
     # Owner Wave 6 (2026-09-27)
     "Card Issuer & Consumer Lender": ["AXP", "COF", "SYF", "DFS", "ALLY"],
     "Insurance Broker":     ["MMC", "AON", "AJG", "BRO", "WTW"],
@@ -5067,29 +5134,39 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "APLD":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "Applied Digital — AI/HPC datacenter hosting"),
     "WULF":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "TeraWulf — AI/HPC hosting on contracted power"),
     "NVDA":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — AI GPU"),
+    # Wave 7 (owner, 2026-09-27): names that had no pin and fell to the ladder.
+    "CSCO":  ("Tech", "Networking & Communication Equipment", "Communication Equipment", "Cisco"),
+    "ANET":  ("Tech", "Networking & Communication Equipment", "Communication Equipment", "Arista Networks"),
+    "CIEN":  ("Tech", "Networking & Communication Equipment", "Communication Equipment", "Ciena"),
+    "MSI":   ("Tech", "Networking & Communication Equipment", "Communication Equipment", "Motorola Solutions"),
+    "JNPR":  ("Tech", "Networking & Communication Equipment", "Communication Equipment", "Juniper Networks"),
+    "WDC":   ("Semiconductor", "Memory / DRAM-NAND", "Semiconductor", "Western Digital"),
+    "STX":   ("Semiconductor", "Memory / DRAM-NAND", "Semiconductor", "Seagate"),
+    "SNDK":  ("Semiconductor", "Memory / DRAM-NAND", "Semiconductor", "Sandisk"),
+    "WBD":   ("Tech", "Media & Streaming", "Entertainment", "Warner Bros. Discovery"),
     "AVGO":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — custom ASIC + networking"),
     "QCOM":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — mobile/edge AI"),
     "AMD":   ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — CPU/GPU"),
-    "MRVL":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — networking/storage"),
-    "ARM":   ("Semiconductor", "",     "Semiconductor",                   "Fabless — IP licensing/royalties"),
+    "MRVL": ('Semiconductor', 'Fabless', 'Semiconductor', 'Marvell (Wave 7 pin)'),
+    "ARM": ('Semiconductor', 'Fabless', 'Semiconductor', 'Arm Holdings (Wave 7 pin)'),
     # IDM / Foundry
     "MU":    ("Semiconductor", "Memory / DRAM-NAND", "Memory (DRAM/NAND)", "Micron Technology — memory IDM; 18x normalised EPS"),
     "000660.KS": ("Semiconductor", "Memory / DRAM-NAND", "Memory (DRAM/NAND)", "SK Hynix — DRAM/HBM leader; averaged-year P/E"),
     "INTC":  ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "IDM + Foundry — x86/fabs"),
     "TSM":   ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "Foundry — TSMC ADR (reports TWD)"),
-    "TXN":   ("Semiconductor", "",     "Semiconductor",                   "IDM — analog fabs"),
+    "TXN": ('Semiconductor', 'Analog / Mixed-signal IDM', 'Semiconductor', 'Texas Instruments -- analog IDM (Wave 7, 2026-09-27; was on Equipment / EDA by the ladder)'),
     "GFS":   ("Semiconductor", "",     "Semiconductor",                   "Foundry — specialty nodes"),
     "UMC":   ("Semiconductor", "",     "Semiconductor",                   "Foundry — UMC ADR (reports TWD)"),
-    "ADI":   ("Semiconductor", "",     "Semiconductor",                   "IDM — analog/mixed-signal"),
-    "MCHP":  ("Semiconductor", "",     "Semiconductor",                   "IDM — microcontrollers"),
-    "ON":    ("Semiconductor", "",     "Semiconductor",                   "IDM — power semiconductors"),
-    "NXPI":  ("Semiconductor", "",     "Semiconductor",                   "IDM — automotive semi"),
+    "ADI": ('Semiconductor', 'Analog / Mixed-signal IDM', 'Semiconductor', 'Analog Devices (Wave 7)'),
+    "MCHP": ('Semiconductor', 'Analog / Mixed-signal IDM', 'Semiconductor', 'Microchip (Wave 7)'),
+    "ON": ('Semiconductor', 'Analog / Mixed-signal IDM', 'Semiconductor', 'onsemi (Wave 7)'),
+    "NXPI": ('Semiconductor', 'Analog / Mixed-signal IDM', 'Semiconductor', 'NXP (Wave 7)'),
     # Equipment / EDA
     "ASML":  ("Semiconductor", "Equipment / EDA",     "Semiconductor Equip",             "Equipment — EUV lithography monopoly"),
     "AMAT":  ("Semiconductor", "Equipment / EDA",     "Semiconductor Equip",             "Equipment — deposition/etch"),
-    "LRCX":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — etch/deposition"),
-    "KLAC":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — process control"),
-    "TER":   ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — automated test"),
+    "LRCX": ('Semiconductor', 'Equipment / EDA', 'Semiconductor', 'Lam Research (Wave 7 pin; FMP labels equipment makers Semiconductors)'),
+    "KLAC": ('Semiconductor', 'Equipment / EDA', 'Semiconductor', 'KLA (Wave 7 pin)'),
+    "TER": ('Semiconductor', 'Equipment / EDA', 'Semiconductor', 'Teradyne (Wave 7 pin)'),
     "SNPS":  ("Semiconductor", "",     "Semiconductor Equip",             "EDA — design tools"),
     "CDNS":  ("Semiconductor", "",     "Semiconductor Equip",             "EDA — design tools"),
     # OSAT
@@ -5097,7 +5174,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "AMKR":  ("Semiconductor", "",     "Semiconductor",                   "OSAT — packaging"),
     "CRM":   ("Tech", "Mature SaaS",   "Software (System & Application)", "Salesforce — durable enterprise SaaS; NRR + Rule-of-40 lens"),
     "NOW":   ("Tech", "Mature SaaS",   "Software (System & Application)", "ServiceNow — workflow platform; durable enterprise SaaS"),
-    "SNOW":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Snowflake — consumption model; growth SaaS profile"),
+    "SNOW": ('Tech', 'Growth SaaS', 'Software', 'Snowflake (Wave 7 pin)'),
     "PLTR":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Palantir — AIP inflection; growth SaaS profile"),
     "ORCL":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (System & Application)", "Oracle — OCI + Fusion ERP/CRM migration; hyperscaler profile"),
     "SAP":   ("Tech", "Mature SaaS",   "Software (System & Application)", "SAP SE ADR — durable enterprise ERP cloud migration"),
@@ -5111,7 +5188,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # Growth SaaS (scaling with positive NRR, unit economics + collapse-risk lens)
     "HUBS":  ("Tech", "Growth SaaS",   "Software (System & Application)", "HubSpot — mid-market CRM/marketing"),
     "FRSH":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Freshworks — ITSM + customer engagement SMB"),
-    "DDOG":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Datadog — observability"),
+    "DDOG": ('Tech', 'Growth SaaS', 'Software', 'Datadog (Wave 7 pin)'),
     "MDB":   ("Tech", "Growth SaaS",   "Software (System & Application)", "MongoDB — database as a service"),
     "TEAM":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Atlassian — Jira/Confluence"),
     "ZM":    ("Tech", "Growth SaaS",   "Software (System & Application)", "Zoom — video communications"),
@@ -5123,10 +5200,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "S":     ("Tech", "Growth SaaS",   "Software (System & Application)", "SentinelOne — cybersecurity SaaS"),
     # Cybersecurity — profile override forces "Cybersecurity / Mission-Critical SaaS"
     "CRWD":  ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "CrowdStrike — Cybersecurity"),
-    "PANW":  ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "Palo Alto Networks — Cybersecurity"),
-    "ZS":    ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "Zscaler — Cybersecurity"),
+    "PANW": ('Tech', 'Cybersecurity / Mission-Critical SaaS', 'Software', 'Palo Alto Networks (Wave 7 pin)'),
+    "ZS": ('Tech', 'Cybersecurity / Mission-Critical SaaS', 'Software', 'Zscaler (Wave 7 pin)'),
     "FTNT":  ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "Fortinet — Cybersecurity"),
-    "NET":   ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "Cloudflare — Cybersecurity/CDN"),
+    "NET": ('Tech', 'Growth SaaS', 'Software', 'Cloudflare (Wave 7 pin)'),
     # Digital Platforms
     "PINS":  ("Tech", "",              "Software (Entertainment)",        "Pinterest — digital platform"),
     "SNAP":  ("Tech", "",              "Software (Entertainment)",        "Snap Inc — digital platform"),
@@ -5138,10 +5215,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # (Semi tickers moved to Semiconductor section above)
 
     # ── IT Services → ProfessionalServices (human-capital, marginal cost > 0) ─
-    "IBM":   ("ProfessionalServices", "", "Computer Services",            "IBM — IT services/consulting; moved from Tech"),
-    "ACN":   ("ProfessionalServices", "", "Business & Consumer Services", "Accenture — IT consulting/outsourcing"),
-    "CTSH":  ("ProfessionalServices", "", "Business & Consumer Services", "Cognizant — IT services"),
-    "INFY":  ("ProfessionalServices", "", "Business & Consumer Services", "Infosys ADR — IT services"),
+    "IBM": ('ProfessionalServices', 'IT Services', 'IT Services', 'IBM (Wave 7 pin)'),
+    "ACN": ('ProfessionalServices', 'IT Services', 'IT Services', 'Accenture (Wave 7 pin; the row now exists too)'),
+    "CTSH": ('ProfessionalServices', 'IT Services', 'IT Services', 'Cognizant (Wave 7 pin)'),
+    "INFY": ('ProfessionalServices', 'IT Services', 'IT Services', 'Infosys ADR (Wave 7 pin)'),
     "WIT":   ("ProfessionalServices", "", "Business & Consumer Services", "Wipro ADR — IT services"),
 
     # ── Communication Services → Tech (digital advertising / search platforms) ─
@@ -5150,16 +5227,16 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "META":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Entertainment)", "Meta — Ads + AI capex + Reality Labs; hyperscaler-like capex lens"),
 
     # ── Communication Services → Telco ────────────────────────────────────────
-    "T":     ("Telco", "",             "Telecom. Services",               "AT&T — high leverage; Telco WACC 5.5%"),
-    "VZ":    ("Telco", "Stable Growth", "Telecom (Wireless)",              "Verizon"),
-    "CMCSA": ("Telco", "",             "Cable TV",                        "Comcast — cable/broadband"),
-    "CHTR":  ("Telco", "",             "Cable TV",                        "Charter Communications"),
-    "TMUS":  ("Telco", "",             "Telecom (Wireless)",              "T-Mobile US"),
+    "T": ('Telco', 'Telecom Carrier', 'Telecom Services', 'AT&T (Wave 7, 2026-09-27)'),
+    "VZ": ('Telco', 'Telecom Carrier', 'Telecom Services', 'Verizon (Wave 7, 2026-09-27)'),
+    "CMCSA": ('Telco', 'Telecom Carrier', 'Telecom Services', 'Comcast (Wave 7)'),
+    "CHTR": ('Telco', 'Telecom Carrier', 'Telecom Services', 'Charter (Wave 7)'),
+    "TMUS": ('Telco', 'Telecom Carrier', 'Telecom Services', 'T-Mobile US (Wave 7)'),
     # DIS moved to Consumer Discretionary section with "Travel & Dining" profile override
-    "NFLX":  ("Tech", "",              "Software (Entertainment)",        "Netflix: streaming tech platform — Tech"),
+    "NFLX": ('Tech', 'Media & Streaming', 'Entertainment', 'Netflix (Wave 7, 2026-09-27)'),
     "SPOT":  ("Tech", "",              "Software (Entertainment)",        "Spotify ADR"),
-    "TTWO":  ("Tech", "",              "Software (Entertainment)",        "Take-Two Interactive"),
-    "EA":    ("Tech", "",              "Software (Entertainment)",        "Electronic Arts"),
+    "TTWO": ('Tech', 'Media & Streaming', 'Electronic Gaming', 'Take-Two (Wave 7)'),
+    "EA": ('Tech', 'Media & Streaming', 'Electronic Gaming', 'Electronic Arts (Wave 7)'),
     "WPP":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "WPP plc ADR"),
     "IPG":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "Interpublic"),
     "OMC":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "Omnicom"),
@@ -5188,7 +5265,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # ── Travel & Dining (profile override) ────────────────────────────────
     "MCD":   ("Consumer", "Travel & Dining", "Restaurant/Dining",        "McDonald's — franchise royalty model"),
     "SBUX":  ("Consumer", "Travel & Dining", "Restaurant/Dining",        "Starbucks — global coffeehouse"),
-    "DIS":   ("Consumer", "Travel & Dining", "Entertainment",            "Disney: content/parks/cruise — Travel & Dining"),
+    "DIS": ('Tech', 'Media & Streaming', 'Entertainment', 'Walt Disney -- media (Wave 7; the parks pin on Travel & Dining is retired)'),
     "ABNB":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Airbnb — asset-light travel platform"),
     "BKNG":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Booking Holdings — OTA platform"),
     # ── Apparel & Footwear ────────────────────────────────────────────────
@@ -5571,34 +5648,34 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "09988.HK": ("Tech", "China Internet Platform", "Software (Internet)", "Alibaba Group HK listing — owner profile 2026-09-26"),
     "03690.HK": ("Tech", "China Internet Platform", "On-Demand Commerce", "Meituan — owner profile 2026-09-26 (was Local Services & Instant Retail)"),
     "09618.HK": ("Tech", "China Internet Platform", "E-commerce",       "JD.com HK listing — owner profile 2026-09-26"),
-    "09999.HK": ("Tech",        "",  "Gaming",                   "NetEase"),
+    "09999.HK": ('Tech', 'China Internet Platform', 'Electronic Gaming', 'NetEase (Wave 7, decision 6)'),
     "09626.HK": ("Tech",        "",  "Internet Media",           "Bilibili"),
     "02018.HK": ("Tech",        "",  "Components",               "AAC Technologies"),
-    "00992.HK": ("Tech",        "",  "PC & Hardware",            "Lenovo Group"),
-    "02382.HK": ("Tech",        "",  "Optics",                   "Sunny Optical Technology"),
+    "00992.HK": ('Tech', 'Consumer Electronics / Hardware Ecosystem', 'Computer Hardware', 'Lenovo (Wave 7; was a Hyperscaler by the currency-blind ladder)'),
+    "02382.HK": ('Tech', 'Consumer Electronics / Hardware Ecosystem', 'Hardware', 'Sunny Optical (Wave 7)'),
     "03888.HK": ("Tech",        "",  "Software",                 "Kingsoft Corporation"),
     "00268.HK": ("Tech",        "",  "Enterprise SaaS",          "Kingdee International"),
-    "00285.HK": ("Tech",        "",  "Components",               "BYD Electronic"),
+    "00285.HK": ('Tech', 'Consumer Electronics / Hardware Ecosystem', 'Hardware', 'BYD Electronic (Wave 7)'),
     "08083.HK": ("Tech",        "",  "SaaS/E-commerce",          "Youzan Technology"),
     "00909.HK": ("Tech",        "",  "PropTech SaaS",            "Mingyuan Cloud"),
     "02013.HK": ("Tech",        "",  "Enterprise SaaS",          "Weimob — marketing SaaS"),
     "00354.HK": ("Tech",        "",  "IT Services",              "Chinasoft Intl — IT outsourcing"),
     "01357.HK": ("Tech",        "",  "Apps & SaaS",              "Meitu"),
     "00763.HK": ("Tech",        "",  "Telecom Equipment",        "ZTE Corporation"),
-    "09888.HK": ("Tech",        "",  "AI & Internet",            "Baidu Group"),
+    "09888.HK": ('Tech', 'China Internet Platform', 'Internet Content', 'Baidu (Wave 7, decision 6)'),
     "00772.HK": ("Tech",        "",  "Digital Content",          "China Literature"),
     "00020.HK": ("Tech",        "",  "AI / Vision",              "SenseTime"),
-    "01024.HK": ("Tech",        "",  "Software (Internet)",      "Kuaishou Technology"),
-    "00981.HK": ("Semiconductor", "", "Semiconductors",           "SMIC — HK foundry"),
-    "01347.HK": ("Semiconductor", "", "Semiconductors",           "Hua Hong Semi — specialty foundry"),
+    "01024.HK": ('Tech', 'China Internet Platform', 'Internet Content', 'Kuaishou (Wave 7, decision 6)'),
+    "00981.HK": ('Semiconductor', 'IDM / Foundry', 'Semiconductor', 'SMIC (Wave 7 pin)'),
+    "01347.HK": ('Semiconductor', 'IDM / Foundry', 'Semiconductor', 'Hua Hong (Wave 7 pin; was OSAT by the ladder)'),
     "09660.HK": ("Semiconductor", "", "Semiconductors",           "Horizon Robotics — auto AI chips"),
     "00100.HK": ("Tech",        "",  "Generative AI",            "MiniMax"),
     "03896.HK": ("Tech",        "",  "Cloud Computing",          "Kingsoft Cloud"),
 
     # Telecom
-    "00941.HK": ("Telco",       "",  "Telco",                    "China Mobile"),
-    "00762.HK": ("Telco",       "",  "Telco",                    "China Unicom"),
-    "00728.HK": ("Telco",       "",  "Telco",                    "China Telecom"),
+    "00941.HK": ('Telco', 'Telecom Carrier', 'Telecom Services', 'China Mobile (Wave 7)'),
+    "00762.HK": ('Telco', 'Telecom Carrier', 'Telecom Services', 'China Unicom (Wave 7)'),
+    "00728.HK": ('Telco', 'Telecom Carrier', 'Telecom Services', 'China Telecom (Wave 7)'),
     "00788.HK": ("Telco",       "",  "Tower Infrastructure",     "China Tower"),
 
     # Energy

@@ -630,7 +630,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
         # COST re-recorded 2026-09-26 on the Wave 4 pin (Membership / Subscription
         # Retail, live Discount Stores comps): its bear premium is now 0.941, Gate B
         # fires, and the leaves below are no longer this fix's evidence.
-        "V":    {"bear": 284.55, "base": 432.04, "bull": 542.55},
+        # V re-recorded 2026-09-27 (Wave 7): the absolute-spread premium reads 1.116 base /
+        # 1.120 bull against the ratio's 1.139 / 1.144, and the leg follows it exactly.
+        "V":    {"bear": 284.55, "base": 423.25, "bull": 531.14},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

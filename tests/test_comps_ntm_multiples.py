@@ -158,7 +158,9 @@ def _leg(name, monkeypatch, peer=PEER):
 
 
 def test_with_the_flag_off_the_forward_legs_are_exactly_what_they_were(monkeypatch):
-    monkeypatch.delenv(dcf_agent.NTM_FORWARD_FLAG, raising=False)
+    # Wave 7 (owner decision 3, 2026-09-27): the flag is ON unless the environment turns it off,
+    # so the legacy pairing is reached by switching it off, not by leaving it unset.
+    monkeypatch.setenv(dcf_agent.NTM_FORWARD_FLAG, "off")
     v, tr = _leg("Forward P/E", monkeypatch)
     assert v == pytest.approx(2.0 * 20.0) and tr["multiple_parts"]["peer_source"] == "peer median pe"
     v, tr = _leg("Forward EV/EBITDA", monkeypatch)

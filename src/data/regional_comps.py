@@ -281,9 +281,19 @@ INDUSTRY_FAMILIES: dict[str, frozenset] = {
 #:     falls to the industry rung.
 #: Commercial Aerospace & Engines (BA, GE) has no basket of its own: two names
 #: is not a peer set, and both take the industry rung.
+#: Wave 7 (owner decision 2, alternative, 2026-09-27): the three tech profiles whose static
+#: table the wave demoted to a fallback take the baskets the table was re-derived from
+#: (`docs/wave7_stage3_remap_proposal.md` section 3). Without them the "live cohort" for a
+#: hyperscaler is whatever FMP industry the name carries -- Consumer Electronics for Apple,
+#: Software - Infrastructure for Microsoft and Oracle (30.3x EV/EBITDA, six names), Internet
+#: Content for Alphabet and Meta -- three cohorts for one profile, and the Stage 4 measurement
+#: put MSFT at +51% and ORCL at +143% against spot on the second of them.
 PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Defense Primes":              {"US": ("LMT", "RTX", "NOC", "GD", "LHX", "ESLT")},
     "Niche Aerospace Components":  {"US": ("TDG", "HEI", "HWM", "CW", "WWD")},
+    "Hyperscaler / Tech Conglomerate": {"US": ("AAPL", "MSFT", "GOOG", "META", "AMZN", "ORCL")},
+    "Mature SaaS":                 {"US": ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")},
+    "Mature Platform":             {"US": ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")},
 }
 
 

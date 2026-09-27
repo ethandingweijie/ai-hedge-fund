@@ -672,7 +672,7 @@ def test_the_quality_gate_saturates_in_bear_for_the_four_names_above_twice_wacc(
     assert _proj("02888_HK")["scenarios.bear.forward_roic"] / _proj("02888_HK")["wacc"] \
         == pytest.approx(1.380, abs=5e-4)
     assert _proj("02888_HK")["scenarios.bear.growth_premium"] == pytest.approx(
-        0.889, abs=5e-4)   # 0.969 until the 2026-09-26 bridge
+        0.85, abs=5e-4)    # 0.969 until the 2026-09-26 bridge; 0.889 until Wave 7's 0.85 floor (2026-09-27)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -786,6 +786,13 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
     if name == "COST":
         # Re-recorded 2026-09-26 on the Wave 4 pin: a live `Discount Stores` cohort.
         assert b["basis"] == "industry" and b["key"] == "Discount Stores" and b["peer_count"] == 9, (name, b)
+        return
+    if name == "AAPL":
+        # Wave 7 (2026-09-27, decision 2 alternative): the Hyperscaler profile carries a curated
+        # six-name basket (regional_comps.PROFILE_PEER_BASKETS), and a basket resolves growth_avg
+        # like every other field. The static fill is gone for this one name because a live cohort
+        # now exists, which is the opposite of the condition this test was written under.
+        assert b["basis"] == "profile" and b["key"] == "Hyperscaler / Tech Conglomerate" and b["peer_count"] == 6, (name, b)
         return
     assert b == {"basis": "static", "cohort": "US", "peer_count": None}, (name, b)
 
@@ -937,7 +944,10 @@ def test_02888_carries_a_forty_six_percent_bank_sector_growth_average():
     assert p["scenarios.bear.sector_g_avg"] == pytest.approx(0.4592, abs=5e-5)
     assert _basis("02888_HK", "bear")["basis"] == "industry"
     assert _basis("02888_HK", "bear")["cohort"] == "all"
-    assert p["scenarios.base.growth_premium"] == pytest.approx(0.793, abs=5e-4)   # 0.891 until the 2026-09-26 bridge
+    # Wave 7 (2026-09-27): the premium is 1 + 2.5 x (g - avg) floored at 0.85; against a +45.9%
+    # average the raw term is deeply negative and the floor binds, so the thin average is still
+    # the one input deciding this fixture's premium.
+    assert p["scenarios.base.growth_premium"] == pytest.approx(0.85, abs=5e-4)    # 0.793 until Wave 7's floor
 
 
 # ══════════════════════════════════════════════════════════════════════════════

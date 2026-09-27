@@ -119,7 +119,8 @@ class TestTheAllowlistIsTheOwnersList:
         # 115 -> 116 with Wave 5's Commercial Biotech (2026-09-26); still not the fourth name.
         # 116 -> 117 with Surgical Robotics / Capital Systems (owner split, 2026-09-26); still not.
         # 117 -> 120 with Wave 6's Card Issuer & Consumer Lender, Insurance Broker, Financial Data & Ratings (2026-09-27).
-        assert len(every) == 120, (
+        # 120 -> 124 with Wave 7's Analog / Mixed-signal IDM, Media & Streaming, Networking & Communication Equipment, Telecom Carrier (2026-09-27).
+        assert len(every) == 124, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:

@@ -184,12 +184,12 @@ _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW", "U
 #: Bull's quality gate unbinds on exactly six: (old_gp, new_gp). The scoping note
 #: said nine; the three extra were `forward_flags` prose containing "bull:".
 _BULL_MOVED = {
-    "02888_HK": (0.719, 0.719),   # 0.815 until the 2026-09-26 bridge deducted its preferred equity
+    "02888_HK": (0.719, 0.85),    # 0.815 until the 2026-09-26 bridge; 0.719 until Wave 7's floor (2026-09-27)
     "09988_HK": (1.167, 1.0),
     "BABA":     (1.019, 1.0),
     "C38U_SI":  (1.2,   1.0),
     "FCX":      (1.8,   1.0),
-    "SCHW":     (1.654, 1.267),
+    "SCHW":     (1.654, 1.111),   # 1.267 until Wave 7's absolute-spread premium (2026-09-27)
 }
 
 _GATE_B_RE = re.compile(r"^Gate B \(bear\): Forward ROIC \((-?[\d.]+)%")
@@ -380,11 +380,26 @@ _WAVE6_MOVED = {
     "02888_HK": (287.71,  237.59,   337.40,   (234.30, 259.36, 284.20)),
     "D05_SI":   (43.21,    35.42,    50.99,   (55.54,  59.43,  63.32)),
 }
+#: Wave 7 (2026-09-27, owner decision 4): the growth premium is an absolute spread
+#: 1 + 2.5 x (g - cohort g) floored at 0.85 for every profile. Both banks sit far below
+#: their thin cohort averages (HKSE Banks - Diversified +45.9%, SES Financial Services
+#: +21.2%), so the ratio penalty (0.65-0.79) lifts to the floor in every scenario.
+#: AAPL, V, SCHW and COST move on the same premium (AAPL also on the EV/EBITDA leg reading the
+#: live Consumer Electronics cohort in place of the static table, decision 2).
+_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
+_WAVE7_MOVED = {
+    "02888_HK": (288.95,  236.95,   340.94,   (233.97, 259.98, 285.97)),
+    "D05_SI":   (44.44,    36.66,    52.21,   (56.16,  60.05,  63.93)),
+    "AAPL":     (203.56,  144.23,   275.70,   (237.78, 267.45, 303.52)),
+    "V":        (444.53,  322.78,   559.80,   (357.13, 399.74, 440.08)),
+    "SCHW":     (72.28,    51.95,    96.23,   (79.87,  90.03,  102.01)),
+    "COST":     (514.36,  345.97,   717.02,   (634.37, 718.56, 819.89)),
+}
 
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -610,7 +625,7 @@ def test_the_forced_shut_premiums_are_where_the_baseline_says():
         gp = _proj(name)["scenarios.bear.growth_premium"]
         assert gp != 1.0, f"{name} should have moved off the forced shut"
         assert _PREFIX[name][2] == 1.0, "and it was shut before"
-    assert _proj("D05_SI")["scenarios.bear.growth_premium"] == 0.65
+    assert _proj("D05_SI")["scenarios.bear.growth_premium"] == 0.85   # 0.65 until Wave 7's floor (2026-09-27)
     assert _PREFIX["D05_SI"][2] == 0.65
 
 
@@ -740,7 +755,7 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
             continue
         if name in _SHARES_MOVED:
             # Moved only by the sixth re-baseline (current share count).
-            assert fx["base_iv"] == _SHARES_MOVED[name][0], name
+            assert fx["base_iv"] == _current(name)[0], name      # Wave 7 moved AAPL, V, SCHW (2026-09-27)
             continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
@@ -809,7 +824,7 @@ def test_d05_is_the_one_fixture_whose_bear_column_did_not_change():
     assert _PREFIX["D05_SI"][4] is None
     assert _bear_gate_b_roic(p) is None
     assert p["scenarios.bear.tgr"] == 0.01
-    assert p["scenarios.bear.growth_premium"] == 0.65
+    assert p["scenarios.bear.growth_premium"] == 0.85   # 0.65 until Wave 7's floor (2026-09-27)
     # The × 10 fix left it at 39.21; the two-tier re-baseline (its 1.10
     # composite out of the IV) took it to 35.65. Both halves asserted.
     assert _BEAR_IV_UNMOVED["D05_SI"] == 39.21
@@ -946,7 +961,14 @@ def test_bull_quality_gate_unbinds_on_exactly_six_not_nine():
         if name == "COST":
             # Re-recorded 2026-09-26 on the Wave 4 pin: bull premium 1.156 on the
             # new profile; not evidence for or against this fix any more.
-            assert _proj(name)["scenarios.bull.growth_premium"] == 1.156
+            assert _proj(name)["scenarios.bull.growth_premium"] == 1.086   # 1.156 until Wave 7's absolute-spread premium
+            continue
+        if name in _WAVE7_BULL_GP:
+            # Wave 7 (2026-09-27): the absolute-spread premium re-reads these three; D05's 0.85
+            # is the floor binding in every scenario (0.731 before), V's 1.120 and AAPL's 1.097
+            # the spread (1.144 and 1.101 before). None is this fix's quality gate any more.
+            assert _proj(name)["scenarios.bull.growth_premium"] == _WAVE7_BULL_GP[name], name
+            unbound.add(name)      # still not one of the six this fix unbound
             continue
         # Unmoved: the bull premium still equals the pre-fix value, and the only
         # bull leaf that changed is the new alias key.
@@ -986,7 +1008,7 @@ def test_02888_is_the_one_bull_premium_that_rose():
     p = _proj("02888_HK")
     # 0.815 until 2026-09-26: with preferred equity in the bridge the bull ROIC term
     # reads lower and the premium sits at 0.719, which is the pre-fix value again.
-    assert p["scenarios.bull.growth_premium"] == 0.719
+    assert p["scenarios.bull.growth_premium"] == 0.85    # 0.719 until Wave 7's floor (2026-09-27)
     # 331.93 was this bull IV with the 1.10 composite; the two-tier
     # re-baseline removed the composite from the IV.
     assert p["scenarios.bull.intrinsic_value"] == _current("02888_HK")[2]   # 301.76 -> 299.57 (preferred equity, 2026-09-26)
@@ -1094,13 +1116,24 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
             # longer compares like with like. The value is pinned instead.
             assert got == _current(name)[1], name
             continue
+        if name in _WAVE7_MOVED:
+            # Wave 7 (2026-09-27): the absolute-spread premium moved V, and the direction
+            # against `before` still holds. AAPL's bear IV also re-priced its EV/EBITDA anchor
+            # on the six-name hyperscaler basket (bear leg 151.55 -> 123.73 a share, decision 2), which
+            # outweighs the +2% the bear deactivation added; the value is pinned instead.
+            assert got == _current(name)[1], name
+            if name == "AAPL":
+                assert got < before[name], name
+            else:
+                assert got > before[name], name
+            continue
         assert got == want, name
         if name == "02888_HK":
             # The exception, and an instructive one: its bear IV carries no DCF
             # weight, so the surviving tgr adds nothing while the premium moving
             # off the forced 1.0 (→ 0.969) shaves the multiple legs. Net −0.2%.
             assert got < before[name]
-            assert _proj(name)["scenarios.bear.growth_premium"] == 0.889   # 0.969 until the 2026-09-26 bridge
+            assert _proj(name)["scenarios.bear.growth_premium"] == 0.85   # 0.969 until the 2026-09-26 bridge; 0.889 until Wave 7's floor
         else:
             assert got > before[name], name
 
@@ -1172,17 +1205,21 @@ _02888_LEGS = {
     # Wave 6 (2026-09-27): Money Center Bank p_tbv 1.4 -> 2.2 (P/TBV 170.72 -> 268.28 bear,
     # 284.54 -> 447.13 bull), pe 12 -> 14.2 (P/E (norm) 121.87 -> 144.22, 164.23 -> 194.34),
     # CoE 10.0% -> 9.3% (Residual Income 230.90 -> 238.57). GGM reads the broker table: unchanged.
+    # Wave 7 (2026-09-27): the premium sits on the 0.85 floor in every scenario, so the two
+    # premium-scaled legs move (bear 0.889 -> 0.85: Forward P/E 126.90 -> 121.29, P/E (norm)
+    # 144.22 -> 137.84; bull 0.719 -> 0.85: 135.22 -> 159.86, 194.34 -> 229.74); bank legs unchanged.
     "bear": {"Excess Capital": 188.02, "GGM (P/B)": 252.98, "P/TBV": 268.28,
-             "Residual Income": 238.57, "Forward P/E": 126.90, "P/E (norm)": 144.22},
+             "Residual Income": 238.57, "Forward P/E": 121.29, "P/E (norm)": 137.84},
     "bull": {"Excess Capital": 188.02, "GGM (P/B)": 421.63, "P/TBV": 447.13,
-             "Residual Income": 238.57, "Forward P/E": 135.22, "P/E (norm)": 194.34},
+             "Residual Income": 238.57, "Forward P/E": 159.86, "P/E (norm)": 229.74},
 }
 
 
 # 2026-09-26: the bridge deducts preferred equity on the earnings legs' path;
 # bear 214.6404 -> 213.5474, bull 301.759 -> 299.57; the x1.10 composite column follows.
 # Wave 6 (2026-09-27): bank calibration re-derived; bear 213.5474 -> 237.5914, bull 299.5748 -> 337.4028.
-_02888_BLEND = {"bear": (237.5914, 261.3505), "bull": (337.4028, 371.1431)}
+# Wave 7 (2026-09-27): premium floor 0.85; bear 237.5914 -> 236.9541, bull 337.4028 -> 340.9431.
+_02888_BLEND = {"bear": (236.9541, 260.6495), "bull": (340.9431, 375.0374)}
 
 
 def test_02888_six_legs_split_exactly_along_the_premium_line():
@@ -1245,7 +1282,7 @@ def test_02888_carries_no_dcf_leg_so_a_surviving_tgr_adds_nothing():
             _BANK_LEGS + ["P/E (norm)"]), scen
     # ... and it did gain the terminal growth rate, so the two facts coexist.
     assert proj["scenarios.bear.tgr"] == 0.01
-    assert proj["scenarios.bear.growth_premium"] == 0.889   # 0.969 until the 2026-09-26 bridge (preferred equity)
+    assert proj["scenarios.bear.growth_premium"] == 0.85   # 0.969 until the 2026-09-26 bridge; 0.889 until Wave 7's floor
 
 
 def test_the_leg_table_is_a_superset_of_the_weighted_set():

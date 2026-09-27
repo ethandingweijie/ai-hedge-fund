@@ -125,7 +125,8 @@ REPORT_FAMILIES: dict[str, dict] = {
                      "Cybersecurity / Mission-Critical SaaS", "Mature SaaS", "High-Growth Tech / AI", "Hyper-Growth Platform",
                      "Mature Platform", "Early Platform", "Levered Subscription", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND",
                      "Equipment / EDA", "OSAT / Packaging", "Telco / Infrastructure (SG)", "Stable Growth", "Ad / Consulting",
-                     "IT Services", "Pre-Revenue Tech", "BTC Treasury / Proxy"],
+                     "IT Services", "Pre-Revenue Tech", "BTC Treasury / Proxy",
+                     "Analog / Mixed-signal IDM", "Media & Streaming", "Networking & Communication Equipment", "Telecom Carrier"],   # Wave 7
         "rows": ["revenue", "ebit_m", "fcf_m", "sbc_pct", "capex_pct", "net_debt"],
         "exposition": ["forward anchor against the live basket", "the terminal convergence stated", "SBC treatment stated"],
         "skeleton": ["rating", "forward multiple against the basket", "growth durability", "SBC and capital return", "risk"],

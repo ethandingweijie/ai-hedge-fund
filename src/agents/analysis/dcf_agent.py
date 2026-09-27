@@ -4284,19 +4284,23 @@ def _compute_reit_metrics(
 #   Cybersecurity    (PANW, FTNT, ZS, S):          35-45x EV/EBITDA
 #   Hyper-Growth     (PLTR, NET, SHOP):            55-65x EV/EBITDA
 #   Semiconductor    (NVDA, AVGO, AMD):            separate sector (Semiconductor)
+# Wave 7 (owner decision 2, 2026-09-27): this table no longer overrides the live cohort. The EV
+# legs of a tech sub-type read the cohort like every other sector and fall back here only when
+# the basket has no reading; the terminal convergence reads the live mature cohort first. The
+# mature rows were re-derived from the 2026-09-27 baskets; the growth rows keep their shape.
 _TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     # Hyperscaler / Tech Conglomerate
     "Hyperscaler / Tech Conglomerate": {
-        "ev_ebitda": 20.0, "ev_revenue": 7.5, "pe": 28.0, "p_s": 6.8, "ev_ebit": 24.0,
+        "ev_ebitda": 16.4, "ev_revenue": 9.2, "pe": 25.3, "p_s": 8.3, "ev_ebit": 20.0,   # basket AAPL MSFT GOOG META AMZN ORCL, 2026-09-27
     },
     # Mature Platform / SaaS — Adobe, ServiceNow, Salesforce, Oracle
     # Calibration 2026-04-22: ADBE/ORCL trading at 15-22x EV/EBITDA in 2025
     # post-Figma + AI disruption concerns. Prior 30x was mid-2022 peak.
     "Mature Platform": {
-        "ev_ebitda": 18.0, "ev_revenue": 6.5, "pe": 24.0, "p_s": 5.8, "ev_ebit": 22.0,
+        "ev_ebitda": 18.0, "ev_revenue": 4.6, "pe": 19.9, "p_s": 4.1, "ev_ebit": 21.0,   # Internet Content basket, 2026-09-27
     },
     "Mature SaaS": {
-        "ev_ebitda": 22.0, "ev_revenue": 10.0, "pe": 28.0, "p_s": 9.0, "ev_ebit": 26.0,
+        "ev_ebitda": 17.0, "ev_revenue": 5.1, "pe": 24.6, "p_s": 4.6, "ev_ebit": 20.0,   # Software - Application basket, 2026-09-27
     },
     # Growth SaaS — Snowflake, Datadog, CrowdStrike, Cloudflare
     "Growth SaaS": {
@@ -4336,7 +4340,37 @@ def _tech_subtype_multiples(profile_name: str) -> dict:
     return _TECH_SUBTYPE_MULTIPLES.get(profile_name, _TECH_SUBTYPE_MULTIPLES["default"])
 
 
-def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> float:
+#: Wave 7 (owner decision 2): the mature profile a growth profile converges to, expressed as
+#: the FMP label whose live cohort carries its EV/Revenue. Hyperscaler and Levered Subscription
+#: have no clean label and keep the table.
+_CONVERGENCE_LIVE_LABEL: dict[str, tuple[str, str]] = {
+    "Mature SaaS":     ("Software - Application", "Technology"),
+    "Mature Platform": ("Internet Content & Information", "Communication Services"),
+}
+
+
+def _live_mature_ev_revenue(convergence: str, peer: Optional[dict]) -> Optional[float]:
+    """The convergence profile's live EV/Revenue in the same market as `peer`'s basket, or None."""
+    lab = _CONVERGENCE_LIVE_LABEL.get(convergence)
+    if not lab:
+        return None
+    try:
+        basis = (peer or {}).get("_comp_basis") or {}
+        ex = next((b.get("exchange") for b in basis.values() if isinstance(b, dict) and b.get("exchange")), "US")
+        from src.data.regional_comps import get_regional_multiples, profile_basket_multiples
+        # The mature profile's curated basket first (the cohort the table was re-derived
+        # from), its FMP industry label when the basket does not resolve.
+        r = profile_basket_multiples(ex, convergence) or {}
+        if not (r.get("ev_revenue") or {}).get("value"):
+            r = get_regional_multiples(ex, lab[0], lab[1]) or {}
+        v = (r.get("ev_revenue") or {}).get("value")
+        return float(v) if isinstance(v, (int, float)) and v > 0 and (r.get("ev_revenue") or {}).get("basis") in ("profile", "industry", "family") else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base",
+                                  peer: Optional[dict] = None) -> float:
     """Terminal EV/Revenue multiple with mature-profile convergence (Option III Spec 2).
 
     Growth-phase profiles converge to their mature equivalent at Y10+ so the
@@ -4353,7 +4387,9 @@ def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> 
     """
     convergence = _TERMINAL_MULTIPLE_CONVERGENCE.get(profile_name, profile_name)
     mature_mults = _TECH_SUBTYPE_MULTIPLES.get(convergence, _TECH_SUBTYPE_MULTIPLES["default"])
-    base = mature_mults["ev_revenue"]
+    # Wave 7 (owner decision 2, 2026-09-27): the live mature cohort first (Software -
+    # Application 5.1x on 2026-09-27 against the table's 10x), the table as the fallback.
+    base = _live_mature_ev_revenue(convergence, peer) or mature_mults["ev_revenue"]
     # Asymmetric tightening for high-SBC tech profiles: bear penalised
     # harder (-30%) AND bull tightened (-5%, going from legacy 1.20→1.15).
     # Earlier rev had bull at 1.30 which LOOSENED bull case vs legacy and
@@ -4421,7 +4457,7 @@ def _qualified_ev_revenue_multiple(
     """
     if not _is_tech_subtype(sector, profile_name):
         return float(peer.get("ev_revenue", 4.0)), "peer"
-    terminal = _terminal_multiple_ev_revenue(profile_name, scenario)
+    terminal = _terminal_multiple_ev_revenue(profile_name, scenario, peer=peer)
     gm = _gross_margin(row)
     if gm is None or gm >= _SAAS_GROSS_MARGIN_FLOOR:
         return terminal, "SaaS terminal"
@@ -6074,7 +6110,14 @@ def _compute_method_value(
     # SBC extension: tech companies with SBC > 10% of revenue get 10%
     # multiple haircut (SBC is real dilution, not non-cash).
     if method_name in _EV_MULTIPLE_METHODS:
-        if _is_tech_subtype(sector, profile_name):
+        # Wave 7 (owner decision 2, 2026-09-27): the live cohort prices the tech
+        # sub-types like every other sector; the static table is the fallback for
+        # a basket that has no reading. `_basket_rank` >= 1 is a live basket
+        # (sector rung or better); 0 is the static table or unknown.
+        _peer_field = "ev_ebit" if method_name in _EV_EBIT_METHODS else "ev_ebitda"
+        if (_is_tech_subtype(sector, profile_name) and not (
+                isinstance(peer.get(_peer_field), (int, float)) and peer.get(_peer_field) > 0
+                and _basket_rank(peer, _peer_field) >= 1)):
             tech_mults = _tech_subtype_multiples(profile_name)
             base_mult = tech_mults["ev_ebit"] if method_name in _EV_EBIT_METHODS else tech_mults["ev_ebitda"]
         elif method_name in _EV_EBIT_METHODS and isinstance(peer.get("ev_ebit"), (int, float)):
@@ -6510,8 +6553,10 @@ def _compute_method_value(
             return None
         # Prefer tech sub-type p_s multiple (explicitly calibrated); fall back
         # to EV/Revenue × 0.90 adjust for sectors without a direct P/S multiple.
-        if _is_tech_subtype(sector, profile_name):
-            ps_mult = _tech_subtype_multiples(profile_name)["p_s"] * growth_premium
+        if (_is_tech_subtype(sector, profile_name)
+                and not (isinstance(peer.get("ev_revenue"), (int, float)) and peer.get("ev_revenue") > 0
+                         and _basket_rank(peer, "ev_revenue") >= 1)):
+            ps_mult = _tech_subtype_multiples(profile_name)["p_s"] * growth_premium     # fallback (Wave 7)
         else:
             ps_mult = peer.get("ev_revenue", 4.0) * 0.90 * growth_premium
         if reported_currency == "CNY":
@@ -6531,8 +6576,12 @@ def _compute_method_value(
         if ebit_fwd is None or ebit_fwd <= 0 or shares <= 0:
             return None
         # Tech sub-type has direct ev_ebit multiple; else use EV/EBITDA × 1.20
-        if _is_tech_subtype(sector, profile_name):
-            base_mult = _tech_subtype_multiples(profile_name)["ev_ebit"]
+        if (_is_tech_subtype(sector, profile_name)
+                and not (isinstance(peer.get("ev_ebitda"), (int, float)) and peer.get("ev_ebitda") > 0
+                         and _basket_rank(peer, "ev_ebitda") >= 1)):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_ebit"]                  # fallback (Wave 7)
+        elif isinstance(peer.get("ev_ebit"), (int, float)) and peer.get("ev_ebit") > 0:
+            base_mult = float(peer["ev_ebit"])
         else:
             base_mult = peer.get("ev_ebitda", 12.0) * 1.20
         mult = base_mult * growth_premium
@@ -7733,7 +7782,25 @@ NTM_FORWARD_FLAG = "NTM_FORWARD_MULTIPLES_ENABLED"
 
 
 def _ntm_forward_enabled() -> bool:
-    return os.getenv(NTM_FORWARD_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+    """Owner decision 3 (Wave 7, 2026-09-27): a forward figure takes a forward multiple in every
+    case, so the flag is ON unless the environment turns it off. A Memory name at peak took
+    forward EPS x a trailing 40x cohort multiple (MU: 6,366 per share) with it off."""
+    return os.getenv(NTM_FORWARD_FLAG, "on").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _ladder_revenue_usd(revenue_base, target_ccy, api_key=None):
+    """Wave 7 (owner decision 7, 2026-09-27): the ratio ladder's size thresholds are dollar
+    figures (`revenue_base > 100e9` -> Hyperscaler). `revenue_base` is in the trading currency,
+    so Lenovo (HK$649bn), NetEase, Kuaishou and BYD Electronic cleared a US$100bn line in HKD or
+    CNY and took the hyperscaler table. Convert before comparing; on any failure return the
+    figure unchanged (the old behaviour) rather than block the run."""
+    try:
+        if not isinstance(revenue_base, (int, float)) or not target_ccy or str(target_ccy).upper() == "USD":
+            return revenue_base
+        r = get_fx_rate(str(target_ccy).upper(), "USD", api_key)
+        return float(revenue_base) * float(r) if r and r > 0 else revenue_base
+    except Exception:                                      # noqa: BLE001
+        return revenue_base
 
 
 def _forward_peer_multiple(peer: dict, field: str, default: float) -> tuple[float, str]:
@@ -11510,13 +11577,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
                 profile_name, profile_data = get_valuation_profile(
                     sector, revenue_cagr, _fcf_margin_for_classify, leverage,
-                    is_pre_revenue, revenue_base=revenue_base,
+                    is_pre_revenue, revenue_base=_ladder_revenue_usd(revenue_base, _target_ccy, api_key),
                     gross_margin=_gross_margin_for_classify,
                 )
         else:
             profile_name, profile_data = get_valuation_profile(
                 sector, revenue_cagr, _fcf_margin_for_classify, leverage,
-                is_pre_revenue, revenue_base=revenue_base,
+                is_pre_revenue, revenue_base=_ladder_revenue_usd(revenue_base, _target_ccy, api_key),
                 gross_margin=_gross_margin_for_classify,
             )
 
@@ -13390,7 +13457,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # Falls back to the ungated legacy growth-vs-sector-avg figure
                 # only when forward_roic isn't computable (missing EBIT/
                 # invested-capital data).
-                _GROWTH_SENSITIVITY = 0.30
+                _GROWTH_SENSITIVITY = 0.30          # retired form (ratio to the cohort average); kept for the record
+                # Wave 7 (owner decision 4, 2026-09-27): absolute-spread form. Ten points of
+                # growth above the cohort add 25% to the multiple; the ratio form saturated
+                # at the 1.8x cap on any cohort growing 1-4% (ACN x1.50, NetEase x1.80).
+                _GROWTH_SPREAD_K = 2.5
                 # `market_cap` MUST match what the three `_compute_method_value`
                 # legs pass, because this call resolves the benchmark those legs
                 # are scaled by. It unlocks the size-matched "large" cohort rungs
@@ -13431,8 +13502,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 _sector_g_avg_basis = (_peer_for_gp.get("_comp_basis") or {}).get("growth_avg")
                 _gp_raw_growth = (
-                    1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
-                    if _sector_g_avg > 0.005 else 1.0
+                    1.0 + _GROWTH_SPREAD_K * (g - _sector_g_avg)
+                    if isinstance(_sector_g_avg, (int, float)) else 1.0
                 )
                 if forward_roic is not None and wacc > 0:
                     if forward_roic <= wacc:
@@ -13466,7 +13537,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 elif _is_high_mult_tech:
                     growth_premium = max(0.85, min(1.30, _gp_raw))
                 else:
-                    growth_premium = max(0.60, min(1.80, _gp_raw))
+                    growth_premium = max(0.85, min(1.30, _gp_raw))   # Wave 7: the tech-growth band for every profile
 
                 # ── SBC Dilution Override ─────────────────────────────────
                 # If UNFUNDED stock comp (SBC not offset by buybacks) exceeds
@@ -13653,6 +13724,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _swaps = [s for s in _mid_cycle_leg_swaps(profile_data, profile_name)
                               if s["to"] not in excluded]
                     _peak_fired = bool(_peak and _peak["fired"])
+                    if _peak_fired:
+                        # Wave 7 (owner decision 3): the peak-consensus trigger is also the
+                        # cyclical regime flag the scorecard counts apart (MU: the market
+                        # prices a super-cycle the normalised anchor does not).
+                        most_recent["_cyclical_peak_flag"] = True
                     if _peak is not None or _swaps:
                         def _mv(_name: str) -> Optional[float]:
                             return _compute_method_value(
@@ -15439,6 +15515,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 pass
             if most_recent.get("_pipeline_quarantine"):
                 _b_sr.setdefault("forward_flags", []).append(most_recent["_pipeline_quarantine"])
+            if most_recent.get("_cyclical_peak_flag") and not _regime_flag:
+                _regime_flag = "Cyclical_Peak_Consensus"
+                _b_sr.setdefault("forward_flags", []).append(
+                    "Cyclical_Peak_Consensus: the peak-consensus trigger fired on this cyclical profile; the "
+                    "normalised anchor and the forward consensus describe different cycles and the name is scored apart")
             if _fpe_rec is not None:
                 gate_evaluations.append({
                     "gate_id": "GATE_FORWARD_PE_SANITY",

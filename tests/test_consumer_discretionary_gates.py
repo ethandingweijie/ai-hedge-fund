@@ -1731,7 +1731,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (121, 39), (total, with_norm)   # Wave 5 +2; Wave 6 (2026-09-27) +3 profiles, Card Issuer carries P/E (norm)
+    assert (total, with_norm) == (125, 39), (total, with_norm)   # Wave 6 +3; Wave 7 (2026-09-27) +4 profiles (Analog IDM, Media, Networking, Telecom Carrier), none normalised
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2101,7 +2101,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (121, 36, 36, 12)   # Wave 5 +2; Wave 6 +3 profiles, none with a trailing P/E leg (2026-09-27)
+    assert (tot, trail, elig, anchored) == (125, 33, 33, 10)   # Wave 7 (2026-09-27): Fabless, Equipment / EDA and Mature SaaS moved off trailing P/E to Forward P/E; +4 profiles
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2952,8 +2952,8 @@ def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
     assert lk["BIRK"][1] == "Apparel / Athletic Wear"
 
     consumer = [v for v in lk.values() if v[0] == "Consumer"]
-    assert len(consumer) == 84     # JD -> Tech (2026-09-26); COST pinned Membership / Subscription Retail (Wave 4)
-    assert sum(1 for v in consumer if v[1]) == 44   # +COST pin (Wave 4)
+    assert len(consumer) == 83     # JD -> Tech (2026-09-26); COST pinned Membership (Wave 4); DIS -> Tech / Media & Streaming (Wave 7, 2026-09-27)
+    assert sum(1 for v in consumer if v[1]) == 43   # +COST pin (Wave 4); DIS pin left for Tech / Media & Streaming (Wave 7)
     assert sum(1 for v in consumer if not v[1]) == 40   # JD -> Tech / China Internet Platform (owner, 2026-09-26)
 
 
@@ -3102,6 +3102,7 @@ def test_the_65_percent_floor_is_live_for_tech_and_inert_for_consumer():
     from src.agents.analysis.dcf_agent import (
         _SAAS_GROSS_MARGIN_FLOOR, _SAAS_GROSS_MARGIN_REFERENCE,
         _is_tech_subtype, _qualified_ev_revenue_multiple,
+        _terminal_multiple_ev_revenue,
     )
 
     assert _SAAS_GROSS_MARGIN_FLOOR == 0.65
@@ -3126,12 +3127,16 @@ def test_the_65_percent_floor_is_live_for_tech_and_inert_for_consumer():
         "Technology", "Hyper-Growth Platform", "base", peer, row(0.595))[0] == 6.0
     tm, tb = _qualified_ev_revenue_multiple(
         "Technology", "Hyper-Growth Platform", "base", peer, row(0.720))
-    assert tm == 10.0 and tb == "SaaS terminal"
+    # Wave 7 (decision 2, alternative): the terminal is the live mature cohort when one is
+    # published, the static table (10.0) otherwise -- so the expectation is read, not typed.
+    _term = _terminal_multiple_ev_revenue("Hyper-Growth Platform", "base", peer=peer)
+    assert tm == _term and tb == "SaaS terminal"
 
     # With no peer multiple to fall back on, the scaling leg is what fires.
     scaled, basis = _qualified_ev_revenue_multiple(
         "Technology", "Hyper-Growth Platform", "base", {}, row(0.445))
-    assert scaled == pytest.approx(10.0 * (0.445 / 0.80) ** 2, rel=1e-9)
+    _term0 = _terminal_multiple_ev_revenue("Hyper-Growth Platform", "base", peer={})
+    assert scaled == pytest.approx(_term0 * (0.445 / 0.80) ** 2, rel=1e-9)
     assert "scaled by" in basis
 
 

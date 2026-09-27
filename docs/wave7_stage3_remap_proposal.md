@@ -88,3 +88,50 @@ ACN it takes the premium from 1.50 to about 1.13; on NetEase from 1.80 to 1.16.
    Mixed-signal IDM; forward anchors on Fabless, Equipment / EDA and Mature SaaS.
 6. HK internet: Baidu, Kuaishou and NetEase onto China Internet Platform by market map.
 7. The ladder currency fix (engine defect, no constant): apply in Stage 4 regardless.
+
+
+## 6. Decisions (owner, 2026-09-27) and what was built
+
+Decisions 1 and 3 to 7 taken as written; decision 2 as the alternative (retire the static table's
+override in favour of the live cohort, table as fallback). Cut: 00020.HK, CJLU.SI, AIY.SI; DIS kept on
+Media & Streaming.
+
+Built (map v21): fourteen labels in `routing_scope` (55 in all); `Consumer Electronics` -> Consumer
+Electronics / Hardware Ecosystem; `Telecommunications Services` -> Telecom Carrier (the SG market map
+keeps Telco / Infrastructure (SG)); `Entertainment` and `Electronic Gaming & Multimedia` -> Media &
+Streaming; `Communication Equipment` -> Networking & Communication Equipment; `Information Technology
+Services` -> IT Services; `Advertising Agencies` -> Ad / Consulting; the HK market map sends `Internet
+Content & Information` and `Electronic Gaming & Multimedia` to China Internet Platform and `Computer
+Hardware` / `Hardware, Equipment & Parts` to Consumer Electronics / Hardware Ecosystem. Four new
+profiles with statics and baskets: Analog / Mixed-signal IDM (Forward P/E .35, EV/EBITDA .25, DCF .25,
+FCF Yield .15), Media & Streaming (.35 / .30 / .25 / .10), Networking & Communication Equipment (.35 /
+.25 / .25 / .15), Telecom Carrier (EV/EBITDA .35, FCF Yield .25, DDM .20, DCF (2-stage) .20). Forward
+anchors: Fabless (Forward P/E .35, DCF .25, EV/EBITDA .20, EV/NTM Revenue .20), Equipment / EDA
+(Forward P/E .35), Mature SaaS (Forward P/E .35, DCF (2-stage) .30, EV/EBITDA .20, FCF Yield .15; EPV
+to a shadow method). Pins: TXN ADI NXPI MCHP ON (Analog); LRCX KLAC TER (Equipment); MRVL ARM (Fabless);
+WDC STX SNDK (Memory); CSCO ANET CIEN MSI JNPR (Networking); NFLX DIS WBD EA TTWO (Media); T VZ TMUS
+CMCSA CHTR 00941.HK 00728.HK 00762.HK (Telecom Carrier); ACN IBM CTSH INFY (IT Services); SNOW DDOG NET
+(Growth SaaS); PANW ZS (Cybersecurity); 00981.HK 01347.HK (IDM / Foundry); 09999.HK 09888.HK 01024.HK
+(China Internet Platform); 00992.HK 02382.HK 00285.HK (Consumer Electronics / Hardware Ecosystem).
+
+Engine: the EV/EBITDA, EV/EBIT and P/S branches use the live cohort whenever the basket rank is at
+least 1 and `_TECH_SUBTYPE_MULTIPLES` only below that (table rows re-derived to the section 3 baskets:
+Hyperscaler 16.4 / 25.3 / 9.2, Mature Platform 18.0 / 19.9 / 4.6, Mature SaaS 17.0 / 24.6 / 5.1); the
+terminal EV/Revenue for the growth profiles converges to the live mature cohort, the table as fallback;
+Hyperscaler / Tech Conglomerate, Mature SaaS and Mature Platform carry the section 3 baskets in
+`regional_comps.PROFILE_PEER_BASKETS`, because without them the first measurement priced Microsoft and
+Oracle on a six-name Software - Infrastructure cohort at 30.3x EV/EBITDA (+51% and +143% against spot)
+while Apple read Consumer Electronics and Alphabet Internet Content; `_ntm_forward_enabled()` defaults
+on; the peak-consensus trigger is the `Cyclical_Peak_Consensus` regime flag; the growth premium is
+`1 + 2.5 x (g - cohort g)` capped 0.85–1.30 for every profile; `_ladder_revenue_usd` converts the
+ladder's revenue to dollars before the size thresholds. No new owner constant beyond the band the
+proposal named; the baskets are the ones in section 3.
+
+Tests: `tests/test_tech_wave7.py` (labels, rows, HK map, pins, profiles, anchors, table-as-fallback,
+baskets, NTM default, premium bound, flag, ladder helper); census pins moved (125 / 39 / 33 / 10, 124
+reinvestment rows, 83 consumer names, 43 pinned); `_WAVE7_MOVED` precedence in
+`tests/test_valuation_fixes_0917e.py`; the 0917d/f premium pins restated onto the 0.85 floor. Goldens
+re-based (AAPL 224.55 -> 203.56 on the basket; 02888.HK 287.71 -> 288.95, D05.SI 43.21 -> 44.44,
+SCHW 76.50 -> 72.28, COST 525.00 -> 514.36, V 451.18 -> 444.53 on the premium; MU trace only).
+Measured in `docs/wave7_stage6_scorecard.md`: 9 of 30 within ±30% of consensus (10 at Stage 0), 19 of
+46 within ±30% of spot (18), backtest passed 21 (19), anchor missing 0.
