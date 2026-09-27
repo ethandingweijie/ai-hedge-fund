@@ -1,0 +1,345 @@
+{
+ "NVDA": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "NVIDIA Corporation",
+  "currency": "USD"
+ },
+ "AAPL": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Consumer Electronics",
+  "name": "Apple Inc.",
+  "currency": "USD"
+ },
+ "GOOG": {
+  "exchange": "NASDAQ",
+  "sector": "Communication Services",
+  "industry": "Internet Content & Information",
+  "name": "Alphabet Inc.",
+  "currency": "USD"
+ },
+ "MSFT": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Software - Infrastructure",
+  "name": "Microsoft Corporation",
+  "currency": "USD"
+ },
+ "META": {
+  "exchange": "NASDAQ",
+  "sector": "Communication Services",
+  "industry": "Internet Content & Information",
+  "name": "Meta Platforms, Inc.",
+  "currency": "USD"
+ },
+ "AVGO": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Broadcom Inc.",
+  "currency": "USD"
+ },
+ "MU": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Micron Technology, Inc.",
+  "currency": "USD"
+ },
+ "AMD": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Advanced Micro Devices, Inc.",
+  "currency": "USD"
+ },
+ "ASML": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "ASML Holding N.V.",
+  "currency": "USD"
+ },
+ "INTC": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Intel Corp.",
+  "currency": "USD"
+ },
+ "ORCL": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Software - Infrastructure",
+  "name": "Oracle Corporation",
+  "currency": "USD"
+ },
+ "PLTR": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Software - Infrastructure",
+  "name": "Palantir Technologies Inc.",
+  "currency": "USD"
+ },
+ "CRM": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "name": "Salesforce, Inc.",
+  "currency": "USD"
+ },
+ "ADBE": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "name": "Adobe Inc.",
+  "currency": "USD"
+ },
+ "NOW": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "name": "ServiceNow, Inc.",
+  "currency": "USD"
+ },
+ "CSCO": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Communication Equipment",
+  "name": "Cisco Systems, Inc.",
+  "currency": "USD"
+ },
+ "QCOM": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "QUALCOMM Incorporated",
+  "currency": "USD"
+ },
+ "TXN": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Texas Instruments Incorporated",
+  "currency": "USD"
+ },
+ "AMAT": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Applied Materials, Inc.",
+  "currency": "USD"
+ },
+ "LRCX": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Lam Research Corporation",
+  "currency": "USD"
+ },
+ "KLAC": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "KLA Corporation",
+  "currency": "USD"
+ },
+ "NFLX": {
+  "exchange": "NASDAQ",
+  "sector": "Communication Services",
+  "industry": "Entertainment",
+  "name": "Netflix, Inc.",
+  "currency": "USD"
+ },
+ "DIS": {
+  "exchange": "NYSE",
+  "sector": "Communication Services",
+  "industry": "Entertainment",
+  "name": "The Walt Disney Company",
+  "currency": "USD"
+ },
+ "T": {
+  "exchange": "NYSE",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "AT&T Inc.",
+  "currency": "USD"
+ },
+ "VZ": {
+  "exchange": "NYSE",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "Verizon Communications Inc.",
+  "currency": "USD"
+ },
+ "TMUS": {
+  "exchange": "NASDAQ",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "T-Mobile US, Inc.",
+  "currency": "USD"
+ },
+ "ACN": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Information Technology Services",
+  "name": "Accenture plc",
+  "currency": "USD"
+ },
+ "IBM": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Information Technology Services",
+  "name": "International Business Machines Corporation",
+  "currency": "USD"
+ },
+ "CRWD": {
+  "exchange": "NASDAQ",
+  "sector": "Technology",
+  "industry": "Software - Infrastructure",
+  "name": "CrowdStrike Holdings, Inc.",
+  "currency": "USD"
+ },
+ "ANET": {
+  "exchange": "NYSE",
+  "sector": "Technology",
+  "industry": "Computer Hardware",
+  "name": "Arista Networks, Inc.",
+  "currency": "USD"
+ },
+ "00700.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Internet Content & Information",
+  "name": "Tencent Holdings Limited",
+  "currency": "HKD"
+ },
+ "00941.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "China Mobile Limited",
+  "currency": "HKD"
+ },
+ "01810.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Consumer Electronics",
+  "name": "Xiaomi Corporation",
+  "currency": "HKD"
+ },
+ "00981.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Semiconductor Manufacturing International Corporation",
+  "currency": "HKD"
+ },
+ "09999.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Electronic Gaming & Multimedia",
+  "name": "NetEase, Inc.",
+  "currency": "HKD"
+ },
+ "00728.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "China Telecom Corporation Limited",
+  "currency": "HKD"
+ },
+ "00992.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Computer Hardware",
+  "name": "Lenovo Group Limited",
+  "currency": "HKD"
+ },
+ "09888.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Internet Content & Information",
+  "name": "Baidu, Inc.",
+  "currency": "HKD"
+ },
+ "00762.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "China Unicom (Hong Kong) Limited",
+  "currency": "HKD"
+ },
+ "01347.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "Hua Hong Semiconductor Limited",
+  "currency": "HKD"
+ },
+ "00020.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "name": "SenseTime Group Inc.",
+  "currency": "HKD"
+ },
+ "02382.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Hardware, Equipment & Parts",
+  "name": "Sunny Optical Technology (Group) Company Limited",
+  "currency": "HKD"
+ },
+ "01024.HK": {
+  "exchange": "HKSE",
+  "sector": "Communication Services",
+  "industry": "Internet Content & Information",
+  "name": "Kuaishou Technology",
+  "currency": "HKD"
+ },
+ "00285.HK": {
+  "exchange": "HKSE",
+  "sector": "Technology",
+  "industry": "Hardware, Equipment & Parts",
+  "name": "BYD Electronic (International) Company Limited",
+  "currency": "HKD"
+ },
+ "Z74.SI": {
+  "exchange": "SES",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "Singapore Telecommunications Limited",
+  "currency": "SGD"
+ },
+ "V03.SI": {
+  "exchange": "SES",
+  "sector": "Technology",
+  "industry": "Hardware, Equipment & Parts",
+  "name": "Venture Corporation Limited",
+  "currency": "SGD"
+ },
+ "CJLU.SI": {
+  "exchange": "SES",
+  "sector": "Communication Services",
+  "industry": "Telecommunications Services",
+  "name": "NetLink NBN Trust",
+  "currency": "SGD"
+ },
+ "AWX.SI": {
+  "exchange": "SES",
+  "sector": "Technology",
+  "industry": "Semiconductors",
+  "name": "AEM Holdings Ltd.",
+  "currency": "SGD"
+ },
+ "AIY.SI": {
+  "exchange": "SES",
+  "sector": "Technology",
+  "industry": "Software - Application",
+  "name": "iFAST Corporation Ltd.",
+  "currency": "SGD"
+ }
+}
