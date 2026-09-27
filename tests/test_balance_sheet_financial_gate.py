@@ -405,7 +405,9 @@ def test_the_allowed_legs_survive_every_tier_1_profile(profile_name):
     The plan's allowed set, asserted against the real taxonomy rather than a
     hand-written list: whatever survives must be a member of it.
     """
-    allowed = {"P/TBV", "P/E (norm)", "Residual Income", "GGM (P/B)", "DDM",
+    # "SOTP (analyst)": Holding Company's accepted look-through (Wave 6, 2026-09-27) is an equity
+    # sum of parts, not an EV/DCF/FCF leg, and survives the strip by design.
+    allowed = {"SOTP (analyst)", "P/TBV", "P/E (norm)", "Residual Income", "GGM (P/B)", "DDM",
                "Excess Capital", "P/BV", "P/E (ops)", "Embedded Value",
                "Combined Ratio Gate", "SOTP / NAV", "NAV Discount",
                "SOTP (published)", "P/FRE", "P/DE", "AUM Multiple",

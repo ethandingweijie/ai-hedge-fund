@@ -94,6 +94,10 @@ class SotpInputs(BaseModel):
     fiscal_year: str = Field(description="The FORWARD year every segment figure is stated for, e.g. 'FY2026E'")
     segments: list[SegmentEstimate]
     associates_investments: Optional[Cited] = None
+    listed_investments_at_market: Optional[Cited] = Field(
+        default=None, description="Fair value of LISTED equity securities held as investments at the latest "
+                                  "balance-sheet date (total, not per share; the equity portfolio a holding "
+                                  "company marks to market). Omit for an operating company without one.")
     net_cash: Optional[Cited] = Field(
         default=None, description="Cash + short-term investments - debt; negative if net debt")
     holdco_discount_pct: float = Field(description="Decimal, e.g. 0.15")
@@ -447,7 +451,9 @@ def sotp_prompt(company: str, ticker: str, anchors: dict) -> str:
         "businesses, EV/Sales otherwise) with the basis; broker SOTP notes are a good "
         "source for the multiple itself. For a P/E segment whose FY+1 earnings are negative "
         "or near zero, ALSO give the EV/Sales range brokers use for it (ev_sales_low/high).\n"
-        "3. Associates and strategic investments (total, not per share), net cash "
+        "3. Associates and strategic investments (total, not per share), LISTED equity investments at "
+        "fair value as a SEPARATE figure (the equity securities portfolio on the balance sheet, e.g. a "
+        "holding company's marked-to-market stakes; total), net cash "
         "(cash + short-term investments - total debt; negative if net debt) at the latest "
         "balance-sheet date with that date as the period, and a holding-company discount.\n"
         f"Do NOT compute a per-share value.\n{_AMOUNT_RULE}\n"
@@ -616,6 +622,100 @@ class RateBase(BaseModel):
                                    "under the Scheme of Control')")
 
 
+class CitedMultipleRange(BaseModel):
+    """A valuation multiple range the sell side applies, cited."""
+    low: float
+    high: float
+    basis: str = Field(description="Whose range and on what (e.g. 'broker P/DE on FY26E distributable earnings')")
+    source_url: str
+    quote: str = ""
+
+
+class EmbeddedValueInputs(BaseModel):
+    """Wave 6 (owner, 2026-09-27): a life insurer's embedded value, as the company reports it."""
+    fiscal_year: str = Field(description="The period the embedded value is stated at, e.g. 'FY2025' or '1H2026'")
+    basis: str = Field(description="EEV, MCEV, traditional EV, or IFRS 17 CSM-based; the company's own label")
+    ev_total: Cited = Field(description="Group embedded value, TOTAL, in the source's currency and scale")
+    ev_per_share: Cited = Field(description="Embedded value PER SHARE in the source's currency (scale 'units')")
+    vnb: Optional[Cited] = Field(default=None, description="Value of new business for the latest full year, total")
+    vnb_margin: Optional[CitedRatio] = Field(default=None, description="VNB margin as a decimal, e.g. 0.54")
+    notes: Optional[str] = None
+
+
+class AltManagerInputs(BaseModel):
+    """Wave 6 (owner, 2026-09-27): an alternative asset manager's fee-related and distributable
+    earnings for the FORWARD year, with the cited multiples the sell side applies."""
+    fiscal_year: str = Field(description="The FORWARD fiscal year every figure is stated for, e.g. 'FY2026E'")
+    fre: Optional[Cited] = Field(default=None, description="Fee-related earnings for the FULL forward year, TOTAL (not a quarterly run-rate)")
+    de: Optional[Cited] = Field(default=None, description="Distributable earnings for the FULL forward year, TOTAL (after tax where reported)")
+    fre_per_share: Optional[Cited] = Field(default=None, description="FRE PER SHARE for the forward year when the source states it that way (scale 'units')")
+    de_per_share: Optional[Cited] = Field(default=None, description="DE PER SHARE for the forward year when consensus is published per share (scale 'units')")
+    net_accrued_carry: Optional[Cited] = Field(default=None, description="Net accrued performance revenues / carry receivable on the latest balance sheet, TOTAL")
+    fee_paying_aum: Optional[Cited] = Field(default=None, description="Fee-paying or fee-earning AUM at the latest quarter, TOTAL")
+    pde_multiple: CitedMultipleRange = Field(description="P/DE range the sell side applies to this company or its peer set")
+    pfre_multiple: CitedMultipleRange = Field(description="P/FRE (fee-related earnings multiple) range applied by the sell side")
+    notes: Optional[str] = None
+
+
+def embedded_value_prompt(company: str, ticker: str, anchors: dict) -> str:
+    return (
+        f"You are collecting EMBEDDED VALUE inputs for the life insurer {company} ({ticker}).\n"
+        "Report the group embedded value exactly as the company discloses it in its latest annual or "
+        "interim results (EEV, MCEV, traditional EV or IFRS 17 CSM-based -- say which), as a TOTAL and PER "
+        "SHARE, the value of new business for the latest full year and the VNB margin, each with the "
+        "fiscal period it is stated at. Cite every number from the company's results announcement, "
+        f"annual report or embedded value report. Do NOT value the company.\n{_AMOUNT_RULE}\n"
+        f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def alt_manager_prompt(company: str, ticker: str, anchors: dict) -> str:
+    return (
+        f"You are collecting DISTRIBUTABLE EARNINGS inputs for the alternative asset manager {company} ({ticker}).\n"
+        "Report, for the NEXT fiscal year (forward, e.g. FY2026E): consensus or company-outlook fee-related "
+        "earnings (FRE) and distributable earnings (DE) for the FULL YEAR -- as totals in the company's reporting "
+        "currency, or per share when consensus is published per share (fill the per-share field, not the total; "
+        "never a quarterly run-rate); the "
+        "net accrued performance revenues (carry receivable) and fee-paying AUM on the latest balance sheet; "
+        "and the P/DE and P/FRE multiple RANGES that sell-side research applies to this company or its peer "
+        "set, with the basis. Cite every number (earnings release, supplemental, sell-side note). Do NOT value "
+        f"the company.\n{_AMOUNT_RULE}\n"
+        f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def embedded_value_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
+    """Accepted embedded_value input -> {ev_per_share (statement ccy), vnb_margin, basis, period}."""
+    out: dict = {"basis": (data or {}).get("basis"), "period": (data or {}).get("fiscal_year")}
+    evps = amount((data or {}).get("ev_per_share"), fx_to_ccy)
+    if evps and evps > 0:
+        out["ev_per_share"] = evps
+    vm = (data or {}).get("vnb_margin")
+    if isinstance(vm, dict) and isinstance(vm.get("value"), (int, float)):
+        v = float(vm["value"]); v = v / 100.0 if v > 1.0 else v
+        if 0.0 < v < 1.5:
+            out["vnb_margin"] = v
+    return out
+
+
+def alt_manager_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
+    """Accepted alt_manager input -> totals in the statement currency plus range midpoints."""
+    d = data or {}
+    out: dict = {"period": d.get("fiscal_year")}
+    for src, key in (("fre", "alt_fre_fwd_total"), ("de", "alt_de_fwd_total"), ("net_accrued_carry", "alt_net_accrued_carry_total"),
+                     ("fre_per_share", "alt_fre_ps_fwd"), ("de_per_share", "alt_de_ps_fwd")):
+        v = amount(d.get(src), fx_to_ccy)
+        if v is not None and (v > 0 or src == "net_accrued_carry"):
+            out[key] = v
+    for src, key in (("pde_multiple", "alt_pde_multiple"), ("pfre_multiple", "alt_pfre_multiple")):
+        r = d.get(src) or {}
+        lo, hi = r.get("low"), r.get("high")
+        if (isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and 0 < lo <= hi < 200
+                and str(r.get("source_url") or "").startswith("http")):
+            out[key] = round((float(lo) + float(hi)) / 2.0, 3)
+    return out
+
+
 INDUSTRY_INPUT_SCHEMAS: dict = {
     "pv10": ReserveValue,
     "backlog": BacklogValue,
@@ -624,6 +724,8 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "fcf_guidance": FcfGuidance,
     "sotp": SotpInputs,
     "pipeline": PipelineInputs,
+    "embedded_value": EmbeddedValueInputs,   # Wave 6 (owner, 2026-09-27)
+    "alt_manager": AltManagerInputs,
 }
 
 _INDUSTRY_ASK = {
@@ -645,6 +747,8 @@ _INDUSTRY_ASK = {
     # the FMP anchors; this entry keeps the kind tables complete.
     "sotp": "its business segments with a cited multiple range each (see sotp_prompt)",
     "pipeline": "its late-stage pipeline assets with consensus peak sales and PTRS (see pipeline_prompt)",
+    "embedded_value": "its group embedded value, per share and total, with VNB (see embedded_value_prompt)",
+    "alt_manager": "its forward fee-related and distributable earnings with cited P/DE and P/FRE ranges (see alt_manager_prompt)",
     "fcf_guidance": (
         "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
         "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
@@ -673,6 +777,8 @@ _INDUSTRY_ASK = {
 _OVERLAY_ASK = {
     "sotp": "segment revenue",
     "pipeline": "peak sales",
+    "embedded_value": "embedded value",       # NO_OVERLAY kinds: listed for the schema census only
+    "alt_manager": "distributable earnings",
     "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",
@@ -807,7 +913,7 @@ def amount(c: Optional[dict], to_ccy_rate: Callable[[str], Optional[float]]) -> 
 def citation_coverage(sotp: dict) -> float:
     cited = [s.get("revenue_fwd") for s in sotp.get("segments") or []]
     cited += [s.get("ebit_margin") for s in sotp.get("segments") or [] if s.get("ebit_margin")]
-    cited += [sotp.get(k) for k in ("associates_investments", "net_cash") if sotp.get(k)]
+    cited += [sotp.get(k) for k in ("associates_investments", "listed_investments_at_market", "net_cash") if sotp.get(k)]
     return round(sum(_cited_ok(c) for c in cited) / len(cited), 4) if cited else 0.0
 
 
@@ -874,7 +980,7 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
                          "holdco_discount_pct": min(max(float(sotp.get("holdco_discount_pct") or 0.0), 0.0), 0.5),
                          "default_tax_rate": 0.15,
                          "_origin": "gemini", "_sources": {"all": "gemini_grounded"}}
-    for field in ("associates_investments", "net_cash"):
+    for field in ("associates_investments", "listed_investments_at_market", "net_cash"):
         c = sotp.get(field)
         if c is None:
             continue
@@ -883,6 +989,11 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
             checks["dropped_fields"].append(field)
         else:
             assumptions[field] = value
+            if field == "listed_investments_at_market":
+                # Owner decision 6 (2026-09-27, BRK-B): the listed portfolio at market is
+                # added to the NAV beside the equity-method associates. The engine reads
+                # `associates_investments`; the separate key keeps the disclosure.
+                assumptions["associates_investments"] = float(assumptions.get("associates_investments") or 0.0) + float(value)
             if field == "net_cash":
                 # Item 2: the citation travels with the figure so the engine's
                 # net-cash restatement can defer to it (see _refresh_sotp_net_cash).

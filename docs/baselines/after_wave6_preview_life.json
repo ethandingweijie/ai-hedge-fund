@@ -1,0 +1,231 @@
+{
+ "wave": "6",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "01299.HK": {
+   "profile": "Insurance",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Embedded Value",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Embedded Value",
+     "value_key": "Embedded Value",
+     "weight": 0.35
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E (ops)",
+     "value_key": "P/E (ops)",
+     "weight": 0.2
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 32.47,
+   "base": 38.57,
+   "bull": 48.18,
+   "scenarios_ordered": true,
+   "target_12m_base": 56.16,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 73.75,
+   "iv_vs_spot": -0.47701694915254234,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.27665116904461684,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $40.72 vs price $56.30 on 2024-12-31 = 28% gap; 12m later the market was closer (49% vs 30%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02628.HK": {
+   "profile": "Insurance",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Embedded Value",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Embedded Value",
+     "value_key": "Embedded Value",
+     "weight": 0.35
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.2
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 31.08,
+   "base": 42.47,
+   "bull": 54.67,
+   "scenarios_ordered": true,
+   "target_12m_base": 35.52,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 28.58,
+   "iv_vs_spot": 0.48600419874037804,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.1809428386558487,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $32.02 vs price $14.68 on 2024-12-31 = 118% gap; 12m later the model was closer (17% vs 46%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "02318.HK": {
+   "profile": "Insurance",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Embedded Value",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Embedded Value",
+     "value_key": "Embedded Value",
+     "weight": 0.35
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E (ops)",
+     "value_key": "P/E (ops)",
+     "weight": 0.2
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 65.03,
+   "base": 82.74,
+   "bull": 99.6,
+   "scenarios_ordered": true,
+   "target_12m_base": 67.72,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 52.7,
+   "iv_vs_spot": 0.5700189753320681,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.6748608867640346,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $77.13 vs price $46.05 on 2024-12-31 = 67% gap; 12m later the model was closer (18% vs 29%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "G07.SI": {
+   "profile": "Insurance",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "Embedded Value",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "Embedded Value",
+     "value_key": "Embedded Value",
+     "weight": 0.35
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.4
+    },
+    {
+     "method": "P/E (ops)",
+     "value_key": "P/E (ops)",
+     "weight": 0.2
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.05
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 10.36,
+   "base": 13.41,
+   "bull": 16.75,
+   "scenarios_ordered": true,
+   "target_12m_base": 16.64,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 19.88,
+   "iv_vs_spot": -0.3254527162977867,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.018066394413251682,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $26.27 vs price $25.80 on 2024-12-31 = 2% gap; 12m later model and market were level (72% vs 69%)",
+   "currency": "SGD",
+   "regime": null
+  }
+ }
+}

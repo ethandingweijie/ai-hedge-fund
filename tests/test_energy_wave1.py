@@ -76,11 +76,15 @@ def test_the_scope_holds_every_wave_one_industry_and_only_later_waves_add_to_it(
              "Medical - Instruments & Supplies", "Medical - Healthcare Plans",
              "Medical - Care Facilities", "Medical - Diagnostics & Research",
              "Medical - Distribution"}                                        # tests/test_healthcare_wave5.py
-    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5
+    wave6 = {"Banks - Diversified", "Banks - Regional", "Banks", "Financial - Capital Markets",
+             "Financial - Credit Services", "Insurance - Diversified", "Insurance - Property & Casualty",
+             "Insurance - Life", "Insurance - Brokers", "Asset Management",
+             "Financial - Data & Stock Exchanges"}                            # tests/test_financials_wave6.py
+    assert ipm.routing_scope() == frozenset(WAVE1_ROWS) | wave2 | wave3 | wave4 | wave5 | wave6
 
 
 def test_scope_does_not_reach_other_industries():
-    for other in ("Software - Application", "Electrical Equipment & Parts", "Uranium", "Banks - Diversified"):
+    for other in ("Software - Application", "Electrical Equipment & Parts", "Uranium", "Conglomerates"):   # Banks - Diversified entered scope in Wave 6 (2026-09-27)
         assert not ipm.in_routing_scope("XYZ", other)
 
 

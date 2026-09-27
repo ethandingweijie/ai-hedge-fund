@@ -1,0 +1,62 @@
+{
+ "wave": "6",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "BRK-B": {
+   "profile": "Holding Company",
+   "routing_winner": "ticker_override",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "SOTP (analyst)",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "NAV Discount",
+     "value_key": "NAV Discount",
+     "weight": 1.0
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "SOTP (analyst)",
+     "weight": 0.7,
+     "reason": "uncomputable"
+    },
+    {
+     "method": "DDM",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.2,
+   "methods_unavailable": [
+    "SOTP (analyst)",
+    "DDM"
+   ],
+   "bear": null,
+   "base": null,
+   "bull": null,
+   "scenarios_ordered": null,
+   "target_12m_base": null,
+   "consensus": 604.0,
+   "iv_vs_consensus": null,
+   "spot": null,
+   "iv_vs_spot": null,
+   "consensus_spread": 0.1949,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": false,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.08081897597017428,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $416.65 vs price $453.28 on 2024-12-31 = 8% gap; 12m later the market was closer (17% vs 10%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}

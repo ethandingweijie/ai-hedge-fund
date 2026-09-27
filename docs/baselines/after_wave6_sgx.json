@@ -1,0 +1,58 @@
+{
+ "wave": "6",
+ "as_of": "2026-09-27",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "S68.SI": {
+   "profile": "Market Infrastructure (SG)",
+   "routing_winner": "router",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "P/E (norm)",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "P/E (norm)",
+     "value_key": "P/E (norm)",
+     "weight": 0.45
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.35
+    },
+    {
+     "method": "DCF",
+     "value_key": "DCF",
+     "weight": 0.2
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 10.87,
+   "base": 20.23,
+   "bull": 40.16,
+   "scenarios_ordered": true,
+   "target_12m_base": 21.64,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 22.4,
+   "iv_vs_spot": -0.09687499999999993,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.17884910953017313,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $17.54 vs price $14.88 on 2025-06-30 = 18% gap; 12m later the model was closer (27% vs 38%)",
+   "currency": "SGD",
+   "regime": null
+  }
+ }
+}

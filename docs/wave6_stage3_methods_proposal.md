@@ -118,3 +118,25 @@ to 1.0 meanwhile.
    Manager re-specified on distributable earnings with its own input kind.
 5. SGX: global exchange basket for a one-exchange market, or keep the registry rule.
 6. BRK-B: Holding Company with a look-through pre-fill, or Insurance (P&C) by row.
+
+
+## 6. Decisions (owner, 2026-09-27) and what was built
+
+All six decisions taken as written. Cut: J36.SI, BN4.SI (Wave 9), 00945.HK (MFC.TO is the primary
+line). Built (map v20): eleven labels in `routing_scope`; `Banks - Regional` -> Super-Regional Bank with
+an HK market-map row keeping EM Bank; `Banks` (SG string) -> Money Center Bank (SG) by market map;
+`Financial - Credit Services` -> Card Issuer & Consumer Lender (new); `Insurance - Diversified` ->
+Insurance (P&C); `Insurance - Brokers` -> Insurance Broker (new); Financial Data & Ratings (new) by pin
+for SPGI and MSCI; Alt Asset Manager re-specified on P/DE (Forward) .40, SOTP (FRE + carry) .30, Forward
+P/E .20, DDM .10, fed by the `alt_manager` kind (forward FRE and DE, totals or per share, cited P/DE and
+P/FRE ranges); Insurance (life) on Embedded Value .35 from the `embedded_value` kind, P/BV .40, P/E (ops)
+.20, DDM .05, Combined Ratio Gate removed; Insurance (P&C) with `leg_fallback` rolling the Combined Ratio
+Gate into P/E (ops) and a PROPOSED calibration row; Holding Company anchored on SOTP (analyst) .70 with a
+`listed_investments_at_market` field on the SOTP input for the Berkshire look-through; the bank
+calibration table re-derived as in section 2a (Money Center 2.2x / 14.2x / 9.3%, Super-Regional 1.6x /
+11.6x, Investment Bank 2.4x / 15.3x / 9.5%, EM Bank 0.6x / 7.3x / 9.75% with RoTE 10.5%, EM Premium 1.0x /
+8.0x, EU 1.3x / 10x / 15% RoTE, SG 1.9x / 12.3x); GATE_BANK_IMPLIED_COE records the GGM inverted at spot
+when outside the plausible band, never applied; SGX takes the US exchange cohort through
+`comps_exchange_overrides`. Pins: USB, PNC, TFC; AXP, COF, SYF; PGR, CB, TRV, AIG; MET, AIA, China Life,
+Ping An, Great Eastern; MMC, AON; SPGI, MSCI; 00388.HK; BRK-B. Goldens re-based (02888.HK 256.74 ->
+287.71, D05.SI 43.53 -> 43.21, the bank calibration). Measured in `docs/wave6_stage6_scorecard.md`.

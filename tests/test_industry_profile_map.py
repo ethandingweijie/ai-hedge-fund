@@ -41,7 +41,7 @@ def test_known_rows_route_where_a_practitioner_would():
     assert profile_for_industry("Insurance - Life") == ("Financials", "Insurance")
     assert profile_for_industry("Financial - Data & Stock Exchanges") == (
         "Financials", "Market Infrastructure")
-    assert profile_for_industry("Banks - Regional") == ("Financials", "EM Bank")
+    assert profile_for_industry("Banks - Regional") == ("Financials", "Super-Regional Bank")   # Wave 6 (2026-09-27): US regionals; HK keeps EM Bank by market map
 
 
 def test_industry_labels_are_stored_trimmed():
@@ -275,9 +275,12 @@ class TestAnchorImplementabilityGuard:
         from src.agents.analysis import dcf_agent as d
         monkeypatch.setattr("src.tools.api.get_company_industry",
                             lambda t, api_key=None: "Conglomerates")
-        # Conglomerates -> Financials/Holding Company, anchor SOTP / NAV
-        assert P["Financials"]["Holding Company"]["methods"][0]["name"] == "SOTP / NAV"
-        assert not P["Financials"]["Holding Company"]["methods"][0]["implementable"]
+        # Conglomerates -> Financials/Holding Company. Wave 6 (2026-09-27) made the anchor
+        # implementable (SOTP (analyst), the accepted look-through), so the guard is exercised
+        # on the live row with the flag forced off for this test only.
+        row = P["Financials"]["Holding Company"]["methods"][0]
+        assert row["name"] == "SOTP (analyst)" and row["implementable"]
+        monkeypatch.setitem(row, "implementable", False)
         assert d._industry_routed_profile("00267.HK", "Financials") is None
 
     def test_still_routes_where_the_anchor_computes(self, monkeypatch):

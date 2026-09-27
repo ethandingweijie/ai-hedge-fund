@@ -1514,3 +1514,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 5 refinements (owner, 2026-09-26): Surgical Robotics / Capital Systems profile (PROPOSED) added, Commercial Biotech declares forward_pe_sanity, Managed Care declares structural_flags, Medical - Distribution row in scope; the constants/profile digest in param_version moves on every fixture, no valuation leaf moves (no health name in the golden basket)
 
+## 2026-09-27T00:22:42+00:00
+
+- regenerated at HEAD: `dab81e1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 6 financials (owner decisions, 2026-09-27): bank calibration re-derived from the 2026-09-26 cohorts and accepted as PROPOSED constants -- Money Center Bank p_tbv 1.4->2.2, pe 12->14.2, CoE 10.0%->9.3% moves 02888.HK 256.74->287.71; Money Center Bank (SG) p_tbv 2.0->1.9, pe 13->12.3 moves D05.SI 43.53->43.21; every other fixture moves only on the profile digest (three new Financials profiles, life/alt/holdco re-specified, eleven labels into scope)
+

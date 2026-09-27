@@ -576,6 +576,103 @@
     "value_usd": 595920000.0
    }
   },
+  "01299.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 96.9,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 32.58
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T00:21:02+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "0.82x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 0.8223
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "7.58 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional EV (deterministic discounted cash flow methodology)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "2 of 2 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "AIA Group Limited",
+    "data": {
+     "basis": "Traditional EV (deterministic discounted cash flow methodology)",
+     "ev_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE_C-UenftVxFLjd8dGdPFo_x8UB0_bGpOaJImGEAr_Dq6VdI7TmFlVVeMOFw4ADKDvyJ031HOG9-TFdy86mYZNKLCGihyYVdFPdaBLodp-qnIahB5xrZ2IwMTtHYYafdHhAsjilKMojwabeKhGkjSiwZqZod2ect9naT8qFdGWQB9cddzN1WTkhHTgcvNh99XmpEZDarCqNwelKgM7noNy3dnlau81WHtoddZPPjRckjoT7j5vu_gA5Q==",
+      "period": "FY2025",
+      "quote": "EV Equity per share (US$). 7.58",
+      "scale": "units",
+      "source_url": "https://www.aia.com/content/dam/group-wise/en/docs/investor-relations/2026/AIA%20Group%202025%20Annual%20Results%20Ann%20(Eng).pdf",
+      "value": 7.58
+     },
+     "ev_total": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE_C-UenftVxFLjd8dGdPFo_x8UB0_bGpOaJImGEAr_Dq6VdI7TmFlVVeMOFw4ADKDvyJ031HOG9-TFdy86mYZNKLCGihyYVdFPdaBLodp-qnIahB5xrZ2IwMTtHYYafdHhAsjilKMojwabeKhGkjSiwZqZod2ect9naT8qFdGWQB9cddzN1WTkhHTgcvNh99XmpEZDarCqNwelKgM7noNy3dnlau81WHtoddZPPjRckjoT7j5vu_gA5Q==",
+      "period": "FY2025",
+      "quote": "EV Equity. 79,678",
+      "scale": "mn",
+      "source_url": "https://www.aia.com/content/dam/group-wise/en/docs/investor-relations/2026/AIA%20Group%202025%20Annual%20Results%20Ann%20(Eng).pdf",
+      "value": 79678.0
+     },
+     "fiscal_year": "FY2025",
+     "notes": "AIA uses a traditional deterministic discounted cash flow methodology for all entities other than Tata AIA Life (which uses Indian Embedded Value). AIA defines EV Equity as the total of embedded value, goodwill and other intangible assets attributable to shareholders of the Company, after allowing for taxes. As of 31 December 2025, EV Equity was US$79,678 million (US$7.58 per share) and Embedded Value (EV) before goodwill and intangibles was US$76,811 million.",
+     "vnb": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE_C-UenftVxFLjd8dGdPFo_x8UB0_bGpOaJImGEAr_Dq6VdI7TmFlVVeMOFw4ADKDvyJ031HOG9-TFdy86mYZNKLCGihyYVdFPdaBLodp-qnIahB5xrZ2IwMTtHYYafdHhAsjilKMojwabeKhGkjSiwZqZod2ect9naT8qFdGWQB9cddzN1WTkhHTgcvNh99XmpEZDarCqNwelKgM7noNy3dnlau81WHtoddZPPjRckjoT7j5vu_gA5Q==",
+      "period": "FY2025",
+      "quote": "Value of new business (VONB) increased by 15 per cent to US$5,516 million",
+      "scale": "mn",
+      "source_url": "https://www.aia.com/content/dam/group-wise/en/docs/investor-relations/2026/AIA%20Group%202025%20Annual%20Results%20Ann%20(Eng).pdf",
+      "value": 5516.0
+     },
+     "vnb_margin": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEH89QEWmPJR5gu4ozNwAgaVNsjSNxeXeQNi5R_4TdXwyR1RmD4b84U9zQ3hRNhZKd_4xBSsCHx7BJkOaGZn5sCVR8nGKoKa0uwLSn_9PvTJYT8fxbVIHgeju5M6CR5kXEFUdvcvpfNgngON76PR1wwVTm5Vz_pUPt1eJOMXHKm5n9c8ocPXUOZt1aMF52lkFfDiw3q5jvmRlq6Usud_bjnEaMIkuU-qcTn8mxLo1B7NsurEB-fcOfD",
+      "period": "FY2025",
+      "quote": "The Group VONB margin for the year ended 31 December 2025 was 58.5 per cent",
+      "source_url": "https://www.aia.com/content/dam/group-wise/en/docs/investor-relations/2026/AIA%20Group%202025%20Annual%20Results%20Ann%20(Eng).pdf",
+      "value": 0.585
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 7.58,
+     "vnb_margin": 0.585
+    },
+    "fmp_context_usd": {
+     "company": "AIA Group Limited",
+     "depreciation_and_amortization": 0.0,
+     "market_cap": 96900760338.9825,
+     "net_ppe": 4699382000.0,
+     "operating_cash_flow": 5333878690.0,
+     "period": "2025-12-31",
+     "revenue": 32578121000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 20.5,
+    "value_usd": 79678000000.0
+   }
+  },
   "01801.HK": {
    "pipeline": {
     "anchors": {
@@ -829,6 +926,103 @@
     "value_usd": 39171034074.51573
    }
   },
+  "02318.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 121.67,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 138.41
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T00:22:48+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": false
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "1.92x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 1.9222
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "12.915138599999999 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional EV (Standards for Actuarial Practice: Valuation Standard for Embedded Value of Life Insurance issued by the China Association of Actuaries and C-ROSS)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "3 of 3 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Ping An Insurance (Group) Company of China, Ltd.",
+    "data": {
+     "basis": "Traditional EV (Standards for Actuarial Practice: Valuation Standard for Embedded Value of Life Insurance issued by the China Association of Actuaries and C-ROSS)",
+     "ev_per_share": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEm83DA7bCQlcQORRdFjO-ejKWYute-E62GLT9PV68bfPE8gLzwBnWJMsSX-eDeAX5RyGuPSH4AqV6ZnpopjkGGHEGiFRTbIDxh30HNxqb2Xqpk56pyZ3h4Ej1HNlEGyB9Xxm03LhAHCUAB-wpg4kWb2BaUPY3pWorS66cZLrgpNtfpim8=",
+      "period": "1H2026",
+      "quote": "Closing group EV per share (in RMB). 86.58.",
+      "scale": "units",
+      "source_url": "https://doc.irasia.com/listco/hk/pingan/interim/ir344235-e101(hir26070179).pdf",
+      "value": 86.58
+     },
+     "ev_total": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHDVrK3_KHwjtKJOIpQiJaIK4Wb7E80U01l0xGfcLcpgUxIxadKwQ6dllQVT8u5fB8bFG5RIKESbfscKvY2ilBPihXGbsXIjjJhr0QFkHBrBlPLC16_LPMFT4MvMeGqlxzSK6DuZzRUFhxkPEYAmq8SCbQgqCXgrRcgox9wqn2Q96S66Ks=",
+      "period": "1H2026",
+      "quote": "Group EV. 1,567,800.",
+      "scale": "mn",
+      "source_url": "https://doc.irasia.com/listco/hk/pingan/interim/ir344235-e101(hir26070179).pdf",
+      "value": 1567800.0
+     },
+     "fiscal_year": "1H2026",
+     "notes": "Group EV as of June 30, 2026 was RMB 1,567,800 million (RMB 86.58 per share). For comparison, at year-end FY2025 (December 31, 2025), Group EV was RMB 1,504,288 million (RMB 83.07 per share). VNB for the latest full year (FY2025) was RMB 36,897 million after cost of capital, and NBV margin on an annualized new premium (ANP) basis was 28.5%.",
+     "vnb": {
+      "currency": "CNY",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGp0j1nWDTHabXi4ocX9WdCG8Qrq-JV8DvM_DcH1eHPKELro21D17UwqR54mtrqpQMVzY37XInCCeoZy7s1jhafI_9fDmr70Es3Kb0cLQTUQ-kaU-EaMM_Zs1x_14xAOS1x5wQVXoPZ0LBztUI1MOxt2ypxKP8taXfYlryNdlCylRDu",
+      "period": "FY2025",
+      "quote": "Value of one year's new business after cost of capital. 36,897.",
+      "scale": "mn",
+      "source_url": "https://group.pingan.com/resource/pingan/IR-Docs/2026/pingan-ar25-report.pdf",
+      "value": 36897.0
+     },
+     "vnb_margin": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGp0j1nWDTHabXi4ocX9WdCG8Qrq-JV8DvM_DcH1eHPKELro21D17UwqR54mtrqpQMVzY37XInCCeoZy7s1jhafI_9fDmr70Es3Kb0cLQTUQ-kaU-EaMM_Zs1x_14xAOS1x5wQVXoPZ0LBztUI1MOxt2ypxKP8taXfYlryNdlCylRDu",
+      "period": "FY2025",
+      "quote": "NBV margin based on annualized new premium (“ANP”) rose. 5.8 pps YoY to 28.5%.",
+      "source_url": "https://group.pingan.com/resource/pingan/IR-Docs/2026/pingan-ar25-report.pdf",
+      "value": 0.285
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 12.915138599999999,
+     "vnb_margin": 0.285
+    },
+    "fmp_context_usd": {
+     "company": "Ping An Insurance (Group) Company of China, Ltd.",
+     "depreciation_and_amortization": 1863591997.75,
+     "market_cap": 121669774536.5325,
+     "net_ppe": 8246063898.8,
+     "operating_cash_flow": 99020306188.16,
+     "period": "2025-12-31",
+     "revenue": 138413351300.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 39.8,
+    "value_usd": 233868726000.0
+   }
+  },
   "02357.HK": {
    "sotp": {
     "anchors": {
@@ -1030,6 +1224,99 @@
     "ok": false,
     "secs": 118.4,
     "value_usd": 1059.0
+   }
+  },
+  "02628.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 167.05,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 90.26
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T00:22:04+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "1.31x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 1.3108
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "7.7463980999999995 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional EV (CAA Standards of Actuarial Practice: Appraisal of Embedded Value)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "China Life Insurance Company Limited",
+    "data": {
+     "basis": "Traditional EV (CAA Standards of Actuarial Practice: Appraisal of Embedded Value)",
+     "ev_per_share": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "每股内含价值 49.57 51.93",
+      "scale": "units",
+      "source_url": "https://stock.finance.sina.com.cn/stock/go.php/vReport_Show/kind/lastest/rptid/7735955/index.phtml",
+      "value": 51.93
+     },
+     "ev_total": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "E Embedded Value (A + D) 1,467,876",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0413/2026041300344.pdf",
+      "value": 1467876.0
+     },
+     "fiscal_year": "FY2025",
+     "notes": null,
+     "vnb": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "H Value of One Year's Sales after Cost of Required Capital (F + G) 45,752",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0413/2026041300344.pdf",
+      "value": 45752.0
+     },
+     "vnb_margin": {
+      "period": "FY2025",
+      "quote": "New Business Margin of One Year's Sales of Individual Agent Channel ... By First Year Premium 35.0%",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0413/2026041300344.pdf",
+      "value": 0.35
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 7.7463980999999995,
+     "vnb_margin": 0.35
+    },
+    "fmp_context_usd": {
+     "company": "China Life Insurance Company Limited",
+     "depreciation_and_amortization": 729739640.0,
+     "market_cap": 167048653687.4175,
+     "net_ppe": 8121709820.0,
+     "operating_cash_flow": 68607012250.0,
+     "period": "2025-12-31",
+     "revenue": 90264855380.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 57.3,
+    "value_usd": 218963062920.0
    }
   },
   "02883.HK": {},
@@ -2462,6 +2749,137 @@
     "value_usd": 15750000000.0
    }
   },
+  "APO": {
+   "alt_manager": {
+    "anchors": {
+     "market_cap_usd_bn": 70.09,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 32.05
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T00:41:59+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "alt_manager / market_cap",
+      "detail": "0.07x (plausible 0.02x to 0.15x)",
+      "ok": true,
+      "ratio": 0.074
+     },
+     {
+      "check": "FRE is a full-year figure",
+      "detail": "FRE 2.50bn = 3.6% of market cap",
+      "ok": true
+     },
+     {
+      "check": "forward period",
+      "detail": "stated for FY2026E",
+      "ok": true
+     },
+     {
+      "check": "P/DE range cited and plausible",
+      "detail": "midpoint 12.0x (Lazard selected P/DE multiple range for alternative asset managers for the next unreported fiscal year in Apollo Form S-4/A)",
+      "ok": true
+     },
+     {
+      "check": "P/FRE range cited and plausible",
+      "detail": "midpoint 19.0x (Sell-side research forward P/FRE multiple estimates on FY2026E FRE for Apollo Global Management (~18-20x) within peer set (~14-26x))",
+      "ok": true
+     },
+     {
+      "check": "FRE below DE",
+      "detail": "FRE 2500000000.0 vs DE 5183746119.015532 (USD, totals or per share x shares)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Apollo Global Management, Inc.",
+    "data": {
+     "de": null,
+     "de_per_share": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "ANI PER SHARE >$9.00",
+      "scale": "units",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1527469/000152746924000083/apollo2024investordaypre001.jpg",
+      "value": 9.0
+     },
+     "fee_paying_aum": {
+      "currency": "USD",
+      "period": "2Q'26",
+      "quote": "Fee-Generating AUM (“FGAUM”) $858",
+      "scale": "bn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1858681/000185868126000036/agmearningsrelease2q2026.htm",
+      "value": 858.0
+     },
+     "fiscal_year": "FY2026E",
+     "fre": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "FRE ~$2.5B",
+      "scale": "bn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1527469/000152746924000083/apollo2024investordaypre001.jpg",
+      "value": 2.5
+     },
+     "fre_per_share": null,
+     "net_accrued_carry": {
+      "currency": "USD",
+      "period": "2Q'26",
+      "quote": "Net accrued performance fees receivable2 1,490",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1858681/000185868126000036/agmearningsrelease2q2026.htm",
+      "value": 1490.0
+     },
+     "notes": "Apollo Global Management uses Fee-Generating AUM (FGAUM) as its metric for fee-paying AUM. Following its merger with Athene, Apollo's primary non-GAAP distributable earnings benchmark is Adjusted Net Income (ANI), which incorporates Asset Management and Retirement Services.",
+     "pde_multiple": {
+      "basis": "Lazard selected P/DE multiple range for alternative asset managers for the next unreported fiscal year in Apollo Form S-4/A",
+      "high": 14.0,
+      "low": 10.0,
+      "quote": "Lazard selected a range of 10.0x – 14.0x P/DE multiples for the next unreported fiscal year.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1858681/000185868125000014/s-4a.htm"
+     },
+     "pfre_multiple": {
+      "basis": "Sell-side research forward P/FRE multiple estimates on FY2026E FRE for Apollo Global Management (~18-20x) within peer set (~14-26x)",
+      "high": 20.0,
+      "low": 18.0,
+      "quote": "Comparing KKR to its closest peers on the same forward P/FRE basis (all estimates for FY2026E FRE): Blackstone ~24–26x , Apollo Global ~18–20x , Ares Management ~23–25x , Carlyle Group ~14–16x .",
+      "source_url": "https://koalagains.com/research/kkr-fair-value-analysis/"
+     }
+    },
+    "engine_preview": {
+     "alt_de_fwd_total": null,
+     "alt_de_ps_fwd": 9.0,
+     "alt_fre_fwd_total": 2500000000.0,
+     "alt_fre_ps_fwd": null,
+     "alt_net_accrued_carry_total": 1490000000.0,
+     "alt_pde_multiple": 12.0,
+     "alt_pfre_multiple": 19.0
+    },
+    "fmp_context_usd": {
+     "company": "Apollo Global Management, Inc.",
+     "depreciation_and_amortization": 1431000000.0,
+     "market_cap": 70090007247.0,
+     "net_ppe": 0.0,
+     "operating_cash_flow": 7452000000.0,
+     "period": "2025-12-31",
+     "revenue": 32049000000.0,
+     "shares": 575971791.0017257
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 160.1,
+    "value_usd": 5183746119.015532
+   }
+  },
   "AVAV": {
    "backlog": {
     "basis": "actual",
@@ -3052,6 +3470,360 @@
     "value_usd": 40100000000.0
    }
   },
+  "BRK-B": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 371.44,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 403.51
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T00:53:32+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "0.99x (plausible 0.6x to 1.6x)",
+      "ok": true,
+      "ratio": 0.9917
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 368.4bn USD vs FMP FY+1 consensus revenue 403.5bn (-8.7%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 0.9129
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2025 (fiscal_year FY2026E); latest reported year is 2025; not forward: FY2025",
+      "ok": false
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "4 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "4 of 4 segment(s) Degraded, the leg would not publish: Insurance Operations: P/E 12.5x cited but EBIT is not stated; no cited EV/Sales range to fall back on; BNSF (Freight Rail): P/E 17x cited but EBIT is not stated; no cited EV/Sales range to fall back on; Berkshire Hathaway Energy (BHE): P/E 16x cited but EBIT is not stated; no cited EV/Sales range to fall back on; Manufacturing, Service and Retailing (MSR): P/E 15.5x cited but EBIT is not stated; no cited EV/Sales range to fall back on",
+      "ok": false
+     }
+    ],
+    "company": "Berkshire Hathaway Inc.",
+    "data": {
+     "associates_investments": {
+      "currency": "USD",
+      "period": "2026-03-31",
+      "quote": "Our investments in Kraft Heinz, Occidental and Berkadia are summarized as follows (in millions)... Carrying Value March 31, 2026: Kraft Heinz $8,689, Occidental $10,808, Berkadia $454, Total $ 19,951",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1067983/000119312526083899/img163245946_0.jpg",
+      "value": 19951.0
+     },
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "SOTP analyses and conglomerate corporate finance literature commonly apply an 8.5% to 15% holding company discount (centered at 10%) to reflect conglomerate complexity, deferred corporate tax liability on embedded equity portfolio gains, capital redeployment friction across massive cash balances, and post-Buffett CEO succession risk.",
+     "holdco_discount_pct": 0.1,
+     "listed_investments_at_market": {
+      "currency": "USD",
+      "period": "2026-06-30",
+      "quote": "Investments in equity securities are summarized as follows (in millions)... June 30, 2026... Fair Value... $ 323,779",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1067983/000119312526083899/img163245946_0.jpg",
+      "value": 323779.0
+     },
+     "net_cash": {
+      "currency": "USD",
+      "period": "2026-06-30",
+      "quote": "Berkshire Hathaway A has $365.51B in cash and marketable securities with $129.37B in debt, giving a net cash position of $236.14B billion.",
+      "scale": "bn",
+      "source_url": "https://www.tipranks.com/stocks/brk.a/statistics",
+      "value": 236.14
+     },
+     "segments": [
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "P/E multiple on normalized after-tax underwriting and investment earnings power. SOTP analysts and brokers benchmark against primary and reinsurance peers (e.g., Chubb, Travelers, Progressive, Allstate) at 10x-15x, reflecting GEICO's personal lines franchise and Berkshire's low-cost float advantage offset by underwriting cyclicality.",
+       "multiple_high": 15.0,
+       "multiple_low": 10.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4720188-berkshire-hathaway-downside-protected-call-option-bear-markets",
+       "name": "Insurance Operations",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2025",
+        "quote": "No forward consensus segment revenue estimate exists for Berkshire's insurance division; latest reported actual is $104,212 million in FY2025 (Total Insurance Revenue: 104.21B).",
+        "scale": "mn",
+        "source_url": "https://stockanalysis.com/stocks/brk.a/financials/",
+        "value": 104212.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "P/E multiple on segment net income. SOTP models and brokers benchmark against North American Class I railroad peers (Union Pacific, CSX, Norfolk Southern, Canadian National) trading in the 15x-19x range, reflecting BNSF's critical continental freight rail infrastructure and high barriers to entry.",
+       "multiple_high": 19.0,
+       "multiple_low": 15.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4720188-berkshire-hathaway-downside-protected-call-option-bear-markets",
+       "name": "BNSF (Freight Rail)",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2025",
+        "quote": "No forward consensus segment revenue estimate exists for BNSF; latest reported actual is $23,533 million in FY2025 (BNSF Revenue: 23.53B).",
+        "scale": "mn",
+        "source_url": "https://stockanalysis.com/stocks/brk.a/financials/",
+        "value": 23533.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "P/E multiple on regulated operating earnings. SOTP frameworks benchmark against peer regulated electric utilities and pipeline operators (NextEra Energy, Southern Company, Duke Energy) at 14x-18x, reflecting steady rate base growth and data center renewable power contracts, tempered by PacifiCorp wildfire liabilities.",
+       "multiple_high": 18.0,
+       "multiple_low": 14.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4720188-berkshire-hathaway-downside-protected-call-option-bear-markets",
+       "name": "Berkshire Hathaway Energy (BHE)",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2025",
+        "quote": "No forward consensus segment revenue estimate exists for BHE; latest reported actual is $26,297 million in FY2025 (BHE Revenue: 26.30B).",
+        "scale": "mn",
+        "source_url": "https://stockanalysis.com/stocks/brk.a/financials/",
+        "value": 26297.0
+       }
+      },
+      {
+       "ebit_margin": null,
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "P/E multiple on segment earnings power. SOTP analysts apply 14x-17x based on peer blended multiples across diversified industrial manufacturing (e.g. Precision Castparts, Lubrizol, Marmon), wholesale distribution (McLane), and consumer/services (NetJets, TTI, Berkshire Hathaway Automotive).",
+       "multiple_high": 17.0,
+       "multiple_low": 14.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://seekingalpha.com/article/4720188-berkshire-hathaway-downside-protected-call-option-bear-markets",
+       "name": "Manufacturing, Service and Retailing (MSR)",
+       "revenue_fwd": {
+        "currency": "USD",
+        "period": "FY2025",
+        "quote": "No forward consensus segment revenue estimate exists for MSR; latest reported actual is $214,330 million in FY2025 ($78,487 million manufacturing and $135,843 million service and retailing).",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1067983/000119312526083899/img163245946_0.jpg",
+        "value": 214330.0
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [],
+      "currencies": [
+       "USD mn",
+       "USD mn",
+       "USD mn",
+       "USD mn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ev_rev_multiple": null,
+       "name": "Insurance Operations",
+       "pe_multiple": 12.5,
+       "period_label": "FY2025",
+       "rationale": "pe 10.0-15.0x: P/E multiple on normalized after-tax underwriting and investment earnings power. SOTP analysts and brokers benchmark against primary and reinsurance peers (e.g., Chubb, Travelers, Progressive, Allstate) at 10x-15x, reflecting GEICO's personal lines franchise and Berkshire's low-cost f",
+       "revenue_fwd": 104212000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "BNSF (Freight Rail)",
+       "pe_multiple": 17.0,
+       "period_label": "FY2025",
+       "rationale": "pe 15.0-19.0x: P/E multiple on segment net income. SOTP models and brokers benchmark against North American Class I railroad peers (Union Pacific, CSX, Norfolk Southern, Canadian National) trading in the 15x-19x range, reflecting BNSF's critical continental freight rail infrastructure and high barri",
+       "revenue_fwd": 23533000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "Berkshire Hathaway Energy (BHE)",
+       "pe_multiple": 16.0,
+       "period_label": "FY2025",
+       "rationale": "pe 14.0-18.0x: P/E multiple on regulated operating earnings. SOTP frameworks benchmark against peer regulated electric utilities and pipeline operators (NextEra Energy, Southern Company, Duke Energy) at 14x-18x, reflecting steady rate base growth and data center renewable power contracts, tempered b",
+       "revenue_fwd": 26297000000.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ev_rev_multiple": null,
+       "name": "Manufacturing, Service and Retailing (MSR)",
+       "pe_multiple": 15.5,
+       "period_label": "FY2025",
+       "rationale": "pe 14.0-17.0x: P/E multiple on segment earnings power. SOTP analysts apply 14x-17x based on peer blended multiples across diversified industrial manufacturing (e.g. Precision Castparts, Lubrizol, Marmon), wholesale distribution (McLane), and consumer/services (NetJets, TTI, Berkshire Hathaway Automo",
+       "revenue_fwd": 214330000000.0,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Berkshire Hathaway Inc.",
+     "depreciation_and_amortization": 13476000000.0,
+     "market_cap": 1090246355201.0,
+     "net_ppe": 241180000000.0,
+     "operating_cash_flow": 45969000000.0,
+     "period": "2025-12-31",
+     "revenue": 371444000000.0,
+     "shares": 2156853595.000791
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 82.4,
+    "value_usd": 368372000000.0
+   }
+  },
+  "BX": {
+   "alt_manager": {
+    "anchors": {
+     "market_cap_usd_bn": 143.05,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 13.83
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T00:38:12+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "alt_manager / market_cap",
+      "detail": "0.05x (plausible 0.02x to 0.15x)",
+      "ok": true,
+      "ratio": 0.0508
+     },
+     {
+      "check": "FRE is a full-year figure",
+      "detail": "FRE missing",
+      "ok": null
+     },
+     {
+      "check": "forward period",
+      "detail": "stated for FY2026E",
+      "ok": true
+     },
+     {
+      "check": "P/DE range cited and plausible",
+      "detail": "midpoint 25.5x (Analyst forward P/DE multiple on FY2026E distributable earnings per share, noting historical realization upcycle ranges)",
+      "ok": true
+     },
+     {
+      "check": "P/FRE range cited and plausible",
+      "detail": "midpoint 25.0x (Sell-side forward P/FRE multiple applied to Blackstone for FY2026E fee-related earnings in peer benchmarking)",
+      "ok": true
+     },
+     {
+      "check": "FRE below DE",
+      "detail": "FRE None vs DE 7272116776.379664 (USD, totals or per share x shares)",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Blackstone Inc.",
+    "data": {
+     "de": null,
+     "de_per_share": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "Consensus FY26 DE/share: ~$6.02 Forward P/DE: ~21x",
+      "scale": "units",
+      "source_url": "https://deepresearchglobal.com/p/blackstone-bx-fundamental-analysis-report-2026-updated",
+      "value": 6.02
+     },
+     "fee_paying_aum": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Fee-earning AUM reached $961.6 billion, up 8% from the prior year",
+      "scale": "bn",
+      "source_url": "https://www.investing.com/news/company-news/blackstone-q2-2026-slides-135t-aum-26-earnings-growth-93CH-4148421",
+      "value": 961.6
+     },
+     "fiscal_year": "FY2026E",
+     "fre": null,
+     "fre_per_share": null,
+     "net_accrued_carry": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "appreciation leading to higher net accrued performance revenues of $7.5 billion, or $6.00 per share—a 13% increase year-over-year.",
+      "scale": "bn",
+      "source_url": "https://www.investing.com/news/company-news/blackstone-q2-2026-slides-135t-aum-26-earnings-growth-93CH-4148421",
+      "value": 7.5
+     },
+     "notes": "Full-year consensus distributable earnings is tracked on a per-share basis ($6.02/share for FY2026E). Total balance sheet Net Accrued Performance Revenues (carry receivable) and Fee-Earning AUM are reported as of the Q2 2026 close (June 30, 2026).",
+     "pde_multiple": {
+      "basis": "Analyst forward P/DE multiple on FY2026E distributable earnings per share, noting historical realization upcycle ranges",
+      "high": 30.0,
+      "low": 21.0,
+      "quote": "Consensus FY26 DE/share: ~$6.02 Forward P/DE: ~21x... BX has routinely commanded mid-20s to low-30s P/DE multiples during realization upcycles.",
+      "source_url": "https://deepresearchglobal.com/p/blackstone-bx-fundamental-analysis-report-2026-updated"
+     },
+     "pfre_multiple": {
+      "basis": "Sell-side forward P/FRE multiple applied to Blackstone for FY2026E fee-related earnings in peer benchmarking",
+      "high": 26.0,
+      "low": 24.0,
+      "quote": "Comparing KKR to its closest peers on the same forward P/FRE basis (all estimates for FY2026E FRE): Blackstone ~24–26x , Apollo Global ~18–20x , Ares Management ~23–25x , Carlyle Group ~14–16x .",
+      "source_url": "https://koalagain.com/post/kkr-co-inc-kkr-fair-value-analysis/"
+     }
+    },
+    "engine_preview": {
+     "alt_de_fwd_total": null,
+     "alt_de_ps_fwd": 6.02,
+     "alt_fre_fwd_total": null,
+     "alt_fre_ps_fwd": null,
+     "alt_net_accrued_carry_total": 7500000000.0,
+     "alt_pde_multiple": 25.5,
+     "alt_pfre_multiple": 25.0
+    },
+    "fmp_context_usd": {
+     "company": "Blackstone Inc.",
+     "depreciation_and_amortization": 36023000.0,
+     "market_cap": 143050509744.0,
+     "net_ppe": 1278648000.0,
+     "operating_cash_flow": 1860601000.0,
+     "period": "2025-12-31",
+     "revenue": 13828896000.0,
+     "shares": 1207992819.996622
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 22.2,
+    "value_usd": 7272116776.379664
+   }
+  },
   "CCJ": {
    "backlog": {
     "basis": "actual",
@@ -3361,6 +4133,103 @@
     "ok": true,
     "secs": 24.0,
     "value_usd": 1316000000.0
+   }
+  },
+  "G07.SI": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 14.73,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 11.31
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T00:23:15+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "1.07x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 1.0681
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "16.6222408 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional deterministic embedded value",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "3 of 3 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "Great Eastern Holdings Limited",
+    "data": {
+     "basis": "Traditional deterministic embedded value",
+     "ev_per_share": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEt2paDYQmcdWZ5t4R2Q_gI5JwEbU35KpF16ze8yKwNGZbpHv3FNhqwXcscozxszIcvaiQiGjzMOmvlcw6n8JY-kqD89SbtflBpm8iMnWd1_3u_iHhoEPWYYct4G5VgWMh-Ff5HcH-IxM45HR0RoJjptU-Yuw-Jo6amocsd6KbUaJj02hdT-BhPNvJEw7Q4oREzSJy2JQAvXLmavyMjjXMVyPdakzviP-mtcws3zbJvZZ3LLpwhXXDA_MFuV_UJKKLzdWG4K7_3E-LtSeOOdQ==",
+      "period": "FY2025",
+      "quote": "Embedded Value per share. (S$). 21.23.",
+      "scale": "units",
+      "source_url": "https://www.greateasternlife.com/content/dam/corp-site/group/gels-au-corpcomms/english-website/annual-report/great-eastern-holdings-limited-ar-2025.pdf",
+      "value": 21.23
+     },
+     "ev_total": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEt2paDYQmcdWZ5t4R2Q_gI5JwEbU35KpF16ze8yKwNGZbpHv3FNhqwXcscozxszIcvaiQiGjzMOmvlcw6n8JY-kqD89SbtflBpm8iMnWd1_3u_iHhoEPWYYct4G5VgWMh-Ff5HcH-IxM45HR0RoJjptU-Yuw-Jo6amocsd6KbUaJj02hdT-BhPNvJEw7Q4oREzSJy2JQAvXLmavyMjjXMVyPdakzviP-mtcws3zbJvZZ3LLpwhXXDA_MFuV_UJKKLzdWG4K7_3E-LtSeOOdQ==",
+      "period": "FY2025",
+      "quote": "2025. Embedded. Value. S$ millions. 18,024. 41. 740. 807. 22. 163. 499. 254. (450). 20,100.",
+      "scale": "mn",
+      "source_url": "https://www.greateasternlife.com/content/dam/corp-site/group/gels-au-corpcomms/english-website/annual-report/great-eastern-holdings-limited-ar-2025.pdf",
+      "value": 20100.0
+     },
+     "fiscal_year": "FY2025",
+     "notes": "Embedded value calculations are based on the traditional deterministic embedded value reporting approach and reviewed by PricewaterhouseCoopers. Total Embedded Value is stated after deducting non-controlling interests. Per share figures are adjusted retrospectively for the 473,319,069 bonus shares issued on 19 August 2025.",
+     "vnb": {
+      "currency": "SGD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHrgBb3xqLE9q7CKNWnCuRd43G63FO9n2nZ5Cla8zWYQ-3QjGK55E6bwfv5yy2atoCmV_WDBchxp0SMV2TyBpcignXhkR2zKJjNX78gXTzvv0shi-cZvMEvU1abpusjTGFcI1VAxaCeZ7PjpOQgRTzTaYrcEHEFOY3psHDXIfq95MWXLOY7XrFB2Dxgs7_jhGsgBCwTTlzo7AY=",
+      "period": "FY2025",
+      "quote": "New Business Embedded Value up 19% to $739.7 million",
+      "scale": "mn",
+      "source_url": "https://links.sgx.com/FileOpen/20260224%20GEH%20Media%20Release.ashx?App=Announcement&FileID=875678",
+      "value": 739.7
+     },
+     "vnb_margin": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGxLmUOY8T50U9lgkG5_UTcAuuSLdJj93PnVJIzccnaMp8RZZ70icmbN2vouSWIQm9FOF2KBtct1o5-D_bZMK0CCCEXwnfoD7QNB7EWiBuO2NlEewCPOsW7AswwPZOLTpsKzEzDMPG0F-OniV7HiIngkjWWgacw_zTl_rP6P0keYxoJrxnBGHCM78Czs2Zi8nIBxMIYkjuwRbOAGPN_cq7EPBLCueLwcw==",
+      "period": "FY2025",
+      "quote": "Whilst TWNS was lower, the Group's NBEV of S$740 million and NBEV margin of 48.2% grew strongly year-on-year.",
+      "source_url": "https://links.sgx.com/FileOpen/20260414%20-%20Minutes%20of%20AGM.ashx?App=Announcement&FileID=888611",
+      "value": 0.482
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 16.6222408,
+     "vnb_margin": 0.482
+    },
+    "fmp_context_usd": {
+     "company": "Great Eastern Holdings Limited",
+     "depreciation_and_amortization": 79627032.0,
+     "market_cap": 14734653810.48448,
+     "net_ppe": 388739640.0,
+     "operating_cash_flow": 2171931040.0,
+     "period": "2025-12-31",
+     "revenue": 11308839352.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 22.5,
+    "value_usd": 15737496000.0
    }
   },
   "GD": {
@@ -4065,6 +4934,137 @@
     "value_usd": 204663258000.0
    }
   },
+  "KKR": {
+   "alt_manager": {
+    "anchors": {
+     "market_cap_usd_bn": 86.8,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 19.21
+    },
+    "basis": "estimate",
+    "built_at": "2026-09-27T00:39:15+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "alt_manager / market_cap",
+      "detail": "0.07x (plausible 0.02x to 0.15x)",
+      "ok": true,
+      "ratio": 0.0728
+     },
+     {
+      "check": "FRE is a full-year figure",
+      "detail": "FRE 4.04bn = 4.7% of market cap",
+      "ok": true
+     },
+     {
+      "check": "forward period",
+      "detail": "stated for FY2026E",
+      "ok": true
+     },
+     {
+      "check": "P/DE range cited and plausible",
+      "detail": "midpoint 23.0x (Forward P/E on FY2026E distributable EPS for KKR)",
+      "ok": true
+     },
+     {
+      "check": "P/FRE range cited and plausible",
+      "detail": "midpoint 21.5x (Historical 3-year P/FRE multiple range for KKR)",
+      "ok": true
+     },
+     {
+      "check": "FRE below DE",
+      "detail": "FRE 4040428234.4781213 vs DE 6321025504.605772 (USD, totals or per share x shares)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "KKR & Co. Inc.",
+    "data": {
+     "de": null,
+     "de_per_share": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "12/24 12/25E 12/26E 12/27E ... EPS ($) 4.70 5.10 7.04 8.51",
+      "scale": "units",
+      "source_url": "https://www.scribd.com/document/779836371/KKR-s-Private-ABF-Business-Overview",
+      "value": 7.04
+     },
+     "fee_paying_aum": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Fee Paying AUM of $638 billion, up 15% year-over-year",
+      "scale": "bn",
+      "source_url": "https://ir.kkr.com/events-presentations/",
+      "value": 638.0
+     },
+     "fiscal_year": "FY2026E",
+     "fre": null,
+     "fre_per_share": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "2026 Forecast Fee Related Earnings per share Implies 2023-2026E CAGR of ~20% $4.50+",
+      "scale": "units",
+      "source_url": "https://ir.kkr.com/events-presentations/",
+      "value": 4.5
+     },
+     "net_accrued_carry": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Net unrealized carried interest would be $2.5 billion assuming a 75% compensation accrual (using the mid-point of the guided range) on gross unrealized carried interest.",
+      "scale": "bn",
+      "source_url": "https://ir.kkr.com/events-presentations/",
+      "value": 2.5
+     },
+     "notes": "At its 2024 Investor Day, KKR guided to 2026 Forecast Fee Related Earnings per share of $4.50+ and Adjusted Net Income (KKR's metric corresponding to after-tax distributable earnings) of $7.00 - $8.00 per share. Sell-side consensus from Goldman Sachs forecasts FY2026E EPS of $7.04 per share. As of Q2 2026, Fee Paying AUM was $638 billion and gross unrealized carried interest was $10.2 billion, yielding $2.5 billion in net unrealized carried interest assuming the mid-point 75% compensation accrual.",
+     "pde_multiple": {
+      "basis": "Forward P/E on FY2026E distributable EPS for KKR",
+      "high": 24.0,
+      "low": 22.0,
+      "quote": "On a forward P/E basis (~ 22–24x FY2026E distributable EPS), KKR is priced similarly to Blackstone but at a meaningful premium to Carlyle and Ares on earnings multiples",
+      "source_url": "https://koalagains.com/stocks/KKR/fair-value"
+     },
+     "pfre_multiple": {
+      "basis": "Historical 3-year P/FRE multiple range for KKR",
+      "high": 25.0,
+      "low": 18.0,
+      "quote": "Looking at KKR's own history: the stock has traded at a P/FRE multiple of roughly 18–25x over the past three years, with a 3-year average around 20–21x .",
+      "source_url": "https://koalagains.com/stocks/KKR/fair-value"
+     }
+    },
+    "engine_preview": {
+     "alt_de_fwd_total": null,
+     "alt_de_ps_fwd": 7.04,
+     "alt_fre_fwd_total": null,
+     "alt_fre_ps_fwd": 4.5,
+     "alt_net_accrued_carry_total": 2500000000.0,
+     "alt_pde_multiple": 23.0,
+     "alt_pfre_multiple": 21.5
+    },
+    "fmp_context_usd": {
+     "company": "KKR & Co. Inc.",
+     "depreciation_and_amortization": 0.0,
+     "market_cap": 86797377206.0,
+     "net_ppe": 0.0,
+     "operating_cash_flow": 477760000.0,
+     "period": "2025-12-31",
+     "revenue": 19207544000.0,
+     "shares": 897872940.995138
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 58.7,
+    "value_usd": 6321025504.605772
+   }
+  },
   "KMI": {
    "maintenance_capex": {
     "basis": "actual",
@@ -4602,6 +5602,99 @@
     "ok": true,
     "secs": 69.9,
     "value_usd": 230000000000.0
+   }
+  },
+  "MET": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 62.86,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 77.08
+    },
+    "basis": "actual",
+    "built_at": "2026-09-27T00:20:36+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2024; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "positive",
+      "detail": "amount 0 is not positive",
+      "ok": false
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "0.00x (plausible 0.3x to 3.0x)",
+      "ok": false,
+      "ratio": 0.0
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "missing or uncited",
+      "ok": false
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "US GAAP (MetLife does not report Group EV; reports VNB defined as present value of future profits net of cost of capital and time value of guarantees)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "MetLife, Inc.",
+    "data": {
+     "basis": "US GAAP (MetLife does not report Group EV; reports VNB defined as present value of future profits net of cost of capital and time value of guarantees)",
+     "ev_per_share": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "US life insurers (MetLife, Prudential Financial) generally do not publish EV externally but calculate it internally",
+      "scale": "units",
+      "source_url": "https://investor.metlife.com",
+      "value": 0.0
+     },
+     "ev_total": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "US life insurers (MetLife, Prudential Financial) generally do not publish EV externally but calculate it internally",
+      "scale": "bn",
+      "source_url": "https://investor.metlife.com",
+      "value": 0.0
+     },
+     "fiscal_year": "FY2024",
+     "notes": null,
+     "vnb": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "Excludes MetLife Holdings; Value of New Business (VNB) is the present value of future profits net of the cost of capital and time value of guarantees from new sales. 2024 VNB ($B) $2.6",
+      "scale": "bn",
+      "source_url": "https://investor.metlife.com",
+      "value": 2.6
+     },
+     "vnb_margin": null
+    },
+    "engine_preview": {
+     "ev_per_share_usd": null,
+     "vnb_margin": null
+    },
+    "fmp_context_usd": {
+     "company": "MetLife, Inc.",
+     "depreciation_and_amortization": 753000000.0,
+     "market_cap": 62863773308.0,
+     "net_ppe": 1698000000.0,
+     "operating_cash_flow": 18105000000.0,
+     "period": "2025-12-31",
+     "revenue": 77084000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 73.4,
+    "value_usd": 0.0
    }
   },
   "NEE": {

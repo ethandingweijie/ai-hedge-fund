@@ -4480,26 +4480,32 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     # CoE 10.0% and g 3.0% per the Phillip Securities GGM table for JPM
     # (21 Oct 2025), which prices US GSIBs on the same Gordon Growth basis
     # as the SG names. Was 9.0%.
-    "Money Center Bank":    {"target_roe": 0.12, "coe": 0.100, "p_tbv": 1.4, "pe": 12.0, "fade_years": 5,
+    # Owner Wave 6 (2026-09-27, decision 3): re-derived from the 2026-09-26 cohorts, PROPOSED
+    # constants accepted by the owner. US Banks - Diversified 1.78x book / 14.2x, ~2.2x tangible;
+    # CoE 9.3% from GGM inversion on JPM (g 3% + (RoTE 19.5% - 3%) / 2.6x).
+    "Money Center Bank":    {"target_roe": 0.12, "coe": 0.093, "p_tbv": 2.2, "pe": 14.2, "fade_years": 5,
                               "target_cet1": 0.12, "rwa_to_assets": 0.55, "terminal_spread": 0.010, "ggm_g": 0.03},
     # European Money Center — structural regulatory drag, higher CoE
-    "Money Center Bank (EU)": {"target_roe": 0.10, "coe": 0.110, "p_tbv": 0.8, "pe": 8.0,  "fade_years": 5,
+    "Money Center Bank (EU)": {"target_roe": 0.15, "coe": 0.095, "p_tbv": 1.3, "pe": 10.0, "fade_years": 5,   # HSBC 1.3x TBV, RoTE 15.6% 1H26 (owner Wave 6)
                               "target_cet1": 0.14, "rwa_to_assets": 0.60, "terminal_spread": 0.005, "ggm_g": 0.02},
     # Regional banks — healthy (USB, TFC, PNC)
     "Regional Bank":        {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
                               "target_cet1": 0.11, "rwa_to_assets": 0.70, "terminal_spread": 0.0, "ggm_g": 0.025},
     # Super-regionals (TD, BMO, RBC)
-    "Super-Regional Bank":  {"target_roe": 0.11, "coe": 0.095, "p_tbv": 1.3, "pe": 11.0, "fade_years": 5,
+    "Super-Regional Bank":  {"target_roe": 0.11, "coe": 0.095, "p_tbv": 1.6, "pe": 11.6, "fade_years": 5,   # US Banks - Regional 1.31x book / 11.6x (owner Wave 6)
                               "target_cet1": 0.11, "rwa_to_assets": 0.65, "terminal_spread": 0.010, "ggm_g": 0.025},
     # EM banks — China SOEs (ICBC, CCB, BOC) — national-service risk
-    "EM Bank":              {"target_roe": 0.14, "coe": 0.130, "p_tbv": 1.2, "pe": 9.0,  "fade_years": 5,
+    # EM Bank: HKSE Banks - Diversified 0.79x / 8.3x, Banks - Regional 0.46x / 6.4x; realised RoTE
+    # ICBC 9.0%, ABC 10.4%, BoCom 8.6%. CoE 9.75% = zero China/HK country premium (owner
+    # 2026-09-26); the market's own implied 12.8% on ICBC is GATE_BANK_IMPLIED_COE, never applied.
+    "EM Bank":              {"target_roe": 0.105, "coe": 0.0975, "p_tbv": 0.6, "pe": 7.3, "fade_years": 5,
                               "target_cet1": 0.105, "rwa_to_assets": 0.65, "terminal_spread": 0.0, "ggm_g": 0.04},
     # EM Bank Premium — India private sector (HDFC, ICICI, Kotak) —
     # credit-to-GDP gap supports sustained 16-18% ROE
-    "EM Bank (Premium)":    {"target_roe": 0.16, "coe": 0.130, "p_tbv": 2.0, "pe": 14.0, "fade_years": 7,
+    "EM Bank (Premium)":    {"target_roe": 0.14, "coe": 0.0975, "p_tbv": 1.0, "pe": 8.0, "fade_years": 7,   # CMB 1.0x book, RoTE 14% (owner Wave 6)
                               "target_cet1": 0.115, "rwa_to_assets": 0.62, "terminal_spread": 0.010, "ggm_g": 0.05},
     # Investment banks — cyclical (GS, MS)
-    "Investment Bank":      {"target_roe": 0.13, "coe": 0.110, "p_tbv": 1.2, "pe": 10.0, "fade_years": 5,
+    "Investment Bank":      {"target_roe": 0.13, "coe": 0.095, "p_tbv": 2.4, "pe": 15.3, "fade_years": 5,   # Capital Markets 3.2x book / 15.3x; GS 2.5x, MS 3.0x TBV (owner Wave 6)
                               "target_cet1": 0.13, "rwa_to_assets": 0.40, "terminal_spread": 0.005, "ggm_g": 0.03},
     # Mortgage/GSE (FNMA, FMCC) — conservatorship overhang
     "Mortgage/GSE":         {"target_roe": 0.09, "coe": 0.110, "p_tbv": 0.8, "pe": 9.0,  "fade_years": 5,
@@ -4522,10 +4528,21 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     # understated justified P/B by ~40% (1.5x vs the 2.51x the GGM
     # supports). Per-ticker ROE / CoE / g overrides live in
     # _BANK_GGM_OVERRIDES and take precedence over these defaults.
-    "Money Center Bank (SG)": {"target_roe": 0.145, "coe": 0.088, "p_tbv": 2.0, "pe": 13.0, "fade_years": 7,
+    "Money Center Bank (SG)": {"target_roe": 0.145, "coe": 0.088, "p_tbv": 1.9, "pe": 12.3, "fade_years": 7,   # DBS 2.1x, OCBC 1.3x, UOB 1.2x book; SES rung 12.3x (owner Wave 6)
                               "target_cet1": 0.140, "rwa_to_assets": 0.55, "terminal_spread": 0.010,
                               "ggm_g": 0.031},
     # Default fallback
+    # Owner Wave 6 (2026-09-27): card issuers and consumer lenders on the bank block. P/TBV and P/E
+    # from the US Financial - Credit Services cohort (1.27x / 10.9x); RoTE 18% is the AXP 33% /
+    # SYF 20% / COF 10% span's centre; RWA density ~85% for card books. PROPOSED.
+    # Wave 6 (2026-09-27), PROPOSED: the P&C GGM had been reading the "default" row (RoTE 11%,
+    # CoE 10%, P/B 1.14x) for a cohort at 2.18x book and 11.4x (US Insurance - Property &
+    # Casualty, n=20; ROE median ~15%: PGR 30%+, TRV 17%, CB 13%, AIG 8%). CoE 9.0% is the
+    # Stage 3 CAPM proposal for P&C. Owner to accept or re-set.
+    "Insurance (P&C)":      {"target_roe": 0.15, "coe": 0.090, "p_tbv": 2.2, "pe": 11.4, "fade_years": 5,
+                              "target_cet1": 0.0, "rwa_to_assets": 0.0, "terminal_spread": 0.0, "ggm_g": 0.03},
+    "Card Issuer & Consumer Lender": {"target_roe": 0.18, "coe": 0.100, "p_tbv": 1.3, "pe": 10.9, "fade_years": 5,
+                              "target_cet1": 0.11, "rwa_to_assets": 0.85, "terminal_spread": 0.010, "ggm_g": 0.03},
     "default":              {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
                               "target_cet1": 0.11, "rwa_to_assets": 0.60, "terminal_spread": 0.0, "ggm_g": 0.03},
 }
@@ -6708,6 +6725,38 @@ def _compute_method_value(
     #   1. Disclosed embedded_value_per_share (cleanest — direct IR figure)
     #   2. P/BV × VNB-margin uplift  (uses extracted vnb_margin to size premium)
     #   3. Fall back to None → blend redistributes weight to remaining methods
+    # ── Alt asset managers (owner Wave 6, 2026-09-27) ────────────────────
+    # Both legs read the ACCEPTED `alt_manager` input only: forward fee-related
+    # and distributable earnings (totals, statement currency), net accrued
+    # carry, and the cited P/DE and P/FRE ranges the sell side applies. Nothing
+    # here is an owner constant; the multiple is a reviewed input.
+    if method_name in {"P/DE (Forward)", "P/DE"}:
+        _de = most_recent.get("alt_de_fwd_total")
+        _de_ps_in = most_recent.get("alt_de_ps_fwd")
+        _pde = most_recent.get("alt_pde_multiple")
+        if not (_pde and _pde > 0 and shares > 0 and ((_de and _de > 0) or (_de_ps_in and _de_ps_in > 0))):
+            return None
+        _de_ps = float(_de) / shares if (_de and _de > 0) else float(_de_ps_in)
+        _de = _de if (_de and _de > 0) else _de_ps * shares
+        _leg_trace(kind="equity_multiple", metric="Distributable earnings (forward, accepted input)",
+                   metric_value=float(_de), per_share_metric=_de_ps, multiple=float(_pde),
+                   multiple_parts={"peer_multiple": float(_pde), "peer_source": "accepted alt_manager input (cited P/DE range midpoint)"})
+        return _de_ps * float(_pde) * sm
+    if method_name in {"SOTP (FRE + carry)", "SOTP (FRE+Carry)"}:
+        _fre = most_recent.get("alt_fre_fwd_total")
+        _fre_ps_in = most_recent.get("alt_fre_ps_fwd")
+        _pfre = most_recent.get("alt_pfre_multiple")
+        if not (_pfre and _pfre > 0 and shares > 0 and ((_fre and _fre > 0) or (_fre_ps_in and _fre_ps_in > 0))):
+            return None
+        _fre = _fre if (_fre and _fre > 0) else float(_fre_ps_in) * shares
+        _carry = float(most_recent.get("alt_net_accrued_carry_total") or 0.0)
+        _v_ps = (float(_fre) * float(_pfre) + _carry) / shares
+        _leg_trace(kind="sotp", metric="FRE x cited P/FRE + net accrued carry (accepted input)",
+                   metric_value=float(_fre), multiple=float(_pfre), per_share_metric=_v_ps,
+                   multiple_parts={"peer_multiple": float(_pfre), "peer_source": "accepted alt_manager input (cited P/FRE range midpoint)",
+                                   "net_accrued_carry_total": _carry})
+        return _v_ps * sm
+
     if method_name in {"Embedded Value", "EV", "EV per Share"}:
         ev_ps = most_recent.get("embedded_value_per_share")
         if ev_ps and ev_ps > 0:
@@ -10737,6 +10786,46 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"{len(_ticker_pipeline)} asset(s) held as a cross-check")
         except Exception:                                  # noqa: BLE001
             pass
+        # Owner Wave 6 (2026-09-27): the life-insurance Embedded Value leg and the alt
+        # manager legs read ACCEPTED review-gated inputs only. The extractor's embedded
+        # value / VNB margin are held as a cross-check and never price (the pipeline rule).
+        try:
+            from src.data import industry_inputs as _ii_w6
+            from src.agents.industry import gemini_params as _gp_w6
+            _ev_ext = most_recent.get("embedded_value_per_share")
+            _vnb_ext = most_recent.get("vnb_margin")
+            if _ev_ext is not None or _vnb_ext is not None:
+                most_recent["embedded_value_per_share_extractor"] = _ev_ext
+                most_recent["vnb_margin_extractor"] = _vnb_ext
+            most_recent["embedded_value_per_share"] = None
+            most_recent["vnb_margin"] = None
+            _ev_e = _ii_w6.accepted_entry(ticker, "embedded_value")
+            if _ev_e:
+                _ev_out = _gp_w6.embedded_value_to_engine(_ii_w6.canonical_data(_ev_e), _ii_w6._fx(_target_ccy))   # per-share legs are in the trading currency
+                if _ev_out.get("ev_per_share"):
+                    most_recent["embedded_value_per_share"] = _ev_out["ev_per_share"]
+                    most_recent["vnb_margin"] = _ev_out.get("vnb_margin")
+                    ticker_forward_flags.append(
+                        f"Embedded Value: {_ev_out['ev_per_share']:,.2f} {_target_ccy}/share from the owner-accepted "
+                        f"input ({_ev_out.get('basis') or 'EV'}, {_ev_out.get('period') or 'period n/a'})"
+                        + (f"; extractor {_ev_ext:,.2f} held as a cross-check" if isinstance(_ev_ext, (int, float)) else ""))
+            elif _ev_ext is not None:
+                ticker_forward_flags.append(
+                    "Embedded Value: quarantined -- no owner-accepted embedded_value input; the extractor's "
+                    f"{_ev_ext:,.2f}/share is held, not priced; the blend re-weights without the leg")
+            _am_e = _ii_w6.accepted_entry(ticker, "alt_manager")
+            if _am_e:
+                _am_out = _gp_w6.alt_manager_to_engine(_ii_w6.canonical_data(_am_e), _ii_w6._fx(_target_ccy))
+                for _k in ("alt_fre_fwd_total", "alt_de_fwd_total", "alt_net_accrued_carry_total",
+                           "alt_fre_ps_fwd", "alt_de_ps_fwd", "alt_pde_multiple", "alt_pfre_multiple"):
+                    if _am_out.get(_k) is not None:
+                        most_recent[_k] = _am_out[_k]
+                ticker_forward_flags.append(
+                    f"Alt manager legs: forward DE {(_am_out.get('alt_de_fwd_total') or 0) / 1e9:,.2f}bn, FRE "
+                    f"{(_am_out.get('alt_fre_fwd_total') or 0) / 1e9:,.2f}bn {_target_ccy}, cited P/DE "
+                    f"{_am_out.get('alt_pde_multiple')}x and P/FRE {_am_out.get('alt_pfre_multiple')}x from the owner-accepted input")
+        except Exception:                                  # noqa: BLE001
+            pass
         if _ticker_pipeline:
             most_recent["pipeline_assets_extractor"] = _ticker_pipeline
             most_recent["pipeline_assets"] = _ticker_pipeline
@@ -13798,6 +13887,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # `P/E (norm)` value that the profile never named, and `_blend_methods`
             # resolves by row name — so the two lists have to be the same one the
             # value map was built from.
+            # Owner Wave 6 (2026-09-27): a profile may name where a leg's weight goes
+            # when the leg has no input this run (Insurance (P&C): the Combined
+            # Ratio Gate rolls into P/E (ops)). Copies the rows; the registry is
+            # untouched; disclosed on the flag.
+            for _lf_leg, _lf_into in (((profile_data or {}).get("leg_fallback") or {}).items()):
+                if (any(isinstance(m, dict) and m.get("name") == _lf_leg for m in _eff_profile_methods)
+                        and method_values.get(_lf_leg) is None):
+                    _eff_profile_methods, _lf_rec = _roll_leg_weight(_eff_profile_methods, _lf_leg, list(_lf_into or []))
+                    if scenario == "base":
+                        forward_flags.append(
+                            f"{_lf_leg}: no input this run; its weight (w={_lf_rec.get('dropped_weight', 0.0):.2f}) rolls into "
+                            f"{', '.join(_lf_into or []) or 'no named leg'} (profile leg_fallback); the blend uses the rolled rows")
             blend_breakdown: dict = {}
             if profile_data and profile_data.get("methods"):
                 blended_iv, blend_breakdown = _blend_methods(
@@ -15364,6 +15465,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "basis": f"{_sf_name}: profile-declared structural observation; no weight",
                     "applied": False,
                 })
+            # Owner Wave 6 (2026-09-27, decision 3): the GGM inversion at spot is the
+            # market's own cost of equity for a bank; recorded as the outer-boundary
+            # anomaly flag when it sits outside the plausible band of the rate used,
+            # never applied as a discount rate (ICBC 12.8% against 9.75%).
+            try:
+                if ((profile_name or "") in _BANK_PROFILE_CALIBRATION
+                        and isinstance(_spot_price, (int, float)) and _spot_price > 0):
+                    _ga = _bank_ggm_assumptions(ticker, profile_name, most_recent) or {}
+                    _tbv_ps = ((_compute_bank_metrics(most_recent, profile_name) or {}).get("tbv_per_share"))
+                    _fxr = float(fx_rate or 1.0)
+                    if (_tbv_ps and _tbv_ps > 0 and isinstance(_ga.get("roe"), (int, float))
+                            and isinstance(_ga.get("g"), (int, float)) and isinstance(_ga.get("coe"), (int, float))):
+                        _ptbv_spot = float(_spot_price) / (float(_tbv_ps) * _fxr)
+                        _coe_impl = float(_ga["g"]) + (float(_ga["roe"]) - float(_ga["g"])) / _ptbv_spot
+                        _coe_used = float(_ga["coe"])
+                        if abs(_coe_impl - _coe_used) > _BANK_COE_PLAUSIBLE_BAND:
+                            _b_sr.setdefault("forward_flags", []).append(
+                                f"Bank implied CoE: the GGM inverted at spot (P/TBV {_ptbv_spot:.2f}x, RoTE {_ga['roe']:.1%}, "
+                                f"g {_ga['g']:.1%}) implies {_coe_impl:.1%} against the {_coe_used:.1%} used; outer-boundary "
+                                f"anomaly flag, not applied (owner, 2026-09-27)")
+                            gate_evaluations.append({
+                                "gate_id": "GATE_BANK_IMPLIED_COE",
+                                "metric": "implied_cost_of_equity_at_spot",
+                                "raw_input_path_a": round(_coe_impl, 4),
+                                "gated_output_path_b": round(_coe_used, 4),
+                                "basis": "GGM inversion at spot outside the plausible band of the profile's cost of equity; observation only",
+                                "applied": False,
+                            })
+            except Exception:                              # noqa: BLE001
+                pass
             _shadow_names = (profile_data or {}).get("shadow_methods") or []
             if _shadow_names:
                 _an = _b_tbl.get("SOTP (analyst)")

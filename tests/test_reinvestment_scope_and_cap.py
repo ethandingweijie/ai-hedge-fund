@@ -118,7 +118,8 @@ class TestTheAllowlistIsTheOwnersList:
         # 112 -> 115 with Wave 4's Agribusiness & Food Processing, Grocery & Discount Retail, Tobacco; still not.
         # 115 -> 116 with Wave 5's Commercial Biotech (2026-09-26); still not the fourth name.
         # 116 -> 117 with Surgical Robotics / Capital Systems (owner split, 2026-09-26); still not.
-        assert len(every) == 117, (
+        # 117 -> 120 with Wave 6's Card Issuer & Consumer Lender, Insurance Broker, Financial Data & Ratings (2026-09-27).
+        assert len(every) == 120, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:
@@ -409,7 +410,7 @@ class TestTheInvariantsAreNotDuplicated:
         # do with this count being a fact about the whole file rather than about
         # this gate — which is why an unrelated change reddens a test whose name
         # says "not applied and publishes both gates".
-        assert src.count('"applied": False,') == 7   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG (2026-09-26)
+        assert src.count('"applied": False,') == 8   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
         # SIX, not five, since GATE_SCENARIO_ORDERING landed with a literal
         # `"applied": True,`. This is the SECOND copy of that count — the first
         # is in `test_consumer_discretionary_gates.py::

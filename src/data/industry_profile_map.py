@@ -46,6 +46,18 @@ def ticker_overrides() -> dict[str, tuple[str, str]]:
     return {k: (v[0], v[1]) for k, v in (_load().get("ticker_overrides") or {}).items()}
 
 
+def comps_exchange_for(ticker: str | None) -> Optional[str]:
+    """The MARKET ("US", "HK", "SG") whose peer cohort this ticker takes when the
+    owner has granted a documented exception to the one-market rule; None for
+    everyone else. Wave 6, decision 5 (2026-09-27): SGX (S68.SI) benchmarks
+    against the global exchange basket because SES has no exchange cohort and
+    its sector rung is banks at 9.8x, which priced SGX at -49%."""
+    if not ticker:
+        return None
+    from src.tools.ticker_canonical import canonical_ticker
+    return (_load().get("comps_exchange_overrides") or {}).get(canonical_ticker(ticker))
+
+
 def comps_industry_for(ticker: str | None) -> Optional[str]:
     """The FMP industry whose peer basket this ticker takes, when it is pinned
     against its own FMP label; None for everyone else (the label stands).

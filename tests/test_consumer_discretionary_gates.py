@@ -448,6 +448,10 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_BACKLOG_VISIBILITY",
         "GATE_BALANCE_SHEET_FINANCIAL",
         "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
+        # Twentieth (2026-09-27, owner Wave 6): the GGM inverted at spot as the bank's
+        # market-implied cost of equity, recorded when outside the plausible band of
+        # the rate used; `applied` is a literal False (never a discount rate).
+        "GATE_BANK_IMPLIED_COE",
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
         # Eighteenth (2026-09-26, owner): Commercial Biotech drops the Forward P/E
@@ -512,7 +516,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     # file, so it lives nowhere in particular and breaks everywhere. If you are
     # reading this because it failed, the second copy is in
     # `test_reinvestment_scope_and_cap.py` and both have to move together.
-    assert src.count('"applied": False,') == 7   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG (2026-09-26)
+    assert src.count('"applied": False,') == 8   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
     assert '"applied": _s_to_c is not None' not in src
 
     # ── the eleventh gate's named facts ──────────────────────────────────────
@@ -1727,7 +1731,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (118, 38), (total, with_norm)   # +China Internet Platform, +3 Wave 4, +Commercial Biotech, +Surgical Robotics (Wave 5)
+    assert (total, with_norm) == (121, 39), (total, with_norm)   # Wave 5 +2; Wave 6 (2026-09-27) +3 profiles, Card Issuer carries P/E (norm)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -1753,7 +1757,7 @@ def test_the_normalized_leg_names_are_not_case_consistent():
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
     assert spellings.get("EV/EBITDA (norm)") == 12, spellings     # +1 Wave 2 hardware OEM, +1 Wave 3 Defense Primes, +1 China Internet Platform, +1 Wave 4 Agribusiness
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 28, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness
+    assert spellings.get("P/E (norm)") == 29, spellings            # +1 China Internet Platform, +1 Wave 4 Agribusiness, +1 Wave 6 Card Issuer (2026-09-27)
     assert len(spellings) == 4   # +'EV/EBIT (norm)', Wave 3 (2026-09-22), spellings
 
 
@@ -2097,7 +2101,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (118, 36, 36, 12)   # Wave 4 anchors on Forward P/E; +Commercial Biotech, +Surgical Robotics (Wave 5)
+    assert (tot, trail, elig, anchored) == (121, 36, 36, 12)   # Wave 5 +2; Wave 6 +3 profiles, none with a trailing P/E leg (2026-09-27)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2226,7 +2230,7 @@ def test_the_ops_spellings_are_now_in_the_swap():
                                      bool(m.get("anchor"))))
     assert sorted(carriers) == [
         ("Biopharma", "Managed Care", "P/E (Ops)", 0.4, True),
-        ("Financials", "Insurance", "P/E (ops)", 0.15, False),
+        ("Financials", "Insurance", "P/E (ops)", 0.2, False),     # Wave 6 (2026-09-27): life profile re-weighted, CR gate removed
         ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
         ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
         ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),

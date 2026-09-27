@@ -29,7 +29,8 @@ from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
-KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp", "pipeline")
+KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp", "pipeline",
+         "embedded_value", "alt_manager")   # Wave 6 (owner, 2026-09-27)
 
 #: Kinds that ARE guidance. Everywhere else a figure for a year that has not
 #: ended fails its period check; here one for a year that HAS ended does.
@@ -38,7 +39,7 @@ GUIDANCE_KINDS = ("fcf_guidance",)
 #: Kinds whose figures are next-fiscal-year ESTIMATES by construction (a SOTP's
 #: segment revenue is forward): the period check accepts a forward year, and a
 #: year already reported is reported as such rather than failed.
-FORWARD_PERIOD_KINDS = ("sotp",)
+FORWARD_PERIOD_KINDS = ("sotp", "alt_manager",)   # + alt_manager (Wave 6, 2026-09-27): forward-year DE/FRE are estimates by construction
 
 #: The overlay toggle. Off by default: a valuation runs on audited actuals
 #: unless someone switches the forward view on deliberately.
@@ -56,7 +57,7 @@ RESERVE_MEASURE_REMARK = (
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
 #: and NAV curves, where the audit trail can separate price from reserve life.
-NO_OVERLAY = ("pv10", "sotp", "pipeline")
+NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager")
 
 #: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
 #: pre-fill whose segments sum to more than the group can only be rebuilt.
@@ -68,6 +69,11 @@ HARD_CHECKS = ("segment revenue vs group revenue",)
 BOUNDS = {
     # PV-10 / market cap: a reserve value is a fraction to a few multiples of equity value.
     "pv10": ("market_cap", 0.05, 10.0),
+    # Group embedded value / market cap: life insurers trade between a deep discount and a few
+    # times EV (P/EV 0.3x to 3x). Wave 6, owner 2026-09-27.
+    "embedded_value": ("market_cap", 0.3, 3.0),
+    # Forward distributable earnings / market cap: the inverse of P/DE, 7x to 50x.
+    "alt_manager": ("market_cap", 0.02, 0.15),
     # Backlog / annual revenue: weeks of work (short-cycle services) to years (drillers).
     "backlog": ("revenue", 0.05, 15.0),
     # Maintenance capex / D&A: sustaining spend is a fraction of to about three times D&A.
@@ -217,7 +223,9 @@ def reconcile(kind: str, value: Optional[float], context: dict,
         # "Q2 2026" beside FY2025 annuals). That is the latest report, not
         # guidance. Flows -- capex, and a rate base projected for a future year
         # -- stay bound to years that have ended.
-        hi = latest + 1 if kind == "backlog" else latest
+        # An embedded value is likewise a BALANCE at the latest period end (AIA, Ping An report it at
+        # the interim too), so a figure a year past the last annual statement is the latest report.
+        hi = latest + 1 if kind in ("backlog", "embedded_value") else latest
         if kind in GUIDANCE_KINDS or kind in FORWARD_PERIOD_KINDS:
             # The opposite test: guidance is for a year that has NOT ended, and
             # stale guidance for a year already reported is an actual, not this.
@@ -511,6 +519,27 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
             detail = {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",
                                                 "book_to_bill", "definition")
                       if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {})
+            if kind == "embedded_value":
+                # Wave 6 (owner, 2026-09-27): the life insurer's cited embedded value, per share
+                # and total, VNB and margin, with the basis (EEV / MCEV / IFRS 17 CSM) and period.
+                def _cf(c):
+                    return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
+                             "period_label": c.get("period"), "source_url": c.get("source_url"), "quote": c.get("quote")}
+                            if isinstance(c, dict) else None)
+                detail = {"basis": data.get("basis"), "fiscal_year": data.get("fiscal_year"),
+                          "ev_total": _cf(data.get("ev_total")), "ev_per_share": _cf(data.get("ev_per_share")),
+                          "vnb": _cf(data.get("vnb")),
+                          "vnb_margin": ((data.get("vnb_margin") or {}).get("value") if isinstance(data.get("vnb_margin"), dict) else None)}
+            if kind == "alt_manager":
+                def _cf(c):
+                    return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
+                             "period_label": c.get("period"), "source_url": c.get("source_url"), "quote": c.get("quote")}
+                            if isinstance(c, dict) else None)
+                _pde, _pfre = data.get("pde_multiple") or {}, data.get("pfre_multiple") or {}
+                detail = {"fiscal_year": data.get("fiscal_year"), "fre": _cf(data.get("fre")), "de": _cf(data.get("de")),
+                          "net_accrued_carry": _cf(data.get("net_accrued_carry")), "fee_paying_aum": _cf(data.get("fee_paying_aum")),
+                          "pde_range": [_pde.get("low"), _pde.get("high")], "pde_basis": _pde.get("basis"), "pde_source_url": _pde.get("source_url"),
+                          "pfre_range": [_pfre.get("low"), _pfre.get("high")], "pfre_basis": _pfre.get("basis"), "pfre_source_url": _pfre.get("source_url")}
             if kind == "pipeline":
                 # Wave 5 (owner spec, 2026-09-26): every asset with its cited peak
                 # sales, period label, PTRS and basis, so the reviewer sees the
@@ -563,7 +592,7 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                             if ov and kind not in NO_OVERLAY else None),
                 "overlay_allowed": kind not in NO_OVERLAY,
                 "value": v.get("value"), "currency": v.get("currency"), "scale": v.get("scale"),
-                "period": (v.get("period") or (data.get("fiscal_year") if kind == "sotp" else None)
+                "period": (v.get("period") or (data.get("fiscal_year") if kind in ("sotp", "embedded_value", "alt_manager") else None)
                            or (data.get("as_of") if kind == "pipeline" else None)),
                 "source_url": v.get("source_url"), "quote": v.get("quote"),
                 "detail": detail,

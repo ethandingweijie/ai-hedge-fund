@@ -372,9 +372,19 @@ _REMEDIATION_MOVED = {
 }
 
 
+#: Wave 6 financials (owner decisions, 2026-09-27; tenth re-baseline): the bank calibration
+#: re-derived from the 2026-09-26 cohorts. Money Center Bank p_tbv 1.4 -> 2.2, pe 12 -> 14.2,
+#: CoE 10.0% -> 9.3% moves Standard Chartered; Money Center Bank (SG) p_tbv 2.0 -> 1.9,
+#: pe 13 -> 12.3 moves DBS.
+_WAVE6_MOVED = {
+    "02888_HK": (287.71,  237.59,   337.40,   (234.30, 259.36, 284.20)),
+    "D05_SI":   (43.21,    35.42,    50.99,   (55.54,  59.43,  63.32)),
+}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -803,7 +813,8 @@ def test_d05_is_the_one_fixture_whose_bear_column_did_not_change():
     # The × 10 fix left it at 39.21; the two-tier re-baseline (its 1.10
     # composite out of the IV) took it to 35.65. Both halves asserted.
     assert _BEAR_IV_UNMOVED["D05_SI"] == 39.21
-    assert p["scenarios.bear.intrinsic_value"] == _TWO_TIER_MOVED["D05_SI"][1]
+    assert _TWO_TIER_MOVED["D05_SI"][1] == 35.65                       # history
+    assert p["scenarios.bear.intrinsic_value"] == _current("D05_SI")[1]   # 35.42 since Wave 6 (SG bank calibration, 2026-09-27)
 
 
 def test_the_sign_flips_changed_only_their_flag_text():
@@ -1158,16 +1169,20 @@ _BANK_LEGS = ["Excess Capital", "GGM (P/B)", "P/TBV", "Residual Income"]
 _02888_LEGS = {
     # Forward P/E 138.28 -> 126.90 and P/E (norm) 132.80 -> 121.87 on 2026-09-26: the
     # bridge deducts Standard Chartered's preferred equity on the earnings legs' path.
-    "bear": {"Excess Capital": 188.02, "GGM (P/B)": 252.98, "P/TBV": 170.72,
-             "Residual Income": 230.90, "Forward P/E": 126.90, "P/E (norm)": 121.87},
-    "bull": {"Excess Capital": 188.02, "GGM (P/B)": 421.63, "P/TBV": 284.54,
-             "Residual Income": 230.90, "Forward P/E": 135.22, "P/E (norm)": 164.23},
+    # Wave 6 (2026-09-27): Money Center Bank p_tbv 1.4 -> 2.2 (P/TBV 170.72 -> 268.28 bear,
+    # 284.54 -> 447.13 bull), pe 12 -> 14.2 (P/E (norm) 121.87 -> 144.22, 164.23 -> 194.34),
+    # CoE 10.0% -> 9.3% (Residual Income 230.90 -> 238.57). GGM reads the broker table: unchanged.
+    "bear": {"Excess Capital": 188.02, "GGM (P/B)": 252.98, "P/TBV": 268.28,
+             "Residual Income": 238.57, "Forward P/E": 126.90, "P/E (norm)": 144.22},
+    "bull": {"Excess Capital": 188.02, "GGM (P/B)": 421.63, "P/TBV": 447.13,
+             "Residual Income": 238.57, "Forward P/E": 135.22, "P/E (norm)": 194.34},
 }
 
 
 # 2026-09-26: the bridge deducts preferred equity on the earnings legs' path;
 # bear 214.6404 -> 213.5474, bull 301.759 -> 299.57; the x1.10 composite column follows.
-_02888_BLEND = {"bear": (213.5474, 234.9021), "bull": (299.5748, 329.5323)}
+# Wave 6 (2026-09-27): bank calibration re-derived; bear 213.5474 -> 237.5914, bull 299.5748 -> 337.4028.
+_02888_BLEND = {"bear": (237.5914, 261.3505), "bull": (337.4028, 371.1431)}
 
 
 def test_02888_six_legs_split_exactly_along_the_premium_line():

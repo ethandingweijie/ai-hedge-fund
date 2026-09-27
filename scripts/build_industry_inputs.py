@@ -65,7 +65,15 @@ WAVE3 = {
 WAVE5 = {
     "pipeline": ["LLY", "AMGN", "PFE", "VRTX", "01801.HK", "01093.HK"],
 }
-WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5}
+#: Wave 6 (owner decisions, 2026-09-27): life insurers' embedded value, alt managers'
+#: distributable earnings, and the Berkshire look-through (kind sotp; Holding Company
+#: declares SOTP (analyst)).
+WAVE6 = {
+    "embedded_value": ["MET", "01299.HK", "02628.HK", "02318.HK", "G07.SI"],
+    "alt_manager": ["BX", "KKR", "APO"],
+    "sotp": ["BRK-B"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6}
 
 
 def sotp_profile_tickers() -> list[str]:
@@ -110,6 +118,9 @@ def fmp_context(ticker: str) -> dict:
         "company": prof.get("companyName") or ticker,
         "period": inc.get("date"),
         "market_cap": conv(prof.get("marketCap"), r_list),
+        # shares = market cap / price (both in the listing currency); the per-share inputs need it
+        "shares": (float(prof["marketCap"]) / float(prof["price"])
+                   if isinstance(prof.get("marketCap"), (int, float)) and isinstance(prof.get("price"), (int, float)) and prof["price"] > 0 else None),
         "revenue": conv(inc.get("revenue"), r_rep),
         "depreciation_and_amortization": conv(cf.get("depreciationAndAmortization")
                                               or inc.get("depreciationAndAmortization"), r_rep),
@@ -170,6 +181,54 @@ def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
+    if kind in ("embedded_value", "alt_manager"):
+        # Wave 6 (owner, 2026-09-27): cited life-insurer embedded value, or an alt manager's
+        # forward FRE / DE with the sell side's cited multiple ranges; quarantined until accepted.
+        anchors = {"reported_currency": (ctx.get("reported_currency") or "USD"),
+                   "market_cap_usd_bn": round((ctx.get("market_cap") or 0) / 1e9, 2),
+                   "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2)}
+        prompt = (gp.embedded_value_prompt if kind == "embedded_value" else gp.alt_manager_prompt)(ctx["company"], ticker, anchors)
+        out = gp.generate(prompt, schema=schema, grounded=True, timeout=300.0)
+        data = out.get("json")
+        if not isinstance(data, dict):
+            raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
+        data, _urls = gp.canonicalize_citations(data)
+        _fx_usd = ii._fx("USD")
+        if kind == "embedded_value":
+            headline = ii.amount(data.get("ev_total"), _fx_usd)
+            eng = gp.embedded_value_to_engine(data, _fx_usd)
+            checks = ii.reconcile("embedded_value", headline, ctx, period=data.get("fiscal_year"))
+            checks.append({"check": "EV per share cited", "ok": bool(eng.get("ev_per_share")),
+                           "detail": f"{eng.get('ev_per_share')} USD/share" if eng.get("ev_per_share") else "missing or uncited"})
+            checks.append({"check": "EV basis stated", "ok": bool(data.get("basis")), "detail": str(data.get("basis"))})
+            preview = {"ev_per_share_usd": eng.get("ev_per_share"), "vnb_margin": eng.get("vnb_margin")}
+        else:
+            eng = gp.alt_manager_to_engine(data, _fx_usd)
+            _sh = ctx.get("shares") or 0
+            headline = (eng.get("alt_de_fwd_total")
+                        or ((eng.get("alt_de_ps_fwd") or 0) * _sh if eng.get("alt_de_ps_fwd") and _sh else None))
+            _fre_total = (eng.get("alt_fre_fwd_total")
+                          or ((eng.get("alt_fre_ps_fwd") or 0) * _sh if eng.get("alt_fre_ps_fwd") and _sh else None))
+            checks = ii.reconcile("alt_manager", headline, ctx, period=data.get("fiscal_year"))
+            checks.append({"check": "FRE is a full-year figure", "ok": (0.02 <= _fre_total / ctx["market_cap"] <= 0.15) if _fre_total and ctx.get("market_cap") else None,
+                           "detail": f"FRE {_fre_total / 1e9:,.2f}bn = {_fre_total / ctx['market_cap']:.1%} of market cap" if _fre_total and ctx.get("market_cap") else "FRE missing"})
+            checks.append({"check": "forward period", "ok": ("E" in str(data.get("fiscal_year") or "").upper()) or None,
+                           "detail": f"stated for {data.get('fiscal_year')}"})
+            checks.append({"check": "P/DE range cited and plausible", "ok": bool(eng.get("alt_pde_multiple")),
+                           "detail": f"midpoint {eng.get('alt_pde_multiple')}x ({(data.get('pde_multiple') or {}).get('basis')})"})
+            checks.append({"check": "P/FRE range cited and plausible", "ok": bool(eng.get("alt_pfre_multiple")),
+                           "detail": f"midpoint {eng.get('alt_pfre_multiple')}x ({(data.get('pfre_multiple') or {}).get('basis')})"})
+            checks.append({"check": "FRE below DE", "ok": (_fre_total <= headline * 1.05) if _fre_total and headline else None,
+                           "detail": f"FRE {_fre_total} vs DE {headline} (USD, totals or per share x shares)"})
+            preview = {k: eng.get(k) for k in ("alt_fre_fwd_total", "alt_de_fwd_total", "alt_fre_ps_fwd", "alt_de_ps_fwd",
+                                               "alt_net_accrued_carry_total", "alt_pde_multiple", "alt_pfre_multiple")}
+        checks.append(_url_check(_urls))
+        return {"basis": "actual" if kind == "embedded_value" else "estimate", "data": data, "company": ctx["company"],
+                "fmp_context_usd": ctx, "anchors": anchors, "value_usd": headline, "checks": checks,
+                "engine_preview": preview, "ok": all(c["ok"] is not False for c in checks),
+                "grounding_urls": out.get("grounding_urls") or [],
+                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if kind == "pipeline":
         # Owner spec, 2026-09-26 (Wave 5): late-stage assets, consensus peak
         # sales, PTRS benchmarks; cited; quarantined until accepted.

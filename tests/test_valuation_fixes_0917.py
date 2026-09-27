@@ -423,12 +423,16 @@ def test_the_owners_brokerage_remedy_names_legs_the_profile_does_not_declare():
 
     # Measured, not recalled: both legs are declared by exactly the same ten
     # bank profiles, so the owner's phrase names one bank-only mechanism twice.
-    assert sorted(ri) == sorted(ec) == [
+    _banks = [
         "Bank / Lending Institution", "EM Bank", "EM Bank (Premium)",
         "Investment Bank", "Money Center Bank", "Money Center Bank (EU)",
         "Money Center Bank (SG)", "Neo/Challenger", "Regional Bank",
         "Super-Regional Bank",
     ]
+    assert sorted(ri) == _banks
+    # Wave 6 (2026-09-27): Card Issuer & Consumer Lender declares Excess Capital (0.10) without
+    # Residual Income, so the two legs are no longer declared by exactly the same set.
+    assert sorted(ec) == sorted(_banks + ["Card Issuer & Consumer Lender"])
     # "Forward P/E" DOES exist in the taxonomy — on other profiles — so this is
     # a naming mismatch on Brokerage, not a missing concept. Recorded so nobody
     # adds a duplicate leg under a second name.

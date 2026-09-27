@@ -29,9 +29,10 @@
     "v16: Wave 3 aerospace & defence (owner framework 2026-09-22). Labels measured live 2026-09-21: every US and HK name in the universe carries the single label `Aerospace & Defense`, so the three-way split is a default row plus pins. Row: Aerospace & Defense -> Industrials / Defense Primes (the most conservative of the three; an unpinned newcomer errs cheap). Pinned off the row: BA, GE -> Commercial Aerospace & Engines; HWM, TDG, HEI -> Niche Aerospace Components; KTOS, AVAV, RKLB -> Defense Tech & Space; 02357.HK -> Aerospace Holdco (HK); 02507.HK -> General Aviation (HK); 00232.HK -> GA Engines & Aftermarket (HK). The label joins routing_scope, which also makes S63.SI's SG row deterministic (it had reached its profile through the LLM router). S59.SI (SIA Engineering, an MRO) joins routing_scope_tickers so the SG table routes it to Aviation & Marine (SG): its label, `Airlines, Airports & Air Services`, maps to Transportation/Airlines for US carriers and must NOT enter scope. The Stage 0 baseline had NOC, GD and KTOS valued as Mature SaaS, HWM/TDG/LHX as Mature Platform, RKLB as High-Growth Tech and 02357.HK as a Hyperscaler.",
     "v17: Wave 4 consumer staples (owner universe 2026-09-26: 21 names; BF-B and 06808.HK cut, MDLZ kept). Eleven staples labels enter routing_scope -- until now none was in scope, so the map's own rows for beverages, packaged foods, household, tobacco and food distribution were never applied and 20 of 23 names fell to the ratio ladder (Coca-Cola as Luxury Goods, Mondelez as Mature SaaS). New rows: Agricultural Farm Products -> Agribusiness & Food Processing (SG keeps Agribusiness & Food (SG) by market); Wineries and Confectioners -> Food & Beverage (pooled families for the thin baskets); Discount Stores, Grocery Stores and Food Distribution -> Grocery & Discount Retail (Food Distribution moves off Traditional Retail); Tobacco -> Tobacco (owner: a standalone profile, not Household). Department Stores stays rowless (Sun Art cut). COST is pinned Membership / Subscription Retail in the same commit as the Discount Stores row; WMT's pin moves from Traditional Retail to Grocery & Discount Retail; EL keeps its Luxury Goods pin (owner, 2026-09-26: prestige beauty is brand economics, not household scale).",
     "v18: Wave 5 health care (owner spec 2026-09-26). Seven health labels enter routing_scope -- as in Wave 4, none was in scope and 12 of 16 names fell to the ratio ladder (Vertex on MedTech, Medtronic on Large Cap Pharma, Baxter on Mature SaaS). New rows: Medical - Devices -> Biopharma / MedTech / Devices; Medical - Healthcare Plans -> HealthcareServices / Managed Care. Biotechnology keeps Pre-approval Biotech as its default row; commercial biotechs (VRTX, 01801.HK) are pinned to the new Commercial Biotech profile. Pins off the rows: MDT, SYK, BAX, 00853.HK -> MedTech / Devices (00853.HK produced no value on Pre-approval Biotech); 01093.HK -> Large Cap Pharma (a drug maker labelled Biotechnology); 02269.HK -> CDMO / Life Science Tools (a CDMO labelled Biotechnology). BSL.SI reaches Healthcare Provider (SG) by the SG market row. VEEV stays on Tech / Mature SaaS (health-care software; out of the Wave 5 scorecard). Software - Application is not brought into scope.",
-    "v19: Wave 5 refinements (owner, 2026-09-26). Medical - Distribution -> HealthcareServices / Pharma Distribution joins routing_scope: Sinopharm (01099.HK) and CR Pharmaceutical (03320.HK) had been placed on the provider profile and priced +165% and +233% against spot on a hospital cohort; the HK Medical - Distribution cohort has 7 members. Pins: 01666.HK (Tong Ren Tang Technologies, a TCM manufacturer) moves from MedTech / Devices to Large Cap Pharma; ISRG and 02252.HK move to the new Surgical Robotics / Capital Systems profile (method table PROPOSED). Commercial Biotech declares a Forward P/E sanity gate (45x, roll into EV/Fwd Rev and rNPV); Managed Care declares the structural flag Trough MLR Cycle. 01666.HK also takes the HK Drug Manufacturers - Specialty & Generic peer basket (n=17, P/E 18.0x) through comps_industry_overrides: its FMP label, Drug Manufacturers - General, has 3 HK members, so the P/E and FCF-yield rungs fell to the HKSE Healthcare sector median (24.9x, biotech-heavy)."
+    "v19: Wave 5 refinements (owner, 2026-09-26). Medical - Distribution -> HealthcareServices / Pharma Distribution joins routing_scope: Sinopharm (01099.HK) and CR Pharmaceutical (03320.HK) had been placed on the provider profile and priced +165% and +233% against spot on a hospital cohort; the HK Medical - Distribution cohort has 7 members. Pins: 01666.HK (Tong Ren Tang Technologies, a TCM manufacturer) moves from MedTech / Devices to Large Cap Pharma; ISRG and 02252.HK move to the new Surgical Robotics / Capital Systems profile (method table PROPOSED). Commercial Biotech declares a Forward P/E sanity gate (45x, roll into EV/Fwd Rev and rNPV); Managed Care declares the structural flag Trough MLR Cycle. 01666.HK also takes the HK Drug Manufacturers - Specialty & Generic peer basket (n=17, P/E 18.0x) through comps_industry_overrides: its FMP label, Drug Manufacturers - General, has 3 HK members, so the P/E and FCF-yield rungs fell to the HKSE Healthcare sector median (24.9x, biotech-heavy).",
+    "v20: Wave 6 financials (owner decisions 2026-09-27). Eleven Financials labels enter routing_scope; at Stage 0 none was in scope and every unpinned name was placed by the ladder (Ping An, China Life, AIA on Money Center Bank; COF and SYF on Mature Platform with a DCF on a lender; MMC, AON, SPGI, MSCI on Mature Platform; BRK-B a Hyperscaler). Rows: Banks - Regional -> Super-Regional Bank (was EM Bank; the HK market map keeps EM Bank for HK regionals); Banks (the SG string) -> Money Center Bank, SG market map -> Money Center Bank (SG); Financial - Credit Services -> Card Issuer & Consumer Lender (new profile; V, MA keep Payment Networks pins); Insurance - Diversified -> Insurance (P&C) (was the life profile); Insurance - Brokers -> Insurance Broker (new profile). Pins: PGR, CB, AIG, TRV -> Insurance (P&C); AIA, China Life, Ping An, Great Eastern -> Insurance (life, embedded value input); USB, PNC, TFC -> Super-Regional Bank; SPGI, MSCI -> Financial Data & Ratings (new); 00388.HK -> Market Infrastructure; BRK-B -> Holding Company (look-through sotp pre-fill). Cut from the wave: J36.SI, BN4.SI (Wave 9), 00945.HK (MFC.TO is the primary line). Conglomerates stays out of scope. Decision 5: comps_exchange_overrides sends S68.SI (SGX) to the US Financial - Data & Stock Exchanges cohort for its peer basket, a documented exception to the one-market rule -- SES has no exchange cohort and its sector rung is banks at 9.8x; the industry label is the same string in both markets."
   ],
-  "version": 19,
+  "version": 20,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -75,7 +76,11 @@
     ],
     "Banks - Regional": [
       "Financials",
-      "EM Bank"
+      "Super-Regional Bank"
+    ],
+    "Banks": [
+      "Financials",
+      "Money Center Bank"
     ],
     "Beverages - Alcoholic": [
       "Consumer",
@@ -171,7 +176,15 @@
     ],
     "Insurance - Diversified": [
       "Financials",
-      "Insurance"
+      "Insurance (P&C)"
+    ],
+    "Insurance - Brokers": [
+      "Financials",
+      "Insurance Broker"
+    ],
+    "Financial - Credit Services": [
+      "Financials",
+      "Card Issuer & Consumer Lender"
     ],
     "Insurance - Life": [
       "Financials",
@@ -557,7 +570,17 @@
     ]
   },
   "markets": {
+    "HK": {
+      "Banks - Regional": [
+        "Financials",
+        "EM Bank"
+      ]
+    },
     "SG": {
+      "Banks": [
+        "Financials",
+        "Money Center Bank (SG)"
+      ],
       "Aerospace & Defense": [
         "Industrials",
         "Aerospace & Engineering (SG)"
@@ -759,6 +782,17 @@
     "Medical - Devices",
     "Medical - Diagnostics & Research",
     "Medical - Distribution",
+    "Banks - Diversified",
+    "Banks - Regional",
+    "Banks",
+    "Financial - Capital Markets",
+    "Financial - Credit Services",
+    "Insurance - Diversified",
+    "Insurance - Property & Casualty",
+    "Insurance - Life",
+    "Insurance - Brokers",
+    "Asset Management",
+    "Financial - Data & Stock Exchanges",
     "Medical - Healthcare Plans",
     "Medical - Instruments & Supplies",
     "Oil & Gas Drilling",
@@ -780,5 +814,8 @@
     "00006.HK": "Regulated Electric",
     "01816.HK": "Regulated Electric",
     "01666.HK": "Drug Manufacturers - Specialty & Generic"
+  },
+  "comps_exchange_overrides": {
+    "S68.SI": "US"
   }
 }

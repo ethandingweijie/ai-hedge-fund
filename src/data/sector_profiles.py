@@ -327,6 +327,7 @@ BALANCE_SHEET_FINANCIAL_PROFILES: frozenset[str] = frozenset({
     # artefact, not cash available to equity.
     "Brokerage",
     "WealthTech & Specialty Financials (SG)",
+    "Card Issuer & Consumer Lender",   # Wave 6 (2026-09-27): a receivables book on the bank path
 })
 
 #: Tier 1, allowed unless the Tier 2 customer-balance ratio fires. Fee-based by
@@ -336,6 +337,7 @@ BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES: frozenset[str] = frozenset({
     "Payment Networks",
     "Market Infrastructure", "Market Infrastructure (SG)",
     "FinTech", "Fintech/Stablecoin",
+    "Insurance Broker", "Financial Data & Ratings",   # Wave 6 (2026-09-27): fee platforms, no deposit base
 })
 
 #: Exempt from Tier 2 even though they sit in the conditional set.
@@ -1715,6 +1717,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 {"name": "DDM",                 "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": ["Embedded Value"],
+            # Owner Wave 6 (2026-09-27): the combined ratio has no source yet (no extractor field,
+            # no review-gated kind), so the gate stands down and its weight rolls into P/E (ops)
+            # instead of silently renormalising across every leg.
+            "leg_fallback": {"Combined Ratio Gate": ["P/E (ops)"]},
             "rationale": (
                 "P/B against ROE is the general-insurance anchor: the balance "
                 "sheet is the asset and the return on it comes from "
@@ -1728,45 +1734,103 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ),
         },
         "Insurance": {
+            # Life insurance (owner Wave 6, 2026-09-27). Embedded Value is fed ONLY by the
+            # review-gated `embedded_value` input (EV per share, VNB, VNB margin, cited);
+            # until accepted the leg is quarantined and the blend renormalises around P/BV,
+            # P/E (ops) and DDM. The Combined Ratio Gate is a P&C concept and was None on
+            # every life insurer at Stage 0; removed here, its weight to P/BV and P/E (ops).
             "methods": [
-                # PR #1 — Embedded Value is now implementable for Life insurers
-                # via SECTOR_KPI_FRAMEWORK extracted vnb_margin and
-                # embedded_value_per_share. Falls back to P/BV proxy if KPIs
-                # missing (handled inside _compute_method_value branch).
-                {"name": "Embedded Value",      "weight": 0.35, "anchor": True,  "implementable": True, "proxy": "P/BV"},
-                # PR #1 — Combined Ratio Gate uses extracted combined_ratio
-                # to apply a P/BV multiplier reflecting underwriting quality.
-                # Replaces a piece of the legacy P/BV weight; only contributes
-                # to blend when combined_ratio is present (P&C / Reinsurance).
-                {"name": "Combined Ratio Gate", "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "P/BV",                "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/E (ops)",           "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Embedded Value",      "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "P/BV",                "weight": 0.40, "anchor": False, "implementable": True},
+                {"name": "P/E (ops)",           "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "DDM",                 "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF"],
+            "excluded": ["DCF", "Combined Ratio Gate"],
             "rationale": (
-                "EV (Life) and Combined Ratio Gate (P&C) capture sub-sub-profile-specific "
-                "value drivers. P/BV remains the regulatory-capital anchor for blended IV."
+                "Life insurers (AIA, China Life, Ping An, MetLife, Great Eastern): the in-force "
+                "book is a multi-decade asset-liability match that book value collapses, so a "
+                "cited embedded value anchors; P/BV is the regulatory-capital floor, P/E (ops) "
+                "and DDM the earnings and payout cross-checks. Cross-border book comparisons "
+                "(LDTI, IFRS 17, C-ROSS II) are why EV is the anchor and not P/BV."
             ),
         },
         "Alt Asset Manager": {
+            # Owner Wave 6 (2026-09-27): re-specified on distributable earnings. The four
+            # legs before this were all non-implementable proxies (EPV, P/E (norm),
+            # EV/Revenue) and priced Blackstone at 44 against 118. P/DE and the FRE + carry
+            # SOTP read the review-gated `alt_manager` input (forward FRE and DE, net accrued
+            # carry, and the CITED P/DE and P/FRE ranges the sell side applies); quarantined
+            # until accepted, the blend then runs on Forward P/E and DDM.
             "methods": [
-                {"name": "SOTP (FRE+Carry)", "weight": 0.60, "anchor": True,  "implementable": False, "proxy": "EPV"},
-                {"name": "P/FRE",            "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/E (norm)"},
-                {"name": "P/DE",             "weight": 0.15, "anchor": False, "implementable": False, "proxy": "P/E (norm)"},
-                {"name": "AUM Multiple",     "weight": 0.05, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
+                {"name": "P/DE (Forward)",     "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "SOTP (FRE + carry)", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DDM",                "weight": 0.10, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF"],
-            "rationale": "Distinguishes between stable Fee-Related Earnings (FRE) and volatile Performance Fees (Carry).",
+            "excluded": ["DCF", "EPV", "EV/Revenue", "P/E (norm)"],
+            "rationale": (
+                "GAAP earnings carry unrealised mark-to-market performance allocations and "
+                "balance-sheet investments; the market prices fee-related and distributable "
+                "earnings (BX 25x, KKR 20x, APO 17x forward DE on 2026-09-26 quotes)."
+            ),
         },
         "Holding Company": {
+            # Owner Wave 6 (2026-09-27, BRK-B): the look-through SOTP is the review-gated
+            # `sotp` pre-fill (segments with cited multiple ranges, the equity portfolio at
+            # market under associates_investments, cited net cash, holdco discount). It replaces
+            # the non-implementable "SOTP / NAV" row that proxied to P/BV. Until accepted the
+            # blend runs on NAV Discount (P/BV proxy) and DDM.
             "methods": [
-                {"name": "SOTP / NAV",     "weight": 0.70, "anchor": True,  "implementable": False, "proxy": "P/BV"},
+                {"name": "SOTP (analyst)", "weight": 0.70, "anchor": True,  "implementable": True},
                 {"name": "NAV Discount",   "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
                 {"name": "DDM",            "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF"],
             "rationale": "Valuation is a sum of its parts; NAV discount reflects liquidity/management/tax frictions.",
+        },
+        "Card Issuer & Consumer Lender": {
+            # Owner Wave 6 (2026-09-27): AXP, COF, SYF. A lender's free cash flow is loan growth
+            # with the sign flipped (COF's DCF leg reached 795/share at Stage 0), so no cash-flow
+            # leg; RoTE-driven P/TBV anchors, through-cycle P/E normalises credit losses.
+            # Statics from the US Financial - Credit Services cohort on 2026-09-26.
+            "methods": [
+                {"name": "P/TBV",          "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "P/E (norm)",     "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Excess Capital", "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "EV/EBITDA", "EV/Revenue", "FCF Yield", "EPV"],
+            "rationale": (
+                "Card issuers and consumer lenders: capital deployed into receivables is the "
+                "business, so balance-sheet returns (RoTE against P/TBV) and normalised earnings "
+                "price it; classical FCF penalises a healthy book for growing."
+            ),
+        },
+        "Insurance Broker": {
+            # Owner Wave 6 (2026-09-27): MMC, AON. Fee-for-service advisory platforms with zero
+            # underwriting risk; carrier balance-sheet metrics (P/BV, GGM) undervalue them
+            # structurally. Statics: US Insurance - Brokers basket (AON, AJG, BRO, WTW) 2026-09-26.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",   "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",         "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",   "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "GGM (P/B)", "Embedded Value", "Combined Ratio Gate"],
+            "rationale": "Capital-light brokerage and consulting fees; priced on forward earnings and EBITDA like other fee platforms.",
+        },
+        "Financial Data & Ratings": {
+            # Owner Wave 6 (2026-09-27): SPGI, MSCI (MCO, FDS by row). Asset-light subscription
+            # and ratings workflows, separated from transaction exchanges' volume cycles.
+            # Statics: the four-name basket (SPGI, MSCI, MCO, FDS) on 2026-09-26.
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",   "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",         "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",   "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "GGM (P/B)", "EPV"],
+            "rationale": "Recurring subscription, index and ratings revenue with high incremental margins; forward earnings and EBITDA benchmarks.",
         },
         "Payment Networks": {
             "methods": [
@@ -3517,6 +3581,15 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # — SG bank total income grows at low-single digits while book
     # compounds; the old 5% average pushed the growth premium to its floor.
     "Money Center Bank (SG)": {"ev_ebitda": 12.0, "pe": 14.0, "ev_revenue": 3.0, "pb": 2.0, "fcf_yield": 0.055, "growth_avg": 0.03},
+    # Owner Wave 6 (2026-09-27): cohort medians read from the comps store on 2026-09-26.
+    "Card Issuer & Consumer Lender": {"ev_ebitda": 7.1, "pe": 10.9, "ev_revenue": 1.6, "pb": 1.27, "fcf_yield": 0.08, "growth_avg": 0.14, "pe_ntm": 8.5},
+    "Insurance Broker":     {"ev_ebitda": 12.2, "pe": 17.8, "ev_revenue": 3.9, "pb": 3.1, "fcf_yield": 0.057, "growth_avg": 0.145, "pe_ntm": 14.1},
+    "Financial Data & Ratings": {"ev_ebitda": 18.9, "pe": 27.1, "ev_revenue": 9.4, "pb": 5.05, "fcf_yield": 0.044, "growth_avg": 0.114, "pe_ntm": 23.3},
+    "Alt Asset Manager":    {"ev_ebitda": 19.9, "pe": 42.3, "ev_revenue": 7.5, "pb": 5.3, "fcf_yield": 0.028, "growth_avg": 0.29, "pe_ntm": 16.1},
+    # Decision 5: SGX is benchmarked against the GLOBAL exchange basket (CME, ICE, NDAQ, HKEX, SGX;
+    # median 25.0x / 21.2x NTM) as a documented exception to the one-market rule: SES has no
+    # exchange cohort and its sector rung is banks at 9.8x.
+    "Market Infrastructure (SG)": {"ev_ebitda": 18.3, "pe": 25.0, "ev_revenue": 10.0, "pb": 4.45, "fcf_yield": 0.04, "growth_avg": 0.097, "pe_ntm": 21.2},
     "Regional Bank":       {"ev_ebitda": 10.0, "pe": 10.0, "ev_revenue": 2.0,  "pb": 1.1,  "fcf_yield": 0.065, "growth_avg": 0.04},
     "Insurance":           {"ev_ebitda": 10.0, "pe": 11.0, "ev_revenue": 1.5,  "pb": 1.3,  "fcf_yield": 0.060, "growth_avg": 0.05},
     "Investment Bank":     {"ev_ebitda": 12.0, "pe": 13.0, "ev_revenue": 2.5,  "pb": 1.5,  "fcf_yield": 0.055, "growth_avg": 0.06},
@@ -3616,6 +3689,12 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Biopharma":            ["PFE", "MRK", "ABBV", "BMY", "LLY", "JNJ", "GSK"],
     "MedTech / Devices":    ["MDT", "SYK", "BSX", "ZBH", "EW", "ABT"],
     "Surgical Robotics / Capital Systems": ["ISRG", "PRCT", "02252.HK"],
+    # Owner Wave 6 (2026-09-27)
+    "Card Issuer & Consumer Lender": ["AXP", "COF", "SYF", "DFS", "ALLY"],
+    "Insurance Broker":     ["MMC", "AON", "AJG", "BRO", "WTW"],
+    "Financial Data & Ratings": ["SPGI", "MSCI", "MCO", "FDS"],
+    "Alt Asset Manager":    ["BX", "KKR", "APO", "ARES", "OWL"],
+    "Market Infrastructure (SG)": ["CME", "ICE", "NDAQ", "CBOE", "0388.HK", "S68.SI"],
     "CDMO / Life Science Tools": ["TMO", "DHR", "A", "CRL", "ICLR", "AVTR"],
     "Pre-approval Biotech": ["VRTX", "REGN", "ALNY", "BMRN", "RARE", "SRPT"],
     "Telco":                ["VZ", "T", "TMUS", "VOD", "BCE"],
@@ -3971,6 +4050,13 @@ def _regional_peer_multiples(
     # FMP reports the listing venue ("NASDAQ"); the store is keyed by market
     # ("US"), since where a company listed is not an economic distinction.
     market = market_for_exchange(exchange)
+    # Owner exception (Wave 6, decision 5): a ticker may take another market's
+    # cohort when its own market has none for its industry (SGX -> US exchanges).
+    try:
+        from src.data.industry_profile_map import comps_exchange_for
+        market = comps_exchange_for(ticker) or market
+    except Exception:                                      # noqa: BLE001
+        pass
     if not market:
         return {}
     try:
@@ -5227,6 +5313,20 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Financials ────────────────────────────────────────────────────────────
     "JPM":   ("Financials", "Money Center Bank",  "Bank (Money Center)",              ""),
+    # Owner Wave 6 (2026-09-27): names that had no pin fell through the ladder to Mature
+    # Platform (lenders on a DCF, brokers and data on a platform table) or Hyperscaler (BRK-B).
+    "USB":   ("Financials", "Super-Regional Bank", "Bank (Super-Regional)", "U.S. Bancorp"),
+    "PNC":   ("Financials", "Super-Regional Bank", "Bank (Super-Regional)", "PNC Financial"),
+    "TFC":   ("Financials", "Super-Regional Bank", "Bank (Super-Regional)", "Truist Financial"),
+    "AXP":   ("Financials", "Card Issuer & Consumer Lender", "Credit Services", "American Express -- closed-loop card issuer"),
+    "COF":   ("Financials", "Card Issuer & Consumer Lender", "Credit Services", "Capital One -- card and auto lender"),
+    "SYF":   ("Financials", "Card Issuer & Consumer Lender", "Credit Services", "Synchrony -- private-label card lender"),
+    "TRV":   ("Financials", "Insurance (P&C)", "Insurance - P&C", "Travelers"),
+    "MMC":   ("Financials", "Insurance Broker", "Insurance Brokers", "Marsh McLennan -- fee broker, no underwriting"),
+    "AON":   ("Financials", "Insurance Broker", "Insurance Brokers", "Aon -- fee broker, no underwriting"),
+    "SPGI":  ("Financials", "Financial Data & Ratings", "Financial Data", "S&P Global -- ratings, indices, data"),
+    "MSCI":  ("Financials", "Financial Data & Ratings", "Financial Data", "MSCI -- indices and analytics"),
+    "BRK-B": ("Financials", "Holding Company", "Diversified", "Berkshire Hathaway (FMP symbol; look-through SOTP pre-fill, owner Wave 6)"),
     "BAC":   ("Financials", "Money Center Bank",  "Bank (Money Center)",              ""),
     "C":     ("Financials", "Money Center Bank",  "Bank (Money Center)",              "Citigroup"),
     "WFC":   ("Financials", "Money Center Bank",  "Bank (Money Center)",              ""),
@@ -5238,8 +5338,8 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "BX":    ("Financials", "Alt Asset Manager",  "Investments & Asset Management",   "Blackstone"),
     "APO":   ("Financials", "Alt Asset Manager",  "Investments & Asset Management",   "Apollo Global"),
     "KKR":   ("Financials", "Alt Asset Manager",  "Investments & Asset Management",   ""),
-    "CB":    ("Financials", "Insurance",          "Insurance (Prop/Cas.)",            "Chubb"),
-    "AIG":   ("Financials", "Insurance",          "Insurance (General)",              ""),
+    "CB": ('Financials', 'Insurance (P&C)', 'Insurance (Prop/Cas.)', 'Chubb -- P&C (owner Wave 6, 2026-09-27; was on the life profile)'),
+    "AIG": ('Financials', 'Insurance (P&C)', 'Insurance (General)', 'AIG -- general insurer (owner Wave 6, 2026-09-27)'),
     "MET":   ("Financials", "Insurance",          "Insurance (Life)",                 "MetLife"),
     "BRK.B": ("Financials", "Holding Company",    "Diversified",                      "Berkshire Hathaway"),
     "BRK.A": ("Financials", "Holding Company",    "Diversified",                      "Berkshire Hathaway Class A"),
@@ -5253,7 +5353,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "TROW":  ("Financials", "Asset Manager",       "Asset Management",             "T. Rowe Price"),
     # Insurance
     "PRU":   ("Financials", "Insurance",           "Insurance - Life",             "Prudential Financial"),
-    "PGR":   ("Financials", "Insurance",           "Insurance - P&C",              "Progressive — auto insurance"),
+    "PGR": ('Financials', 'Insurance (P&C)', 'Insurance - P&C', 'Progressive -- auto P&C (owner Wave 6, 2026-09-27; was on the life profile)'),
     # Brokerage
     "SCHW":  ("Financials", "Brokerage",           "Financial - Capital Markets",  "Charles Schwab — deposit-funded brokerage"),
     "JEF":   ("Financials", "Investment Bank",     "Financial - Capital Markets",  "Jefferies — mid-cap IB"),
@@ -5524,18 +5624,18 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # Financials
     "00005.HK": ("Financials",  "Money Center Bank (EU)",  "Banking",  "HSBC Holdings"),
-    "01299.HK": ("Financials",  "",  "Insurance",                "AIA Group"),
-    "02318.HK": ("Financials",  "",  "Insurance",                "Ping An Insurance"),
+    "01299.HK": ('Financials', 'Insurance', 'Insurance', 'AIA Group -- life, embedded value (owner Wave 6, 2026-09-27)'),
+    "02318.HK": ('Financials', 'Insurance', 'Insurance', 'Ping An -- life-led composite, embedded value (owner Wave 6, 2026-09-27)'),
     "03988.HK": ("Financials",  "EM Bank",          "Banking",        "Bank of China"),
     "01398.HK": ("Financials",  "EM Bank",          "Banking",        "ICBC"),
     "00939.HK": ("Financials",  "EM Bank",          "Banking",        "China Construction Bank"),
     "03968.HK": ("Financials",  "EM Bank",          "Banking",        "China Merchants Bank"),
-    "02628.HK": ("Financials",  "",  "Insurance",                "China Life Insurance"),
+    "02628.HK": ('Financials', 'Insurance', 'Insurance', 'China Life -- embedded value (owner Wave 6, 2026-09-27)'),
     "01288.HK": ("Financials",  "EM Bank",          "Banking",        "Agricultural Bank of China"),
     "00998.HK": ("Financials",  "EM Bank",          "Banking",        "CITIC Bank"),
     "03328.HK": ("Financials",  "EM Bank",          "Banking",        "Bank of Communications"),
     "01658.HK": ("Financials",  "EM Bank",          "Banking",        "Postal Savings Bank of China"),
-    "00388.HK": ("Financials",  "",  "Exchange",                 "Hong Kong Exchanges (HKEX)"),
+    "00388.HK": ('Financials', 'Market Infrastructure', 'Exchange', 'HKEX (owner Wave 6, 2026-09-27; was an empty pin that fell to Payment Networks)'),
     "02388.HK": ("Financials",  "Regional Bank",    "Banking",        "BOC Hong Kong — HK-domiciled"),
     "00011.HK": ("Financials",  "Regional Bank",    "Banking",        "Hang Seng Bank — HK-domiciled"),
     "02888.HK": ("Financials", "Money Center Bank",    "Banks (Diversified)",    "Standard Chartered"),
@@ -6038,6 +6138,7 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "O39.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "OCBC Bank — SG money-center bank"),
     "U11.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "UOB — SG money-center bank"),
     "S68.SI":  ("Financials", "Market Infrastructure (SG)",    "Capital Markets",        "Singapore Exchange"),
+    "G07.SI":  ("Financials", "Insurance",                       "Insurance",              "Great Eastern Holdings -- life, embedded value (owner Wave 6, 2026-09-27)"),
     "9CI.SI":  ("Financials", "Real Estate Asset Manager (SG)",   "Asset Management",       "CapitaLand Investment"),
     "U09.SI":  ("Financials", "Insurance",   "Insurance",              "United Overseas Insurance"),
     # Telco
