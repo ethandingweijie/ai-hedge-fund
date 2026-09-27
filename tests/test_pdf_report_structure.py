@@ -162,3 +162,16 @@ def test_a_bank_report_shows_book_not_free_cash_flow(tmp_path):
     text2 = " ".join("\n".join(p.get_text() for p in fitz.open(str(path2))).split())   # labels wrap in the narrow column
     kf2 = text2[text2.index("Key financials"): text2.index("Key financials") + 600]
     assert "FCF" in kf2 and "Book value / share" not in kf2
+
+
+
+def test_the_reconciliation_line_prints_under_the_rating(tmp_path):
+    import fitz
+    res = _result()
+    res["decisions"][T]["signals_reconciliation"] = ("Momentum signals (news sentiment bullish) run against this "
+                                                     "valuation-driven Underweight rating; the rating is a 12-month "
+                                                     "total-return call on the valuation, not a momentum call.")
+    path = tmp_path / "recon.pdf"
+    pdf_report.generate_pdf_report(res, str(path), open_after=False)
+    text = " ".join("\n".join(p.get_text() for p in fitz.open(str(path))).split())
+    assert "run against this valuation-driven Underweight rating" in text

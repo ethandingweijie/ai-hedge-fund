@@ -1425,8 +1425,22 @@ def run_advanced_portfolio_manager(state) -> dict:
                 d["rationale"] = _strip(d.get("rationale") or "", _verdict)
             d["rationale_fidelity"] = {"checked": _verdict.get("checked"), "offending_numbers": _verdict.get("offending_numbers"),
                                        "removed_sentences": _removed, "retried": _retried, "family": _family}
+            from src.agents.pm.industry_pm import skeleton_check as _sk_check
+            d["rationale_fidelity"]["skeleton"] = _sk_check(d.get("rationale") or "", _family)
         except Exception:                                  # noqa: BLE001
             pass
+        # Owner, 2026-09-27: when the momentum signals run against the rating, say so in
+        # one computed sentence; the reader sees which call the page is asking them to act on.
+        try:
+            from src.agents.pm.industry_pm import signals_reconciliation as _recon
+            _sd = state["data"]
+            d["signals_reconciliation"] = _recon(
+                action, (research_view or {}).get("rating_label"),
+                ((_sd.get("news_sentiment") or {}).get(ticker) or {}).get("signal"),
+                ((_sd.get("analyst_revisions") or {}).get(ticker) or {}).get("revision_direction"),
+                ((_sd.get("insider_activity") or {}).get(ticker) or {}).get("signal"))
+        except Exception:                                  # noqa: BLE001
+            d["signals_reconciliation"] = None
         # Pin deterministic values — the LLM sometimes misinterprets the
         # position_size_pct format (e.g. returns 7.5 instead of 0.075).
         # Python-computed values always win over LLM interpretation.

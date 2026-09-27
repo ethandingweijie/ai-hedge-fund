@@ -259,6 +259,7 @@ class _Book:
             self.sotp_tab()
         if self._has_bank():
             self.banks_tab()
+        self.family_tab()
         self.blend_tab()
         self.target_tab()
         self.backtest_tab()
@@ -1220,6 +1221,39 @@ class _Book:
         sh.widths({"A": 44, "B": 10, "C": 10, "D": 14, "E": 14, "F": 12, "G": 16})
 
     # ── Banks ───────────────────────────────────────────────────────────────
+    def family_tab(self) -> None:
+        """Owner, 2026-09-27: the profile's report family -- the desk's exposition fields, the
+        thesis skeleton, the signals that belong, and the checklist computed from this run's
+        valuation record (the same lines the writer narrated). Static values, input colour."""
+        try:
+            from src.data.report_families import report_family_for, REPORT_FAMILIES
+            from src.agents.pm.industry_pm import family_checklist
+        except Exception:                                  # noqa: BLE001
+            return
+        fam = report_family_for(self.dr.get("profile"))
+        spec = REPORT_FAMILIES.get(fam) or {}
+        sh = self.sheet("Family", f"Report family: {fam} -- exposition, skeleton, signals and the checklist from this run")
+        sh.title(f"{self.ticker} — {fam}", f"Profile {self.dr.get('profile')}; anchor {self.dr.get('anchor_method')}")
+        r = 4
+        for heading, items in (("Valuation exposition (what the write-up must state)", spec.get("exposition") or []),
+                               ("Thesis skeleton (theme order)", spec.get("skeleton") or []),
+                               ("Signals that belong on the page", spec.get("signals") or []),
+                               ("Metrics the family does not use", spec.get("excluded_metrics") or [])):
+            sh.section(r, heading, 6); r += 1
+            if not items:
+                sh.note(r, 1, "(none declared)"); r += 1
+            for i, it in enumerate(items, 1):
+                sh.label(r, 1, f"{i}. {it}", indent=1); r += 1
+            r += 1
+        sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£"}.get(str(self.ccy).upper(), str(self.ccy).upper() + " ")
+        lines = family_checklist(fam, self.dr, None, (self.data.get("sector_kpis") or {}), sym)
+        sh.section(r, "Checklist from this run's valuation record", 6); r += 1
+        if not lines:
+            sh.note(r, 1, "(no record lines)"); r += 1
+        for line in lines:
+            sh.label(r, 1, line, indent=1); r += 1
+        sh.widths({"A": 110})
+
     def banks_tab(self) -> None:
         sh = self.sheet("Banks", "Bank valuation: ROE, cost of equity, growth, book value → justified P/B")
         sh.title("Bank valuation", "Justified P/B = (ROE − g) / (CoE − g), bounded by the engine's floor and cap.")

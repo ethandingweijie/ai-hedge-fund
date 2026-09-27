@@ -127,9 +127,70 @@ FAMILY_ADDENDA: dict[str, str] = {
 }
 
 
+def family_skeleton(family: Optional[str]) -> list[str]:
+    """The theme order the family's desk writes in (declared in the report-family registry)."""
+    try:
+        from src.data.report_families import REPORT_FAMILIES
+        return list((REPORT_FAMILIES.get(family or "") or {}).get("skeleton") or [])
+    except Exception:                                      # noqa: BLE001
+        return []
+
+
+def family_skeleton_text(family: Optional[str]) -> str:
+    sk = family_skeleton(family)
+    if not sk:
+        return ""
+    return ("THESIS SKELETON (write the themes in this order; drop a theme only when the inputs carry "
+            "nothing for it): " + "; ".join(f"{i}. {t}" for i, t in enumerate(sk, 1)) + ".\n")
+
+
 def family_addendum(family: Optional[str]) -> str:
-    """The desk rules appended to the system prompt for this family (always with the fidelity rule)."""
-    return _COMMON_FIDELITY + (FAMILY_ADDENDA.get(family or "") or "")
+    """The desk rules appended to the system prompt for this family (always with the fidelity rule
+    and the family's thesis skeleton)."""
+    return _COMMON_FIDELITY + (FAMILY_ADDENDA.get(family or "") or "") + family_skeleton_text(family)
+
+
+_RATING_WORDS = ("overweight", "neutral", "underweight", "buy", "sell", "hold", "short", "unrated")
+
+
+def skeleton_check(rationale: str, family: Optional[str]) -> dict:
+    """Did the draft follow the family skeleton? Theme count against the skeleton and whether theme 1
+    opens with the rating. Observation for the record; it does not fail the draft."""
+    sk = family_skeleton(family)
+    themes = [t.strip() for t in re.split(r"(?:^|\n)\s*\d+[.)]\s+", rationale or "") if t.strip()]
+    first = (themes[0].lower() if themes else "")
+    return {"family": family, "skeleton_len": len(sk), "themes": len(themes),
+            "enough_themes": (len(themes) >= min(3, len(sk))) if sk else True,
+            "opens_with_rating": any(w in first for w in _RATING_WORDS) if themes else False}
+
+
+# ── 4. Signals versus rating ────────────────────────────────────────────────
+
+_BULL = {"BULLISH", "ACCELERATING_UP", "ACCELERATING UP", "IMPROVING", "UP"}
+_BEAR = {"BEARISH", "ACCELERATING_DOWN", "ACCELERATING DOWN", "DETERIORATING", "DOWN"}
+
+
+def signals_reconciliation(action: Optional[str], rating_label: Optional[str],
+                           news_signal: Optional[str] = None, revision_direction: Optional[str] = None,
+                           insider_signal: Optional[str] = None) -> Optional[str]:
+    """One computed sentence when the momentum signals run against the valuation-driven rating;
+    None when they agree or nothing is known. No model involvement."""
+    a = (action or "").upper(); r = (rating_label or "").lower()
+    bearish_call = a in ("SELL", "SHORT") or "underweight" in r
+    bullish_call = a in ("BUY", "COVER") or "overweight" in r
+    if not (bearish_call or bullish_call):
+        return None
+    sig = {"news sentiment": (news_signal or "").upper().replace("_", " "),
+           "analyst revisions": (revision_direction or "").upper().replace("_", " "),
+           "insider activity": (insider_signal or "").upper().replace("_", " ")}
+    against = [f"{k} {v.lower()}" for k, v in sig.items()
+               if v and ((bearish_call and v in {x.replace("_", " ") for x in _BULL})
+                         or (bullish_call and v in {x.replace("_", " ") for x in _BEAR}))]
+    if not against:
+        return None
+    return (f"Momentum signals ({', '.join(against)}) run against this valuation-driven "
+            f"{'Underweight' if bearish_call else 'Overweight'} rating; the rating is a 12-month "
+            "total-return call on the valuation, not a momentum call.")
 
 
 # ── 2. Family checklist from the valuation record ───────────────────────────

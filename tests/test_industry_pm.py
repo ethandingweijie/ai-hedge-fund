@@ -115,3 +115,26 @@ def test_the_pm_agent_is_wired_to_the_family_language_and_the_guard():
     assert "taken from the anchors" in pm._PM_RATIONALE_SYSTEM_PROMPT
     assert "TWO specific figures with units" in pm._PM_RATIONALE_SYSTEM_PROMPT      # the density test's pin survives
     assert "deposits are not debt" in pm._PM_BANK_RATIONALE_ADDENDUM                # kept for the fallback path
+
+
+
+def test_the_family_skeleton_is_in_the_prompt_and_checked():
+    add = ip.family_addendum("Energy and resources")
+    assert "THESIS SKELETON" in add and "1. rating" in add and "mid-cycle multiple" in add
+    ok = "1. Underweight vs the S&P 500: TSR -17.8%.\n2. Mid-cycle multiple at 5.4x.\n3. Volumes flat.\n4. Payout intact.\n5. Risk: strip."
+    c = ip.skeleton_check(ok, "Energy and resources")
+    assert c["themes"] == 5 and c["enough_themes"] and c["opens_with_rating"] and c["skeleton_len"] == 5
+    c2 = ip.skeleton_check("1. The strip is weak.\n2. Costs rising.", "Energy and resources")
+    assert not c2["enough_themes"] and not c2["opens_with_rating"]
+    assert ip.skeleton_check("anything", "Operating company")["enough_themes"]
+
+
+def test_the_reconciliation_line_fires_only_when_signals_run_against_the_rating():
+    line = ip.signals_reconciliation("SELL", "Underweight", "BULLISH", "ACCELERATING_UP", "BEARISH")
+    assert line and "news sentiment bullish" in line and "analyst revisions accelerating up" in line and "Underweight" in line
+    assert "insider" not in line                                       # insiders agree with the sell
+    assert ip.signals_reconciliation("SELL", "Underweight", "BEARISH", "ACCELERATING_DOWN", None) is None
+    assert ip.signals_reconciliation("BUY", "Overweight", "BEARISH", None, None).startswith("Momentum signals (news sentiment bearish)")
+    assert ip.signals_reconciliation("HOLD", "Neutral", "BULLISH", "ACCELERATING_UP", None) is None
+    src = inspect.getsource(pm.run_advanced_portfolio_manager)
+    assert 'd["signals_reconciliation"] = _recon(' in src and '"skeleton"] = _sk_check(' in src

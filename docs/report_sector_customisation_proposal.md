@@ -109,3 +109,11 @@ family's rows.
   them are removed; the verdict is stored as `rationale_fidelity` on the decision. The density rule now
   reads "from the anchors, the family checklist or the research digest supplied". No per-industry
   agent exists. Tests: `tests/test_industry_pm.py`.
+
+- 2026-09-27 (owner "Build"): the remaining items. (3) The family thesis skeleton is in the system prompt
+  as the theme order and checked after generation (theme count against the skeleton, theme 1 opening
+  with the rating), recorded under `rationale_fidelity.skeleton`. (4) The reconciliation line: when news
+  sentiment, analyst revisions or insider activity run against the rating, one computed sentence is
+  stored as `signals_reconciliation` and printed under the rating callout in the PDF. (5) The workbook
+  carries a Family tab: exposition, skeleton, signals, excluded metrics and the checklist computed from
+  the run's valuation record. Every item in section 3 is built.

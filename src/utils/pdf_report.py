@@ -1891,6 +1891,9 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
     out += [kt, Spacer(1, 4)]
     if rv.get("callout"):
         out.append(Paragraph(_strip(rv["callout"]), styles["RptSource"]))
+    # Owner, 2026-09-27: the computed reconciliation when momentum signals run against the rating.
+    if decision.get("signals_reconciliation"):
+        out.append(Paragraph(_strip(str(decision["signals_reconciliation"])), styles["RptSource"]))
     points = _rationale_points(decision.get("rationale") or decision.get("reasoning") or "")
     for p in points:
         out.append(Paragraph(p, styles["RptBullet"], bulletText="•"))

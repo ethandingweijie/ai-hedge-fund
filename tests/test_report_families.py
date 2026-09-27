@@ -76,3 +76,18 @@ def test_the_workbook_summary_carries_the_family_block():
     ws = wb["Summary"]
     cells = [str(c.value) for row in ws.iter_rows() for c in row if c.value is not None]
     assert "Key metrics (Banks)" in cells and "Book value / share" in cells and "Return on equity" in cells
+
+
+
+def test_the_workbook_carries_a_family_tab_with_the_checklist():
+    import sys
+    sys.path.insert(0, "tests")
+    from test_valuation_workbook import _run, _statements
+    from src.utils.valuation_workbook import build_workbook
+    run = _run()
+    run["data"]["dcf_range"]["TEST"]["profile"] = "Integrated Oil & Gas"
+    wb = load_workbook(io.BytesIO(build_workbook(run, "TEST", load_statements=_statements)))
+    assert "Family" in wb.sheetnames
+    cells = " | ".join(str(c.value) for row in wb["Family"].iter_rows() for c in row if c.value is not None)
+    assert "Energy and resources" in cells and "Thesis skeleton" in cells and "Checklist from this run" in cells
+    assert "mid-cycle multiple" in cells
