@@ -192,6 +192,11 @@ def _prediction(row, ticker: str, dr: dict) -> Optional[dict]:
     # model on a number it declined to publish.
     if is_unrated(dr):
         return None
+    # Owner, 2026-10-03: the tracker scores the AGENT's estimates, never a user's. A user's
+    # estimate override is applied on read and never reaches these archive rows; a run the
+    # pipeline built on a CARRIED user override says so in its dcf_range and is not scored.
+    if dr.get("estimate_override_carried"):
+        return None
     scenario = _loads(row["scenario_json"]) or {}
     iv = _pos((dr.get("base") or {}).get("intrinsic_value"))
     # Two targets, scored separately: the engine's deterministic 12-month

@@ -165,6 +165,14 @@ class TestRefusals:
                                   consensus_fn=_no_consensus)
         assert _labels() == {} and report["skipped_cache_copy"] == 1
 
+    def test_a_run_built_on_a_carried_user_override_is_not_scored(self):
+        """Owner, 2026-10-03: the tracker scores the agent's estimates, never a user's. A read-time
+        override never reaches ticker_signals; a run the pipeline built on a carried one says so."""
+        _add_run("r1", dcf=_dcf(estimate_override_carried={"run_id": "r0", "fields": ["base.revenue_growth_fy2"]}))
+        _add_run("r2", ticker="AACO", dcf=_dcf())
+        vo.score_matured(today=TODAY, closes_fn=_closes({**SERIES, "AACO": SERIES["ZZCO"]}), consensus_fn=_no_consensus)
+        assert {k[0] for k in _labels()} == {"r2"}                       # the agent-only run is scored; the carried one is not
+
     def test_a_pre_flag_copy_is_found_by_content(self):
         original = _dcf()
         original.pop("is_cache_copy")
