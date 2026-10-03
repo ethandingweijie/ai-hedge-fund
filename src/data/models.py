@@ -410,6 +410,9 @@ class AdvancedPortfolioDecision(BaseModel):
     price_target: float
     time_horizon: str
     rationale: str
+    # Owner, 2026-10-03: one bold line, at most 18 words, that summarises the rationale and
+    # quantifies the catalyst or inflection (a metric, a percent or a target price).
+    headline: str = ""
 
 
 # ---------------------------------------------------------------------------

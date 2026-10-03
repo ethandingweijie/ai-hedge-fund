@@ -478,12 +478,15 @@ function SummaryBody({
               </span>
             </div>
           )}
+          {decision.headline && (
+            <p className="mt-3 text-[14px] font-bold leading-snug text-foreground">{String(decision.headline)}</p>
+          )}
           {decision.rationale && (
             /* Shared with the desktop path via RationaleBlock so the two
                render paths cannot drift apart again. */
             <RationaleBlock
               text={String(decision.rationale)}
-              className="mt-3"
+              className={decision.headline ? 'mt-2' : 'mt-3'}
               itemClassName="text-[12.5px] text-foreground/80 leading-relaxed"
             />
           )}

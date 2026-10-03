@@ -1899,6 +1899,10 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
     # Owner, 2026-09-27: the computed reconciliation when momentum signals run against the rating.
     if decision.get("signals_reconciliation"):
         out.append(Paragraph(_strip(str(decision["signals_reconciliation"])), styles["RptSource"]))
+    # Owner, 2026-10-03: the one-line headline, bold, above the themes.
+    if decision.get("headline"):
+        out.append(Paragraph(f"<b>{_strip(str(decision['headline']))}</b>", styles["RptBody"]))
+        out.append(Spacer(1, 2))
     points = _rationale_points(decision.get("rationale") or decision.get("reasoning") or "")
     for p in points:
         out.append(Paragraph(p, styles["RptBullet"], bulletText="•"))

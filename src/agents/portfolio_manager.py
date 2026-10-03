@@ -109,8 +109,101 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "release or call), consensus, and our estimate, and says where we sit "
     "against both and why. When the block says management gives no guidance, "
     "say that and anchor on consensus instead.\n"
+    # Owner, 2026-10-03: the summary is read in one sitting.
+    "Length rule — the whole rationale is at most 300 words. Fewer, denser "
+    "themes beat more; a theme that only restates another is cut.\n"
+    "Headline rule — also return `headline`: ONE line of at most 18 words that "
+    "summarises the rationale and QUANTIFIES the catalyst or inflection with at "
+    "least one concrete metric, percentage or target price taken from the "
+    "inputs. No vague adjectives (strong, weak, solid, robust, challenging, "
+    "healthy, attractive). It is written in the house form: "
+    "\"Backlog Burn-Off Accelerates Topside Margins Toward 10.5%; PT to S$2.45.\" "
+    "or \"Capital Returns Peak as NII Compresses 15%; Downgrading to Underweight.\" "
+    "The rounding and currency rules apply to it.\n"
     "Output JSON only."
 )
+
+#: Owner, 2026-10-03: the limits the writer is held to after the fact.
+PM_RATIONALE_MAX_WORDS = 300
+PM_HEADLINE_MAX_WORDS = 18
+_VAGUE_ADJECTIVES = re.compile(
+    r"\b(strong|weak|solid|robust|challenging|healthy|attractive|compelling|significant|meaningful)\b",
+    re.IGNORECASE)
+_THEME_SPLIT = re.compile(r"\n+")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")   # not ';' -- a headline keeps its "…15%; PT to S$2.45" clause
+
+
+def _word_count(text: str) -> int:
+    return len(re.findall(r"\S+", text or ""))
+
+
+def _trim_to_words(text: str, limit: int) -> str:
+    words = re.findall(r"\S+", text or "")
+    if len(words) <= limit:
+        return (text or "").strip()
+    cut = " ".join(words[:limit]).rstrip(",;:")
+    return cut if cut.endswith((".", "!", "?")) else cut + "."
+
+
+def _enforce_pm_length(d: dict, inputs_text: str) -> dict:
+    """Hold the rationale to PM_RATIONALE_MAX_WORDS (cut at a theme boundary, else a sentence
+    boundary) and the headline to PM_HEADLINE_MAX_WORDS. A headline that carries a figure the
+    inputs do not support, or that is missing, is rebuilt from the first theme's first sentence.
+    Vague adjectives in the headline are recorded, not rewritten. Records what it did."""
+    rationale = str(d.get("rationale") or "")
+    before = _word_count(rationale)
+    trimmed = False
+    if before > PM_RATIONALE_MAX_WORDS:
+        themes = [t for t in _THEME_SPLIT.split(rationale) if t.strip()]
+        kept: list[str] = []
+        used = 0
+        for t in themes:
+            n = _word_count(t)
+            if used + n <= PM_RATIONALE_MAX_WORDS:
+                kept.append(t)
+                used += n
+            else:
+                if not kept:                                   # one theme over the cap: cut at a sentence
+                    acc: list[str] = []
+                    for sent in _SENTENCE_SPLIT.split(t):
+                        if used + _word_count(sent) > PM_RATIONALE_MAX_WORDS:
+                            break
+                        acc.append(sent)
+                        used += _word_count(sent)
+                    kept.append(" ".join(acc) if acc else _trim_to_words(t, PM_RATIONALE_MAX_WORDS))
+                break
+        rationale = "\n".join(kept).strip()
+        trimmed = True
+    d["rationale"] = rationale
+    d["rationale_length"] = {"words_before": before, "words_after": _word_count(rationale),
+                             "max_words": PM_RATIONALE_MAX_WORDS, "trimmed": trimmed}
+
+    headline = str(d.get("headline") or "").strip().strip("*").strip().strip('"').strip()
+    flags: list[str] = []
+    try:
+        from src.agents.pm.industry_pm import number_guard as _ng
+        if headline and not _ng(headline, inputs_text or "")["ok"]:
+            flags.append("headline carried a figure not in the inputs; rebuilt from theme 1")
+            headline = ""
+    except Exception:  # noqa: BLE001
+        pass
+    if not headline:
+        first = next((t for t in _THEME_SPLIT.split(rationale) if t.strip()), "")
+        first = re.sub(r"^\s*\d+[.)]\s*", "", first)
+        headline = _SENTENCE_SPLIT.split(first)[0] if first else ""
+        if headline:
+            flags.append("headline derived from theme 1")
+    if _word_count(headline) > PM_HEADLINE_MAX_WORDS:
+        headline = _trim_to_words(headline, PM_HEADLINE_MAX_WORDS)
+        flags.append(f"headline trimmed to {PM_HEADLINE_MAX_WORDS} words")
+    vague = sorted({m.group(0).lower() for m in _VAGUE_ADJECTIVES.finditer(headline)})
+    if vague:
+        flags.append("vague adjective(s) in headline: " + ", ".join(vague))
+    if headline and not re.search(r"\d", headline):
+        flags.append("headline carries no figure")
+    d["headline"] = headline
+    d["headline_flags"] = flags
+    return d
 
 # Profile addendum for banks. A bank thesis is written off different
 # primitives than an industrial or a software name: the P&L line that
@@ -1558,6 +1651,7 @@ def run_advanced_portfolio_manager(state) -> dict:
                 '  "stop_loss": {stop_loss},\n'
                 '  "price_target": {price_target},\n'
                 '  "time_horizon": "short"|"medium"|"long",\n'
+                '  "headline": "<one line, at most 18 words, with a figure>",\n'
                 '  "rationale": "1. ...\\n2. ...\\n3. ..."\n'
                 "}}"
             )),
@@ -1601,6 +1695,7 @@ def run_advanced_portfolio_manager(state) -> dict:
                 price_target=price_target,
                 time_horizon="medium",
                 rationale="Default decision due to LLM failure.",
+                headline="",
             ),
         )
 
@@ -1633,6 +1728,11 @@ def run_advanced_portfolio_manager(state) -> dict:
             d["rationale_fidelity"]["skeleton"] = _sk_check(d.get("rationale") or "", _family)
         except Exception:                                  # noqa: BLE001
             pass
+        # Owner, 2026-10-03: 300 words, and a quantified one-line headline of at most 18 words.
+        try:
+            d = _enforce_pm_length(d, _inputs_text)
+        except Exception:                                  # noqa: BLE001
+            d.setdefault("headline", "")
         # Owner, 2026-09-27: when the momentum signals run against the rating, say so in
         # one computed sentence; the reader sees which call the page is asking them to act on.
         try:

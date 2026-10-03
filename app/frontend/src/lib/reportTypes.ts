@@ -812,6 +812,8 @@ export interface PortfolioDecision {
   price_target?: number;
   time_horizon?: string;
   rationale?: string;
+  /** One bold line, at most 18 words, quantifying the catalyst (owner, 2026-10-03). */
+  headline?: string;
   decision_inputs?: DecisionInputs;
   research_rating?: string | null;
   rating_label?: string | null;

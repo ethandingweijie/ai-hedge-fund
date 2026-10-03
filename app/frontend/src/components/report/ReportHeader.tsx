@@ -143,10 +143,14 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           track the element's font-size, so this stays optimal even when the
           desktop root font scales up on large screens — without it the thesis
           stretched the full card width and lines got hard to track. */}
+      {/* Owner, 2026-10-03: the one-line headline, bold, above the themes. */}
+      {decision?.headline && (
+        <p className="mt-4 pt-4 max-w-[72ch] text-xl font-bold leading-snug text-foreground">{decision.headline}</p>
+      )}
       {decision?.rationale && (
         <RationaleBlock
           text={decision.rationale}
-          className="mt-4 pt-4 max-w-[72ch]"
+          className={decision?.headline ? 'mt-3 max-w-[72ch]' : 'mt-4 pt-4 max-w-[72ch]'}
           itemClassName="text-lg text-muted-foreground leading-relaxed"
         />
       )}
