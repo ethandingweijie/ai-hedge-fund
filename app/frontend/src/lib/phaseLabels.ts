@@ -78,6 +78,29 @@ export const PHASE_ORDER: string[] = [
   'advanced_portfolio_manager',
 ];
 
+/**
+ * Phases that run at the same time (owner, 2026-10-03: the header said "Deep Research" while the
+ * router was fetching five years of financials). The completion-by-order rule in lib/runProgress
+ * may only infer that a phase is finished from a settled phase in a LATER group; inside a group the
+ * phases overlap, so a settled sibling says nothing about the others. Groups follow src/pipeline.py:
+ * the front block runs on one executor, research / specialist / data routing hand off to each
+ * other, the DCF and segment extraction overlap, the Phase-7 analytics fan out, then risk, then
+ * the decision.
+ */
+export const PHASE_GROUPS: string[][] = [
+  ['archive_cache', 'macro_regime_classifier', 'strategic_router', 'intelligence_agents', 'edgar_hkex_resolver'],
+  ['deep_research', 'industry_specialist', 'data_router'],
+  ['dcf_engine', 'sotp_extractor'],
+  ['scenario_agent', 'sector_card', 'power_law_agent', 'value_trap_agent', 'phase7_complete'],
+  ['advanced_risk_manager'],
+  ['advanced_portfolio_manager', 'post_trade_review'],
+];
+
+export function phaseGroup(phase: string): number {
+  const i = PHASE_GROUPS.findIndex((g) => g.includes(canonicalPhase(phase)));
+  return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+}
+
 /** `deep_research_agent` and `deep_research` are the same step to a reader. */
 const PHASE_ALIASES: Record<string, string> = {
   deep_research_agent: 'deep_research',

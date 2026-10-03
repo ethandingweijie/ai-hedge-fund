@@ -63,12 +63,16 @@ export function useProgressDerived(
     const activePhase = (activeKey && record.get(activeKey)) || events[events.length - 1];
     const phaseKey = activeKey ?? activePhase.phase;
 
-    const phaseLabel = PHASE_SHORT[phaseKey] ?? phaseKey.replace(/_/g, ' ');
+    const shortName = PHASE_SHORT[phaseKey] ?? phaseKey.replace(/_/g, ' ');
+    // Owner, 2026-10-03: several phases run at once in the front block; the label names the one
+    // that reported most recently and says how many others are still in flight, and the detail is
+    // always THAT phase's own status, so the label and the detail can never describe different work.
+    const { donePhases } = derivePhaseState(record);
+    const outstanding = [...record.keys()].filter((k) => !donePhases.has(k)).length;
+    const phaseLabel = outstanding > 1 ? `${shortName} · ${outstanding - 1} more in parallel` : shortName;
 
-    // Detail text: prefer summary (longer, richer), then status. Skip if
-    // it matches phase label (avoids redundant echo).
     const raw = (activePhase.summary || activePhase.status || '').trim();
-    const thinkingDetail = raw && raw.toLowerCase() !== phaseLabel.toLowerCase()
+    const thinkingDetail = raw && raw.toLowerCase() !== shortName.toLowerCase()
       ? raw : undefined;
 
     return { phaseLabel, thinkingDetail };

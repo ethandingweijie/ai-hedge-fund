@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 
 SCENARIOS = ("bear", "base", "bull")
 SCENARIO_FIELDS = ("revenue_growth_fy1", "revenue_growth_fy2", "ebitda_margin_fy1", "ebitda_margin_fy2", "eps_fy1", "eps_fy2")
-SHARED_FIELDS = ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic", "wacc", "tgr")
+SHARED_FIELDS = ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic", "wacc", "tgr",
+                 "gross_margin", "sbc_pct", "interest_rate", "payout_ratio", "buyback_annual")
+STATEMENT_FIELDS = ("gross_margin", "sbc_pct", "interest_rate", "payout_ratio", "buyback_annual")
 MEDIUM_TERM_METRICS = ("eps", "revenue", "revenue_growth", "ebitda_margin", "operating_margin", "ebit_margin")
 _BOUNDS = {
     "revenue_growth_fy1": (-0.9, 3.0), "revenue_growth_fy2": (-0.9, 3.0),
@@ -41,6 +43,7 @@ _BOUNDS = {
     "eps_fy1": (-1e6, 1e6), "eps_fy2": (-1e6, 1e6),
     "fade_years": (1, 8), "tax_rate": (0.0, 0.6), "capex_alpha": (0.0, 3.0), "nwc_intensity": (-0.5, 1.0), "terminal_roic": (0.02, 1.0),
     "wacc": (0.02, 0.30), "tgr": (-0.02, 0.06),
+    "gross_margin": (0.0, 0.98), "sbc_pct": (0.0, 0.25), "interest_rate": (0.0, 0.20), "payout_ratio": (0.0, 1.5), "buyback_annual": (0.0, 1e12),
 }
 
 
@@ -114,6 +117,27 @@ def changed_fields(ov: dict) -> list[str]:
 
 
 # ── the recompute ─────────────────────────────────────────────────────────────
+
+def _statements_for(fc: dict, ctx: dict, shared: dict, dr: dict) -> Optional[dict]:
+    """The three statements on the user's forecast and assumption overrides (base scenario)."""
+    try:
+        from src.agents.analysis import three_statement as ts
+        if ctx.get("statements_family_ok") is False:
+            return {"skipped": f"the {dr.get('profile')} profile is a balance-sheet business; the statement model does not apply"}
+        opening = ctx.get("opening_balance_sheet")
+        if not opening:
+            return {"skipped": "no audited balance sheet on this run"}
+        a = deepcopy(ctx.get("statement_assumptions") or {})
+        for k in STATEMENT_FIELDS:
+            if shared.get(k) is not None:
+                a[k] = {"value": shared[k], "source": "user override", "needed_for": (a.get(k) or {}).get("needed_for")}
+        out = ts.build(fc, opening, a)
+        if out:
+            out["coverage"] = ts.coverage(fc, opening, a)
+        return out
+    except Exception as exc:  # noqa: BLE001
+        return {"skipped": f"the statements did not build: {type(exc).__name__}: {str(exc)[:120]}"}
+
 
 def _dcf_mod():
     from src.agents.analysis import dcf_agent
@@ -203,6 +227,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
             minority_interest=float(leg.get("minority_interest") or 0.0), preferred_equity=float(leg.get("preferred_equity") or 0.0))
         iv_dcf = _num(iv_dcf)
         rec["forecast"] = gfm.summary(fc)
+        if sc == "base":
+            rec["three_statements"] = _statements_for(fc, ctx, shared, dr)
         rec["dcf"] = {"value": iv_dcf, "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv, "projection_rows": rows,
                       "growth_schedule": fc["growth_schedule"], "margin_schedule": fc["fcf_margin_schedule"], "wacc": float(wacc), "tgr": float(tgr)}
         # Owner, 2026-10-03 ("especially the management guidance to estimates"): the forward multiples
@@ -363,6 +389,8 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
             flags.insert(0, flag)
         if sc == "base":
             dr["guidance_forecast"] = {**fc, "override": meta} if fc else dr.get("guidance_forecast")
+            if rec.get("three_statements"):
+                dr["three_statements"] = {**rec["three_statements"], "override": meta}
             dr["projection_rows"] = d.get("projection_rows") or dr.get("projection_rows")
             if d.get("pv_fcf_per_share") is not None:
                 dr["pv_fcf_base"] = d["pv_fcf_per_share"]

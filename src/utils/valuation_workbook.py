@@ -284,6 +284,7 @@ class _Book:
             self.banks_tab()
         if (self.dr or {}).get("guidance_estimates"):
             self.guidance_tab()                 # owner, 2026-10-03: guidance → estimates, as the DCF used them
+        self.model_tab()                        # owner, 2026-10-03: IS / BS / CF FY+1E..FY+5E on the estimates
         self.family_tab()
         self.blend_tab()
         self.target_tab()
@@ -1396,6 +1397,204 @@ class _Book:
             r += 1
             sh.label(r, 1, "Sources: " + " · ".join(str(x) for x in ge.get("citations")))
         sh.widths({"A": 46, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14, "G": 12, "H": 14, "I": 12, "J": 10})
+
+    # ── Three-statement forecast (owner, 2026-10-03) ─────────────────────────
+    def model_tab(self) -> None:
+        """IS, CF and BS for FY+1E..FY+5E, live formulas over an assumptions block and the opening
+        (latest audited) column. Inputs in blue are the agent's estimates and the history-derived
+        assumptions; change one and the three statements move together and still balance."""
+        th = (self.dr or {}).get("three_statements") or {}
+        if not th or th.get("skipped") or not th.get("fy_labels"):
+            if th.get("skipped"):
+                sh = self.sheet("Model", "Three-statement forecast: not built for this run")
+                sh.title("Three-statement forecast", th["skipped"])
+                _rc = th.get("reconciliation") or {}
+                if _rc.get("failures"):
+                    rr = 4
+                    sh.header(rr, ["Year", "Assertion", "Left-hand side", "Right-hand side", "Difference"]); rr += 1
+                    for f in _rc["failures"]:
+                        sh.put(rr, 1, f["year"]); sh.put(rr, 2, f"#{f['id']} {f['name']}"); sh.put(rr, 3, _mil(f["lhs"]), MIL); sh.put(rr, 4, _mil(f["rhs"]), MIL); sh.put(rr, 5, _mil(f["diff"]), MIL); rr += 1
+                    sh.widths({"A": 10, "B": 80, "C": 16, "D": 16, "E": 14})
+            return
+        sh = self.sheet("Model", "Three-statement forecast FY+1E..FY+5E on the valuation agent's estimates (live formulas)")
+        op, a, IS, CF, BS = th["opening"], th["assumptions"], th["income"], th["cashflow"], th["balance"]
+        labels = th["fy_labels"]
+        n = len(labels)
+        ovr = th.get("override") or (self.dr or {}).get("estimate_override") or {}
+        sh.title("Three-statement forecast", f"In statement currency, millions. Opening column = {op.get('fy_label')} as filed; forecast columns are formulas over the "
+                                             "assumptions block (inputs in blue: the agent's estimates and history-derived assumptions). The balance check is zero by construction."
+                                             + (f" USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {', '.join(ovr.get('fields') or [])}." if ovr else ""))
+        C0 = 3                                                  # opening column
+        cols = [get_column_letter(C0 + 1 + i) for i in range(n)]
+        OC = get_column_letter(C0)
+        r = 4
+        sh.label(r, 1, "Fiscal year", bold=True); sh.put(r, C0, f"{op.get('fy_label')}A").font = Font(bold=True)
+        for i, lab in enumerate(labels):
+            sh.put(r, C0 + 1 + i, lab).font = Font(bold=True)
+        r += 2
+        A: dict = {}
+
+        def arow(key, label, values, fmt, scale=1.0):
+            nonlocal r
+            sh.label(r, 1, label); sh.label(r, 2, "Input")
+            for i in range(n):
+                v = values[i] if isinstance(values, list) else values
+                sh.put(r, C0 + 1 + i, (None if v is None else float(v) * scale), fmt).font = Font(color=BLUE)
+            A[key] = r
+            r += 1
+
+        av = lambda k: (a.get(k) or {}).get("value")                                    # noqa: E731
+        sh.section(r, "Assumptions (per year)", C0 + n); r += 1
+        arow("g", "Revenue growth", IS["growth"], PCT)
+        arow("gm", "Gross margin (blank = no COGS line filed)", IS.get("gross_margin") or [None] * n, PCT)
+        arow("em", "EBIT margin", IS["ebit_margin"], PCT)
+        arow("da", "Depreciation & amortisation", [-x for x in IS["da"]], MIL, 1e-6)
+        arow("capex", "Capital expenditure", [-x for x in CF["capex"]], MIL, 1e-6)
+        arow("nwc", "Working capital absorbed (+ = cash out)", [-x for x in CF["change_nwc"]], MIL, 1e-6)
+        arow("sbc", "Stock-based compensation, % of revenue", av("sbc_pct"), PCT)
+        arow("tax", "Tax rate", IS["tax_rate"], PCT)
+        arow("ir", "Interest rate on opening debt", av("interest_rate"), PCT)
+        arow("iir", "Interest income rate on opening cash", av("interest_income_rate"), PCT)
+        arow("po", "Dividend payout ratio", av("payout_ratio"), PCT)
+        arow("bb", "Share repurchases, target", av("buyback_annual"), MIL, 1e-6)
+        arow("px", "Buyback price (spot, held)", av("buyback_price"), NUM)
+        arow("mincash", "Minimum cash (revolver trigger)", av("min_cash"), MIL, 1e-6)
+        arow("ard", "Receivable days (blank = held)", av("receivable_days"), "0.0")
+        arow("invd", "Inventory days (blank = held)", av("inventory_days"), "0.0")
+        arow("apd", "Payable days (blank = held)", av("payable_days"), "0.0")
+        arow("mi", "Minority share of net income", av("minority_share_of_ni"), PCT)
+        arow("acq", "Acquisitions", av("acquisitions"), MIL, 1e-6)
+        r += 1
+        R: dict = {}
+
+        def frow(key, label, f, fmt=MIL, bold=False, opening=None, typ="Formula"):
+            """f(L, P) -> formula for column L with previous column P; opening = static value for the opening column."""
+            nonlocal r
+            R[key] = r                                       # registered first: roll-forward rows reference their own prior column
+            sh.label(r, 1, label, bold=bold); sh.label(r, 2, typ)
+            if opening is not None:
+                sh.put(r, C0, float(opening), fmt, bold=bold).font = Font(color=BLUE, bold=bold)
+            for i, L in enumerate(cols):
+                P = OC if i == 0 else cols[i - 1]
+                sh.put(r, C0 + 1 + i, f(L, P), fmt, bold=bold)
+            r += 1
+            return r - 1
+
+        M = 1e-6
+        # 1. Income statement: revenue and EBIT from the assumptions; interest from the debt schedule below
+        sh.section(r, "1. Income statement (revenue & EBIT)", C0 + n); r += 1
+        frow("rev", "Revenue", lambda L, P: f"={P}{R['rev']}*(1+{L}{A['g']})", bold=True, opening=(op.get("revenue") or 0) * M)
+        frow("cogs", "Cost of goods sold", lambda L, P: f'=IF({L}{A["gm"]}="","",-{L}{R["rev"]}*(1-{L}{A["gm"]}))', opening=(-(abs(op.get("cost_of_revenue") or 0)) * M) if op.get("cost_of_revenue") else None)
+        frow("gp", "Gross profit", lambda L, P: f'=IF({L}{R["cogs"]}="","",{L}{R["rev"]}+{L}{R["cogs"]})', bold=True)
+        frow("ebit", "EBIT", lambda L, P: f"={L}{R['rev']}*{L}{A['em']}", bold=True, opening=(op.get("ebit") or 0) * M)
+        frow("opex", "Operating expenses excl. D&A (derived)", lambda L, P: f'=IF({L}{R["gp"]}="",-({L}{R["rev"]}-{L}{R["ebit"]}-{L}{A["da"]}),-({L}{R["gp"]}-{L}{R["ebit"]}-{L}{A["da"]}))')
+        frow("ebitda", "EBITDA", lambda L, P: f"={L}{R['ebit']}+{L}{A['da']}", bold=True)
+        frow("intexp", "Interest expense (debt schedule)", lambda L, P: f"=-{L}{{d_int}}", typ="Link")
+        frow("intinc", "Interest income (opening cash × rate)", lambda L, P: f"=({P}{{cash}}+{P}{{sti}})*{L}{A['iir']}")
+        frow("pretax", "Pre-tax income", lambda L, P: f"={L}{R['ebit']}+{L}{R['intexp']}+{L}{R['intinc']}", bold=True, opening=(op.get("pretax") or 0) * M)
+        frow("tax", "Income tax", lambda L, P: f"=-MAX({L}{R['pretax']},0)*{L}{A['tax']}")
+        frow("mino", "Minority interest", lambda L, P: f"=-({L}{R['pretax']}+{L}{R['tax']})*{L}{A['mi']}")
+        frow("ni", "Net income to common", lambda L, P: f"={L}{R['pretax']}+{L}{R['tax']}+{L}{R['mino']}", bold=True, opening=(op.get("net_income") or 0) * M)
+        frow("shares", "Diluted shares (millions)", lambda L, P: f'=IF({L}{A["px"]}>0,{P}{R["shares"]}+{L}{{bbk}}/{L}{A["px"]},{P}{R["shares"]})', fmt=MIL, opening=(op.get("shares") or 0) * M)
+        frow("eps", "Diluted EPS", lambda L, P: f"=IFERROR({L}{R['ni']}/{L}{R['shares']},0)", fmt=NUM, bold=True)
+        frow("dps", "Dividend per share", lambda L, P: f"=IFERROR(-{L}{{div}}/{L}{R['shares']},0)", fmt=NUM)
+        r += 1
+        # 2. Supporting schedules
+        sh.section(r, "2. Supporting schedules", C0 + n); r += 1
+        sh.label(r, 1, "Working capital (days of revenue / COGS; blank days hold the balance)", bold=True); r += 1
+        frow("ar", "Accounts receivable", lambda L, P: f'=IF({L}{A["ard"]}="",{P}{R["ar"]},{L}{R["rev"]}*{L}{A["ard"]}/365)', opening=(op.get("receivables") or 0) * M)
+        frow("inv", "Inventory", lambda L, P: f'=IF({L}{A["invd"]}="",{P}{R["inv"]},IF({L}{R["cogs"]}="",{L}{R["rev"]},-{L}{R["cogs"]})*{L}{A["invd"]}/365)', opening=(op.get("inventory") or 0) * M)
+        frow("ap", "Accounts payable", lambda L, P: f'=IF({L}{A["apd"]}="",{P}{R["ap"]},IF({L}{R["cogs"]}="",{L}{R["rev"]},-{L}{R["cogs"]})*{L}{A["apd"]}/365)', opening=(op.get("payables") or 0) * M)
+        frow("ap_memo", "Named working-capital change (ΔAR + Δinventory − Δpayables)", lambda L, P: f"=({L}{R['ar']}-{P}{R['ar']})+({L}{R['inv']}-{P}{R['inv']})-({L}{R['ap']}-{P}{R['ap']})")
+        frow("oca", "Other working capital (carries the forecast's absorption beyond the named lines)", lambda L, P: f"={P}{R['oca']}+{L}{A['nwc']}-{L}{R['ap_memo']}", opening=(op.get("other_current_assets") or 0) * M)
+        frow("wc_chg", "Working capital absorbed, total (to the cash flow)", lambda L, P: f"={L}{A['nwc']}", typ="Link")
+        sh.label(r, 1, "Capex & D&A (PP&E roll-forward)", bold=True); r += 1
+        frow("ppe_o", "PP&E, opening", lambda L, P: f"={P}{{ppe}}", typ="Link")
+        frow("ppe_cx", "+ Capital expenditure", lambda L, P: f"={L}{A['capex']}", typ="Link")
+        frow("ppe_da", "− Depreciation & amortisation", lambda L, P: f"=-{L}{A['da']}", typ="Link")
+        frow("ppe", "PP&E, closing", lambda L, P: f"={L}{R['ppe_o']}+{L}{R['ppe_cx']}+{L}{R['ppe_da']}", bold=True, opening=(op.get("ppe") or 0) * M)
+        sh.label(r, 1, "Debt schedule (gross debt held; a revolver draw only to hold the minimum cash)", bold=True); r += 1
+        frow("d_open", "Debt, opening (short + long term)", lambda L, P: f"={P}{{std}}+{P}{{ltd}}")
+        frow("d_draw", "+ Revolver draw (from the cash flow)", lambda L, P: f"={L}{{draw}}", typ="Link")
+        frow("d_close", "Debt, closing", lambda L, P: f"={L}{R['d_open']}+{L}{R['d_draw']}", bold=True)
+        frow("d_int", "Interest expense (opening debt × rate)", lambda L, P: f"={L}{R['d_open']}*{L}{A['ir']}")
+        r += 1
+        # 3. Cash flow statement
+        sh.section(r, "3. Cash flow statement (net change in cash & free cash flow)", C0 + n); r += 1
+        frow("cf_ni", "Net income", lambda L, P: f"={L}{R['ni']}", typ="Link")
+        frow("cf_da", "Depreciation & amortisation", lambda L, P: f"={L}{A['da']}", typ="Link")
+        frow("cf_sbc", "Stock-based compensation", lambda L, P: f"={L}{R['rev']}*{L}{A['sbc']}")
+        frow("cf_nwc", "Change in working capital", lambda L, P: f"=-{L}{R['wc_chg']}", typ="Link")
+        frow("cf_mi", "Minority interest (non-cash)", lambda L, P: f"=-{L}{R['mino']}")
+        frow("cfo", "Cash from operations", lambda L, P: f"=SUM({L}{R['cf_ni']}:{L}{R['cf_mi']})", bold=True)
+        frow("cf_capex", "Capital expenditure", lambda L, P: f"=-{L}{R['ppe_cx']}", typ="Link")
+        frow("cf_acq", "Acquisitions", lambda L, P: f"=-{L}{A['acq']}")
+        frow("cfi", "Cash from investing", lambda L, P: f"={L}{R['cf_capex']}+{L}{R['cf_acq']}", bold=True)
+        frow("div", "Dividends paid", lambda L, P: f"=-MAX({L}{R['ni']},0)*{L}{A['po']}")
+        frow("cashpre", "  Cash before buybacks and revolver", lambda L, P: f"={P}{{cash}}+{L}{R['cfo']}+{L}{R['cfi']}+{L}{R['div']}", typ="Memo")
+        frow("bbk", "Share repurchases", lambda L, P: f"=-MAX(0,MIN({L}{A['bb']},{L}{R['cashpre']}-{L}{A['mincash']}))")
+        frow("draw", "Revolver draw", lambda L, P: f"=MAX(0,{L}{A['mincash']}-({L}{R['cashpre']}+{L}{R['bbk']}))")
+        frow("cff", "Cash from financing", lambda L, P: f"={L}{R['div']}+{L}{R['bbk']}+{L}{R['draw']}", bold=True)
+        frow("dcash", "Net change in cash", lambda L, P: f"={L}{R['cfo']}+{L}{R['cfi']}+{L}{R['cff']}", bold=True)
+        frow("fcf", "Free cash flow (CFO − capex)", lambda L, P: f"={L}{R['cfo']}+{L}{R['cf_capex']}", bold=True)
+        r += 1
+        # 4. Balance sheet
+        sh.section(r, "4. Balance sheet (assets = liabilities + equity)", C0 + n); r += 1
+        frow("cash", "Cash & equivalents (opening + net change)", lambda L, P: f"={P}{R['cash']}+{L}{R['dcash']}", opening=(op.get("cash") or 0) * M)
+        frow("sti", "Short-term investments (held)", lambda L, P: f"={P}{R['sti']}", opening=(op.get("sti") or 0) * M)
+        frow("bs_ar", "Accounts receivable (schedule)", lambda L, P: f"={L}{R['ar']}", typ="Link", opening=(op.get("receivables") or 0) * M)
+        frow("bs_inv", "Inventory (schedule)", lambda L, P: f"={L}{R['inv']}", typ="Link", opening=(op.get("inventory") or 0) * M)
+        frow("bs_oca", "Other current assets (schedule)", lambda L, P: f"={L}{R['oca']}", typ="Link", opening=(op.get("other_current_assets") or 0) * M)
+        frow("tca", "Total current assets", lambda L, P: f"={L}{R['cash']}+{L}{R['sti']}+{L}{R['bs_ar']}+{L}{R['bs_inv']}+{L}{R['bs_oca']}", bold=True)
+        frow("bs_ppe", "Property, plant & equipment (schedule)", lambda L, P: f"={L}{R['ppe']}", typ="Link", opening=(op.get("ppe") or 0) * M)
+        frow("gi", "Goodwill & intangibles (held)", lambda L, P: f"={P}{R['gi']}", opening=(op.get("goodwill_intangibles") or 0) * M)
+        frow("onca", "Other non-current assets (held)", lambda L, P: f"={P}{R['onca']}", opening=(op.get("other_noncurrent_assets") or 0) * M)
+        frow("ta", "Total assets", lambda L, P: f"={L}{R['tca']}+{L}{R['bs_ppe']}+{L}{R['gi']}+{L}{R['onca']}", bold=True)
+        frow("bs_ap", "Accounts payable (schedule)", lambda L, P: f"={L}{R['ap']}", typ="Link", opening=(op.get("payables") or 0) * M)
+        frow("std", "Short-term debt incl. revolver (schedule)", lambda L, P: f"={P}{R['std']}+{L}{R['d_draw']}", typ="Link", opening=(op.get("short_term_debt") or 0) * M)
+        frow("ocl", "Other current liabilities (held)", lambda L, P: f"={P}{R['ocl']}", opening=(op.get("other_current_liabilities") or 0) * M)
+        frow("ltd", "Long-term debt (held)", lambda L, P: f"={P}{R['ltd']}", opening=(op.get("long_term_debt") or 0) * M)
+        frow("oncl", "Other non-current liabilities (held)", lambda L, P: f"={P}{R['oncl']}", opening=(op.get("other_noncurrent_liabilities") or 0) * M)
+        frow("tl", "Total liabilities", lambda L, P: f"={L}{R['bs_ap']}+{L}{R['std']}+{L}{R['ocl']}+{L}{R['ltd']}+{L}{R['oncl']}", bold=True)
+        _re0 = (op.get("retained_earnings") if op.get("retained_earnings") is not None else op.get("equity")) or 0
+        frow("re", "Retained earnings (prior + net income − common dividends)", lambda L, P: f"={P}{R['re']}+{L}{R['ni']}+{L}{R['div']}", opening=_re0 * M)
+        frow("oeq", "Other equity: APIC, treasury, reserves (prior − buybacks + SBC)", lambda L, P: f"={P}{R['oeq']}+{L}{R['bbk']}+{L}{R['cf_sbc']}", opening=((op.get("equity") or 0) - _re0) * M)
+        frow("eq", "Shareholders' equity", lambda L, P: f"={L}{R['re']}+{L}{R['oeq']}", bold=True, opening=(op.get("equity") or 0) * M)
+        frow("mi", "Minority interest", lambda L, P: f"={P}{R['mi']}-{L}{R['mino']}", opening=(op.get("minority_interest") or 0) * M)
+        frow("tle", "Total liabilities & equity", lambda L, P: f"={L}{R['tl']}+{L}{R['eq']}+{L}{R['mi']}", bold=True)
+        frow("chk", "Balance check (assets − liabilities & equity)", lambda L, P: f"=ROUND({L}{R['ta']}-{L}{R['tle']},3)", typ="Check")
+        frow("nd", "Net debt (debt − cash − short-term investments)", lambda L, P: f"={L}{R['std']}+{L}{R['ltd']}-{L}{R['cash']}-{L}{R['sti']}")
+        frow("lev", "Net debt / EBITDA", lambda L, P: f"=IFERROR({L}{R['nd']}/{L}{R['ebitda']},0)", fmt="0.0x")
+        frow("cover", "Interest cover (EBIT / interest)", lambda L, P: f"=IFERROR(-{L}{R['ebit']}/{L}{R['intexp']},0)", fmt="0.0x")
+        r += 1
+        # 5. The reconciliation suite (owner's execution mandate): live on every forecast column.
+        sh.section(r, "5. Reconciliation suite (every forecast column must read OK)", C0 + n); r += 1
+        OK = lambda expr: f'=IF(ABS({expr})<0.01,"OK","FAIL")'                                 # noqa: E731
+        frow("c1", "1. ABS(total assets − total liabilities & equity) < 0.01", lambda L, P: OK(f"{L}{R['ta']}-{L}{R['tle']}"), fmt=None, typ="Check")
+        frow("c2", "2. Cash ending = cash beginning + net change in cash (CFS)", lambda L, P: OK(f"{L}{R['cash']}-({P}{R['cash']}+{L}{R['dcash']})"), fmt=None, typ="Check")
+        frow("c3", "3. Retained earnings ending = prior + net income − common dividends", lambda L, P: OK(f"{L}{R['re']}-({P}{R['re']}+{L}{R['ni']}+{L}{R['div']})"), fmt=None, typ="Check")
+        frow("c4", "4. Net PP&E = prior + capex (CFS) − depreciation (IS)", lambda L, P: OK(f"{L}{R['bs_ppe']}-({P}{R['bs_ppe']}-{L}{R['cf_capex']}+{L}{R['ppe_da']})"), fmt=None, typ="Check")
+        frow("c5", "5. NWC change (CFS) = −(Δ current assets ex cash − Δ current liabilities ex short debt)",
+             lambda L, P: OK(f"{L}{R['cf_nwc']}+(({L}{R['sti']}+{L}{R['bs_ar']}+{L}{R['bs_inv']}+{L}{R['bs_oca']})-({P}{R['sti']}+{P}{R['bs_ar']}+{P}{R['bs_inv']}+{P}{R['bs_oca']})"
+                             f"-(({L}{R['bs_ap']}+{L}{R['ocl']})-({P}{R['bs_ap']}+{P}{R['ocl']})))"), fmt=None, typ="Check")
+        frow("call", "Suite result", lambda L, P: f'=IF(COUNTIF({L}{R["c1"]}:{L}{R["c5"]},"FAIL")=0,"ALL OK","FAIL — do not use the valuation outputs until traced")', fmt=None, bold=True, typ="Check")
+        _rc = th.get("reconciliation") or {}
+        sh.label(r, 1, "Engine suite (Python build): " + ("ALL OK on every forecast column" if _rc.get("ok") else "FAILED — " + "; ".join(f"{f['year']} #{f['id']}" for f in _rc.get("failures") or [])), bold=True); r += 1
+        # resolve the forward references written as {name} placeholders
+        for row in sh.ws.iter_rows(min_row=1, max_row=r, min_col=C0 + 1, max_col=C0 + n):
+            for cell in row:
+                if isinstance(cell.value, str) and "{" in cell.value and cell.value.startswith("="):
+                    cell.value = cell.value.format(**R)
+        r += 1
+        sh.section(r, "Where each assumption comes from", C0 + n); r += 1
+        for row in th.get("coverage") or []:
+            sh.label(r, 1, f"{row.get('assumption')}: {row.get('status')}" + (f" — {row.get('source')}" if row.get("source") else "")); r += 1
+        for note in th.get("notes") or []:
+            sh.label(r, 1, note); r += 1
+        sh.label(r, 1, "Engine check (Python build): balance gaps " + ", ".join(f"{c['year']} {c['balance_gap']:,.0f}" for c in th.get("checks") or [])
+                       + "; revolver draws in " + (", ".join(c["year"] for c in (th.get("checks") or []) if c.get("revolver_draw")) or "none") + ".")
+        sh.widths({"A": 58, "B": 9, **{get_column_letter(c): 14 for c in range(C0, C0 + n + 1)}})
+        sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
 
     # ── Banks ───────────────────────────────────────────────────────────────
     def family_tab(self) -> None:

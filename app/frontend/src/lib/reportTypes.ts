@@ -389,12 +389,16 @@ export interface ForecastInputs {
 export interface ForecastContext {
   history: Record<string, number | string | null>;
   inputs: ForecastInputs;
+  /** The three-statement model's inputs (owner, 2026-10-03). */
+  opening_balance_sheet?: Record<string, number | string | null> | null;
+  statement_assumptions?: Record<string, { value?: number | string | null; source?: string; needed_for?: string }> | null;
+  statements_family_ok?: boolean;
   fiscal_year_1?: string | null;
   fiscal_year_2?: string | null;
 }
 /** The user's estimate overrides, in the shape estimate_override_service accepts. */
 export interface EstimateOverrides {
-  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr', number>>;
+  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual', number>>;
   scenarios?: Partial<Record<'bear' | 'base' | 'bull', Partial<GuidanceScenarioRow>>>;
   medium_term_target?: { metric: string; target_year: string; low?: number | null; mid?: number | null; high?: number | null; unit?: string | null } | Record<string, never> | null;
   rationale?: string;

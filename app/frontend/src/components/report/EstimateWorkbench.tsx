@@ -23,14 +23,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { askEstimateAgent, clearEstimateOverride, previewEstimateOverride, regeneratePmText, saveEstimateOverride } from '@/lib/api';
 import type {
-  DcfRange, EstimateOverrides, EstimateRecompute, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
+  DcfRange, EstimateOverrides, EstimateRecompute, ForecastContext, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
 } from '@/lib/reportTypes';
 
 const LABEL_CLS = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 type Scenario = (typeof SCENARIOS)[number];
 type ScenarioField = keyof GuidanceScenarioRow;
-type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr';
+type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual';
 
 const SCENARIO_FIELDS: { key: ScenarioField; label: (fy1: string, fy2: string) => string; kind: 'pct' | 'num' }[] = [
   { key: 'revenue_growth_fy1', label: (a) => `Revenue growth ${a}`, kind: 'pct' },
@@ -48,6 +48,12 @@ const SHARED_FIELDS: { key: SharedField; label: string; kind: 'pct' | 'num' | 'i
   { key: 'terminal_roic', label: 'Terminal ROIC', kind: 'pct', hint: 'reinvestment = terminal growth / ROIC; the engine floors it at WACC + 2pp' },
   { key: 'wacc', label: 'WACC', kind: 'pct', hint: 'the discount rate the leg used' },
   { key: 'tgr', label: 'Terminal growth', kind: 'pct', hint: 'the perpetuity rate' },
+  // Owner, 2026-10-03: the three-statement model's assumptions beyond the forecast's operating lines.
+  { key: 'gross_margin', label: 'Gross margin (3-statement model)', kind: 'pct', hint: 'COGS line of the income statement' },
+  { key: 'sbc_pct', label: 'Stock-based compensation, % of revenue', kind: 'pct', hint: 'add-back in operating cash flow' },
+  { key: 'interest_rate', label: 'Interest rate on debt', kind: 'pct', hint: 'interest expense on opening debt' },
+  { key: 'payout_ratio', label: 'Dividend payout ratio', kind: 'pct', hint: 'dividends in financing cash flow' },
+  { key: 'buyback_annual', label: 'Share repurchases per year (currency)', kind: 'num', hint: 'capped at cash above the minimum' },
 ];
 
 type Form = {
@@ -78,7 +84,7 @@ function pctS(v: number | null | undefined): string {
   return `${v >= 0 ? '+' : '−'}${(Math.abs(v) * 100).toFixed(1)}%`;
 }
 
-function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceForecast | null | undefined): Form {
+function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceForecast | null | undefined, ctx?: ForecastContext | null): Form {
   const est = block?.estimates ?? {};
   const mt = (block as { medium_term_target?: { metric?: string; target_year?: string; low?: number | null; mid?: number | null; high?: number | null } } | null | undefined)?.medium_term_target
     ?? (fc?.target ? { metric: fc.target.metric, target_year: fc.target.target_year, mid: fc.target.value } : undefined);
@@ -90,12 +96,16 @@ function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceFo
   }
   const h = (fc?.history ?? {}) as Record<string, number | null | undefined>;
   const inp = fc?.inputs ?? {};
+  const saRaw = (ctx?.statement_assumptions ?? {}) as Record<string, { value?: number | null } | undefined>;
+  const sa: Record<string, number | null | undefined> = Object.fromEntries(Object.entries(saRaw).map(([k, v]) => [k, v?.value]));
   return {
     scenarios,
     shared: {
       fade_years: fmtIn(fc?.fade_years, 'int'), tax_rate: fmtIn(h.tax_rate as number, 'pct'), capex_alpha: fmtIn(h.capex_alpha as number, 'num'),
       nwc_intensity: fmtIn(h.nwc_intensity as number, 'num'), terminal_roic: fmtIn(fc?.terminal?.roic_terminal, 'pct'),
       wacc: fmtIn(inp.wacc, 'pct'), tgr: fmtIn(inp.tgr, 'pct'),
+      gross_margin: fmtIn(sa.gross_margin, 'pct'), sbc_pct: fmtIn(sa.sbc_pct, 'pct'), interest_rate: fmtIn(sa.interest_rate, 'pct'),
+      payout_ratio: fmtIn(sa.payout_ratio, 'pct'), buyback_annual: fmtIn(sa.buyback_annual, 'num'),
     },
     mt: { metric: mt?.metric ?? 'eps', target_year: mt?.target_year ?? '', low: fmtIn(mt?.low, 'num'), mid: fmtIn(mt?.mid, 'num'), high: fmtIn(mt?.high, 'num'), enabled: !!mt },
   };
@@ -155,7 +165,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
   runId: string; ticker: string; block: GuidanceEstimates | null | undefined; forecast: GuidanceForecast | null | undefined;
   dcfRange: DcfRange | undefined; onRunUpdated?: (r: RunResult) => void;
 }) {
-  const base = useMemo(() => initialForm(block, forecast), [block, forecast]);
+  const base = useMemo(() => initialForm(block, forecast, dcfRange?.forecast_context), [block, forecast, dcfRange]);
   const [form, setForm] = useState<Form>(base);
   const [scenario, setScenario] = useState<Scenario>('base');
   const [note, setNote] = useState('');

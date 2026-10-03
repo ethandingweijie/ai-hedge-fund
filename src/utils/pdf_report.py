@@ -2155,7 +2155,112 @@ def _guidance_estimates_block_pdf(dcf_t: dict, styles, width: float) -> list:
     if ge.get("track_record"):
         out.append(Paragraph(f"Track record: {_strip(str(ge.get('track_record')))}", st_l))
     out.extend(_guidance_forecast_block_pdf(dcf_t, styles, width))
+    out.extend(_three_statement_block_pdf(dcf_t, styles, width))
     out.append(Spacer(1, 6))
+    return out
+
+
+def _three_statement_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """IS, CF and BS for FY+1E..FY+5E on the agent's estimates (owner, 2026-10-03); or why there are none."""
+    th = dcf_t.get("three_statements") or {}
+    st_l = ParagraphStyle("_tsl", fontName="Helvetica", fontSize=6.3, leading=7.6)
+    st_lb = ParagraphStyle("_tslb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_tsv", parent=st_l, alignment=2)
+    if not th:
+        return []
+    if th.get("skipped") or not th.get("fy_labels"):
+        out = [Spacer(1, 3), Paragraph("Three-statement forecast: " + _strip(str(th.get("skipped") or "not built")), st_lb if str(th.get("skipped", "")).startswith("RECONCILIATION") else st_l)]
+        for f in ((th.get("reconciliation") or {}).get("failures") or [])[:10]:
+            out.append(Paragraph(f"{_strip(str(f.get('year')))} #{f.get('id')} {_strip(str(f.get('name')))}: LHS {float(f.get('lhs') or 0) / 1e6:,.1f}m vs RHS {float(f.get('rhs') or 0) / 1e6:,.1f}m", st_l))
+        return out
+    labels = th["fy_labels"]
+    op = th.get("opening") or {}
+    ccy = dcf_t.get("reported_currency") or ""
+    ovr = th.get("override") or dcf_t.get("estimate_override") or {}
+    out = [Spacer(1, 4), Paragraph(f"Three-statement forecast ({ccy or 'statement currency'} millions) — {op.get('fy_label')}A as filed, {labels[0]}–{labels[-1]} on the valuation agent's estimates"
+                                   + (f"; USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {_strip(', '.join(ovr.get('fields') or []))}" if ovr else ""), st_lb),
+           Paragraph("Flow: " + " → ".join(_strip(str(x)) for x in (th.get("flow") or [])), st_l)]
+
+    def _m(v):
+        try:
+            return f"{float(v) / 1e6:,.0f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _p(v):
+        try:
+            return f"{float(v):.1%}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _n(v):
+        try:
+            return f"{float(v):,.2f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def table(title, lines, opening_keys):
+        body = [[Paragraph(_wh(title), st_lb)] + [Paragraph(_wh(f"{op.get('fy_label')}A"), st_lb)] + [Paragraph(_wh(l), st_lb) for l in labels]]
+        for label, key, fmt in lines:
+            series = (th.get(opening_keys[0]) or {}).get(key) or []
+            if not series:
+                continue
+            o = opening_keys[1].get(key)
+            f = {"m": _m, "p": _p, "n": _n}[fmt]
+            body.append([Paragraph(_wh(label), st_l), Paragraph(f(o) if o is not None else "", st_v)] + [Paragraph(f(x), st_v) for x in series])
+        cw = [width * 0.30, width * 0.11] + [width * 0.59 / len(labels)] * len(labels)
+        t = Table(body, colWidths=cw)
+        t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8)]))
+        return t
+
+    o_is = {"revenue": op.get("revenue"), "ebit": op.get("ebit"), "net_income": op.get("net_income"), "shares": op.get("shares"),
+            "cogs": (-abs(op["cost_of_revenue"]) if op.get("cost_of_revenue") else None), "gross_profit": op.get("gross_profit"), "pretax": op.get("pretax")}
+    o_bs = {k: op.get(k) for k in ("cash", "sti", "receivables", "inventory", "other_current_assets", "ppe", "goodwill_intangibles", "other_noncurrent_assets", "total_assets",
+                                     "payables", "short_term_debt", "other_current_liabilities", "long_term_debt", "other_noncurrent_liabilities", "total_liabilities", "equity", "minority_interest")}
+    o_cf = {"da": op.get("da"), "capex": (-abs(op["capex"]) if op.get("capex") else None), "dividends": (-abs(op["dividends"]) if op.get("dividends") else None),
+            "buybacks": (-abs(op["buybacks"]) if op.get("buybacks") else None), "sbc": op.get("sbc"), "net_income": op.get("net_income")}
+    out.append(table("Income statement", [("Revenue", "revenue", "m"), ("  growth", "growth", "p"), ("Cost of goods sold", "cogs", "m"), ("Gross profit", "gross_profit", "m"),
+                                          ("Operating expenses excl. D&A", "opex_ex_da", "m"), ("EBITDA", "ebitda", "m"), ("D&A", "da", "m"), ("EBIT", "ebit", "m"), ("  EBIT margin", "ebit_margin", "p"),
+                                          ("Interest expense", "interest_expense", "m"), ("Interest income", "interest_income", "m"), ("Pre-tax income", "pretax", "m"), ("Tax", "tax", "m"),
+                                          ("Net income to common", "net_income", "m"), ("Diluted shares (m)", "shares", "m"), ("Diluted EPS", "eps", "n"), ("Dividend per share", "dividends_per_share", "n")],
+                     ("income", o_is)))
+    out.append(Spacer(1, 3))
+    o_sch = {"ppe_close": op.get("ppe"), "wc_receivables": op.get("receivables"), "wc_inventory": op.get("inventory"), "wc_payables": op.get("payables"),
+             "debt_close": ((op.get("short_term_debt") or 0.0) + (op.get("long_term_debt") or 0.0)) if op else None}
+    out.append(table("Supporting schedules", [("Receivables", "wc_receivables", "m"), ("Inventory", "wc_inventory", "m"), ("Payables", "wc_payables", "m"),
+                                              ("Working capital absorbed", "wc_change", "m"), ("PP&E, opening", "ppe_open", "m"), ("+ Capex", "ppe_capex", "m"), ("− D&A", "ppe_da", "m"),
+                                              ("PP&E, closing", "ppe_close", "m"), ("Debt, opening", "debt_open", "m"), ("+ Revolver draw", "debt_draw", "m"), ("Debt, closing", "debt_close", "m"),
+                                              ("Interest expense", "debt_interest", "m")], ("schedules", o_sch)))
+    out.append(Spacer(1, 3))
+    out.append(table("Cash flow statement", [("Net income", "net_income", "m"), ("D&A", "da", "m"), ("Stock-based compensation", "sbc", "m"), ("Change in working capital", "change_nwc", "m"),
+                                             ("Cash from operations", "cfo", "m"), ("Capital expenditure", "capex", "m"), ("Cash from investing", "cfi", "m"), ("Dividends", "dividends", "m"),
+                                             ("Share repurchases", "buybacks", "m"), ("Revolver draw", "debt_change", "m"), ("Cash from financing", "cff", "m"), ("Net change in cash", "net_change_cash", "m"),
+                                             ("Free cash flow", "fcf", "m")], ("cashflow", o_cf)))
+    out.append(Spacer(1, 3))
+    out.append(table("Balance sheet", [("Cash & equivalents", "cash", "m"), ("Short-term investments", "sti", "m"), ("Receivables", "receivables", "m"), ("Inventory", "inventory", "m"),
+                                       ("Other current assets", "other_current_assets", "m"), ("PP&E", "ppe", "m"), ("Goodwill & intangibles", "goodwill_intangibles", "m"),
+                                       ("Other non-current assets", "other_noncurrent_assets", "m"), ("Total assets", "total_assets", "m"), ("Payables", "payables", "m"),
+                                       ("Short-term debt (incl. revolver)", "short_term_debt", "m"), ("Other current liabilities", "other_current_liabilities", "m"), ("Long-term debt", "long_term_debt", "m"),
+                                       ("Other non-current liabilities", "other_noncurrent_liabilities", "m"), ("Total liabilities", "total_liabilities", "m"), ("Equity", "equity", "m"),
+                                       ("Minority interest", "minority_interest", "m"), ("Total liabilities & equity", "total_liabilities_equity", "m"), ("Balance check", "balance_check", "m"),
+                                       ("Net debt", "net_debt", "m")], ("balance", o_bs)))
+    rc = th.get("reconciliation") or {}
+    if rc.get("assertions"):
+        body = [[Paragraph(_wh("Reconciliation suite"), st_lb)] + [Paragraph(_wh(l), st_lb) for l in labels]]
+        for aid in (1, 2, 3, 4, 5):
+            rows_a = [r for r in rc["assertions"] if r.get("id") == aid]
+            if rows_a:
+                body.append([Paragraph(_wh(f"{aid}. {rows_a[0]['name']}"), st_l)] + [Paragraph("OK" if r["ok"] else "FAIL", st_v) for r in rows_a])
+        body.append([Paragraph(_wh("Suite result"), st_lb)] + [Paragraph("ALL OK" if rc.get("ok") else "FAIL", st_v) for _ in labels])
+        t = Table(body, colWidths=[width * 0.45] + [width * 0.55 / len(labels)] * len(labels))
+        t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black), ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8)]))
+        out += [Spacer(1, 3), t]
+    cov = [c for c in (th.get("coverage") or []) if str(c.get("status", "")).lower().startswith("missing") or "default" in str(c.get("status", ""))]
+    if cov:
+        out.append(Paragraph("Assumptions not from the agent or the filings: " + "; ".join(f"{_strip(str(c.get('assumption')))} ({_strip(str(c.get('status')))})" for c in cov)[:400], st_l))
+    for note in th.get("notes") or []:
+        out.append(Paragraph(_strip(str(note))[:300], st_l))
     return out
 
 

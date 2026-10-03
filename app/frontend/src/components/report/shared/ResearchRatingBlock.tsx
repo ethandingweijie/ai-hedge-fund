@@ -2,11 +2,11 @@
  * Research rating header — shared by the desktop ReportHeader and the mobile
  * V2ReportView hero card, so the two render paths cannot drift.
  *
- * Carries the disclosure checklist a published rating needs: price with its
- * as-of date, the 12-month target, implied upside, dividend yield and implied
- * total shareholder return, the benchmark the rating is relative to, the
- * structural vs tactical views, any divergence / SOTP disclosure, the rating
- * definition and the rating-to-action disclaimer.
+ * Owner, 2026-10-03: the summary shows the rating pin (with the benchmark and the trade action)
+ * and the five figures a published rating discloses: price with its as-of date, the 12-month
+ * target, implied upside, dividend yield and implied total shareholder return. The TSR arithmetic,
+ * the structural vs tactical views, the compliance notes, the rating definition and the
+ * rating-to-action disclaimer are on hover and in the PDF.
  */
 import type { ResearchView } from '@/lib/reportTypes';
 import { actionTone, priceTone } from '@/lib/semanticColors';
@@ -69,13 +69,14 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
 
   return (
     <div className={`flex flex-col gap-3 ${text}`}>
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap" title={[view.callout, view.structural_rating ? `Structural: ${title(view.structural_rating)}; tactical (12M): ${title(view.tactical_rating)}${diverges ? ' (views differ, see disclosure)' : ''}.` : '',
+        ...(view.compliance?.notes ?? []), view.rating_definition, view.benchmark ? `Benchmark expected return ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).` : '', view.disclaimer].filter(Boolean).join(' | ')}>
         <RatingPill view={view} />
         {view.benchmark && <span className="text-content-medium">vs {view.benchmark.name}</span>}
         <span className={`${small} text-content-muted`}>· trade action {view.trade_action}</span>
       </div>
 
-      {/* Disclosure checklist */}
+      {/* The five figures a published rating discloses */}
       <dl className={`grid grid-cols-2 sm:grid-cols-5 gap-3 ${small}`}>
         <div>
           <dt className="uppercase tracking-wider text-content-muted">Price</dt>
@@ -107,34 +108,9 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
         </div>
       </dl>
 
-      {/* TSR callout */}
-      <div className="rounded-lg border border-[var(--hairline)] bg-surface-2 px-3 py-2 text-content-high leading-relaxed">
-        {view.callout}
-      </div>
-
-      {view.structural_rating && (
-        <div className={`flex items-center gap-2 flex-wrap ${small}`}>
-          <span className="rounded border border-[var(--hairline)] px-2 py-0.5 text-content-high">
-            Structural: {title(view.structural_rating)}
-          </span>
-          <span className="rounded border border-[var(--hairline)] px-2 py-0.5 text-content-high">
-            Tactical (12M): {title(view.tactical_rating)}
-          </span>
-          {diverges && <span className="text-content-muted">views differ, see disclosure</span>}
-        </div>
-      )}
-
-      {view.compliance.notes.length > 0 && (
-        <ul className={`${small} text-content-medium leading-relaxed list-none space-y-1`}>
-          {view.compliance.notes.map((n) => <li key={n}>{n}</li>)}
-        </ul>
-      )}
-
-      <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-content-muted leading-relaxed`}>
-        {view.rating_definition}{view.benchmark
-          ? ` Benchmark expected return ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).`
-          : ''} {view.disclaimer}
-      </p>
+      {/* Owner, 2026-10-03: the summary keeps the pin and the five figures. The TSR arithmetic, the
+          structural / tactical views, the compliance notes, the rating definition and the disclaimer
+          stay reachable on hover (the title on the pin row above) and in the PDF, not on the page. */}
     </div>
   );
 }

@@ -3762,6 +3762,29 @@ def _fwd_consensus_value(fwd: Optional[dict], metric: str, scenario: str):
     return (((fwd or {}).get("_consensus") or {}).get(metric) or {}).get(scenario)
 
 
+def _three_statements_payload(fc: Optional[dict], ctx: Optional[dict], profile_name: Optional[str], sector: Optional[str]) -> Optional[dict]:
+    """IS / BS / CF for FY+1..FY+5 on the base forecast (owner, 2026-10-03), or the reason there is none."""
+    try:
+        from src.agents.analysis import three_statement as _ts
+        if not ctx:
+            return None
+        if ctx.get("statements_family_ok") is False:
+            return {"skipped": f"the {profile_name} profile is a balance-sheet business: its estimates need an earnings-and-capital model "
+                               "(net interest income, fees, costs, provisions, capital and payout), not a working-capital roll; not yet built"}
+        if not ctx.get("opening_balance_sheet"):
+            return {"skipped": "no audited balance sheet in the run's raw financials"}
+        if not fc or not fc.get("rows"):
+            return {"skipped": "no guidance-derived forecast on this run; enter estimates in the workbench to build the statements"}
+        out = _ts.build(fc, ctx["opening_balance_sheet"], ctx.get("statement_assumptions") or {})
+        if out:
+            out["coverage"] = _ts.coverage(fc, ctx["opening_balance_sheet"], ctx.get("statement_assumptions") or {})
+            if out.get("skipped", "").startswith("RECONCILIATION FAILED"):
+                out["flag"] = "THREE-STATEMENT " + out["skipped"][:300]
+        return out
+    except Exception as exc:  # noqa: BLE001
+        return {"skipped": f"the statements did not build: {type(exc).__name__}: {str(exc)[:120]}"}
+
+
 def _guidance_forecast_payload(fc: Optional[dict]) -> Optional[dict]:
     """The report's forecast block (base scenario): what the DCF ran on, with the per-year table."""
     try:
@@ -14149,6 +14172,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                    "engine_growth_path": _growth_schedule},
                         "fiscal_year_1": (_guid_est or {}).get("fiscal_year_1"), "fiscal_year_2": (_guid_est or {}).get("fiscal_year_2"),
                     }
+                    # Owner, 2026-10-03: the three-statement model's opening balance sheet (latest
+                    # audited year) and its assumptions from history, so the page can rebuild IS / BS / CF
+                    # on the user's numbers. Not for balance-sheet families: a bank or insurer needs an
+                    # earnings-and-capital model, not a working-capital roll.
+                    try:
+                        from src.agents.analysis import three_statement as _ts
+                        _raw_fin = state["data"].get("raw_financials")
+                        _fc_ctx["opening_balance_sheet"] = _ts.opening_from_raw(_raw_fin)
+                        _fc_ctx["statement_assumptions"] = _ts.assumptions_from_history(
+                            _raw_fin, _fc_ctx["history"], spot=_fc_ctx["inputs"].get("spot"))
+                        _fc_ctx["statements_family_ok"] = not _interest_is_cost_of_goods(profile_name, sector)
+                    except Exception:                      # noqa: BLE001
+                        pass
                 except Exception:                          # noqa: BLE001
                     _fc_ctx = None
             if _guid_est and _guidance_channel_enabled():
@@ -17070,6 +17106,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03 (interactive agent): the history ratios and inputs the page rebuilds
             # estimates from when the user overrides them (or enters them where research gave none).
             "forecast_context": _fc_ctx,
+            # Owner, 2026-10-03: the three statements FY+1E..FY+5E the estimates imply (web, PDF, Excel).
+            "three_statements": _three_statements_payload(_gf_base, _fc_ctx, profile_name, sector),
             # The bear and bull forecasts (steps, rows, checks) beside the base one, for the page's scenario toggle.
             "guidance_forecast_scenarios": ({sc: _guidance_forecast_payload(v) for sc, v in _gf_by_sc.items() if sc != "base"} or None),
             # The user's carried-forward override, if one shaped this run.

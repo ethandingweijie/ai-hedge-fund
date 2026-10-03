@@ -20,7 +20,7 @@
  *    decides the label.
  */
 import type { ProgressEvent } from '@/lib/reportTypes';
-import { PHASE_ORDER, canonicalPhase } from '@/lib/phaseLabels';
+import { PHASE_ORDER, canonicalPhase, phaseGroup } from '@/lib/phaseLabels';
 
 /** Completion wording for rows predating status normalisation. */
 export const SETTLED_RE = /^✓|\bcomplete\b|\bready\b|\bskipp?(ed|ing)\b/i;
@@ -68,17 +68,22 @@ export function derivePhaseState(record: Map<string, ProgressEvent>): PhaseState
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
 
-  // The furthest-along phase that has actually settled. Anything ordered before
-  // it is finished too, whether or not it bothered to say so.
-  let maxSettledIdx = -1;
+  // The furthest-along GROUP with a settled phase. A phase in an earlier group is finished too,
+  // whether or not it bothered to say so (scenario_agent never does). A phase in the SAME group
+  // is not: the front-block phases run concurrently, so an "EDGAR OK" from the filings resolver
+  // said nothing about the router still fetching five years of financials -- yet the old rule
+  // (ordered before the furthest settled phase ⇒ done) ticked the router off and the header moved
+  // on to the next outstanding phase, "Deep Research" (owner, 2026-10-03).
+  let maxSettledGroup = -1;
   for (const [phase, ev] of record) {
-    if (isSettledEvent(ev)) maxSettledIdx = Math.max(maxSettledIdx, idx(phase));
+    if (isSettledEvent(ev)) maxSettledGroup = Math.max(maxSettledGroup, phaseGroup(phase));
   }
 
   const donePhases = new Set<string>();
   for (const [phase, ev] of record) {
-    if (isSettledEvent(ev) || idx(phase) < maxSettledIdx) donePhases.add(phase);
+    if (isSettledEvent(ev) || phaseGroup(phase) < maxSettledGroup) donePhases.add(phase);
   }
+  void idx;
 
   // Active = the outstanding phase with the newest timestamp.
   let activePhase: string | null = null;
