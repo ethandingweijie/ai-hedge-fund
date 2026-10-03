@@ -12,7 +12,7 @@
  */
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { GuidanceEstimates, GuidanceScenarioRow } from '@/lib/reportTypes';
+import type { GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow } from '@/lib/reportTypes';
 
 const LABEL_CLS = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
@@ -66,7 +66,91 @@ function EstimateRow({ label, rows, field, fmt }: {
   );
 }
 
-export function GuidanceEstimatesPanel({ block }: { block: GuidanceEstimates }) {
+function amountBn(v: number | null | undefined): string {
+  if (v == null || !isFinite(v)) return '—';
+  return (v / 1e9).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/** The forecast the DCF ran on: archetype, target-year deconstruction, the intermediate years, the checks. */
+function ForecastSection({ fc }: { fc: GuidanceForecast }) {
+  const rows = fc.rows ?? [];
+  if (!rows.length) return null;
+  const T = fc.horizon_years ?? 0;
+  const shown = rows.filter((r) => r.phase !== 'steady' || r.year === rows[rows.length - 1].year);
+  const t = fc.target;
+  const dec = fc.deconstruction ?? {};
+  const term = fc.terminal;
+  return (
+    <div className="mt-5 border-t border-border/60 pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={LABEL_CLS}>Forecast the DCF ran on</span>
+        <Badge variant="outline" className="text-[10px]">{fc.archetype_name}</Badge>
+      </div>
+      <div className="mt-1 text-[12.5px] text-foreground">
+        {T}-year path to {t ? `the ${t.target_year} ${t.metric} target of ${num(t.value)}` : 'the FY+2 estimate'}; EBIT margin {margin(fc.margin_start)} → {margin(fc.margin_target)} ({fc.margin_source}); then a {fc.fade_years}-year fade to {margin(term?.tgr)} growth.
+      </div>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-[12px] tabular-nums">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+              <th className="pb-1.5 text-left font-medium">Year</th>
+              <th className="pb-1.5 text-right font-medium">Revenue (bn)</th>
+              <th className="pb-1.5 text-right font-medium">Growth</th>
+              <th className="pb-1.5 text-right font-medium">EBIT margin</th>
+              <th className="pb-1.5 text-right font-medium">EPS</th>
+              <th className="pb-1.5 text-right font-medium">UFCF (bn)</th>
+              <th className="pb-1.5 text-right font-medium">FCF margin</th>
+              <th className="pb-1.5 text-left font-medium pl-3">Phase</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((r) => (
+              <tr key={r.year} className={`border-t border-border/50 ${r.phase === 'guided' ? 'text-foreground' : 'text-foreground/70'}`}>
+                <td className="py-1 pr-2">{r.year}</td>
+                <td className="py-1 text-right">{amountBn(r.revenue)}</td>
+                <td className="py-1 text-right">{pct(r.growth)}</td>
+                <td className="py-1 text-right">{margin(r.ebit_margin)}</td>
+                <td className="py-1 text-right">{num(r.eps)}</td>
+                <td className="py-1 text-right">{amountBn(r.ufcf)}</td>
+                <td className="py-1 text-right">{margin(r.fcf_margin)}</td>
+                <td className="py-1 pl-3 text-muted-foreground">{r.phase}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {dec.ebit_T_implied != null ? (
+        <div className="mt-2 text-[11px] text-muted-foreground">
+          Target year back-solved: revenue {amountBn(dec.revenue_T as number)}bn, implied EBIT {amountBn(dec.ebit_T_implied as number)}bn
+          {dec.implied_tax_rate != null ? `, implied tax-and-non-operating take ${margin(dec.implied_tax_rate as number)}` : ''}
+          {dec.guided_cagr != null && dec.market_cagr != null ? `; guided CAGR ${margin(dec.guided_cagr as number)} vs market ${margin(dec.market_cagr as number)}` : ''}.
+        </div>
+      ) : null}
+      {term ? (
+        <div className="mt-1 text-[11px] text-muted-foreground">
+          Terminal: growth {margin(term.tgr)}, ROIC {margin(term.roic_terminal)}, reinvestment {margin(term.reinvestment_rate)}
+          {term.implied_exit_ev_ebitda != null ? `; implied exit EV/EBITDA ${term.implied_exit_ev_ebitda.toFixed(1)}x` : ''}
+          {term.peer_ev_ebitda_median != null ? ` vs peer median ${term.peer_ev_ebitda_median.toFixed(1)}x` : ''}.
+        </div>
+      ) : null}
+      <ul className="mt-2 space-y-0.5 text-[11px]">
+        {(fc.invariants ?? []).map((inv) => (
+          <li key={inv.id} className="flex gap-2">
+            <span className={`shrink-0 font-mono ${inv.ok === false ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+              {inv.ok === true ? 'PASS' : inv.ok === false ? 'FAIL' : 'n/a'}
+            </span>
+            <span className="text-foreground/85">{inv.name}: <span className="text-muted-foreground">{inv.detail}</span></span>
+          </li>
+        ))}
+        {(fc.flags ?? []).map((f, i) => (
+          <li key={`f${i}`} className="flex gap-2"><span className="shrink-0 font-mono text-muted-foreground">FLAG</span><span className="text-foreground/85">{f}</span></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function GuidanceEstimatesPanel({ block, forecast }: { block: GuidanceEstimates; forecast?: GuidanceForecast | null }) {
   const g = block.guidance ?? {};
   const c = block.consensus ?? {};
   const rows = block.estimates ?? {};
@@ -156,6 +240,8 @@ export function GuidanceEstimatesPanel({ block }: { block: GuidanceEstimates }) 
           </div>
         </div>
       ) : null}
+
+      {forecast ? <ForecastSection fc={forecast} /> : null}
 
       {block.rationale ? <div className="mt-3 text-[11.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}
       {block.track_record ? <div className="mt-1 text-[11px] text-muted-foreground">Track record: {block.track_record}</div> : null}

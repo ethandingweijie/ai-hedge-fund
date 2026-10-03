@@ -1405,7 +1405,7 @@ export function ReportPage() {
               <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
             ) : null; })()}
             {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
-            {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} /> : null}
+            {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} forecast={dcfRange.guidance_forecast} /> : null}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards

@@ -2154,7 +2154,76 @@ def _guidance_estimates_block_pdf(dcf_t: dict, styles, width: float) -> list:
         out.append(Paragraph(_strip(str(ge.get("rationale"))), st_l))
     if ge.get("track_record"):
         out.append(Paragraph(f"Track record: {_strip(str(ge.get('track_record')))}", st_l))
+    out.extend(_guidance_forecast_block_pdf(dcf_t, styles, width))
     out.append(Spacer(1, 6))
+    return out
+
+
+def _guidance_forecast_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """The guidance-to-forecast table the DCF ran on (owner's five principles, 2026-10-03):
+    archetype, the path to the target, the per-year operating lines, the invariants."""
+    fc = dcf_t.get("guidance_forecast") or {}
+    rows = fc.get("rows") or []
+    if not rows:
+        return []
+    st_l = ParagraphStyle("_gfl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_gflb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_gfv", parent=st_l, alignment=2)
+    ccy = dcf_t.get("reported_currency") or ""
+
+    def _bn(v):
+        try:
+            return f"{float(v) / 1e9:,.1f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _p(v, signed=False):
+        try:
+            return f"{float(v):+.1%}" if signed else f"{float(v):.1%}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _n(v):
+        try:
+            return f"{float(v):,.2f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    T = int(fc.get("horizon_years") or 0)
+    tgt = fc.get("target") or {}
+    head = (f"Guidance forecast — {_strip(str(fc.get('archetype_name') or ''))}: {T}-year path to "
+            + (f"the {_strip(str(tgt.get('target_year')))} {_strip(str(tgt.get('metric')))} target" if tgt else "the FY+2 estimate")
+            + f", EBIT margin {_p(fc.get('margin_start'))} → {_p(fc.get('margin_target'))} ({_strip(str(fc.get('margin_source') or ''))}), "
+            f"then a {fc.get('fade_years')}-year fade")
+    out = [Spacer(1, 4), Paragraph(head, st_lb)]
+    hdr = [Paragraph(_wh(h), st_lb) for h in ("Year", f"Revenue ({ccy or 'USD'} bn)", "Growth", "EBIT margin", "EPS", f"UFCF ({ccy or 'USD'} bn)", "FCF margin", "Phase")]
+    body = [hdr]
+    for r in rows:
+        if r.get("phase") == "steady" and r.get("year") not in (len(rows),):
+            continue                                         # the steady years repeat; print the last one
+        body.append([Paragraph(str(r.get("year")), st_l), Paragraph(_bn(r.get("revenue")), st_v), Paragraph(_p(r.get("growth"), True), st_v),
+                     Paragraph(_p(r.get("ebit_margin")), st_v), Paragraph(_n(r.get("eps")), st_v), Paragraph(_bn(r.get("ufcf")), st_v),
+                     Paragraph(_p(r.get("fcf_margin")), st_v), Paragraph(_strip(str(r.get("phase") or "")), st_l)])
+    cw = [width * 0.07, width * 0.16, width * 0.11, width * 0.13, width * 0.12, width * 0.16, width * 0.12, width * 0.13]
+    tbl = Table(body, colWidths=cw)
+    tbl.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                             ("TOPPADDING", (0, 0), (-1, -1), 1.2), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2)]))
+    out += [tbl, Spacer(1, 3)]
+    dec = fc.get("deconstruction") or {}
+    if dec.get("ebit_T_implied") is not None:
+        out.append(Paragraph(f"Target year back-solved: revenue {_bn(dec.get('revenue_T'))}bn, implied EBIT {_bn(dec.get('ebit_T_implied'))}bn"
+                             + (f", implied tax-and-non-operating take {_p(dec.get('implied_tax_rate'))}" if dec.get("implied_tax_rate") is not None else "")
+                             + (f"; guided CAGR {_p(dec.get('guided_cagr'))} vs market {_p(dec.get('market_cagr'))}" if dec.get("guided_cagr") is not None and dec.get("market_cagr") is not None else ""), st_l))
+    term = fc.get("terminal") or {}
+    if term:
+        out.append(Paragraph(f"Terminal: growth {_p(term.get('tgr'))}, ROIC {_p(term.get('roic_terminal'))}, reinvestment {_p(term.get('reinvestment_rate'))}"
+                             + (f"; implied exit EV/EBITDA {float(term['implied_exit_ev_ebitda']):.1f}x" if isinstance(term.get("implied_exit_ev_ebitda"), (int, float)) else "")
+                             + (f" vs peer median {float(term['peer_ev_ebitda_median']):.1f}x" if isinstance(term.get("peer_ev_ebitda_median"), (int, float)) else ""), st_l))
+    for inv in fc.get("invariants") or []:
+        mark = "PASS" if inv.get("ok") is True else ("FAIL" if inv.get("ok") is False else "n/a")
+        out.append(Paragraph(f"Check {inv.get('id')} {_strip(str(inv.get('name') or ''))}: {mark} — {_strip(str(inv.get('detail') or ''))[:220]}", st_l))
+    for f in fc.get("flags") or []:
+        out.append(Paragraph(f"Flag: {_strip(str(f))[:220]}", st_l))
     return out
 
 

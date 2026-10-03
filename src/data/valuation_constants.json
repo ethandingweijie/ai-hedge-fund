@@ -670,6 +670,58 @@
     }
    }
   },
+  "guidance_forecast": {
+   "_doc": "PROPOSED 2026-10-03 (the owner set the five principles; the numbers are the builder's and await review). The guidance-to-forecast engine (src/agents/analysis/guidance_forecast.py): fade_years 4 (the 3-5 year window the principle names, mid); max_horizon_years 6 (a medium-term target further out than FY+6 is capped there); organic_spread_flag 500bp over market growth (the principle's threshold); cash_conversion_bounds 60-120% of net income (the principle's); capex_alpha and nwc_intensity are medians of the audited history, bounded; da_useful_life_years 10 for the PP&E roll-forward; tax from history bounded 10-35% else 21%; terminal ROIC at least WACC + 200bp so the reinvestment identity (g / ROIC) is defined; jaws_margin_step 50bp. Curves: I regulatory lag = logistic S-curve, year 1 capped at 15% of the gap (the lag); II operating leverage = convex (t/T)^2 (J-curve); III retail rollout = linear with a quarter of one year's step as year-1 pre-opening drag; IV platform = linear (the deliberate path to breakeven).",
+   "status": "PROPOSED",
+   "reviewed": {
+    "last_reviewed": null,
+    "reviewer": null
+   },
+   "fade_years": 4,
+   "max_horizon_years": 6,
+   "organic_spread_flag": 0.05,
+   "cash_conversion_bounds": [
+    0.6,
+    1.2
+   ],
+   "capex_alpha_bounds": [
+    0.0,
+    1.5
+   ],
+   "nwc_intensity_bounds": [
+    -0.1,
+    0.5
+   ],
+   "da_useful_life_years": 10,
+   "tax_rate_default": 0.21,
+   "tax_rate_bounds": [
+    0.1,
+    0.35
+   ],
+   "jaws_margin_step": 0.005,
+   "terminal_roic_floor_over_wacc": 0.02,
+   "curves": {
+    "I": {
+     "shape": "s_curve",
+     "steepness": 1.6,
+     "year1_lag": 0.15
+    },
+    "II": {
+     "shape": "convex",
+     "power": 2.0
+    },
+    "III": {
+     "shape": "linear_drag",
+     "preopen_drag": 0.25
+    },
+    "IV": {
+     "shape": "linear"
+    },
+    "G": {
+     "shape": "linear"
+    }
+   }
+  },
   "target_margins": {
     "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
     "reviewed": {

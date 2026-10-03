@@ -1101,6 +1101,8 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     '               "basis": "<reported|organic|constant-currency|null>", "status": "<new|raised|cut|reaffirmed|none>", "quote": "<=160 chars verbatim", "source": "<publisher, date>"},\n'
     '  "consensus": {"revenue_growth_fy1": n, "eps_fy1": n, "as_of": "<date or null>", "source": "<...>"},\n'
     '  "guidance_vs_consensus_pct": n,\n'
+    '  "medium_term_target": {"metric": "eps|revenue|revenue_growth|ebitda_margin|operating_margin", "target_year": "<FY label, e.g. FY2029>", '
+    '"low": n, "mid": n, "high": n, "unit": "<USD per share | USD bn | decimal>", "basis": "<workplan, investor day, breakeven commitment>", "source": "<publisher, date>"} or null,\n'
     '  "track_record": "<=120 chars: beats/meets/misses and bias>",\n'
     '  "estimates": {"bear": {"revenue_growth_fy1": n, "revenue_growth_fy2": n, "ebitda_margin_fy1": n, "ebitda_margin_fy2": n, "eps_fy1": n, "eps_fy2": n},\n'
     '                "base": {...same keys...}, "bull": {...same keys...}},\n'
@@ -1120,6 +1122,9 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     "A company with no guidance still gets estimates from consensus and the note; say so in rationale.\n"
     "- FY+2: use a stated medium-term target when there is one, else carry the base dynamic "
     "forward with the note's cycle view (2D) -- never extrapolate a one-off.\n"
+    "- medium_term_target: ONLY a target management has stated for a year beyond FY+2 (a 2029 EPS "
+    "workplan, a margin target, a capex breakeven year); null when there is none. Decimals for "
+    "rates and margins; the EPS or revenue number as stated for amounts. Never invent one.\n"
     "- confidence: HIGH = formal ranged guidance within the last quarter and a consistent track "
     "record; MEDIUM = guidance exists but is qualitative, stale or the record is mixed; LOW = no "
     "guidance and thin consensus.\n"
@@ -1243,7 +1248,21 @@ def _normalize_guidance_estimates(parsed: dict) -> dict:
         conf = "LOW" if guidance["revenue_growth"] is None and guidance["revenue"] is None else "MEDIUM"
     cits = parsed.get("citations")
     citations = [str(c)[:160] for c in cits if c] if isinstance(cits, list) else []
+    mt_in = parsed.get("medium_term_target") if isinstance(parsed.get("medium_term_target"), dict) else None
+    medium_term = None
+    if mt_in and mt_in.get("metric") and mt_in.get("target_year"):
+        _metric = str(mt_in["metric"]).strip().lower()
+        _rate_like = _metric in ("revenue_growth", "ebitda_margin", "operating_margin", "ebit_margin")
+        _conv = _guidance_rate if _rate_like else _guidance_num
+        medium_term = {"metric": _metric, "target_year": str(mt_in["target_year"])[:12],
+                       "low": _conv(mt_in.get("low")), "mid": _conv(mt_in.get("mid")), "high": _conv(mt_in.get("high")),
+                       "unit": (str(mt_in.get("unit"))[:40] if mt_in.get("unit") else None),
+                       "basis": (str(mt_in.get("basis"))[:120] if mt_in.get("basis") else None),
+                       "source": (str(mt_in.get("source"))[:160] if mt_in.get("source") else None)}
+        if medium_term["mid"] is None and medium_term["low"] is None and medium_term["high"] is None:
+            medium_term = None
     return {
+        "medium_term_target": medium_term,
         "as_of": (str(parsed.get("as_of")) if parsed.get("as_of") else None),
         "fiscal_year_1": (str(parsed.get("fiscal_year_1")) if parsed.get("fiscal_year_1") else None),
         "fiscal_year_2": (str(parsed.get("fiscal_year_2")) if parsed.get("fiscal_year_2") else None),

@@ -3665,6 +3665,15 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
             "source": "deep research 2G → guidance_estimates"}
 
 
+def _guidance_forecast_payload(fc: Optional[dict]) -> Optional[dict]:
+    """The report's forecast block (base scenario): what the DCF ran on, with the per-year table."""
+    try:
+        from src.agents.analysis import guidance_forecast as _gfm
+        return _gfm.summary(fc)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict]) -> Optional[dict]:
     """What the report shows: the research block plus how (or why not) the DCF used it."""
     if not est or not isinstance(est, dict):
@@ -6893,6 +6902,7 @@ def _compute_method_value(
             growth_schedule=_pj.get("growth_schedule"),
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
+            margin_schedule=_pj.get("margin_schedule"),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
@@ -12416,6 +12426,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         dcf_cal = dcf_calibration_all.get(ticker, {})
         _guid_est = guidance_estimates_all.get(ticker) or {}
         _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
+        _gf_base: Optional[dict] = None             # the base scenario's guidance forecast (five principles)
         _cal_adj = dcf_cal.get("growth_rate_adj")
         if _cal_adj is not None and data_source == "historical":
             # Apply when no hard guidance or analyst estimate overrides.
@@ -13960,7 +13971,45 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # g, or the profile's schedule). Analyst bands and the engine's
             # waterfall still decide the long run; guidance decides the near
             # years it actually speaks to.
-            _gc = _guidance_channel_schedule(
+            # Owner, 2026-10-03 (five principles): when the guidance block is there, the
+            # guidance-to-forecast engine builds the intermediate years -- archetype margin
+            # curve, three statements, fade -- and the DCF leg runs on its growth AND FCF-margin
+            # schedules. The FY+1/FY+2 channel below is the fallback when it cannot.
+            _gf = None
+            _gf_margin_sched = None
+            if _guid_est and _guidance_channel_enabled():
+                try:
+                    from src.agents.analysis import guidance_forecast as _gfm
+                    _gf = _gfm.build_forecast(
+                        _guid_est, scenario=scenario, series=series, profile_name=profile_name, sector=sector,
+                        wacc=wacc, tgr=tgr, shares=shares, net_debt=net_debt,
+                        spot=((market_cap / shares) if (market_cap and shares) else None),
+                        peer_ev_ebitda=_peer_for_gp.get("ev_ebitda") if isinstance(_peer_for_gp, dict) else None,
+                        market_growth=_peer_for_gp.get("growth_avg") if isinstance(_peer_for_gp, dict) else None,
+                        engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base)
+                except Exception as _gf_exc:  # noqa: BLE001
+                    _gf = None
+                    if scenario == "base":
+                        ticker_forward_flags.append(f"Guidance forecast did not build ({type(_gf_exc).__name__}); the FY+1/FY+2 channel ran instead")
+            if _gf:
+                _growth_schedule = _gf["growth_schedule"]
+                _gf_margin_sched = _gf["fcf_margin_schedule"]
+                if scenario == "base":
+                    _gf_base = _gf
+                    _gc_applied = {"schedule": _gf["growth_schedule"], "explicit": _gf["growth_schedule"][:_gf["horizon_years"]],
+                                   "explicit_years": _gf["horizon_years"], "fade_years": _gf["fade_years"], "engine_year1": round(float(g), 6),
+                                   "confidence": _guid_est.get("confidence"), "source": f"guidance forecast ({_gf['archetype_name']})"}
+                    _t = _gf.get("target")
+                    ticker_forward_flags.append(
+                        f"Guidance forecast ({_gf['archetype_name']}): {_gf['horizon_years']}-year path to "
+                        + (f"the {_t['target_year']} {_t['metric']} target" if _t else "the FY+2 estimate")
+                        + f", EBIT margin {_gf['margin_start']:.1%} → {_gf['margin_target']:.1%} ({_gf['margin_source']}), "
+                        f"then a {_gf['fade_years']}-year fade to {tgr:.1%}; the DCF runs on its growth and FCF-margin schedules"
+                        + ("; " + "; ".join(_gf["flags"]) if _gf.get("flags") else ""))
+                    for _inv in _gf["invariants"]:
+                        if _inv.get("ok") is False:
+                            ticker_forward_flags.append(f"Forecast invariant {_inv['id']} ({_inv['name']}) FAILED: {_inv['detail']}")
+            _gc = None if _gf else _guidance_channel_schedule(
                 _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS)
             if _gc:
                 _growth_schedule = _gc["schedule"]
@@ -14183,6 +14232,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "growth_schedule": _growth_schedule,
                 "wacc_schedule": _wacc_schedule,
                 "margin_delta_absolute": md_abs,
+                "margin_schedule": _gf_margin_sched,      # the guidance forecast's FCF margins, else None
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
@@ -14199,6 +14249,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 growth_schedule=_growth_schedule,
                 wacc_schedule=_wacc_schedule,
                 margin_delta_absolute=md_abs,
+                margin_schedule=_gf_margin_sched,
             )
             leg_inputs["DCF"] = {
                 "kind": "dcf", "value": iv_dcf,
@@ -14210,6 +14261,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
                 "projection_rows": _proj_rows,
                 "guidance_channel": _gc,          # None when guidance did not set years 1–E
+                "guidance_forecast": ({k: v for k, v in _gf.items() if k not in ("rows", "curve")} if _gf else None),
             }
 
             # ── Reinvestment disclosure, OBSERVATION-ONLY ─────────────────
@@ -16823,6 +16875,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # estimates (deep research 2G) and whether the DCF's years 1–2 ran on them.
             # Frontend: GuidanceEstimatesPanel reads `dcfRange?.guidance_estimates`.
             "guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied),
+            # Owner, 2026-10-03 (five principles): the guidance-to-forecast table the DCF ran on --
+            # archetype, deconstruction, the intermediate years, the fade, the invariants.
+            "guidance_forecast": _guidance_forecast_payload(_gf_base),
             # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
             # its rows and reason so both renderers can show WHY it did not price.
             # Published only when the profile declared SOTP (analyst): it explains why a declared leg

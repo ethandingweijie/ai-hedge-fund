@@ -1319,6 +1319,40 @@ class _Book:
                               else "engine path")).font = Font(color=BLACK)
             r += 1
             sh.label(r, 1, "Engine year-1 growth before the channel"); sh.put(r, 2, _num(ch.get("engine_year1")), PCT); r += 1
+        # Owner, 2026-10-03 (five principles): the forecast the DCF ran on.
+        fc = (self.dr or {}).get("guidance_forecast") or {}
+        if fc.get("rows"):
+            r += 2
+            _t = fc.get("target") or {}
+            sh.section(r, f"Guidance forecast — {fc.get('archetype_name')}: {fc.get('horizon_years')} years to "
+                          + (f"the {_t.get('target_year')} {_t.get('metric')} target" if _t else "the FY+2 estimate")
+                          + f", then a {fc.get('fade_years')}-year fade", 9); r += 1
+            sh.header(r, ["Year", "Revenue (mn)", "Growth", "EBIT margin", "EBIT (mn)", "Net income (mn)", "EPS", "UFCF (mn)", "FCF margin", "Phase"])
+            for row in fc["rows"]:
+                r += 1
+                sh.put(r, 1, int(row.get("year") or 0), "0")
+                sh.put(r, 2, _mil(row.get("revenue")), MIL); sh.put(r, 3, _num(row.get("growth")), PCT)
+                sh.put(r, 4, _num(row.get("ebit_margin")), PCT); sh.put(r, 5, _mil(row.get("ebit")), MIL)
+                sh.put(r, 6, _mil(row.get("net_income")), MIL); sh.put(r, 7, _num(row.get("eps")), NUM)
+                sh.put(r, 8, _mil(row.get("ufcf")), MIL); sh.put(r, 9, _num(row.get("fcf_margin")), PCT)
+                sh.put(r, 10, str(row.get("phase") or "")).font = Font(color=BLACK)
+            r += 1
+            dec = fc.get("deconstruction") or {}
+            for label, key, fmt in (("Target-year revenue", "revenue_T", MIL), ("Implied EBIT, target year", "ebit_T_implied", MIL),
+                                    ("Implied tax-and-non-operating take", "implied_tax_rate", PCT), ("Guided revenue CAGR", "guided_cagr", PCT),
+                                    ("Market CAGR", "market_cagr", PCT)):
+                if dec.get(key) is not None:
+                    sh.label(r, 1, label); sh.put(r, 2, (_mil(dec.get(key)) if fmt == MIL else _num(dec.get(key))), fmt); r += 1
+            term = fc.get("terminal") or {}
+            for label, key, fmt in (("Terminal growth", "tgr", PCT), ("Terminal ROIC", "roic_terminal", PCT), ("Reinvestment rate (g / ROIC)", "reinvestment_rate", PCT),
+                                    ("Implied exit EV/EBITDA", "implied_exit_ev_ebitda", "0.0"), ("Peer EV/EBITDA median", "peer_ev_ebitda_median", "0.0")):
+                if term.get(key) is not None:
+                    sh.label(r, 1, label); sh.put(r, 2, _num(term.get(key)), fmt); r += 1
+            for inv in fc.get("invariants") or []:
+                mark = "PASS" if inv.get("ok") is True else ("FAIL" if inv.get("ok") is False else "n/a")
+                sh.label(r, 1, f"Check {inv.get('id')} {inv.get('name')}: {mark} — {inv.get('detail')}"); r += 1
+            for f in fc.get("flags") or []:
+                sh.label(r, 1, f"Flag: {f}"); r += 1
         for key, label in (("rationale", "Rationale"), ("track_record", "Track record")):
             if ge.get(key):
                 r += 1
@@ -1326,7 +1360,7 @@ class _Book:
         if ge.get("citations"):
             r += 1
             sh.label(r, 1, "Sources: " + " · ".join(str(x) for x in ge.get("citations")))
-        sh.widths({"A": 46, "B": 14, "C": 14, "D": 14, "E": 12, "F": 28})
+        sh.widths({"A": 46, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14, "G": 12, "H": 14, "I": 12, "J": 10})
 
     # ── Banks ───────────────────────────────────────────────────────────────
     def family_tab(self) -> None:

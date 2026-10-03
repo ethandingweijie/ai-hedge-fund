@@ -354,6 +354,25 @@ export interface GuidanceEstimates {
   } | null;
 }
 
+export interface GuidanceForecastRow {
+  year: number; revenue: number; growth: number; ebit_margin: number; ebit: number; net_income: number;
+  eps?: number | null; ufcf: number; fcf_margin: number; capex?: number; capex_growth?: number; delta_nwc?: number;
+  phase: 'guided' | 'fade' | 'steady' | string;
+}
+export interface GuidanceForecastInvariant { id: number; name: string; ok: boolean | null; detail: string }
+export interface GuidanceForecast {
+  scenario: string; archetype: string; archetype_name: string; horizon_years: number; fade_years: number;
+  margin_source: string; margin_start: number; margin_target: number;
+  deconstruction: Record<string, number | string | null>;
+  flags: string[];
+  history: Record<string, number | string | null>;
+  rows: GuidanceForecastRow[];
+  growth_schedule: number[]; fcf_margin_schedule: number[];
+  terminal: { tgr: number; wacc: number; roic_terminal: number; reinvestment_rate: number | null; implied_exit_ev_ebitda: number | null; peer_ev_ebitda_median: number | null };
+  invariants: GuidanceForecastInvariant[];
+  target?: { metric: string; year_index: number; target_year: string; value: number; unit?: string | null; basis?: string | null; source?: string | null } | null;
+}
+
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
 // dcf_range[ticker].sotp_breakdown; null/absent for tickers without SOTP
 // assumptions. Frontend gates on `dcfRange?.sotp_breakdown`.
@@ -540,6 +559,8 @@ export interface DcfRange {
   /** Management guidance → the model's bear/base/bull estimates and how the DCF used them
    *  (owner, 2026-10-03; dcf_agent._guidance_estimates_payload). GuidanceEstimatesPanel. */
   guidance_estimates?: GuidanceEstimates | null;
+  /** The guidance-to-forecast table the DCF ran on (owner's five principles, 2026-10-03). */
+  guidance_forecast?: GuidanceForecast | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.

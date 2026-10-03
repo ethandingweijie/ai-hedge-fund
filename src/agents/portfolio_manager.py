@@ -998,6 +998,23 @@ def _forward_estimates_block(ticker: str, state) -> str:
         lines.append("Estimates confidence: " + str(ge.get("confidence") or "n/a")
                      + ("; the DCF's first two years run on these estimates" if ge.get("applied")
                         else f"; the DCF did not use them ({ge.get('not_applied_reason') or 'not applied'})"))
+        # Owner, 2026-10-03 (five principles): the forecast the DCF ran on, in operating terms.
+        gfc = dcf.get("guidance_forecast") or {}
+        if gfc.get("rows"):
+            _t = gfc.get("target") or {}
+            _rows = gfc["rows"]
+            _T = int(gfc.get("horizon_years") or 0)
+            _rT = _rows[_T - 1] if 0 < _T <= len(_rows) else _rows[-1]
+            lines.append(f"Forecast path ({gfc.get('archetype_name')}): {_T} years to "
+                         + (f"the {_t.get('target_year')} {_t.get('metric')} target of {_t.get('value')}" if _t else "the FY+2 estimate")
+                         + f"; EBIT margin {float(gfc.get('margin_start') or 0):.1%} → {float(gfc.get('margin_target') or 0):.1%} ({gfc.get('margin_source')}); "
+                         f"year-{_T} revenue {_sym}{_rT['revenue'] / 1e9:,.1f}bn, EPS {_sym}{(_rT.get('eps') or 0):,.2f}, "
+                         f"FCF margin {float(_rT.get('fcf_margin') or 0):.1%}; then a {gfc.get('fade_years')}-year fade to the terminal rate")
+            _bad = [i for i in (gfc.get("invariants") or []) if i.get("ok") is False]
+            if _bad:
+                lines.append("Forecast checks that FAILED: " + "; ".join(f"{i['name']}: {i['detail']}" for i in _bad)[:400])
+            for f in (gfc.get("flags") or [])[:2]:
+                lines.append(f"Forecast flag: {f}")
     else:
         mg = (data.get("management_guidance") or {}).get(ticker) or {}
         bits = []
