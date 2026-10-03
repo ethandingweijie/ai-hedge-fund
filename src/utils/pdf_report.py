@@ -3095,7 +3095,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
     else:
         story.append(Paragraph("Industry Intelligence Brief not available.", styles["RptBody"]))
 
-    # ── Footnote block — rendered below the brief body ─────────────────────
+    # ── Footnote block — collected here, printed on the report's LAST page (owner, 2026-10-03) ──
+    _refs: list = []
     _fn_list: list[dict] = result.get("industry_footnotes", []) or []
     if not _fn_list:
         # Fall back to citation_registry verified entries
@@ -3105,9 +3106,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         ][:20]
 
     if _fn_list:
-        story.append(HRFlowable(width="100%", thickness=0.3, color=C_LGREY, spaceAfter=2))
-        story.append(Paragraph("References", styles["RptLabel"]))
-        story.append(Spacer(1, 2))
+        _refs.append(Paragraph("Numbered as cited in the Industry Intelligence Brief.", styles["RptSource"]))
+        _refs.append(Spacer(1, 2))
 
         fn_rows = []
         for _seq, fn in enumerate(sorted(_fn_list, key=lambda x: x.get("ref_id") or 9999), start=1):
@@ -3158,8 +3158,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
                 ("ROWBACKGROUNDS",(0, 0), (-1, -1), [colors.white, C_PALE]),
                 ("LINEBELOW",     (0, 0), (-1, -1), 0.2, C_LGREY),
             ]))
-            story.append(fn_tbl)
-            story.append(Spacer(1, 4))
+            _refs.append(fn_tbl)
+            _refs.append(Spacer(1, 4))
 
     # Source attribution — enterprise requirement
     story.append(HRFlowable(width="100%", thickness=0.4, color=C_LGREY, spaceAfter=2))
@@ -3384,6 +3384,12 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
             )
 
             self.restoreState()
+
+    # ── References: their own last page (owner, 2026-10-03) ──────────────────
+    if _refs:
+        story.append(PageBreak())
+        story.extend(_section_header("REFERENCES", page_w))
+        story.extend(_refs)
 
     doc.build(story, canvasmaker=_NumberedCanvas)
 
