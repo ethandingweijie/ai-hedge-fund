@@ -60,7 +60,17 @@ def test_the_two_targets_and_the_three_net_debts_are_each_named():
     assert s.cell(row=r_base, column=3).value == "='Target'!$C$6"
     from src.data.report_families import _R
     assert _R["net_debt"][0] == "Net debt / (cash) — FMP annual, lease liabilities included"   # the family history row's label
-    assert any(v.startswith("Net debt — valuation basis (balance sheet 2026-06-28, leases excluded)") for v in labels)
+    assert any(v.startswith("Less: net debt — valuation basis (balance sheet 2026-06-28, leases excluded)") for v in labels)
+    # Alibaba review (2026-10-03, section 1): the bridge deducts minorities and preferreds on both tabs,
+    # and the Summary's static column carries the same sign as the linked "Less:" cells.
+    assert "Less: minority interest" in labels and "Less: preferred equity" in labels
+    assert "Less: minority interest" in _col_a(wb["DCF"]) and "Less: preferred equity" in _col_a(wb["DCF"])
+    r_nd = next(c.row for c in s["A"] if str(c.value).startswith("Less: net debt — valuation basis"))
+    _static, _linked = s.cell(row=r_nd, column=2).value, s.cell(row=r_nd, column=3).value
+    run = _run_without_dcf_weight()
+    _nd_trace = run["data"]["dcf_range"]["TEST"]["base"]["leg_inputs"]["DCF"]["net_debt"]
+    assert _static == -_nd_trace                      # "Less:" sign, matching the DCF tab's =-nd cell
+    assert str(_linked).startswith("='DCF'!") or str(_linked).startswith("=DCF!")
     assert any(v.startswith("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)") for v in _col_a(wb["BS"]))
 
 

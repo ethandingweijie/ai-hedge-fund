@@ -364,7 +364,7 @@ class _Book:
         sh.section(r, "Scenario drivers", 8); r += 1
         sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
         drivers = [("revenue_base", "Revenue base (last actual, valuation currency)", BIG),
-                   ("fcf_margin_base", "FCF margin base (owner earnings)", PCT2),
+                   ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials and property)", PCT2),
                    ("margin_delta_absolute", "Scenario margin change (absolute)", PCT2),
                    ("fcf_floor", "FCF margin floor", PCT2),
                    ("tgr", "Terminal growth", PCT2),
@@ -987,21 +987,27 @@ class _Book:
             ("PV of terminal value", f"=B{out + 2}*{Lc}{dfr}", BIG),
             ("Enterprise value", f"=B{out}+B{out + 3}", BIG),
             ("Less: net debt", f"=-{nd}", BIG),
-            ("Equity value", f"=B{out + 4}+B{out + 5}", BIG),
-            ("Intrinsic value per share", f"=IFERROR(B{out + 6}/{shs},0)", NUM),
+            # Owner, 2026-10-03 (Alibaba review, section 1): the engine deducts minority interest and
+            # preferred equity in the DCF bridge; the tab did not, so every check read REVIEW
+            # (HK$3.965 a share on 09988.HK = the HK$76.3bn of minorities over 19,235m shares).
+            ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0), BIG),
+            ("Less: preferred equity", -(_num(tr.get("preferred_equity")) or 0.0), BIG),
+            ("Equity value", f"=B{out + 4}+B{out + 5}+B{out + 6}+B{out + 7}", BIG),
+            ("Intrinsic value per share", f"=IFERROR(B{out + 8}/{shs},0)", NUM),
             ("Engine value", _num(tr.get("value")), NUM),
-            ("Check", f"=B{out + 7}-B{out + 8}", NUM),
+            ("Check", f"=B{out + 9}-B{out + 10}", NUM),
             ("Terminal value share of EV", f"=IFERROR(B{out + 3}/B{out + 4},0)", PCT),
         ]
         for i, (lab, v, fmt) in enumerate(lines):
             sh.label(out + i, 1, lab, bold=lab in ("Intrinsic value per share", "Enterprise value"))
             sh.put(out + i, 2, v, fmt, bold=lab == "Intrinsic value per share")
         if not core:
-            self.leg_cell[(s, leg)] = _ref("DCF", out + 7, 2)
+            self.leg_cell[(s, leg)] = _ref("DCF", out + 9, 2)
             return out + len(lines)
-        self.dcf[s] = {"iv": _ref("DCF", out + 7, 2), "pv_fcf": _ref("DCF", out, 2),
+        self.dcf[s] = {"iv": _ref("DCF", out + 9, 2), "pv_fcf": _ref("DCF", out, 2),
                        "pv_tv": _ref("DCF", out + 3, 2), "ev": _ref("DCF", out + 4, 2),
-                       "nd": _ref("DCF", out + 5, 2), "eq": _ref("DCF", out + 6, 2),
+                       "nd": _ref("DCF", out + 5, 2), "mi": _ref("DCF", out + 6, 2), "pe": _ref("DCF", out + 7, 2),
+                       "eq": _ref("DCF", out + 8, 2),
                        "fcf_row": fr, "rev_row": rv, "c0": c0, "n": n}
         self.leg_cell[(s, "DCF")] = self.dcf[s]["iv"]
         if s == "base" and getattr(self, "_is_sheet", None) is not None:
@@ -1815,12 +1821,17 @@ class _Book:
             _pvt = (_li.get("pv_tv_per_share") or 0.0) * _sh_n if _sh_n and isinstance(_li.get("pv_tv_per_share"), (int, float)) else None
             _ev = (_pvf + _pvt) if (_pvf is not None and _pvt is not None) else None
             _nd = _li.get("net_debt") if isinstance(_li.get("net_debt"), (int, float)) else None
-            _eq = (_ev - _nd) if (_ev is not None and _nd is not None) else None
-            _static = {"pv_fcf": _pvf, "pv_tv": _pvt, "ev": _ev, "nd": _nd, "eq": _eq,
+            _mi = float(_li.get("minority_interest") or 0.0) if isinstance(_li.get("minority_interest"), (int, float)) else 0.0
+            _pe = float(_li.get("preferred_equity") or 0.0) if isinstance(_li.get("preferred_equity"), (int, float)) else 0.0
+            _eq = (_ev - _nd - _mi - _pe) if (_ev is not None and _nd is not None) else None
+            # Owner, 2026-10-03 (Alibaba review): the static column carries the SAME sign as the linked
+            # "Less:" cells (the engine column had shown +189bn against the link's -189bn).
+            _static = {"pv_fcf": _pvf, "pv_tv": _pvt, "ev": _ev, "nd": (-_nd if _nd is not None else None), "mi": -_mi, "pe": -_pe, "eq": _eq,
                        "iv": _li.get("value") if isinstance(_li.get("value"), (int, float)) else None}
             for lab, key in (("PV of forecast FCF", "pv_fcf"), ("PV of terminal value", "pv_tv"),
                              ("Enterprise value", "ev"),
-                             (f"Net debt — valuation basis (balance sheet {((self.dr.get('financials_used') or {}).get('balance_sheet_period') or 'latest')}, leases excluded)", "nd"),
+                             (f"Less: net debt — valuation basis (balance sheet {((self.dr.get('financials_used') or {}).get('balance_sheet_period') or 'latest')}, leases excluded)", "nd"),
+                             ("Less: minority interest", "mi"), ("Less: preferred equity", "pe"),
                              ("Equity value", "eq"),
                              ("DCF value per share", "iv")):
                 sh.label(r, 1, lab, indent=1)
