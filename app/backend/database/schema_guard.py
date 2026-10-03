@@ -105,12 +105,30 @@ def ensure_api_key_user_scope(engine: sa.engine.Engine) -> None:
     logger.info("Schema guard: api_keys uniqueness now (user_id, provider)")
 
 
+def ensure_calibration_family(engine: sa.engine.Engine) -> None:
+    """Self-learning layer (2026-10-03): calibration_versions.family, one active
+    version per family (iv / pt / est). Every pre-existing row is an iv version.
+    The dual-mode module adds the same column lazily; this guard covers a boot
+    where the ORM path reaches the table first."""
+    inspector = sa.inspect(engine)
+    if "calibration_versions" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("calibration_versions")}
+    if "family" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(sa.text("ALTER TABLE calibration_versions ADD COLUMN family "
+                             "VARCHAR(16) NOT NULL DEFAULT 'iv'"))
+    logger.info("Schema guard: added calibration_versions.family")
+
+
 def ensure_all(engine: sa.engine.Engine) -> None:
     """Run every runtime schema guard. Called at boot (main.py) and by
     scripts/sync_schema.py. Failures are logged, not raised — a startup
     crash loop is worse than serving with the diag endpoint reporting
     the missing columns."""
-    for guard in (ensure_user_extensions, ensure_api_key_user_scope):
+    for guard in (ensure_user_extensions, ensure_api_key_user_scope,
+                  ensure_calibration_family):
         try:
             guard(engine)
         except Exception:

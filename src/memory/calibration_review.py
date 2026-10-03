@@ -104,11 +104,18 @@ def _now() -> str:
 def _version(version_id: str):
     row = _db.query_one(
         "SELECT version_id, created_at, horizon, status, params_json, fit_json, "
-        "backtest_json, promoted_at FROM calibration_versions WHERE version_id = ?",
+        "backtest_json, promoted_at, family FROM calibration_versions WHERE version_id = ?",
         [version_id])
     if row is None:
         raise KeyError(version_id)
     return row
+
+
+def _family(row) -> str:
+    try:
+        return str(row["family"] or "iv")
+    except (KeyError, IndexError, TypeError):
+        return "iv"
 
 
 def _event(version_id: str, action: str, actor: Optional[str], reason: str = "") -> None:
@@ -134,6 +141,21 @@ def describe_params(params: dict) -> list[str]:
                    for name, w in weights.items()
                    if abs(float(w) - current.get(name, 0.0)) >= 0.005]
         lines.append(f"Re-weight {sector} / {profile}: " + (", ".join(changes) or "no material change"))
+    # est family (self-learning loop 1): growth adjustments in points, read by the engine as fractions
+    for scope, adj in sorted((params.get("guidance_growth_adj") or {}).items()):
+        pts = float(adj) * 100
+        lines.append(f"{'Raise' if pts > 0 else 'Lower'} management's guided revenue growth for "
+                     f"{scope.replace(':', ' ')} by {abs(pts):.1f} pt")
+    for code, adj in sorted((params.get("archetype_growth_adj") or {}).items()):
+        pts = float(adj) * 100
+        lines.append(f"{'Raise' if pts > 0 else 'Lower'} archetype {code} year 1-2 revenue growth "
+                     f"by {abs(pts):.1f} pt")
+    # pt family (loops 3 and 4)
+    for scope, c in sorted((params.get("capture") or {}).items()):
+        lines.append(f"Target capture for {scope.replace(':', ' ')}: {float(c):.0%} of the spot-to-IV gap")
+    lam = (params.get("scenario_prob_shrink") or {}).get("lambda")
+    if lam is not None:
+        lines.append(f"Shrink scenario probabilities {float(lam):.0%} of the way toward 25/50/25")
     return lines
 
 
@@ -169,7 +191,7 @@ def version_card(row) -> dict:
                   if c in (params.get("profile_weights") or {})},
     }
     return {
-        "id": row["version_id"], "kind": "calibration",
+        "id": row["version_id"], "kind": "calibration", "family": _family(row),
         "title": changes[0] if len(changes) == 1 else f"{len(changes)} calibration changes",
         "changes": changes, "status": row["status"],
         "stage": _stage(row["status"], shadow, row["promoted_at"]),
@@ -278,14 +300,16 @@ def overview() -> dict:
     vo._ensure_tables()
     rows = _db.query(
         "SELECT version_id, created_at, horizon, status, params_json, fit_json, "
-        "backtest_json, promoted_at FROM calibration_versions ORDER BY created_at DESC")
+        "backtest_json, promoted_at, family FROM calibration_versions ORDER BY created_at DESC")
     cards = [version_card(r) for r in rows[:25]]
-    active = next((c for c in cards if c["status"] == "active"), None)
+    active = next((c for c in cards if c["status"] == "active" and c["family"] == "iv"), None)
+    actives = {c["family"]: c for c in cards if c["status"] == "active"}
     horizon, diags = diagnostics()
     return {
         "generated_at": _now(),
         "labels": _label_counts(),
         "active": active,
+        "actives": actives,
         "proposals": [c for c in cards if c["status"] in ("shadow", "rejected")],
         "history": [c for c in cards if c["status"] not in ("shadow", "rejected", "active")],
         "diagnostics": diags, "diagnostics_horizon": horizon,
@@ -341,17 +365,20 @@ def promote(version_id: str, *, actor: Optional[str] = None,
         raise PromotionRefused("not eligible yet: " + "; ".join(report["reasons"]))
 
     params = vo._loads(row["params_json"]) or {}
-    predict = cf.predictor(params)
+    family = _family(row)
     now = _now()
     cohort = []
-    for r in _runs_since(str(row["created_at"])):
-        cand = predict(r)
-        if cand:
-            cohort.append([f"{version_id}|{r['run_id']}|{r['ticker']}", version_id,
-                           r["run_id"], r["ticker"], r["run_date"].isoformat(),
-                           r["base_iv"], cand, now])
+    if family == "iv":          # the frozen cohort re-blends IVs; other families have no IV effect
+        predict = cf.predictor(params)
+        for r in _runs_since(str(row["created_at"])):
+            cand = predict(r)
+            if cand:
+                cohort.append([f"{version_id}|{r['run_id']}|{r['ticker']}", version_id,
+                               r["run_id"], r["ticker"], r["run_date"].isoformat(),
+                               r["base_iv"], cand, now])
 
-    _db.execute("UPDATE calibration_versions SET status = 'retired' WHERE status = 'active'")
+    _db.execute("UPDATE calibration_versions SET status = 'retired' "
+                "WHERE status = 'active' AND family = ?", [family])
     _db.execute("UPDATE calibration_versions SET status = 'active', promoted_at = ? "
                 "WHERE version_id = ?", [now, version_id])
     if cohort:
@@ -375,7 +402,8 @@ def rollback(version_id: str, *, actor: Optional[str] = None, reason: str = "") 
                 [version_id])
     prior = _db.query_one(
         "SELECT version_id FROM calibration_versions WHERE status = 'retired' "
-        "AND promoted_at IS NOT NULL ORDER BY promoted_at DESC LIMIT 1")
+        "AND promoted_at IS NOT NULL AND family = ? ORDER BY promoted_at DESC LIMIT 1",
+        [_family(row)])
     restored = None
     if prior is not None:
         restored = prior["version_id"]
@@ -406,7 +434,7 @@ def canary_check(*, auto_rollback: bool = True) -> dict:
     effect divided out, on its own horizon."""
     _ensure_tables()
     row = _db.query_one("SELECT version_id, horizon, params_json, promoted_at FROM "
-                        "calibration_versions WHERE status = 'active' "
+                        "calibration_versions WHERE status = 'active' AND family = 'iv' "
                         "ORDER BY promoted_at DESC LIMIT 1")
     if row is None:
         return {"active": None}

@@ -100,6 +100,14 @@ def load_cfg() -> dict:
                 cfg["curves"][code].update(cv)
     except Exception:  # noqa: BLE001
         pass
+    # Self-learning loop 1: the ACTIVE est calibration's per-archetype adjustment to years 1-2
+    # revenue growth ({} until the owner promotes one; the forecast is then bit-identical).
+    cfg["archetype_growth_adj"] = {}
+    try:
+        from src.memory import calibration as _cal
+        cfg["archetype_growth_adj"] = dict(_cal.archetype_adj_map() or {})
+    except Exception:  # noqa: BLE001
+        pass
     return cfg
 
 
@@ -367,6 +375,15 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     if tg["g1"] is None:
         return None
     code, arche, arche_reason = archetype_route(profile_name, sector)
+    _adj_map = cfg.get("archetype_growth_adj") if isinstance(cfg.get("archetype_growth_adj"), dict) else {}
+    _adj = _num(_adj_map.get(code))
+    calibration_applied = None
+    if _adj:
+        tg["g1"] = tg["g1"] + _adj
+        if tg["g2"] is not None:
+            tg["g2"] = tg["g2"] + _adj
+        calibration_applied = {"archetype_growth_adj": round(_adj, 6), "archetype": code,
+                               "version_id": _adj_map.get("_version_id")}
     dec = deconstruct(tg, hist, shares, cfg, market_growth)
     T = int(dec["horizon_years"])
     rev0, m0 = hist["revenue"], hist["ebit_margin"] if hist["ebit_margin"] is not None else 0.0
@@ -494,7 +511,11 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                          curve=curve, hist=hist, interest=interest, alpha=alpha, nwc_i=nwc_i, life=life, gT=gT, tgr=tgr, wacc=wacc,
                          roic_terminal=roic_terminal, reinvest=reinvest, exit_mult=exit_mult, peer_ev_ebitda=peer_ev_ebitda, inv=inv,
                          fcf_sched=fcf_sched, fcf_margin_base=fcf_margin_base, cfg=cfg, applied=applied)
+    if calibration_applied:
+        dec["flags"].append(f"Calibration {calibration_applied['version_id']}: archetype {code} year 1-2 growth adjusted by {calibration_applied['archetype_growth_adj']:+.2%}.")
+
     return {
+        "calibration_applied": calibration_applied,
         "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],

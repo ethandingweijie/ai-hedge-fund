@@ -3659,15 +3659,27 @@ def _guidance_channel_cfg() -> dict:
     return cfg
 
 
+def _guidance_growth_adj_for(ticker: str, sector: Optional[str]) -> float:
+    """Self-learning loop 1: the ACTIVE est calibration's adjustment to guided revenue growth
+    for this sector / market (a fraction), 0.0 when nothing is promoted. Never raises."""
+    try:
+        from src.memory import calibration as _cal
+        return float(_cal.guidance_adj(ticker, sector) or 0.0)
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
 def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: float,
                                engine_schedule: Optional[list[float]], years: int,
-                               cfg: Optional[dict] = None) -> Optional[dict]:
+                               cfg: Optional[dict] = None, growth_adj: float = 0.0) -> Optional[dict]:
     """The DCF growth schedule for one scenario with the guidance channel applied, or None.
 
         years 1..E        the scenario's recommended growth: FY+1, then FY+2 when given, else FY+1
         years E+1..E+F    a linear fade from the last explicit year onto the engine's own path
         later years       the engine's path (its schedule, or flat g_engine); the terminal is untouched
 
+    `growth_adj` (self-learning loop 1) shifts the explicit years by the active calibration's
+    adjustment for the name's sector / market before the cap and floor; 0.0 is bit-identical.
     None when the channel is off, the block is missing or below min_confidence, or the
     scenario has no FY+1 revenue growth.
     """
@@ -3682,6 +3694,10 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
     if not isinstance(g1, (int, float)):
         return None
     g2 = row.get("revenue_growth_fy2")
+    _adj = float(growth_adj or 0.0)
+    if _adj:
+        g1 = float(g1) + _adj
+        g2 = (float(g2) + _adj) if isinstance(g2, (int, float)) else g2
     lo, hi = float(cfg["growth_floor"]), float(cfg["growth_cap"])
     clip = lambda x: max(min(float(x), hi), lo)   # noqa: E731
     E, F = int(cfg["explicit_years"]), int(cfg["fade_years"])
@@ -3699,10 +3715,14 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
             sched.append(round(explicit[-1] * (1.0 - w) + engine_path[t - 1] * w, 6))
         else:
             sched.append(round(engine_path[t - 1], 6))
-    return {"schedule": sched, "explicit": [round(x, 6) for x in explicit], "explicit_years": E, "fade_years": F,
-            "engine_path": [round(x, 6) for x in engine_path], "engine_year1": round(float(g_engine), 6),
-            "confidence": conf, "fiscal_year_1": est.get("fiscal_year_1"), "fiscal_year_2": est.get("fiscal_year_2"),
-            "source": "deep research 2G → guidance_estimates"}
+    out = {"schedule": sched, "explicit": [round(x, 6) for x in explicit], "explicit_years": E, "fade_years": F,
+           "engine_path": [round(x, 6) for x in engine_path], "engine_year1": round(float(g_engine), 6),
+           "confidence": conf, "fiscal_year_1": est.get("fiscal_year_1"), "fiscal_year_2": est.get("fiscal_year_2"),
+           "source": "deep research 2G → guidance_estimates"}
+    if _adj:
+        out["growth_adj"] = round(_adj, 6)
+        out["growth_adj_source"] = "est calibration (self-learning loop 1)"
+    return out
 
 
 def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario: str, gf: Optional[dict],
@@ -14293,7 +14313,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                             + "; ".join(f"{m.upper() if m == 'eps' else m.upper() if m in ('ebit', 'ebitda') else m} from {lab}" for m, lab in _srcs.items())
                                             + "; consensus kept beside each leg for comparison")
             _gc = None if _gf else _guidance_channel_schedule(
-                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS)
+                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS,
+                growth_adj=_guidance_growth_adj_for(ticker, sector))
             if _gc:
                 _growth_schedule = _gc["schedule"]
                 if scenario == "base":

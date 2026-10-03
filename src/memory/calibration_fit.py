@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS calibration_versions (
     params_json   TEXT NOT NULL,
     fit_json      TEXT,
     backtest_json TEXT,
-    promoted_at   TEXT
+    promoted_at   TEXT,
+    family        TEXT NOT NULL DEFAULT 'iv'
 )
 """
 _DDL_RUNS = """
@@ -90,7 +91,29 @@ def _ensure_tables() -> None:
         return
     _db.ensure_table(_DDL_VERSIONS)
     _db.ensure_table(_DDL_RUNS)
+    # Self-learning layer: one active version per family (iv / pt / est). Tables created
+    # before 2026-10 lack the column; every existing row is an iv version.
+    _db.add_column_if_missing("calibration_versions", "family", "TEXT NOT NULL DEFAULT 'iv'")
     _tables_ready_key = key
+
+
+_VERSION_COLUMNS = ["version_id", "created_at", "horizon", "status", "params_json",
+                    "fit_json", "backtest_json", "promoted_at", "family"]
+
+
+def record_version(*, version_id: str, horizon: str, status: str, params: dict,
+                   fit: dict, backtest: dict, family: str = "iv",
+                   today: Optional[date] = None) -> None:
+    """Store a proposal. A new shadow supersedes the older shadows OF ITS FAMILY only."""
+    _ensure_tables()
+    today = today or datetime.now(timezone.utc).date()
+    if status == "shadow":
+        _db.execute("UPDATE calibration_versions SET status = 'superseded' "
+                    "WHERE status = 'shadow' AND family = ?", [family])
+    _db.execute(
+        vo._upsert_sql("calibration_versions", "version_id", _VERSION_COLUMNS),
+        [version_id, today.isoformat(), horizon, status, json.dumps(params),
+         json.dumps(fit, default=str), json.dumps(backtest, default=str), None, family])
 
 
 # ── re-blending from stored method values ───────────────────────────────────
@@ -353,15 +376,8 @@ def fit_and_record(*, horizon: Optional[str] = None, today: Optional[date] = Non
     version_id = f"cal-{today.isoformat()}-{digest}"
 
     if write:
-        if status == "shadow":
-            _db.execute("UPDATE calibration_versions SET status = 'superseded' "
-                        "WHERE status = 'shadow'")
-        _db.execute(
-            vo._upsert_sql("calibration_versions", "version_id",
-                           ["version_id", "created_at", "horizon", "status",
-                            "params_json", "fit_json", "backtest_json", "promoted_at"]),
-            [version_id, today.isoformat(), chosen, status, json.dumps(params),
-             json.dumps(base, default=str), json.dumps(backtest, default=str), None])
+        record_version(version_id=version_id, horizon=chosen, status=status, params=params,
+                       fit=base, backtest=backtest, family="iv", today=today)
     return {"status": status, "version_id": version_id, "params": params,
             "backtest_verdict": backtest["verdict"], "written": write, **base}
 
@@ -401,13 +417,17 @@ def list_versions() -> list[dict]:
 # ── B5: forward shadow ──────────────────────────────────────────────────────
 
 def shadow_report(version_id: str, *, today: Optional[date] = None) -> dict:
-    """Live vs the proposal on runs made AFTER it was proposed (FT2)."""
+    """Live vs the proposal on runs made AFTER it was proposed (FT2). An est-family
+    proposal is scored on reported prints instead (estimate_outcomes.shadow_report)."""
     _ensure_tables()
     today = today or datetime.now(timezone.utc).date()
-    row = _db.query_one("SELECT version_id, created_at, horizon, status, params_json "
+    row = _db.query_one("SELECT version_id, created_at, horizon, status, params_json, family "
                         "FROM calibration_versions WHERE version_id = ?", [version_id])
     if row is None:
         raise KeyError(version_id)
+    if (row["family"] or "iv") == "est":
+        from src.memory import estimate_outcomes as _eo
+        return _eo.shadow_report(version_id, today=today)
     params = vo._loads(row["params_json"]) or {}
     created = date.fromisoformat(str(row["created_at"])[:10])
     predict = predictor(params)

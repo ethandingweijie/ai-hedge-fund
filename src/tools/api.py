@@ -2330,6 +2330,11 @@ def get_earnings_surprises(
             "eps_estimated": eps_est,
             "surprise_pct":  round(surprise_pct, 2),
             "beat":          eps_act >= eps_est,
+            # Kept since 2026-10-03: the estimate scorer tracks quarterly revenue, and the
+            # assumption steward reads revenueActual (it had always been missing).
+            "revenue_actual":    _safe_float(row.get("revenueActual")),
+            "revenue_estimated": _safe_float(row.get("revenueEstimated")),
+            "revenueActual":     _safe_float(row.get("revenueActual")),
         })
 
     results.sort(key=lambda x: x["date"], reverse=True)

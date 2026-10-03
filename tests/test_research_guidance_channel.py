@@ -229,7 +229,8 @@ def test_the_constants_are_proposed_and_read_by_the_engine():
 
 def test_the_engine_wires_the_channel_into_the_scenario_loop_and_the_payload():
     src = inspect.getsource(d.run_dcf_agent)
-    assert "_guidance_channel_schedule(\n                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS)" in src
+    assert ("_guidance_channel_schedule(" + chr(10) + "                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS," + chr(10)
+            + "                growth_adj=_guidance_growth_adj_for(ticker, sector))") in src
     assert '"guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied),' in src
     assert '"guidance_channel": _gc,' in src
     assert 'state["data"].get("guidance_estimates", {})' in src
@@ -369,3 +370,25 @@ def test_the_brief_markers_resolve_to_the_sections_references_in_order():
     from pathlib import Path
     pipe = (Path(__file__).resolve().parents[1] / "src" / "pipeline.py").read_text(encoding="utf-8")
     assert pipe.index("Industry brief loaded from archive") > pipe.index("resolve_brief_references as _rbr")
+
+
+def test_the_est_calibration_shifts_the_explicit_years_and_zero_is_bit_identical(monkeypatch):
+    """Self-learning loop 1: the ACTIVE est calibration's adjustment reaches the channel as
+    growth_adj; 0.0 (nothing promoted) reproduces the schedule exactly."""
+    monkeypatch.delenv("GUIDANCE_CHANNEL", raising=False)
+    base = d._guidance_channel_schedule(_EST, "base", 0.10, None, 10, _CFG)
+    same = d._guidance_channel_schedule(_EST, "base", 0.10, None, 10, _CFG, growth_adj=0.0)
+    assert same == base and "growth_adj" not in same
+    low = d._guidance_channel_schedule(_EST, "base", 0.10, None, 10, _CFG, growth_adj=-0.02)
+    assert low["explicit"] == [pytest.approx(0.045), pytest.approx(0.04)]
+    assert low["schedule"][0] == pytest.approx(0.045) and low["growth_adj"] == -0.02
+    assert low["schedule"][5:] == base["schedule"][5:]                      # the engine path is untouched
+    # the reader is inert until an est version is active, and never raises
+    from src.memory import calibration as cal
+    monkeypatch.setattr(cal, "active_version", lambda family="iv": None)
+    assert d._guidance_growth_adj_for("ZZCO", "Tech") == 0.0
+    monkeypatch.setattr(cal, "active_version", lambda family="iv": {"version_id": "calest-x", "family": "est",
+                        "params": {"guidance_growth_adj": {"sector:Tech": -0.02, "market:US": 0.01}}})
+    assert d._guidance_growth_adj_for("ZZCO", "Tech") == -0.02               # sector scope wins
+    assert d._guidance_growth_adj_for("ZZCO", "Energy") == 0.01              # then the market
+    assert d._guidance_growth_adj_for("0005.HK", None) == 0.0

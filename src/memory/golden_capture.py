@@ -78,6 +78,20 @@ FROZEN_TARGETS: tuple[str, ...] = (
 
 ALL_TARGETS: tuple[str, ...] = (FMP_TARGET,) + FROZEN_TARGETS
 
+
+def _new_calibration_family(args: tuple, kwargs: dict) -> bool:
+    family = kwargs.get("family", args[0] if args else "iv")
+    return family in ("pt", "est")
+
+
+#: Unrecorded calls a replay may answer with None instead of a miss, because None is
+#: exactly what production returns for them until the owner promotes something: the
+#: self-learning calibration families (pt, est) added 2026-10-03, which every fixture
+#: recorded before that date never asked for. Anything else unrecorded is still a miss.
+INERT_UNRECORDED: dict[str, Callable[[tuple, dict], bool]] = {
+    "src.memory.calibration.active_version": _new_calibration_family,
+}
+
 #: Positional argument indexes that must never enter a replay key or a
 #: fixture. ``_fmp_get(path, params, api_key, uncap)`` takes the key
 #: POSITIONALLY at index 2 — filtering only the ``api_key`` keyword let a live
@@ -389,6 +403,9 @@ class Replayer:
             with replayer._lock:
                 queue = replayer._queues.get(key)
                 if not queue:
+                    inert = INERT_UNRECORDED.get(target)
+                    if inert is not None and inert(args, kwargs):
+                        return None
                     replayer.misses.append(key)
                     raise ReplayError(
                         f"unrecorded call during golden replay: {target}{_sig(args, kwargs)}\n"

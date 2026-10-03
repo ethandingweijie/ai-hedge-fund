@@ -601,6 +601,13 @@ async def run_valuation_outcomes_task(ctx: dict) -> dict:
     try:
         report = await asyncio.to_thread(vo.score_matured)
         report["actions"] = await asyncio.to_thread(vo.score_actions)
+        # Self-learning layer (2026-10-03): the flat ledger and the print-scored loops.
+        # Each loop is guarded inside run_daily; the whole sweep is guarded here.
+        try:
+            from src.memory import learning_sweep as _ls
+            report["learning"] = await asyncio.to_thread(_ls.run_daily)
+        except Exception as exc:                           # noqa: BLE001
+            report["learning"] = {"error": str(exc)[:200]}
         # B6 FT4: the live canary for a promoted calibration. It reads the
         # labels this sweep just wrote, so it runs after them; it rolls a
         # regressing calibration back on its own.
@@ -628,6 +635,13 @@ async def run_calibration_fit_task(ctx: dict) -> dict:
     from src.memory import calibration_fit as cf
     try:
         report = await asyncio.to_thread(cf.fit_and_record)
+        # Self-learning layer: the est family (guidance / archetype growth adjustments,
+        # scored on reported prints) is proposed on the same weekly clock.
+        try:
+            from src.memory import estimate_outcomes as _eo
+            report["est"] = await asyncio.to_thread(_eo.propose_est)
+        except Exception as exc:                           # noqa: BLE001
+            report["est"] = {"error": str(exc)[:200]}
         await asyncio.to_thread(cf.mark_fit_run, report)
     except Exception as exc:                               # noqa: BLE001
         logger.warning("[sched] calibration_fit raised %s: %s",
@@ -636,7 +650,7 @@ async def run_calibration_fit_task(ctx: dict) -> dict:
     logger.info("[sched] calibration_fit: %s", {k: report.get(k) for k in
                                                 ("status", "version_id", "horizon")})
     return {k: report.get(k) for k in ("status", "version_id", "horizon",
-                                       "backtest_verdict")}
+                                       "backtest_verdict", "est")}
 
 
 async def run_regional_comps_refresh_task(ctx: dict) -> dict:
