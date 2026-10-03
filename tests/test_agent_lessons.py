@@ -199,7 +199,7 @@ def test_ingestion_newest_first(lessons):
     ]:
         _db.execute(lessons._SAVE_SQL, [
             lid, lessons._lesson_hash("dcf_engine", lesson), "dcf_engine",
-            None, "run-x", lesson, "{}", created,
+            None, "run-x", lesson, "{}", created, "ticker", None,   # scope, scope_key (loop 7)
         ])
     got = lessons.get_active_lessons("dcf_engine")
     assert got[0] == "newer lesson"
@@ -302,6 +302,6 @@ def test_dcf_calibration_extractor_ingests_lessons():
     feeds the DCF engine."""
     from src.agents.industry import deep_research
     src = inspect.getsource(deep_research._extract_dcf_calibration)
-    assert 'get_active_lessons("dcf_engine")' in src
+    assert 'get_active_lessons("dcf_engine", profile=_cell_profile, market=_cell_market)' in src   # loop 7: cell-aware
     assert "Past misses to avoid" in src
     assert "_lessons_block" in src

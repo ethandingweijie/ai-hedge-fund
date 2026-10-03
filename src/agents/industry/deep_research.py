@@ -929,9 +929,19 @@ def _extract_dcf_calibration(
     # misses (src/memory/agent_lessons). Pure prompt-append on the one LLM
     # surface that feeds the DCF engine — the engine's hard clamps are
     # unaffected. [] when the kill switch is off or nothing is stored.
+    # Self-learning loop 7: the name's profile and market (its latest archived run) select
+    # the profile-scope lessons and the prior misses in that cell. Prompt-append only.
+    _cell_profile = _cell_market = None
+    try:
+        from src.memory import run_features as _rf
+        _feat = _rf.latest_for_ticker(ticker)
+        if _feat:
+            _cell_profile, _cell_market = _feat.get("profile"), _feat.get("market")
+    except Exception:
+        pass
     try:
         from src.memory.agent_lessons import get_active_lessons
-        _dcf_lessons = get_active_lessons("dcf_engine")
+        _dcf_lessons = get_active_lessons("dcf_engine", profile=_cell_profile, market=_cell_market)
     except Exception:
         _dcf_lessons = []
     _lessons_block = ""
@@ -939,6 +949,16 @@ def _extract_dcf_calibration(
         _lessons_block = (
             "\n\nPast misses to avoid (post-mortems of prior valuation errors):\n"
             + "\n".join(f"  - {l}" for l in _dcf_lessons)
+        )
+    try:
+        from src.memory.agent_lessons import retrieve_prior_misses
+        _prior_misses = retrieve_prior_misses(_cell_profile, _cell_market)
+    except Exception:
+        _prior_misses = []
+    if _prior_misses:
+        _lessons_block += (
+            f"\n\nPRIOR MISSES IN THIS PROFILE ({_cell_profile}; matured targets of the agent's own runs):\n"
+            + "\n".join(f"  - {m}" for m in _prior_misses)
         )
 
     try:

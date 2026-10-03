@@ -122,13 +122,33 @@ def ensure_calibration_family(engine: sa.engine.Engine) -> None:
     logger.info("Schema guard: added calibration_versions.family")
 
 
+def ensure_agent_lessons_scope(engine: sa.engine.Engine) -> None:
+    """Self-learning loop 7 (2026-10-04): agent_lessons.scope / scope_key. Every
+    pre-existing row is a ticker-scope lesson."""
+    inspector = sa.inspect(engine)
+    if "agent_lessons" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("agent_lessons")}
+    pending = []
+    if "scope" not in cols:
+        pending.append("ALTER TABLE agent_lessons ADD COLUMN scope VARCHAR(16) NOT NULL DEFAULT 'ticker'")
+    if "scope_key" not in cols:
+        pending.append("ALTER TABLE agent_lessons ADD COLUMN scope_key VARCHAR(200)")
+    if not pending:
+        return
+    with engine.begin() as conn:
+        for stmt in pending:
+            conn.execute(sa.text(stmt))
+    logger.info("Schema guard: agent_lessons scope columns added (%d)", len(pending))
+
+
 def ensure_all(engine: sa.engine.Engine) -> None:
     """Run every runtime schema guard. Called at boot (main.py) and by
     scripts/sync_schema.py. Failures are logged, not raised — a startup
     crash loop is worse than serving with the diag endpoint reporting
     the missing columns."""
     for guard in (ensure_user_extensions, ensure_api_key_user_scope,
-                  ensure_calibration_family):
+                  ensure_calibration_family, ensure_agent_lessons_scope):
         try:
             guard(engine)
         except Exception:

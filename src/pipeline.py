@@ -744,6 +744,24 @@ def run_advanced_pipeline(
                     for _t in tickers:
                         _agent_lessons.maybe_generate_lessons(
                             _t, _prior_reports.get(_t))
+                    # Self-learning loop 7: the cell's lesson, once per (market, profile)
+                    # in this run. The DCF has not run yet, so the profile is the
+                    # ticker's latest archived one (run_features).
+                    if _agent_lessons.profile_lessons_enabled():
+                        _seen_cells: set = set()
+                        for _t in tickers:
+                            try:
+                                from src.memory import run_features as _rf
+                                _feat = _rf.latest_for_ticker(_t)
+                            except Exception:
+                                _feat = None
+                            if not _feat or not _feat.get("market") or not _feat.get("profile"):
+                                continue
+                            _cell = (_feat["market"], _feat["profile"])
+                            if _cell in _seen_cells:
+                                continue
+                            _seen_cells.add(_cell)
+                            _agent_lessons.maybe_generate_profile_lessons(*_cell)
             except Exception as _lessons_exc:
                 print(f"  [lessons] lesson generation failed: {_lessons_exc}")
 

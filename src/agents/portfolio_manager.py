@@ -1018,6 +1018,15 @@ def _forward_estimates_block(ticker: str, state) -> str:
                 lines.append("Forecast checks that FAILED: " + "; ".join(f"{i['name']}: {i['detail']}" for i in _bad)[:400])
             for f in (gfc.get("flags") or [])[:2]:
                 lines.append(f"Forecast flag: {f}")
+        # Self-learning loop 7: the profile's prior misses, one line; the numbers are unchanged.
+        try:
+            from src.memory.agent_lessons import retrieve_prior_misses as _rpm
+            from src.memory.valuation_outcomes import market_of as _market_of
+            _pm_misses = _rpm(dcf.get("profile"), _market_of(ticker)) if dcf.get("profile") else []
+        except Exception:
+            _pm_misses = []
+        if _pm_misses:
+            lines.append("Prior misses in this profile (matured targets of our own runs): " + "; ".join(_pm_misses))
         # Owner, 2026-10-03 ("rationale should be captured"): the forward multiples price on the
         # guidance-derived FY+1 estimates; the writer says so once, with consensus beside ours.
         _legs = ((dcf.get("base") or {}).get("leg_inputs") or {})
