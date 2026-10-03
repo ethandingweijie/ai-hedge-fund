@@ -6709,13 +6709,19 @@ def _compute_method_value(
     # Wave 10 renewables (owner methodology, 2026-10-03): the PPA project-finance DCF on an
     # accepted ppa input; without one the name falls through to the core DCF below.
     if method_name == "PPA-backed DCF" and isinstance(most_recent.get("_ppa_detail"), dict):
-        _ppa_out = _ppa_project_finance_dcf(
-            most_recent["_ppa_detail"], scenario=scenario, wacc=wacc, shares=shares, net_debt=net_debt,
-            minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
-            revenue_base=revenue_base, ebitda=most_recent.get("ebitda"),
-            da=most_recent.get("depreciation_and_amortization"))
+        try:
+            _ppa_out = _ppa_project_finance_dcf(
+                most_recent["_ppa_detail"], scenario=scenario, wacc=wacc, shares=shares, net_debt=net_debt,
+                minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
+                revenue_base=revenue_base, ebitda=most_recent.get("ebitda"),
+                da=most_recent.get("depreciation_and_amortization"))
+        except Exception as _ppa_exc:  # noqa: BLE001 -- the report says why the leg did not price
+            _leg_trace(kind="ppa_dcf", source="accepted ppa input", error=f"{type(_ppa_exc).__name__}: {_ppa_exc}"[:200])
+            return None
         if _ppa_out is not None:
             _leg_trace(kind="ppa_dcf", source="accepted ppa input", **{k: v for k, v in _ppa_out.items() if k != "value"})
+            if _ppa_out["value"] <= 0:
+                _leg_trace(non_positive_equity=True)
             return _ppa_out["value"] if _ppa_out["value"] > 0 else None
     peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
                                      ticker=ticker, market_cap=market_cap)
@@ -14614,7 +14620,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     if method_name not in method_values:
                         if (_dcf_family_disabled
                                 and method_name in _DCF_PROJECTION_FAMILY
-                                and method_name not in _OE_GATE_EXEMPT):
+                                and method_name not in _OE_GATE_EXEMPT
+                                # Wave 10 renewables (2026-10-03): the project-finance DCF on an
+                                # accepted ppa input projects the portfolio's contracts, not today's
+                                # owner earnings, so the OE<=0 gate does not switch it off (BEPI: the
+                                # gate had left the accepted leg "uncomputable").
+                                and not (method_name == "PPA-backed DCF"
+                                         and isinstance(most_recent.get("_ppa_detail"), dict))):
                             # OE≤0 cascade (task #18): no positive
                             # owner-earnings year to anchor a projection —
                             # DCF-family methods return None and

@@ -225,6 +225,14 @@ def build_one(ticker: str, kind: str) -> dict:
                        "detail": f"{eng.get('contracted_pct')}" if eng.get("contracted_pct") is not None else "missing"})
         checks.append({"check": "remaining PPA term plausible", "ok": (1.0 <= (eng.get("remaining_ppa_years") or 0.0) <= 35.0) or None,
                        "detail": f"{eng.get('remaining_ppa_years')} years" if eng.get("remaining_ppa_years") else "missing"})
+        # A portfolio larger than the listed entity's economic share (BEPC carries a slice of Brookfield
+        # Renewable; the pre-fill returned the whole fleet): contracted revenue above the market cap is the
+        # tell. Informational -- the reviewer decides whose portfolio this is.
+        _mc = ctx.get("market_cap") or 0.0
+        checks.append({"check": "portfolio scale vs the listed entity", "ok": (None if (headline and _mc and headline > _mc) else True) if headline else None,
+                       "detail": (f"contracted revenue {headline / 1e9:,.2f}bn vs market cap {_mc / 1e9:,.2f}bn -- "
+                                  + ("larger than the entity's market value: confirm the figures are the LISTED entity's share of the portfolio"
+                                     if (_mc and headline > _mc) else "within the entity's scale")) if headline and _mc else "no headline or market cap"})
         checks.append({"check": "contracted price available", "ok": bool(eng.get("avg_ppa_price")),
                        "detail": (f"{eng.get('avg_ppa_price'):,.2f} USD/MWh" + (" (derived from contracted revenue)" if eng.get("avg_ppa_price_derived") else ""))
                        if eng.get("avg_ppa_price") else "no PPA price and no contracted revenue: the leg cannot price"})

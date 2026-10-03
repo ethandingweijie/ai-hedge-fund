@@ -1,0 +1,439 @@
+{
+ "wave": "10",
+ "as_of": "2026-10-03",
+ "dynamic_multiples_enabled": "default",
+ "tickers": {
+  "00916.HK": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.583333
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "PPA-backed DCF",
+     "weight": 0.4,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [],
+   "bear": 9.76,
+   "base": 17.14,
+   "bull": 25.45,
+   "scenarios_ordered": true,
+   "target_12m_base": 11.17,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 5.195000171661377,
+   "iv_vs_spot": 2.299326166243143,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 1.4817098706083611,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $15.98 vs price $6.44 on 2024-12-31 = 148% gap; 12m later the market was closer (141% vs 3%)",
+   "currency": "HKD",
+   "regime": null
+  },
+  "BEPI": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.583333
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "PPA-backed DCF",
+     "weight": 0.4,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [
+    "PPA-backed DCF"
+   ],
+   "bear": 76.82,
+   "base": 76.82,
+   "bull": 112.73,
+   "scenarios_ordered": true,
+   "target_12m_base": 46.31,
+   "consensus": null,
+   "iv_vs_consensus": null,
+   "spot": 15.795,
+   "iv_vs_spot": 3.8635644191199745,
+   "consensus_spread": null,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 9.551233391281839,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $175.78 vs price $16.66 on 2024-12-31 = 955% gap; 12m later the market was closer (984% vs 3%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "ENLT": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PPA-backed DCF",
+     "value_key": "PPA-backed DCF",
+     "weight": 0.444444
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.388889
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "DDM",
+     "weight": 0.1,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.9,
+   "methods_unavailable": [
+    "DDM"
+   ],
+   "bear": 1.15,
+   "base": 8.57,
+   "bull": 15.21,
+   "scenarios_ordered": true,
+   "target_12m_base": 37.58,
+   "consensus": 93.75,
+   "iv_vs_consensus": -0.9085866666666667,
+   "spot": 66.58,
+   "iv_vs_spot": -0.871282667467708,
+   "consensus_spread": 0.4081,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.5991466666666667,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.7595299544757573,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $4.15 vs price $17.25 on 2024-12-31 = 76% gap; 12m later the market was closer (91% vs 62%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "BEPC": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.6
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.4
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "PPA-backed DCF",
+     "weight": 0.4,
+     "reason": "non_positive"
+    },
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.35,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.25,
+   "methods_unavailable": [],
+   "bear": null,
+   "base": null,
+   "bull": null,
+   "scenarios_ordered": null,
+   "target_12m_base": null,
+   "consensus": 39.0,
+   "iv_vs_consensus": null,
+   "spot": null,
+   "iv_vs_spot": null,
+   "consensus_spread": 0.3675,
+   "regime_flag": null,
+   "pt_vs_consensus": null,
+   "pt_bridge_present": false,
+   "no_peer_multiples": false,
+   "backtest_status": "fired",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 2.5260293714805413,
+   "backtest_forward_verdict": "MARKET_CLOSER",
+   "backtest_note": "Calibration Error: T-1 blended IV $97.53 vs price $27.66 on 2024-12-31 = 253% gap; 12m later the market was closer (154% vs 28%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "CWEN": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PPA-backed DCF",
+     "value_key": "PPA-backed DCF",
+     "weight": 0.4
+    },
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.35
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.15
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.1
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [],
+   "weight_surviving": 1.0,
+   "methods_unavailable": [],
+   "bear": 19.75,
+   "base": 19.75,
+   "bull": 43.4,
+   "scenarios_ordered": true,
+   "target_12m_base": 25.98,
+   "consensus": 43.14,
+   "iv_vs_consensus": -0.5421882243857209,
+   "spot": 29.34,
+   "iv_vs_spot": -0.3268575323790047,
+   "consensus_spread": 0.4703,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.39777468706536856,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.3656075254307355,
+   "backtest_forward_verdict": "MODEL_CLOSER",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $35.51 vs price $26.00 on 2024-12-31 = 37% gap; 12m later the model was closer (7% vs 22%)",
+   "currency": "USD",
+   "regime": null
+  },
+  "XIFR": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": true,
+   "effective_weights": [
+    {
+     "method": "PPA-backed DCF",
+     "value_key": "PPA-backed DCF",
+     "weight": 0.615385
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.230769
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.153846
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "EV/EBITDA",
+     "weight": 0.35,
+     "reason": "non_positive"
+    }
+   ],
+   "weight_surviving": 0.65,
+   "methods_unavailable": [],
+   "bear": 74.24,
+   "base": 154.93,
+   "bull": 236.76,
+   "scenarios_ordered": true,
+   "target_12m_base": 82.66,
+   "consensus": 12.25,
+   "iv_vs_consensus": 11.647346938775511,
+   "spot": 10.39,
+   "iv_vs_spot": 13.911453320500481,
+   "consensus_spread": 0.179,
+   "regime_flag": null,
+   "pt_vs_consensus": 5.747755102040816,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "skipped",
+   "backtest_status_basis": null,
+   "backtest_t1_gap": null,
+   "backtest_forward_verdict": "UNSCORABLE",
+   "backtest_note": "Skipped \u2014 invalid T-1 price",
+   "currency": "USD",
+   "regime": null
+  },
+  "ORA": {
+   "seeded_sector": {
+    "label": "Renewable Utilities",
+    "sector": "Energy"
+   },
+   "profile": "IPP",
+   "routing_winner": "industry_map",
+   "industry_routing": true,
+   "profile_fallback_used": false,
+   "anchor_method": "PPA-backed DCF",
+   "anchor_in_blend": false,
+   "effective_weights": [
+    {
+     "method": "EV/EBITDA",
+     "value_key": "EV/EBITDA",
+     "weight": 0.583333
+    },
+    {
+     "method": "P/BV",
+     "value_key": "P/BV",
+     "weight": 0.25
+    },
+    {
+     "method": "DDM",
+     "value_key": "DDM",
+     "weight": 0.166667
+    }
+   ],
+   "proxied_weight": 0,
+   "proxied_legs": [],
+   "dropped_legs": [
+    {
+     "method": "PPA-backed DCF",
+     "weight": 0.4,
+     "reason": "uncomputable"
+    }
+   ],
+   "weight_surviving": 0.6,
+   "methods_unavailable": [
+    "PPA-backed DCF"
+   ],
+   "bear": 43.85,
+   "base": 67.76,
+   "bull": 92.37,
+   "scenarios_ordered": true,
+   "target_12m_base": 80.31,
+   "consensus": 124.71,
+   "iv_vs_consensus": -0.45665944992382324,
+   "spot": 92.86,
+   "iv_vs_spot": -0.27029937540383364,
+   "consensus_spread": 0.343,
+   "regime_flag": null,
+   "pt_vs_consensus": -0.35602598027423615,
+   "pt_bridge_present": true,
+   "no_peer_multiples": false,
+   "backtest_status": "passed",
+   "backtest_status_basis": "forward_outcome",
+   "backtest_t1_gap": 0.02846825931605901,
+   "backtest_forward_verdict": "TIE",
+   "backtest_note": "T-1 passed on outcome (blended): T-1 blended IV $69.65 vs price $67.72 on 2024-12-31 = 3% gap; 12m later model and market were level (37% vs 39%)",
+   "currency": "USD",
+   "regime": null
+  }
+ }
+}
