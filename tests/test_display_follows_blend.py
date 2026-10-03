@@ -37,8 +37,9 @@ def test_the_blend_is_the_weighted_legs_only():
 def test_the_payload_publishes_display_blocks_only_for_weighted_legs():
     src = inspect.getsource(d.run_dcf_agent)
     assert "_legs_in_blend = _blend_legs(scenario_results)" in src
-    assert '"segment_sotp":          _segment_sotp_pub,' in src
-    assert "if _sotp_analyst_weight is not None else None" in src
+    # 2026-10-03: one SOTP block for every SOTP leg, built from the weighted leg's own trace.
+    assert "sotp_breakdown = _sotp_family_breakdown(scenario_results, _legs_in_blend, sotp_breakdown, shares, _output_currency)" in src
+    assert '"segment_sotp"' not in src
     assert "and _sotp_analyst_declared) else None)" in src
 
 
@@ -85,7 +86,8 @@ def test_the_pdf_lists_only_weighted_legs_and_omits_unweighted_sotp():
     assert set(pr._legs_in_blend(MOH)) == set(_MOH_W)
     assert pr._leg_carries_weight(MOH, pr._SOTP_SEGMENT_LEGS) is False
     assert pr._leg_carries_weight({}, pr._SOTP_SEGMENT_LEGS) is True       # legacy payload: no weight record
-    assert pr._segment_sotp_block_pdf({**MOH, "segment_sotp": {"segments": [{"segment": "x"}]}}, None, 400.0) == []
+    assert not hasattr(pr, "_segment_sotp_block_pdf")                   # one SOTP block since 2026-10-03
+    assert pr._leg_carries_weight(MOH, pr._SOTP_FAMILY_LEGS) is False
     src = inspect.getsource(pr)
     assert "Cross-checks (computed, not in the blend)" not in src
 

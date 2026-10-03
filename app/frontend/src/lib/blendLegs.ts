@@ -17,6 +17,13 @@ const SCENARIOS = ['bear', 'base', 'bull'] as const;
 
 export const SOTP_ANALYST_LEGS = ['SOTP (analyst)', 'Analyst SOTP'];
 export const SOTP_SEGMENT_LEGS = ['SOTP (segments)', 'Sum of Parts', 'SOTP', 'SOTP (Segments)'];
+export const SOTP_LOOKTHROUGH_LEGS = ['SOTP / NAV', 'SOTP / NAV (look-through)', 'NAV Discount'];
+export const SOTP_PUBLISHED_LEGS = ['SOTP (published)', 'Published SOTP'];
+export const SOTP_FRE_LEGS = ['SOTP (FRE + carry)', 'SOTP (FRE+Carry)'];
+/** Every sum-of-the-parts leg; all render in the one analyst format (owner, 2026-10-03). */
+export const SOTP_FAMILY_LEGS = [
+  ...SOTP_ANALYST_LEGS, ...SOTP_SEGMENT_LEGS, ...SOTP_LOOKTHROUGH_LEGS, ...SOTP_PUBLISHED_LEGS, ...SOTP_FRE_LEGS,
+];
 export const NAV_DISPLAY_LEGS = ['NAV (Cap Rates)', 'RNAV (published)', 'NAV (published)', 'NAV', 'RNAV'];
 export const BANK_DISPLAY_LEG = 'GGM (P/B)';
 export const DCF_FAMILY_LEGS = [

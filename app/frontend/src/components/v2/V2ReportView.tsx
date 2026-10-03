@@ -59,8 +59,7 @@ import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { ExportFab } from '@/components/report/ExportFab';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
-import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
-import { blendLeg, legWeight, SOTP_ANALYST_LEGS, SOTP_SEGMENT_LEGS } from '@/lib/blendLegs';
+import { sotpFor } from '@/lib/sotpBreakdown';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
@@ -652,11 +651,8 @@ function ValuationBody({
           ticker (dcf_range[ticker].sotp_breakdown). Stacks below whichever
           sector branch rendered above; the DCF methodology panel follows. ── */}
       {/* Owner, 2026-09-27 (MOH): only a SOTP leg that carries weight is shown. */}
-      {(() => { const _l = blendLeg(dcfRange, SOTP_ANALYST_LEGS); return _l && dcfRange?.sotp_breakdown ? (
-        <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} weight={legWeight(dcfRange, _l)} />
-      ) : null; })()}
-      {(() => { const _l = blendLeg(dcfRange, SOTP_SEGMENT_LEGS); return _l && dcfRange?.segment_sotp ? (
-        <SegmentSotpPanel sotp={dcfRange.segment_sotp} weight={legWeight(dcfRange, _l)} />
+      {(() => { const _s = sotpFor(dcfRange); return _s ? (
+        <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
       ) : null; })()}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />

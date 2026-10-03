@@ -302,52 +302,6 @@ export interface SaasMetrics {
   evidence?: string | null;
 }
 
-// ── Segment SOTP (business segments priced on EV/EBITDA bands) ──────────────
-// Emitted by dcf_agent._segment_sotp_block at dcf_range[ticker].segment_sotp.
-// Separate from `sotp_breakdown` below, which is the ANALYST SOTP.
-export interface SegmentSotpRow {
-  segment: string;
-  type?: string | null;
-  /** 'ev_ebitda' | 'carrying_value' | 'ev_revenue' | 'excluded' */
-  basis?: string | null;
-  revenue?: number | null;
-  ebitda_margin?: number | null;
-  ebitda_margin_source?: string | null;
-  /** Estimated from revenue x margin — NOT a disclosed figure. */
-  ebitda?: number | null;
-  band?: number[] | null;
-  multiple?: number | null;
-  /** "static band (high end)" or "dynamic, accepted <date>" (Phase 2). */
-  multiple_source?: string | null;
-  /** Why the band sits where it does -- stored with the multiple. */
-  band_rationale?: string | null;
-  ev?: number | null;
-  share_of_ev?: number | null;
-  note?: string | null;
-}
-
-export interface SegmentSotp {
-  currency?: string | null;
-  segments: SegmentSotpRow[];
-  total_ev?: number | null;
-  /** The parts summed before the growth premium; shares of EV are measured against it. */
-  sum_of_parts_ev?: number | null;
-  growth_premium?: number | null;
-  /** The leg's weight in the blend -- the block is only published when it carries one. */
-  weight?: number | null;
-  value_per_share?: number | null;
-  shares?: number | null;
-  priced_share_of_revenue?: number | null;
-  basis_note?: string | null;
-  /** A sum of the parts has to sum — see _segment_sotp_block. */
-  checks?: {
-    share_of_ev_sum?: number | null;
-    share_of_ev_sums_to_100?: boolean | null;
-    revenue_fully_priced?: boolean | null;
-    reminders?: string[] | null;
-  } | null;
-}
-
 // ── GS-style SOTP breakdown (Tier 1 report package) ─────────────────────────
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
 // dcf_range[ticker].sotp_breakdown; null/absent for tickers without SOTP
@@ -397,10 +351,23 @@ export interface SotpScenario {
   applied?: string[];
 }
 
+export interface SotpAdjustment {
+  label: string;
+  amount: number;
+}
+
 export interface SotpBreakdown {
-  /** SOTP (analyst)'s weight in the blend -- only published when it carries one (2026-09-27). */
+  /** The SOTP leg's weight in the blend -- only published when it carries one (2026-09-27). */
   weight?: number | null;
+  /** Which SOTP leg this is: analyst, segments, look-through, published, FRE + carry (2026-10-03: one format). */
   method?: string;
+  /** Column labels per leg: "Fwd Rev" / "EBIT" for the analyst table, "Revenue" / "EBITDA (est.)" for segments. */
+  revenue_label?: string | null;
+  earnings_label?: string | null;
+  /** Bridge lines between the parts and NAV (growth premium, minority interest, corporate cost). */
+  adjustments?: SotpAdjustment[] | null;
+  reminders?: string[] | null;
+  basis_note?: string | null;
   sentence?: string;
   reporting_currency?: string;
   rows?: SotpRow[];
@@ -519,7 +486,6 @@ export interface DcfRange {
   reit_breakdown?: ReitBreakdown | null;
   bank_breakdown?: BankBreakdown | null;
   sotp_breakdown?: SotpBreakdown | null;
-  segment_sotp?: SegmentSotp | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.

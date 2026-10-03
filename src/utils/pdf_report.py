@@ -2002,6 +2002,10 @@ _SEG_TYPE_LABEL = {
 
 _SOTP_ANALYST_LEGS = frozenset({"SOTP (analyst)", "Analyst SOTP"})
 _SOTP_SEGMENT_LEGS = frozenset({"SOTP (segments)", "Sum of Parts", "SOTP", "SOTP (Segments)"})
+#: Owner, 2026-10-03: every SOTP leg prints in the one analyst format (dcf_range.sotp_breakdown).
+_SOTP_FAMILY_LEGS = _SOTP_ANALYST_LEGS | _SOTP_SEGMENT_LEGS | frozenset({
+    "SOTP / NAV", "SOTP / NAV (look-through)", "NAV Discount", "SOTP (published)", "Published SOTP",
+    "SOTP (FRE + carry)", "SOTP (FRE+Carry)"})
 
 
 def _legs_in_blend(dcf_t: dict) -> dict:
@@ -2075,8 +2079,8 @@ def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """
     b = dcf_t.get("sotp_breakdown") or {}
     rows = b.get("rows") or []
-    if not _leg_carries_weight(dcf_t, _SOTP_ANALYST_LEGS):
-        rows = []                                  # not in the blend: no analyst SOTP table
+    if not _leg_carries_weight(dcf_t, _SOTP_FAMILY_LEGS):
+        rows = []                                  # not in the blend: no SOTP table
     if not rows or b.get("per_share_reporting") is None:
         return _degraded_sotp_block_pdf(dcf_t, styles, width)
     ccy = b.get("reporting_currency") or ""
@@ -2096,17 +2100,25 @@ def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
         except (TypeError, ValueError):
             return "—"
 
-    hdr = [Paragraph(_wh(h), st_lb) for h in ("Segment", "Fwd revenue (USD)", "Method", "Multiple", "Value (USD)")]
+    _rev_lab = str(b.get("revenue_label") or "Fwd revenue")
+    hdr = [Paragraph(_wh(h), st_lb) for h in ("Segment", f"{_rev_lab} ({ccy or 'USD'})", "Method", "Multiple", f"Value ({ccy or 'USD'})")]
     body = [hdr]
     for r in rows:
         body.append([Paragraph(_strip(str(r.get("name") or "")), st_l), Paragraph(_bn(r.get("revenue_fwd")), st_v),
                      Paragraph(_strip(str(r.get("method") or "")), st_l), Paragraph(_x(r.get("multiple")), st_v),
                      Paragraph(_bn(r.get("value")), st_v)])
-    for label, key in (("Sum of segments", "segment_value"), ("+ Associates / investments", "associates"),
-                       ("+ Net cash", "net_cash"), ("= NAV", "nav")):
-        body.append([Paragraph(f"<b>{label}</b>", st_l), "", "", "", Paragraph(_bn(b.get(key)), st_v)])
-    body.append([Paragraph(f"<b>- Holdco discount ({_pct_s(b.get('holdco_discount_pct'), signed=False)})</b>", st_l),
-                 "", "", "", Paragraph(_bn(b.get("holdco_discount")), st_v)])
+    body.append([Paragraph("<b>Sum of segments</b>", st_l), "", "", "", Paragraph(_bn(b.get("segment_value")), st_v)])
+    if b.get("associates"):
+        body.append([Paragraph("<b>+ Associates / investments</b>", st_l), "", "", "", Paragraph(_bn(b.get("associates")), st_v)])
+    for adj in b.get("adjustments") or []:            # growth premium, minority interest, corporate cost ...
+        body.append([Paragraph(f"<b>{'+' if (adj.get('amount') or 0) >= 0 else '−'} {_strip(str(adj.get('label') or ''))}</b>", st_l),
+                     "", "", "", Paragraph(_bn(abs(adj.get("amount") or 0.0)), st_v)])
+    _nc = b.get("net_cash") or 0.0
+    body.append([Paragraph(f"<b>{'+ Net cash' if _nc >= 0 else '− Net debt'}</b>", st_l), "", "", "", Paragraph(_bn(abs(_nc)), st_v)])
+    body.append([Paragraph("<b>= NAV</b>", st_l), "", "", "", Paragraph(_bn(b.get("nav")), st_v)])
+    if b.get("holdco_discount_pct"):
+        body.append([Paragraph(f"<b>- Holdco discount ({_pct_s(b.get('holdco_discount_pct'), signed=False)})</b>", st_l),
+                     "", "", "", Paragraph(_bn(b.get("holdco_discount")), st_v)])
     body.append([Paragraph("<b>= Equity value</b>", st_l), "", "", "", Paragraph(_bn(b.get("final")), st_v)])
     body.append([Paragraph(f"<b>Per share ({ccy})</b>", st_l), "", "", "",
                  Paragraph(f"<b>{_money(b.get('per_share_reporting'))}</b>", st_v)])
@@ -2117,109 +2129,21 @@ def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
                            ("LINEABOVE", (0, len(rows) + 1), (-1, len(rows) + 1), 0.4, colors.black),
                            ("VALIGN", (0, 0), (-1, -1), "TOP"),
                            ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5)]))
-    out = [Paragraph("Sum of the parts (analyst)", styles["RptLabel"])]
+    _method = str(b.get("method") or "SOTP (analyst)")
+    _w = b.get("weight")
+    out = [Paragraph(f"Sum of the parts — {_strip(_method)}" + (f" · {float(_w):.0%} of the valuation" if isinstance(_w, (int, float)) and _w > 0 else ""),
+                     styles["RptLabel"])]
     if b.get("sentence"):
         out.append(Paragraph(_strip(str(b["sentence"])), styles["RptBody"]))
     out += [t, Spacer(1, 4)]
+    for rem in b.get("reminders") or []:
+        out.append(Paragraph(_strip(str(rem)), styles["RptBody"]))
+    if b.get("basis_note"):
+        out.append(Paragraph(_strip(str(b["basis_note"])), styles["RptBody"]))
     if (b.get("sources") or {}).get("all") in ("gemini_grounded", "gemini_accepted"):
         out.append(Paragraph("Segments and multiple ranges: owner-accepted, cited inputs (midpoint of each "
                              "range applied). Source: Financial Modeling Prep for the group anchors.",
                              styles["RptBody"]))
-    return out
-
-
-def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
-    """The segment sum-of-the-parts, with the arithmetic behind each part.
-
-    Printed under Valuation Summary (owner, 2026-09-20). Every column is a step
-    of the calculation -- revenue, the margin used to estimate segment EBITDA,
-    the through-cycle band and where in it the multiple sits -- because the
-    figure this replaced was a single unexplained number and it was wrong by
-    an order of magnitude.
-    """
-    b = dcf_t.get("segment_sotp") or {}
-    rows = b.get("segments") or []
-    if not rows or not _leg_carries_weight(dcf_t, _SOTP_SEGMENT_LEGS):
-        return []
-    # The report's price currency is already set for this ticker by
-    # _set_price_currency; the block is in that same currency.
-    sym = _cs()
-    lab_w = width * 0.26
-    col_w = (width - lab_w) / 6.0
-    st_l = ParagraphStyle("_ssl", fontName="Helvetica", fontSize=6.5, leading=8)
-    st_lb = ParagraphStyle("_sslb", parent=st_l, fontName="Helvetica-Bold")
-    st_v = ParagraphStyle("_ssv", parent=st_l, alignment=2)
-    st_vb = ParagraphStyle("_ssvb", parent=st_v, fontName="Helvetica-Bold")
-
-    def bn(v):
-        if not isinstance(v, (int, float)):
-            return "--"
-        return f"{sym}{v / 1e9:,.2f}B" if abs(v) >= 1e9 else f"{sym}{v / 1e6:,.0f}M"
-
-    def pct(v):
-        return f"{v * 100:.1f}%" if isinstance(v, (int, float)) else "--"
-
-    def mult(r):
-        if (r.get("basis") or "") == "carrying_value":
-            return "at book"
-        m = r.get("multiple")
-        if not isinstance(m, (int, float)):
-            return "--"
-        band = r.get("band") or []
-        return (f"{m:.2f}x ({band[0]:g}-{band[1]:g}x)"
-                if len(band) == 2 else f"{m:.2f}x")
-
-    head = ["Segment", "Revenue", "Margin", "EBITDA est.", "Multiple", "EV", "% of EV"]
-    data = [[Paragraph(f"<b>{_wh(h)}</b>", st_vb if i else st_lb) for i, h in enumerate(head)]]
-    for r in rows:
-        seg = _strip(str(r.get("segment") or ""))
-        ty = _SEG_TYPE_LABEL.get(r.get("type") or "", r.get("type") or "")
-        if str(r.get("multiple_source") or "").startswith("dynamic"):
-            ty = f"{ty} - dynamic multiple"
-        data.append([
-            Paragraph(f"{seg}<br/><font size=5.5 color='#666666'>{_strip(str(ty))}</font>", st_l),
-            Paragraph(bn(r.get("revenue")), st_v),
-            Paragraph(pct(r.get("ebitda_margin")), st_v),
-            Paragraph(bn(r.get("ebitda")), st_v),
-            Paragraph(mult(r), st_v),
-            Paragraph(bn(r.get("ev")), st_v),
-            Paragraph(pct(r.get("share_of_ev")), st_v),
-        ])
-    _chk = b.get("checks") or {}
-    data.append([Paragraph("<b>Total enterprise value</b>", st_lb),
-                 Paragraph("", st_v), Paragraph("", st_v), Paragraph("", st_v),
-                 Paragraph("", st_v), Paragraph(f"<b>{bn(b.get('total_ev'))}</b>", st_vb),
-                 Paragraph(f"<b>{pct(_chk.get('share_of_ev_sum'))}</b>", st_vb)])
-    t = Table(data, colWidths=[lab_w] + [col_w] * 6, hAlign="LEFT")
-    t.setStyle(TableStyle([
-        ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8),
-        ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_NAVY),
-        ("LINEABOVE", (0, len(data) - 1), (-1, len(data) - 1), 0.5, C_NAVY),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    ps = b.get("value_per_share")
-    lead = ("Sum of the parts by business segment"
-            + (f" -- {_money(ps)} per share" if isinstance(ps, (int, float)) else ""))
-    out = [Spacer(1, 6), Paragraph(lead, styles["RptLabel"]), Spacer(1, 2), t]
-    for _rem in (_chk.get("reminders") or []):
-        out += [Spacer(1, 2), Paragraph(f"<b>{_strip(str(_rem))}</b>", styles["RptBody"])]
-    # Why each band sits where it does, once per business type.
-    _seen: set = set()
-    _notes = []
-    for r in rows:
-        ty = r.get("type") or ""
-        if r.get("band_rationale") and ty and ty not in _seen:
-            _seen.add(ty)
-            _notes.append((_SEG_TYPE_LABEL.get(ty, ty), _strip(str(r["band_rationale"]))))
-    if _notes:
-        out += [Spacer(1, 3), Paragraph("Band rationale", styles["RptLabel"])]
-        for lab, text in _notes:
-            out += [Paragraph(f"<font size=5.8><b>{lab}:</b> {text}</font>", styles["RptBody"])]
-    note = _strip(str(b.get("basis_note") or ""))
-    if note:
-        out += [Spacer(1, 2), Paragraph(f"<font size=5.5 color='#666666'>{note}</font>",
-                                        styles["RptBody"])]
     return out
 
 
@@ -2844,7 +2768,6 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         # ── Valuation Summary: intrinsic value to 12-month target ──
         story.append(Paragraph("Valuation Summary", styles["RptSubsection"]))
         story.extend(_valuation_summary(dcf_ticker, scen, styles, page_w))
-        story.extend(_segment_sotp_block_pdf(dcf_ticker, styles, page_w))
         story.extend(_analyst_sotp_block_pdf(dcf_ticker, styles, page_w))
         story.append(Spacer(1, 8))
 

@@ -13,8 +13,10 @@
  *   7. Bear / Base / Bull scenario strip (2A.5 SCENARIO multiples)
  *   8. Source badges + multiple-basis divergence flags + data limitations
  *
- * Gated by V2ReportView on `dcfRange?.sotp_breakdown` — tickers without SOTP
- * assumptions never reach this component.
+ * Owner, 2026-10-03: the ONE format for every sum-of-the-parts leg -- analyst, segments,
+ * look-through, published, FRE + carry. `breakdown.method` names the leg; the column labels and
+ * the bridge's adjustment lines come from the block. Mounted through lib/sotpBreakdown.sotpFor,
+ * only when a SOTP leg carries weight.
  */
 
 import { Card } from '@/components/ui/card';
@@ -76,8 +78,8 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
         <thead>
           <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
             <th className="text-left font-medium pb-1.5">Segment</th>
-            <th className="text-right font-medium pb-1.5">Fwd Rev</th>
-            <th className="text-right font-medium pb-1.5">EBIT</th>
+            <th className="text-right font-medium pb-1.5">{breakdown.revenue_label ?? 'Fwd Rev'}</th>
+            <th className="text-right font-medium pb-1.5">{breakdown.earnings_label ?? 'EBIT'}</th>
             <th className="text-left font-medium pb-1.5 pl-3">Method</th>
             <th className="text-right font-medium pb-1.5">Mult</th>
             <th className="text-right font-medium pb-1.5">Value</th>
@@ -128,6 +130,9 @@ function NavBridge({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
     { label: 'Σ segment value', value: fmtAmount(breakdown.segment_value, usd) },
   ];
   if (breakdown.associates) rows.push({ label: 'Associates & investments', value: fmtAmount(breakdown.associates, usd) });
+  for (const a of breakdown.adjustments ?? []) {
+    rows.push({ label: a.label, value: `${a.amount < 0 ? '−' : ''}${fmtAmount(Math.abs(a.amount), usd)}` });
+  }
   if (nc !== 0) rows.push({ label: nc > 0 ? 'Net cash' : 'Net debt', value: fmtAmount(Math.abs(nc), usd) });
   rows.push({ label: 'NAV', value: fmtAmount(breakdown.nav, usd), strong: true });
   if ((breakdown.holdco_discount_pct ?? 0) > 0) {
@@ -162,7 +167,7 @@ function NavBridge({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
         <span className="text-[24px] font-semibold tabular-nums tracking-tight text-foreground leading-none">
           {fmtPs(breakdown.per_share_reporting, sym)}
         </span>
-        {(breakdown.reporting_currency ?? 'USD') !== 'USD' && (
+        {(breakdown.reporting_currency ?? 'USD') !== 'USD' && breakdown.per_share != null && (
           <span className="text-[10.5px] text-muted-foreground tabular-nums">
             {fmtPs(breakdown.per_share, '$')} USD
           </span>
@@ -349,6 +354,15 @@ function ScenarioStrip({ breakdown, sym }: { breakdown: SotpBreakdown; sym: stri
 }
 
 /* ── Main panel ───────────────────────────────────────────────────────── */
+const METHOD_LABEL: Record<string, string> = {
+  'SOTP (analyst)': 'Analyst', 'Analyst SOTP': 'Analyst', 'SOTP (segments)': 'Segments',
+  'SOTP / NAV (look-through)': 'Look-through', 'SOTP / NAV': 'Look-through', 'NAV Discount': 'Look-through',
+  'SOTP (published)': 'Published', 'SOTP (FRE + carry)': 'FRE + carry',
+};
+function methodLabel(m?: string): string {
+  return METHOD_LABEL[m ?? ''] ?? (m || 'Analyst');
+}
+
 export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdown; weight?: number | null }) {
   // Mounted only when SOTP (analyst) carries weight in the blend (owner, 2026-09-27; lib/blendLegs).
   const w = weight ?? breakdown.weight ?? null;
@@ -363,7 +377,7 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
     <Card className="p-5">
       {/* 1. Header + valuation sentence */}
       <div className={LABEL_CLS}>
-        Sum-of-the-Parts (Analyst){w != null && w > 0 ? ` · ${(w * 100).toFixed(0)}% of the valuation` : ''}
+        Sum-of-the-Parts ({methodLabel(breakdown.method)}){w != null && w > 0 ? ` · ${(w * 100).toFixed(0)}% of the valuation` : ''}
       </div>
       {breakdown.sentence && (
         <p className="mt-2 text-[12.5px] font-medium leading-relaxed text-foreground/90">
@@ -407,6 +421,12 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
           {flags.map((f, i) => (
             <div key={i} className="text-[10.5px] text-amber-600 dark:text-amber-400">⚠ {f}</div>
           ))}
+          {(breakdown.reminders ?? []).map((r, i) => (
+            <div key={`rem-${i}`} className="text-[10.5px] font-medium text-foreground/80">{r}</div>
+          ))}
+          {breakdown.basis_note && (
+            <div className="text-[10.5px] text-muted-foreground/70">{breakdown.basis_note}</div>
+          )}
           {breakdown.data_limitations && (
             <div className="text-[10.5px] text-muted-foreground/70">Limitations: {breakdown.data_limitations}</div>
           )}

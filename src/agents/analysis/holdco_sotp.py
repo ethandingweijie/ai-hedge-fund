@@ -565,7 +565,8 @@ def value_per_share(ticker: str, end_date: str, shares: float, *,
                     to_currency: Optional[str] = None,
                     ebitda_by_division: Optional[dict] = None,
                     net_debt: Optional[float] = None,
-                    scenario_toggles: Optional[dict] = None) -> Optional[float]:
+                    scenario_toggles: Optional[dict] = None,
+                    detail: Optional[dict] = None) -> Optional[float]:
     """Look-through NAV per share, or None when the SOTP does not complete.
 
     A partial look-through is NOT returned. Skipping a division does not make
@@ -597,11 +598,20 @@ def value_per_share(ticker: str, end_date: str, shares: float, *,
     nav = res.get("net_asset_value")
     if not isinstance(nav, (int, float)) or nav <= 0:
         return None
+    rate = 1.0
     if to_currency:
         rate = _fx(res.get("reporting_currency") or "", to_currency)
         if rate is None:
             return None
         nav = nav * rate
+    if detail is not None:
+        # The table behind the number, for the leg trace and the report (owner, 2026-10-03: every
+        # SOTP leg shows its parts in one format).
+        detail.update(res)
+        detail["fx_to_listing"] = rate
+        detail["listing_currency"] = (to_currency or res.get("reporting_currency") or "").upper()
+        detail["shares"] = shares
+        detail["per_share"] = nav / shares
     return nav / shares
 
 

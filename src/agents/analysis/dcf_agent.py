@@ -2365,6 +2365,213 @@ def _align_bank_breakdown(bb: Optional[dict], scenario_results: dict,
     return bb
 
 
+_SOTP_LOOKTHROUGH_METHOD_NAMES: frozenset[str] = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)", "NAV Discount"})
+_SOTP_PUBLISHED_METHOD_NAMES: frozenset[str] = frozenset({"SOTP (published)", "Published SOTP"})
+_SOTP_FRE_METHOD_NAMES: frozenset[str] = frozenset({"SOTP (FRE + carry)", "SOTP (FRE+Carry)"})
+_LOOKTHROUGH_BASIS_LABEL = {"market_stake": "Market stake", "transaction_anchor": "Transaction", "cap_rate": "Cap rate",
+                            "ev_ebit_range": "EV/EBIT", "pe_range": "P/E", "fixed_value": "Stated", "nil": "Nil"}
+
+
+def _sotp_split(rows: list[dict]) -> list[dict]:
+    tot = sum(float(r.get("value") or 0.0) for r in rows if (r.get("value") or 0) > 0)
+    for r in rows:
+        v = r.get("value")
+        r["value_split_pct"] = (float(v) / tot) if (tot > 0 and isinstance(v, (int, float)) and v > 0) else 0.0
+    return rows
+
+
+def _sotp_sentence(ccy: str, per_share: Optional[float], rows: list[dict], segment_value: Optional[float],
+                   extras: list[tuple[str, Optional[float]]], shares: Optional[float]) -> str:
+    def bn(v):
+        return "—" if not isinstance(v, (int, float)) else f"{v / 1e9:,.1f}B"
+    parts = " + ".join(f"{r['name']} {r['multiple']:g}x {r['method']}" if isinstance(r.get("multiple"), (int, float))
+                       else f"{r['name']} ({r['method']})" for r in rows)
+    tail = "".join(f" {sign} {label} {bn(abs(v))}" for label, v, sign in
+                   ((l, v, "−" if (isinstance(v, (int, float)) and v < 0) else "+") for l, v in extras)
+                   if isinstance(v, (int, float)) and v != 0)
+    ps = f"{ccy} {per_share:,.2f}" if isinstance(per_share, (int, float)) else "—"
+    sh = f" ÷ {shares / 1e6:,.0f}M shares" if isinstance(shares, (int, float)) and shares > 0 else ""
+    return f"SOTP {ps} = Σ segments {bn(segment_value)} ({parts}){tail}{sh}"
+
+
+def _segments_as_sotp_breakdown(block: dict, trace: dict, currency: Optional[str]) -> Optional[dict]:
+    """The segment SOTP (Refining & Marketing) in the analyst format: the parts at their bands, the growth
+    premium as its own adjustment line, the EV-to-equity bridge the leg actually used."""
+    if not block or not block.get("segments"):
+        return None
+    ccy = (currency or "USD").upper()
+    label = {"ev_ebitda": "EV/EBITDA", "ev_revenue": "EV/Rev", "carrying_value": "Book", "excluded": "Excluded"}
+    rows = []
+    for r in block["segments"]:
+        rows.append({"name": r.get("segment"), "revenue_fwd": r.get("revenue"), "ebit": r.get("ebitda"),
+                     "method": label.get(r.get("basis") or "", str(r.get("basis") or "")),
+                     "multiple": r.get("multiple"), "value": float(r.get("ev") or 0.0),
+                     "rationale": r.get("note") or r.get("band_rationale") or r.get("multiple_source")})
+    rows = _sotp_split(rows)
+    parts = float(block.get("sum_of_parts_ev") or 0.0)
+    total_ev = float(block.get("total_ev") or parts)
+    premium = block.get("growth_premium") or 1.0
+    adjustments = []
+    if abs(premium - 1.0) > 1e-6:
+        adjustments.append({"label": f"Growth premium ×{premium:.2f}", "amount": total_ev - parts})
+    for k, lab in (("minority_interest", "Minority interest"), ("preferred_equity", "Preferred equity")):
+        v = trace.get(k)
+        if isinstance(v, (int, float)) and v:
+            adjustments.append({"label": lab, "amount": -float(v)})
+    nd = trace.get("net_debt")
+    net_cash = -float(nd) if isinstance(nd, (int, float)) else 0.0
+    final = trace.get("equity")
+    final = float(final) if isinstance(final, (int, float)) else total_ev + net_cash + sum(a["amount"] for a in adjustments if "premium" not in a["label"].lower())
+    shares = block.get("shares")
+    per_share = block.get("value_per_share")
+    return {
+        "method": "SOTP (segments)", "reporting_currency": ccy, "revenue_label": "Revenue", "earnings_label": "EBITDA (est.)",
+        "sentence": _sotp_sentence(ccy, per_share, rows, parts,
+                                   [(a["label"], a["amount"]) for a in adjustments] + [("net cash", net_cash)], shares),
+        "rows": rows, "segment_value": parts, "associates": 0.0, "net_cash": net_cash,
+        "adjustments": adjustments, "nav": final, "holdco_discount_pct": 0.0, "holdco_discount": 0.0,
+        "final": final, "per_share": per_share, "per_share_reporting": per_share, "shares": shares, "fx_to_reporting": 1.0,
+        "reminders": list((block.get("checks") or {}).get("reminders") or []), "basis_note": block.get("basis_note"),
+        "sources": {"all": "engine_segments"},
+    }
+
+
+def _lookthrough_as_sotp_breakdown(detail: dict) -> Optional[dict]:
+    """The conglomerate look-through (template divisions at market, transaction, cap rate or multiple) in
+    the analyst format: gross asset value, parent net debt, the holdco discount, per share."""
+    parts = (detail or {}).get("parts") or []
+    if not parts:
+        return None
+    rep = (detail.get("reporting_currency") or "USD").upper()
+    listing = (detail.get("listing_currency") or rep).upper()
+    fx = float(detail.get("fx_to_listing") or 1.0)
+    rows = []
+    for p in parts:
+        basis = p.get("basis") or ""
+        mr = p.get("multiple_range")
+        mult = (float(mr[0]) + float(mr[1])) / 2.0 if isinstance(mr, (list, tuple)) and len(mr) == 2 and all(
+            isinstance(x, (int, float)) for x in mr) else None
+        bits = []
+        if isinstance(p.get("stake_pct"), (int, float)):
+            bits.append(f"{float(p['stake_pct']):.0%} stake")
+        if p.get("discount_pct"):
+            bits.append(f"{float(p['discount_pct']):.0%} discount at the stake")
+        if p.get("fiscal_year"):
+            bits.append(str(p["fiscal_year"]))
+        rows.append({"name": p.get("division"), "revenue_fwd": None, "ebit": p.get("ebitda") or p.get("ebit"),
+                     "method": _LOOKTHROUGH_BASIS_LABEL.get(basis, "EV/EBITDA" if mr else (basis or "Stated")),
+                     "multiple": mult, "value": float(p.get("value") or 0.0), "rationale": "; ".join(bits) or None})
+    rows = _sotp_split(rows)
+    gross = float(detail.get("gross_asset_value") or 0.0)
+    nd = float(detail.get("parent_net_debt") or 0.0)
+    disc = float(detail.get("holdco_discount") or 0.0)
+    nav_pre = gross - nd
+    final = float(detail.get("net_asset_value") or nav_pre * (1.0 - disc))
+    shares = detail.get("shares")
+    per_share_listing = detail.get("per_share")
+    return {
+        "method": "SOTP / NAV (look-through)", "reporting_currency": listing, "revenue_label": "Revenue", "earnings_label": "EBITDA",
+        "sentence": _sotp_sentence(listing, per_share_listing, rows, gross, [("parent net debt", -nd)], shares)
+                    + (f" − {disc:.0%} holdco" if disc else ""),
+        "rows": rows, "segment_value": gross, "associates": 0.0, "net_cash": -nd, "adjustments": [],
+        "nav": nav_pre, "holdco_discount_pct": disc, "holdco_discount": nav_pre * disc, "final": final,
+        "per_share": (per_share_listing / fx) if (isinstance(per_share_listing, (int, float)) and fx) else None,
+        "per_share_reporting": per_share_listing, "shares": shares, "fx_to_reporting": fx,
+        "reminders": [f"{s.get('division')}: {s.get('reason')}" for s in (detail.get("skipped") or [])],
+        "basis_note": f"Template currency {rep}; divisions valued at market stakes, transactions, cap rates or stated multiples; the holdco discount is the template's band midpoint.",
+        "sources": {"all": "holdco_template"},
+    }
+
+
+def _published_as_sotp_breakdown(tbl: dict, provenance: list, shares: Optional[float], per_share: Optional[float]) -> Optional[dict]:
+    segs = (tbl or {}).get("segments") or []
+    if not segs:
+        return None
+    ccy = (tbl.get("currency") or "USD").upper()
+    rows = _sotp_split([{"name": s.get("name"), "revenue_fwd": None, "ebit": None, "method": s.get("basis") or "Stated",
+                         "multiple": None, "value": float(s.get("value_mn") or 0.0) * 1e6, "rationale": None} for s in segs])
+    segment_value = sum(r["value"] for r in rows)
+    net_cash, adjustments = 0.0, []
+    for a in tbl.get("adjustments") or []:
+        amt = float(a.get("value_mn") or 0.0) * 1e6
+        if "debt" in str(a.get("basis") or a.get("name") or "").lower():
+            net_cash += amt
+        else:
+            adjustments.append({"label": a.get("name") or a.get("basis") or "Adjustment", "amount": amt})
+    final = segment_value + net_cash + sum(a["amount"] for a in adjustments)
+    return {
+        "method": "SOTP (published)", "reporting_currency": ccy, "revenue_label": "Revenue", "earnings_label": "Earnings",
+        "sentence": _sotp_sentence(ccy, per_share, rows, segment_value, [("net cash", net_cash)] + [(a["label"], a["amount"]) for a in adjustments], shares),
+        "rows": rows, "segment_value": segment_value, "associates": 0.0, "net_cash": net_cash, "adjustments": adjustments,
+        "nav": final, "holdco_discount_pct": 0.0, "holdco_discount": 0.0, "final": final,
+        "per_share": per_share, "per_share_reporting": per_share, "shares": shares, "fx_to_reporting": 1.0,
+        "reminders": [], "basis_note": f"Published table: {'; '.join(str(x) for x in (provenance or []))} as of {tbl.get('as_of', 'n/a')}.",
+        "sources": {"all": "published_table"},
+    }
+
+
+def _fre_carry_as_sotp_breakdown(trace: dict, shares: Optional[float], currency: Optional[str]) -> Optional[dict]:
+    fre, mult = trace.get("metric_value"), trace.get("multiple")
+    if not isinstance(fre, (int, float)) or not isinstance(mult, (int, float)):
+        return None
+    ccy = (currency or "USD").upper()
+    carry = float(((trace.get("multiple_parts") or {}).get("net_accrued_carry_total")) or 0.0)
+    rows = _sotp_split([{"name": "Fee-related earnings (forward)", "revenue_fwd": None, "ebit": float(fre), "method": "P/FRE",
+                         "multiple": float(mult), "value": float(fre) * float(mult), "rationale": "accepted alt_manager input: cited P/FRE range midpoint"}])
+    adjustments = [{"label": "Net accrued carry", "amount": carry}] if carry else []
+    final = rows[0]["value"] + carry
+    per_share = trace.get("per_share_metric")
+    return {
+        "method": "SOTP (FRE + carry)", "reporting_currency": ccy, "revenue_label": "Revenue", "earnings_label": "FRE",
+        "sentence": _sotp_sentence(ccy, per_share, rows, rows[0]["value"], [("net accrued carry", carry)], shares),
+        "rows": rows, "segment_value": rows[0]["value"], "associates": 0.0, "net_cash": 0.0, "adjustments": adjustments,
+        "nav": final, "holdco_discount_pct": 0.0, "holdco_discount": 0.0, "final": final,
+        "per_share": per_share, "per_share_reporting": per_share, "shares": shares, "fx_to_reporting": 1.0,
+        "reminders": [], "basis_note": None, "sources": {"all": "alt_manager_input"},
+    }
+
+
+def _sotp_family_breakdown(scenario_results: dict, legs: dict, analyst_breakdown: Optional[dict],
+                           shares: Optional[float], currency: Optional[str]) -> Optional[dict]:
+    """The one `sotp_breakdown` the report renders: the SOTP-family leg that carries weight, in the analyst
+    format, with its weight. None when no SOTP leg is weighted (owner, 2026-09-27: no display-only panel;
+    2026-10-03: one format for every SOTP)."""
+    base = (scenario_results or {}).get("base") or {}
+    li = base.get("leg_inputs") or {}
+
+    def first(names):
+        hit = [k for k in names if k in legs]
+        return (hit[0], legs[hit[0]]) if hit else (None, None)
+
+    leg, w = first(_SOTP_ANALYST_METHOD_NAMES)
+    if leg and analyst_breakdown:
+        return {**analyst_breakdown, "weight": w, "revenue_label": analyst_breakdown.get("revenue_label") or "Fwd Rev",
+                "earnings_label": analyst_breakdown.get("earnings_label") or "EBIT", "adjustments": analyst_breakdown.get("adjustments") or []}
+    leg, w = first(_SOTP_SEGMENT_METHOD_NAMES)
+    if leg:
+        blk = _segment_sotp_block(base, shares, currency)
+        out = _segments_as_sotp_breakdown(blk, li.get(leg) or {}, currency) if blk else None
+        if out:
+            return {**out, "weight": w}
+    leg, w = first(_SOTP_LOOKTHROUGH_METHOD_NAMES)
+    if leg:
+        out = _lookthrough_as_sotp_breakdown((li.get(leg) or {}).get("lookthrough") or {})
+        if out:
+            return {**out, "weight": w}
+    leg, w = first(_SOTP_PUBLISHED_METHOD_NAMES)
+    if leg:
+        tr = li.get(leg) or {}
+        out = _published_as_sotp_breakdown(tr.get("published") or {}, tr.get("provenance") or [], tr.get("shares") or shares, tr.get("value"))
+        if out:
+            return {**out, "weight": w}
+    leg, w = first(_SOTP_FRE_METHOD_NAMES)
+    if leg:
+        out = _fre_carry_as_sotp_breakdown(li.get(leg) or {}, shares, currency)
+        if out:
+            return {**out, "weight": w}
+    return None
+
+
 def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
                         currency: Optional[str]) -> Optional[dict]:
     """The segment SOTP as the report and the PDF render it, or None.
@@ -6670,11 +6877,14 @@ def _compute_method_value(
                     _nd = (holdco_sotp.parent_net_debt(ticker, end_date, net_debt, _listing_ccy)
                            if _needs_debt else None)
                     if not (_needs_debt and _nd is None):
+                        _lt_detail: dict = {}
                         _lt = holdco_sotp.value_per_share(
                             ticker, end_date, shares,
                             to_currency=_listing_ccy,
                             ebitda_by_division=_accepted_division_ebitda(ticker),
-                            net_debt=_nd)
+                            net_debt=_nd, detail=_lt_detail)
+                        if _lt is not None and _lt > 0:
+                            _leg_trace(kind="sotp", source="look-through template", lookthrough=_lt_detail)
             except Exception:                              # noqa: BLE001
                 _lt = None
         if _lt is not None and _lt > 0:
@@ -6763,6 +6973,8 @@ def _compute_method_value(
         res = _compute_published_sotp(ticker, shares)
         if res is None:
             return None
+        _leg_trace(kind="sotp", source="published table", published=res[1], provenance=res[2],
+                   shares=float(shares), per_share=float(res[0]))
         return res[0] * sm
 
     # ── SOTP (analyst) — GS-style segment P/E + EV/Rev SOTP ──────────────
@@ -8384,6 +8596,10 @@ _DCF_PROJECTION_FAMILY: frozenset[str] = frozenset(_DCF_FAMILY_NAMES)
 # extractor's output is an unweighted cross-check (GATE_SOTP_EXTRACTOR_CROSSCHECK).
 _SOTP_ANALYST_METHOD_NAMES: frozenset[str] = frozenset(
     {"SOTP (analyst)", "Analyst SOTP"})
+#: Every sum-of-the-parts leg; all publish in the one analyst-format block (owner, 2026-10-03).
+_SOTP_FAMILY_METHOD_NAMES: frozenset[str] = (_SOTP_ANALYST_METHOD_NAMES | _SOTP_SEGMENT_METHOD_NAMES
+                                             | _SOTP_LOOKTHROUGH_METHOD_NAMES | _SOTP_PUBLISHED_METHOD_NAMES
+                                             | _SOTP_FRE_METHOD_NAMES)
 
 
 #: Profiles where EV/Revenue is a growth-stage metric applied to a business
@@ -16192,21 +16408,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _legs_in_blend = _blend_legs(scenario_results)
         reit_breakdown = _align_reit_breakdown(reit_breakdown, scenario_results, _legs_in_blend, shares)
         bank_breakdown = _align_bank_breakdown(bank_breakdown, scenario_results, _legs_in_blend)
-        _sotp_analyst_weight = max((w for k, w in _legs_in_blend.items() if k in _SOTP_ANALYST_METHOD_NAMES),
-                                   default=None)
         _sotp_analyst_declared = any(
             (m.get("name") in _SOTP_ANALYST_METHOD_NAMES)
             for m in ((scenario_results.get("base") or {}).get("profile_weights") or []) if isinstance(m, dict))
-        _segment_weight = max((w for k, w in _legs_in_blend.items() if k in _SOTP_SEGMENT_METHOD_NAMES),
-                              default=None)
-        if sotp_breakdown is not None:
-            sotp_breakdown = ({**sotp_breakdown, "weight": _sotp_analyst_weight}
-                              if _sotp_analyst_weight is not None else None)
-        _segment_sotp_pub = None
-        if _segment_weight is not None:
-            _segment_sotp_pub = _segment_sotp_block((scenario_results.get("base") or {}), shares, _output_currency)
-            if _segment_sotp_pub:
-                _segment_sotp_pub["weight"] = _segment_weight
+        # Owner, 2026-10-03: every SOTP leg (analyst, segments, look-through, published, FRE + carry)
+        # publishes in the one analyst format, with its weight; the segment-only block is retired.
+        sotp_breakdown = _sotp_family_breakdown(scenario_results, _legs_in_blend, sotp_breakdown, shares, _output_currency)
 
         dcf_range[ticker] = {
             **scenario_results,
@@ -16305,7 +16512,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # on. Distinct from `sotp_breakdown`, which is the ANALYST SOTP
             # (BABA, 09988.HK, 09618.HK) and carries forward estimates and
             # elasticities this one has no equivalent of.
-            "segment_sotp":          _segment_sotp_pub,
             # B1 prediction ledger -- see _param_version / _consensus_at_run.
             "routing_trace":         {**_routing_trace,
                                       "final_sector": sector,

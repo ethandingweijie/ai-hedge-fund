@@ -43,8 +43,7 @@ import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
-import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
-import { blendLeg, legWeight, SOTP_ANALYST_LEGS, SOTP_SEGMENT_LEGS } from '@/lib/blendLegs';
+import { sotpFor } from '@/lib/sotpBreakdown';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
@@ -1401,11 +1400,8 @@ export function ReportPage() {
                 below whichever valuation branch rendered above, mirroring
                 V2ReportView; the DCF methodology panel follows. */}
             {/* Owner, 2026-09-27 (MOH): only a SOTP leg that carries weight is shown. */}
-            {(() => { const _l = blendLeg(dcfRange, SOTP_ANALYST_LEGS); return _l && dcfRange?.sotp_breakdown ? (
-              <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} weight={legWeight(dcfRange, _l)} />
-            ) : null; })()}
-            {(() => { const _l = blendLeg(dcfRange, SOTP_SEGMENT_LEGS); return _l && dcfRange?.segment_sotp ? (
-              <SegmentSotpPanel sotp={dcfRange.segment_sotp} weight={legWeight(dcfRange, _l)} />
+            {(() => { const _s = sotpFor(dcfRange); return _s ? (
+              <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
             ) : null; })()}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining
