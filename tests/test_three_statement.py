@@ -178,14 +178,18 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     is_ws, bs_ws, cf_ws = wb["IS"], wb["BS"], wb["CFS"]
     def _first_fc(ws_):                                                                       # the first EDATE() header = FY+1E
         return next(c for c in range(3, 20) if str(ws_.cell(row=4, column=c).value).startswith("=EDATE("))
-    for ws_, label in ((is_ws, "Revenue"), (is_ws, "Net income"), (bs_ws, "Cash & equivalents"), (bs_ws, "Total assets"), (bs_ws, "Shareholders' equity"), (cf_ws, "Cash from operations"), (cf_ws, "Free cash flow (CFO + capex)")):
-        rr = [c.row for c in ws_["A"] if c.value == label][-1]
+    for ws_, label in ((is_ws, "Revenue"), (is_ws, "Net income attributable (reported)"), (bs_ws, "Cash & equivalents"), (bs_ws, "Total assets"), (bs_ws, "Shareholders' equity"), (cf_ws, "Cash from operations"), (cf_ws, "Free cash flow (CFO + capex)")):
+        rr = [c.row for c in ws_["A"] if c.value == label][0 if ws_.title == "IS" else -1]
         f0 = _first_fc(ws_)
         assert str(ws_.cell(row=rr, column=f0).value).startswith("='Model'!D"), (ws_.title, label, ws_.cell(row=rr, column=f0).value)
         assert str(ws_.cell(row=rr, column=f0 + 4).value).startswith("='Model'!H")
     rev_model = next(c.row for c in ws["A"] if c.value == "Revenue")
-    rr = [c.row for c in is_ws["A"] if c.value == "Revenue"][-1]
+    rr = [c.row for c in is_ws["A"] if c.value == "Revenue"][0]
     assert is_ws.cell(row=rr, column=_first_fc(is_ws)).value == f"='Model'!D{rev_model}"
+    # the derived lines extend the tab's own formulas across the forecast columns
+    ebit_r = [c.row for c in is_ws["A"] if c.value == "EBIT margin (%)"][0]
+    assert str(is_ws.cell(row=ebit_r, column=_first_fc(is_ws)).value).startswith("=IFERROR(")
+    assert not any(str(c.value).startswith("Forecast — three-statement model") for c in is_ws["A"])
     assert not any("{" in str(c.value) for row in ws.iter_rows(min_col=4, max_col=8) for c in row if isinstance(c.value, str))   # every forward reference resolved
     from src.utils import pdf_report as pr
     from reportlab.lib.styles import getSampleStyleSheet
@@ -207,3 +211,51 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     assert not any(str(wb2["BS"].cell(row=4, column=c).value).startswith("=EDATE(") for c in range(3, 14))   # no forecast columns without a model
     flow2 = pr._three_statement_block_pdf(bad["data"]["dcf_range"]["MOH"], getSampleStyleSheet(), 500.0)
     assert "RECONCILIATION FAILED" in " ".join(getattr(f, "text", "") for f in flow2) and not [f for f in flow2 if f.__class__.__name__ == "Table"]
+
+
+def test_the_pdf_statements_page_carries_the_forecast_years_and_the_suite_beneath():
+    """Owner, 2026-10-03 (Anta PDF): FY+1E..FY+5E beside the actuals in the same Growth & Margins, IS, BS and CF
+    tables, full width, the reconciliation suite under them; no standalone block for an operating company."""
+    from src.utils import pdf_report as pr
+    p = _payload_with_statements()
+    dr = p["data"]["dcf_range"]["MOH"]
+    periods = ["FY2023", "FY2024", "FY2025"]
+    def row(key, label, vals, emphasis=False):
+        return {"key": key, "label": label, "values": dict(zip(periods, vals)), "emphasis": emphasis}
+    fs = {"layout": "standard", "currency": "USD", "periods": periods, "statements": {
+        "income": {"title": "Income Statement", "rows": [row("revenue", "Revenue", [34e9, 38e9, 42e9], True), row("cost_of_revenue", "Cost of revenue", [28e9, 31.5e9, 35.5e9]),
+                                                          row("gross_profit", "Gross profit", [6e9, 6.5e9, 6.5e9], True), row("operating_income", "Operating income", [1.6e9, 1.9e9, 1.2e9], True),
+                                                          row("net_income", "Net income", [1.1e9, 1.3e9, 0.75e9], True), row("earnings_per_share", "Diluted EPS", [19.0, 23.2, 14.4]), row("ebitda", "EBITDA", [1.78e9, 2.09e9, 1.4e9])]},
+        "balance": {"title": "Balance Sheet", "rows": [row("cash_and_equivalents", "Cash & equivalents", [3.5e9, 4.0e9, 4.2e9]), row("total_assets", "Total assets", [13e9, 14e9, 14.5e9], True),
+                                                        row("shareholders_equity", "Shareholders' equity", [4.0e9, 4.3e9, 4.4e9], True), row("book_value_per_share", "Book value per share", [69.0, 76.8, 84.6])]},
+        "cashflow": {"title": "Cash Flow Statement", "rows": [row("net_income", "Net income", [1.1e9, 1.3e9, 0.75e9]), row("operating_cash_flow", "Cash flow from operations", [1.5e9, 1.7e9, 1.2e9], True),
+                                                              row("capital_expenditure", "Capital expenditure", [-0.12e9, -0.14e9, -0.15e9]), row("free_cash_flow", "Free cash flow", [1.38e9, 1.56e9, 1.05e9], True)]}}}
+    styles = pr._build_styles()
+    out = pr._financial_statements_page(fs, styles, 500.0, dr)
+    tables = [f for f in out if f.__class__.__name__ == "Table"]
+    assert len(tables) == 5                                                                         # ratios, IS, BS, CF, the suite
+    for t_ in tables[:4]:
+        hdr = [getattr(c, "text", "") for c in t_._cellvalues[0]]
+        assert len(hdr) == 1 + 3 + 5 and "FY2026E" in hdr[4] and "FY2030E" in hdr[-1]
+    is_t = tables[1]
+    rev_row = next(r for r in is_t._cellvalues if getattr(r[0], "text", "").endswith("Revenue"))
+    th = dr["three_statements"]
+    assert getattr(rev_row[4], "text", "") == f"{th['income']['revenue'][0] / 1e6:,.1f}"               # FY2026E revenue from the model, in millions
+    cogs_row = next(r for r in is_t._cellvalues if "Cost of revenue" in getattr(r[0], "text", ""))
+    assert "(" not in getattr(cogs_row[4], "text", "")                                               # expenses positive, as the reported rows print them
+    suite = tables[4]
+    assert len(suite._cellvalues[0]) == 6 and getattr(suite._cellvalues[-1][0], "text", "") == "Suite result" and getattr(suite._cellvalues[-1][1], "text", "") == "ALL OK"
+    texts = " ".join(getattr(f, "text", "") for f in out if f.__class__.__name__ == "Paragraph")
+    assert "FY2026E–FY2030E are the valuation agent's three-statement forecast" in texts
+    # the ratio rows extend too: a growth figure exists for the first forecast year
+    rat = tables[0]
+    g_row = next(r for r in rat._cellvalues if getattr(r[0], "text", "") == "Revenue growth")
+    assert getattr(g_row[4], "text", "") not in ("–", "")
+    # without a model the page keeps its two-column layout and four periods
+    dr2 = {**dr, "three_statements": None}
+    out2 = pr._financial_statements_page(fs, styles, 500.0, dr2)
+    assert [f.__class__.__name__ for f in out2][0] == "Table" and len([f for f in out2 if f.__class__.__name__ == "Table"]) == 1
+    # a withheld model says why under the two-column page
+    dr3 = {**dr, "three_statements": {"skipped": "RECONCILIATION FAILED: x", "fy_labels": None}}
+    out3 = pr._financial_statements_page(fs, styles, 500.0, dr3)
+    assert any("Forecast columns withheld: RECONCILIATION FAILED" in getattr(f, "text", "") for f in out3)

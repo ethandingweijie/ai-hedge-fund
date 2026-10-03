@@ -544,6 +544,20 @@ class _Book:
         c0 = 3
         r = 6
         U = self.A["unit"]
+        # Owner, 2026-10-03 (Anta): FY+1E..FY+5E are filled on the reported rows themselves -- inputs
+        # link to the Model tab, the tab's own formulas extend across the forecast columns.
+        _fc_cols = list(range(last + 1, last + 1 + n_fc)) if self.model_rows else []
+        _op = self.model_kind == "operating"
+        _is_map = ({"revenue": "rev", "cost_of_revenue": "cogs", "depreciation_and_amortization": "da_assump", "interest_expense": "intexp",
+                    "other_income_expense": "intinc", "pretax_income": "pretax", "income_tax_expense": "tax", "net_income": "ni", "shares_outstanding": "shares"}
+                   if _op else {"revenue": "total_income", "operating_expense": "operating_expenses", "pretax_income": "pretax", "income_tax_expense": "tax",
+                                "net_income": "net_income", "shares_outstanding": "shares"})
+
+        def _link(rr: int, key: str) -> None:
+            mk = _is_map.get(key)
+            if _fc_cols and mk and (self.model_rows or {}).get(mk):
+                for k, c in enumerate(_fc_cols):
+                    sh.put(rr, c, f"='Model'!{self.model_cols[k]}{self.model_rows[mk]}", MIL)
 
         def inrow(key: str, label: str, sign: float = 1.0, indent: int = 0) -> int:
             nonlocal r
@@ -552,16 +566,24 @@ class _Book:
             for i, row in enumerate(rows):
                 v = _num(row.get(key))
                 sh.put(r, c0 + i, None if v is None else sign * v / 1e6, MIL)
+            _link(r, key)
             r += 1
             return r - 1
 
         def frow(label: str, formula: Callable[[str], str], fmt: str = MIL, bold=False,
-                 typ: str = "Formula", cols: Optional[range] = None) -> int:
+                 typ: str = "Formula", cols: Optional[range] = None, extend: bool = True, link: Optional[str] = None) -> int:
+            """`extend`: the formula also runs across the forecast columns; `link`: those columns link to a Model row instead."""
             nonlocal r
             sh.label(r, 1, label, bold=bold)
             sh.label(r, 2, typ)
             for c in (cols or range(c0, last + 1)):
                 sh.put(r, c, formula(get_column_letter(c)), fmt, bold=bold)
+            if _fc_cols and link and (self.model_rows or {}).get(link):
+                for k, c in enumerate(_fc_cols):
+                    sh.put(r, c, f"='Model'!{self.model_cols[k]}{self.model_rows[link]}", fmt, bold=bold)
+            elif _fc_cols and extend and not cols:
+                for c in _fc_cols:
+                    sh.put(r, c, formula(get_column_letter(c)), fmt, bold=bold)
             r += 1
             return r - 1
 
@@ -574,14 +596,19 @@ class _Book:
         sga = inrow("selling_general_admin", "SG&A", -1.0, 1)
         rnd = inrow("research_and_development", "Research & development", -1.0, 1)
         opx = inrow("operating_expense", "Total operating expenses (reported)", -1.0)
-        ebit = frow("EBIT (operating income)", lambda L: f"={L}{gp}+{L}{opx}", bold=True)
+        ebit = frow("EBIT (operating income)", lambda L: f"={L}{gp}+{L}{opx}", bold=True, link=("ebit" if _op else "pre_provision_profit"))
+        if _fc_cols and _op:
+            # the reported total includes D&A; in the forecast it is EBIT less gross profit, so the row ties to the model's EBIT
+            for c in _fc_cols:
+                L = get_column_letter(c)
+                sh.put(opx, c, f"={L}{ebit}-{L}{gp}", MIL)
         frow("EBIT margin (%)", lambda L: f"=IFERROR({L}{ebit}/{L}{rev},0)", PCT)
         da = inrow("depreciation_and_amortization", "Depreciation & amortisation")
         ebitda = frow("EBITDA", lambda L: f"={L}{ebit}+{L}{da}", bold=True)
         frow("EBITDA margin (%)", lambda L: f"=IFERROR({L}{ebitda}/{L}{rev},0)", PCT)
         ie = inrow("interest_expense", "Interest expense", -1.0)
         oth = inrow("other_income_expense", "Other income / (expense), incl. interest income")
-        ebt = frow("EBT (pre-tax income)", lambda L: f"={L}{ebit}+{L}{oth}", bold=True)
+        ebt = frow("EBT (pre-tax income)", lambda L: f"={L}{ebit}+{L}{oth}", bold=True, link="pretax")
         rep_ebt = inrow("pretax_income", "Pre-tax income (reported)", 1.0, 1)
         tie = frow("Tie-out: EBT vs reported (data consistency)", lambda L: f"={L}{ebt}-{L}{rep_ebt}",
                    MIL, typ="Tie-out")
@@ -595,6 +622,8 @@ class _Book:
         frow("Minorities / discontinued (reported − computed)", lambda L: f"={L}{ni}-{L}{ni_c}", MIL, typ="Formula")
         sh_r = inrow("shares_outstanding", "Diluted shares (millions)")
         frow("Diluted EPS", lambda L: f"=IFERROR({L}{ni}/{L}{sh_r},0)", NUM, bold=True)
+        if _fc_cols:
+            sh.note(5, last + 1, "FY+1E..FY+5E: the three-statement model (Model tab), linked line by line; blank = not modelled")
         self.is_rows = {"rev": rev, "ni": ni, "da": da, "last": last}
         # ── Forecast: FMP consensus (the estimates the forward legs use) and
         # the DCF's own revenue path, side by side. ──
@@ -635,28 +664,16 @@ class _Book:
                 sh.put(r, last + 1 + k, f'=IFERROR({L}{num}/{L}{c_rev},"")', PCT)
             r += 1
         r += 1
-        # Owner, 2026-10-03 (Anta): the income statement the estimates imply, FY+1E..FY+5E, linked to the Model tab.
-        sh.section(r, "Forecast — three-statement model on the valuation agent's estimates (linked to the Model tab)", last + n_fc); r += 1
-        _fc0 = last + 1
-        if self.model_rows:
-            _is_lines = ([("Revenue", "rev"), ("Cost of goods sold", "cogs"), ("Gross profit", "gp"), ("Operating expenses excl. D&A", "opex"), ("EBITDA", "ebitda"),
-                          ("EBIT (operating income)", "ebit"), ("Interest expense", "intexp"), ("Interest income", "intinc"), ("EBT (pre-tax income)", "pretax"), ("Income tax", "tax"),
-                          ("Net income", "ni"), ("Diluted shares (millions)", "shares"), ("Diluted EPS", "eps"), ("Dividend per share", "dps")]
-                         if self.model_kind == "operating" else
-                         [("Net interest income", "net_interest_income"), ("Non-interest income", "fee_income"), ("Total income", "total_income"), ("Operating expenses", "operating_expenses"),
-                          ("Pre-provision profit", "pre_provision_profit"), ("Provisions", "provisions"), ("Pre-tax profit", "pretax"), ("Tax", "tax"), ("Net income", "net_income"),
-                          ("Diluted shares (millions)", "shares"), ("EPS", "eps"), ("Dividend per share", "dividend_per_share")] if self.model_kind == "bank" else
-                         [("Net earned premiums", "net_earned_premiums"), ("Underwriting result", "underwriting_result"), ("Investment income", "investment_income"), ("Pre-tax profit", "pretax"),
-                          ("Tax", "tax"), ("Net income", "net_income"), ("Diluted shares (millions)", "shares"), ("EPS", "eps"), ("Dividend per share", "dividend_per_share")])
-            for _lab, _key in _is_lines:
-                sh.label(r, 1, _lab, bold=_key in ("rev", "ebit", "ni", "eps", "total_income", "net_income")); sh.label(r, 2, "Link")
-                if self._model_link(sh, r, _key, _fc0, NUM if _key in ("eps", "dps", "dividend_per_share") else MIL):
+        if self.model_rows and self.model_kind == "bank":
+            # a bank's income statement has lines the reported layout does not: shown here, linked
+            sh.section(r, "Forecast — bank earnings-and-capital model (Model tab), linked", last + n_fc); r += 1
+            for _lab, _key in (("Net interest income", "net_interest_income"), ("Non-interest income", "fee_income"), ("Provisions", "provisions"), ("Dividend per share", "dividend_per_share")):
+                sh.label(r, 1, _lab); sh.label(r, 2, "Link")
+                if self._model_link(sh, r, _key, last + 1, NUM if _key == "dividend_per_share" else MIL):
                     r += 1
-                else:
-                    sh.ws.cell(row=r, column=1, value=None); sh.ws.cell(row=r, column=2, value=None)
-        else:
-            self._model_note(sh, r, _fc0); r += 1
-        r += 1
+            r += 1
+        elif not self.model_rows:
+            self._model_note(sh, r, last + 1); r += 2
         sh.section(r, "Forecast — engine DCF base case (what the valuation projects)", last + n_fc); r += 1
         dcf_rev = r
         sh.label(r, 1, "Revenue (DCF base, statement currency)"); sh.label(r, 2, "Link"); r += 1
@@ -1658,7 +1675,7 @@ class _Book:
             for cell in row:
                 if isinstance(cell.value, str) and "{" in cell.value and cell.value.startswith("="):
                     cell.value = cell.value.format(**R)
-        self.model_rows, self.model_cols, self.model_kind = dict(R), list(cols), "operating"
+        self.model_rows, self.model_cols, self.model_kind = {**R, "da_assump": A["da"]}, list(cols), "operating"
         r += 1
         sh.section(r, "Where each assumption comes from", C0 + n); r += 1
         for row in th.get("coverage") or []:

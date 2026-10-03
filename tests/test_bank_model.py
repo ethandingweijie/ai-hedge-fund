@@ -165,10 +165,14 @@ def test_the_model_tab_and_the_pdf_print_the_bank_layout():
     # the IS tab's forecast columns carry the bank model's lines; the BS tab its total assets and equity; the CFS tab has none
     is_ws = wb["IS"]
     rr = [c.row for c in is_ws["A"] if c.value == "Net interest income"]
-    assert rr and str(is_ws.cell(row=rr[-1], column=8).value).startswith("='Model'!")
+    f0 = next(c for c in range(3, 20) if str(is_ws.cell(row=4, column=c).value).startswith("=EDATE("))
+    assert rr and str(is_ws.cell(row=rr[-1], column=f0).value).startswith("='Model'!")
+    rev_r = [c.row for c in is_ws["A"] if c.value == "Revenue"][0]
+    assert str(is_ws.cell(row=rev_r, column=f0).value).startswith("='Model'!")                     # total income on the revenue row
     bs_ws = wb["BS"]
     rr = [c.row for c in bs_ws["A"] if c.value == "Shareholders' equity"]
-    assert rr and str(bs_ws.cell(row=rr[-1], column=8).value).startswith("='Model'!")
+    f0b = next(c for c in range(3, 20) if str(bs_ws.cell(row=4, column=c).value).startswith("=EDATE("))
+    assert rr and str(bs_ws.cell(row=rr[-1], column=f0b).value).startswith("='Model'!")
     assert wb["CFS"].cell(row=4, column=8).value is None
     from src.utils import pdf_report as pr
     from reportlab.lib.styles import getSampleStyleSheet

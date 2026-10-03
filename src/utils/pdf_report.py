@@ -2155,7 +2155,11 @@ def _guidance_estimates_block_pdf(dcf_t: dict, styles, width: float) -> list:
     if ge.get("track_record"):
         out.append(Paragraph(f"Track record: {_strip(str(ge.get('track_record')))}", st_l))
     out.extend(_guidance_forecast_block_pdf(dcf_t, styles, width))
-    out.extend(_three_statement_block_pdf(dcf_t, styles, width))
+    # Owner, 2026-10-03: an operating company's forecast prints on the Financial Statements page
+    # beside the actuals; the bank / insurer model keeps its block here (its layout is not the reported one).
+    _th = dcf_t.get("three_statements") or {}
+    if _th.get("kind") in ("bank", "insurer") or _th.get("skipped"):
+        out.extend(_three_statement_block_pdf(dcf_t, styles, width))
     out.append(Spacer(1, 6))
     return out
 
@@ -2599,7 +2603,7 @@ def _fs_pct(v) -> str:
 def _fs_table(title: str, periods: list, rows: list, styles, width: float,
               pct_rows: bool = False) -> list:
     """One statement block: title rule, period header, rows (bold = subtotal)."""
-    lab_w = width * 0.40
+    lab_w = width * (0.40 if len(periods) <= 5 else 0.26)
     col_w = (width - lab_w) / max(len(periods), 1)
     st_l = ParagraphStyle("_fsl", fontName="Helvetica", fontSize=6.5, leading=8)
     st_lb = ParagraphStyle("_fslb", parent=st_l, fontName="Helvetica-Bold")
@@ -2678,18 +2682,116 @@ def _fs_ratio_rows(stmts: dict, periods: list) -> list:
     return out
 
 
-def _financial_statements_page(fs: dict, styles, page_w: float) -> list:
-    """Income statement, balance sheet and cash flow, last four fiscal years."""
+def _fs_forecast_values(th: dict) -> dict:
+    """The three-statement model's series keyed like the reported rows, in the reported sign conventions
+    (expenses positive on the income statement; outflows negative on the cash flow), per forecast year."""
+    IS, BS, CF = th.get("income") or {}, th.get("balance") or {}, th.get("cashflow") or {}
+    op = th.get("opening") or {}
+    n = len(th.get("fy_labels") or [])
+
+    def ser(d, k, sign=1.0):
+        v = d.get(k)
+        return [((sign * x) if isinstance(x, (int, float)) else None) for x in v][:n] if v else None
+
+    def add(a, b):
+        return [((x or 0.0) + (y or 0.0)) if (x is not None or y is not None) else None for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    def sub(a, b):
+        return [((x or 0.0) - (y or 0.0)) if (x is not None or y is not None) else None for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    def div(a, b):
+        return [((x / y) if (x is not None and y) else None) for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    held = lambda key: [op.get(key)] * n if isinstance(op.get(key), (int, float)) else None     # noqa: E731
+    out = {
+        "income": {
+            "revenue": ser(IS, "revenue"), "cost_of_revenue": ser(IS, "cogs", -1.0), "gross_profit": ser(IS, "gross_profit"),
+            "operating_expense": sub([0.0] * n, add(ser(IS, "opex_ex_da"), ser(IS, "da"))), "operating_income": ser(IS, "ebit"),
+            "interest_expense": ser(IS, "interest_expense", -1.0), "other_income_expense": ser(IS, "interest_income"), "pretax_income": ser(IS, "pretax"),
+            "income_tax_expense": ser(IS, "tax", -1.0), "net_income": ser(IS, "net_income"), "earnings_per_share": ser(IS, "eps"), "ebitda": ser(IS, "ebitda"),
+        },
+        "balance": {
+            "cash_and_equivalents": ser(BS, "cash"), "short_term_investments": ser(BS, "sti"), "accounts_receivable": ser(BS, "receivables"), "inventory": ser(BS, "inventory"),
+            "current_assets": ser(BS, "current_assets"), "property_plant_equipment": ser(BS, "ppe"), "goodwill": held("goodwill"), "intangible_assets": held("intangibles"),
+            "non_current_assets": sub(ser(BS, "total_assets"), ser(BS, "current_assets")), "total_assets": ser(BS, "total_assets"),
+            "accounts_payable": ser(BS, "payables"), "short_term_debt": ser(BS, "short_term_debt"), "current_liabilities": ser(BS, "current_liabilities"),
+            "long_term_debt": ser(BS, "long_term_debt"), "non_current_liabilities": sub(ser(BS, "total_liabilities"), ser(BS, "current_liabilities")),
+            "total_liabilities": ser(BS, "total_liabilities"), "retained_earnings": ser(BS, "retained_earnings"), "minority_interest": ser(BS, "minority_interest"),
+            "shareholders_equity": ser(BS, "equity"), "total_debt": add(ser(BS, "short_term_debt"), ser(BS, "long_term_debt")), "net_debt": ser(BS, "net_debt"),
+            "book_value_per_share": div(ser(BS, "equity"), ser(IS, "shares")),
+        },
+        "cashflow": {
+            "net_income": ser(CF, "net_income"), "depreciation_and_amortization": ser(CF, "da"), "stock_based_compensation": ser(CF, "sbc"),
+            "change_in_working_capital": ser(CF, "change_nwc"), "operating_cash_flow": ser(CF, "cfo"), "capital_expenditure": ser(CF, "capex"),
+            "acquisitions_net": ser(CF, "acquisitions"), "investing_cash_flow": ser(CF, "cfi"), "net_debt_issuance": ser(CF, "debt_change"),
+            "share_buyback": ser(CF, "buybacks"), "dividends_and_distributions": ser(CF, "dividends"), "financing_cash_flow": ser(CF, "cff"),
+            "net_change_in_cash": ser(CF, "net_change_cash"), "cash_at_end_of_period": ser(CF, "closing_cash"), "free_cash_flow": ser(CF, "fcf"),
+        },
+    }
+    return out
+
+
+def _fs_reconciliation_table(th: dict, styles, width: float) -> list:
+    """The five assertions per forecast column, beneath the statements (owner's execution mandate)."""
+    rc = th.get("reconciliation") or {}
+    labels = th.get("fy_labels") or []
+    if not rc.get("assertions") or not labels:
+        return []
+    st_l = ParagraphStyle("_fsrl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_fsrlb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_fsrv", parent=st_l, alignment=2)
+    st_vb = ParagraphStyle("_fsrvb", parent=st_v, fontName="Helvetica-Bold")
+    by_id: dict = {}
+    for a in rc["assertions"]:
+        by_id.setdefault(a["id"], (a["name"], []))[1].append(a["ok"])
+    data = [[Paragraph("", st_l)] + [Paragraph(f"<b>{_strip(str(p))}</b>", st_vb) for p in labels]]
+    for aid in sorted(by_id):
+        name, oks = by_id[aid]
+        data.append([Paragraph(f"{aid}. {_strip(str(name))}", st_l)] + [Paragraph("OK" if ok else "FAIL", st_vb if not ok else st_v) for ok in oks[:len(labels)]])
+    data.append([Paragraph("Suite result", st_lb)] + [Paragraph("ALL OK" if rc.get("ok") else "FAIL", st_vb) for _ in labels])
+    lab_w = width * 0.46
+    t = Table(data, colWidths=[lab_w] + [(width - lab_w) / len(labels)] * len(labels), hAlign="LEFT")
+    t.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 0.6), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.6), ("LEFTPADDING", (0, 0), (-1, -1), 1),
+                           ("RIGHTPADDING", (0, 0), (-1, -1), 1), ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_NAVY), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    head = ParagraphStyle("_fsrh", fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=C_NAVY)
+    out = [Paragraph("Reconciliation suite (forecast years)", head), HRFlowable(width="100%", thickness=0.75, color=C_NAVY, spaceAfter=2), t, Spacer(1, 4)]
+    cov = [c for c in (th.get("coverage") or []) if str(c.get("status", "")).lower().startswith(("missing", "default"))]
+    if cov:
+        out.append(Paragraph("Assumptions not from the agent or the filings: " + "; ".join(f"{_strip(str(c.get('assumption')))} ({_strip(str(c.get('status')))})" for c in cov)[:400], styles["RptSource"]))
+    for note in th.get("notes") or []:
+        out.append(Paragraph(_strip(str(note))[:300], styles["RptSource"]))
+    return out
+
+
+def _financial_statements_page(fs: dict, styles, page_w: float, dcf_t: "dict | None" = None) -> list:
+    """Income statement, balance sheet and cash flow: the last four fiscal years and, when the valuation
+    agent's three-statement forecast exists for an operating company, FY+1E..FY+5E in the same tables
+    (owner, 2026-10-03), with the reconciliation suite beneath."""
     if not isinstance(fs, dict) or not fs.get("statements"):
         return []
     stmts = fs["statements"]
     periods = list(fs.get("periods") or [])[-4:]
     if not periods:
         return []
+    th = (dcf_t or {}).get("three_statements") or {}
+    fc_labels = list(th.get("fy_labels") or []) if (th.get("fy_labels") and not th.get("skipped") and th.get("kind") in (None, "operating") and th.get("income")) else []
+    if fc_labels:
+        import copy as _copy
+        stmts = _copy.deepcopy(stmts)
+        fv = _fs_forecast_values(th)
+        for sec, keyed in fv.items():
+            for r in (stmts.get(sec) or {}).get("rows") or []:
+                series = keyed.get(r.get("key"))
+                if series:
+                    vals = r.setdefault("values", {})
+                    for lab, x in zip(fc_labels, series):
+                        if x is not None:
+                            vals[lab] = x
+        periods = periods + fc_labels
     ccy = _strip(str(fs.get("currency") or "")).upper()
     unit = f"{ccy} mn" if ccy else "mn"
     gutter = 7 * mm
-    col = (page_w - gutter) / 2
+    col = page_w if fc_labels else (page_w - gutter) / 2            # nine columns need the full width
     left, right = [], []
     ratios = _fs_ratio_rows(stmts, periods)
     if ratios:
@@ -2704,6 +2806,14 @@ def _financial_statements_page(fs: dict, styles, page_w: float) -> list:
         if k not in ("income", "balance", "cashflow") and isinstance(st, dict) and st.get("rows"):
             (left if len(left) <= len(right) else right).extend(
                 _fs_table(f"{_strip(str(st.get('title') or k))} ({unit})", periods, st["rows"], styles, col))
+    if fc_labels:
+        out = left + right + _fs_reconciliation_table(th, styles, page_w)
+        ovr = th.get("override") or (dcf_t or {}).get("estimate_override") or {}
+        out.append(Paragraph("Source: company filings via Financial Modeling Prep for the fiscal years as reported; "
+                             f"{fc_labels[0]}–{fc_labels[-1]} are the valuation agent's three-statement forecast on its guidance-derived estimates "
+                             "(the Model tab of the workbook carries every assumption and its source); per-share lines unscaled."
+                             + (f" USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {_strip(', '.join(ovr.get('fields') or []))}." if ovr else ""), styles["RptSource"]))
+        return out
     grid = Table([[left, right]], colWidths=[col + gutter, col], hAlign="LEFT")
     grid.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -2711,8 +2821,13 @@ def _financial_statements_page(fs: dict, styles, page_w: float) -> list:
         ("RIGHTPADDING", (1, 0), (1, 0), 0), ("TOPPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
-    return [grid, Paragraph("Source: company filings via Financial Modeling Prep. Fiscal years as reported; "
-                            "per-share lines unscaled.", styles["RptSource"])]
+    tail = [grid]
+    if th.get("skipped"):
+        tail.append(Paragraph("Forecast columns withheld: " + _strip(str(th["skipped"]))[:300], styles["RptSource"]))
+    elif th.get("kind") in ("bank", "insurer") and th.get("fy_labels"):
+        tail.append(Paragraph("Forecast: the earnings-and-capital model's lines print under the valuation summary; a bank's reported layout does not carry them here.", styles["RptSource"]))
+    return tail + [Paragraph("Source: company filings via Financial Modeling Prep. Fiscal years as reported; "
+                             "per-share lines unscaled.", styles["RptSource"])]
 
 
 # ── Full-width section header bar ──────────────────────────────────────────────
@@ -3098,7 +3213,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         # ── Financial statements: their own page after the valuation model ──
         _fs_raw = result.get("financial_statements") or {}
         _fs_t = _fs_raw.get(ticker) if isinstance(_fs_raw, dict) and ticker in _fs_raw else _fs_raw
-        _fs_page = _financial_statements_page(_fs_t, styles, page_w)
+        _fs_page = _financial_statements_page(_fs_t, styles, page_w, dcf_ticker)
         if _fs_page:
             story.append(PageBreak())
             story.extend(_section_header("FINANCIAL STATEMENTS", page_w))
