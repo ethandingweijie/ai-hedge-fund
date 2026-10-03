@@ -473,6 +473,13 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # GATE_LONG_CYCLE_ELIGIBILITY removed 2026-09-27 with the Backlog-Gated Long Cycle profile
         "GATE_MARGIN_PEAK",
         "GATE_MARGIN_TURNAROUND",
+        # Twenty-fifth (2026-10-04, self-learning loop 6): the OE<=0 cascade, live since
+        # task #18, finally writes a record (A = the refused trailing margin, B = the
+        # median of the positive years, or None when the DCF family was disabled) so
+        # its firings can be scored against the printed year like every other gate.
+        # `applied` is a literal True. Fires on one golden fixture (BN4.SI): one name
+        # in gate_metrics, zero numeric leaves.
+        "GATE_OE_CASCADE",
         "GATE_PPA_INPUT",   # Wave 10 renewables (owner methodology, 2026-10-03): the accepted ppa input behind PPA-backed DCF
         "GATE_PT_IV_BAND",
         "GATE_REIT_MULTIPLE_OUTLIER",
@@ -513,7 +520,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 11   # +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
+    assert src.count('"applied": True,') == 12   # +GATE_OE_CASCADE (self-learning loop 6, 2026-10-04); +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose

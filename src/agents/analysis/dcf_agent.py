@@ -12110,6 +12110,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _dcf_family_disabled = False
         if fcf_margin_base <= 0:
             _pos_median = _median_positive_fcf_margin(series, field=_oe_basis_field)
+            # Self-learning loop 6 (2026-10-03): the cascade writes a gate record like every
+            # other gate, so its firings can be scored against the year that then printed.
+            # path A = the trailing margin it refused, path B = the basis it used (None when
+            # the DCF family was disabled: that variant is counted, not scored).
+            gate_evaluations.append({
+                "gate_id": "GATE_OE_CASCADE",
+                "metric": "fcf_margin_base",
+                "raw_input_path_a": round(float(fcf_margin_base), 6),
+                "gated_output_path_b": (round(float(_pos_median), 6) if _pos_median is not None else None),
+                "basis": (f"trailing {_oe_basis_label} margin <= 0; "
+                          + ("median of the positive years in the 5y window"
+                             if _pos_median is not None else
+                             "no positive year in the 5y window: DCF-family methods disabled")),
+                "applied": True,
+                "variant": "median_positive" if _pos_median is not None else "dcf_disabled",
+            })
             if _pos_median is not None:
                 ticker_forward_flags.append(
                     f"OE≤0 cascade: trailing {_oe_basis_label} margin "

@@ -1666,3 +1666,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner, 2026-10-03 (steps two and three): flag text only - the bank model's cross-check flag; the model prices the legs only when management's family guidance built it, so no fixture value moves
 
+## 2026-10-03T16:06:53+00:00
+
+- regenerated at HEAD: `f07febf8`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: self-learning loop 6 (2026-10-04): the OE<=0 cascade writes a GATE_OE_CASCADE record; BN4.SI gains the metric name fcf_margin_base in gate_metrics, zero numeric leaves moved
+

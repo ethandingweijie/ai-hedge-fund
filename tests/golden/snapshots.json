@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-10-03T13:37:58+00:00",
+  "generated_at": "2026-10-03T16:06:53+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "50579381",
-  "reason": "Owner, 2026-10-03 (steps two and three): flag text only - the bank model's cross-check flag; the model prices the legs only when management's family guidance built it, so no fixture value moves",
+  "regenerated_at_commit": "f07febf8",
+  "reason": "self-learning loop 6 (2026-10-04): the OE<=0 cascade writes a GATE_OE_CASCADE record; BN4.SI gains the metric name fcf_margin_base in gate_metrics, zero numeric leaves moved",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -1519,6 +1519,7 @@
    "fx_note": " | embedded 0.5% country premium removed for SGD: the owner's total is 0.0%.",
    "fx_rate": 1.0,
    "gate_metrics": [
+    "fcf_margin_base",
     "reinvestment_margin_deduction",
     "revenue_growth"
    ],

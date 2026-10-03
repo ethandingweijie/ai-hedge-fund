@@ -681,6 +681,12 @@ def test_oe_cascade_median_of_positive_years(seams):
     assert entry["methods_unavailable"] == []
     # Trailing reality still classified the profile (pre-cascade margin).
     assert entry["profile"] == "Cybersecurity / Mission-Critical SaaS"
+    # Self-learning loop 6: the cascade writes exactly one gate record, A = the refused
+    # trailing margin, B = the median it used, so the firing can be scored once FY prints.
+    recs = [g for g in entry["gate_evaluations"] if g["gate_id"] == "GATE_OE_CASCADE"]
+    assert len(recs) == 1 and recs[0]["variant"] == "median_positive" and recs[0]["applied"] is True
+    assert recs[0]["metric"] == "fcf_margin_base" and recs[0]["raw_input_path_a"] <= 0
+    assert recs[0]["gated_output_path_b"] == pytest.approx(expected_median, abs=1e-3)
 
 
 def test_oe_all_negative_disables_dcf_family(seams):
@@ -716,6 +722,10 @@ def test_oe_all_negative_disables_dcf_family(seams):
         assert set(entry[scen]["methods_used"]) == base_used, (
             f"FIXOE2: {scen} method set diverges from base after DCF disable"
         )
+    # Self-learning loop 6: the disabling variant is recorded with no path B (counted, not scored).
+    recs = [g for g in entry["gate_evaluations"] if g["gate_id"] == "GATE_OE_CASCADE"]
+    assert len(recs) == 1 and recs[0]["variant"] == "dcf_disabled"
+    assert recs[0]["gated_output_path_b"] is None and recs[0]["raw_input_path_a"] <= 0
 
 
 def test_oe_cascade_reported_path_when_sbc_untrusted(seams):

@@ -150,6 +150,9 @@ def describe_params(params: dict) -> list[str]:
         pts = float(adj) * 100
         lines.append(f"{'Raise' if pts > 0 else 'Lower'} archetype {code} year 1-2 revenue growth "
                      f"by {abs(pts):.1f} pt")
+    for gate_id, ev in sorted((params.get("gate_threshold_review") or {}).items()):
+        lines.append(f"Review the {gate_id} threshold: false alarms in {float(ev.get('false_alarm_share') or 0):.0%} "
+                     f"of {int(ev.get('n') or 0)} scored firings (a code change; accepting records the review)")
     # pt family (loops 3 and 4)
     for scope, c in sorted((params.get("capture") or {}).items()):
         lines.append(f"Target capture for {scope.replace(':', ' ')}: {float(c):.0%} of the spot-to-IV gap")

@@ -140,7 +140,8 @@ def _li_rows(items, *, with_eps: bool) -> list[dict]:
             continue
         row = {"period_end": end.isoformat(), "revenue": rev,
                "ebitda": rf._num(getattr(li, "ebitda", None)),
-               "net_income": rf._num(getattr(li, "net_income", None))}
+               "net_income": rf._num(getattr(li, "net_income", None)),
+               "free_cash_flow": rf._num(getattr(li, "free_cash_flow", None))}
         if with_eps:
             eps = rf._num(getattr(li, "earnings_per_share", None))
             if eps is None:
@@ -154,7 +155,8 @@ def _li_rows(items, *, with_eps: bool) -> list[dict]:
 def _default_annuals(ticker: str, end_date: str) -> list[dict]:
     from src.tools.api import search_line_items
     items = search_line_items(ticker, ["revenue", "ebitda", "net_income", "earnings_per_share",
-                                       "shares_outstanding"], end_date, period="annual", limit=3)
+                                       "shares_outstanding", "free_cash_flow"], end_date,
+                              period="annual", limit=3)
     return _li_rows(items, with_eps=True)
 
 
