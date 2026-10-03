@@ -1,0 +1,328 @@
+<title>Hedge Fund Architecture Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #f6f5f2; --ink: #16181d; --mute: #5b6069; --line: #d9d6cf; --tile: #ffffff; --tile-hi: #e9eef5;
+    --acc: #1f4e79; --acc-ink: #ffffff; --band: #8a8f98; --panel: #ffffff; --shade: rgba(22,24,29,.55);
+    --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --mono: "IBM Plex Mono", "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark; --bg: #121417; --ink: #ebeced; --mute: #a3a8b1; --line: #2c3138; --tile: #1a1d22; --tile-hi: #1f2a3a;
+      --acc: #7fb0e0; --acc-ink: #0d1623; --band: #6f757f; --panel: #171a1f; --shade: rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark; --bg: #121417; --ink: #ebeced; --mute: #a3a8b1; --line: #2c3138; --tile: #1a1d22; --tile-hi: #1f2a3a;
+    --acc: #7fb0e0; --acc-ink: #0d1623; --band: #6f757f; --panel: #171a1f; --shade: rgba(0,0,0,.6);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); padding-inline: 16px; padding-block: 20px 40px; max-width: 1480px; margin: 0 auto; line-height: 1.4; }
+  h1 { font-size: clamp(22px, 3vw, 30px); margin: 0 0 4px; letter-spacing: -.01em; text-wrap: balance; }
+  .sub { color: var(--mute); margin: 0 0 18px; max-width: 72ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 12.5px; color: var(--mute); margin-bottom: 18px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--tile); border: 1px solid var(--line); }
+  .legend .hi::before { background: var(--tile-hi); border-color: var(--acc); }
+  .band { border: 1px dashed var(--band); border-radius: 10px; padding: 12px 12px 14px; margin-bottom: 14px; position: relative; }
+  .band > .label { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--band); font-weight: 600; margin: 0 0 10px; }
+  .band > .label small { letter-spacing: 0; text-transform: none; font-weight: 400; margin-left: 8px; }
+  .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .tile { background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 12px; text-align: left; cursor: pointer; color: var(--ink); font: inherit; display: flex; flex-direction: column; gap: 6px; min-height: 108px; transition: transform .12s ease, border-color .12s ease; }
+  .tile:hover, .tile:focus-visible { border-color: var(--acc); transform: translateY(-1px); outline: none; }
+  .tile.hi { background: var(--tile-hi); border-color: var(--acc); }
+  .tile .k { font-family: var(--mono); font-size: 10.5px; color: var(--mute); }
+  .tile .t { font-weight: 600; font-size: 14px; letter-spacing: -.005em; }
+  .tile .d { font-size: 12.5px; color: var(--mute); }
+  .tile .n { margin-top: auto; font-size: 11px; color: var(--acc); font-weight: 500; }
+  .flow { display: flex; align-items: center; gap: 6px; color: var(--mute); font-size: 12px; margin: 6px 0 2px; flex-wrap: wrap; }
+  .flow b { color: var(--ink); font-weight: 600; }
+  /* zoom panel */
+  .shade { position: fixed; inset: 0; background: var(--shade); z-index: 20; }
+  .panel { position: fixed; top: env(safe-area-inset-top, 0px); right: 0; bottom: 0; width: min(760px, 100%); background: var(--panel); border-left: 1px solid var(--line); z-index: 21; overflow-y: auto; padding: 22px 24px 40px; box-shadow: -12px 0 40px rgba(0,0,0,.18); }
+  .panel .crumbs { font-family: var(--mono); font-size: 11.5px; color: var(--mute); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .panel .crumbs button { background: none; border: 0; color: var(--acc); font: inherit; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+  .panel h2 { margin: 0 0 6px; font-size: 22px; letter-spacing: -.01em; text-wrap: balance; }
+  .panel .role { color: var(--mute); margin: 0 0 16px; max-width: 70ch; }
+  .panel h3 { font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--band); margin: 18px 0 8px; }
+  .io { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .io { grid-template-columns: 1fr; } }
+  .io div { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .io div b { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); margin-bottom: 4px; }
+  .parts { display: grid; gap: 8px; }
+  .part { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--tile); cursor: pointer; }
+  .part:hover { border-color: var(--acc); }
+  .part .pt { font-weight: 600; font-size: 13.5px; }
+  .part .pd { font-size: 12.5px; color: var(--mute); margin-top: 2px; }
+  .part .pf { font-family: var(--mono); font-size: 11px; color: var(--acc); margin-top: 4px; word-break: break-all; }
+  .part.open .pd { color: var(--ink); }
+  .part .px { display: none; font-size: 12.5px; margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  .part.open .px { display: block; }
+  .files { font-family: var(--mono); font-size: 11.5px; line-height: 1.6; color: var(--ink); word-break: break-all; }
+  .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .links button { font: inherit; font-size: 12px; background: var(--tile); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  .links button:hover { border-color: var(--acc); color: var(--acc); }
+  .close { position: absolute; top: 14px; right: 16px; background: var(--tile); border: 1px solid var(--line); border-radius: 999px; width: 32px; height: 32px; cursor: pointer; color: var(--ink); font-size: 16px; }
+  .hint { font-size: 12px; color: var(--mute); margin-top: 6px; }
+  @media (prefers-reduced-motion: reduce) { .tile { transition: none; } }
+</style>
+
+<h1>AI Hedge Fund, architecture map</h1>
+<p class="sub">v2.23.0, 3 October 2026. One run of a ticker flows top to bottom; every surface reads the one stored run; the loops at the bottom feed the next run. Click any module to zoom into its parts, then click a part for its files and rules.</p>
+<div class="legend"><span>module</span><span class="hi">where guidance becomes a valuation</span><span style="color:var(--acc)">▶ click to zoom · Esc to close</span></div>
+
+<div id="map"></div>
+
+<div id="overlay" hidden>
+  <div class="shade" id="shade"></div>
+  <aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="ptitle">
+    <button class="close" id="close" aria-label="Close">×</button>
+    <div class="crumbs" id="crumbs"></div>
+    <h2 id="ptitle"></h2>
+    <p class="role" id="prole"></p>
+    <h3>Reads and writes</h3>
+    <div class="io"><div><b>Reads</b><span id="preads"></span></div><div><b>Writes</b><span id="pwrites"></span></div></div>
+    <h3>Parts, click to expand</h3>
+    <div class="parts" id="pparts"></div>
+    <h3>Files</h3>
+    <div class="files" id="pfiles"></div>
+    <h3>Connected modules</h3>
+    <div class="links" id="plinks"></div>
+  </aside>
+</div>
+
+<script>
+const M = {
+  bands: [
+    { id: "inputs", label: "Inputs", note: "what a run is built from", mods: ["market", "research_src", "config", "gate", "memory"] },
+    { id: "pipeline", label: "The pipeline", note: "FastAPI web service → queue → worker on Railway", mods: ["front", "research", "forecast", "engine", "statements", "decision", "blend", "archive"] },
+    { id: "surfaces", label: "Surfaces", note: "all built from the stored run at read time; a saved override is applied on read", mods: ["web", "pdf", "excel", "accuracy"] },
+    { id: "loops", label: "Closed loops", note: "what the next run inherits", mods: ["overrides", "review", "constants", "golden", "outcomes"] },
+  ],
+  mods: {
+    market: { k: "input", t: "Market & filings", d: "FMP statements, estimates, prices for 7 markets; EDGAR / HKEXnews filings; FX.", role: "Audited history, consensus estimates, prices and filings. Every valuation starts from FMP's five years of statements for the name and the exchange's live peer cohort.",
+      reads: "FMP (income, balance, cash flow, estimates, price targets, profile), EDGAR / HKEXnews, FX rates", writes: "raw_financials by fiscal year, financial_statements for the exports, forward consensus per scenario",
+      parts: [
+        { t: "Statements and ratios", d: "Five fiscal years per name; HK symbols are four digits; EOD caps at 5,000 rows.", f: "src/tools/api.py · src/agents/routing/strategic_router.py", x: "The strategic router fetches the raw financials once and stores them on the state; the DCF agent, the three-statement model and the PDF key-financials table all read that one copy." },
+        { t: "Analyst estimates", d: "NTM EPS, EBITDA, revenue and EBIT per scenario (low / avg / high).", f: "dcf_agent.forward_consensus", x: "These are the baseline the forward multiples price when no guidance estimate exists; when it does, the guidance-derived figure replaces it and consensus is kept beside it on the leg trace." },
+        { t: "Regional comps", d: "Weekly refresh of peer multiples for seven markets; keys HKSE / SES, not HKEX / SGX.", f: "src/data/regional_comps.py · scripts/wave_baseline.py", x: "A partial write stamped now would make load_comps skip the rest of an exchange; fills carry the exchange's refresh time. Local sqlite goes stale silently; production is refreshed by the Saturday job." },
+        { t: "Filings resolver", d: "SEC EDGAR for US names, HKEXnews for Hong Kong.", f: "src/agents/routing/edgar_hkex_resolver.py", x: "Runs in the front block; its 'EDGAR OK' is a settled status and no longer implies the router is done." },
+      ], files: ["src/tools/api.py", "src/agents/routing/strategic_router.py", "src/data/regional_comps.py", "src/data/market_registry.py"], links: ["front", "engine", "statements"] },
+    research_src: { k: "input", t: "Web research", d: "DashScope qwen3.8-flash with native search; sections 2A–2G, length-budgeted.", role: "The research model and its search. Flash thinks by default on the compatibility endpoint, so thinking is switched off except where a budget is granted; the search strategy is 'pro'.",
+      reads: "the web, the research archive, the industry knowledge notes", writes: "sections 2A–2G, the GUIDANCE_BLOCK, references with global footnote numbers",
+      parts: [
+        { t: "Model and policy", d: "DEEP_RESEARCH_MODEL defaults to qwen3.8-flash; a native-search prompt variant; one thinking-on retry when Tier 1 is degenerate.", f: "deep_research._apply_thinking_policy · _qwen_search_strategy · _report_max_tokens", x: "The first live flash run wrote a textual [TOOL CALL] and stopped at 173 characters; the native-search prompt and the degenerate-retry fixed it." },
+        { t: "Length budget", d: "Compact LENGTH BUDGET for 2A–2F; the brief keeps its depth.", f: "deep_research._report_length_profile · DEEP_RESEARCH_LENGTH=full", x: "Production fresh-research timings on flash: SBUX 293 s, TJX 337 s, DECK 678 s (the model sometimes writes long; a hard cap is the next fix)." },
+        { t: "Production variables", d: "DEEP_RESEARCH_MODEL and DEEP_RESEARCH_SYNTHESIS_MODEL on web and worker.", f: "Railway variables (owner-set)", x: "A redeploy kills in-flight jobs; the 65-minute dedupe lock then blocks a resubmit until it expires." },
+      ], files: ["src/agents/industry/deep_research.py", "src/agents/industry/specialist.py"], links: ["research", "memory"] },
+    config: { k: "input", t: "Owner-set configuration", d: "145 profiles → legs and weights; 7 market multiples; valuation_constants PROPOSED until accepted.", role: "Everything the owner decides in advance: which legs a profile prices and at what weight, each market's multiples and WACC, and the constants the engine uses.",
+      reads: "the owner's acceptances", writes: "profile routing, leg weights, constants with status",
+      parts: [
+        { t: "Profiles and routing", d: "industry_profile_map (v24) routes labels to 145 profiles; each profile declares its legs and weights, including SOTP where declared.", f: "src/data/sector_profiles.py · src/data/industry_profile_map.json", x: "A profile no label routes to was removed (14 of them); every market owns its multiples and WACC and no market borrows another's." },
+        { t: "Valuation constants", d: "Versioned config with a quarterly clock and an inertia band; calibration proposes, only --accept records.", f: "src/data/valuation_constants.json · src/data/valuation_constants.py", x: "Guidance channel, guidance forecast, PPA project finance and the forecast archetype curves all shipped PROPOSED with their derivations." },
+        { t: "Report families", d: "Nine families decide the key-metrics rows, the writer's checklist and the workbook's Family tab.", f: "src/data/report_families.py", x: "Banks show the book they are valued on, energy names cash and leverage, software names margins and SBC." },
+      ], files: ["src/data/sector_profiles.py", "src/data/industry_profile_map.json", "src/data/valuation_constants.json", "src/data/report_families.py"], links: ["engine", "constants", "forecast"] },
+    gate: { k: "input", t: "Review-gated inputs", d: "industry_inputs: PV-10, backlog, SOTP, NAV, PPA; Gemini pre-fills, cited; accepted on Model Accuracy.", role: "Cited figures FMP does not report. A leg prices on one only after the owner accepts it; a changed entry needs a new acceptance.",
+      reads: "Gemini pre-fills with their sources, the owner's accept / revoke", writes: "accepted_entry / accepted_detail for the legs that read them",
+      parts: [
+        { t: "Kinds", d: "pv10, backlog, maintenance_capex, rate_base, fcf_guidance, sotp, pipeline, embedded_value, alt_manager, nav, ppa.", f: "src/data/industry_inputs.py (KINDS)", x: "Each kind has checks against FMP; a failed hard check cannot be accepted until the entry is rebuilt." },
+        { t: "The PPA input", d: "Capacity, generation, contracted share, term, PPA price and escalator, merchant price, opex, project debt, tax equity, credits.", f: "gemini_params.ppa_prompt · build_industry_inputs (WAVE10)", x: "A contracted revenue above the market cap flags a portfolio larger than the listed entity (Brookfield fleet vs the corporation's share)." },
+        { t: "Reviews store", d: "industry_input_reviews holds status, content hash, reviewer and time.", f: "industry_inputs.set_review / review_for", x: "An accepted entry whose content hash changed reads changed_since_acceptance and stops pricing." },
+      ], files: ["src/data/industry_inputs.py", "src/data/industry_inputs.json", "src/agents/analysis/gemini_params.py", "app/backend/routes/model_accuracy.py"], links: ["engine", "accuracy", "review"] },
+    memory: { k: "input", t: "Memory", d: "Research archive and freshness (fast path); assumption ledger R1–R3; prior-run recap.", role: "What a run already knows about the name. A covered name reuses research under 14 days with one freshness search; the assumption ledger and the steward keep the challenge loop.",
+      reads: "web_runs, ticker_signals, research archive, the recap of the prior run", writes: "research_tier, freshness delta, prior_recap, assumption challenges",
+      parts: [
+        { t: "Fast path", d: "Covered run = memory + one freshness search; RESEARCH_FORCE_REUSE is the kill switch.", f: "src/memory/freshness.py · src/pipeline.py (2_8 / 2_9)", x: "Production: BABA about 110 s on the fast path; a full COST run about 12 minutes." },
+        { t: "Recap and recency", d: "The prior run's decision, target and date; lessons when an INCORRECT prior recurs.", f: "src/memory/report_recap.py · M1 recency loop", x: "Recap reads the raw stored blob, never the override-applied payload, so a user's estimates never become the agent's memory." },
+        { t: "Assumption steward", d: "R1 ledger, R3 recursive challenge; flags only, feeds the valuation.", f: "src/memory/assumption_store.py · assumption_extract.py", x: "The BABA $66 vs $145 target incident was an aged-row tie in get_recent_research, not the steward." },
+      ], files: ["src/memory/freshness.py", "src/memory/report_recap.py", "src/memory/assumption_store.py", "src/memory/run_archive.py"], links: ["front", "research", "outcomes"] },
+
+    front: { k: "1–2.9", t: "Front block", d: "Archive and freshness, macro regime, strategic router (profile + raw financials), intelligence signals, filings resolver.", role: "Five concurrent phases on one executor. The router decides the profile and fetches the five-year financials every later phase reads.",
+      reads: "FMP, the archive, EDGAR / HKEXnews", writes: "profile_name, sector, raw_financials, macro_regime, intelligence signals, freshness delta",
+      parts: [
+        { t: "Macro regime classifier", d: "Risk-on / risk-off and the C_macro handshake the WACC overlay reads.", f: "src/agents/routing/macro_regime.py", x: "A regime change between two runs of the same name confounds its intrinsic-value move; the flags say which regime priced the run." },
+        { t: "Strategic router", d: "Profile routing (TICKER_SECTOR_LOOKUP override, then the map), raw financials, sector.", f: "src/agents/routing/strategic_router.py", x: "Its 'Fetching 5-year raw financials' used to be inferred done when a sibling settled; completion is now inferred only across concurrency groups." },
+        { t: "Intelligence signals", d: "Earnings quality, short interest, insider activity, news sentiment, analyst revisions.", f: "src/agents/intelligence/*", x: "Shown as one compact table in the PDF; the value-trap and PM phases read the flags." },
+        { t: "Progress", d: "Each phase reports under its agent id; terminal statuses normalise to Done; the header names the running phase.", f: "src/utils/progress.py · app/frontend/src/lib/runProgress.ts · phaseLabels.ts", x: "The data router settles before deep research starts; the research start is deep research's own event." },
+      ], files: ["src/pipeline.py", "src/agents/routing/*", "app/frontend/src/lib/runProgress.ts"], links: ["market", "memory", "research"] },
+    research: { k: "3", t: "Deep research", d: "Industry Intelligence Brief (8–12 bullets, [n] footnotes); 2G GUIDANCE_BLOCK; extractors: guidance_estimates (thinking), family_metrics, bank / REIT / SaaS KPIs.", role: "The research deliverable is the brief; the section text behind it is working context for the extractors and is not printed. Section 2G is where management's guidance is captured for the valuation.",
+      reads: "web search, archive, knowledge notes, the GUIDANCE_BLOCK", writes: "industry_brief, industry_footnotes, deep_research_sections, guidance_estimates, bank / REIT / SaaS metrics, citation registry",
+      parts: [
+        { t: "The brief and its footnotes", d: "Assertion-headed bullets; [n] markers resolve from the sections' REFERENCES to industry_footnotes; unresolved markers stay visible.", f: "deep_research.resolve_brief_references · src/pipeline.py (cached-brief path)", x: "Footnote numbers are global across the report; the PDF prints the list on its own last page." },
+        { t: "guidance_estimates extractor", d: "The one extractor that thinks (6,000 tokens): bear / base / bull FY+1 and FY+2 revenue growth, margin and EPS, a medium-term target, confidence, citations.", f: "deep_research._extract_guidance_estimates · _normalize_guidance_estimates", x: "Rates come back as decimals so the engine needs no scale conversion; a block with no base FY+1 growth is dropped." },
+        { t: "family_metrics", d: "Bank: loan growth, NIM, fee growth, cost-to-income, credit cost (bps), payout, CET1 target, ROE target year. Insurer: premium growth, combined ratio, investment yield, payout.", f: "_GUIDANCE_ESTIMATES_SYSTEM (family block)", x: "These are what the bank earnings-and-capital model prices the legs on; without them the model is a cross-check." },
+        { t: "Other extractors", d: "Bank, REIT, SaaS and insurance KPIs; DCF calibration; SOTP segments; the pipeline for biotech.", f: "src/agents/industry/deep_research.py (extractor registry)", x: "Never name an extractor KPI after a financial line item: the bridge overwrites the real value silently (DBS BVPS incident)." },
+      ], files: ["src/agents/industry/deep_research.py", "src/agents/industry/data_router.py", "src/agents/industry/specialist.py"], links: ["research_src", "forecast", "engine", "web"] },
+    forecast: { k: "4", t: "Guidance → forecast", hi: true, d: "bear / base / bull FY+1, FY+2, medium-term target; five principles; 9-step trace.", role: "Deterministic. Turns the research's estimates into the intermediate years a flat rate misses, by the owner's five principles, and records how it did it.",
+      reads: "guidance_estimates, the audited series, profile and sector, WACC, terminal growth, peer EV/EBITDA, market growth", writes: "growth_schedule and fcf_margin_schedule for the DCF, rows for the statements, deconstruction, terminal diagnostics, invariants, steps",
+      parts: [
+        { t: "1 Target deconstruction", d: "Back-solve the target year into revenue, EBIT, net income, tax and non-operating lines; flag a guided CAGR more than 500 bp above the market's.", f: "guidance_forecast.deconstruct", x: "An EPS or margin target bridges revenue from the last guided rate toward the market's, never flat zero." },
+        { t: "2 Archetype routing", d: "Regulatory lag (S-curve), fixed-asset operating leverage (convex), retail rollout (linear with pre-opening drag), platform (linear), generic.", f: "guidance_forecast.archetype_route · margin_curve", x: "Routing order: explicit profile → report family → sector; the reason is recorded in the trace." },
+        { t: "3 Three statements", d: "Working-capital intensity, capex as D&A plus growth capex, D&A rolled forward, tax and interest from history, net income, EPS, UFCF.", f: "guidance_forecast.build_forecast · history_ratios", x: "No receivables / payables in the series, so NWC uses change_in_working_capital / Δrevenue; capex alpha and tax from history medians, bounded." },
+        { t: "4 Fade and terminal", d: "Linear fade to the terminal rate over four years after the target; terminal ROIC at least WACC + 2 pp; reinvestment g / ROIC; implied exit multiple vs peer median.", f: "guidance_forecast.build_forecast", x: "Open call for the owner: a one- or two-year guidance horizon fades to terminal growth within four years (09988.HK DCF 188 → 109 on a user FY+1 estimate); fading toward the engine path is the proposed alternative." },
+        { t: "5 Invariants and trace", d: "Operating jaws, cash conversion 0.6–1.2x, share-count integrity, terminal multiple bounds, no engine residue; nine numbered steps with the numbers used.", f: "guidance_forecast._trace_steps", x: "Shown on the web card, the PDF block and the Excel Guidance tab; the PM's forward block names the archetype and any failed check." },
+      ], files: ["src/agents/analysis/guidance_forecast.py", "src/data/valuation_constants.json[guidance_forecast]", "tests/test_guidance_forecast.py"], links: ["research", "engine", "statements", "overrides"] },
+    engine: { k: "4.5", t: "Valuation engine", hi: true, d: "DCF on the forecast's schedules (unlevered); forward multiples on the estimates; banks read the earnings-and-capital model; PPA, SOTP, NAV.", role: "One projection per leg, every leg traced. The profile decides which legs price and at what weight; the forecast decides what they price.",
+      reads: "profile legs and weights, forecast schedules, forward consensus with the guidance overlay, bank model outputs, accepted inputs, peer cohorts, WACC build", writes: "leg_inputs with full traces, method_iv_table, effective_weights, gates, forward flags",
+      parts: [
+        { t: "DCF leg", d: "Unlevered owner-earnings FCF (owner-earnings FCF + after-tax interest; banks, insurers, fee financials and property keep the levered basis) on the forecast's growth and FCF-margin schedules; bridge net of net debt, minorities, preferreds.", f: "dcf_agent._project_dcf · _extract_annual_series (ufcf_owner_earnings)", x: "Any money field must be in BOTH FX money-field lists or CNY / USD names blow up (BABA went to 73% before that fix)." },
+        { t: "Forward multiples", d: "Forward P/E, EV/EBITDA, EV/EBIT, EV/Revenue price the guidance-derived FY+1 estimates per scenario; consensus kept beside; the label names the source.", f: "dcf_agent._guidance_forward_overlay · _fwd_label", x: "EPS from the research's estimate else the forecast's year 1; EBITDA from FY+1 revenue × margin else EBIT + D&A; trailing legs stay on history." },
+        { t: "Bank legs", d: "GGM (P/B) on RoTE and book; Residual Income; P/TBV; Excess Capital. With family guidance the GGM reads the model's steady RoTE and FY+1 book, the forward P/E its EPS.", f: "dcf_agent._bank_ggm_assumptions · _compute_ggm_pb · bank_model.py", x: "On extraction drivers alone the model is a cross-check: a line-item NIM of 0.74% had moved Standard Chartered 17%." },
+        { t: "Family legs", d: "REIT NAV on clean NOI and the cohort cap rate, P/FFO, P/AFFO, S-REIT DDM; IPP PPA project-finance DCF; holdco look-through SOTP; biotech rNPV.", f: "dcf_agent._ppa_project_finance_dcf · _compute_sreit_ddm · sotp_report_extras.py", x: "The PPA leg is exempt from the owner-earnings gate when an input is accepted; the holdco discount decides the answer and ranges +55% to −33%." },
+        { t: "Gates and traces", d: "OE ≤ 0 cascade, cash-conversion gate, CAGR divergence, revenue-scale cap, reinvestment disclosure, GATE_PPA_INPUT; every leg writes kind, metric, basis, multiple parts and bridge.", f: "dcf_agent.gate_evaluations · _leg_trace", x: "The workbook rebuilds each leg from its trace with live formulas, so the export is checkable." },
+      ], files: ["src/agents/analysis/dcf_agent.py", "src/agents/analysis/bank_model.py", "src/agents/analysis/sotp_report_extras.py", "tests/test_golden_valuations.py"], links: ["forecast", "statements", "blend", "config", "gate"] },
+    blend: { k: "blend", t: "Blend & target", hi: true, d: "Legs at the profile's weights, no display-only figures; IV = Σ w × leg; target = spot + 0.5 × (IV − spot); 12m PT probability-weighted.", role: "Two tiers and no composite: the intrinsic value is the weighted blend of the DCF and the multiples legs, and the target is a capture of the gap to spot.",
+      reads: "method_iv_table, effective_weights, spot, scenario probabilities", writes: "intrinsic_value per scenario, pt_bridge, 12m_targets, reconciliation",
+      parts: [
+        { t: "The blend", d: "Legs that price at their weights; a leg that does not price is dropped and the weight renormalised onto the survivors.", f: "dcf_agent._blend_legs · _blend_methods", x: "Every panel, hero number and table row prints a leg's own value and weight; display-only or divergent figures are deleted (blendLegs.ts mirrors it)." },
+        { t: "The target bridge", d: "target = spot + capture × (IV − spot), capture 0.5, per scenario; the 12-month target weights the scenarios by the scenario agent's probabilities.", f: "dcf_agent pt_bridge · scenario_agent.py §7", x: "The Q × R × C composite and the z-scores were deleted on 2026-09-19 and are not to be reintroduced." },
+        { t: "Scenarios", d: "Bear / base / bull with probabilities; a scenario-aware dispatcher; the reconciliation block (blended IV, PT, upside, skew, gap flag).", f: "src/agents/analysis/scenario_agent.py", x: "An estimate override recomputes the same chain with the run's own probabilities." },
+      ], files: ["src/agents/analysis/dcf_agent.py", "src/agents/analysis/scenario_agent.py", "app/frontend/src/lib/blendLegs.ts"], links: ["engine", "decision", "overrides", "web"] },
+    statements: { k: "checks", t: "Statements & checks", d: "Three-statement forecast FY+1E..FY+5E (IS → schedules → CF → BS); bank / insurer earnings-and-capital model; 5-assertion reconciliation suite.", role: "The professional analyst's model: income statement, supporting schedules, cash flow and a balance sheet that balances, gated by assertions that withhold the output when they fail.",
+      reads: "forecast rows, the latest audited balance sheet (raw financials), history-derived assumptions with their sources, bank metrics", writes: "three_statements (income, schedules, cashflow, balance, checks, reconciliation, coverage, notes), bank / insurer rows",
+      parts: [
+        { t: "Operating companies", d: "IS (revenue and EBIT) → working capital in days, PP&E roll, debt with a minimum-cash revolver → CF → BS with retained earnings and other equity carried separately.", f: "src/agents/analysis/three_statement.py (build, assumptions_from_history, coverage)", x: "Assumptions beyond the forecast: gross margin, SBC, interest rates on debt and cash, payout, buybacks and price, receivable / inventory / payable days, debt policy, minimum cash, minority share, M&A." },
+        { t: "The reconciliation suite", d: "|A − L − E| < 0.01; cash roll; retained-earnings roll; PP&E roll; working-capital identity. Live OK / FAIL rows in Excel; a failure prints the trace instead of the statements.", f: "three_statement.build (reconciliation) · valuation_workbook.model_tab · pdf_report._fs_reconciliation_table", x: "The owner's execution mandate; the Excel formulas reproduce the Python exactly (no revolver spread)." },
+        { t: "Banks and insurers", d: "Asset growth and NIM → NII + fees − cost-to-income × income − credit cost × loans − tax → capital against the CET1 target → EPS, DPS, BVPS, ROE, RoTE; insurers on premiums, combined ratio and float yield.", f: "src/agents/analysis/bank_model.py", x: "Each driver from guidance → the bank-metrics extraction → the line items → a PROPOSED default; total income must be _bank_total_income, never revenue_base, or fees inflate threefold." },
+      ], files: ["src/agents/analysis/three_statement.py", "src/agents/analysis/bank_model.py", "tests/test_three_statement.py", "tests/test_bank_model.py"], links: ["forecast", "engine", "excel", "pdf"] },
+    decision: { k: "5–9", t: "Decision", d: "Scenarios with probabilities; sector card, power law, value trap; risk manager; PM: 300-word institutional rationale, 18-word headline; post-trade review.", role: "Python decides action, size, stop and target; the LLM writes the rationale over a quantitative anchor block and a research digest.",
+      reads: "the valuation record, scenarios, intelligence flags, the forward-estimates block, the prior recap", writes: "decisions (action, size, target, rationale, headline), post-trade review, archive rows",
+      parts: [
+        { t: "Portfolio manager", d: "Deterministic band on blended-IV upside adjusted by qualitative gates; the rationale follows nine rules (voice, one anchor, rounding, arithmetic, bear case, bridge, guidance, length, headline).", f: "src/agents/portfolio_manager.py (_PM_RATIONALE_SYSTEM_PROMPT, _forward_estimates_block, _enforce_pm_length)", x: "The forward block names the archetype, the forward-multiples basis vs consensus and any carried user override; the number guard keeps headline figures inside the inputs." },
+        { t: "Sector card, power law, value trap", d: "Peer scoring, growth-pattern analysis and the trap verdict that can block a BUY.", f: "src/agents/analysis/*", x: "Phase 7 fans out concurrently; scenario_agent emits no terminal status, so completion is inferred from the next group." },
+        { t: "Archive", d: "web_runs.full_result_json plus ticker_signals and agent_signals; phase durations; progress log.", f: "src/memory/run_archive.py · app/backend/services/analysis_service.py", x: "The stored run is never rewritten by an override; the accuracy tracker reads ticker_signals." },
+      ], files: ["src/agents/portfolio_manager.py", "src/agents/analysis/scenario_agent.py", "src/memory/run_archive.py"], links: ["blend", "archive", "web", "pdf"] },
+    archive: { k: "store", t: "Archive of the run", d: "web_runs.full_result_json: the one stored run every surface reads; ticker_signals / agent_signals; phase durations; progress log.", role: "One record per run. Web, PDF and Excel are built from it at read time; overrides are applied on read and never written into it.",
+      reads: "the finished pipeline state", writes: "web_runs, ticker_signals, agent_signals, phase_durations",
+      parts: [
+        { t: "get_run_result", d: "Loads the blob, hydrates statements, applies active estimate overrides (apply_overrides=True), sanitises floats.", f: "app/backend/services/analysis_service.get_run_result", x: "The recap, the target history and the accuracy tracker read the raw blob or the archive tables, never the override-applied payload." },
+        { t: "Production verification", d: "Age web_runs.run_at by 45 minutes to bypass the 30-minute endpoint cache; payload under data.* keyed by ticker; checkpoint rows exist.", f: "scratchpad recipes: prod_runs.py, prod_bench.py, verify_prod_agent.py", x: "Naive-local run_at rows replay forever as fresh on UTC production." },
+      ], files: ["app/backend/services/analysis_service.py", "src/memory/run_archive.py"], links: ["decision", "web", "pdf", "excel", "outcomes"] },
+
+    web: { k: "surface", t: "Web report (desktop and mobile)", d: "Rating pin; 18-word headline; valuation ladder; guidance card with the 9-step trace; estimate workbench; ask the agent; SOTP card; progress header.", role: "Two render paths (ReportPage and V2ReportView) mount the same cards; nothing is added to one without the other.",
+      reads: "GET /analysis/runs/{id}, SSE progress, the workbench routes", writes: "estimate overrides (PUT / DELETE), questions to the agent",
+      parts: [
+        { t: "GuidanceEstimatesPanel", d: "Guidance as stated vs consensus, the model's estimates, the DCF growth path, the forecast with its nine steps and bear / bull toggle.", f: "app/frontend/src/components/report/GuidanceEstimatesPanel.tsx", x: "Mounted in ReportPage, ReportViewPage and V2ReportView; font sizes +4 px on the owner's request." },
+        { t: "EstimateWorkbench", d: "Edit estimates and engine inputs, recompute (preview), save, revert; agent-vs-you table with the forward legs; ask the agent and load a proposal.", f: "app/frontend/src/components/report/EstimateWorkbench.tsx · lib/api.ts", x: "Shows only when the run carries forecast_context; a bank run shows the bank drivers." },
+        { t: "Rating block and header", d: "The pin with benchmark and trade action; the disclosures on hover and in the PDF; the headline featured; a note when the PM text predates an override.", f: "components/report/shared/ResearchRatingBlock.tsx · ReportHeader.tsx", x: "Monochrome by design-system rule: green and red are reserved for price change." },
+        { t: "Progress", d: "ProgressHeader and ChainOfThought share derivePhaseState; completion inferred across concurrency groups; the label counts parallel phases.", f: "app/frontend/src/hooks/useProgressDerived.ts · lib/runProgress.ts", x: "The 'Deep Research while fetching financials' mislabel came from the old order-based inference." },
+      ], files: ["app/frontend/src/pages/ReportPage.tsx", "app/frontend/src/components/v2/V2ReportView.tsx", "app/frontend/src/components/report/*", "app/frontend/src/lib/*"], links: ["archive", "overrides", "blend", "statements"] },
+    pdf: { k: "surface", t: "PDF (reportlab)", d: "Valuation summary; guidance forecast block; Financial Statements page FY2022 → FY2030E with the suite; rationale and headline; references last.", role: "The same report the CLI writes, built at download time from the stored run.",
+      reads: "the stored run with overrides applied, financial_statements, three_statements, industry_footnotes", writes: "the PDF bytes (GET /analysis/runs/{id}/report.pdf)",
+      parts: [
+        { t: "Financial Statements page", d: "Growth & Margins, Income Statement, Balance Sheet and Cash Flow with four actual years plus FY+1E..FY+5E in the same tables (full width); the reconciliation suite beneath.", f: "pdf_report._financial_statements_page · _fs_forecast_values · _fs_reconciliation_table", x: "Expenses print positive and outflows negative as the reported rows do; growth, margin and ROE rows extend into the forecast years." },
+        { t: "Valuation summary and blocks", d: "Intrinsic value to target, the SOTP block, the guidance block with the forecast steps; the bank model block for balance-sheet families; a withheld model's reason.", f: "pdf_report._valuation_summary · _guidance_forecast_block_pdf · _bank_model_block_pdf", x: "The standalone three-statement block remains only for banks, insurers and withheld models." },
+        { t: "References", d: "The brief's footnotes, numbered as cited, on their own last page.", f: "pdf_report (REFERENCES section)", x: "Moved from under the brief on the owner's request." },
+      ], files: ["src/utils/pdf_report.py", "app/backend/services/workbook_export_service.py"], links: ["archive", "statements", "decision"] },
+    excel: { k: "surface", t: "Excel workbook (openpyxl, live formulas)", d: "Summary; IS / BS / CFS with FY+1E..FY+5E linked to the Model tab; Model (four blocks + suite); WACC; DCF bridge; Multiples; Comps; SOTP; Guidance; Family; Blend; Target; Backtest.", role: "A checkable model, not a printout: static engine values in input colour beside the live formulas that reproduce them.",
+      reads: "the stored run with overrides applied, reported statements", writes: "the .xlsx bytes (GET /analysis/runs/{id}/workbook)",
+      parts: [
+        { t: "Model tab", d: "Assumptions in blue; 1 income statement, 2 supporting schedules, 3 cash flow, 4 balance sheet, 5 reconciliation suite as OK / FAIL formulas; bank layout for balance-sheet families.", f: "valuation_workbook.model_tab · _bank_model_tab", x: "Built before the statement tabs so their forecast columns can link to its rows; moved to sit after CFS." },
+        { t: "IS / BS / CFS", d: "Reported history as inputs with tie-outs; FY+1E..FY+5E on the reported rows linked to the Model tab; the tab's own margin, EBITDA, tax-rate and EPS formulas extend across.", f: "valuation_workbook.income_statement / balance_sheet / cash_flow · _model_link", x: "A withheld model writes its reason into the forecast columns rather than leaving blanks." },
+        { t: "DCF and Summary", d: "The bridge deducts net debt, minority interest and preferred equity; the Summary names the probability-weighted and base-case targets, every net-debt basis, an unweighted DCF and the WACC used.", f: "valuation_workbook._dcf_block · summary_tab", x: "From the SBUX and Alibaba reviews; the Check cells had read REVIEW on every 09988.HK scenario." },
+      ], files: ["src/utils/valuation_workbook.py", "tests/test_valuation_workbook.py", "tests/test_workbook_review_fixes.py"], links: ["archive", "statements", "engine"] },
+    accuracy: { k: "surface", t: "Model Accuracy page", d: "Accept / revoke review-gated inputs; carried estimate overrides; dynamic multiples log; calibration promote / rollback; outcome scoring.", role: "The owner's gate: what the next run may price on, what it inherits, and how past targets scored.",
+      reads: "industry_inputs and reviews, segment memory, estimate_overrides, calibration versions, valuation_outcomes", writes: "accept / revoke decisions, calibration promotions",
+      parts: [
+        { t: "Industry inputs", d: "Each entry with its checks against FMP and its status; a forward overlay accepted separately.", f: "app/backend/routes/model_accuracy.py · ModelAccuracyPage.tsx (IndustryInputsSection)", x: "MODEL_ACCURACY_EMAILS gates every route." },
+        { t: "Carried estimate overrides", d: "The latest active override per ticker with its fields, note and the agent's IV before and after; revoke stops the carry.", f: "/model-accuracy/estimate-overrides · EstimateOverridesSection", x: "ESTIMATE_OVERRIDE_CARRY=off stops the carry without touching the rows." },
+        { t: "Calibration and outcomes", d: "Dynamic multiples log; calibration versions promote / rollback / dismiss; matured targets scored against prices and consensus.", f: "src/memory/calibration_review.py · src/memory/valuation_outcomes.py", x: "Outcomes score the agent's estimates only; a run built on a carried override is excluded." },
+      ], files: ["app/frontend/src/pages/ModelAccuracyPage.tsx", "app/backend/routes/model_accuracy.py"], links: ["gate", "overrides", "constants", "outcomes"] },
+
+    overrides: { k: "loop", t: "Estimate overrides", d: "User disagrees → the same engine recomputes; saved per run; carried into the next run; agent proposes, only the user saves.", role: "The user's judgement enters the loop without rewriting a run: recompute, save, apply on read, carry forward, revoke.",
+      reads: "the stored run's forecast_context and leg traces", writes: "estimate_overrides rows; the override applied on read; the carry into the next run",
+      parts: [
+        { t: "Recompute", d: "normalize_overrides → forecast on the stored history → DCF re-projected → forward legs re-priced on the user's FY+1 figures → blend at the run's weights → target bridge → probability-weighted PT.", f: "app/backend/services/estimate_override_service.recompute · _recompute_bank", x: "Only the DCF and the forward legs move; trailing legs stay on history; a bank run re-prices the GGM and forward P/E on the user's drivers." },
+        { t: "Apply on read", d: "Patches dcf_range, scenario_analysis and decisions in the payload returned by get_run_result; the stored blob is untouched; revert is a delete.", f: "estimate_override_service.apply_to_payload · apply_saved", x: "The PM headline and rationale stay the agent's until the user asks for a rewrite." },
+        { t: "Carry forward", d: "The ticker's latest active override merges into the next run's guidance block; engine inputs, WACC and terminal growth follow; the run flags it.", f: "src/data/estimate_override_store.latest_for_ticker · merge_block · dcf_agent (carried override)", x: "Revoke on the Model Accuracy page; the accuracy tracker skips runs built on a carried override." },
+        { t: "Ask the agent", d: "One DeepSeek call over the trace, the brief and its footnotes; answers in 120 words; proposals validated through normalize_overrides; never writes.", f: "app/backend/services/estimate_agent_service.ask · regenerate_pm", x: "A proposal's rationale pre-fills the note when loaded into the form." },
+      ], files: ["app/backend/services/estimate_override_service.py", "app/backend/services/estimate_agent_service.py", "src/data/estimate_override_store.py", "tests/test_estimate_overrides.py"], links: ["web", "forecast", "engine", "accuracy", "outcomes"] },
+    review: { k: "loop", t: "Review gate", d: "Inputs and SOTP memory accepted by the owner; a changed entry needs a new acceptance; nothing un-accepted prices a leg.", role: "Human acceptance is the only path from a cited figure to a priced leg.",
+      reads: "pre-filled entries and their checks", writes: "industry_input_reviews, segment memory reviews",
+      parts: [
+        { t: "Accept / revoke", d: "Per ticker and kind, with an optional forward overlay; a hard-check failure cannot be accepted.", f: "industry_inputs.set_review · routes/model_accuracy.py", x: "Local sqlite shows pending where production has accepted; query production PG for the truth." },
+        { t: "Segment memory", d: "Learned SOTP segment multiples (ridge on the 46-row panel) accepted or revoked per ticker.", f: "src/data/segment_memory.py", x: "Note > model > comp median; margin fill never touches note-matched segments." },
+      ], files: ["src/data/industry_inputs.py", "src/data/segment_memory.py"], links: ["gate", "engine", "accuracy"] },
+    constants: { k: "loop", t: "Calibration & constants", d: "Owner-set constants; quarterly clock, inertia band; calibration proposes, only --accept records; new constants ship PROPOSED with a derivation.", role: "The machine recommends a multiple or a constant with its derivation; the owner chooses.",
+      reads: "live cohorts, calibration runs, the owner's acceptances", writes: "valuation_constants versions, dynamic multiples log",
+      parts: [
+        { t: "Recommend a market multiple first", d: "Never pick a multiple silently: derive it from the current market, show the derivation, ask.", f: "feedback memory; scripts/wave_baseline.py", x: "Every multiple defect on 2026-09-20 was a basis mismatch nobody could see." },
+        { t: "Calibration review", d: "Versions with promote / rollback / dismiss; the inertia band stops churn.", f: "src/memory/calibration_review.py", x: "Guidance channel, forecast, PPA and archetype curves are PROPOSED blocks awaiting acceptance." },
+      ], files: ["src/data/valuation_constants.py", "src/memory/calibration_review.py"], links: ["config", "engine", "accuracy"] },
+    golden: { k: "loop", t: "Golden harness & pins", d: "17 fixtures replayed offline on every change; pins restate each methodology move with its reason; snapshots hold values and flag text.", role: "Every methodology change is measured against recorded fixtures before it ships, and the reason it moved is written down.",
+      reads: "tests/fixtures/golden/<NAME>/raw/calls.json, comps.json, web_run.json", writes: "tests/golden/snapshots.json, CHANGELOG.md",
+      parts: [
+        { t: "Replay", d: "replay_fixture freezes the clock, serves recorded calls and comps, runs run_dcf_agent; state_patch injects a guidance block for a test.", f: "src/memory/golden_replay.py", x: "Snapshots store flag text too, so rewording a flag needs --update-snapshots with a GOLDEN_UPDATE_REASON." },
+        { t: "Pinned suites", d: "0917e and 0917f restate each moved value with the owner's reason; the UFCF move is pinned per fixture.", f: "tests/test_valuation_fixes_0917e.py · tests/test_dcf_fixtures.py", x: "A test that pins the exact text of a status or a sentence fails loudly when the wording changes, which is the point." },
+      ], files: ["tests/test_golden_valuations.py", "src/memory/golden_replay.py", "tests/golden/"], links: ["engine", "forecast", "constants"] },
+    outcomes: { k: "loop", t: "Accuracy & memory", d: "Outcomes score matured targets (agent only); prior-run recap, freshness delta, steward; research reused under 14 days.", role: "How the system learns: scored outcomes on the agent's own estimates, and the memory the next run starts from.",
+      reads: "ticker_signals, prices, consensus", writes: "valuation_outcomes, recaps, lessons",
+      parts: [
+        { t: "Outcome scoring", d: "Engine 12-month target and PM target scored separately against matured prices; cache copies and unrated runs are not scored.", f: "src/memory/valuation_outcomes.py", x: "Owner decision 2026-10-03: a user's override is never scored; runs built on a carried override are excluded by their marker." },
+        { t: "Memory loop", d: "Recap of the prior run, freshness delta, the assumption steward's challenges, M1 recency lessons.", f: "src/memory/report_recap.py · freshness.py · assumption_store.py", x: "Lessons start at zero until an INCORRECT prior run recurs." },
+      ], files: ["src/memory/valuation_outcomes.py", "src/memory/report_recap.py", "src/memory/freshness.py"], links: ["memory", "archive", "accuracy", "overrides"] },
+  }
+};
+
+const map = document.getElementById("map");
+function tile(id) {
+  const m = M.mods[id];
+  const b = document.createElement("button");
+  b.className = "tile" + (m.hi ? " hi" : ""); b.type = "button"; b.dataset.id = id;
+  b.innerHTML = `<div class="k">${m.k}</div><div class="t">${m.t}</div><div class="d">${m.d}</div><div class="n">▶ ${m.parts.length} parts</div>`;
+  b.addEventListener("click", () => open(id));
+  return b;
+}
+for (const band of M.bands) {
+  const s = document.createElement("section"); s.className = "band";
+  s.innerHTML = `<p class="label">${band.label}<small>${band.note}</small></p>`;
+  const g = document.createElement("div"); g.className = "grid";
+  band.mods.forEach((id) => g.appendChild(tile(id)));
+  s.appendChild(g);
+  if (band.id === "pipeline") {
+    const f = document.createElement("p"); f.className = "flow";
+    f.innerHTML = `Flow: <b>front block</b> → <b>deep research</b> → <b>guidance → forecast</b> → <b>valuation engine</b> → <b>statements & checks</b> → <b>blend & target</b> → <b>decision</b> → <b>archive</b>`;
+    s.appendChild(f);
+  }
+  map.appendChild(s);
+}
+
+const overlay = document.getElementById("overlay");
+let current = null;
+function open(id) {
+  const m = M.mods[id]; if (!m) return;
+  current = id;
+  const band = M.bands.find((b) => b.mods.includes(id));
+  document.getElementById("crumbs").innerHTML = `<button type="button" id="crumb-root">map</button><span>›</span><span>${band ? band.label : ""}</span><span>›</span><span>${m.t}</span>`;
+  document.getElementById("crumb-root").addEventListener("click", close);
+  document.getElementById("ptitle").textContent = m.t;
+  document.getElementById("prole").textContent = m.role;
+  document.getElementById("preads").textContent = m.reads;
+  document.getElementById("pwrites").textContent = m.writes;
+  const parts = document.getElementById("pparts"); parts.innerHTML = "";
+  m.parts.forEach((p) => {
+    const d = document.createElement("div"); d.className = "part"; d.tabIndex = 0; d.setAttribute("role", "button");
+    d.innerHTML = `<div class="pt">${p.t}</div><div class="pd">${p.d}</div><div class="pf">${p.f}</div><div class="px">${p.x}</div>`;
+    const toggle = () => d.classList.toggle("open");
+    d.addEventListener("click", toggle);
+    d.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+    parts.appendChild(d);
+  });
+  document.getElementById("pfiles").innerHTML = m.files.map((f) => `<div>${f}</div>`).join("");
+  const links = document.getElementById("plinks"); links.innerHTML = "";
+  m.links.forEach((l) => { const b = document.createElement("button"); b.type = "button"; b.textContent = M.mods[l].t; b.addEventListener("click", () => open(l)); links.appendChild(b); });
+  overlay.hidden = false;
+  document.getElementById("panel").scrollTop = 0;
+  document.getElementById("close").focus();
+  try { history.replaceState(null, "", "#" + id); } catch (e) { /* ignore */ }
+}
+function close() {
+  overlay.hidden = true; current = null;
+  try { history.replaceState(null, "", location.pathname); } catch (e) { /* ignore */ }
+}
+document.getElementById("close").addEventListener("click", close);
+document.getElementById("shade").addEventListener("click", close);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !overlay.hidden) close(); });
+const h = (location.hash || "").slice(1);
+if (h && M.mods[h]) open(h);
+</script>
