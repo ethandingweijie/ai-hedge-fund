@@ -1658,3 +1658,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner, 2026-10-03 (steps two and three): flag text only - every bank run now carries the earnings-and-capital model's flag (a cross-check beside the research ROE where no family guidance exists); no value moves (02888_HK, D05_SI, SCHW)
 
+## 2026-10-03T13:37:58+00:00
+
+- regenerated at HEAD: `50579381`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (steps two and three): flag text only - the bank model's cross-check flag; the model prices the legs only when management's family guidance built it, so no fixture value moves
+

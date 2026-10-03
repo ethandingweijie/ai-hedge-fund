@@ -13168,11 +13168,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _bm_base["coverage"] = _bmod.coverage(_bm_base)
                         _bm_guided = _bm_base.get("guided_fields") or []
                         _bm_cal = _bm_base.get("calibration") or {}
-                        # The model prices the legs when management's own drivers built it (family
-                        # guidance), or when no research ROE target exists and it reproduces the latest
-                        # year. Otherwise it is a cross-check beside the research's target: a line-item
-                        # NIM or a default tax rate must not re-price a bank (02888.HK fell 17% on them).
-                        _bm_feeds = bool(_bm_guided) or (not most_recent.get("_bank_target_roe_research") and bool(_bm_cal.get("ok")))
+                        # The model prices the legs only when management's own drivers built it (family
+                        # guidance in the research). Otherwise it is a cross-check beside the research's
+                        # target: a line-item NIM or a default tax rate must not re-price a bank (02888.HK
+                        # fell 17% on them; SCHW's forward P/E moved to a default-built EPS).
+                        _bm_feeds = bool(_bm_guided)          # guidance-built only; calibration is reported, never a licence (SCHW's forward P/E moved on defaults)
                         _bm_base["feeds_legs"] = _bm_feeds
                         for _sc_m in _bank_models.values():
                             _sc_m["feeds_legs"] = _bm_feeds
