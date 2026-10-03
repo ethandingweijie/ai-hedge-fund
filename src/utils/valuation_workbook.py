@@ -275,8 +275,10 @@ class _Book:
         self.dcf_tab()
         self.multiples_tab()
         self.comps_tab()
-        if any(tr.get("kind") == "sotp" for sc in SCENARIOS
-               for tr in (self.scen(sc).get("leg_inputs") or {}).values()):
+        # Owner, 2026-10-03 (SBUX review, A10): a SOTP tab only when a SOTP leg carries weight;
+        # an unweighted SOTP (segments) trace used to create the tab and then empty it.
+        if any(tr.get("kind") == "sotp" and self.in_blend(name) for sc in SCENARIOS
+               for name, tr in (self.scen(sc).get("leg_inputs") or {}).items()):
             self.sotp_tab()
         if self._has_bank():
             self.banks_tab()
@@ -686,7 +688,7 @@ class _Book:
         frow("Balance check (assets − liabilities & equity)", lambda L: f"={L}{ta}-{L}{tle}", typ="Check")
         r += 1
         td = frow("Total debt", lambda L: f"={L}{std}+{L}{ltd}")
-        frow("Net debt (debt − cash − short-term investments)", lambda L: f"={L}{td}-{L}{cash}-{L}{sti}", bold=True)
+        frow("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)", lambda L: f"={L}{td}-{L}{cash}-{L}{sti}", bold=True)
         sh.widths({"A": 50, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1)}})
         sh.ws.freeze_panes = "C6"
 
@@ -788,8 +790,13 @@ class _Book:
             sh.label(r, 1, "Leverage (net debt / equity)", indent=1)
             sh.put(r, 3, _num(bb.get("leverage")), "0.00\"x\""); r += 1
             app_r = r
-            sh.label(r, 1, "Leverage premium applies (1 = yes; US REITs exempt)", indent=1)
-            sh.put(r, 3, 1 if bb.get("leverage_premium_applies") else 0, "0"); r += 1
+            # Owner, 2026-10-03 (SBUX review, A8): net debt / equity on negative book equity has no
+            # meaning; the test is marked n/a and the premium is zero.
+            _lev_v = _num(bb.get("leverage"))
+            _neg_eq = _lev_v is not None and _lev_v < 0
+            sh.label(r, 1, "Leverage premium applies (1 = yes; US REITs exempt"
+                           + ("; n/a: book equity is negative, so the ratio has no meaning" if _neg_eq else "") + ")", indent=1)
+            sh.put(r, 3, 0 if _neg_eq else (1 if bb.get("leverage_premium_applies") else 0), "0"); r += 1
             prem_r = r
             sh.label(r, 1, "Leverage premium", indent=1)
             sh.put(r, 3, f"=IF(C{app_r}=1,MAX(0,(C{lev_r}-{A['lev_threshold']})*{A['lev_slope']}),0)", PCT2); r += 1
@@ -882,6 +889,20 @@ class _Book:
                 r = self._dcf_block(sh, r, s, v["trace"], sfx=f"|{leg}", leg=leg) + 2
         if r == 4:
             sh.note(4, 1, "No DCF projection recorded for this run.")
+        # Owner, 2026-10-03 (SBUX review, A1): a DCF the blend does not weight says so, and the gap to
+        # the blended intrinsic value is reconciled to the profile's choice of methods.
+        _base_li = (self.scen("base").get("leg_inputs") or {})
+        _weighted = [n for n in _base_li if self.in_blend(n)]
+        _dcf_weighted = any(n == "DCF" or n in getattr(self, "dcf_variants", {}) for n in _weighted)
+        if r > 4 and not _dcf_weighted:
+            _dcf_v = (_base_li.get("DCF") or {}).get("value")
+            _iv_v = self.scen("base").get("intrinsic_value")
+            sh.note(r, 1, "NOT IN THE BLEND: the " + str(self.dr.get("profile")) + " profile weights "
+                          + (", ".join(_weighted) or "other legs") + "; the DCF value per share "
+                          + (f"{float(_dcf_v):,.2f}" if isinstance(_dcf_v, (int, float)) else "n/a")
+                          + " against the blended intrinsic value "
+                          + (f"{float(_iv_v):,.2f}" if isinstance(_iv_v, (int, float)) else "n/a")
+                          + " is the profile's choice of methods, recorded here for reconciliation; it is not an input to the target.")
         sh.widths({"A": 42, "B": 14, **{get_column_letter(c): 13 for c in range(3, 14)}})
 
     def _dcf_block(self, sh: _Sheet, r: int, s: str, tr: dict, sfx: str = "", leg: str = "DCF") -> int:
@@ -1565,6 +1586,19 @@ class _Book:
             c = sh.ws.cell(row=r, column=1, value=f)
             c.alignment = Alignment(wrap_text=True, vertical="top")
             sh.ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
+        # Owner, 2026-10-03 (SBUX review, A8): the build note above stops before the regime
+        # overlay; the rate the valuation used is stated with its parts.
+        _wb_ = self.dr.get("wacc_build") or {}
+        _bb_ = _wb_.get("base_breakdown") or {}
+        if isinstance(self.dr.get("wacc"), (int, float)):
+            r += 2
+            _ov_ = _num(_bb_.get("macro_overlay"))
+            sh.ws.cell(row=r, column=1, value=(
+                f"WACC used by the valuation {float(self.dr['wacc']):.2%}"
+                + (f" = build {float(_wb_['wacc']):.2%}" if isinstance(_wb_.get("wacc"), (int, float)) else "")
+                + (f" + macro-regime overlay {_ov_:+.2%}" if _ov_ is not None else "")
+                + (f" ({_bb_.get('macro_regime')} regime)" if _bb_.get("macro_regime") else "") + "."))
+            sh.ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
         sh.widths({"A": 60, "B": 50, "C": 16, "D": 16, "E": 10})
 
     # ── Data gaps ───────────────────────────────────────────────────────────
@@ -1662,8 +1696,12 @@ class _Book:
         _pb = self.dr.get("pt_bridge") or {}
         _spot_v = _pb.get("spot") or self.dr.get("current_price")
         _iv_v = _b.get("intrinsic_value")
-        _tgt_v = ((self.dr.get("12m_targets") or {}).get("base")
-                  or ((_pb.get("scenarios") or {}).get("base") or {}).get("target"))
+        # Owner, 2026-10-03 (SBUX review, A9): the headline target is the probability-weighted one
+        # the Target tab links to; the base-case target is its own, named row below.
+        _base_tgt_v = ((self.dr.get("12m_targets") or {}).get("base")
+                       or ((_pb.get("scenarios") or {}).get("base") or {}).get("target"))
+        _rec_sum = ((self.data.get("scenario_analysis") or {}).get(self.ticker) or {}).get("reconciliation") or {}
+        _tgt_v = _rec_sum.get("12m_price_target") or _base_tgt_v
         _ret_v = (float(_tgt_v) / float(_spot_v) - 1.0) if _tgt_v and _spot_v else None
         _tables = {s: ((self.dr.get(s) or {}).get("method_iv_table") or {}) for s in SCENARIOS}
         _ivs = {s: (self.dr.get(s) or {}).get("intrinsic_value") for s in SCENARIOS}
@@ -1678,7 +1716,7 @@ class _Book:
         _hl = (("Share price", "=" + A["spot"], NUM),
                ("Intrinsic value — base", f"N/A — Unrated: {_rs.get('reason') or ''}" if _unrated
                 else (("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None), None if _unrated else NUM),
-               ("12-month target", "N/A — Unrated" if _unrated
+               ("12-month target (probability-weighted)", "N/A — Unrated" if _unrated
                 else (("=" + self.target_cell) if self.target_cell else None), None if _unrated else NUM),
                ("Implied return to target", "N/A" if _unrated else f"=IFERROR(C{r + 2}/C{r}-1,0)", None if _unrated else PCT))
         _hl_static = (_spot_v, None if _unrated else _iv_v, None if _unrated else _tgt_v, None if _unrated else _ret_v)
@@ -1689,6 +1727,12 @@ class _Book:
             elif isinstance(v, str) and not v.startswith("="):
                 sh.put(r, 2, v, fmt, bold=True)                     # the Unrated "N/A" text
             sh.put(r, 3, v, fmt)
+            r += 1
+        if not _unrated:
+            sh.label(r, 1, "Base-case target (spot + capture × (IV − spot))")
+            if isinstance(_base_tgt_v, (int, float)):
+                sh.put(r, 2, float(_base_tgt_v), NUM).font = Font(color=BLUE)
+            sh.put(r, 3, "='Target'!$C$6" if _pb else None, NUM)
             r += 1
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)
@@ -1775,7 +1819,9 @@ class _Book:
             _static = {"pv_fcf": _pvf, "pv_tv": _pvt, "ev": _ev, "nd": _nd, "eq": _eq,
                        "iv": _li.get("value") if isinstance(_li.get("value"), (int, float)) else None}
             for lab, key in (("PV of forecast FCF", "pv_fcf"), ("PV of terminal value", "pv_tv"),
-                             ("Enterprise value", "ev"), ("Net debt", "nd"), ("Equity value", "eq"),
+                             ("Enterprise value", "ev"),
+                             (f"Net debt — valuation basis (balance sheet {((self.dr.get('financials_used') or {}).get('balance_sheet_period') or 'latest')}, leases excluded)", "nd"),
+                             ("Equity value", "eq"),
                              ("DCF value per share", "iv")):
                 sh.label(r, 1, lab, indent=1)
                 if isinstance(_static.get(key), (int, float)):

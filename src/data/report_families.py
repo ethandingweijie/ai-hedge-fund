@@ -27,7 +27,7 @@ _R = {
     "ebitda":   ("EBITDA", "bn", "ebitda"),
     "fcf":      ("FCF", "bn", "free_cash_flow"),
     "capex":    ("Capex", "bn", "capital_expenditure"),
-    "net_debt": ("Net debt / (cash)", "bn", "net_debt"),
+    "net_debt": ("Net debt / (cash) — FMP annual, lease liabilities included", "bn", "net_debt"),   # basis named (SBUX review, 2026-10-03)
     "equity":   ("Total equity", "bn", "total_equity"),
     "bvps":     ("Book value / share", "ps", ("book_value_per_share", "total_equity", "shares_outstanding")),
     "dps":      ("Dividends / share", "ps", ("dividends_per_share", None, None)),
