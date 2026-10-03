@@ -26,7 +26,7 @@ import type {
   DcfRange, EstimateOverrides, EstimateRecompute, ForecastContext, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
 } from '@/lib/reportTypes';
 
-const LABEL_CLS = 'text-[12px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
+const LABEL_CLS = 'text-[14px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 type Scenario = (typeof SCENARIOS)[number];
 type ScenarioField = keyof GuidanceScenarioRow;
@@ -175,7 +175,7 @@ function applyProposal(form: Form, p: EstimateOverrides): Form {
   return next;
 }
 
-const INPUT_CLS = 'h-7 w-24 rounded border border-input bg-background px-2 text-right text-[14px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring';
+const INPUT_CLS = 'h-7 w-24 rounded border border-input bg-background px-2 text-right text-[16px] tabular-nums focus:outline-none focus:ring-1 focus:ring-ring';
 
 export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, onRunUpdated }: {
   runId: string; ticker: string; block: GuidanceEstimates | null | undefined; forecast: GuidanceForecast | null | undefined;
@@ -256,29 +256,29 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className={LABEL_CLS}>Work the estimate with the agent</span>
-          {override ? <Badge variant="outline" className="text-[12px]">user override in force{override.created_at ? ` · ${override.created_at.slice(0, 10)}` : ''}</Badge> : null}
+          {override ? <Badge variant="outline" className="text-[14px]">user override in force{override.created_at ? ` · ${override.created_at.slice(0, 10)}` : ''}</Badge> : null}
         </div>
         <div className="flex gap-1">
           {SCENARIOS.map((s) => (
             <button key={s} type="button" onClick={() => setScenario(s)}
-              className={`rounded px-2 py-0.5 text-[13px] ${s === scenario ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground'}`}>
+              className={`rounded px-2 py-0.5 text-[15px] ${s === scenario ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground'}`}>
               {s}
             </button>
           ))}
         </div>
       </div>
       {override ? (
-        <div className="mt-1 text-[13.5px] text-foreground/85">
+        <div className="mt-1 text-[15.5px] text-foreground/85">
           {override.fields?.join(', ')}{override.note ? ` — ${override.note}` : ''}. Agent's base IV {money(override.before?.intrinsic_value)} → {money(override.after?.intrinsic_value)}; 12-month target {money(override.before?.['12m_price_target'])} → {money(override.after?.['12m_price_target'])}. The PDF and the workbook carry the same figures. These estimates are carried into the next run of {ticker} until revoked on the Model Accuracy page.
         </div>
       ) : (
-        <div className="mt-1 text-[13.5px] text-muted-foreground">
+        <div className="mt-1 text-[15.5px] text-muted-foreground">
           Change what you disagree with, recompute, then save. Only the DCF leg moves — the same engine, the same weights, the same target bridge; peer-multiple legs stay on the cohort.
         </div>
       )}
 
       {/* 1. the estimates */}
-      <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-1 text-[14px] sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-1 text-[16px] sm:grid-cols-2">
         <div>
           <div className={LABEL_CLS}>{scenario} case estimates</div>
           {SCENARIO_FIELDS.map((f) => (
@@ -289,17 +289,17 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
           ))}
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className={LABEL_CLS}>Medium-term target</span>
-            <label className="flex items-center gap-1 text-[13px] text-muted-foreground">
+            <label className="flex items-center gap-1 text-[15px] text-muted-foreground">
               <input type="checkbox" checked={form.mt.enabled} onChange={(e) => setMt('enabled', e.target.checked)} /> in use
             </label>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-[13.5px]">
-            <select className="h-7 rounded border border-input bg-background px-1 text-[14px]" value={form.mt.metric} onChange={(e) => setMt('metric', e.target.value)} disabled={!form.mt.enabled}>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[15.5px]">
+            <select className="h-7 rounded border border-input bg-background px-1 text-[16px]" value={form.mt.metric} onChange={(e) => setMt('metric', e.target.value)} disabled={!form.mt.enabled}>
               {['eps', 'revenue', 'revenue_growth', 'ebitda_margin'].map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-            <input className="h-7 w-20 rounded border border-input bg-background px-2 text-[14px]" placeholder="FY2029" value={form.mt.target_year} onChange={(e) => setMt('target_year', e.target.value)} disabled={!form.mt.enabled} />
+            <input className="h-7 w-20 rounded border border-input bg-background px-2 text-[16px]" placeholder="FY2029" value={form.mt.target_year} onChange={(e) => setMt('target_year', e.target.value)} disabled={!form.mt.enabled} />
             {(['low', 'mid', 'high'] as const).map((k) => (
-              <input key={k} className="h-7 w-16 rounded border border-input bg-background px-2 text-right text-[14px] tabular-nums" placeholder={k} value={form.mt[k]} onChange={(e) => setMt(k, e.target.value)} disabled={!form.mt.enabled} />
+              <input key={k} className="h-7 w-16 rounded border border-input bg-background px-2 text-right text-[16px] tabular-nums" placeholder={k} value={form.mt[k]} onChange={(e) => setMt(k, e.target.value)} disabled={!form.mt.enabled} />
             ))}
           </div>
         </div>
@@ -319,7 +319,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
         <Button size="sm" variant="outline" disabled={busy !== null || nChanges === 0} onClick={() => run('preview')}>
           {busy === 'preview' ? 'Recomputing…' : `Recompute${nChanges ? ` (${nChanges} change${nChanges > 1 ? 's' : ''})` : ''}`}
         </Button>
-        <input className="h-8 min-w-[12rem] flex-1 rounded border border-input bg-background px-2 text-[14px]" placeholder="Why (saved with the override)" value={note} onChange={(e) => setNote(e.target.value)} />
+        <input className="h-8 min-w-[12rem] flex-1 rounded border border-input bg-background px-2 text-[16px]" placeholder="Why (saved with the override)" value={note} onChange={(e) => setNote(e.target.value)} />
         <Button size="sm" disabled={busy !== null || nChanges === 0} onClick={() => run('save')}>{busy === 'save' ? 'Saving…' : 'Save override'}</Button>
         {override ? <Button size="sm" variant="ghost" disabled={busy !== null} onClick={revert}>{busy === 'revert' ? 'Reverting…' : 'Revert to the agent'}</Button> : null}
         {override ? (
@@ -329,13 +329,13 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
         ) : null}
         <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => { setForm(base); setPreview(null); setError(null); }}>Reset fields</Button>
       </div>
-      {error ? <div className="mt-2 text-[13.5px] font-medium text-foreground">{error}</div> : null}
+      {error ? <div className="mt-2 text-[15.5px] font-medium text-foreground">{error}</div> : null}
 
       {preview ? (
-        <div className="mt-3 rounded border border-border/60 p-3 text-[14px]">
+        <div className="mt-3 rounded border border-border/60 p-3 text-[16px]">
           <div className={LABEL_CLS}>Agent vs you{preview.computed_at ? ` · ${preview.computed_at.slice(11, 19)} UTC` : ''}</div>
           <table className="mt-1 w-full tabular-nums">
-            <thead><tr className="text-[12px] uppercase tracking-[0.08em] text-muted-foreground/70"><th className="text-left font-medium">Figure</th><th className="text-right font-medium">Agent</th><th className="text-right font-medium">You</th></tr></thead>
+            <thead><tr className="text-[14px] uppercase tracking-[0.08em] text-muted-foreground/70"><th className="text-left font-medium">Figure</th><th className="text-right font-medium">Agent</th><th className="text-right font-medium">You</th></tr></thead>
             <tbody>
               {([['DCF value per share (base)', 'dcf_value'], ['Blended intrinsic value (base)', 'intrinsic_value'], ['Base-case target', 'target'],
                 ['12-month target (probability-weighted)', '12m_price_target'], ['Expected value', 'expected_value']] as const).map(([lab, k]) => (
@@ -347,16 +347,16 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
               ))}
             </tbody>
           </table>
-          {sc?.skipped ? <div className="mt-2 text-[13.5px] text-foreground/85">{scenario}: {sc.skipped}</div> : null}
-          {sc?.note ? <div className="mt-2 text-[13.5px] text-foreground/85">{sc.note}</div> : null}
+          {sc?.skipped ? <div className="mt-2 text-[15.5px] text-foreground/85">{scenario}: {sc.skipped}</div> : null}
+          {sc?.note ? <div className="mt-2 text-[15.5px] text-foreground/85">{sc.note}</div> : null}
           {sc && !sc.skipped ? (
-            <div className="mt-1 text-[13px] text-muted-foreground">
+            <div className="mt-1 text-[15px] text-muted-foreground">
               {scenario} DCF {money(sc.before.dcf_value)} → {money(sc.dcf?.value)} at {(sc.dcf_weight * 100).toFixed(0)}% weight; IV {money(sc.before.intrinsic_value)} → {money(sc.intrinsic_value)}; target {money(sc.before.target)} → {money(sc.target)}.
             </div>
           ) : null}
           {sc?.legs && Object.keys(sc.legs).length ? (
-            <table className="mt-2 w-full tabular-nums text-[13px]">
-              <thead><tr className="text-[12px] uppercase tracking-[0.08em] text-muted-foreground/70"><th className="text-left font-medium">Forward leg ({scenario})</th><th className="text-right font-medium">Metric agent → you</th><th className="text-right font-medium">Value agent → you</th></tr></thead>
+            <table className="mt-2 w-full tabular-nums text-[15px]">
+              <thead><tr className="text-[14px] uppercase tracking-[0.08em] text-muted-foreground/70"><th className="text-left font-medium">Forward leg ({scenario})</th><th className="text-right font-medium">Metric agent → you</th><th className="text-right font-medium">Value agent → you</th></tr></thead>
               <tbody>
                 {Object.entries(sc.legs).map(([name, lg]) => (
                   <tr key={name} className="border-t border-border/50">
@@ -370,42 +370,42 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
           ) : null}
           {pf?.steps?.length ? (
             <details className="mt-2">
-              <summary className="cursor-pointer text-[13px] text-muted-foreground">How your version was built ({pf.archetype_name}, {pf.horizon_years}-year path)</summary>
-              <ol className="mt-1 space-y-1 text-[13px] text-foreground/85">
+              <summary className="cursor-pointer text-[15px] text-muted-foreground">How your version was built ({pf.archetype_name}, {pf.horizon_years}-year path)</summary>
+              <ol className="mt-1 space-y-1 text-[15px] text-foreground/85">
                 {pf.steps.map((s) => <li key={s.n}><span className="font-medium">{s.n}. {s.title}.</span> {s.detail}</li>)}
               </ol>
-              <div className="mt-1 flex flex-wrap gap-x-3 text-[13px] tabular-nums text-muted-foreground">
+              <div className="mt-1 flex flex-wrap gap-x-3 text-[15px] tabular-nums text-muted-foreground">
                 {pf.rows.map((r) => <span key={r.year}>Y{r.year} {pctS(r.growth)} / {(r.ebit_margin * 100).toFixed(1)}%</span>)}
               </div>
-              {(pf.invariants ?? []).filter((i) => i.ok === false).map((i) => <div key={i.id} className="mt-1 text-[13px] font-medium text-foreground">Check {i.id} {i.name} FAILS: {i.detail}</div>)}
+              {(pf.invariants ?? []).filter((i) => i.ok === false).map((i) => <div key={i.id} className="mt-1 text-[15px] font-medium text-foreground">Check {i.id} {i.name} FAILS: {i.detail}</div>)}
             </details>
           ) : null}
-          <div className="mt-2 text-[13px] text-muted-foreground">Preview only until saved. Saving applies to this run on the page, the PDF and the workbook; the written rationale and headline stay the agent's and say so.</div>
+          <div className="mt-2 text-[15px] text-muted-foreground">Preview only until saved. Saving applies to this run on the page, the PDF and the workbook; the written rationale and headline stay the agent's and say so.</div>
         </div>
       ) : null}
 
       {/* 3. ask the agent */}
       <div className="mt-4">
         <div className={LABEL_CLS}>Ask the agent</div>
-        <div className="mt-1 space-y-2 text-[14px]">
+        <div className="mt-1 space-y-2 text-[16px]">
           {thread.map((m, i) => (
             <div key={i} className={m.role === 'user' ? 'text-foreground' : 'rounded border border-border/60 p-2 text-foreground/85'}>
-              <span className="mr-1 font-mono text-[12px] uppercase text-muted-foreground">{m.role}</span>{m.content}
+              <span className="mr-1 font-mono text-[14px] uppercase text-muted-foreground">{m.role}</span>{m.content}
               {m.proposal ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] text-muted-foreground">Proposed: {describe(m.proposal)}{m.proposal.rationale ? ` — ${m.proposal.rationale}` : ''}</span>
+                  <span className="text-[15px] text-muted-foreground">Proposed: {describe(m.proposal)}{m.proposal.rationale ? ` — ${m.proposal.rationale}` : ''}</span>
                   <Button size="sm" variant="outline" onClick={() => { setForm((f) => applyProposal(f, m.proposal!)); setPreview(null); if (m.proposal?.rationale && !note) setNote(m.proposal.rationale); }}>Load into the form</Button>
                 </div>
               ) : null}
-              {m.proposalError ? <div className="mt-1 text-[13px] text-muted-foreground">The agent's proposal was not in the accepted shape ({m.proposalError}); nothing loaded.</div> : null}
+              {m.proposalError ? <div className="mt-1 text-[15px] text-muted-foreground">The agent's proposal was not in the accepted shape ({m.proposalError}); nothing loaded.</div> : null}
             </div>
           ))}
         </div>
         <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
-          <input className="h-8 flex-1 rounded border border-input bg-background px-2 text-[14px]" placeholder={`Why this margin path? What if ${fy2} growth is 4%?`} value={question} onChange={(e) => setQuestion(e.target.value)} disabled={busy === 'ask'} />
+          <input className="h-8 flex-1 rounded border border-input bg-background px-2 text-[16px]" placeholder={`Why this margin path? What if ${fy2} growth is 4%?`} value={question} onChange={(e) => setQuestion(e.target.value)} disabled={busy === 'ask'} />
           <Button size="sm" variant="outline" type="submit" disabled={busy !== null || !question.trim()}>{busy === 'ask' ? 'Thinking…' : 'Ask'}</Button>
         </form>
-        <div className="mt-1 text-[12.5px] text-muted-foreground">The agent answers from this run's trace and the brief's footnotes. It proposes; only you save.</div>
+        <div className="mt-1 text-[14.5px] text-muted-foreground">The agent answers from this run's trace and the brief's footnotes. It proposes; only you save.</div>
       </div>
     </div>
   );
