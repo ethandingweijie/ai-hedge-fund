@@ -30,6 +30,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import statistics
+
 import pytest
 
 from src.agents.analysis import dcf_agent
@@ -619,6 +621,14 @@ def test_scenario_method_set_structurally_consistent(seams):
 # renormalizes onto the multiples bucket (reference: sw46/iv15.py
 # ::_resolve_base_oe).
 
+def _ufcf_addback(rev: float, ebit_pct: float = 0.16, ni_pct: float = 0.10, interest: float = 2.0e7) -> float:
+    """The unlevered basis' after-tax interest add-back as a margin, on the fixtures' shape
+    (owner, 2026-10-03): tax = 1 - NI / (EBIT - interest), bounded as the engine bounds it."""
+    from src.agents.analysis.dcf_agent import _UFCF_TAX_BOUNDS
+    tax = min(max(1.0 - (ni_pct * rev) / (ebit_pct * rev - interest), _UFCF_TAX_BOUNDS[0]), _UFCF_TAX_BOUNDS[1])
+    return interest * (1.0 - tax) / rev
+
+
 def _cyber_rows_sbc(sbc_pcts: list[float], fcf_pct: float = 0.16):
     """Cyber-SaaS line items with per-year SBC as a fraction of revenue and
     no buybacks — owner earnings = FCF − unfunded SBC − 37% RSU withholding."""
@@ -655,7 +665,9 @@ def test_oe_cascade_median_of_positive_years(seams):
     assert entry, f"engine skipped FIXOE1: {out['data'].get('dcf_skip_reasons')}"
 
     base = entry["base"]
-    expected_median = 0.16 - 0.08 - 0.37 * 0.08          # the single + year
+    # 2026-10-03 (owner, SBUX review A2): the basis is unlevered owner-earnings FCF, so the single
+    # positive year carries its after-tax interest add-back (2.0e7 at the year's bounded effective rate).
+    expected_median = 0.16 - 0.08 - 0.37 * 0.08 + _ufcf_addback(3.4e9)          # the single + year
     assert base["fcf_margin_start"] == pytest.approx(expected_median, abs=1e-3), (
         f"cascade basis {base['fcf_margin_start']} != median of positive "
         f"years {expected_median:.4f}"
@@ -735,8 +747,12 @@ def test_oe_cascade_reported_path_when_sbc_untrusted(seams):
 
     base = entry["base"]
     # Reported margins mean = −2% ≤ 0 → median of [+4%, +2%] = 3%.
-    assert base["fcf_margin_start"] == pytest.approx(0.03, abs=1e-3)
-    assert any("OE≤0 cascade" in f and "reported-FCF" in f
+    # 2026-10-03 (owner, SBUX review A2): median of the two positive years on the unlevered basis.
+    _exp = statistics.median([0.04 + _ufcf_addback(3.0e9), 0.02 + _ufcf_addback(3.4e9)])
+    assert base["fcf_margin_start"] == pytest.approx(_exp, abs=1e-3)
+    # 2026-10-03 (owner, SBUX review A2): with EBIT, D&A, capex and interest in the rows the unlevered
+    # owner-earnings basis takes precedence over the reported-FCF path, so the cascade names it.
+    assert any("OE≤0 cascade" in f and ("reported-FCF" in f or "unlevered owner-earnings" in f)
                for f in base["forward_flags"]), (
         f"reported-path cascade flag missing: {base['forward_flags']}"
     )

@@ -126,6 +126,26 @@ _PROFILE_TGR: dict[str, dict[str, float]] = {
 # as src/research_ideas/sw46/tragic_algebra.py's Method E, calibrated
 # against Burry/Cassandra-Unchained's published SBC framework).
 _RSU_TAX_WITHHOLDING_RATE = 0.37
+#: Owner, 2026-10-03 (SBUX review, A2): the unlevered basis' tax. The year's effective rate
+#: on pre-tax profit, bounded; the default when the statements give no usable rate.
+_UFCF_TAX_DEFAULT = 0.21
+_UFCF_TAX_BOUNDS = (0.10, 0.35)
+#: Balance-sheet intermediaries, whose interest is cost of goods; and the property family,
+#: whose legs are NAV, P/B and AFFO -- an unlevered margin nothing prices would only trip the
+#: FCF-margin clamp the levered basis was calibrated on (C38U.SI: 55.8% -> 72.4%, measured).
+_INTEREST_IS_COST_FAMILIES = frozenset({"Banks", "Insurance", "Fee financials", "Property, REITs and holdcos"})
+
+
+def _interest_is_cost_of_goods(profile_name, sector) -> bool:
+    """A balance-sheet intermediary's interest expense is its cost of goods (deposits, client cash,
+    policy liabilities), not a financing charge to add back; those names keep the levered basis."""
+    try:
+        from src.data.report_families import report_family_for
+        if report_family_for(profile_name or "") in _INTEREST_IS_COST_FAMILIES:
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    return (sector or "") == "Financials" and not (profile_name or "")
 
 # Retries for the line-items fetch — a single FMP hiccup shouldn't blank the
 # whole Valuation Methodology panel. Short exponential backoff (1.5s, 3s).
@@ -1218,7 +1238,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     "research_and_development", "stock_based_compensation",
     "depreciation_and_amortization",
     # Cash flow
-    "free_cash_flow", "fcf_owner_earnings", "operating_cash_flow",
+    "free_cash_flow", "fcf_owner_earnings", "ufcf_owner_earnings", "operating_cash_flow",
     "capital_expenditure", "change_in_working_capital",
     "share_buyback", "common_stock_repurchased",
     # Balance sheet
@@ -1392,6 +1412,26 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             row["fcf_owner_earnings"] = fcf - unfunded_comp - cash_tax_withholding
         else:
             row["fcf_owner_earnings"] = fcf
+        # Owner, 2026-10-03 (SBUX review, A2): the unlevered basis. Reported FCF (operating cash
+        # flow minus capex) is after interest, so discounting it at WACC and subtracting net
+        # debt counted the debt twice. UFCF unlevers the same cash flow: owner-earnings FCF plus
+        # after-tax interest. (Rebuilding it from EBIT, D&A and the working-capital line was
+        # tried first and measured off the goldens: FMP's line items gave BABA a 46% margin and
+        # Standard Chartered 2.8%, so the statement the engine already trusts is the base.) Tax
+        # is the year's effective rate on pre-tax profit, bounded; the default when the
+        # statements give none.
+        _int = row.get("interest_expense")
+        if row.get("fcf_owner_earnings") is not None and _int is not None:
+            _ebit, _ni = row.get("ebit"), row.get("net_income")
+            _pretax = (_ebit - abs(_int)) if _ebit is not None else None
+            if _ni is not None and _pretax is not None and _pretax > 0:
+                _tax = min(max(1.0 - _ni / _pretax, _UFCF_TAX_BOUNDS[0]), _UFCF_TAX_BOUNDS[1])
+            else:
+                _tax = _UFCF_TAX_DEFAULT
+            row["ufcf_owner_earnings"] = row["fcf_owner_earnings"] + abs(_int) * (1.0 - _tax)
+            row["ufcf_tax_rate"] = _tax
+        else:
+            row["ufcf_owner_earnings"] = None
 
     rows.sort(key=lambda r: r["period"])
     return rows, reported_currency
@@ -6503,7 +6543,7 @@ def _minority_interest(most_recent: dict) -> float:
 _FINANCIALS_USED_FIELDS: tuple[str, ...] = (
     "period", "revenue", "gross_profit", "operating_income", "ebit", "ebitda",
     "net_income", "operating_cash_flow", "capital_expenditure", "free_cash_flow",
-    "stock_based_compensation", "fcf_owner_earnings", "depreciation_and_amortization",
+    "stock_based_compensation", "fcf_owner_earnings", "ufcf_owner_earnings", "depreciation_and_amortization",
     "cash_and_equivalents", "short_term_investments", "total_debt", "net_debt",
     "minority_interest", "total_equity", "total_assets", "shares_outstanding",
     "book_value_per_share", "dividends_per_share",
@@ -10523,7 +10563,11 @@ def _run_backward_gate(
         _hist = series[:-1]
         _sbc_t1 = sum(1 for r in _hist[-5:] if r.get("stock_based_compensation") is not None)
         _oe_t1 = _mean_fcf_margin(_hist, field="fcf_owner_earnings")
-        if _oe_t1 is not None and _sbc_t1 >= 3:
+        _ufcf_t1 = _mean_fcf_margin(_hist, field="ufcf_owner_earnings")
+        _ufcf_t1_years = sum(1 for r in _hist[-5:] if r.get("ufcf_owner_earnings") is not None)
+        if _ufcf_t1 is not None and _ufcf_t1_years >= 3 and not _interest_is_cost_of_goods(profile_name, sector):
+            fcf_margin_t1, _t1_field = _ufcf_t1, "ufcf_owner_earnings"      # the live basis (2026-10-03)
+        elif _oe_t1 is not None and _sbc_t1 >= 3:
             fcf_margin_t1, _t1_field = _oe_t1, "fcf_owner_earnings"
         else:
             fcf_margin_t1, _t1_field = (_mean_fcf_margin(_hist) or 0.0), "free_cash_flow"
@@ -11880,7 +11924,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             1 for row in series[-5:]
             if row.get("stock_based_compensation") is not None
         )
-        if fcf_margin_owner is not None and _sbc_years >= 3:
+        # Owner, 2026-10-03 (SBUX review, A2): the unlevered owner-earnings basis when the
+        # window carries EBIT, D&A and capex for at least three years. The levered FCF is
+        # after interest; at WACC less net debt it counted the debt twice.
+        fcf_margin_ufcf = _mean_fcf_margin(series, field="ufcf_owner_earnings")
+        _ufcf_years = sum(1 for row in series[-5:] if row.get("ufcf_owner_earnings") is not None)
+        if fcf_margin_ufcf is not None and _ufcf_years >= 3 and not _interest_is_cost_of_goods(
+                (state["data"].get("profile_names") or {}).get(ticker) or state["data"].get("profile_name"), sector):
+            fcf_margin_base = fcf_margin_ufcf
+            _oe_basis_label = "unlevered owner-earnings"
+            _oe_basis_field = "ufcf_owner_earnings"
+            _lev_ref = fcf_margin_owner if (fcf_margin_owner is not None and _sbc_years >= 3) else fcf_margin_reported
+            ticker_forward_flags.append(
+                f"Unlevered basis: DCF cash flow is owner-earnings FCF + after-tax interest (effective rate per year, "
+                f"bounded), margin {fcf_margin_ufcf:.1%} vs {_lev_ref:.1%} on the after-interest FCF ({_ufcf_years}/5 yr); "
+                f"interest is no longer counted against both the cash flow and net debt")
+        elif fcf_margin_owner is not None and _sbc_years >= 3:
             fcf_margin_base = fcf_margin_owner
             _oe_basis_label = "owner-earnings"
             _oe_basis_field = "fcf_owner_earnings"

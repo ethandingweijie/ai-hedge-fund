@@ -1610,3 +1610,43 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: China Internet Platform prices its relative legs on a curated China internet basket instead of FMP's Specialty Retail label (owner, 2026-09-28: Alibaba is not specialty retail). BABA base IV 166.74 -> 134.23 (the US label cohort had priced its normalised legs at 20.8x P/E / 14.1x EV/EBITDA against the peers' 15.6x / 10.4x; 12m target 138.24 -> 118.31); 09988.HK 129.26 -> 132.14 (P/E (norm) leg 92.25 -> 79.53 on the HK basket, the other relative legs re-priced on the same peers). Every other fixture unchanged.
 
+## 2026-10-03T09:45:39+00:00
+
+- regenerated at HEAD: `395350f4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (SBUX review, A2): the DCF cash flow is unlevered owner-earnings FCF = EBIT x (1 - tax) + D&A - capex + change in working capital - SBC cost, averaged as before. The levered FCF (after interest) discounted at WACC less net debt counted the debt twice; the move is the after-tax interest add-back plus the working-capital and capex re-statement per fixture. Names whose statements lack EBIT, D&A or capex for three years keep the levered basis.
+
+## 2026-10-03T09:48:59+00:00
+
+- regenerated at HEAD: `395350f4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (SBUX review, A2): the DCF cash flow is unlevered owner-earnings FCF = owner-earnings FCF + after-tax interest (the effective rate on pre-tax profit, bounded 10-35%, else 21%). The levered FCF (after interest) discounted at WACC less net debt counted the debt twice. Balance-sheet intermediaries (Banks, Insurance, Fee financials) keep the levered basis: their interest is cost of goods. The move per fixture is the after-tax interest add-back on the margin base.
+
+## 2026-10-03T09:55:15+00:00
+
+- regenerated at HEAD: `395350f4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (SBUX review, A2): the DCF cash flow is unlevered owner-earnings FCF = owner-earnings FCF + after-tax interest (the effective rate on pre-tax profit, bounded 10-35%, else 21%). The levered FCF (after interest) discounted at WACC less net debt counted the debt twice. Balance-sheet intermediaries (Banks, Insurance, Fee financials) keep the levered basis: their interest is cost of goods. The move per fixture is the after-tax interest add-back on the margin base.
+
+## 2026-10-03T09:58:46+00:00
+
+- regenerated at HEAD: `395350f4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (SBUX review, A2): the DCF cash flow is unlevered owner-earnings FCF = owner-earnings FCF + after-tax interest (effective rate on pre-tax profit, bounded 10-35%, else 21%). The levered FCF (after interest) discounted at WACC less net debt counted the debt twice. Balance-sheet intermediaries (Banks, Insurance, Fee financials) and the property family (NAV / P/B / AFFO legs) keep the levered basis. The move per fixture is the after-tax interest add-back on the margin base.
+
+## 2026-10-03T10:14:36+00:00
+
+- regenerated at HEAD: `395350f4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner, 2026-10-03 (SBUX review, A2): flag wording only - the unlevered-basis flag now states the actual formula (owner-earnings FCF + after-tax interest); no value moves
+

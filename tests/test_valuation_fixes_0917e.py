@@ -417,9 +417,25 @@ _WAVE7_MOVED = {
 }
 
 
+#: Owner, 2026-10-03 (SBUX review, A2): the DCF cash flow is unlevered owner-earnings FCF (owner-earnings
+#: FCF + after-tax interest; the levered FCF at WACC less net debt counted the debt twice). Banks, insurers,
+#: fee financials and the property family keep the levered basis. Six fixtures move, all under 10%.
+_UFCF_MOVED = {
+    "09988_HK": (136.95,   67.32,   220.28,   (94.61,  118.98, 148.14)),
+    "AAPL":     (204.66,  144.96,   277.33,   (238.15, 268.0,  304.33)),
+    "BABA":     (145.08,   92.26,   213.36,   (103.62, 122.11, 146.01)),
+    "COST":     (517.38,  345.97,   721.92,   (634.37, 720.07, 822.34)),
+    "MELI":     (3149.16, 2399.18,  3650.38,  (2028.52, 2291.02, 2466.44)),
+    "MU":       (183.42,  139.63,   230.09,   (533.62, 555.51, 578.85)),
+}
+#: Fixtures whose margin BASE moved to the unlevered series while no DCF leg carries weight, so the
+#: intrinsic value did not move but the bear ROIC the gate prints did (FCX 5.4% -> 6.6%, U96.SI 7.2% -> 11.8%).
+_UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -526,6 +542,10 @@ def test_the_sign_flips_in_the_baseline_obey_that_factor_exactly():
     """
     tol = 0.80 * 0.05 + 0.05
     for name in _STILL_FIRES:
+        if name in _UFCF_MOVED or name in _UFCF_BASIS_MOVED:
+            # 2026-10-03: the identity was measured on the levered basis; the unlevered margin
+            # base changes the bear ROIC the gate prints, so the x10 factor no longer applies.
+            continue
         old = _PREFIX[name][4]
         new = _bear_gate_b_roic(_proj(name))
         assert new is not None and new > 0, f"{name} should still fire, positively"
