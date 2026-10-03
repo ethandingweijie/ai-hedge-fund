@@ -430,7 +430,7 @@ def project(entry: dict) -> dict[str, Any]:
     return dict(sorted(_flatten(picked).items()))
 
 
-def replay_fixture(name: str, *, frozen_now: Any = None) -> dict:
+def replay_fixture(name: str, *, frozen_now: Any = None, state_patch: Optional[dict] = None) -> dict:
     """Replay one fixture directory offline. Never touches network or DB
     (regional comps included: they are served from the fixture's comps.json).
 
@@ -447,6 +447,9 @@ def replay_fixture(name: str, *, frozen_now: Any = None) -> dict:
         state = build_state(ticker, web["data"], meta["end_date"], api_key="dummy")
     else:
         state = build_state_from_lookups(ticker, meta["end_date"], api_key="dummy")
+    if state_patch:
+        # A test's injection (e.g. a guidance block): the fixture's own inputs are not touched.
+        state["data"].update(state_patch)
 
     from src.agents.analysis.dcf_agent import run_dcf_agent
 
@@ -472,6 +475,7 @@ def replay_fixture(name: str, *, frozen_now: Any = None) -> dict:
         "ok": entry is not None,
         "skip_reason": skip,
         "projection": project(entry) if entry else {},
+        "entry": entry,                       # the raw dcf_range record, for tests that read past the projection
         "base_iv": (entry or {}).get("base", {}).get("intrinsic_value"),
         "diagnostics": {
             "recorded_calls": len(calls),

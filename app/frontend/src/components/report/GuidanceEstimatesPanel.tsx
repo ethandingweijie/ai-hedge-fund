@@ -12,7 +12,8 @@
  */
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import type { GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow } from '@/lib/reportTypes';
+import { EstimateWorkbench } from '@/components/report/EstimateWorkbench';
+import type { DcfRange, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult } from '@/lib/reportTypes';
 
 const LABEL_CLS = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
@@ -89,6 +90,25 @@ function ForecastSection({ fc }: { fc: GuidanceForecast }) {
       <div className="mt-1 text-[12.5px] text-foreground">
         {T}-year path to {t ? `the ${t.target_year} ${t.metric} target of ${num(t.value)}` : 'the FY+2 estimate'}; EBIT margin {margin(fc.margin_start)} → {margin(fc.margin_target)} ({fc.margin_source}); then a {fc.fade_years}-year fade to {margin(term?.tgr)} growth.
       </div>
+      {fc.override ? (
+        <div className="mt-1 text-[11.5px] font-medium text-foreground">
+          User override{fc.override.created_at ? ` (${fc.override.created_at.slice(0, 10)})` : ''}: {fc.override.fields?.join(', ')}{fc.override.note ? ` — ${fc.override.note}` : ''}. Agent's base IV {num(fc.override.before?.intrinsic_value)} → {num(fc.override.after?.intrinsic_value)}.
+        </div>
+      ) : null}
+      {/* Owner, 2026-10-03: the agent's thinking, step by step, so the user can query and contest it. */}
+      {fc.steps?.length ? (
+        <details className="mt-2" open>
+          <summary className="cursor-pointer text-[11px] text-muted-foreground">How the agent built this estimate ({fc.steps.length} steps)</summary>
+          <ol className="mt-1 space-y-1 text-[11.5px] leading-snug text-foreground/85">
+            {fc.steps.map((s) => (
+              <li key={s.n} className="flex gap-2">
+                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{s.n}</span>
+                <span><span className="font-medium text-foreground">{s.title}.</span> {s.detail}</span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-[12px] tabular-nums">
           <thead>
@@ -150,15 +170,21 @@ function ForecastSection({ fc }: { fc: GuidanceForecast }) {
   );
 }
 
-export function GuidanceEstimatesPanel({ block, forecast }: { block: GuidanceEstimates; forecast?: GuidanceForecast | null }) {
+export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, runId, ticker, onRunUpdated }: {
+  block: GuidanceEstimates | null | undefined; forecast?: GuidanceForecast | null;
+  /** The ticker's dcf_range (forecast_context, estimate_override); with runId + ticker the workbench renders. */
+  dcfRange?: DcfRange; runId?: string | null; ticker?: string | null; onRunUpdated?: (r: RunResult) => void;
+}) {
+  const block: GuidanceEstimates = blockIn ?? { guidance: {}, consensus: {}, estimates: {}, applied: false, not_applied_reason: 'the research produced no guidance block; enter estimates below' };
   const g = block.guidance ?? {};
   const c = block.consensus ?? {};
   const rows = block.estimates ?? {};
-  const fy1 = block.fiscal_year_1 ?? 'FY+1';
-  const fy2 = block.fiscal_year_2 ?? 'FY+2';
+  const fy1 = block.fiscal_year_1 ?? dcfRange?.forecast_context?.fiscal_year_1 ?? 'FY+1';
+  const fy2 = block.fiscal_year_2 ?? dcfRange?.forecast_context?.fiscal_year_2 ?? 'FY+2';
   const ch = block.channel;
   const explicitYears = ch?.explicit_years ?? 0;
   const fadeYears = ch?.fade_years ?? 0;
+  const canWork = !!runId && !!ticker && !!(dcfRange?.forecast_context || forecast);
 
   return (
     <Card className="p-4">
@@ -242,6 +268,7 @@ export function GuidanceEstimatesPanel({ block, forecast }: { block: GuidanceEst
       ) : null}
 
       {forecast ? <ForecastSection fc={forecast} /> : null}
+      {canWork ? <EstimateWorkbench runId={runId!} ticker={ticker!} block={blockIn} forecast={forecast} dcfRange={dcfRange} onRunUpdated={onRunUpdated} /> : null}
 
       {block.rationale ? <div className="mt-3 text-[11.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}
       {block.track_record ? <div className="mt-1 text-[11px] text-muted-foreground">Track record: {block.track_record}</div> : null}

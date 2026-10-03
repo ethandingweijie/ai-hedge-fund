@@ -2886,3 +2886,98 @@ async def post_research_summary(body: _ResearchSummaryReq, db: Session = Depends
         db.rollback()
 
     return {"summary": summary, "cached": False}
+
+
+# ── Interactive valuation agent (owner, 2026-10-03) ──────────────────────────
+# The user sees the agent work the estimate out, changes what they disagree with,
+# and the change flows to the page, the PDF and the workbook through one override
+# that is applied on read (estimate_override_service). The agent answers questions
+# about its reasoning and PROPOSES overrides; only the user's save writes one.
+
+class _EstimateOverrideReq(_BaseModel):
+    ticker: str
+    overrides: dict
+    note: Optional[str] = None
+
+
+class _EstimateAskReq(_BaseModel):
+    ticker: str
+    question: str
+    history: Optional[list[dict]] = None
+
+
+def _owned_run_or_404(run_id: str, request: Request, db: Session, apply_overrides: bool = True) -> tuple[Optional[int], dict]:
+    user_id = _get_user_id(request, db)
+    result = analysis_service.get_run_result(run_id, user_id=user_id, apply_overrides=apply_overrides)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return user_id, result
+
+
+@router.get("/runs/{run_id}/estimates")
+async def get_estimate_override(run_id: str, request: Request, ticker: str, db: Session = Depends(get_db)):
+    from app.backend.services import estimate_override_service as eo
+    _owned_run_or_404(run_id, request, db, apply_overrides=False)
+    rec = await asyncio.to_thread(eo.get_active, run_id, canonical_ticker(ticker))
+    return {"override": rec}
+
+
+@router.post("/runs/{run_id}/estimates/preview")
+async def preview_estimate_override(run_id: str, body: _EstimateOverrideReq, request: Request, db: Session = Depends(get_db)):
+    """Recompute the forecast, the DCF leg, the blend and the targets with the user's numbers; nothing is saved."""
+    from app.backend.services import estimate_override_service as eo
+    _, result = await asyncio.to_thread(_owned_run_or_404, run_id, request, db, False)
+    t = canonical_ticker(body.ticker)
+    try:
+        return await asyncio.to_thread(eo.recompute, result, t, body.overrides)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No valuation for that ticker in this run")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.put("/runs/{run_id}/estimates")
+async def save_estimate_override(run_id: str, body: _EstimateOverrideReq, request: Request, db: Session = Depends(get_db)):
+    """Save the override (one active per run and ticker) and return the run as every surface now reads it."""
+    from app.backend.services import estimate_override_service as eo
+    user_id, result = await asyncio.to_thread(_owned_run_or_404, run_id, request, db, False)
+    t = canonical_ticker(body.ticker)
+    try:
+        res = await asyncio.to_thread(eo.recompute, result, t, body.overrides)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No valuation for that ticker in this run")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    rec = await asyncio.to_thread(eo.save, run_id, t, user_id, res["overrides"], body.note, res)
+    updated = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id)
+    return {"override": {k: rec[k] for k in ("id", "ticker", "note", "created_at")}, "result": res, "run": updated}
+
+
+@router.delete("/runs/{run_id}/estimates")
+async def clear_estimate_override(run_id: str, request: Request, ticker: str, db: Session = Depends(get_db)):
+    """Revert to the agent's estimates: the override is deactivated, the stored run was never changed."""
+    from app.backend.services import estimate_override_service as eo
+    user_id, _ = await asyncio.to_thread(_owned_run_or_404, run_id, request, db, False)
+    t = canonical_ticker(ticker)
+    n = await asyncio.to_thread(eo.clear, run_id, t)
+    updated = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id)
+    return {"cleared": n, "run": updated}
+
+
+@router.post("/runs/{run_id}/estimates/ask")
+async def ask_estimate_agent(run_id: str, body: _EstimateAskReq, request: Request, db: Session = Depends(get_db)):
+    """Query the agent about its estimates. It answers from the run's trace and may propose an override."""
+    from app.backend.services import estimate_agent_service as ea
+    _, result = await asyncio.to_thread(_owned_run_or_404, run_id, request, db, True)
+    t = canonical_ticker(body.ticker)
+    if t not in ((result.get("data") or {}).get("dcf_range") or {}):
+        raise HTTPException(status_code=404, detail="No valuation for that ticker in this run")
+    try:
+        return await asyncio.to_thread(ea.ask, result, t, body.question, body.history)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    except Exception:
+        logger.exception("estimate agent failed for %s", run_id)
+        raise HTTPException(status_code=502, detail="The estimate agent did not answer")

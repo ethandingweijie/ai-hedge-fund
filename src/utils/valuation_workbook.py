@@ -1354,6 +1354,14 @@ class _Book:
             sh.section(r, f"Guidance forecast — {fc.get('archetype_name')}: {fc.get('horizon_years')} years to "
                           + (f"the {_t.get('target_year')} {_t.get('metric')} target" if _t else "the FY+2 estimate")
                           + f", then a {fc.get('fade_years')}-year fade", 9); r += 1
+            # Owner, 2026-10-03 (interactive agent): the override in force, then how the estimate was built.
+            _ovr = fc.get("override") or (self.dr or {}).get("estimate_override") or {}
+            if _ovr:
+                sh.label(r, 1, f"USER OVERRIDE ({str(_ovr.get('created_at') or '')[:10]}): " + ", ".join(_ovr.get("fields") or [])
+                               + (f" — {_ovr.get('note')}" if _ovr.get("note") else ""), bold=True); r += 1
+            for _st in fc.get("steps") or []:
+                sh.label(r, 1, f"{_st.get('n')}. {_st.get('title')}: {_st.get('detail')}"); r += 1
+            r += 1
             sh.header(r, ["Year", "Revenue (mn)", "Growth", "EBIT margin", "EBIT (mn)", "Net income (mn)", "EPS", "UFCF (mn)", "FCF margin", "Phase"])
             for row in fc["rows"]:
                 r += 1
@@ -1739,6 +1747,16 @@ class _Book:
             if isinstance(_base_tgt_v, (int, float)):
                 sh.put(r, 2, float(_base_tgt_v), NUM).font = Font(color=BLUE)
             sh.put(r, 3, "='Target'!$C$6" if _pb else None, NUM)
+            r += 1
+        # Owner, 2026-10-03 (interactive agent): the headline figures above carry a user's estimate override.
+        _ovr = (self.dr or {}).get("estimate_override") or {}
+        if _ovr:
+            _b, _a = (_ovr.get("before") or {}), (_ovr.get("after") or {})
+            sh.label(r, 1, f"USER ESTIMATE OVERRIDE ({str(_ovr.get('created_at') or '')[:10]}): " + ", ".join(_ovr.get("fields") or [])
+                           + (f" — {_ovr.get('note')}" if _ovr.get("note") else "")
+                           + (f"; agent's base IV {float(_b['intrinsic_value']):,.2f} → {float(_a['intrinsic_value']):,.2f}"
+                              if isinstance(_b.get("intrinsic_value"), (int, float)) and isinstance(_a.get("intrinsic_value"), (int, float)) else "")
+                           + ". Details on the Guidance tab.", bold=True)
             r += 1
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)

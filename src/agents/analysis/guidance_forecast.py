@@ -103,23 +103,34 @@ def load_cfg() -> dict:
     return cfg
 
 
-def archetype_for(profile_name: Optional[str], sector: Optional[str] = None) -> tuple[str, str]:
+def archetype_route(profile_name: Optional[str], sector: Optional[str] = None) -> tuple[str, str, str]:
+    """(code, name, reason): the archetype and the routing step that chose it, for the trace."""
     p = (profile_name or "").strip()
     if p in _PROFILE_ARCHETYPE:
         code = _PROFILE_ARCHETYPE[p]
+        reason = f"the {p} profile is routed to archetype {code} explicitly"
     else:
         code = None
+        reason = ""
         try:
             from src.data.report_families import report_family_for
             fam = report_family_for(p)
             if fam != "Operating company" or not sector:
                 code = _FAMILY_ARCHETYPE.get(fam)
+                reason = f"no explicit route for the {p or 'unnamed'} profile; its report family ({fam}) routes to archetype {code}"
         except Exception:  # noqa: BLE001
             code = None
         if code in (None, "G") and sector:
             code = _SECTOR_ARCHETYPE.get(sector, code or "G")
+            reason = f"no explicit route for the {p or 'unnamed'} profile; the {sector} sector routes to archetype {code}"
         code = code or "G"
-    return code, ARCHETYPES[code]
+        reason = reason or "no profile, family or sector route: the generic linear path"
+    return code, ARCHETYPES[code], reason
+
+
+def archetype_for(profile_name: Optional[str], sector: Optional[str] = None) -> tuple[str, str]:
+    code, name, _ = archetype_route(profile_name, sector)
+    return code, name
 
 
 # ── curves: the fraction of the margin gap closed by year t of T ──────────────
@@ -259,12 +270,24 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
             rev_path.append(rev_path[-1] * (1.0 + g))
     revT = rev_path[-1]
     horizon = T
+    out["bridge_growth"] = []
     if tgt and tgt["year_index"] > T:
         horizon = min(int(tgt["year_index"]), int(cfg["max_horizon_years"]))
         if tgt["metric"] in ("revenue",):
             revT = float(tgt["value"])
         elif tgt["metric"] == "revenue_growth":
             revT = rev_path[-1] * (1.0 + float(tgt["value"])) ** (horizon - T)
+        else:
+            # An EPS or margin target says nothing about revenue: the last guided growth rate
+            # steps linearly toward the market's (else holds) over the bridge years, instead of
+            # flat-lining at zero (the first build's quirk, seen on the Molina trace).
+            g_last = targets["g2"] if targets["g2"] is not None else (targets["g1"] or 0.0)
+            g_end = market_growth if market_growth is not None else g_last
+            n = horizon - T
+            for i in range(1, n + 1):
+                g_i = g_last + (g_end - g_last) * i / float(n + 1)
+                out["bridge_growth"].append(g_i)
+                revT *= (1.0 + g_i)
     out["horizon_years"] = horizon
     out["revenue_T"] = revT
     cagr = (revT / rev0) ** (1.0 / horizon) - 1.0 if (rev0 > 0 and horizon > 0 and revT > 0) else None
@@ -308,22 +331,39 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                    wacc: float, tgr: float, shares: float, net_debt: float, spot: Optional[float] = None,
                    peer_ev_ebitda: Optional[float] = None, market_growth: Optional[float] = None,
                    engine_growth_path: Optional[list[float]] = None, fcf_margin_base: Optional[float] = None,
-                   cfg: Optional[dict] = None) -> Optional[dict]:
+                   cfg: Optional[dict] = None, hist: Optional[dict] = None, overrides: Optional[dict] = None) -> Optional[dict]:
     """The intermediate years from today to the guided endpoints, by the owner's five principles.
 
     Returns the per-year table, the schedules the DCF leg runs on (growth and FCF margin for
     PROJECTION_YEARS years), the deconstruction, the terminal diagnostics and the invariants;
-    None when the block carries no FY+1 revenue growth for this scenario."""
-    cfg = cfg or load_cfg()
+    None when the block carries no FY+1 revenue growth for this scenario.
+
+    `hist` is a precomputed `history_ratios` result (the interactive recompute passes the one the
+    run stored, so no statements are re-read); `overrides` are the user's: `fade_years` on the
+    config, `tax_rate`, `capex_alpha`, `nwc_intensity` on the history. The estimate overrides
+    (growth, margins, EPS, the medium-term target) are applied to `block` by the caller."""
+    cfg = dict(cfg or load_cfg())
+    ov = dict(overrides or {})
     if not block or not shares or shares <= 0:
         return None
-    hist = history_ratios(series, cfg)
-    if not hist["revenue"]:
+    if _num(ov.get("fade_years")) is not None:
+        cfg["fade_years"] = int(max(1, min(8, round(float(ov["fade_years"])))))
+    hist = dict(hist) if hist else history_ratios(series, cfg)
+    applied: dict = {}
+    for k in ("tax_rate", "capex_alpha", "nwc_intensity"):
+        if _num(ov.get(k)) is not None:
+            hist[k] = float(ov[k])
+            applied[k] = float(ov[k])
+            if k == "tax_rate":
+                hist["tax_rate_source"] = "user override"
+    if _num(ov.get("fade_years")) is not None:
+        applied["fade_years"] = cfg["fade_years"]
+    if not hist.get("revenue"):
         return None
     tg = targets_for(block, scenario, hist)
     if tg["g1"] is None:
         return None
-    code, arche = archetype_for(profile_name, sector)
+    code, arche, arche_reason = archetype_route(profile_name, sector)
     dec = deconstruct(tg, hist, shares, cfg, market_growth)
     T = int(dec["horizon_years"])
     rev0, m0 = hist["revenue"], hist["ebit_margin"] if hist["ebit_margin"] is not None else 0.0
@@ -342,9 +382,14 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             revs.append(revs[-1] * (1.0 + g))
     if len(revs) - 1 < T:
         rem = T - (len(revs) - 1)
-        step = (dec["revenue_T"] / revs[-1]) ** (1.0 / rem) if revs[-1] > 0 and dec["revenue_T"] > 0 else 1.0
-        for _ in range(rem):
-            revs.append(revs[-1] * step)
+        bridge = dec.get("bridge_growth") or []
+        if len(bridge) == rem:
+            for g_i in bridge:
+                revs.append(revs[-1] * (1.0 + g_i))
+        else:
+            step = (dec["revenue_T"] / revs[-1]) ** (1.0 / rem) if revs[-1] > 0 and dec["revenue_T"] > 0 else 1.0
+            for _ in range(rem):
+                revs.append(revs[-1] * step)
     # fade: growth decays linearly to tgr over fade_years, then tgr to year 10
     gT = revs[-1] / revs[-2] - 1.0 if len(revs) > 1 and revs[-2] > 0 else tg["g1"]
     F = int(cfg["fade_years"])
@@ -439,18 +484,97 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                            else "no peer median or no positive terminal EBITDA")})
     inv.append({"id": 5, "name": "No engine residue", "ok": None, "detail": "held by the PM rationale prompt's voice and rounding rules"})
     fcf_sched = [r["fcf_margin"] for r in rows]
+    steps = _trace_steps(scenario=scenario, block=block, tg=tg, code=code, arche=arche, arche_reason=arche_reason, dec=dec, T=T, F=F,
+                         tax=tax, rows=rows, rev0=rev0, rev_all=rev_all, growth_sched=growth_sched, m0=m0, mT=mT, margin_source=margin_source,
+                         curve=curve, hist=hist, interest=interest, alpha=alpha, nwc_i=nwc_i, life=life, gT=gT, tgr=tgr, wacc=wacc,
+                         roic_terminal=roic_terminal, reinvest=reinvest, exit_mult=exit_mult, peer_ev_ebitda=peer_ev_ebitda, inv=inv,
+                         fcf_sched=fcf_sched, fcf_margin_base=fcf_margin_base, cfg=cfg, applied=applied)
     return {
-        "scenario": scenario, "archetype": code, "archetype_name": arche, "horizon_years": T, "fade_years": F,
+        "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
-        "history": {k: hist[k] for k in ("tax_rate", "tax_rate_source", "capex_alpha", "capex_alpha_n", "nwc_intensity", "nwc_n",
-                                          "da_pct_revenue", "buyback_median", "roic_median", "years", "interest")},
+        "history": {k: hist.get(k) for k in ("revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",
+                                              "tax_rate", "tax_rate_source", "capex_alpha", "capex_alpha_n", "nwc_intensity", "nwc_n",
+                                              "buyback_median", "roic_median", "years")},
+        "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0), "spot": spot,
+                   "peer_ev_ebitda": peer_ev_ebitda, "market_growth": market_growth, "profile_name": profile_name, "sector": sector,
+                   "fcf_margin_base": fcf_margin_base, "engine_growth_path": engine_growth_path},
+        "overrides_applied": applied or None,
+        "steps": steps,
         "rows": rows, "growth_schedule": [round(g, 6) for g in growth_sched], "fcf_margin_schedule": [round(m, 6) for m in fcf_sched],
         "terminal": {"tgr": float(tgr), "wacc": float(wacc), "roic_terminal": roic_terminal, "reinvestment_rate": reinvest,
                      "implied_exit_ev_ebitda": exit_mult, "peer_ev_ebitda_median": peer_ev_ebitda},
         "invariants": inv,
         "target": tg.get("target"),
     }
+
+
+def _pc(v) -> str:
+    return f"{float(v):.1%}" if _num(v) is not None else "n/a"
+
+
+def _bn(v) -> str:
+    return f"{float(v) / 1e9:,.2f}bn" if _num(v) is not None else "n/a"
+
+
+def _trace_steps(**k) -> list[dict]:
+    """The thinking shown on the page and in the exports: one step per principle, with the numbers
+    the build actually used (owner, 2026-10-03: the user sees the agent work the valuation out)."""
+    tg, dec, rows, T, F = k["tg"], k["dec"], k["rows"], k["T"], k["F"]
+    tgt = tg.get("target")
+    rT = rows[T - 1]
+    gs, fs, curve, inv = k["growth_sched"], k["fcf_sched"], k["curve"], k["inv"]
+    read = f"{k['scenario']} case: FY+1 revenue growth {_pc(tg['g1'])}"
+    if tg["g2"] is not None:
+        read += f", FY+2 {_pc(tg['g2'])}"
+    if tg["m1"] is not None:
+        read += f"; margin FY+1 {_pc(tg['m1'])}"
+    if tg["m2"] is not None:
+        read += f", FY+2 {_pc(tg['m2'])}"
+    if tg["eps1"] is not None:
+        read += f"; EPS FY+1 {tg['eps1']:,.2f}"
+    if tg["eps2"] is not None:
+        read += f", FY+2 {tg['eps2']:,.2f}"
+    if tgt:
+        read += f"; medium-term target: {tgt['metric']} {tgt['value']:,.2f} in {tgt['target_year']}" + (f" ({tgt['source']})" if tgt.get("source") else "")
+    else:
+        read += "; no medium-term target"
+    read += f". Confidence {k['block'].get('confidence') or 'n/a'}."
+    back = f"Horizon {T} years; target-year revenue {_bn(dec.get('revenue_T'))}"
+    if dec.get("ebit_T_implied") is not None:
+        back += f", implied EBIT {_bn(dec.get('ebit_T_implied'))}"
+    if dec.get("implied_tax_rate") is not None:
+        back += f", implied tax-and-non-operating take {_pc(dec.get('implied_tax_rate'))} (history {_pc(k['tax'])})"
+    if dec.get("guided_cagr") is not None and dec.get("market_cagr") is not None:
+        back += f"; guided CAGR {_pc(dec.get('guided_cagr'))} vs market {_pc(dec.get('market_cagr'))}"
+    back += (". " + " ".join(dec["flags"])) if dec.get("flags") else ". Endpoints are compatible."
+    three = (f"Tax {_pc(k['tax'])} ({k['hist'].get('tax_rate_source')}), interest {_bn(k['interest'])} a year, capex = D&A + {k['alpha']:.2f} x new revenue, "
+             f"working capital absorbs {k['nwc_i']:.2f} of new revenue, D&A rolls forward over {k['life']:.0f} years. Year {T}: net income {_bn(rT['net_income'])}"
+             + (f", EPS {rT['eps']:,.2f}" if _num(rT.get("eps")) is not None else "") + f", UFCF {_bn(rT['ufcf'])} ({_pc(rT['fcf_margin'])} of revenue).")
+    term = (f"After year {T} growth fades linearly from {_pc(k['gT'])} to the terminal {_pc(k['tgr'])} over {F} years, margin held at {_pc(k['mT'])}. "
+            f"Terminal ROIC {_pc(k['roic_terminal'])} (at least WACC {_pc(k['wacc'])} + {_pc(k['cfg']['terminal_roic_floor_over_wacc'])}), reinvestment g/ROIC {_pc(k['reinvest'])}")
+    if k["exit_mult"] is not None and k["peer_ev_ebitda"]:
+        term += f"; implied exit EV/EBITDA {k['exit_mult']:.1f}x vs peer median {k['peer_ev_ebitda']:.1f}x"
+    term += "."
+    hand = "Growth " + ", ".join(_pc(g) for g in gs) + "; FCF margin " + ", ".join(_pc(m) for m in fs)
+    hand += f". The engine's own year-1 FCF margin was {_pc(k['fcf_margin_base'])}." if k["fcf_margin_base"] is not None else "."
+    steps = [
+        {"n": 1, "title": "Read the guidance", "detail": read},
+        {"n": 2, "title": "Route the archetype", "detail": f"{k['arche']} (archetype {k['code']}): {k['arche_reason']}. The margin path takes this archetype's curve shape."},
+        {"n": 3, "title": "Back-solve the target year", "detail": back},
+        {"n": 4, "title": "Lay the revenue path",
+         "detail": "Guided years: " + ", ".join(f"Y{i + 1} {_pc(gs[i])}" for i in range(T)) + f"; revenue {_bn(k['rev0'])} to {_bn(k['rev_all'][T])} by year {T}."},
+        {"n": 5, "title": "Shape the margin path",
+         "detail": f"EBIT margin {_pc(k['m0'])} to {_pc(k['mT'])} ({k['margin_source']}); the gap closes " + ", ".join(f"{w:.0%}" for w in curve) + f" of the way over years 1-{T}."},
+        {"n": 6, "title": "Build the three statements", "detail": three},
+        {"n": 7, "title": "Fade and terminal", "detail": term},
+        {"n": 8, "title": "Run the invariants",
+         "detail": "; ".join(f"{i['name']}: " + ("PASS" if i["ok"] is True else "FAIL" if i["ok"] is False else "n/a") for i in inv) + "."},
+        {"n": 9, "title": "Hand the schedules to the DCF", "detail": hand},
+    ]
+    if k["applied"]:
+        steps.insert(0, {"n": 0, "title": "User overrides in force", "detail": ", ".join(f"{a} = {b}" for a, b in k["applied"].items()) + "."})
+    return steps
 
 
 def summary(fc: Optional[dict]) -> Optional[dict]:

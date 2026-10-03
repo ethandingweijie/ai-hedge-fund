@@ -96,6 +96,8 @@ interface V2ReportViewProps {
   liveData?: Record<string, unknown>;
   /** Called when user clicks Cancel on the progress header. */
   onCancel?: () => void;
+  /** Owner, 2026-10-03: the estimate workbench saved or reverted an override; the run as every surface now reads it. */
+  onRunUpdated?: (r: RunResult) => void;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -118,6 +120,7 @@ export function V2ReportView({
   events,
   liveData = {},
   onCancel,
+  onRunUpdated,
 }: V2ReportViewProps) {
   const [tab, setTab] = useState<TabId>('summary');
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -324,6 +327,9 @@ export function V2ReportView({
         )}
         {tab === 'valuation'  && <ValuationBody
           dcfRange={dcfRange}
+          runId={runId}
+          isComplete={isComplete}
+          onRunUpdated={onRunUpdated}
           dcfSkipReason={dcfSkipReason}
           scenarioAnalysis={scenarioAnalysis}
           decision={decision}
@@ -539,10 +545,14 @@ function SummaryBody({
 
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
-  dcfRange, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
+  dcfRange, runId, isComplete, onRunUpdated, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
   sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard, ptHistory,
 }: {
   dcfRange: DcfRange | undefined;
+  /** Owner, 2026-10-03: the estimate workbench needs the run and reports a saved override back. */
+  runId: string;
+  isComplete: boolean;
+  onRunUpdated?: (r: RunResult) => void;
   /** Why dcfRange came back {} for this ticker, if known (see DcfMethodologyPanel). */
   dcfSkipReason?: string;
   scenarioAnalysis: ScenarioAnalysis | undefined;
@@ -662,7 +672,10 @@ function ValuationBody({
         <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
       ) : null; })()}
       {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
-      {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} forecast={dcfRange.guidance_forecast} /> : null}
+      {dcfRange && (dcfRange.guidance_estimates || dcfRange.forecast_context) ? (
+        <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} forecast={dcfRange.guidance_forecast} dcfRange={dcfRange}
+          runId={isComplete ? runId : null} ticker={ticker} onRunUpdated={onRunUpdated} />
+      ) : null}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 

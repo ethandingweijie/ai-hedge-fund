@@ -190,6 +190,7 @@ export function ReportViewPage() {
         progressPct={100}
         events={[]}
         liveData={{}}
+        onRunUpdated={setResult}
       />
     );
   }
@@ -349,7 +350,10 @@ export function ReportViewPage() {
           <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
         ) : null; })()}
         {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
-        {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} forecast={dcfRange.guidance_forecast} /> : null}
+        {dcfRange && (dcfRange.guidance_estimates || dcfRange.forecast_context) ? (
+          <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} forecast={dcfRange.guidance_forecast} dcfRange={dcfRange}
+            runId={runId} ticker={ticker} onRunUpdated={setResult} />
+        ) : null}
 
         {/* Full width: this is the 6-column scenario table that was being
             squeezed into a 403px column, wrapping its headers onto three

@@ -75,7 +75,10 @@ def test_the_three_statements_and_the_fade_hold_their_identities():
     assert rows[0]["growth"] == pytest.approx(-0.075) and rows[1]["growth"] == pytest.approx(0.107)
     assert rows[3]["ebit_margin"] == pytest.approx(0.05)                             # the target margin in the target year
     g = fc["growth_schedule"]
-    assert g[-1] == pytest.approx(0.025) and g[-2] == pytest.approx(0.025) and all(g[i] <= g[i + 1] + 1e-9 for i in range(4, 8))   # fade to tgr
+    assert g[-1] == pytest.approx(0.025) and g[-2] == pytest.approx(0.025)
+    assert all(abs(g[i + 1] - 0.025) <= abs(g[i] - 0.025) + 1e-9 for i in range(4, 8))   # fade converges on tgr from either side
+    # an EPS target says nothing about revenue: the bridge years step from the last guided rate toward the market's, never flat zero
+    assert 0.04 < rows[3]["growth"] < rows[2]["growth"] < 0.107                    # 10.7% stepping down toward the market's 4%
     h = fc["history"]
     assert h["tax_rate_source"] == "history" and 0.10 <= h["tax_rate"] <= 0.35
     r1 = rows[0]

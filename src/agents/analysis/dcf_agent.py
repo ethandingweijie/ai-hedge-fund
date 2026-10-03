@@ -12486,6 +12486,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _guid_est = guidance_estimates_all.get(ticker) or {}
         _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
         _gf_base: Optional[dict] = None             # the base scenario's guidance forecast (five principles)
+        _fc_ctx: Optional[dict] = None              # history ratios + inputs the page rebuilds estimates from
+        _peer_for_gf: Optional[dict] = None         # peer multiples for the forecast (hoisted: see the scenario loop)
         _cal_adj = dcf_cal.get("growth_rate_adj")
         if _cal_adj is not None and data_source == "historical":
             # Apply when no hard guidance or analyst estimate overrides.
@@ -13954,6 +13956,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception:                                  # noqa: BLE001
             pass
 
+        # Owner, 2026-10-03 (interactive agent): the forecast's peer median and market growth. The
+        # scenario loop assigned `_peer_for_gp` AFTER the forecast block, so the base scenario's
+        # build raised UnboundLocalError and the FY+1/FY+2 channel ran instead; bear and bull built.
+        try:
+            _peer_for_gf = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
+                                                     ticker=ticker, market_cap=resolved_mcap)
+        except Exception:                                  # noqa: BLE001
+            _peer_for_gf = None
+
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -14036,20 +14047,38 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # schedules. The FY+1/FY+2 channel below is the fallback when it cannot.
             _gf = None
             _gf_margin_sched = None
+            if scenario == "base":
+                # Owner, 2026-10-03 (interactive agent): what the page needs to rebuild the estimate
+                # with the user's numbers -- the audited ratios and the leg's inputs -- published
+                # whether or not the research produced a guidance block.
+                try:
+                    from src.agents.analysis import guidance_forecast as _gfm
+                    _fc_ctx = {
+                        "history": _gfm.history_ratios(series, _gfm.load_cfg()),
+                        "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0),
+                                   "spot": ((resolved_mcap / shares) if (resolved_mcap and shares) else None),
+                                   "peer_ev_ebitda": _peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                                   "market_growth": _peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
+                                   "profile_name": profile_name, "sector": sector, "fcf_margin_base": fcf_margin_base,
+                                   "engine_growth_path": _growth_schedule},
+                        "fiscal_year_1": (_guid_est or {}).get("fiscal_year_1"), "fiscal_year_2": (_guid_est or {}).get("fiscal_year_2"),
+                    }
+                except Exception:                          # noqa: BLE001
+                    _fc_ctx = None
             if _guid_est and _guidance_channel_enabled():
                 try:
                     from src.agents.analysis import guidance_forecast as _gfm
                     _gf = _gfm.build_forecast(
                         _guid_est, scenario=scenario, series=series, profile_name=profile_name, sector=sector,
                         wacc=wacc, tgr=tgr, shares=shares, net_debt=net_debt,
-                        spot=((market_cap / shares) if (market_cap and shares) else None),
-                        peer_ev_ebitda=_peer_for_gp.get("ev_ebitda") if isinstance(_peer_for_gp, dict) else None,
-                        market_growth=_peer_for_gp.get("growth_avg") if isinstance(_peer_for_gp, dict) else None,
+                        spot=((resolved_mcap / shares) if (resolved_mcap and shares) else None),   # `market_cap` was never a name here: NameError on every build (2026-10-03)
+                        peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                        market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                         engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base)
                 except Exception as _gf_exc:  # noqa: BLE001
                     _gf = None
                     if scenario == "base":
-                        ticker_forward_flags.append(f"Guidance forecast did not build ({type(_gf_exc).__name__}); the FY+1/FY+2 channel ran instead")
+                        ticker_forward_flags.append(f"Guidance forecast did not build ({type(_gf_exc).__name__}: {str(_gf_exc)[:120]}); the FY+1/FY+2 channel ran instead")
             if _gf:
                 _growth_schedule = _gf["growth_schedule"]
                 _gf_margin_sched = _gf["fcf_margin_schedule"]
@@ -14317,6 +14346,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "margin_delta_absolute": md_abs, "wacc": wacc,
                 "wacc_schedule": _wacc_schedule, "tgr": tgr, "fcf_floor": fcf_floor,
                 "net_debt": float(net_debt or 0.0), "shares": shares,
+                "minority_interest": float(_minority_interest(most_recent) or 0.0),
+                "preferred_equity": float(_preferred_equity(most_recent) or 0.0),
+                "scenario": scenario,
                 "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
                 "projection_rows": _proj_rows,
                 "guidance_channel": _gc,          # None when guidance did not set years 1–E
@@ -16937,6 +16969,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03 (five principles): the guidance-to-forecast table the DCF ran on --
             # archetype, deconstruction, the intermediate years, the fade, the invariants.
             "guidance_forecast": _guidance_forecast_payload(_gf_base),
+            # Owner, 2026-10-03 (interactive agent): the history ratios and inputs the page rebuilds
+            # estimates from when the user overrides them (or enters them where research gave none).
+            "forecast_context": _fc_ctx,
             # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
             # its rows and reason so both renderers can show WHY it did not price.
             # Published only when the profile declared SOTP (analyst): it explains why a declared leg

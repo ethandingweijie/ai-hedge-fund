@@ -1,6 +1,9 @@
 // ── API client for the analysis service ────────────────────────────────────
 import type {
   ArchiveSummary,
+  EstimateAskResponse,
+  EstimateOverrides,
+  EstimateRecompute,
   HistoryResponse,
   RunResult,
   ScreenerResponse,
@@ -86,6 +89,43 @@ export async function downloadRunExport(runId: string, kind: RunExportKind, tick
 /** Fetch the full result for a completed run. */
 export function getRunResult(runId: string): Promise<RunResult> {
   return fetchJson<RunResult>(`${BASE}/analysis/runs/${runId}`);
+}
+
+// ── Interactive valuation agent (owner, 2026-10-03) ─────────────────────────
+// The user edits the estimates the agent built from guidance; the server recomputes
+// forecast → DCF leg → blend → targets deterministically, and a saved override is
+// applied on read so the page, the PDF and the workbook agree.
+
+/** Recompute with the user's overrides; nothing is saved. */
+export function previewEstimateOverride(runId: string, ticker: string, overrides: EstimateOverrides): Promise<EstimateRecompute> {
+  return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates/preview`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ ticker, overrides }),
+  });
+}
+
+/** Save the override (one active per run and ticker) and get the run as every surface now reads it. */
+export function saveEstimateOverride(runId: string, ticker: string, overrides: EstimateOverrides, note?: string):
+  Promise<{ override: { id: string; ticker: string; note: string | null; created_at: string }; result: EstimateRecompute; run: RunResult }> {
+  return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ ticker, overrides, note: note ?? null }),
+  });
+}
+
+/** Revert to the agent's estimates. */
+export function clearEstimateOverride(runId: string, ticker: string): Promise<{ cleared: number; run: RunResult }> {
+  return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates?ticker=${encodeURIComponent(ticker)}`, {
+    method: 'DELETE', headers: { ..._authHeaders() },
+  });
+}
+
+/** Ask the agent about its estimates; it answers from the run's trace and may propose an override. */
+export function askEstimateAgent(runId: string, ticker: string, question: string, history: { role: 'user' | 'agent'; content: string }[]): Promise<EstimateAskResponse> {
+  return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates/ask`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ ticker, question, history }),
+  });
 }
 
 /** Permanently delete a run from the archive. */

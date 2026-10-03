@@ -371,6 +371,55 @@ export interface GuidanceForecast {
   terminal: { tgr: number; wacc: number; roic_terminal: number; reinvestment_rate: number | null; implied_exit_ev_ebitda: number | null; peer_ev_ebitda_median: number | null };
   invariants: GuidanceForecastInvariant[];
   target?: { metric: string; year_index: number; target_year: string; value: number; unit?: string | null; basis?: string | null; source?: string | null } | null;
+  // Owner, 2026-10-03 (interactive agent): how the estimate was built, the inputs it ran on, and
+  // the user override in force, if any.
+  archetype_reason?: string | null;
+  steps?: GuidanceForecastStep[];
+  inputs?: ForecastInputs | null;
+  overrides_applied?: Record<string, number> | null;
+  override?: EstimateOverrideMeta | null;
+}
+export interface GuidanceForecastStep { n: number; title: string; detail: string }
+export interface ForecastInputs {
+  wacc?: number | null; tgr?: number | null; shares?: number | null; net_debt?: number | null; spot?: number | null;
+  peer_ev_ebitda?: number | null; market_growth?: number | null; profile_name?: string | null; sector?: string | null;
+  fcf_margin_base?: number | null; engine_growth_path?: number[] | null;
+}
+/** dcf_range[ticker].forecast_context: what the page rebuilds estimates from (dcf_agent, 2026-10-03). */
+export interface ForecastContext {
+  history: Record<string, number | string | null>;
+  inputs: ForecastInputs;
+  fiscal_year_1?: string | null;
+  fiscal_year_2?: string | null;
+}
+/** The user's estimate overrides, in the shape estimate_override_service accepts. */
+export interface EstimateOverrides {
+  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'wacc' | 'tgr', number>>;
+  scenarios?: Partial<Record<'bear' | 'base' | 'bull', Partial<GuidanceScenarioRow>>>;
+  medium_term_target?: { metric: string; target_year: string; low?: number | null; mid?: number | null; high?: number | null; unit?: string | null } | Record<string, never> | null;
+  rationale?: string;
+}
+export interface EstimateFigures { intrinsic_value?: number | null; dcf_value?: number | null; target?: number | null; '12m_price_target'?: number | null; expected_value?: number | null }
+export interface EstimateOverrideMeta {
+  id?: string | null; note?: string | null; created_at?: string | null; fields?: string[]; overrides?: EstimateOverrides | null;
+  before?: EstimateFigures | null; after?: EstimateFigures | null;
+}
+export interface EstimateScenarioResult {
+  skipped: string | null; note?: string | null; dcf_weight: number;
+  forecast: GuidanceForecast | null;
+  dcf: { value: number | null; pv_fcf_per_share: number; pv_tv_per_share: number; growth_schedule: number[]; margin_schedule: number[]; wacc: number; tgr: number } | null;
+  intrinsic_value: number | null; target: number | null;
+  before: { intrinsic_value: number | null; dcf_value: number | null; target: number | null };
+}
+/** POST /analysis/runs/{id}/estimates/preview and the `result` of a save. */
+export interface EstimateRecompute {
+  ticker: string; overrides: EstimateOverrides; fields: string[]; spot: number | null; capture: number | null;
+  probabilities: Record<string, number>;
+  scenarios: Record<'bear' | 'base' | 'bull', EstimateScenarioResult>;
+  before: EstimateFigures; after: EstimateFigures; computed_at: string;
+}
+export interface EstimateAskResponse {
+  answer: string; proposal: EstimateOverrides | null; proposal_valid: boolean; proposal_error: string | null; model: string;
 }
 
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
@@ -561,6 +610,10 @@ export interface DcfRange {
   guidance_estimates?: GuidanceEstimates | null;
   /** The guidance-to-forecast table the DCF ran on (owner's five principles, 2026-10-03). */
   guidance_forecast?: GuidanceForecast | null;
+  /** History ratios + leg inputs the page rebuilds estimates from (interactive agent, 2026-10-03). */
+  forecast_context?: ForecastContext | null;
+  /** The user's accepted estimate override in force on this run, applied on read. */
+  estimate_override?: EstimateOverrideMeta | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.

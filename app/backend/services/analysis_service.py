@@ -1011,7 +1011,7 @@ def _hydrate_financial_statements(run_id: str, payload: dict) -> None:
         pass
 
 
-def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
+def get_run_result(run_id: str, user_id: int = None, apply_overrides: bool = True) -> Optional[dict]:
     """
     Return full result dict for a run.
     Checks web_runs first (full JSON stored); falls back to reconstructing
@@ -1032,6 +1032,11 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
             return None  # Not the owner — deny access
         _payload = json.loads(row["full_result_json"])
         _hydrate_financial_statements(run_id, _payload)
+        # Owner, 2026-10-03 (interactive agent): a user's accepted estimate override is applied on
+        # read, never written into the stored run, so web, PDF and Excel agree and a revert is a delete.
+        if apply_overrides:
+            from app.backend.services import estimate_override_service as _eo
+            _eo.apply_saved(run_id, _payload)
         return _sanitize_floats(_payload)
 
     # ── 2. Try reconstructing from CLI archive tables ─────────────────────

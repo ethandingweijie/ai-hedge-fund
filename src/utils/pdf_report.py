@@ -2196,6 +2196,19 @@ def _guidance_forecast_block_pdf(dcf_t: dict, styles, width: float) -> list:
             + f", EBIT margin {_p(fc.get('margin_start'))} → {_p(fc.get('margin_target'))} ({_strip(str(fc.get('margin_source') or ''))}), "
             f"then a {fc.get('fade_years')}-year fade")
     out = [Spacer(1, 4), Paragraph(head, st_lb)]
+    # Owner, 2026-10-03 (interactive agent): a user's accepted override is printed where it acts.
+    ovr = fc.get("override") or dcf_t.get("estimate_override") or {}
+    if ovr:
+        _b, _a = (ovr.get("before") or {}), (ovr.get("after") or {})
+        out.append(Paragraph(_strip(
+            f"USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {', '.join(ovr.get('fields') or [])}"
+            + (f" — {ovr.get('note')}" if ovr.get("note") else "")
+            + (f". The agent's base intrinsic value {float(_b['intrinsic_value']):,.2f} → {float(_a['intrinsic_value']):,.2f}; "
+               f"12-month target {float(_b['12m_price_target']):,.2f} → {float(_a['12m_price_target']):,.2f}."
+               if isinstance(_b.get("intrinsic_value"), (int, float)) and isinstance(_a.get("intrinsic_value"), (int, float))
+               and isinstance(_b.get("12m_price_target"), (int, float)) and isinstance(_a.get("12m_price_target"), (int, float)) else ".")), st_lb))
+    for st in fc.get("steps") or []:
+        out.append(Paragraph(f"{st.get('n')}. {_strip(str(st.get('title') or ''))}: {_strip(str(st.get('detail') or ''))[:420]}", st_l))
     hdr = [Paragraph(_wh(h), st_lb) for h in ("Year", f"Revenue ({ccy or 'USD'} bn)", "Growth", "EBIT margin", "EPS", f"UFCF ({ccy or 'USD'} bn)", "FCF margin", "Phase")]
     body = [hdr]
     for r in rows:
