@@ -1,11 +1,16 @@
 """Steps two and three (owner, 2026-10-03): family-specific guided metrics in the research extractor,
 and the bank / insurer earnings-and-capital model whose RoTE, FY+1 book and EPS price the legs."""
 import copy
+import importlib.util
 import io
 from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
+
+_wspec = importlib.util.spec_from_file_location("_wbt", Path(__file__).resolve().parent / "test_valuation_workbook.py")
+_wbt = importlib.util.module_from_spec(_wspec)
+_wspec.loader.exec_module(_wbt)
 
 from src.agents.analysis import bank_model as bmod
 from src.agents.industry import deep_research as dr
@@ -150,13 +155,21 @@ def test_the_workbench_rebuilds_the_bank_model_and_reprices_the_ggm_and_forward_
 def test_the_model_tab_and_the_pdf_print_the_bank_layout():
     from src.utils.valuation_workbook import build_workbook
     p = _bank_payload()
-    wb = load_workbook(io.BytesIO(build_workbook(p, "D05.SI")))
+    wb = load_workbook(io.BytesIO(build_workbook(p, "D05.SI", load_statements=_wbt._statements)))
     ws = wb["Model"]
     col_a = [str(c.value) for c in ws["A"] if c.value is not None]
     for head in ("Assumptions (each with its source)", "Balance sheet drivers", "Income statement", "Capital", "Per share and returns", "Reconciliation suite (engine build)"):
         assert head in col_a
     assert "Net interest margin" in col_a and "CET1 ratio" in col_a and "RoTE" in col_a and str(ws["D4"].value) == "FY2026E"
     assert any(v.startswith("Suite result: ALL OK") for v in col_a) and any("vs cost of equity" in v for v in col_a)
+    # the IS tab's forecast columns carry the bank model's lines; the BS tab its total assets and equity; the CFS tab has none
+    is_ws = wb["IS"]
+    rr = [c.row for c in is_ws["A"] if c.value == "Net interest income"]
+    assert rr and str(is_ws.cell(row=rr[-1], column=8).value).startswith("='Model'!")
+    bs_ws = wb["BS"]
+    rr = [c.row for c in bs_ws["A"] if c.value == "Shareholders' equity"]
+    assert rr and str(bs_ws.cell(row=rr[-1], column=8).value).startswith("='Model'!")
+    assert wb["CFS"].cell(row=4, column=8).value is None
     from src.utils import pdf_report as pr
     from reportlab.lib.styles import getSampleStyleSheet
     flow = pr._three_statement_block_pdf(p["data"]["dcf_range"]["D05.SI"], getSampleStyleSheet(), 500.0)

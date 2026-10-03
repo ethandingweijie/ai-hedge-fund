@@ -268,6 +268,12 @@ class _Book:
             except Exception:  # noqa: BLE001
                 self.statements = None
         self.assumptions()
+        # Owner, 2026-10-03: the Model tab is built before the statements so their FY+1E..FY+5E
+        # columns can link to its rows; it is moved to sit after the CFS tab below.
+        self.model_rows: dict = {}
+        self.model_cols: list = []
+        self.model_kind: Optional[str] = None
+        self.model_tab()
         self.income_statement()
         self.balance_sheet()
         self.cash_flow()
@@ -284,7 +290,6 @@ class _Book:
             self.banks_tab()
         if (self.dr or {}).get("guidance_estimates"):
             self.guidance_tab()                 # owner, 2026-10-03: guidance → estimates, as the DCF used them
-        self.model_tab()                        # owner, 2026-10-03: IS / BS / CF FY+1E..FY+5E on the estimates
         self.family_tab()
         self.blend_tab()
         self.target_tab()
@@ -292,6 +297,15 @@ class _Book:
         self.gaps_tab()
         self.summary_tab(summary)
         self.cover_tab(cover)
+        if "Model" in self.wb.sheetnames and "CFS" in self.wb.sheetnames:
+            _ws = self.wb["Model"]
+            _sheets = self.wb._sheets                      # the explicit order: Model directly after CFS
+            _sheets.remove(_ws)
+            _sheets.insert(_sheets.index(self.wb["CFS"]) + 1, _ws)
+            _mt = next((t for t in self.tabs if t[0] == "Model"), None)
+            if _mt:
+                self.tabs.remove(_mt)
+                self.tabs.insert(next(i for i, t in enumerate(self.tabs) if t[0] == "CFS") + 1, _mt)
         buf = io.BytesIO()
         self.wb.save(buf)
         return buf.getvalue()
@@ -621,6 +635,28 @@ class _Book:
                 sh.put(r, last + 1 + k, f'=IFERROR({L}{num}/{L}{c_rev},"")', PCT)
             r += 1
         r += 1
+        # Owner, 2026-10-03 (Anta): the income statement the estimates imply, FY+1E..FY+5E, linked to the Model tab.
+        sh.section(r, "Forecast — three-statement model on the valuation agent's estimates (linked to the Model tab)", last + n_fc); r += 1
+        _fc0 = last + 1
+        if self.model_rows:
+            _is_lines = ([("Revenue", "rev"), ("Cost of goods sold", "cogs"), ("Gross profit", "gp"), ("Operating expenses excl. D&A", "opex"), ("EBITDA", "ebitda"),
+                          ("EBIT (operating income)", "ebit"), ("Interest expense", "intexp"), ("Interest income", "intinc"), ("EBT (pre-tax income)", "pretax"), ("Income tax", "tax"),
+                          ("Net income", "ni"), ("Diluted shares (millions)", "shares"), ("Diluted EPS", "eps"), ("Dividend per share", "dps")]
+                         if self.model_kind == "operating" else
+                         [("Net interest income", "net_interest_income"), ("Non-interest income", "fee_income"), ("Total income", "total_income"), ("Operating expenses", "operating_expenses"),
+                          ("Pre-provision profit", "pre_provision_profit"), ("Provisions", "provisions"), ("Pre-tax profit", "pretax"), ("Tax", "tax"), ("Net income", "net_income"),
+                          ("Diluted shares (millions)", "shares"), ("EPS", "eps"), ("Dividend per share", "dividend_per_share")] if self.model_kind == "bank" else
+                         [("Net earned premiums", "net_earned_premiums"), ("Underwriting result", "underwriting_result"), ("Investment income", "investment_income"), ("Pre-tax profit", "pretax"),
+                          ("Tax", "tax"), ("Net income", "net_income"), ("Diluted shares (millions)", "shares"), ("EPS", "eps"), ("Dividend per share", "dividend_per_share")])
+            for _lab, _key in _is_lines:
+                sh.label(r, 1, _lab, bold=_key in ("rev", "ebit", "ni", "eps", "total_income", "net_income")); sh.label(r, 2, "Link")
+                if self._model_link(sh, r, _key, _fc0, NUM if _key in ("eps", "dps", "dividend_per_share") else MIL):
+                    r += 1
+                else:
+                    sh.ws.cell(row=r, column=1, value=None); sh.ws.cell(row=r, column=2, value=None)
+        else:
+            self._model_note(sh, r, _fc0); r += 1
+        r += 1
         sh.section(r, "Forecast — engine DCF base case (what the valuation projects)", last + n_fc); r += 1
         dcf_rev = r
         sh.label(r, 1, "Revenue (DCF base, statement currency)"); sh.label(r, 2, "Link"); r += 1
@@ -642,55 +678,74 @@ class _Book:
         if not rows:
             sh.note(4, 1, "Reported statements unavailable for this export.")
             return
-        last = self._period_headers(sh, 4, rows, 0)
+        n_fc = 5 if self.model_rows else 0
+        last = self._period_headers(sh, 4, rows, n_fc)
         c0, r = 3, 6
+        _fc0 = last + 1
+        # Owner, 2026-10-03 (Anta): the forecast columns are the Model tab's balance sheet, linked.
+        _bs_map = ({"cash_and_equivalents": "cash", "short_term_investments": "sti", "accounts_receivable": "bs_ar", "inventory": "bs_inv", "oca": "bs_oca", "tca": "tca",
+                    "property_plant_equipment": "bs_ppe", "goodwill_plus_intangibles": "gi", "onca": "onca", "ta": "ta", "accounts_payable": "bs_ap", "short_term_debt": "std",
+                    "ocl": "ocl", "long_term_debt": "ltd", "oncl": "oncl", "tl": "tl", "shareholders_equity": "eq", "minority_interest": "mi", "tle": "tle", "chk": "chk", "td": None, "nd": "nd"}
+                   if self.model_kind == "operating" else {"total_assets": "total_assets", "shareholders_equity": "equity", "ta": "total_assets", "minority_interest": None})
+
+        def _fc(rr, key):
+            if n_fc and _bs_map.get(key):
+                self._model_link(sh, rr, _bs_map[key], _fc0)
 
         def inrow(key, label, indent=1):
             nonlocal r
             sh.label(r, 1, label, indent=indent); sh.label(r, 2, "Input")
             for i, row in enumerate(rows):
                 sh.put(r, c0 + i, _mil(row.get(key)), MIL)
+            _fc(r, key)
             r += 1
             return r - 1
 
-        def frow(label, f, bold=False, typ="Formula"):
+        def frow(label, f, bold=False, typ="Formula", key=None):
             nonlocal r
             sh.label(r, 1, label, bold=bold); sh.label(r, 2, typ)
             for c in range(c0, last + 1):
                 sh.put(r, c, f(get_column_letter(c)), MIL, bold=bold)
+            if key:
+                _fc(r, key)
             r += 1
             return r - 1
 
-        sh.section(r, "Assets", last); r += 1
+        if n_fc:
+            sh.note(5, _fc0, "FY+1E..FY+5E: the three-statement model's balance sheet (Model tab), linked")
+        sh.section(r, "Assets", last + n_fc); r += 1
         cash = inrow("cash_and_equivalents", "Cash & equivalents")
         sti = inrow("short_term_investments", "Short-term investments")
         ar = inrow("accounts_receivable", "Accounts receivable")
         inv = inrow("inventory", "Inventory")
         tca = inrow("current_assets", "Total current assets (reported)", 0)
-        oca = frow("  Other current assets", lambda L: f"={L}{tca}-SUM({L}{cash}:{L}{inv})")
+        oca = frow("  Other current assets", lambda L: f"={L}{tca}-SUM({L}{cash}:{L}{inv})", key="oca")
         ppe = inrow("property_plant_equipment", "Property, plant & equipment")
         gw = inrow("goodwill_plus_intangibles", "Goodwill & intangibles")
         ta_rep = inrow("total_assets", "Total assets (reported)", 0)
-        onca = frow("  Other non-current assets", lambda L: f"={L}{ta_rep}-{L}{tca}-{L}{ppe}-{L}{gw}")
-        ta = frow("Total assets", lambda L: f"={L}{tca}+{L}{ppe}+{L}{gw}+{L}{onca}", bold=True)
+        onca = frow("  Other non-current assets", lambda L: f"={L}{ta_rep}-{L}{tca}-{L}{ppe}-{L}{gw}", key="onca")
+        ta = frow("Total assets", lambda L: f"={L}{tca}+{L}{ppe}+{L}{gw}+{L}{onca}", bold=True, key="ta")
         r += 1
         sh.section(r, "Liabilities & equity", last); r += 1
         ap = inrow("accounts_payable", "Accounts payable")
         std = inrow("short_term_debt", "Short-term debt")
         tcl = inrow("current_liabilities", "Total current liabilities (reported)", 0)
-        ocl = frow("  Other current liabilities", lambda L: f"={L}{tcl}-{L}{ap}-{L}{std}")
+        ocl = frow("  Other current liabilities", lambda L: f"={L}{tcl}-{L}{ap}-{L}{std}", key="ocl")
         ltd = inrow("long_term_debt", "Long-term debt")
         tl_rep = inrow("total_liabilities", "Total liabilities (reported)", 0)
-        oncl = frow("  Other non-current liabilities", lambda L: f"={L}{tl_rep}-{L}{tcl}-{L}{ltd}")
-        tl = frow("Total liabilities", lambda L: f"={L}{tcl}+{L}{ltd}+{L}{oncl}", bold=True)
+        oncl = frow("  Other non-current liabilities", lambda L: f"={L}{tl_rep}-{L}{tcl}-{L}{ltd}", key="oncl")
+        tl = frow("Total liabilities", lambda L: f"={L}{tcl}+{L}{ltd}+{L}{oncl}", bold=True, key="tl")
         eq = inrow("shareholders_equity", "Shareholders' equity")
         mi = inrow("minority_interest", "Minority interest")
-        tle = frow("Total liabilities & equity", lambda L: f"={L}{tl}+{L}{eq}+{L}{mi}", bold=True)
-        frow("Balance check (assets − liabilities & equity)", lambda L: f"={L}{ta}-{L}{tle}", typ="Check")
+        tle = frow("Total liabilities & equity", lambda L: f"={L}{tl}+{L}{eq}+{L}{mi}", bold=True, key="tle")
+        frow("Balance check (assets − liabilities & equity)", lambda L: f"={L}{ta}-{L}{tle}", typ="Check", key="chk")
         r += 1
         td = frow("Total debt", lambda L: f"={L}{std}+{L}{ltd}")
-        frow("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)", lambda L: f"={L}{td}-{L}{cash}-{L}{sti}", bold=True)
-        sh.widths({"A": 50, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1)}})
+        frow("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)", lambda L: f"={L}{td}-{L}{cash}-{L}{sti}", bold=True, key="nd")
+        if self.model_kind == "operating" and n_fc:
+            # the current-asset / liability sub-totals the model carries
+            self._model_link(sh, tca, "tca", _fc0)
+        sh.widths({"A": 50, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1 + n_fc)}})
         sh.ws.freeze_panes = "C6"
 
     def cash_flow(self) -> None:
@@ -701,9 +756,18 @@ class _Book:
         if not rows:
             sh.note(4, 1, "Reported statements unavailable for this export.")
             return
-        last = self._period_headers(sh, 4, rows, 0)
+        n_fc = 5 if (self.model_rows and self.model_kind == "operating") else 0
+        last = self._period_headers(sh, 4, rows, n_fc)
         c0, r = 3, 6
+        _fc0 = last + 1
         isr = getattr(self, "is_rows", None)
+        # Owner, 2026-10-03 (Anta): the forecast columns are the Model tab's cash flow statement, linked.
+        _cf_map = {"ni": "cf_ni", "da": "cf_da", "stock_based_compensation": "cf_sbc", "change_in_working_capital": "cf_nwc", "cfo": "cfo", "capital_expenditure": "cf_capex",
+                   "acquisitions_net": "cf_acq", "cfi": "cfi", "dividends_and_distributions": "div", "share_buyback": "bbk", "net_debt_issuance": "draw", "cff": "cff", "dcash": "dcash", "fcf": "fcf"}
+
+        def _fc(rr, key):
+            if n_fc and _cf_map.get(key):
+                self._model_link(sh, rr, _cf_map[key], _fc0)
 
         def inrow(key, label, sign=1.0, indent=1):
             nonlocal r
@@ -711,35 +775,41 @@ class _Book:
             for i, row in enumerate(rows):
                 v = _num(row.get(key))
                 sh.put(r, c0 + i, None if v is None else sign * v / 1e6, MIL)
+            _fc(r, key)
             r += 1
             return r - 1
 
-        def frow(label, f, bold=False, typ="Formula", fmt=MIL):
+        def frow(label, f, bold=False, typ="Formula", fmt=MIL, key=None):
             nonlocal r
             sh.label(r, 1, label, bold=bold); sh.label(r, 2, typ)
             for c in range(c0, last + 1):
                 sh.put(r, c, f(get_column_letter(c)), fmt, bold=bold)
+            if key:
+                _fc(r, key)
             r += 1
             return r - 1
 
-        sh.section(r, "Operating", last); r += 1
+        if n_fc:
+            sh.note(5, _fc0, "FY+1E..FY+5E: the three-statement model's cash flow (Model tab), linked")
+        sh.section(r, "Operating", last + n_fc); r += 1
         if isr:
-            ni = frow("Net income", lambda L: f"='IS'!{L}{isr['ni']}", typ="Link")
-            da = frow("Depreciation & amortisation", lambda L: f"='IS'!{L}{isr['da']}", typ="Link")
+            ni = frow("Net income", lambda L: f"='IS'!{L}{isr['ni']}", typ="Link", key="ni")
+            da = frow("Depreciation & amortisation", lambda L: f"='IS'!{L}{isr['da']}", typ="Link", key="da")
         else:
             ni = inrow("net_income", "Net income"); da = inrow("depreciation_and_amortization", "D&A")
+            _fc(ni, "ni"); _fc(da, "da")
         sbc = inrow("stock_based_compensation", "Stock-based compensation")
         wc = inrow("change_in_working_capital", "Change in working capital")
         cfo_rep = inrow("operating_cash_flow", "Cash from operations (reported)", 1.0, 0)
         oth = frow("  Other operating items", lambda L: f"={L}{cfo_rep}-{L}{ni}-{L}{da}-{L}{sbc}-{L}{wc}")
-        cfo = frow("Cash from operations", lambda L: f"={L}{ni}+{L}{da}+{L}{sbc}+{L}{wc}+{L}{oth}", bold=True)
+        cfo = frow("Cash from operations", lambda L: f"={L}{ni}+{L}{da}+{L}{sbc}+{L}{wc}+{L}{oth}", bold=True, key="cfo")
         r += 1
         sh.section(r, "Investing", last); r += 1
         capex = inrow("capital_expenditure", "Capital expenditure")
         acq = inrow("acquisitions_net", "Acquisitions (net)")
         cfi_rep = inrow("investing_cash_flow", "Cash from investing (reported)", 1.0, 0)
         oi = frow("  Other investing items", lambda L: f"={L}{cfi_rep}-{L}{capex}-{L}{acq}")
-        cfi = frow("Cash from investing", lambda L: f"={L}{capex}+{L}{acq}+{L}{oi}", bold=True)
+        cfi = frow("Cash from investing", lambda L: f"={L}{capex}+{L}{acq}+{L}{oi}", bold=True, key="cfi")
         r += 1
         sh.section(r, "Financing", last); r += 1
         div = inrow("dividends_and_distributions", "Dividends paid")
@@ -747,16 +817,16 @@ class _Book:
         ndi = inrow("net_debt_issuance", "Net debt issuance / (repayment)")
         cff_rep = inrow("financing_cash_flow", "Cash from financing (reported)", 1.0, 0)
         of = frow("  Other financing items", lambda L: f"={L}{cff_rep}-{L}{div}-{L}{bb}-{L}{ndi}")
-        cff = frow("Cash from financing", lambda L: f"={L}{div}+{L}{bb}+{L}{ndi}+{L}{of}", bold=True)
+        cff = frow("Cash from financing", lambda L: f"={L}{div}+{L}{bb}+{L}{ndi}+{L}{of}", bold=True, key="cff")
         r += 1
-        frow("Net change in cash (computed)", lambda L: f"={L}{cfo}+{L}{cfi}+{L}{cff}", bold=True)
+        frow("Net change in cash (computed)", lambda L: f"={L}{cfo}+{L}{cfi}+{L}{cff}", bold=True, key="dcash")
         r += 1
         sh.section(r, "Free cash flow (the DCF basis)", last); r += 1
-        fcf = frow("Free cash flow (CFO + capex)", lambda L: f"={L}{cfo}+{L}{capex}", bold=True)
+        fcf = frow("Free cash flow (CFO + capex)", lambda L: f"={L}{cfo}+{L}{capex}", bold=True, key="fcf")
         oe = frow("Owner earnings FCF (FCF − SBC)", lambda L: f"={L}{fcf}-{L}{sbc}", bold=True)
         if isr:
             frow("Owner earnings margin (%)", lambda L: f"=IFERROR({L}{oe}/'IS'!{L}{isr['rev']},0)", PCT)
-        sh.widths({"A": 46, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1)}})
+        sh.widths({"A": 46, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1 + n_fc)}})
         sh.ws.freeze_panes = "C6"
 
     # ── WACC ────────────────────────────────────────────────────────────────
@@ -1588,6 +1658,7 @@ class _Book:
             for cell in row:
                 if isinstance(cell.value, str) and "{" in cell.value and cell.value.startswith("="):
                     cell.value = cell.value.format(**R)
+        self.model_rows, self.model_cols, self.model_kind = dict(R), list(cols), "operating"
         r += 1
         sh.section(r, "Where each assumption comes from", C0 + n); r += 1
         for row in th.get("coverage") or []:
@@ -1651,6 +1722,7 @@ class _Book:
         r += 1
         opening_map = {"total_assets": op.get("total_assets"), "equity": op.get("equity"), "tangible_equity": op.get("tangible_equity"), "net_income": op.get("net_income"),
                        "total_income": op.get("total_income"), "shares": op.get("shares"), "bvps": op.get("bvps"), "tbvps": op.get("tbvps"), "roe": op.get("roe")}
+        _R: dict = {}
         for label, key, *fmt in (self._BANK_ROWS if kind == "bank" else self._INSURER_ROWS):
             if key is None:
                 sh.section(r, label, C0 + n); r += 1
@@ -1658,6 +1730,7 @@ class _Book:
             series = rows.get(key)
             if not series:
                 continue
+            _R[key] = r
             f = fmt[0]
             sh.label(r, 1, label, bold=key in ("total_income", "net_income", "equity", "eps", "bvps", "cet1_ratio", "roe"))
             sh.label(r, 2, "Model")
@@ -1692,6 +1765,21 @@ class _Book:
                 sh.label(r, 1, f"{row.get('assumption')}: {row.get('status')} — {row.get('source')}"); r += 1
         sh.widths({"A": 52, "B": 14, "C": 44, "D": 40, **{get_column_letter(c): 14 for c in range(C0 + 1, C0 + n + 1)}})
         sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
+        self.model_rows, self.model_cols, self.model_kind = _R, [get_column_letter(C0 + 1 + i) for i in range(n)], kind
+
+    def _model_link(self, sh: _Sheet, r: int, key: str, first_fc_col: int, fmt: str = MIL) -> bool:
+        """FY+1E..FY+5E cells of row `r` linked to the Model tab's `key` row. False when the model has no such row."""
+        mr = (self.model_rows or {}).get(key)
+        if not mr:
+            return False
+        for k, L in enumerate(self.model_cols or []):
+            sh.put(r, first_fc_col + k, f"='Model'!{L}{mr}", fmt)
+        return True
+
+    def _model_note(self, sh: _Sheet, r: int, first_fc_col: int) -> None:
+        th = (self.dr or {}).get("three_statements") or {}
+        why = th.get("skipped") if isinstance(th, dict) else None
+        sh.ws.cell(row=r, column=first_fc_col, value=("Forecast columns: " + (why or "no three-statement forecast on this run"))).font = _NOTE
 
     # ── Banks ───────────────────────────────────────────────────────────────
     def family_tab(self) -> None:

@@ -8,6 +8,10 @@ from pathlib import Path
 import pytest
 from openpyxl import load_workbook
 
+_wspec = importlib.util.spec_from_file_location("_wbt", Path(__file__).resolve().parent / "test_valuation_workbook.py")
+_wbt = importlib.util.module_from_spec(_wspec)
+_wspec.loader.exec_module(_wbt)
+
 from src.agents.analysis import guidance_forecast as gf
 from src.agents.analysis import three_statement as ts
 
@@ -153,7 +157,7 @@ def test_the_workbench_rebuilds_the_statements_on_assumption_overrides_and_appli
 def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     from src.utils.valuation_workbook import build_workbook
     p = _payload_with_statements()
-    wb = load_workbook(io.BytesIO(build_workbook(p, "MOH")))
+    wb = load_workbook(io.BytesIO(build_workbook(p, "MOH", load_statements=_wbt._statements)))
     assert "Model" in wb.sheetnames
     ws = wb["Model"]
     col_a = [str(c.value) for c in ws["A"] if c.value is not None]
@@ -169,6 +173,18 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     suite = next(c.row for c in ws["A"] if c.value == "Suite result")
     assert "COUNTIF" in str(ws.cell(row=suite, column=8).value)
     assert any(v.startswith("Engine suite (Python build): ALL OK") for v in col_a)
+    # Owner, 2026-10-03 (Anta): FY+1E..FY+5E on the statements themselves, linked to the Model tab, which sits right after CFS
+    assert wb.sheetnames.index("Model") == wb.sheetnames.index("CFS") + 1
+    is_ws, bs_ws, cf_ws = wb["IS"], wb["BS"], wb["CFS"]
+    for ws_, label in ((is_ws, "Revenue"), (is_ws, "Net income"), (bs_ws, "Cash & equivalents"), (bs_ws, "Total assets"), (bs_ws, "Shareholders' equity"), (cf_ws, "Cash from operations"), (cf_ws, "Free cash flow (CFO + capex)")):
+        rr = [c.row for c in ws_["A"] if c.value == label][-1]
+        first = ws_.cell(row=rr, column=8).value                                              # FY2026E is the first forecast column after five actuals
+        assert str(first).startswith("='Model'!D"), (ws_.title, label, first)
+        assert str(ws_.cell(row=rr, column=12).value).startswith("='Model'!H")
+    assert str(bs_ws.cell(row=4, column=8).value).startswith("=EDATE(") and str(cf_ws.cell(row=4, column=8).value).startswith("=EDATE(")
+    rev_model = next(c.row for c in ws["A"] if c.value == "Revenue")
+    rr = [c.row for c in is_ws["A"] if c.value == "Revenue"][-1]
+    assert is_ws.cell(row=rr, column=8).value == f"='Model'!D{rev_model}"
     assert not any("{" in str(c.value) for row in ws.iter_rows(min_col=4, max_col=8) for c in row if isinstance(c.value, str))   # every forward reference resolved
     from src.utils import pdf_report as pr
     from reportlab.lib.styles import getSampleStyleSheet
@@ -181,8 +197,12 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     bad = copy.deepcopy(p)
     bad["data"]["dcf_range"]["MOH"]["three_statements"] = {"skipped": "RECONCILIATION FAILED: FY2026E #1 ...", "reconciliation": {"ok": False, "failures": [
         {"id": 1, "name": "Total assets = total liabilities + equity", "year": "FY2026E", "lhs": 1e9, "rhs": 0.9e9, "diff": 1e8, "ok": False}]}, "fy_labels": None}
-    wb2 = load_workbook(io.BytesIO(build_workbook(bad, "MOH")))
+    wb2 = load_workbook(io.BytesIO(build_workbook(bad, "MOH", load_statements=_wbt._statements)))
     a2 = [str(c.value) for c in wb2["Model"]["A"] if c.value is not None]
     assert not any(v.startswith("1. Income statement") for v in a2) and any(v == "FY2026E" for v in a2)
+    # a withheld model leaves the statements' forecast columns with the reason, not blanks
+    is2 = wb2["IS"]
+    assert any(str(c.value).startswith("Forecast columns: RECONCILIATION FAILED") for row in is2.iter_rows(min_col=8, max_col=8) for c in row)
+    assert wb2["BS"].cell(row=4, column=8).value is None                                       # no forecast columns without a model
     flow2 = pr._three_statement_block_pdf(bad["data"]["dcf_range"]["MOH"], getSampleStyleSheet(), 500.0)
     assert "RECONCILIATION FAILED" in " ".join(getattr(f, "text", "") for f in flow2) and not [f for f in flow2 if f.__class__.__name__ == "Table"]
