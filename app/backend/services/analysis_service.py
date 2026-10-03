@@ -500,6 +500,7 @@ def _save_partial_web_run(
             "reit_metrics":                data.get("reit_metrics"),
             "dcf_calibration":             data.get("dcf_calibration"),
             "segment_scenarios":           data.get("segment_scenarios"),
+            "guidance_estimates":          data.get("guidance_estimates"),   # owner, 2026-10-03
             # ── checkpoint: industry_brief ───────────────────────────────
             "industry_brief":              data.get("industry_brief"),
             # ── checkpoint: analyst signals (system agents only — the

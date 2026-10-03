@@ -3584,6 +3584,107 @@ def _guided_growth(guidance: dict, revenue_base: float = 0.0) -> Optional[float]
     return None
 
 
+# ── Guidance channel (owner, 2026-10-03) ─────────────────────────────────────
+# The research's guidance → estimates block (deep_research._extract_guidance_estimates,
+# state["data"]["guidance_estimates"][ticker]) carries the recommended bear / base /
+# bull revenue growth for FY+1 and FY+2. Here it sets the DCF's first years per
+# scenario and fades onto the engine's own path. Constants in
+# valuation_constants.json["guidance_channel"] (PROPOSED); GUIDANCE_CHANNEL=off
+# disables. Guidance never sets the baseline, the long-run path or the terminal.
+
+_GUIDANCE_CHANNEL_DEFAULTS = {"explicit_years": 2, "fade_years": 3, "min_confidence": "MEDIUM",
+                              "growth_cap": 0.40, "growth_floor": -0.30}
+_GUIDANCE_CONFIDENCE_RANK = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+
+
+def _guidance_channel_enabled() -> bool:
+    return os.environ.get("GUIDANCE_CHANNEL", "on").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _guidance_channel_cfg() -> dict:
+    cfg = dict(_GUIDANCE_CHANNEL_DEFAULTS)
+    try:
+        from src.data import valuation_constants as _vc_gc
+        blk = (_vc_gc.load().get("guidance_channel") or {})
+        for k in ("explicit_years", "fade_years"):
+            if isinstance(blk.get(k), int) and blk[k] >= 0:
+                cfg[k] = blk[k]
+        for k in ("growth_cap", "growth_floor"):
+            if isinstance(blk.get(k), (int, float)):
+                cfg[k] = float(blk[k])
+        if str(blk.get("min_confidence") or "").upper() in _GUIDANCE_CONFIDENCE_RANK:
+            cfg["min_confidence"] = str(blk["min_confidence"]).upper()
+    except Exception:  # noqa: BLE001 -- defaults
+        pass
+    return cfg
+
+
+def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: float,
+                               engine_schedule: Optional[list[float]], years: int,
+                               cfg: Optional[dict] = None) -> Optional[dict]:
+    """The DCF growth schedule for one scenario with the guidance channel applied, or None.
+
+        years 1..E        the scenario's recommended growth: FY+1, then FY+2 when given, else FY+1
+        years E+1..E+F    a linear fade from the last explicit year onto the engine's own path
+        later years       the engine's path (its schedule, or flat g_engine); the terminal is untouched
+
+    None when the channel is off, the block is missing or below min_confidence, or the
+    scenario has no FY+1 revenue growth.
+    """
+    if not est or not isinstance(est, dict) or not _guidance_channel_enabled():
+        return None
+    cfg = cfg or _guidance_channel_cfg()
+    conf = str(est.get("confidence") or "LOW").upper()
+    if _GUIDANCE_CONFIDENCE_RANK.get(conf, 0) < _GUIDANCE_CONFIDENCE_RANK.get(cfg["min_confidence"], 1):
+        return None
+    row = ((est.get("estimates") or {}).get(scenario) or {})
+    g1 = row.get("revenue_growth_fy1")
+    if not isinstance(g1, (int, float)):
+        return None
+    g2 = row.get("revenue_growth_fy2")
+    lo, hi = float(cfg["growth_floor"]), float(cfg["growth_cap"])
+    clip = lambda x: max(min(float(x), hi), lo)   # noqa: E731
+    E, F = int(cfg["explicit_years"]), int(cfg["fade_years"])
+    if E <= 0:
+        return None
+    engine_path = list(engine_schedule) if engine_schedule and len(engine_schedule) == years else [float(g_engine)] * years
+    explicit = [clip(g1)] + ([clip(g2)] if isinstance(g2, (int, float)) else [clip(g1)])
+    explicit = (explicit * E)[:E]
+    sched: list[float] = []
+    for t in range(1, years + 1):
+        if t <= E:
+            sched.append(round(explicit[t - 1], 6))
+        elif t <= E + F and F > 0:
+            w = (t - E) / float(F + 1)            # strictly between the last explicit year and the engine path
+            sched.append(round(explicit[-1] * (1.0 - w) + engine_path[t - 1] * w, 6))
+        else:
+            sched.append(round(engine_path[t - 1], 6))
+    return {"schedule": sched, "explicit": [round(x, 6) for x in explicit], "explicit_years": E, "fade_years": F,
+            "engine_path": [round(x, 6) for x in engine_path], "engine_year1": round(float(g_engine), 6),
+            "confidence": conf, "fiscal_year_1": est.get("fiscal_year_1"), "fiscal_year_2": est.get("fiscal_year_2"),
+            "source": "deep research 2G → guidance_estimates"}
+
+
+def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict]) -> Optional[dict]:
+    """What the report shows: the research block plus how (or why not) the DCF used it."""
+    if not est or not isinstance(est, dict):
+        return None
+    out = {k: v for k, v in est.items() if not k.startswith("_")}
+    out["model"] = est.get("_model")
+    out["applied"] = bool(applied)
+    out["channel"] = ({k: applied.get(k) for k in ("explicit", "explicit_years", "fade_years", "engine_year1",
+                                                 "schedule", "confidence", "source")} if applied else None)
+    if not applied:
+        cfg = _guidance_channel_cfg()
+        if not _guidance_channel_enabled():
+            out["not_applied_reason"] = "GUIDANCE_CHANNEL is off"
+        elif _GUIDANCE_CONFIDENCE_RANK.get(str(est.get("confidence") or "LOW").upper(), 0) < _GUIDANCE_CONFIDENCE_RANK.get(cfg["min_confidence"], 1):
+            out["not_applied_reason"] = f"confidence {est.get('confidence')} is below the channel's minimum ({cfg['min_confidence']})"
+        else:
+            out["not_applied_reason"] = "the DCF leg did not price for this name"
+    return out
+
+
 # ── R1: structured company guidance (Priority 0 over the regex parse) ────────
 # The assumption store (src/memory/assumption_store.py) holds guidance
 # extracted from PRIMARY sources — the EDGAR press release (FPI 6-K
@@ -10621,6 +10722,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
+    # Per-ticker guidance → estimates from deep research section 2G (owner, 2026-10-03).
+    guidance_estimates_all = state["data"].get("guidance_estimates", {}) or {}
     api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
 
     # ── Macro Handshake (Phase 1 input) ─────────────────────────────────────
@@ -12141,6 +12244,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # directional nudge, not an override.  Blended at 30% weight to avoid
         # over-indexing on a single LLM parse of qualitative text.
         dcf_cal = dcf_calibration_all.get(ticker, {})
+        _guid_est = guidance_estimates_all.get(ticker) or {}
+        _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
         _cal_adj = dcf_cal.get("growth_rate_adj")
         if _cal_adj is not None and data_source == "historical":
             # Apply when no hard guidance or analyst estimate overrides.
@@ -13649,6 +13754,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for y in range(1, _PROJECTION_YEARS + 1)
                 ]
 
+            # ── Guidance channel (owner, 2026-10-03) ──────────────────────
+            # The research's recommended estimates set years 1–E of THIS
+            # scenario's growth and fade onto the path built above (the gated
+            # g, or the profile's schedule). Analyst bands and the engine's
+            # waterfall still decide the long run; guidance decides the near
+            # years it actually speaks to.
+            _gc = _guidance_channel_schedule(
+                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS)
+            if _gc:
+                _growth_schedule = _gc["schedule"]
+                if scenario == "base":
+                    _gc_applied = _gc
+                    _ge_rows = (_guid_est.get("estimates") or {})
+                    _ge_g = {sc: ((_ge_rows.get(sc) or {}).get("revenue_growth_fy1")) for sc in ("bear", "base", "bull")}
+                    ticker_forward_flags.append(
+                        "Guidance → estimates (deep research 2G, "
+                        f"{_gc['confidence']}): FY+1 revenue growth bear "
+                        f"{(_ge_g['bear'] if _ge_g['bear'] is not None else _gc['explicit'][0]):+.1%} / base "
+                        f"{(_ge_g['base'] if _ge_g['base'] is not None else _gc['explicit'][0]):+.1%} / bull "
+                        f"{(_ge_g['bull'] if _ge_g['bull'] is not None else _gc['explicit'][0]):+.1%} "
+                        f"sets DCF years 1–{_gc['explicit_years']} (engine year 1 was "
+                        f"{_gc['engine_year1']:+.1%}), fading onto the engine path by year "
+                        f"{_gc['explicit_years'] + _gc['fade_years'] + 1}")
+
             # ── Forward Gate B: ROIC compression (Y10 projection) ──────────
             # Previously 'Forward ROIC' used TRAILING ebit/invested_capital
             # from most_recent. For scaling co's (NET: op_income -$203M,
@@ -13880,6 +14009,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "net_debt": float(net_debt or 0.0), "shares": shares,
                 "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
                 "projection_rows": _proj_rows,
+                "guidance_channel": _gc,          # None when guidance did not set years 1–E
             }
 
             # ── Reinvestment disclosure, OBSERVATION-ONLY ─────────────────
@@ -16483,6 +16613,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # `dcfRange?.sotp_breakdown`. Rides the existing persistence chain
             # (pipeline allowlist → analysis_service → web_runs) untouched.
             "sotp_breakdown":     sotp_breakdown,
+            # Owner, 2026-10-03: management guidance → the model's bear / base / bull
+            # estimates (deep research 2G) and whether the DCF's years 1–2 ran on them.
+            # Frontend: GuidanceEstimatesPanel reads `dcfRange?.guidance_estimates`.
+            "guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied),
             # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
             # its rows and reason so both renderers can show WHY it did not price.
             # Published only when the profile declared SOTP (analyst): it explains why a declared leg

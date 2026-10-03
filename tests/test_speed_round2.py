@@ -192,7 +192,10 @@ class TestResearchPromptGating:
         p = _build_research_system("2026", "Tech", "")
         assert "exactly 8 searches" in p
         # kept feeds: management FY+1 guidance (dcf_calibration), market share
-        assert "management guidance EBITDA revenue outlook" in p
+        # 2026-10-03 (owner): guidance leads the sequence -- search 1 is the latest results
+        # release and its guidance; the EBITDA/revenue prose format the regex parser reads stays.
+        assert "latest quarterly results press release guidance" in p
+        assert "EBITDA guidance: $X.XB" in p
         assert "market share competitive landscape" in p
         # dropped gap-fill default + legacy queries
         assert "additional searches to fill gaps" not in p
@@ -341,7 +344,11 @@ class TestAssembleIndustryBriefMerged:
         ik = merged_state["data"]["industry_kpis"]
         assert ik["trailing_pe"] == 60.0 and ik["ev_ebitda"] == 50.0
         assert ik["roic"] == 0.12 and ik["rule_of_40"] == 55.0
-        assert merged_state["data"]["industry_footnotes"] == []
+        # 2026-10-03 (owner): the research text is no longer printed, so the brief's [n]
+        # markers resolve into footnotes; this fixture's "[1]" has no REFERENCES entry
+        # behind it and stays visible as unresolved rather than vanishing.
+        _fns = merged_state["data"]["industry_footnotes"]
+        assert [f["ref_id"] for f in _fns] == [1] and _fns[0]["source_type"] == "unresolved"
 
     def test_returns_false_without_brief_section(self, monkeypatch, merged_state):
         merged_state["data"]["deep_research_sections"] = {"2a": "no brief"}

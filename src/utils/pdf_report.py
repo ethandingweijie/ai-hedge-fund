@@ -2071,6 +2071,88 @@ def _degraded_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
             Paragraph(_strip(str(d.get("degraded_reason") or "")), st_l), Spacer(1, 3), t, Spacer(1, 4)]
 
 
+def _guidance_estimates_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """Management guidance → the model's estimates (dcf_range.guidance_estimates;
+    owner, 2026-10-03): guidance as stated, consensus, the bear / base / bull
+    estimates, and how the DCF used them. The same block the web and the Excel
+    model show; [] when the research produced none."""
+    ge = dcf_t.get("guidance_estimates") or {}
+    est = ge.get("estimates") or {}
+    if not est or not isinstance(est, dict):
+        return []
+    g = ge.get("guidance") or {}
+    c = ge.get("consensus") or {}
+    st_l = ParagraphStyle("_gel", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_gelb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_gev", parent=st_l, alignment=2)
+
+    def _p(v, signed=True):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        return f"{f:+.1%}" if signed else f"{f:.1%}"
+
+    def _n(v):
+        try:
+            return f"{float(v):,.2f}"
+        except (TypeError, ValueError):
+            return "—"
+
+    def _rng(r, fmt):
+        if not isinstance(r, dict):
+            return "—"
+        lo, mid, hi = r.get("low"), r.get("mid"), r.get("high")
+        if lo is None and mid is None and hi is None:
+            return "—"
+        if lo is not None and hi is not None and lo != hi:
+            return f"{fmt(lo)} – {fmt(hi)}" + (f" (mid {fmt(mid)})" if mid is not None else "")
+        return fmt(mid if mid is not None else (lo if lo is not None else hi))
+
+    fy1 = ge.get("fiscal_year_1") or "FY+1"
+    fy2 = ge.get("fiscal_year_2") or "FY+2"
+    hdr = [Paragraph(_wh(h), st_lb) for h in ("Estimate", "Guidance", "Consensus", "Bear", "Base", "Bull")]
+    body = [hdr]
+    _rows = (
+        (f"Revenue growth {fy1}", "revenue_growth_fy1", _rng(g.get("revenue_growth"), _p), _p(c.get("revenue_growth_fy1")), _p),
+        (f"Revenue growth {fy2}", "revenue_growth_fy2", "—", "—", _p),
+        (f"EBITDA margin {fy1}", "ebitda_margin_fy1", _rng(g.get("ebitda_margin"), lambda v: _p(v, signed=False)), "—", lambda v: _p(v, signed=False)),
+        (f"EBITDA margin {fy2}", "ebitda_margin_fy2", "—", "—", lambda v: _p(v, signed=False)),
+        (f"EPS {fy1}", "eps_fy1", _rng(g.get("eps"), _n), _n(c.get("eps_fy1")), _n),
+        (f"EPS {fy2}", "eps_fy2", "—", "—", _n),
+    )
+    for label, field, g_cell, c_cell, fmt in _rows:
+        vals = [(est.get(sc) or {}).get(field) for sc in ("bear", "base", "bull")]
+        if all(v is None for v in vals) and g_cell == "—" and c_cell == "—":
+            continue
+        body.append([Paragraph(_strip(label), st_l), Paragraph(_strip(g_cell), st_v), Paragraph(_strip(c_cell), st_v)]
+                    + [Paragraph(fmt(v), st_v) for v in vals])
+    lab_w = width * 0.26
+    col_w = (width - lab_w) / 5.0
+    t = Table(body, colWidths=[lab_w, col_w, col_w, col_w, col_w, col_w])
+    t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                           ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5)]))
+    ch = ge.get("channel") or {}
+    if ge.get("applied") and ch:
+        _E, _F = int(ch.get("explicit_years") or 0), int(ch.get("fade_years") or 0)
+        _how = (f"Applied: the base DCF's years 1–{_E} run on these estimates (engine year 1 was "
+                f"{_p(ch.get('engine_year1'))}), fading onto the engine path by year {_E + _F + 1}; the terminal is untouched.")
+    else:
+        _how = f"Shown, not applied — {_strip(str(ge.get('not_applied_reason') or 'the DCF did not use it'))}."
+    out = [Paragraph(f"Management guidance → estimates · confidence {_strip(str(ge.get('confidence') or '—'))}"
+                     + (f" · as of {_strip(str(ge.get('as_of')))}" if ge.get("as_of") else ""), styles["RptSubsection"]),
+           t, Spacer(1, 3), Paragraph(_how, st_l)]
+    if g.get("quote"):
+        out.append(Paragraph(f"<i>“{_strip(str(g.get('quote')))}”</i>" + (f" — {_strip(str(g.get('source')))}" if g.get("source") else ""), st_l))
+    if ge.get("rationale"):
+        out.append(Paragraph(_strip(str(ge.get("rationale"))), st_l))
+    if ge.get("track_record"):
+        out.append(Paragraph(f"Track record: {_strip(str(ge.get('track_record')))}", st_l))
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _analyst_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """The analyst sum-of-the-parts (dcf_range.sotp_breakdown): each segment's
     forward revenue, the method and multiple it was valued on, its value, then
@@ -2769,6 +2851,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         story.append(Paragraph("Valuation Summary", styles["RptSubsection"]))
         story.extend(_valuation_summary(dcf_ticker, scen, styles, page_w))
         story.extend(_analyst_sotp_block_pdf(dcf_ticker, styles, page_w))
+        story.extend(_guidance_estimates_block_pdf(dcf_ticker, styles, page_w))   # owner, 2026-10-03
         story.append(Spacer(1, 8))
 
         # ── Risk Assessment (value-trap checks + risk flags) ──

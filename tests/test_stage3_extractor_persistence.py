@@ -117,6 +117,9 @@ _PERSISTED = {
     "saas_metrics":    {"nrr_pct": 1.18},
     "framework_metrics": {"nrr_pct": 1.18, "_completeness_score": 0.9},
     "segment_scenarios": {"Subscription": {"bear": 1, "base": 2, "bull": 3}},
+    # 2026-10-03: a current persisted set carries the guidance -> estimates extractor; a set
+    # from before it existed is reused as `precomputed` and only the missing extractor runs.
+    "guidance_estimates": {"confidence": "MEDIUM", "estimates": {"base": {"revenue_growth_fy1": 0.05}}},
 }
 
 

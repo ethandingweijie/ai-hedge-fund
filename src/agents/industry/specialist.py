@@ -1072,9 +1072,16 @@ def assemble_industry_brief_merged(state: AgentState) -> bool:
     )
     state["data"]["industry_kpis"] = industry_kpis
     state["data"]["sector_kpis"] = sector_kpis
-    # Merged brief reuses the deep-research [n] markers; citation_registry is
-    # already in state from phase 3 — no specialist footnotes to merge.
-    state["data"]["industry_footnotes"] = []
+    # Merged brief reuses the deep-research [n] markers. Owner, 2026-10-03: the
+    # Section 2 text is no longer printed, so the markers are resolved here into
+    # footnotes from the sections' REFERENCES blocks (PDF and web render them
+    # under the brief). An unresolved marker stays visible as such.
+    try:
+        from src.agents.industry.deep_research import resolve_brief_references as _resolve_refs
+        state["data"]["industry_footnotes"] = _resolve_refs(brief_text, sections)
+    except Exception as _exc:  # noqa: BLE001
+        print(f"  [brief-merged] footnote resolution failed for {ticker}: {_exc}")
+        state["data"]["industry_footnotes"] = []
 
     progress.update_status(
         agent_id, ticker,

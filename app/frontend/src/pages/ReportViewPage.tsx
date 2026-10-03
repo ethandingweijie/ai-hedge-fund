@@ -29,10 +29,11 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { sotpFor } from '@/lib/sotpBreakdown';
+import { GuidanceEstimatesPanel } from '@/components/report/GuidanceEstimatesPanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel } from '@/components/report/IndustryBriefPanel';
-import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
+import type { CitationRegistryEntry } from '@/lib/reportTypes';
 import { StockPanel } from '@/components/report/StockPanel';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
@@ -173,8 +174,7 @@ export function ReportViewPage() {
   // Deep research + citations
   // Pipeline writes state["data"]["deep_research"] (not "deep_research_report")
   const deepResearchReport    = (data.deep_research ?? data.deep_research_report) as string | undefined;
-  const deepResearchAnnotated = data.deep_research_annotated as string | undefined;
-  const citationRegistry      = data.citation_registry as import('@/lib/reportTypes').CitationRegistryEntry[] | undefined;
+  const briefFootnotes        = data.industry_footnotes as CitationRegistryEntry[] | undefined;   // owner, 2026-10-03
 
   const currentPrice = scenarioAnalysis?.current_price;
 
@@ -348,6 +348,8 @@ export function ReportViewPage() {
         {(() => { const _s = sotpFor(dcfRange); return _s ? (
           <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
         ) : null; })()}
+        {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
+        {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} /> : null}
 
         {/* Full width: this is the 6-column scenario table that was being
             squeezed into a 403px column, wrapping its headers onto three
@@ -394,15 +396,7 @@ export function ReportViewPage() {
           industryBrief={industryBrief}
           deepResearch={deepResearchReport}
           industryBriefContent={industryBrief
-            ? <IndustryBriefPanel industryBrief={industryBrief} sector={sector} />
-            : undefined}
-          deepResearchContent={deepResearchReport
-            ? <DeepResearchPanel
-                reportText={deepResearchReport}
-                annotatedText={deepResearchAnnotated}
-                registry={citationRegistry}
-                ticker={ticker}
-              />
+            ? <IndustryBriefPanel industryBrief={industryBrief} sector={sector} footnotes={briefFootnotes} />
             : undefined}
         />
         <IntelligenceGrid

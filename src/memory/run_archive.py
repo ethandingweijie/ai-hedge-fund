@@ -1491,7 +1491,7 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
     # Widened to tolerate LLM formatting variants — kept in lock-step with
     # deep_research._extract_sections(). See that function's docstring.
     boundary = re.compile(
-        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-F])\b[\.\:—\-\)\*\s]",
+        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-G])\b[\.\:—\-\)\*\s]",
         re.IGNORECASE | re.MULTILINE,
     )
     positions: list[tuple[str, int]] = []

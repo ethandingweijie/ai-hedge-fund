@@ -5,7 +5,7 @@
  *
  * Wraps existing report panel components (ValuationLadder, PowerLawRadar,
  * ValueTrapChecklist, DecisionInputsCard, FinancialsChart,
- * ResearchSummaryPanel, IndustryBriefPanel, DeepResearchPanel) in the new
+ * ResearchSummaryPanel, IndustryBriefPanel; DeepResearchPanel removed 2026-10-03) in the new
  * zinc-neutral tab shell. No translator layer needed — existing panels
  * already consume the RunResult shape.
  *
@@ -48,7 +48,7 @@ import type { FinancialStatementsPayload } from '@/components/report/FinancialSt
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import type { DdCardAudit } from '@/lib/reportTypes';
-import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
+import { BriefReferences } from '@/components/report/IndustryBriefPanel';
 import { ChainOfThought } from '@/components/report/ChainOfThought';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
@@ -60,6 +60,7 @@ import { ExportFab } from '@/components/report/ExportFab';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { sotpFor } from '@/lib/sotpBreakdown';
+import { GuidanceEstimatesPanel } from '@/components/report/GuidanceEstimatesPanel';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
@@ -151,8 +152,8 @@ export function V2ReportView({
   const priorRecap = (data.prior_recap as Record<string, PriorRecap> | undefined)?.[ticker];
   const freshnessDelta = (data.freshness_delta as Record<string, FreshnessDelta> | undefined)?.[ticker];
   const deepResearch = (data.deep_research ?? data.deep_research_report) as string | undefined;
-  const deepAnnotated = data.deep_research_annotated as string | undefined;
   const citations = data.citation_registry as CitationRegistryEntry[] | undefined;
+  const briefFootnotes = data.industry_footnotes as CitationRegistryEntry[] | undefined;   // owner, 2026-10-03
 
   // Company name fetch (sets header "NVDA · NVIDIA Corporation" style)
   useEffect(() => {
@@ -354,7 +355,7 @@ export function V2ReportView({
             </>
           ))}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
-        {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
+        {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} briefFootnotes={briefFootnotes} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
         {tab === 'financials' && (
           <FinancialsBody
             ticker={ticker}
@@ -654,6 +655,8 @@ function ValuationBody({
       {(() => { const _s = sotpFor(dcfRange); return _s ? (
         <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
       ) : null; })()}
+      {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
+      {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} /> : null}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
@@ -1009,21 +1012,21 @@ function PowerLawPentagon({ dims }: { dims: { label: string; score?: number }[] 
 
 /* ───────── Research Tab — v2 native (status card + sub-tabs) ───────── */
 function ResearchBody({
-  runId, ticker, industryBrief, deepResearch, deepAnnotated, citations,
+  runId, ticker, industryBrief, deepResearch, briefFootnotes, citations,
   isResearchPhase, isComplete,
 }: {
   runId: string;
   ticker: string;
   industryBrief: string | undefined;
   deepResearch: string | undefined;
-  deepAnnotated: string | undefined;
+  briefFootnotes: CitationRegistryEntry[] | undefined;
   citations: CitationRegistryEntry[] | undefined;
   events: ProgressEvent[];
   liveData: Record<string, unknown>;
   isResearchPhase: boolean;
   isComplete: boolean;
 }) {
-  type SubTab = 'summary' | 'brief' | 'deep';
+  type SubTab = 'summary' | 'brief';   // owner, 2026-10-03: the research text is context, not printed
   const [sub, setSub] = useState<SubTab>('summary');
   const hasData = !!(industryBrief || deepResearch);
   const sourceCount = citations?.length ?? 0;
@@ -1060,7 +1063,7 @@ function ResearchBody({
             <div className="text-[13px] font-semibold text-foreground">Research complete</div>
             <div className="text-[11px] text-muted-foreground truncate">
               {sourceCount > 0 && <>{sourceCount} source{sourceCount === 1 ? '' : 's'} · </>}
-              Qwen 3.6-plus + Claude Sonnet
+              Live web research
             </div>
           </div>
         </div>
@@ -1072,7 +1075,6 @@ function ResearchBody({
           {([
             { id: 'summary' as const, label: 'Research summary' },
             { id: 'brief'   as const, label: 'Industry brief' },
-            { id: 'deep'    as const, label: 'Deep research' },
           ]).map(t => (
             <button
               key={t.id}
@@ -1111,15 +1113,8 @@ function ResearchBody({
             Industry Intelligence Brief
           </div>
           <Markdown>{industryBrief}</Markdown>
+          <BriefReferences footnotes={briefFootnotes} />
         </div>
-      )}
-      {hasData && sub === 'deep' && deepResearch && (
-        <DeepResearchPanel
-          reportText={deepResearch}
-          annotatedText={deepAnnotated}
-          registry={citations}
-          ticker={ticker}
-        />
       )}
 
       {!isComplete && isResearchPhase && (

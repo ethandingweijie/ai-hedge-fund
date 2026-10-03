@@ -280,6 +280,8 @@ class _Book:
             self.sotp_tab()
         if self._has_bank():
             self.banks_tab()
+        if (self.dr or {}).get("guidance_estimates"):
+            self.guidance_tab()                 # owner, 2026-10-03: guidance → estimates, as the DCF used them
         self.family_tab()
         self.blend_tab()
         self.target_tab()
@@ -1242,6 +1244,89 @@ class _Book:
                 sh.put(r, 7, f"=G{ps}-G{r - 1}", NUM); r += 2
                 self.leg_cell[(s, name)] = _ref("SOTP", ps, 7)
         sh.widths({"A": 44, "B": 10, "C": 10, "D": 14, "E": 14, "F": 12, "G": 16})
+
+    # ── Guidance → estimates (owner, 2026-10-03) ──────────────────────────────
+    def guidance_tab(self) -> None:
+        """Management guidance as stated, consensus, the model's bear / base / bull
+        estimates (deep research 2G → guidance_estimates), and the growth path the
+        base DCF ran on. Static values in input colour: the research produced them."""
+        ge = (self.dr or {}).get("guidance_estimates") or {}
+        est = ge.get("estimates") or {}
+        g = ge.get("guidance") or {}
+        c = ge.get("consensus") or {}
+        sh = self.sheet("Guidance", "Management guidance → the model's estimates and how the DCF used them")
+        sh.title("Management guidance → estimates",
+                 f"Confidence {ge.get('confidence') or '—'}"
+                 + (f"; guidance as of {ge.get('as_of')}" if ge.get("as_of") else "")
+                 + ". " + ("Applied: the base DCF's first years run on these estimates." if ge.get("applied")
+                           else f"Shown, not applied: {ge.get('not_applied_reason') or 'the DCF did not use it'}."))
+        fy1, fy2 = ge.get("fiscal_year_1") or "FY+1", ge.get("fiscal_year_2") or "FY+2"
+        r = 4
+        sh.section(r, f"Guidance as stated ({fy1})", 6); r += 1
+        sh.header(r, ["Metric", "Low", "Mid", "High", "Unit", "Basis / status"])
+        for label, key, fmt, unit in (("Revenue growth", "revenue_growth", PCT, "yoy"),
+                                      ("Revenue", "revenue", NUM, None),
+                                      ("EBITDA / operating margin", "ebitda_margin", PCT, "%"),
+                                      ("EPS", "eps", NUM, None)):
+            rng = g.get(key) or {}
+            if not isinstance(rng, dict) or all(rng.get(k) is None for k in ("low", "mid", "high")):
+                continue
+            r += 1
+            sh.label(r, 1, label)
+            for col, k in ((2, "low"), (3, "mid"), (4, "high")):
+                if rng.get(k) is not None:
+                    sh.put(r, col, _num(rng.get(k)), fmt)
+            sh.put(r, 5, unit or " ".join(str(x) for x in (rng.get("currency"), rng.get("scale")) if x)).font = Font(color=BLACK)
+            sh.put(r, 6, " / ".join(str(x) for x in (g.get("basis"), g.get("status")) if x)).font = Font(color=BLACK)
+        if g.get("quote"):
+            r += 1
+            sh.label(r, 1, f"“{g.get('quote')}”" + (f" — {g.get('source')}" if g.get("source") else ""), indent=1)
+        r += 2
+        sh.section(r, f"Consensus ({fy1})", 6); r += 1
+        sh.label(r, 1, "Revenue growth"); sh.put(r, 2, _num(c.get("revenue_growth_fy1")), PCT); r += 1
+        sh.label(r, 1, "EPS"); sh.put(r, 2, _num(c.get("eps_fy1")), NUM); r += 1
+        sh.label(r, 1, "Guidance vs consensus"); sh.put(r, 2, _num(ge.get("guidance_vs_consensus_pct")), PCT); r += 1
+        if c.get("as_of"):
+            sh.label(r, 1, "Consensus as of"); sh.put(r, 2, str(c.get("as_of"))).font = Font(color=BLACK); r += 1
+        r += 1
+        sh.section(r, "Model estimates", 6); r += 1
+        sh.header(r, ["Estimate", "Bear", "Base", "Bull"])
+        for label, field, fmt in ((f"Revenue growth {fy1}", "revenue_growth_fy1", PCT),
+                                  (f"Revenue growth {fy2}", "revenue_growth_fy2", PCT),
+                                  (f"EBITDA margin {fy1}", "ebitda_margin_fy1", PCT),
+                                  (f"EBITDA margin {fy2}", "ebitda_margin_fy2", PCT),
+                                  (f"EPS {fy1}", "eps_fy1", NUM), (f"EPS {fy2}", "eps_fy2", NUM)):
+            vals = [(est.get(sc) or {}).get(field) for sc in ("bear", "base", "bull")]
+            if all(v is None for v in vals):
+                continue
+            r += 1
+            sh.label(r, 1, label)
+            for col, v in zip((2, 3, 4), vals):
+                if v is not None:
+                    sh.put(r, col, _num(v), fmt)
+        ch = ge.get("channel") or {}
+        sched = ch.get("schedule") or []
+        if sched:
+            r += 2
+            sh.section(r, "Base DCF growth path", 6); r += 1
+            sh.header(r, ["Year", "Growth used", "Source"])
+            E, F = int(ch.get("explicit_years") or 0), int(ch.get("fade_years") or 0)
+            for i, v in enumerate(sched, start=1):
+                r += 1
+                sh.put(r, 1, i, "0")
+                sh.put(r, 2, _num(v), PCT)
+                sh.put(r, 3, ("guidance-derived estimate" if i <= E else "fade onto the engine path" if i <= E + F
+                              else "engine path")).font = Font(color=BLACK)
+            r += 1
+            sh.label(r, 1, "Engine year-1 growth before the channel"); sh.put(r, 2, _num(ch.get("engine_year1")), PCT); r += 1
+        for key, label in (("rationale", "Rationale"), ("track_record", "Track record")):
+            if ge.get(key):
+                r += 1
+                sh.label(r, 1, f"{label}: {ge.get(key)}")
+        if ge.get("citations"):
+            r += 1
+            sh.label(r, 1, "Sources: " + " · ".join(str(x) for x in ge.get("citations")))
+        sh.widths({"A": 46, "B": 14, "C": 14, "D": 14, "E": 12, "F": 28})
 
     # ── Banks ───────────────────────────────────────────────────────────────
     def family_tab(self) -> None:

@@ -857,6 +857,7 @@ def needs_extractor(
     Universal extractors (always run):
       - dcf_calibration
       - segment_scenarios
+      - guidance_estimates (owner, 2026-10-03: management guidance -> year 1-2 estimates)
 
     The ticker parameter (optional) provides a last-resort fallback for the
     saas_metrics gate: if profile_name is empty (because strategic_router's
@@ -878,8 +879,8 @@ def needs_extractor(
     # for each sector family. Belt-and-suspenders — TICKER_SECTOR_LOOKUP hits
     # already return canonical strings, but unknown tickers fall through to
     # LLM classification where variants are common.
-    if extractor in {"dcf_calibration", "segment_scenarios"}:
-        return True
+    if extractor in {"dcf_calibration", "segment_scenarios", "guidance_estimates"}:
+        return True   # guidance_estimates: every sector and profile (owner, 2026-10-03)
     if extractor == "reit_metrics":
         return is_reit_sector(sector) or "REIT" in (profile_name or "")
     if extractor == "bank_metrics":

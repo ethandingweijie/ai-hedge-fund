@@ -44,13 +44,13 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { sotpFor } from '@/lib/sotpBreakdown';
+import { GuidanceEstimatesPanel } from '@/components/report/GuidanceEstimatesPanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
 import { NewsPanel }           from '@/components/report/NewsPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
-import { DeepResearchPanel }   from '@/components/report/DeepResearchPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 import { PulseCard }           from '@/components/report/PulseCard';
 
@@ -655,8 +655,9 @@ export function ReportPage() {
   const dcfSkipReason = _byTicker(data.dcf_skip_reasons    as Record<string, string>                                        | undefined);
   const industryBrief = data.industry_brief       as string | undefined;
   const deepResearch  = (data.deep_research ?? data.deep_research_report)   as string | undefined;
-  const deepAnnotated = data.deep_research_annotated as string | undefined;
-  const citations     = data.citation_registry as import('@/lib/reportTypes').CitationRegistryEntry[] | undefined;
+  // Owner, 2026-10-03: the full research text is working context, not printed; the brief
+  // carries its citations as footnotes.
+  const briefFootnotes = data.industry_footnotes as import('@/lib/reportTypes').CitationRegistryEntry[] | undefined;
   // Prefer FMP live price (available immediately) over pipeline scenario price (available late)
   const currentPrice  = livePrice ?? scenarioAnalysis?.current_price;
 
@@ -1403,6 +1404,8 @@ export function ReportPage() {
             {(() => { const _s = sotpFor(dcfRange); return _s ? (
               <SotpAnalystPanel breakdown={_s.breakdown} weight={_s.weight} />
             ) : null; })()}
+            {/* Owner, 2026-10-03: management guidance → the model's estimates, and how the DCF used them. */}
+            {dcfRange?.guidance_estimates ? <GuidanceEstimatesPanel block={dcfRange.guidance_estimates} /> : null}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards
@@ -1455,15 +1458,7 @@ export function ReportPage() {
             industryBrief={industryBrief}
             deepResearch={deepResearch}
             industryBriefContent={industryBrief
-              ? <IndustryBriefPanel industryBrief={industryBrief} sector={sector} />
-              : undefined}
-            deepResearchContent={deepResearch
-              ? <DeepResearchPanel
-                  reportText={deepResearch}
-                  annotatedText={deepAnnotated}
-                  registry={citations}
-                  ticker={liveTicker}
-                />
+              ? <IndustryBriefPanel industryBrief={industryBrief} sector={sector} footnotes={briefFootnotes} />
               : undefined}
           />
         ) : (

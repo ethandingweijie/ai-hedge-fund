@@ -4,10 +4,42 @@ import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import type { CitationRegistryEntry } from '@/lib/reportTypes';
 
 interface IndustryBriefPanelProps {
   industryBrief?: string;
   sector?: string;
+  /** The brief's [n] citations, resolved from the research notes (owner, 2026-10-03: the
+   *  full research text is no longer printed, so the brief carries its own references). */
+  footnotes?: CitationRegistryEntry[] | null;
+}
+
+/** The references the brief cites, [n] by [n]. Shared by the desktop and mobile paths. */
+export function BriefReferences({ footnotes }: { footnotes?: CitationRegistryEntry[] | null }) {
+  const rows = (footnotes ?? []).filter((f) => f && f.ref_id != null);
+  if (!rows.length) return null;
+  return (
+    <div className="border-t border-border/60 px-6 py-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70 mb-2">
+        References
+      </div>
+      <ol className="space-y-1">
+        {rows.map((f) => (
+          <li key={f.ref_id} className="flex gap-2 text-[11px] leading-snug">
+            <span className="shrink-0 font-mono text-muted-foreground w-7">[{f.ref_id}]</span>
+            <span className={f.source_type === 'unresolved' ? 'text-muted-foreground italic' : 'text-foreground/85'}>
+              {f.url ? (
+                <a href={f.url} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2">
+                  {f.source_name || f.url}
+                </a>
+              ) : (f.source_name || '—')}
+              {f.date && !(f.source_name || '').includes(f.date) ? <span className="text-muted-foreground"> · {f.date}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 // ── Detect whether the brief uses the old ASCII-box format or markdown ────────
@@ -355,7 +387,7 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function IndustryBriefPanel({ industryBrief, sector: _sector }: IndustryBriefPanelProps) {
+export function IndustryBriefPanel({ industryBrief, sector: _sector, footnotes }: IndustryBriefPanelProps) {
   const [tocOpen, setTocOpen] = useState(false);
 
   if (!industryBrief) {
@@ -427,6 +459,7 @@ export function IndustryBriefPanel({ industryBrief, sector: _sector }: IndustryB
           <LegacyView blocks={parseLegacy(industryBrief)} />
         )}
       </div>
+      <BriefReferences footnotes={footnotes} />
     </Card>
   );
 }

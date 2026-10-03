@@ -590,6 +590,27 @@
       0.155
     ]
   },
+  "guidance_channel": {
+   "_doc": "PROPOSED 2026-10-03 (owner asked for the channel; the numbers are the builder's and await the owner's review). How the research's guidance-derived estimates (section 2G -> guidance_estimates extractor) enter a DCF: years 1..explicit_years take the scenario's recommended revenue growth (FY+1, then FY+2 when the research gives one, else FY+1 again); the next fade_years fade linearly onto the engine's own growth path (its convergence/decay schedule or flat g); every later year and the terminal are the engine's. Guidance never sets the baseline or the terminal (owner rule 2026-09-20). Derivation: management guides one year, sometimes two (explicit_years 2, the shorter of the fcf_guidance_fade precedent's 3); a 3-year fade lands on the engine path by year 5, inside the 10-year projection's first half, mirroring fcf_guidance_fade's explicit+fade = 7 scaled to the 2-year horizon. min_confidence: a LOW-confidence estimate (no guidance, thin consensus) is shown but not channelled.",
+   "status": "PROPOSED",
+   "reviewed": {
+    "last_reviewed": null,
+    "reviewer": null
+   },
+   "explicit_years": 2,
+   "explicit_years_band": [
+    1,
+    2
+   ],
+   "fade_years": 3,
+   "fade_years_band": [
+    2,
+    4
+   ],
+   "min_confidence": "MEDIUM",
+   "growth_cap": 0.4,
+   "growth_floor": -0.3
+  },
   "target_margins": {
     "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
     "reviewed": {

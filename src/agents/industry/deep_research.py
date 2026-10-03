@@ -96,7 +96,7 @@ def _call_llm_with_rate_retry(
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
-            return sdk_client.messages.create(**create_kwargs)
+            return sdk_client.messages.create(**_apply_thinking_policy(create_kwargs))
         except Exception as exc:
             retryable, kind = classify_llm_error(exc)
             if not retryable:
@@ -372,6 +372,157 @@ _SECTION_2F_SECTOR_OVERLAYS: dict[str, str] = {
 # "server_tool_use" blocks and needs no extra headers.
 _WEB_SEARCH_TOOL_VERSION = "web_search_20260209"
 
+# ── Research model policy (owner, 2026-10-03) ─────────────────────────────────
+# (i)  The report engine is the DashScope flash tier. The owner named
+#      "Qwen3.8-Flash-Next"; the id that resolves on this account is
+#      qwen3.8-flash (qwen3.8-flash-next 404s on both DashScope endpoints,
+#      checked 2026-10-03). Tier 1 search, synthesis and every extractor run on
+#      it unless DEEP_RESEARCH_MODEL / DEEP_RESEARCH_SYNTHESIS_MODEL say otherwise.
+# (ii) Thinking is spent where it buys an estimate. qwen3.8-flash THINKS BY
+#      DEFAULT on the Anthropic-compatible endpoint: with no thinking parameter
+#      and max_tokens=4000 it returned a thinking block only (stop=max_tokens,
+#      no text); thinking={"type": "disabled"} answered the same prompt in
+#      2.5 s. So every messages.create on a flash-tier model gets thinking OFF
+#      unless the caller asks for a budget -- the guidance -> estimates
+#      extractor does (GUIDANCE_THINKING_BUDGET), nothing else.
+# (iii) DashScope search strategy is per model: qwen3.8-flash rejects "agent"
+#      (400 InvalidParameter); under "pro" it answered in 39 s against 104 s
+#      (no strategy), 151 s (turbo) and 583 s (max). With enable_thinking off
+#      the same search answered in 5 s. DEEP_RESEARCH_SEARCH_STRATEGY and
+#      DEEP_RESEARCH_SEARCH_THINKING override.
+DEFAULT_RESEARCH_MODEL = "qwen3.8-flash"
+_FLASH_TIER_PREFIXES = ("qwen3.8-flash", "qwen3.7-flash")
+
+
+def _is_flash_tier(model) -> bool:
+    return str(model or "").lower().startswith(_FLASH_TIER_PREFIXES)
+
+
+def _guidance_thinking_budget() -> int:
+    try:
+        return max(1024, int(os.environ.get("GUIDANCE_THINKING_BUDGET", "6000") or 6000))
+    except ValueError:
+        return 6000
+
+
+def _apply_thinking_policy(kwargs: dict) -> dict:
+    """messages.create kwargs -> kwargs with the thinking policy applied. Idempotent.
+
+    Flash tier, no `thinking` given      -> thinking disabled (the report engine is fast).
+    Flash tier, budget >= max_tokens      -> max_tokens raised so the answer is not truncated.
+    Any other model                        -> untouched.
+    """
+    model = kwargs.get("model")
+    if not _is_flash_tier(model):
+        return kwargs
+    th = kwargs.get("thinking")
+    if th is None:
+        return {**kwargs, "thinking": {"type": "disabled"}}
+    if isinstance(th, dict) and th.get("type") == "enabled":
+        try:
+            budget = int(th.get("budget_tokens") or 0)
+            max_tokens = int(kwargs.get("max_tokens") or 0)
+        except (TypeError, ValueError):
+            return kwargs
+        if budget and max_tokens <= budget:
+            return {**kwargs, "max_tokens": budget + 2500}
+    return kwargs
+
+
+def _thinking_for_estimates(model) -> dict:
+    """The thinking argument for the guidance -> estimates pass: a budget on Qwen
+    (DashScope's Anthropic-compatible endpoint takes budget_tokens; measured on
+    qwen3.8-flash and qwen3.6-plus), adaptive on Claude 4.6+."""
+    if str(model or "").startswith("claude"):
+        return {"type": "adaptive"}
+    return {"type": "enabled", "budget_tokens": _guidance_thinking_budget()}
+
+
+def _with_thinking_policy(client):
+    """Wrap client.messages.create so the policy applies to every call made with
+    this client -- the synthesis nudges, the delta pass and the citation rebuild
+    call messages.create directly, not through _call_llm_with_rate_retry."""
+    try:
+        _orig = client.messages.create
+        if getattr(_orig, "_thinking_policy", False):
+            return client
+
+        def _create(*args, **kwargs):
+            return _orig(*args, **_apply_thinking_policy(kwargs))
+
+        _create._thinking_policy = True          # type: ignore[attr-defined]
+        client.messages.create = _create
+    except Exception:  # noqa: BLE001 -- a fake or frozen client keeps its own create
+        pass
+    return client
+
+
+def make_sdk_client(api_key, base_url=None, timeout=None, max_retries=4):
+    """anthropic.Anthropic(...) with the thinking policy attached. Every client deep
+    research builds goes through here."""
+    client = anthropic.Anthropic(
+        api_key=api_key, base_url=base_url,
+        timeout=CLIENT_TIMEOUT if timeout is None else timeout, max_retries=max_retries,
+    )
+    return _with_thinking_policy(client)
+
+
+# Report length (owner, 2026-10-03: "can we also reduce the writing output and
+# hence latency"). Two levers: the prompt's LENGTH BUDGET (DEEP_RESEARCH_LENGTH=
+# compact, the default; "full" restores the long form) and a hard output cap on
+# the fast tier. 12,000 output tokens is about 9,000 words, three times the
+# compact budget (3,000 words of prose plus the machine-readable blocks and
+# REFERENCES), so the cap cuts a runaway, not a good report. Other models keep
+# MAX_TOKENS. DEEP_RESEARCH_REPORT_MAX_TOKENS overrides.
+_FLASH_REPORT_MAX_TOKENS = 12000
+
+
+def _report_max_tokens(model) -> int:
+    v = os.environ.get("DEEP_RESEARCH_REPORT_MAX_TOKENS", "").strip()
+    if v:
+        try:
+            return max(2000, int(v))
+        except ValueError:
+            pass
+    return _FLASH_REPORT_MAX_TOKENS if _is_flash_tier(model) else MAX_TOKENS
+
+
+def _report_length_profile() -> str:
+    return "full" if os.environ.get("DEEP_RESEARCH_LENGTH", "compact").strip().lower() == "full" else "compact"
+
+
+_TIER1_MIN_CHARS = 1500
+
+
+def _tier1_degenerate(text: str) -> bool:
+    """A Tier 1 answer that is not a report: a textual tool call, a bare query, or
+    far too short to carry sections 2A–2G."""
+    t = (text or "").strip()
+    if len(t) < _TIER1_MIN_CHARS:
+        return True
+    head = t[:600]
+    return bool(re.search(r"\[TOOL[ _]CALL\]|\"name\":\s*\"web_search\"|<tool_call>", head))
+
+
+def _qwen_search_strategy(model) -> str:
+    """DashScope search_options.search_strategy for the Tier 1 model."""
+    v = os.environ.get("DEEP_RESEARCH_SEARCH_STRATEGY", "").strip()
+    if v:
+        return v
+    return "pro" if _is_flash_tier(model) else "agent"
+
+
+def _qwen_search_extra_body(model) -> dict:
+    """extra_body for the Qwen native-search call. The flash tier searches with
+    thinking off (objective (i): the report is the fast part; the thinking goes
+    to the guidance -> estimates pass). DEEP_RESEARCH_SEARCH_THINKING=on restores
+    the model default. qwen3.6-plus keeps its default: enable_thinking and
+    enable_search were incompatible on it (comment in the search path)."""
+    body = {"enable_search": True, "search_options": {"search_strategy": _qwen_search_strategy(model)}}
+    if _is_flash_tier(model) and os.environ.get("DEEP_RESEARCH_SEARCH_THINKING", "off").strip().lower() not in ("on", "1", "true", "yes"):
+        body["enable_thinking"] = False
+    return body
+
 # ── Narration filter ──────────────────────────────────────────────────────────
 # Patterns that identify LLM meta-commentary rather than research content.
 # These appear when the model narrates its own process instead of writing findings.
@@ -518,7 +669,7 @@ def _extract_sections(report_text: str) -> dict[str, str]:
       2e → scenario_agent     (disruption vectors → bear case)
       2f → investor agents    (KPI framework → anchor KPI monitoring)
     """
-    ids = ["2F", "2E", "2D", "2C", "2B", "2A"]  # kept for reference
+    ids = ["2G", "2F", "2E", "2D", "2C", "2B", "2A"]  # kept for reference (2G: guidance -> estimates, 2026-10-03)
     # M2 A3: strip the freshness addendum (appended to reused research text)
     # so sections match the original extraction — C2 hash stability. Kept in
     # lock-step with run_archive._parse_sections_inline.
@@ -541,7 +692,7 @@ def _extract_sections(report_text: str) -> dict[str, str]:
     # prefix chars (catches list markers, dividers, bullets, ascii-art); (b)
     # accept "Section" / "Part" prose prefix before the 2X token.
     boundary = re.compile(
-        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-F])\b[\.\:—\-\)\*\s]",
+        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-G])\b[\.\:—\-\)\*\s]",
         re.IGNORECASE | re.MULTILINE,
     )
     positions: list[tuple[str, int]] = []
@@ -845,6 +996,310 @@ def _extract_dcf_calibration(
         print(f"  [dcf_calibration {ticker}] extractor FAILED: {type(exc).__name__}: {exc}")
         return {"growth_rate_adj": None, "margin_direction": "stable",
                 "risk_flag": "MEDIUM", "notes": f"Extraction failed: {exc}"}
+
+
+# ── Brief citations (owner, 2026-10-03) ─────────────────────────────────────
+# The Section 2 text is working context and is no longer printed; the brief
+# (Section 7) is what the reader sees. Its [n] markers reuse the sections'
+# REFERENCES entries, so those entries are resolved here into footnotes the PDF
+# and the web render under the brief. Numbers are global across the report
+# (prompt rule); on a legacy report that restarted numbering, the first entry
+# with a given number wins.
+_REF_LINE_RE = re.compile(r"^\s*\[(\d{1,3})\]\s+(.+?)\s*$")
+_REF_URL_RE = re.compile(r"^\s*URL:\s*(\S.*?)\s*$", re.IGNORECASE)
+# A calendar date first (20 November 2025, January 2025, 2025-11-20); a fiscal period
+# (Q3 FY2026, FY2025) only when the entry carries no calendar date.
+_REF_DATE_RE = re.compile(
+    r"\b(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December|"
+    r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+\d{4}\b|\b\d{4}-\d{2}-\d{2}\b")
+_REF_PERIOD_RE = re.compile(r"\bQ[1-4]\s+(?:FY)?\d{2,4}\b|\bFY\s?\d{2,4}\b")
+
+
+def parse_reference_entries(sections: dict) -> dict[int, dict]:
+    """{n: {ref_id, source_name, date, url, section}} from every REFERENCES block in the sections."""
+    out: dict[int, dict] = {}
+    for key in sorted(k for k in (sections or {}) if k != "brief"):
+        text = (sections or {}).get(key) or ""
+        if "REFERENCES" not in text.upper():
+            continue
+        block = text[text.upper().rfind("REFERENCES"):]
+        lines = block.splitlines()
+        i = 0
+        while i < len(lines):
+            m = _REF_LINE_RE.match(lines[i])
+            if m:
+                n = int(m.group(1))
+                body = m.group(2).strip()
+                url = None
+                j = i + 1
+                while j < len(lines) and not _REF_LINE_RE.match(lines[j]):
+                    mu = _REF_URL_RE.match(lines[j])
+                    if mu and url is None:
+                        url = mu.group(1).strip()
+                    elif lines[j].strip() and not lines[j].strip().startswith(("REFERENCES", "──", "══")):
+                        body = (body + " " + lines[j].strip()).strip()
+                    j += 1
+                if n not in out:
+                    md = _REF_DATE_RE.search(body) or _REF_PERIOD_RE.search(body)
+                    out[n] = {"ref_id": n, "source_name": body[:240], "date": (md.group(0) if md else ""),
+                              "url": (None if (url or "").lower().startswith("url unavailable") else url),
+                              "section": key, "source_type": "web", "claim": "", "verified": bool(url)}
+                i = j
+            else:
+                i += 1
+    return out
+
+
+def resolve_brief_references(brief_text: str, sections: dict) -> list[dict]:
+    """The footnotes the brief cites, in order of first appearance, resolved from the
+    sections' REFERENCES blocks. Markers with no entry are kept as unresolved rows so
+    the reader sees that a citation existed, not a silent gap."""
+    if not brief_text:
+        return []
+    entries = parse_reference_entries(sections)
+    seen: list[int] = []
+    for m in re.finditer(r"\[(\d{1,3})\]", brief_text):
+        n = int(m.group(1))
+        if n not in seen:
+            seen.append(n)
+    rows: list[dict] = []
+    for n in seen:
+        e = entries.get(n)
+        if e:
+            rows.append(dict(e))
+        else:
+            rows.append({"ref_id": n, "source_name": "source not resolved from the research notes", "date": "",
+                         "url": None, "section": None, "source_type": "unresolved", "claim": "", "verified": False})
+    return rows
+
+
+# ── Guidance → estimates extractor (owner, 2026-10-03) ───────────────────────
+# Objective (ii): the thinking the research spends goes on translating
+# management guidance into the estimates a valuation runs on. Reads section 2G
+# (the GUIDANCE_BLOCK and the reasoning under it), runs on the synthesis model
+# WITH a thinking budget (every other extractor runs with thinking off), and
+# returns growth RATES and margins as decimals, not amounts, so the engine needs
+# no currency or scale conversion (task #26: raw CNY ÷ USD base gave +100% bands).
+# Universal: every sector and profile (needs_extractor returns True).
+
+_GUIDANCE_SCENARIOS = ("bear", "base", "bull")
+_GUIDANCE_RATE_FIELDS = ("revenue_growth_fy1", "revenue_growth_fy2", "ebitda_margin_fy1", "ebitda_margin_fy2")
+_GUIDANCE_EPS_FIELDS = ("eps_fy1", "eps_fy2")
+_GUIDANCE_CONFIDENCE = ("HIGH", "MEDIUM", "LOW")
+
+_GUIDANCE_ESTIMATES_SYSTEM = (
+    "You are the estimates analyst on a buy-side team. You are given the research "
+    "note's section on management guidance (a GUIDANCE_BLOCK with what management "
+    "guided, consensus and the prior-year actuals, then the analyst's reasoning). "
+    "Think it through, then respond ONLY with valid JSON, no commentary.\n\n"
+    "Return this object:\n"
+    "{\n"
+    '  "as_of": "<date the guidance was given or reaffirmed, YYYY-MM-DD or null>",\n'
+    '  "fiscal_year_1": "<FY+1 label, e.g. FY2026>", "fiscal_year_2": "<FY+2 label or null>",\n'
+    '  "guidance": {"revenue_growth": {"low": n, "mid": n, "high": n}, "revenue": {"low": n, "mid": n, "high": n, "currency": "USD", "scale": "bn"},\n'
+    '               "ebitda_margin": {"low": n, "mid": n, "high": n}, "eps": {"low": n, "mid": n, "high": n, "currency": "USD"},\n'
+    '               "basis": "<reported|organic|constant-currency|null>", "status": "<new|raised|cut|reaffirmed|none>", "quote": "<=160 chars verbatim", "source": "<publisher, date>"},\n'
+    '  "consensus": {"revenue_growth_fy1": n, "eps_fy1": n, "as_of": "<date or null>", "source": "<...>"},\n'
+    '  "guidance_vs_consensus_pct": n,\n'
+    '  "track_record": "<=120 chars: beats/meets/misses and bias>",\n'
+    '  "estimates": {"bear": {"revenue_growth_fy1": n, "revenue_growth_fy2": n, "ebitda_margin_fy1": n, "ebitda_margin_fy2": n, "eps_fy1": n, "eps_fy2": n},\n'
+    '                "base": {...same keys...}, "bull": {...same keys...}},\n'
+    '  "rationale": "<=320 chars: how the estimates follow from the guidance, consensus and track record>",\n'
+    '  "confidence": "HIGH|MEDIUM|LOW",\n'
+    '  "citations": ["<publisher, date>", ...]\n'
+    "}\n\n"
+    "Rules:\n"
+    "- Every rate and margin is a DECIMAL (0.063 = 6.3%). revenue_growth is year-over-year "
+    "against the PRIOR_YEAR actual in the block; compute it from the amounts when the company "
+    "guides amounts, and use null when the block gives no prior-year actual.\n"
+    "- Guidance fields hold ONLY what management stated; null for anything not guided. "
+    "Never put consensus or your own number into `guidance`.\n"
+    "- estimates are YOUR recommended numbers: base starts at the guidance midpoint adjusted "
+    "for the track record; bull at the top of the range plus the pattern of raises; bear below "
+    "the low end only where the note gives a concrete reason. bear <= base <= bull for every field. "
+    "A company with no guidance still gets estimates from consensus and the note; say so in rationale.\n"
+    "- FY+2: use a stated medium-term target when there is one, else carry the base dynamic "
+    "forward with the note's cycle view (2D) -- never extrapolate a one-off.\n"
+    "- confidence: HIGH = formal ranged guidance within the last quarter and a consistent track "
+    "record; MEDIUM = guidance exists but is qualitative, stale or the record is mixed; LOW = no "
+    "guidance and thin consensus.\n"
+    "- Use null, never a guess, for a number the text does not support."
+)
+
+
+def _guidance_source_text(sections: dict[str, str], final_report: str) -> str:
+    """Section 2G; for a report written before 2G existed, the GUIDANCE_BLOCK if one
+    is present, else the paragraphs that talk about guidance or outlook."""
+    s2g = (sections or {}).get("2g") or (sections or {}).get("2G") or ""
+    if s2g.strip():
+        return s2g
+    txt = final_report or ""
+    i = txt.find("GUIDANCE_BLOCK_START")
+    if i >= 0:
+        j = txt.find("GUIDANCE_BLOCK_END", i)
+        return txt[i:(j + len("GUIDANCE_BLOCK_END")) if j >= 0 else i + 6000]
+    paras = [p for p in re.split(r"\n{2,}", txt)
+             if re.search(r"\bguid(?:ance|ed|es)\b|\boutlook\b|\bconsensus\b", p, re.IGNORECASE)]
+    return "\n\n".join(paras)[:12000]
+
+
+def _guidance_rate(v) -> Optional[float]:
+    """A decimal rate from the model's output. Percent-looking values (6.3 for 6.3%,
+    or '6.3%') are converted; anything outside -60%..+150% is dropped."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, str):
+        m = re.search(r"-?\d+(?:\.\d+)?", v.replace(",", ""))
+        if not m:
+            return None
+        pct = "%" in v
+        try:
+            f = float(m.group(0))
+        except ValueError:
+            return None
+        if pct:
+            f = f / 100.0
+    elif isinstance(v, (int, float)):
+        f = float(v)
+    else:
+        return None
+    if abs(f) > 1.5 and abs(f) <= 150.0:
+        f = f / 100.0
+    if f != f or abs(f) > 1.5:
+        return None
+    return round(f, 6)
+
+
+def _guidance_num(v) -> Optional[float]:
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v) if v == v else None
+    if isinstance(v, str):
+        m = re.search(r"-?\d+(?:\.\d+)?", v.replace(",", ""))
+        return float(m.group(0)) if m else None
+    return None
+
+
+def _guidance_range(d) -> Optional[dict]:
+    if not isinstance(d, dict):
+        return None
+    out = {k: _guidance_rate(d.get(k)) for k in ("low", "mid", "high")}
+    return out if any(x is not None for x in out.values()) else None
+
+
+def _guidance_amount_range(d) -> Optional[dict]:
+    if not isinstance(d, dict):
+        return None
+    out = {k: _guidance_num(d.get(k)) for k in ("low", "mid", "high")}
+    if not any(x is not None for x in out.values()):
+        return None
+    for k in ("currency", "scale"):
+        if d.get(k):
+            out[k] = str(d.get(k))
+    return out
+
+
+def _normalize_guidance_estimates(parsed: dict) -> dict:
+    """The extractor's JSON -> the block the engine and the frontend read. {} when no
+    base FY+1 revenue growth survives (nothing to channel)."""
+    if not isinstance(parsed, dict):
+        return {}
+    est_in = parsed.get("estimates") if isinstance(parsed.get("estimates"), dict) else {}
+    est: dict[str, dict] = {}
+    for sc in _GUIDANCE_SCENARIOS:
+        row = est_in.get(sc) if isinstance(est_in.get(sc), dict) else {}
+        clean = {f: _guidance_rate(row.get(f)) for f in _GUIDANCE_RATE_FIELDS}
+        clean.update({f: _guidance_num(row.get(f)) for f in _GUIDANCE_EPS_FIELDS})
+        est[sc] = clean
+    # bear <= base <= bull on every field, by sorting the three where all are present
+    for f in _GUIDANCE_RATE_FIELDS + _GUIDANCE_EPS_FIELDS:
+        vals = [est[sc][f] for sc in _GUIDANCE_SCENARIOS]
+        if all(v is not None for v in vals):
+            for sc, v in zip(_GUIDANCE_SCENARIOS, sorted(vals)):
+                est[sc][f] = v
+    if est["base"].get("revenue_growth_fy1") is None:
+        return {}
+    g_in = parsed.get("guidance") if isinstance(parsed.get("guidance"), dict) else {}
+    guidance = {
+        "revenue_growth": _guidance_range(g_in.get("revenue_growth")),
+        "revenue": _guidance_amount_range(g_in.get("revenue")),
+        "ebitda_margin": _guidance_range(g_in.get("ebitda_margin")),
+        "eps": _guidance_amount_range(g_in.get("eps")),
+        "basis": (str(g_in.get("basis")) if g_in.get("basis") else None),
+        "status": (str(g_in.get("status")) if g_in.get("status") else None),
+        "quote": (str(g_in.get("quote"))[:200] if g_in.get("quote") else None),
+        "source": (str(g_in.get("source"))[:160] if g_in.get("source") else None),
+    }
+    c_in = parsed.get("consensus") if isinstance(parsed.get("consensus"), dict) else {}
+    consensus = {
+        "revenue_growth_fy1": _guidance_rate(c_in.get("revenue_growth_fy1")),
+        "eps_fy1": _guidance_num(c_in.get("eps_fy1")),
+        "as_of": (str(c_in.get("as_of")) if c_in.get("as_of") else None),
+        "source": (str(c_in.get("source"))[:160] if c_in.get("source") else None),
+    }
+    conf = str(parsed.get("confidence") or "").strip().upper()
+    if conf not in _GUIDANCE_CONFIDENCE:
+        conf = "LOW" if guidance["revenue_growth"] is None and guidance["revenue"] is None else "MEDIUM"
+    cits = parsed.get("citations")
+    citations = [str(c)[:160] for c in cits if c] if isinstance(cits, list) else []
+    return {
+        "as_of": (str(parsed.get("as_of")) if parsed.get("as_of") else None),
+        "fiscal_year_1": (str(parsed.get("fiscal_year_1")) if parsed.get("fiscal_year_1") else None),
+        "fiscal_year_2": (str(parsed.get("fiscal_year_2")) if parsed.get("fiscal_year_2") else None),
+        "guidance": guidance,
+        "consensus": consensus,
+        "guidance_vs_consensus_pct": _guidance_rate(parsed.get("guidance_vs_consensus_pct")),
+        "track_record": (str(parsed.get("track_record"))[:160] if parsed.get("track_record") else None),
+        "estimates": est,
+        "rationale": (str(parsed.get("rationale"))[:400] if parsed.get("rationale") else None),
+        "confidence": conf,
+        "citations": citations[:8],
+    }
+
+
+def _extract_guidance_estimates(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    final_report: str,
+    ticker: str,
+    retry_directive: str = "",
+) -> dict:
+    """Section 2G -> {guidance, consensus, estimates{bear,base,bull}, confidence, ...}.
+    {} when the report carries nothing about guidance or the model returns no base
+    FY+1 revenue growth. The thinking budget is the point of this call."""
+    src = _guidance_source_text(sections, final_report)
+    if not src.strip():
+        return {}
+    try:
+        budget = _guidance_thinking_budget()
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="guidance_estimates",
+            ticker=ticker,
+            model=model_name,
+            max_tokens=budget + 2500,
+            thinking=_thinking_for_estimates(model_name),
+            system=_GUIDANCE_ESTIMATES_SYSTEM + (("\n\n" + retry_directive) if retry_directive else ""),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Section 2G — Management guidance → financial estimates:\n{src[:14000]}"
+                ),
+            }],
+        )
+        raw = "".join(getattr(b, "text", "") or "" for b in resp.content)   # thinking blocks carry no .text
+        parsed = _parse_llm_json(raw, extractor_name="guidance_estimates")
+        out = _normalize_guidance_estimates(parsed) if isinstance(parsed, dict) else {}
+        if out:
+            out["_model"] = model_name
+            out["_thinking"] = _thinking_for_estimates(model_name)
+        return out
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [guidance_estimates {ticker}] extractor FAILED: {type(exc).__name__}: {exc}")
+        return {}
 
 
 # ── Segment-scenario extractor (probabilistic SOTP 12m) ──────────────────────
@@ -2192,7 +2647,7 @@ def _merge_delta_into_sections(
     same format consumed by specialist.py via state["data"]["deep_research"].
     """
     delta_pat = re.compile(
-        r"\[2([A-F])\]\s*(.*?)(?=\n\[2[A-F]\]|\Z)",
+        r"\[2([A-G])\]\s*(.*?)(?=\n\[2[A-G]\]|\Z)",
         re.DOTALL | re.IGNORECASE,
     )
     merged = dict(base_sections)
@@ -2395,8 +2850,15 @@ def _build_research_system(
     sector: str = "",
     profile_name: str = "",
     reit_subtype: str | None = None,
+    native_search: bool = False,
 ) -> str:
     """Return the deep research system prompt with dynamic year references.
+
+    native_search=True is the DashScope path (Qwen `enable_search`): the search
+    runs server-side as part of the request and there is NO tool to call. The
+    tool-use framing below made qwen3.8-flash (thinking off) write a textual
+    "[TOOL CALL] {...web_search...}" and stop (TSCO smoke, 2026-10-03: 173
+    chars), so that path gets an environment block that says so.
 
     Args:
         year: 4-digit string, e.g. "2026". Computes ym1 (year-1) and y1 (year+1)
@@ -2495,21 +2957,29 @@ Describe the attack vector for each moat type."""
             "Required search sequence (exactly 8 searches — the complete set "
             "downstream valuation consumes):"
         )
-        _search_sequence = f"""  1. "[Ticker] CEO management commentary strategy outlook {ym1} {year} earnings call"   [RECENT]
-  2. "[Ticker] market share competitive landscape {ym1} {year}"                         [RECENT]
-  3. "[Ticker] earnings call transcript key quotes guidance {ym1} {year}"               [RECENT]
-  4. "[Ticker] competitor analysis market positioning {year} {y1}"                      [FORWARD]
+        _search_sequence = f"""  1. "[Ticker] latest quarterly results press release guidance fiscal {year} {y1} revenue EPS margin outlook" [FORWARD]
+     → GUIDANCE FIRST (owner, 2026-10-03). Capture management's CURRENT guidance for
+       the next fiscal year(s) exactly as stated: revenue (or growth %), EBITDA /
+       operating margin, EPS, capex, free cash flow — low / mid / high of every range,
+       the fiscal period, the basis (reported / organic / constant currency) and the
+       date it was given or reaffirmed. Also write it in prose as
+       "Revenue guidance: $X.XB–$X.XB (mid $X.XB)" and "EBITDA guidance: $X.XB–$X.XB
+       (mid $X.XB)" so the deterministic parser can read it.
+  2. "[Ticker] earnings call transcript guidance commentary medium-term targets investor day {ym1} {year}" [RECENT]
+     → The words behind the numbers: what management says drives the guidance, what it
+       excludes, whether it was raised / cut / reaffirmed, and any multi-year targets.
+  3. "[Ticker] analyst consensus estimates FY{y1} revenue EPS versus guidance {year}"     [FORWARD]
+     → Consensus FY+1 / FY+2 revenue and EPS and the date of the latest revision, so 2G
+       can state guidance versus consensus. Flag a consensus PT not revised within the
+       last 6 months as STALE.
+  4. "[Ticker] market share competitive landscape {ym1} {year}"                         [RECENT]
   5. "[Industry] market size growth rate {year} {y1} IDC Gartner"                      [FORWARD]
   6. "[Ticker] regulatory government policy ruling {ym1} {year}"                        [RECENT]
   7. "[Ticker] material event impairment restructuring asset sale write-down {ym1} {year}" [RECENT]
-  8. "[Ticker] management guidance EBITDA revenue outlook forecast FY{y1} {year}"      [FORWARD]
-     → CRITICAL: Extract any quantitative forward guidance from earnings calls, investor
-       presentations, or press releases. Report EBITDA guidance range (low/mid/high),
-       revenue guidance, capex guidance, and margin targets as exact dollar figures.
-       Format as: "EBITDA guidance: $X.XB–$X.XB (mid $X.XB)" so DCF agent can parse it.
-Each search maps to a downstream valuation consumer — run all 8. Only add an
-extra search if one of these returns nothing useful and a reformulated query
-is needed."""
+  8. "[Ticker] competitor analysis market positioning {year} {y1}"                      [FORWARD]
+Each search maps to a downstream valuation consumer — run all 8. Searches 1–3 feed
+section 2G and the DCF's year 1–2 estimates. Only add an extra search if one of
+these returns nothing useful and a reformulated query is needed."""
         _section_2a_opening = """2A.1 Value chain — ONE verdict line per step (no prose paragraphs), format:
 "[step]: [gross margin band %] | [concentrated/fragmented] | [expanding/stable/compressing] | [asset-heavy/asset-light]"
 
@@ -2526,27 +2996,56 @@ costs / cost advantage / intangible assets / efficient scale.
   Flag "Moat Erosion Risk" if 3+ narrowing; "Moat Expansion" if 3+ widening.
 - Stress test: ONE sentence — the specific scenario that destroys this moat."""
 
+    # Owner, 2026-10-03: the report is read for its numbers and verdicts, not as
+    # a survey. The compact budget (default) caps the prose; the machine-read
+    # blocks (2A.5 SOTP, the 2F KPI block, the 2G GUIDANCE_BLOCK) and the
+    # REFERENCES are outside it. DEEP_RESEARCH_LENGTH=full restores the long form.
+    if _report_length_profile() == "compact":
+        _length_budget_block = """
+LENGTH BUDGET (compact — the reader is a professional equity analyst who needs
+the numbers and the verdicts, not the survey):
+- Whole report at most 3,000 words, EXCLUDING the SOTP_BLOCK, the 2F KPI block,
+  the GUIDANCE_BLOCK, and the REFERENCES blocks.
+- 2A ≤ 300 words plus the SOTP block. 2B ≤ 200 words: the market-structure line,
+  a top-5 share table (one line per player), one price-vs-product verdict.
+  2C ≤ 120 words (the verdict block). 2D ≤ 150 words: four verdict lines —
+  lifecycle, cyclical-vs-structural with the mid-cycle figure, capacity,
+  inventory. 2E ≤ 200 words: one line per vector (impact / timeline /
+  probability / response). 2F: the KPI block's own format. 2G in full.
+- Skip a sub-point you cannot source rather than writing around it. No
+  introductions, no restating the brief, no closing summary outside Section 7.
+"""
+    else:
+        _length_budget_block = ""
+
     if _brief_mode == "merged":
+        # Owner, 2026-10-03: the brief keeps its depth and coverage. It is the research
+        # deliverable the reader sees -- the Section 2 text behind it is working context
+        # (not printed) -- so it must stand on its own, with its citations resolved
+        # into footnotes downstream (deep_research.resolve_brief_references).
         _brief_section_spec = """
 ════════════════════════════════════════════
 SECTION 7 — INDUSTRY INTELLIGENCE BRIEF
 ════════════════════════════════════════════
-After 2F, write an investment-committee brief synthesising 2A–2F.
+After 2G, write an investment-committee brief synthesising 2A–2G. This brief is
+the research deliverable the reader sees; sections 2A–2G are your working notes.
 
 FORMAT — 8 to 12 bullets. Each bullet is:
 - an ASSERTION-HEADED first line: an investment conclusion, not a topic label.
   BAD: "Competition"  |  GOOD: "Price-Driven Share Gains Cap Margin Recovery"
 - followed by one or two sentences of evidence + the valuation/thesis so-what.
-- Reuse the inline [n] footnote markers already cited in 2A–2F — do NOT create
-  new reference numbers and do NOT add a REFERENCES block to Section 7.
+- Reuse the inline [n] footnote markers already cited in 2A–2G — do NOT create
+  new reference numbers and do NOT add a REFERENCES block to Section 7 (the
+  markers are resolved from the sections' REFERENCES blocks downstream, so
+  every claim in the brief must carry one).
 
 GROUNDING — every figure must already appear in your searches above or in the
 pre-loaded FMP data. Do NOT introduce numbers from training knowledge.
 
 COVER (one or more bullets each): competitive position and share dynamics;
 growth durability and cycle exposure; margin / returns trajectory; balance
-sheet or one-off risks; management guidance vs consensus; the single biggest
-thesis risk and what would change the view.
+sheet or one-off risks; management guidance vs consensus and the 2G estimates;
+the single biggest thesis risk and what would change the view.
 
 Do NOT include a BUY/SELL recommendation.
 """
@@ -2555,8 +3054,32 @@ Do NOT include a BUY/SELL recommendation.
         _brief_section_spec = ""
         _brief_output_note = ""
 
-    return f"""
-TOOL ENVIRONMENT (read first — non-negotiable):
+    if native_search:
+        _env_block = """SEARCH ENVIRONMENT (read first — non-negotiable):
+- Web search runs NATIVELY inside this request: the results are already in front
+  of you. There is NO tool to call and nothing to invoke.
+- NEVER write a tool call, a JSON object, "[TOOL CALL]", a query string or any
+  search syntax in your answer. Anything you write IS the report.
+- Do NOT write any narration about tools, searching, rate limits or your own
+  process. Do not use phrases like "let me search", "I'll look up", "the tool
+  appears", "rate-limited", "simultaneously", or "compile data collected".
+- Write ONLY the structured research report. Do not explain what you are about
+  to do. Just write it.
+
+You are a buy-side research analyst conducting pre-brief intelligence gathering
+for an investment committee. Live web search results are provided to you.
+
+MANDATORY: the report covers every one of the 8 search topics below from the
+search results and the pre-loaded data. Where the results do not cover a topic,
+write what the pre-loaded data support and say what source is missing — never
+substitute a tool call or a placeholder."""
+        _source_b = ("  [B] WEB SEARCH (native, already run): everything FMP cannot provide — management "
+                     "commentary, competitive intelligence, regulatory filings, industry forecasts, "
+                     "analyst views, contract wins/losses, and the qualitative narrative behind the numbers.")
+        _grounding = ("All claims that are NOT in the pre-loaded FMP data must be grounded in a search "
+                      "result, cited with publisher and date.")
+    else:
+        _env_block = """TOOL ENVIRONMENT (read first — non-negotiable):
 - You have exactly ONE tool: web_search. That is the only tool in this context.
 - There is NO code_execution tool. Do not reference it, attempt to use it, or
   assume it exists.
@@ -2573,19 +3096,24 @@ You are a buy-side research analyst conducting pre-brief intelligence gathering
 for an investment committee. You have access to a live web search tool.
 
 MANDATORY: You MUST call web_search at least 8 times BEFORE writing any report
-text. Do not produce the Section 2 report until all searches are complete.
+text. Do not produce the Section 2 report until all searches are complete."""
+        _source_b = ("  [B] WEB SEARCH (your tool): everything FMP cannot provide — management commentary,\n"
+                     "      competitive intelligence, regulatory filings, industry forecasts, analyst views,\n"
+                     "      contract wins/losses, and the qualitative narrative behind the numbers.")
+        _grounding = ("All claims that are NOT in the pre-loaded FMP data must be grounded in a web\n"
+                      "search result. If a search returns poor results, reformulate and retry.")
+
+    return f"""
+{_env_block}
 
 Two data sources are available to you — use both:
   [A] PRE-LOADED FMP DATA (in the user message): revenue, net income, FCF, capex,
       net debt, insider activity for up to 5 years. These are already cited as
       (Financial Data API). Integrate them directly into 2A quantitative analysis —
       compute trends, ratios, and CAGR. Do NOT re-search for them.
-  [B] WEB SEARCH (your tool): everything FMP cannot provide — management commentary,
-      competitive intelligence, regulatory filings, industry forecasts, analyst views,
-      contract wins/losses, and the qualitative narrative behind the numbers.
+{_source_b}
 
-All claims that are NOT in the pre-loaded FMP data must be grounded in a web
-search result. If a search returns poor results, reformulate and retry.
+{_grounding}
 
 SOURCE QUALITY STANDARDS (mandatory — applies to every claim in this report):
 - PREFERRED primary sources: SEC EDGAR filings (10-K, 10-Q, 8-K, S-1, DEF 14A),
@@ -2631,10 +3159,11 @@ Your output feeds directly into downstream valuation and risk agents:
   2D (Cycle)         → informs mid-cycle normalisation
   2E (Disruption)    → informs bear case scenario
   2F (KPIs)          → informs anchor KPI monitoring in the valuation agent
+  2G (Guidance)      → the DCF's year 1–2 revenue growth per scenario (bear / base / bull)
 
 Quote specific figures with dates and source names in the report.
 If a search returns nothing useful, try a different angle.
-
+{_length_budget_block}
 ════════════════════════════════════════════
 SECTION 2 — INDUSTRY STRUCTURE
 ════════════════════════════════════════════
@@ -2797,12 +3326,56 @@ For each: the single evidence point supporting your view AND the single data
 point that would change your mind.
 
 {kpi_framework_block}
+
+──────────────────────────────────────────
+2G. MANAGEMENT GUIDANCE → FINANCIAL ESTIMATES
+──────────────────────────────────────────
+Purpose: Translate what management has guided into the estimates a valuation
+runs on. This section feeds the DCF's year 1–2 scenarios directly, so it is
+numbers first, reasoning second, and every number carries a citation.
+
+2G.1 Guidance as stated — one line per metric, ONLY what management has
+guided (no consensus, no invention). Use this machine-readable block
+(downstream tooling parses it verbatim — do not reformat):
+GUIDANCE_BLOCK_START
+GUIDANCE | metric=revenue | period=<FY+1, e.g. FY2026> | low=<n or NA> | mid=<n or NA> | high=<n or NA> | unit=<ISO ccy + scale, or "% growth"> | basis=<reported/organic/constant-currency> | given=<date> | status=<new/raised/cut/reaffirmed> | source=<publisher, date>
+GUIDANCE | metric=ebitda_margin | period=<FY+1> | low=<%> | mid=<%> | high=<%> | unit=% | basis=<adjusted/GAAP> | given=<date> | status=<...> | source=<...>
+GUIDANCE | metric=eps | period=<FY+1> | low=<n> | mid=<n> | high=<n> | unit=<ccy per share> | basis=<adjusted/GAAP> | given=<date> | status=<...> | source=<...>
+GUIDANCE | metric=capex | period=<FY+1> | ...
+GUIDANCE | metric=fcf | period=<FY+1> | ...
+GUIDANCE | metric=<medium-term target> | period=<FY+2 or "FY2028 target"> | ...
+CONSENSUS | metric=revenue | period=<FY+1> | value=<n> | unit=<...> | as_of=<date> | source=<...>
+CONSENSUS | metric=eps | period=<FY+1> | value=<n> | unit=<...> | as_of=<date> | source=<...>
+PRIOR_YEAR | metric=revenue | period=<last completed FY> | value=<n> | unit=<...> | source=<10-K / annual report>
+PRIOR_YEAR | metric=ebitda_margin | period=<last completed FY> | value=<%> | unit=% | source=<...>
+GUIDANCE_BLOCK_END
+Write NA where management guides nothing; never put a consensus or your own
+figure on a GUIDANCE line.
+
+2G.2 What the guidance implies — reason it through, in this order:
+- Implied FY+1 revenue growth at the low / mid / high of the range against the
+  PRIOR_YEAR actual (show the arithmetic), and the implied margin change in
+  basis points against the latest reported margin.
+- Guidance versus consensus: above / in line / below, by how much, and whether
+  the Street has moved since the guidance was given.
+- Management's record on its own guidance (beat / meet / miss over the last
+  4–8 quarters, with source) and its known conservatism or optimism.
+- What the guidance includes that a model must not double count (acquisitions,
+  FX, a 53rd week, one-offs) and what it excludes.
+
+2G.3 Estimates — your recommended FY+1 and FY+2 revenue growth, EBITDA (or
+operating) margin and EPS for BEAR / BASE / BULL, each a number with one line
+of reasoning tied to 2G.1–2G.2 (e.g. base = guidance midpoint less the
+historical miss; bull = top of the range plus the pattern of raises; bear =
+below the low end only where 2D / 2E give a concrete reason). State confidence
+HIGH / MEDIUM / LOW and what would change the estimates. A company that gives
+no guidance still gets 2G.3: estimate from consensus and 2A–2E and say so.
 {_brief_section_spec}
 ════════════════════════════════════════════
 OUTPUT FORMAT & CITATION REQUIREMENTS
 ════════════════════════════════════════════
 After completing your searches, write the full Section 2 report using the
-sub-section headers above (2A through 2F){_brief_output_note}. Each sub-section must be populated
+sub-section headers above (2A through 2G){_brief_output_note}. Each sub-section must be populated
 with real data from your searches — do not leave placeholders. Do NOT include
 a BUY/SELL recommendation.
 
@@ -2811,7 +3384,7 @@ Every figure, statistic, market share estimate, management quote, or forecast
 must carry a numbered footnote marker inline: e.g. "~7% GenAI services market
 share [1]" or "revenue grew 13% YoY to $69.7B [2]".
 
-At the end of EACH sub-section (2A through 2F), append a REFERENCES block:
+At the end of EACH sub-section (2A through 2G), append a REFERENCES block:
 
   REFERENCES
   [1] IoT Analytics — GenAI Services Market Share Report, January 2025
@@ -2823,6 +3396,9 @@ At the end of EACH sub-section (2A through 2F), append a REFERENCES block:
 
 CITATION RULES:
 - Every [n] marker in the text must have a matching entry in that section's REFERENCES block
+- Footnote numbers are GLOBAL across the report: 2B continues from where 2A ended, and so
+  on through 2G. Never restart at [1] in a new sub-section — Section 7 reuses these numbers
+  and each must point to exactly one source
 - SEC filings: include accession number and EDGAR URL
 - Third-party research (IDC, Gartner, IoT Analytics, etc.): include publisher name,
   report title, publication month/year, and URL if publicly accessible (note "paywalled" if not)
@@ -3511,6 +4087,7 @@ _EXTRACTOR_RETRY_DIRECTIVE = (
 _RETRY_ON_EMPTY_EXTRACTORS = {
     "bank_metrics", "reit_metrics", "insurance_metrics",
     "pipeline_assets", "framework_metrics",
+    "guidance_estimates",   # owner, 2026-10-03: one sharper retry, the estimate is the point
 }
 
 
@@ -3586,6 +4163,7 @@ def _run_extractor_fanout(
     # certainly return {} for the given (sector, profile_name).
     _all_extractors: dict[str, callable] = {
         "dcf_calibration":   lambda rd="": _extract_dcf_calibration(sdk_client, synthesis_model, sections, ticker),
+        "guidance_estimates": lambda rd="": _extract_guidance_estimates(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
         "segment_scenarios": lambda rd="": _extract_segment_scenarios(sdk_client, synthesis_model, sections, final_report, ticker),
         "pipeline_assets":   lambda rd="": _extract_pipeline_assets(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
         "reit_metrics":      lambda rd="": _extract_reit_metrics(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
@@ -3910,6 +4488,10 @@ def _research_one_ticker(
                 and not _is_empty_extraction(
                     _persisted_ext["results"].get("dcf_calibration")
                 )
+                # 2026-10-03: a set persisted before the guidance → estimates
+                # extractor existed is reused as `precomputed` below, so only the
+                # missing extractor runs (the fan-out skips the ones it has).
+                and "guidance_estimates" in _persisted_ext["results"]
             )
 
             # B8/R2: the citation registry rebuild (~128 s — the cached-run
@@ -3934,7 +4516,7 @@ def _research_one_ticker(
             # attempts == the "~128 s cached floor", an empty registry, and
             # nothing ever persisted). Full CLIENT_TIMEOUT + one retry; the
             # rebuild soft-fails to [] and the next run retries.
-            _cit_client_cache = anthropic.Anthropic(
+            _cit_client_cache = make_sdk_client(
                 api_key=anthropic_key, base_url=base_url,
                 timeout=CLIENT_TIMEOUT, max_retries=1)
             # L4: the citation rebuild is rendering-guarded — run it on the
@@ -3982,7 +4564,7 @@ def _research_one_ticker(
                 # A1: dcf_calibration is one of the fan-out's universal
                 # extractors, so it runs there alongside the rest instead of
                 # as a serial LLM call ahead of them.
-                _ext_client = anthropic.Anthropic(
+                _ext_client = make_sdk_client(
                     api_key=anthropic_key, base_url=base_url,
                     timeout=CLIENT_TIMEOUT, max_retries=4,
                 )
@@ -3990,6 +4572,7 @@ def _research_one_ticker(
                     _ext_client, _synthesis_model,
                     _cached["deep_research_sections"], _cached_text, ticker,
                     sector, profile_name, raw_financials,
+                    precomputed=((_persisted_ext or {}).get("results") or None),
                 )
                 _dcf_cal = _ext_results.get("dcf_calibration", {})
                 # C2: persist for the next cache hit (best-effort).
@@ -4085,6 +4668,7 @@ def _research_one_ticker(
                 "cache_age_days":           _age,
                 "cache_run_id":             _cached["run_id"],
                 "dcf_calibration":          _dcf_cal,
+                "guidance_estimates":       _ext_results.get("guidance_estimates", {}),
                 "segment_scenarios":        _ext_results.get("segment_scenarios", {}),
                 "pipeline_assets":          _ext_results.get("pipeline_assets", []),
                 "reit_metrics":             _ext_results.get("reit_metrics", {}),
@@ -4114,7 +4698,7 @@ def _research_one_ticker(
                 f"{_company_name} (ticker: {ticker})"
                 if _company_name != ticker else ticker
             )
-            _delta_client = anthropic.Anthropic(
+            _delta_client = make_sdk_client(
                 api_key=anthropic_key,
                 base_url=base_url,
                 timeout=CLIENT_TIMEOUT,
@@ -4250,7 +4834,7 @@ def _research_one_ticker(
                 edgar_filing_ref=edgar_filing_ref,
             )
             # Inject Phase 2.5 news sentiment as a "recent_news" section (post-cache-date only)
-            _ns_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
+            _ns_client = make_sdk_client(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
             _supplement = _build_news_supplement(
                 client=_ns_client,
                 model_name=_synthesis_model,
@@ -4338,6 +4922,7 @@ def _research_one_ticker(
                 "cache_age_days":         _age,
                 "cache_run_id":           _cached["run_id"],
                 "dcf_calibration":        _dcf_cal_d,
+                "guidance_estimates":     _ext_results_d.get("guidance_estimates", {}),
                 "segment_scenarios":      _ext_results_d.get("segment_scenarios", {}),
                 "pipeline_assets":        _ext_results_d.get("pipeline_assets", []),
                 "reit_metrics":           _ext_results_d.get("reit_metrics", {}),
@@ -4364,7 +4949,7 @@ def _research_one_ticker(
 
     # ── Full research path ────────────────────────────────────────────────────
 
-    sdk_client = anthropic.Anthropic(
+    sdk_client = make_sdk_client(
         api_key=anthropic_key,
         base_url=base_url,
         timeout=CLIENT_TIMEOUT,
@@ -4735,7 +5320,7 @@ def _research_one_ticker(
     human_msg = (
         _base_context
         + f"Research {company_display} ({sector} sector) using the web_search tool and produce "
-        f"the full Section 2 — Industry Structure report (sub-sections 2A through 2F){_brief_directive}. "
+        f"the full Section 2 — Industry Structure report (sub-sections 2A through 2G){_brief_directive}. "
         f"Focus on information from {int(year)-2}–{year}, with priority on {int(year)-1}–{year}. "
         f"IMPORTANT: This analysis is specifically about {company_display} — not any other "
         f"company that shares a similar ticker symbol. Confirm you are researching the correct "
@@ -4751,11 +5336,11 @@ def _research_one_ticker(
         f"outages, contract wins/losses). Cite all web-sourced claims with source name and date.\n\n"
         f"Use at least 8 searches — start broad on industry structure, then drill into the most "
         f"material findings for each sub-section. After your searches, write the complete "
-        f"Section 2 report with all sub-sections 2A through 2F fully populated{_brief_directive}."
+        f"Section 2 report with all sub-sections 2A through 2G fully populated{_brief_directive}."
     )
     human_msg_kb = (
         _base_context
-        + f"Produce the full Section 2 — Industry Structure report (sub-sections 2A through 2F){_brief_directive} "
+        + f"Produce the full Section 2 — Industry Structure report (sub-sections 2A through 2G){_brief_directive} "
         f"for {company_display} ({sector} sector). "
         f"IMPORTANT: This analysis is specifically about {company_display} — not any other "
         f"company that shares a similar ticker symbol.\n\n"
@@ -4800,7 +5385,7 @@ def _research_one_ticker(
         # The human_msg prompt already instructs the model to search first.
         response = sdk_client.messages.create(
             model=model_name,
-            max_tokens=MAX_TOKENS,
+            max_tokens=_report_max_tokens(model_name),
             system=_research_system,
             tools=[_WEB_SEARCH_TOOL],
             messages=[{"role": "user", "content": human_msg}],
@@ -4888,7 +5473,7 @@ def _research_one_ticker(
             try:
                 nudge_resp = sdk_client.messages.create(
                     model=model_name,
-                    max_tokens=MAX_TOKENS,
+                    max_tokens=_report_max_tokens(model_name),
                     system=_research_system,
                     # No tools: forces text-only output. Passing the prior
                     # assistant turn (which contains server_tool_use and
@@ -4900,7 +5485,7 @@ def _research_one_ticker(
                         {"role": "user",      "content": (
                             "All web searches are complete. Now write the full "
                             "Section 2 research report — all sub-sections 2A "
-                            "through 2F — using the search results above. "
+                            "through 2G — using the search results above. "
                             "Do not perform any additional searches."
                         )},
                     ],
@@ -4989,7 +5574,7 @@ def _research_one_ticker(
             _base_context
             + f"Research {company_display} ({sector} sector) using your web search capability "
             f"and produce the full Section 2 — Industry Structure report "
-            f"(sub-sections 2A through 2F). "
+            f"(sub-sections 2A through 2G). "
             f"Focus on information from {int(year)-2}–{year}, with priority on "
             f"{int(year)-1}–{year}. "
             f"IMPORTANT: This analysis is specifically about {company_display} — not any "
@@ -5008,7 +5593,7 @@ def _research_one_ticker(
             f"web-sourced claims with source name and date.\n\n"
             f"Search broadly on industry structure first, then drill into the most material "
             f"findings for each sub-section. Write the complete Section 2 report with all "
-            f"sub-sections 2A through 2F fully populated."
+            f"sub-sections 2A through 2G fully populated."
         )
 
         progress.update_status(agent_id, ticker, "Tier 1 — Qwen native web search (live)...")
@@ -5018,77 +5603,109 @@ def _research_one_ticker(
         # reasoning_content naturally during deep research without needing
         # enable_thinking=True. Do NOT combine enable_thinking with
         # enable_search — they are incompatible and cause API errors.
+        # The native-search prompt: no tool to call (see _build_research_system).
+        _research_system_native = _build_research_system(
+            year, sector=sector, profile_name=profile_name,
+            reit_subtype=_reit_subtype_for_prompt, native_search=True,
+        )
+        _body = _qwen_search_extra_body(model_name)
         _stream = _qwen_search_client.chat.completions.create(
             model=model_name,
+            max_tokens=_report_max_tokens(model_name),
             messages=[
-                {"role": "system", "content": _research_system},
+                {"role": "system", "content": _research_system_native},
                 {"role": "user",   "content": human_msg_qwen},
             ],
-            extra_body={
-                "enable_search": True,
-                "search_options": {"search_strategy": "agent"},
-            },
+            extra_body=_body,
             stream=True,
         )
 
         import time as _time
-        text = ""
-        reasoning = ""
-        is_answering = False
-        _chunk_count = 0
-        _last_update = _time.time()
 
-        for _chunk in _stream:
-            _delta = getattr(_chunk.choices[0] if _chunk.choices else None, "delta", None)
-            if not _delta:
-                continue
+        def _consume_stream(_stream) -> tuple[str, str]:
+          """Drain one Qwen stream into (text, reasoning), streaming progress as it goes."""
+          text = ""
+          reasoning = ""
+          is_answering = False
+          _chunk_count = 0
+          _last_update = _time.time()
 
-            now = _time.time()
+          for _chunk in _stream:
+              _delta = getattr(_chunk.choices[0] if _chunk.choices else None, "delta", None)
+              if not _delta:
+                  continue
 
-            # ── Thinking phase (reasoning_content) ───────────────────────
-            rc = getattr(_delta, "reasoning_content", None)
-            if rc:
-                reasoning += rc
-                _chunk_count += 1
-                # Stream thinking every 20 chunks OR every 15 seconds (SSE keepalive)
-                if _chunk_count % 20 == 0 or (now - _last_update) > 15:
-                    _snippet = reasoning[-150:].replace("\n", " ").strip()
-                    progress.update_status(
-                        agent_id, ticker,
-                        f"Thinking: {_snippet}",
-                        partial_data={"deep_research_thinking": reasoning[-300:]}
-                    )
-                    _last_update = now
+              now = _time.time()
 
-            # ── Response phase (content) ─────────────────────────────────
-            c = getattr(_delta, "content", None)
-            if c:
-                if not is_answering:
-                    is_answering = True
-                    progress.update_status(
-                        agent_id, ticker,
-                        f"Writing research report ({len(reasoning):,} chars of reasoning complete)..."
-                    )
-                    _last_update = now
-                text += c
-                _chunk_count += 1
-                # Stream writing progress every 50 chunks OR every 15 seconds
-                if _chunk_count % 50 == 0 or (now - _last_update) > 15:
-                    progress.update_status(
-                        agent_id, ticker,
-                        f"Writing report ({len(text):,} chars so far)..."
-                    )
-                    _last_update = now
+              # ── Thinking phase (reasoning_content) ───────────────────────
+              rc = getattr(_delta, "reasoning_content", None)
+              if rc:
+                  reasoning += rc
+                  _chunk_count += 1
+                  # Stream thinking every 20 chunks OR every 15 seconds (SSE keepalive)
+                  if _chunk_count % 20 == 0 or (now - _last_update) > 15:
+                      _snippet = reasoning[-150:].replace("\n", " ").strip()
+                      progress.update_status(
+                          agent_id, ticker,
+                          f"Thinking: {_snippet}",
+                          partial_data={"deep_research_thinking": reasoning[-300:]}
+                      )
+                      _last_update = now
 
-            # ── SSE keepalive: if no update in 30s, send heartbeat ───────
-            if (now - _last_update) > 30:
-                progress.update_status(
-                    agent_id, ticker,
-                    f"Deep research in progress ({len(reasoning):,} thinking + {len(text):,} content chars)..."
-                )
-                _last_update = now
+              # ── Response phase (content) ─────────────────────────────────
+              c = getattr(_delta, "content", None)
+              if c:
+                  if not is_answering:
+                      is_answering = True
+                      progress.update_status(
+                          agent_id, ticker,
+                          f"Writing research report ({len(reasoning):,} chars of reasoning complete)..."
+                      )
+                      _last_update = now
+                  text += c
+                  _chunk_count += 1
+                  # Stream writing progress every 50 chunks OR every 15 seconds
+                  if _chunk_count % 50 == 0 or (now - _last_update) > 15:
+                      progress.update_status(
+                          agent_id, ticker,
+                          f"Writing report ({len(text):,} chars so far)..."
+                      )
+                      _last_update = now
 
-        text = text.strip()
+              # ── SSE keepalive: if no update in 30s, send heartbeat ───────
+              if (now - _last_update) > 30:
+                  progress.update_status(
+                      agent_id, ticker,
+                      f"Deep research in progress ({len(reasoning):,} thinking + {len(text):,} content chars)..."
+                  )
+                  _last_update = now
+
+          return text.strip(), reasoning
+
+        text, reasoning = _consume_stream(_stream)
+
+        # ── Degenerate Tier 1 (owner smoke, 2026-10-03) ──────────────────────
+        # qwen3.8-flash with thinking off returned '[TOOL CALL] {"name": "web_search", ...}'
+        # and nothing else (173 chars). A textual tool call or an answer far too
+        # short to be a report gets ONE retry with the model's default thinking.
+        if _tier1_degenerate(text) and _body.get("enable_thinking") is False:
+            progress.update_status(
+                agent_id, ticker,
+                f"⚠ Tier 1 returned a degenerate answer ({len(text)} chars) with thinking off — "
+                "retrying once with thinking on..."
+            )
+            _body = {k: v for k, v in _body.items() if k != "enable_thinking"}
+            _stream = _qwen_search_client.chat.completions.create(
+                model=model_name,
+                max_tokens=_report_max_tokens(model_name),
+                messages=[
+                    {"role": "system", "content": _research_system_native},
+                    {"role": "user",   "content": human_msg_qwen},
+                ],
+                extra_body=_body,
+                stream=True,
+            )
+            text, reasoning = _consume_stream(_stream)
 
         # ─── Qwen empty-content retry (parallel-load mitigation) ───────────────
         # Observed failure: Qwen's enable_search+stream=True path can emit many
@@ -5118,12 +5735,12 @@ def _research_one_ticker(
                 retry_resp = _qwen_search_client.chat.completions.create(
                     model=model_name,
                     messages=[
-                        {"role": "system",    "content": _research_system},
+                        {"role": "system",    "content": _research_system_native},
                         {"role": "user",      "content": human_msg_qwen},
                         {"role": "assistant", "content": safe_reasoning},
                         {"role": "user", "content": (
                             "Your reasoning above is excellent. Now write the complete "
-                            "Section 2 report — all sub-sections 2A through 2F fully "
+                            "Section 2 report — all sub-sections 2A through 2G fully "
                             "populated. Do not perform additional searches. Output "
                             "only the final report content (no meta-commentary)."
                         )},
@@ -5131,7 +5748,7 @@ def _research_one_ticker(
                     extra_body={"enable_search": False},  # prevent recursive search loops
                     stream=False,                          # deterministic fallback
                     temperature=0.3,                       # low variance on retry
-                    max_tokens=8192,                       # explicit content-phase budget
+                    max_tokens=_report_max_tokens(model_name),  # content-phase budget (fast tier: 12k)
                 )
                 text = (retry_resp.choices[0].message.content or "").strip()
                 if text:
@@ -5179,7 +5796,7 @@ def _research_one_ticker(
         Fallback: produce the Section 2 report from Claude's training knowledge.
         No tool attached — uses human_msg_kb which makes no mention of web search,
         so Claude writes directly from training data rather than apologising about
-        a missing tool.  Produces the same 2A–2F structure as the web-search path.
+        a missing tool.  Produces the same 2A–2G structure as the web-search path.
         """
         response = sdk_client.messages.create(
             model=_synthesis_model,
@@ -5253,7 +5870,7 @@ def _research_one_ticker(
                         "content": (
                             "You have reached the search limit. Write the complete "
                             "Section 2 — Industry Structure report now, covering all "
-                            "sub-sections 2A through 2F with the data gathered."
+                            "sub-sections 2A through 2G with the data gathered."
                         ),
                     })
                     # CRITICAL: do NOT pass tools here. If the tool schema is still
@@ -5463,7 +6080,7 @@ def _research_one_ticker(
     # power_law_agent, investor agents) never see per-section data.
     if (not sections or set(sections.keys()) == {"full"}) and final_report.strip():
         logger.info(
-            "[deep_research] Section parser matched NO 2A-2F headers for %s — "
+            "[deep_research] Section parser matched NO 2A-2G headers for %s — "
             "LLM output may use a non-canonical header format. First 200 chars: %s",
             ticker, final_report[:200].replace(chr(10), ' | '),
         )
@@ -5618,6 +6235,7 @@ def _research_one_ticker(
     # this function.)
 
     dcf_calibration   = _results.get("dcf_calibration", {})
+    guidance_estimates = _results.get("guidance_estimates", {})
     segment_scenarios = _results.get("segment_scenarios", {})
     pipeline_assets   = _results.get("pipeline_assets", [])
     reit_metrics      = _results.get("reit_metrics", {})
@@ -5632,6 +6250,13 @@ def _research_one_ticker(
         f"margin={dcf_calibration.get('margin_direction')}, "
         f"risk={dcf_calibration.get('risk_flag')}"
     )
+    if guidance_estimates:
+        _ge_base = (guidance_estimates.get("estimates") or {}).get("base") or {}
+        progress.update_status(
+            agent_id, ticker,
+            f"Guidance → estimates ({guidance_estimates.get('confidence')}): "
+            f"FY+1 revenue growth base {(_ge_base.get('revenue_growth_fy1') or 0):+.1%}"
+        )
     if segment_scenarios:
         progress.update_status(
             agent_id, ticker,
@@ -5725,6 +6350,7 @@ def _research_one_ticker(
         "cache_age_days":         None,
         "cache_run_id":           None,
         "dcf_calibration":        dcf_calibration,
+        "guidance_estimates":     guidance_estimates,
         "segment_scenarios":      segment_scenarios,
         "pipeline_assets":        pipeline_assets,
         "reit_metrics":           reit_metrics,
@@ -5799,11 +6425,12 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     end_date       = state["data"]["end_date"]
 
     # Default model for US tickers.
-    # Priority: DEEP_RESEARCH_MODEL env/run-overlay → qwen3.6-plus.
+    # Priority: DEEP_RESEARCH_MODEL env/run-overlay → DEFAULT_RESEARCH_MODEL
+    # (qwen3.8-flash, owner 2026-10-03: the report engine is the fast tier).
     # Deep research deliberately does NOT inherit the run model: live runs must
     # research on Qwen's native web search (user directive 2026-08-09), so a
-    # missing env var falls back to qwen3.6-plus instead of the run's Claude.
-    _us_model: str = _cfg_getenv("DEEP_RESEARCH_MODEL") or "qwen3.6-plus"
+    # missing env var falls back to the Qwen default instead of the run's Claude.
+    _us_model: str = _cfg_getenv("DEEP_RESEARCH_MODEL") or DEFAULT_RESEARCH_MODEL
 
     # FMP data is fetched by strategic_router for the primary ticker only.
     # Secondary tickers run without pre-loaded financials (web searches pick up the gap).
@@ -5827,7 +6454,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         _edgar_ref = edgar_refs_map.get(t) or {}
         _ns_data   = news_sentiment_map.get(t) or {}
         # Route: HK → Qwen (web search) + Qwen (synthesis/extractors), US → Anthropic
-        # Synthesis default is qwen3.6-plus — confirmed working on /apps/anthropic
+        # Synthesis default is DEFAULT_RESEARCH_MODEL (qwen3.8-flash since
+        # 2026-10-03; qwen3.6-plus before) — confirmed working on /apps/anthropic
         # endpoint (user's setup). qwen3-max was the old default but 404s on
         # Anthropic-compat regional endpoints, causing every extractor call
         # (saas_metrics, bank_metrics, reit_metrics, pipeline_assets,
@@ -5837,8 +6465,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if is_hk_ticker(t):
             _key              = _hk_key
             _base_url         = _hk_base_url
-            _model            = _hk_model or "qwen3.6-plus"   # OpenAI-compat web search
-            _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3.6-plus"  # Anthropic-compat synthesis
+            _model            = _hk_model or DEFAULT_RESEARCH_MODEL   # OpenAI-compat web search
+            _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or DEFAULT_RESEARCH_MODEL  # Anthropic-compat synthesis
         else:
             # When user selects a Qwen model for US tickers, use the DashScope
             # key and base URL (same as HK path) instead of the Anthropic key.
@@ -5846,7 +6474,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                 _key              = _hk_key
                 _base_url         = _hk_base_url
                 _model            = _us_model
-                _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3.6-plus"
+                _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or DEFAULT_RESEARCH_MODEL
             else:
                 _key              = _us_key or anthropic_key
                 _base_url         = None
@@ -5915,6 +6543,15 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if cal:
             dcf_calibration_signals[t] = cal
     state["data"]["dcf_calibration_signals"] = dcf_calibration_signals
+
+    # ── Per-ticker guidance → estimates (owner, 2026-10-03) ────────────────────
+    # The DCF reads these for its year 1–2 scenario growth; the report shows them.
+    guidance_estimates_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        ge = res.get("guidance_estimates")
+        if ge:
+            guidance_estimates_all[t] = ge
+    state["data"]["guidance_estimates"] = guidance_estimates_all
 
     # ── Per-ticker segment scenarios (for probabilistic SOTP 12m) ─────────────
     segment_scenarios_all: dict[str, dict] = {}

@@ -303,6 +303,57 @@ export interface SaasMetrics {
 }
 
 // ── GS-style SOTP breakdown (Tier 1 report package) ─────────────────────────
+// ── Guidance → estimates (owner, 2026-10-03) ─────────────────────────────────
+// Built by deep research section 2G → deep_research._extract_guidance_estimates
+// (a thinking pass on the research model), consumed by dcf_agent's guidance
+// channel (years 1–E of each scenario's growth) and published at
+// dcf_range[ticker].guidance_estimates by _guidance_estimates_payload.
+export interface GuidanceRange { low?: number | null; mid?: number | null; high?: number | null }
+export interface GuidanceAmountRange extends GuidanceRange { currency?: string | null; scale?: string | null }
+export interface GuidanceScenarioRow {
+  revenue_growth_fy1?: number | null;
+  revenue_growth_fy2?: number | null;
+  ebitda_margin_fy1?: number | null;
+  ebitda_margin_fy2?: number | null;
+  eps_fy1?: number | null;
+  eps_fy2?: number | null;
+}
+export interface GuidanceEstimates {
+  as_of?: string | null;
+  fiscal_year_1?: string | null;
+  fiscal_year_2?: string | null;
+  guidance: {
+    revenue_growth?: GuidanceRange | null;
+    revenue?: GuidanceAmountRange | null;
+    ebitda_margin?: GuidanceRange | null;
+    eps?: GuidanceAmountRange | null;
+    basis?: string | null;
+    status?: string | null;
+    quote?: string | null;
+    source?: string | null;
+  };
+  consensus: { revenue_growth_fy1?: number | null; eps_fy1?: number | null; as_of?: string | null; source?: string | null };
+  guidance_vs_consensus_pct?: number | null;
+  track_record?: string | null;
+  estimates: Record<string, GuidanceScenarioRow>;
+  rationale?: string | null;
+  confidence?: 'HIGH' | 'MEDIUM' | 'LOW' | string | null;
+  citations?: string[];
+  model?: string | null;
+  /** True when the base DCF's years 1–E ran on these estimates. */
+  applied: boolean;
+  not_applied_reason?: string | null;
+  channel?: {
+    explicit?: number[];
+    explicit_years?: number;
+    fade_years?: number;
+    engine_year1?: number | null;
+    schedule?: number[];
+    confidence?: string | null;
+    source?: string | null;
+  } | null;
+}
+
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
 // dcf_range[ticker].sotp_breakdown; null/absent for tickers without SOTP
 // assumptions. Frontend gates on `dcfRange?.sotp_breakdown`.
@@ -486,6 +537,9 @@ export interface DcfRange {
   reit_breakdown?: ReitBreakdown | null;
   bank_breakdown?: BankBreakdown | null;
   sotp_breakdown?: SotpBreakdown | null;
+  /** Management guidance → the model's bear/base/bull estimates and how the DCF used them
+   *  (owner, 2026-10-03; dcf_agent._guidance_estimates_payload). GuidanceEstimatesPanel. */
+  guidance_estimates?: GuidanceEstimates | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.
@@ -585,7 +639,9 @@ export interface PipelineData {
   risk_manager_output?: RiskManagerOutput;
   // Deep research + citations
   deep_research_report?: string;
-  deep_research_annotated?: string;   // report text with [n] markers inserted
+  deep_research_annotated?: string;   // report text with [n] markers inserted (no longer rendered; owner 2026-10-03)
+  /** The brief's [n] citations resolved from the research notes (deep_research.resolve_brief_references). */
+  industry_footnotes?: CitationRegistryEntry[];
   citation_registry?: CitationRegistryEntry[];
   // Sector-specific valuation card (Option B). One entry per ticker; absent
   // for legacy sub-profiles (frontend gates on `sector_card?.[ticker]`).
