@@ -386,6 +386,34 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["run_features"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 14. Self-learning loops: table counts, the last sweep's learning sub-report, switches.
+    try:
+        import asyncio as _aio
+
+        def _learning() -> dict:
+            from src.data import db as _db
+            from src.memory import estimate_outcomes as _eo
+            from src.memory import gate_outcomes as _go
+            from src.memory import learning_review as _lr
+            from src.memory import override_outcomes as _oo
+            last = _db.query_one("SELECT sweep_date, report FROM valuation_outcome_sweeps "
+                                 "ORDER BY sweep_date DESC LIMIT 1")
+            learning = None
+            if last and last["report"]:
+                try:
+                    learning = (json.loads(last["report"]) or {}).get("learning")
+                except Exception:  # noqa: BLE001
+                    learning = None
+            return {"estimate_outcomes": _eo.counts(), "gate_outcomes": _go.counts(),
+                    "override_outcomes": _oo.counts(),
+                    "last_sweep": {"sweep_date": last["sweep_date"] if last else None, "learning": learning},
+                    "families": _lr._families(), "kill_switches": _lr._switches()}
+
+        out["learning"] = await _aio.to_thread(_learning)
+        out["learning"]["ok"] = True
+    except Exception:
+        out["learning"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
 
 
@@ -402,6 +430,17 @@ async def run_features_backfill(request: Request, secret: str = "",
     import asyncio
     from src.memory import run_features as rf
     return await asyncio.to_thread(rf.backfill, write=write, force=force)
+
+
+@router.post("/admin/learning/sweep")
+async def learning_sweep(request: Request, secret: str = "", write: bool = False):
+    """Run the daily learning sweep now (ledger backfill, estimate / gate / override
+    scoring). write=false (default) reports what it WOULD write; idempotent otherwise."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import learning_sweep as ls
+    return await asyncio.to_thread(ls.run_daily, write=write)
 
 
 # ── B2: valuation outcome labels ────────────────────────────────────────────

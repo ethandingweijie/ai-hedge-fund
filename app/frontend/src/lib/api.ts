@@ -276,6 +276,8 @@ export interface CalibrationFold {
 export interface CalibrationCard {
   id: string;
   kind: 'calibration';
+  /** Self-learning layer: iv (weights + market multiplier), pt (capture + probability shrink), est (guidance / archetype growth adjustments, gate reviews). */
+  family?: 'iv' | 'pt' | 'est';
   title: string;
   changes: string[];
   status: string;
@@ -310,6 +312,8 @@ export interface ModelAccuracyOverview {
   generated_at: string;
   labels: Record<string, number>;
   active: CalibrationCard | null;
+  /** One live version per calibration family (iv / pt / est). */
+  actives?: Record<string, CalibrationCard>;
   proposals: CalibrationCard[];
   history: CalibrationCard[];
   diagnostics: DiagnosticCard[];
@@ -332,6 +336,45 @@ export function getModelAccuracyOverview(): Promise<ModelAccuracyOverview> {
 
 export function getModelAccuracyBadge(): Promise<{ eligible: number }> {
   return fetchJson(`${BASE}/model-accuracy/badge`, { headers: { ..._authHeaders() } });
+}
+
+// ── Self-learning layer (2026-10-04): what every loop has learned ───────────
+
+export interface LearningCell {
+  n: number; bias: number | null; mae: number | null; status: 'ok' | 'insufficient'; need?: number;
+  beat_consensus_share: number | null; in_band_share: number | null;
+}
+export interface LearningScorecard {
+  group_by: string; period_kind: string; n_rows: number;
+  groups: Record<string, Record<string, LearningCell>>;
+}
+export interface LearningCredibilityCell { n: number; beat_rate?: number; hit_rate?: number; status: string }
+export interface LearningBlock { status?: string; error?: string }
+export interface LearningOverview {
+  generated_at: string;
+  ledger: LearningBlock & { rows?: number; override_carried?: number; unrated?: number; cache_copy?: number; last_recorded_at?: string | null; enabled?: boolean };
+  estimates: LearningBlock & { fy?: Record<string, LearningScorecard>; q_track?: Record<string, LearningScorecard>; counts?: Record<string, number>; min_n?: number };
+  guidance: LearningBlock & { n?: number; tickers?: Record<string, LearningCredibilityCell>; markets?: Record<string, LearningCredibilityCell>; best?: string[]; worst?: string[] };
+  scenarios: LearningBlock & Record<string, LearningBlock & { n?: number; need?: number; mean_predicted?: Record<string, number>; realised_share?: Record<string, number> }>;
+  gates: LearningBlock & { gates?: Record<string, { HELPED: number; FALSE_ALARM: number; NEUTRAL: number; UNSCORABLE: number; n_judged: number; false_alarm_share: number | null; helped_share: number | null; status: string }>; min_n?: number };
+  overrides: LearningBlock & {
+    n_overrides?: number; n_scored_rows?: number;
+    horizons?: Record<string, { n: number; agent_median_miss_pct: number | null; user_median_miss_pct: number | null; user_closer_share: number | null; status: string }>;
+    fields_changed?: Record<string, number>;
+    estimate_fields?: { n: number; user_closer: number; user_closer_share: number | null };
+  };
+  prior_misses: LearningBlock & { cells?: number; gaps?: Array<{ market: string; profile: string; n: number; median_miss_pct: number; reason: string }>; profile_lessons_active?: number; enabled?: boolean; prior_misses_enabled?: boolean };
+  families: LearningBlock & Record<string, { version_id: string } | null>;
+  kill_switches: Record<string, { what: string; state: 'on' | 'off'; value: string | null }>;
+}
+
+export function getLearningOverview(): Promise<LearningOverview> {
+  return fetchJson(`${BASE}/model-accuracy/learning/overview`, { headers: { ..._authHeaders() } });
+}
+
+export function getLearningEstimates(groupBy: string, periodKind: 'fy' | 'q_track' = 'fy'): Promise<LearningScorecard> {
+  return fetchJson(`${BASE}/model-accuracy/learning/estimates?group_by=${encodeURIComponent(groupBy)}&period_kind=${periodKind}`,
+    { headers: { ..._authHeaders() } });
 }
 
 export interface SegmentMemoryCell {

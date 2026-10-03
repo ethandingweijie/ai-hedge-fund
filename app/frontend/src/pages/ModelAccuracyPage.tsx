@@ -28,6 +28,7 @@ import {
   getCarriedEstimateOverrides, revokeCarriedEstimateOverride, type CarriedEstimateOverride,
   getDynamicMultiples, pinDynamicMultiple, unpinDynamicMultiple,
   type DynamicMultiplesLog, type DynamicMultipleRow,
+  getLearningOverview, type LearningOverview, type LearningScorecard,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
   type SegmentMemory, type SegmentMemoryTicker, type CitedFigure } from '@/lib/api';
@@ -50,6 +51,9 @@ const CATEGORY_LABEL: Record<DiagnosticCard['category'], string> = {
 function pct(v: number | null | undefined): string {
   return v == null ? '—' : `${v.toFixed(1)}%`;
 }
+
+/** Calibration families of the self-learning layer. */
+const FAMILY_LABEL: Record<string, string> = { iv: 'intrinsic value', pt: 'target', est: 'estimates' };
 
 function Chip({ children, strong = false }: { children: React.ReactNode; strong?: boolean }) {
   return (
@@ -124,7 +128,10 @@ function ProposalCard({ card, onChanged }: { card: CalibrationCard; onChanged: (
             Scored against the {card.label} · proposed {card.created_at.slice(0, 10)}
           </p>
         </div>
-        <Chip strong={card.actions.promote}>{card.stage}</Chip>
+        <div className="flex items-center gap-2 shrink-0">
+          {card.family && card.family !== 'iv' && <Chip>{FAMILY_LABEL[card.family]}</Chip>}
+          <Chip strong={card.actions.promote}>{card.stage}</Chip>
+        </div>
       </div>
 
       <p className="text-sm">
@@ -501,6 +508,252 @@ const FIELD_LABEL: Record<string, string> = {
 /** The quarterly multiple update, confirmed three ways (owner 2026-09-21):
  *  it RAN, it reached the engine for EVERY industry, and the multiples
  *  REACHED VALUATIONS -- the last one recorded by the valuations themselves. */
+// ── self-learning layer (2026-10-04) ────────────────────────────────────────
+
+const EST_FIELD_LABEL: Record<string, string> = { revenue_growth: 'Revenue growth', ebitda_margin: 'EBITDA margin', eps: 'EPS' };
+const GROUP_LABEL: Record<string, string> = { archetype: 'forecast archetype', confidence: 'guidance confidence', market: 'market' };
+
+/** A signed error: growth and EPS are log errors (shown as %), the margin is in points. */
+function errText(field: string, v: number | null | undefined): string {
+  if (v == null) return '—';
+  if (field === 'ebitda_margin') return `${(v * 100).toFixed(1)} pt`;
+  return `${((Math.exp(v) - 1) * 100).toFixed(1)}%`;
+}
+function share(v: number | null | undefined): string {
+  return v == null ? '—' : `${Math.round(v * 100)}%`;
+}
+
+function ScorecardTable({ card }: { card: LearningScorecard }) {
+  const groups = Object.entries(card.groups);
+  if (groups.length === 0) return <p className="px-3 py-3 text-xs text-muted-foreground">No prints scored yet.</p>;
+  return (
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="text-muted-foreground border-b border-border">
+          <th className="text-left font-medium px-3 py-2">{GROUP_LABEL[card.group_by] ?? card.group_by}</th>
+          <th className="text-left font-medium px-3 py-2">Field</th>
+          <th className="text-right font-medium px-3 py-2">n</th>
+          <th className="text-right font-medium px-3 py-2">Bias (median)</th>
+          <th className="text-right font-medium px-3 py-2">MAE</th>
+          <th className="text-right font-medium px-3 py-2">Beat consensus</th>
+          <th className="text-right font-medium px-3 py-2">In bear–bull band</th>
+        </tr>
+      </thead>
+      <tbody>
+        {groups.flatMap(([g, fields]) => Object.entries(fields).map(([field, c], i) => (
+          <tr key={`${g}|${field}`} className="border-b border-border last:border-0">
+            <td className="px-3 py-1.5 font-medium">{i === 0 ? g : ''}</td>
+            <td className="px-3 py-1.5">{EST_FIELD_LABEL[field] ?? field}</td>
+            <td className="px-3 py-1.5 text-right tabular-nums">{c.n}</td>
+            {c.status === 'insufficient' ? (
+              <td className="px-3 py-1.5 text-right" colSpan={4}><Chip>insufficient · need {c.need ?? 5}</Chip></td>
+            ) : (
+              <>
+                <td className="px-3 py-1.5 text-right tabular-nums">{errText(field, c.bias)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{errText(field, c.mae)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{share(c.beat_consensus_share)}</td>
+                <td className="px-3 py-1.5 text-right tabular-nums">{share(c.in_band_share)}</td>
+              </>
+            )}
+          </tr>
+        )))}
+      </tbody>
+    </table>
+  );
+}
+
+function LearningSection({ allowed }: { allowed: boolean }) {
+  const [data, setData] = useState<LearningOverview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [group, setGroup] = useState<'archetype' | 'confidence' | 'market'>('archetype');
+  const reload = useCallback(() => {
+    getLearningOverview().then(setData).catch((e: Error) => setError(e.message));
+  }, []);
+  useEffect(() => { if (allowed) reload(); }, [allowed, reload]);
+  if (error) return <section><SectionTitle>Learning</SectionTitle><Card className="p-4 text-sm text-foreground">Could not load the learning scorecards: {error}</Card></section>;
+  if (!data) return null;
+
+  const ledger = data.ledger ?? {};
+  const fy = data.estimates?.fy?.[group];
+  const qt = data.estimates?.q_track?.archetype;
+  const gates = Object.entries(data.gates?.gates ?? {});
+  const horizons = Object.entries(data.overrides?.horizons ?? {});
+  const fields = Object.entries(data.overrides?.fields_changed ?? {});
+  const gaps = data.prior_misses?.gaps ?? [];
+  const off = Object.entries(data.kill_switches ?? {}).filter(([, v]) => v.state === 'off');
+  const families = Object.entries(data.families ?? {}).filter(([k]) => k === 'iv' || k === 'pt' || k === 'est');
+  const unavailable = (b: { status?: string; error?: string } | undefined) => b?.status === 'unavailable';
+
+  return (
+    <section className="space-y-4">
+      <SectionTitle hint="What the loops have learned from the agent's own runs: estimates against the prints, management's credibility, scenario probabilities, gate firings and user overrides. A cell under the minimum says insufficient rather than a number. Proposals from these loops appear under Recommendations with their family.">
+        Learning
+        {ledger.rows != null && <Chip strong>{ledger.rows} run{ledger.rows === 1 ? '' : 's'} in the ledger</Chip>}
+        {(ledger.override_carried ?? 0) + (ledger.unrated ?? 0) + (ledger.cache_copy ?? 0) > 0 && (
+          <Chip>{(ledger.override_carried ?? 0) + (ledger.unrated ?? 0) + (ledger.cache_copy ?? 0)} excluded (user override / unrated / cache copy)</Chip>
+        )}
+      </SectionTitle>
+
+      <Card className="px-4 py-3 text-xs text-muted-foreground flex flex-wrap gap-x-5 gap-y-1">
+        {families.map(([fam, v]) => (
+          <span key={fam}>{FAMILY_LABEL[fam] ?? fam} calibration: <span className="text-foreground">{v?.version_id ?? 'none promoted'}</span></span>
+        ))}
+        {off.length > 0 && <span>switched off: {off.map(([k]) => k).join(', ')}</span>}
+      </Card>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimate accuracy · FY+1 against the print</h3>
+          <div className="flex gap-1">
+            {(['archetype', 'confidence', 'market'] as const).map((g) => (
+              <button key={g} type="button" onClick={() => setGroup(g)}
+                className={`text-[11px] px-2 py-0.5 rounded-full border ${group === g ? 'bg-foreground text-background border-foreground' : 'border-border text-muted-foreground'}`}>
+                by {GROUP_LABEL[g]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Card className="p-0 overflow-x-auto">
+          {unavailable(data.estimates) ? <p className="px-3 py-3 text-xs">Unavailable: {data.estimates.error}</p>
+            : fy ? <ScorecardTable card={fy} /> : <p className="px-3 py-3 text-xs text-muted-foreground">No prints scored yet.</p>}
+        </Card>
+        {qt && Object.keys(qt.groups).length > 0 && (
+          <div className="mt-2">
+            <p className="text-[11px] text-muted-foreground mb-1">Quarterly tracking (latest quarter year on year vs the FY+1 growth estimate; an early read, not a verdict)</p>
+            <Card className="p-0 overflow-x-auto"><ScorecardTable card={qt} /></Card>
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Management guidance credibility</h3>
+          <Card className="p-0 overflow-x-auto">
+            {(data.guidance?.n ?? 0) === 0 ? <p className="px-3 py-3 text-xs text-muted-foreground">No guided figure has printed yet.</p> : (
+              <table className="w-full text-xs">
+                <thead><tr className="text-muted-foreground border-b border-border">
+                  <th className="text-left font-medium px-3 py-2">Market</th><th className="text-right font-medium px-3 py-2">n</th>
+                  <th className="text-right font-medium px-3 py-2">Met or beaten</th><th className="text-right font-medium px-3 py-2">Within band</th>
+                </tr></thead>
+                <tbody>
+                  {Object.entries(data.guidance?.markets ?? {}).map(([m, c]) => (
+                    <tr key={m} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5 font-medium">{m}</td><td className="px-3 py-1.5 text-right tabular-nums">{c.n}</td>
+                      {c.status === 'insufficient' ? <td className="px-3 py-1.5 text-right" colSpan={2}><Chip>insufficient</Chip></td> : (
+                        <><td className="px-3 py-1.5 text-right tabular-nums">{share(c.beat_rate)}</td><td className="px-3 py-1.5 text-right tabular-nums">{share(c.hit_rate)}</td></>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {((data.guidance?.best?.length ?? 0) > 0 || (data.guidance?.worst?.length ?? 0) > 0) && (
+              <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
+                most credible: {(data.guidance?.best ?? []).join(', ') || '—'} · least: {(data.guidance?.worst ?? []).join(', ') || '—'}
+              </p>
+            )}
+          </Card>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scenario probabilities · predicted vs realised</h3>
+          <Card className="p-0 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-3 py-2">Horizon</th><th className="text-right font-medium px-3 py-2">n</th>
+                <th className="text-right font-medium px-3 py-2">Bear</th><th className="text-right font-medium px-3 py-2">Base</th><th className="text-right font-medium px-3 py-2">Bull</th>
+              </tr></thead>
+              <tbody>
+                {Object.entries(data.scenarios ?? {}).filter(([k]) => k.startsWith('px_')).map(([h, r]) => (
+                  <tr key={h} className="border-b border-border last:border-0">
+                    <td className="px-3 py-1.5 font-medium">{HORIZON_LABEL[h] ?? h}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{r.n ?? 0}</td>
+                    {r.status !== 'ok' ? <td className="px-3 py-1.5 text-right" colSpan={3}><Chip>insufficient · need {r.need ?? 20}</Chip></td> : (
+                      (['bear', 'base', 'bull'] as const).map((k) => (
+                        <td key={k} className="px-3 py-1.5 text-right tabular-nums">{share(r.mean_predicted?.[k])} → {share(r.realised_share?.[k])}</td>
+                      ))
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Gate firings against the printed year</h3>
+          <Card className="p-0 overflow-x-auto">
+            {gates.length === 0 ? <p className="px-3 py-3 text-xs text-muted-foreground">No gate firing has a printed year yet.</p> : (
+              <table className="w-full text-xs">
+                <thead><tr className="text-muted-foreground border-b border-border">
+                  <th className="text-left font-medium px-3 py-2">Gate</th><th className="text-right font-medium px-3 py-2">Helped</th>
+                  <th className="text-right font-medium px-3 py-2">False alarm</th><th className="text-right font-medium px-3 py-2">Neutral</th>
+                  <th className="text-right font-medium px-3 py-2">Unscorable</th><th className="text-right font-medium px-3 py-2">False-alarm share</th>
+                </tr></thead>
+                <tbody>
+                  {gates.map(([g, r]) => (
+                    <tr key={g} className="border-b border-border last:border-0">
+                      <td className="px-3 py-1.5 font-mono text-[11px]">{g}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{r.HELPED}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.FALSE_ALARM}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{r.NEUTRAL}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.UNSCORABLE}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{r.status === 'insufficient' ? <Chip>insufficient</Chip> : share(r.false_alarm_share)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">User overrides · agent vs user at maturity</h3>
+          <Card className="p-0 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-3 py-2">Horizon</th><th className="text-right font-medium px-3 py-2">n</th>
+                <th className="text-right font-medium px-3 py-2">Agent miss</th><th className="text-right font-medium px-3 py-2">User miss</th><th className="text-right font-medium px-3 py-2">User closer</th>
+              </tr></thead>
+              <tbody>
+                {horizons.map(([h, r]) => (
+                  <tr key={h} className="border-b border-border last:border-0">
+                    <td className="px-3 py-1.5 font-medium">{HORIZON_LABEL[h] ?? h}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{r.n}</td>
+                    {r.status !== 'ok' ? <td className="px-3 py-1.5 text-right" colSpan={3}><Chip>insufficient</Chip></td> : (
+                      <><td className="px-3 py-1.5 text-right tabular-nums">{pct(r.agent_median_miss_pct)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{pct(r.user_median_miss_pct)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{share(r.user_closer_share)}</td></>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
+              {data.overrides?.n_overrides ?? 0} active override(s)
+              {fields.length > 0 && ` · fields changed: ${fields.map(([f, n]) => `${f} ×${n}`).join(', ')}`}
+              {(data.overrides?.estimate_fields?.n ?? 0) > 0 && ` · on printed FY+1 fields the user was closer ${share(data.overrides?.estimate_fields?.user_closer_share)} of ${data.overrides?.estimate_fields?.n} times`}
+            </p>
+          </Card>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Profiles that keep missing</h3>
+        <Card className="px-4 py-3 text-xs">
+          {gaps.length === 0 ? (
+            <span className="text-muted-foreground">No profile cell has a gap on matured price labels ({data.prior_misses?.cells ?? 0} cell(s) in the ledger; {data.prior_misses?.profile_lessons_active ?? 0} profile lesson(s) active).</span>
+          ) : (
+            <ul className="space-y-1">
+              {gaps.map((g) => <li key={`${g.market}|${g.profile}`}><span className="font-medium">{g.market} · {g.profile}</span> — {g.reason}</li>)}
+            </ul>
+          )}
+        </Card>
+      </div>
+    </section>
+  );
+}
+
 function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
   const [log, setLog] = useState<DynamicMultiplesLog | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -974,6 +1227,14 @@ export function ModelAccuracyPage() {
                 <ActiveCard card={data.active} onChanged={load} />
               </section>
             )}
+            {Object.entries(data.actives ?? {}).filter(([fam]) => fam !== 'iv').map(([fam, card]) => (
+              <section key={fam}>
+                <SectionTitle hint={fam === 'pt' ? 'In force for every new 12-month target: the capture and the scenario-probability shrink.' : 'In force for every new forecast: the guidance and archetype growth adjustments.'}>
+                  Live {FAMILY_LABEL[fam] ?? fam} calibration
+                </SectionTitle>
+                <ActiveCard card={card} onChanged={load} />
+              </section>
+            ))}
 
             <section>
               <SectionTitle hint={data.diagnostics_horizon
@@ -995,6 +1256,8 @@ export function ModelAccuracyPage() {
             <IndustryInputsSection allowed={allowed} />
 
             <EstimateOverridesSection allowed={allowed} />
+
+            <LearningSection allowed={allowed} />
 
             <DynamicMultiplesSection allowed={allowed} />
 

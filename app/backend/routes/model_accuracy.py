@@ -203,3 +203,35 @@ async def rollback(version_id: str, reason: str = "", admin=Depends(require_mode
 async def dismiss(version_id: str, reason: str = "", admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review
     return await _change(review.dismiss, version_id, actor=_actor(admin), reason=reason)
+
+
+# ── Self-learning layer (2026-10-04): what every loop has learned so far ────
+# Proposals stay on /overview and the /calibration routes (family-aware); these
+# are the scorecards behind them.
+
+@router.get("/learning/overview")
+async def learning_overview(admin=Depends(require_model_accuracy_owner)):
+    """Ledger counts, estimate scorecards, guidance credibility, scenario reliability,
+    gate verdicts, override outcomes, profile gaps, the active version per family and
+    every kill switch. Each block says insufficient rather than guessing."""
+    from src.memory import learning_review
+    return await asyncio.to_thread(learning_review.overview)
+
+
+@router.get("/learning/estimates")
+async def learning_estimates(group_by: str = "archetype", period_kind: str = "fy",
+                             admin=Depends(require_model_accuracy_owner)):
+    """Loop 1 scorecard by archetype / confidence / profile / market / sector."""
+    from src.memory import learning_review
+    try:
+        return await asyncio.to_thread(learning_review.estimates, group_by, period_kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/learning/guidance-credibility")
+async def learning_guidance_credibility(ticker: Optional[str] = None,
+                                        admin=Depends(require_model_accuracy_owner)):
+    """How management's guidance has held up, per ticker and per market."""
+    from src.memory import learning_review
+    return await asyncio.to_thread(learning_review.guidance_credibility, ticker)
