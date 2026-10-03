@@ -2,6 +2,7 @@
 import type {
   ArchiveSummary,
   EstimateAskResponse,
+  EstimateFigures,
   EstimateOverrides,
   EstimateRecompute,
   HistoryResponse,
@@ -118,6 +119,28 @@ export function clearEstimateOverride(runId: string, ticker: string): Promise<{ 
   return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates?ticker=${encodeURIComponent(ticker)}`, {
     method: 'DELETE', headers: { ..._authHeaders() },
   });
+}
+
+/** Rewrite the PM rationale and headline on the overridden run (one LLM call, on request). */
+export function regeneratePmText(runId: string, ticker: string): Promise<{ pm: { rationale: string; headline?: string | null; regenerated_at: string }; run: RunResult }> {
+  return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/estimates/regenerate?ticker=${encodeURIComponent(ticker)}`, {
+    method: 'POST', headers: { ..._authHeaders() },
+  });
+}
+
+/** GET /model-accuracy/estimate-overrides: the latest active user estimate override per ticker. */
+export interface CarriedEstimateOverride {
+  id: string; run_id: string; ticker: string; user_id?: number | null; note?: string | null; created_at: string;
+  overrides: EstimateOverrides; fields: string[]; before?: EstimateFigures | null; after?: EstimateFigures | null;
+}
+
+/** Model Accuracy: the user estimate overrides the next run of each ticker will carry. */
+export function getCarriedEstimateOverrides(): Promise<{ rows: CarriedEstimateOverride[]; carry_enabled: boolean }> {
+  return fetchJson(`${BASE}/model-accuracy/estimate-overrides`, { headers: { ..._authHeaders() } });
+}
+
+export function revokeCarriedEstimateOverride(ticker: string): Promise<{ ticker: string; revoked: number }> {
+  return fetchJson(`${BASE}/model-accuracy/estimate-overrides/${encodeURIComponent(ticker)}/revoke`, { method: 'POST', headers: { ..._authHeaders() } });
 }
 
 /** Ask the agent about its estimates; it answers from the run's trace and may propose an override. */

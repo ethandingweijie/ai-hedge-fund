@@ -33,13 +33,13 @@ logger = logging.getLogger(__name__)
 
 SCENARIOS = ("bear", "base", "bull")
 SCENARIO_FIELDS = ("revenue_growth_fy1", "revenue_growth_fy2", "ebitda_margin_fy1", "ebitda_margin_fy2", "eps_fy1", "eps_fy2")
-SHARED_FIELDS = ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "wacc", "tgr")
+SHARED_FIELDS = ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic", "wacc", "tgr")
 MEDIUM_TERM_METRICS = ("eps", "revenue", "revenue_growth", "ebitda_margin", "operating_margin", "ebit_margin")
 _BOUNDS = {
     "revenue_growth_fy1": (-0.9, 3.0), "revenue_growth_fy2": (-0.9, 3.0),
     "ebitda_margin_fy1": (-1.0, 1.0), "ebitda_margin_fy2": (-1.0, 1.0),
     "eps_fy1": (-1e6, 1e6), "eps_fy2": (-1e6, 1e6),
-    "fade_years": (1, 8), "tax_rate": (0.0, 0.6), "capex_alpha": (0.0, 3.0), "nwc_intensity": (-0.5, 1.0),
+    "fade_years": (1, 8), "tax_rate": (0.0, 0.6), "capex_alpha": (0.0, 3.0), "nwc_intensity": (-0.5, 1.0), "terminal_roic": (0.02, 1.0),
     "wacc": (0.02, 0.30), "tgr": (-0.02, 0.06),
 }
 
@@ -115,6 +115,11 @@ def changed_fields(ov: dict) -> list[str]:
 
 # ── the recompute ─────────────────────────────────────────────────────────────
 
+def _dcf_mod():
+    from src.agents.analysis import dcf_agent
+    return dcf_agent
+
+
 def _block_for(dr: dict, ctx: dict, ov: dict) -> dict:
     ge = dr.get("guidance_estimates") or {}
     block = {"estimates": deepcopy(ge.get("estimates") or {}), "medium_term_target": deepcopy(ge.get("medium_term_target")),
@@ -155,7 +160,9 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
     capture = _num(pb.get("capture"))
     block = _block_for(dr, ctx, ov)
     shared = ov["shared"]
-    engine_ov = {k: shared[k] for k in ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity") if k in shared}
+    engine_ov = {k: shared[k] for k in ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic") if k in shared}
+    block0 = _block_for(dr, ctx, {"shared": {}, "scenarios": {}, "medium_term_target": None})     # the agent's block, for the legs' baseline
+    shares_dr = _num(dr.get("shares_outstanding"))
     sa = (data.get("scenario_analysis") or {}).get(ticker) or {}
     probs = {sc: (_num((sa.get(sc) or {}).get("probability")) or {"bear": 0.25, "base": 0.5, "bull": 0.25}[sc]) for sc in SCENARIOS}
     out_sc: dict = {}
@@ -198,26 +205,98 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
         rec["forecast"] = gfm.summary(fc)
         rec["dcf"] = {"value": iv_dcf, "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv, "projection_rows": rows,
                       "growth_schedule": fc["growth_schedule"], "margin_schedule": fc["fcf_margin_schedule"], "wacc": float(wacc), "tgr": float(tgr)}
-        # the blend: the DCF leg at its own weight, every other leg as priced
+        # Owner, 2026-10-03 ("especially the management guidance to estimates"): the forward multiples
+        # re-price on the user's FY+1 estimates by the pipeline's own rule. The agent's metric for the
+        # same leg is rebuilt from the agent's block and forecast, and the leg moves by that ratio, so
+        # the leg keeps its basis (consensus or guidance-derived) and moves only for the user's change.
+        legs_changed: dict = {}
+        try:
+            fc0 = gfm.build_forecast(block0, scenario=sc, series=None, hist=hist, overrides=None,
+                                     profile_name=inputs.get("profile_name") or dr.get("profile"), sector=inputs.get("sector") or data.get("sector"),
+                                     wacc=_num(leg.get("wacc")) or wacc, tgr=_num(leg.get("tgr")) if _num(leg.get("tgr")) is not None else tgr,
+                                     shares=float(leg["shares"]), net_debt=float(leg.get("net_debt") or 0.0), spot=spot,
+                                     peer_ev_ebitda=_num(inputs.get("peer_ev_ebitda")), market_growth=_num(inputs.get("market_growth")),
+                                     engine_growth_path=leg.get("growth_schedule"), fcf_margin_base=_num(leg.get("fcf_margin_base")))
+        except Exception:                                   # noqa: BLE001
+            fc0 = None
+        user_m = _dcf_mod()._guidance_forward_overlay(block, None, sc, fc, _num(leg.get("revenue_base"))) or {}
+        agent_m = _dcf_mod()._guidance_forward_overlay(block0, None, sc, fc0, _num(leg.get("revenue_base"))) or {}
+        new_leg_values: dict = {}
+        for name, tr in (scen.get("leg_inputs") or {}).items():
+            if name == "DCF" or not isinstance(tr, dict) or tr.get("kind") not in ("equity_multiple", "ev_multiple"):
+                continue
+            metric_label = str(tr.get("metric") or "")
+            if "NTM" not in metric_label and "guidance" not in metric_label:
+                continue                                    # trailing legs do not move on a forward estimate
+            m = ("eps" if "EPS" in metric_label else "ebitda" if "EBITDA" in metric_label else "ebit" if "EBIT" in metric_label
+                 else "revenue" if "Revenue" in metric_label else None)
+            if not m or not _num(tr.get("metric_value")) or not _num(tr.get("multiple")):
+                continue
+            u, a = _num((user_m.get(m) or {}).get(sc)), _num((agent_m.get(m) or {}).get(sc))
+            if u is None or u <= 0:
+                continue
+            old_metric = float(tr["metric_value"])
+            if a is not None and a > 0:
+                new_metric = old_metric * (u / a)
+                basis = "scaled by your estimate vs the agent's"
+            elif "guidance" in metric_label:
+                new_metric = u
+                basis = "your estimate in place of the agent's"
+            else:
+                new_metric = u
+                basis = "your estimate in place of consensus"
+            if abs(new_metric - old_metric) < 1e-12:
+                continue
+            mult = float(tr["multiple"])
+            if tr.get("kind") == "equity_multiple":
+                new_value = new_metric * mult
+            else:
+                sh = _num(tr.get("shares")) or _num(leg.get("shares")) or shares_dr
+                if not sh:
+                    continue
+                ev = new_metric * mult
+                new_value = (ev - float(tr.get("net_debt") or leg.get("net_debt") or 0.0) - float(tr.get("minority_interest") or 0.0)
+                             - float(tr.get("preferred_equity") or 0.0)) / sh
+            legs_changed[name] = {"metric": m, "metric_before": old_metric, "metric_after": new_metric, "multiple": mult,
+                                  "value_before": _num(tr.get("value")), "value_after": new_value, "basis": basis}
+        rec["legs"] = legs_changed
+        # the blend: every leg at its own weight -- the DCF re-projected, the forward legs re-priced
         eff = scen.get("effective_weights") or []
         mit = scen.get("method_iv_table") or {}
         w_dcf = sum(float(e.get("weight") or 0.0) for e in eff if (e.get("value_key") or e.get("method")) == "DCF")
         rec["dcf_weight"] = w_dcf
-        if w_dcf > 0 and iv_dcf is not None and iv_dcf > 0:
+        weights = [(e.get("value_key") or e.get("method"), float(e.get("weight") or 0.0)) for e in eff]
+        if w_dcf == 0 and iv_dcf is not None and iv_dcf > 0 and any(str(p.get("name")) == "DCF" for p in (scen.get("profile_weights") or [])):
+            # the agent's run dropped the DCF (it did not price); the user's numbers make it price, so
+            # the profile's INTENDED weights apply, renormalised over the legs that have a value
+            weights = [(str(p.get("name")), float(p.get("weight") or 0.0)) for p in (scen.get("profile_weights") or [])]
+            w_dcf = sum(w for k, w in weights if k == "DCF")
+            rec["dcf_weight"] = w_dcf
+            rec["note"] = "the agent's run dropped the DCF (it did not price); your estimates make it price, so the profile's intended weights apply, renormalised"
+        # the blend is rebuilt only when something in it moved (the DCF at weight, or a forward leg);
+        # otherwise the run's own intrinsic value stands, rounding and all
+        if (w_dcf > 0 and iv_dcf is not None and iv_dcf > 0) or legs_changed:
             num = den = 0.0
-            for e in eff:
-                k = e.get("value_key") or e.get("method")
-                w = float(e.get("weight") or 0.0)
-                v = iv_dcf if k == "DCF" else _num(mit.get(k))
-                if w > 0 and v is not None:
+            for k, w in weights:
+                if w <= 0:
+                    continue
+                if k == "DCF":
+                    v = iv_dcf if (iv_dcf is not None and iv_dcf > 0) else None
+                elif k in legs_changed:
+                    v = legs_changed[k]["value_after"]
+                else:
+                    v = _num(mit.get(k))
+                if v is not None:
                     num += w * v
                     den += w
             if den > 0:
                 rec["intrinsic_value"] = num / den
-        elif w_dcf > 0:
-            rec["note"] = "the re-projected DCF did not price (value ≤ 0); the blend keeps the agent's value"
-        else:
-            rec["note"] = f"the DCF carries no weight in the {dr.get('profile')} profile's blend: the override moves the DCF cross-check only"
+        if w_dcf > 0 and not (iv_dcf is not None and iv_dcf > 0):
+            rec["note"] = "the re-projected DCF did not price (value ≤ 0); its weight is renormalised onto the other legs"
+        elif w_dcf == 0 and not legs_changed:
+            rec["note"] = f"the DCF carries no weight in the {dr.get('profile')} profile's blend and no forward leg carries an estimate: the override moves the DCF cross-check only"
+        elif w_dcf == 0:
+            rec["note"] = f"the DCF carries no weight in the {dr.get('profile')} profile's blend; the forward legs re-priced on your estimates: " + ", ".join(legs_changed)
         if spot is not None and capture is not None and rec["intrinsic_value"] is not None:
             rec["target"] = spot + capture * (rec["intrinsic_value"] - spot)
     pt = sum(probs[sc] * out_sc[sc]["target"] for sc in SCENARIOS if out_sc[sc]["target"] is not None)
@@ -266,6 +345,13 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
             scen["iv_dcf"] = d["value"]
             if "DCF" in (scen.get("method_iv_table") or {}) or rec.get("dcf_weight"):
                 scen.setdefault("method_iv_table", {})["DCF"] = round(float(d["value"]), 2)
+        for name, lg in (rec.get("legs") or {}).items():
+            tr = (scen.get("leg_inputs") or {}).get(name)
+            if isinstance(tr, dict) and lg.get("value_after") is not None:
+                tr.update({"value": lg["value_after"], "metric_value": lg["metric_after"], "per_share_metric": (lg["metric_after"] if tr.get("kind") == "equity_multiple" else tr.get("per_share_metric")),
+                           "metric_agent": lg["metric_before"], "metric": str(tr.get("metric") or "") + " · user estimate", "user_override": True})
+                if name in (scen.get("method_iv_table") or {}):
+                    scen["method_iv_table"][name] = round(float(lg["value_after"]), 2)
         if rec.get("intrinsic_value") is not None:
             scen["intrinsic_value"] = round(float(rec["intrinsic_value"]), 2)
             pb_sc.setdefault(sc, {})["intrinsic_value"] = round(float(rec["intrinsic_value"]), 2)
@@ -292,6 +378,16 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
                     ests.setdefault(sc2, {}).update(row)
                 if (res.get("overrides") or {}).get("medium_term_target") is not None:
                     ge["medium_term_target"] = (res["overrides"]["medium_term_target"] or None)
+    pm = record.get("pm") or (res.get("pm") if isinstance(res.get("pm"), dict) else None)
+    if pm and pm.get("rationale"):
+        for holder in ((data.get("decisions") or {}).get(ticker), (payload.get("decisions") or {}).get(ticker)):
+            if isinstance(holder, dict):
+                holder["rationale_agent"] = holder.get("rationale_agent", holder.get("rationale"))
+                holder["headline_agent"] = holder.get("headline_agent", holder.get("headline"))
+                holder["rationale"] = pm["rationale"]
+                if pm.get("headline"):
+                    holder["headline"] = pm["headline"]
+                holder["pm_regenerated_at"] = pm.get("regenerated_at")
     after = res.get("after") or {}
     sa = (data.get("scenario_analysis") or {}).get(ticker)
     if isinstance(sa, dict) and after.get("12m_price_target") is not None:
@@ -323,78 +419,42 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
     return payload
 
 
-# ── persistence (web_runs' database; one active record per run + ticker) ─────
-
-_DDL = """CREATE TABLE IF NOT EXISTS estimate_overrides (
-    id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL,
-    ticker TEXT NOT NULL,
-    user_id INTEGER,
-    overrides_json TEXT NOT NULL,
-    result_json TEXT NOT NULL,
-    note TEXT,
-    created_at TEXT NOT NULL,
-    active INTEGER DEFAULT 1
-)"""
-_IDX = "CREATE INDEX IF NOT EXISTS idx_estimate_overrides_run ON estimate_overrides(run_id, ticker, active)"
-_ensured = False
-
-
-def _svc():
-    from app.backend.services import analysis_service as svc            # lazy: the service imports this module
-    return svc
-
+# ── persistence: src.data.estimate_override_store, shared with the pipeline's carry-forward ──
 
 def ensure_table() -> None:
-    global _ensured
-    if _ensured:
-        return
-    svc = _svc()
-    svc._exec(_DDL)
-    svc._exec(_IDX)
-    _ensured = True
-
-
-def _row_to_record(row) -> dict:
-    g = (lambda k: row[k]) if not isinstance(row, dict) else row.get
-    return {"id": g("id"), "run_id": g("run_id"), "ticker": g("ticker"), "user_id": g("user_id"), "note": g("note"),
-            "created_at": g("created_at"), "overrides": json.loads(g("overrides_json") or "{}"), "result": json.loads(g("result_json") or "{}")}
+    from src.data import estimate_override_store as store
+    store.ensure_table()
 
 
 def get_active(run_id: str, ticker: str) -> Optional[dict]:
-    ensure_table()
-    row = _svc()._fetch_one("SELECT * FROM estimate_overrides WHERE run_id = ? AND ticker = ? AND active = 1 ORDER BY created_at DESC LIMIT 1",
-                            [run_id, ticker])
-    return _row_to_record(row) if row else None
+    from src.data import estimate_override_store as store
+    return store.get_active(run_id, ticker)
 
 
 def list_active(run_id: str) -> list[dict]:
-    ensure_table()
-    rows = _svc()._fetch("SELECT * FROM estimate_overrides WHERE run_id = ? AND active = 1 ORDER BY created_at DESC", [run_id])
-    seen, out = set(), []
-    for r in rows:
-        rec = _row_to_record(r)
-        if rec["ticker"] not in seen:
-            seen.add(rec["ticker"])
-            out.append(rec)
-    return out
+    from src.data import estimate_override_store as store
+    return store.list_active(run_id)
 
 
 def save(run_id: str, ticker: str, user_id: Optional[int], overrides: dict, note: Optional[str], result: dict) -> dict:
-    ensure_table()
-    svc = _svc()
-    svc._exec("UPDATE estimate_overrides SET active = 0 WHERE run_id = ? AND ticker = ? AND active = 1", [run_id, ticker])
-    rec = {"id": uuid.uuid4().hex, "run_id": run_id, "ticker": ticker, "user_id": user_id, "note": (note or "").strip()[:500] or None,
-           "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "overrides": overrides, "result": svc._sanitize_floats(result)}
-    svc._exec("INSERT INTO estimate_overrides (id, run_id, ticker, user_id, overrides_json, result_json, note, created_at, active) "
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)",
-              [rec["id"], run_id, ticker, user_id, json.dumps(rec["overrides"]), json.dumps(rec["result"], default=str), rec["note"], rec["created_at"]])
-    return rec
+    from src.data import estimate_override_store as store
+    from app.backend.services import analysis_service as svc
+    return store.save(run_id, ticker, user_id, overrides, note, svc._sanitize_floats(result))
 
 
 def clear(run_id: str, ticker: str) -> int:
-    ensure_table()
-    return _svc()._exec("UPDATE estimate_overrides SET active = 0 WHERE run_id = ? AND ticker = ? AND active = 1", [run_id, ticker])
+    from src.data import estimate_override_store as store
+    return store.clear(run_id, ticker)
+
+
+def attach_pm(record: dict, pm: dict) -> dict:
+    """Store a regenerated PM rationale and headline on the active record (applied on read)."""
+    from src.data import estimate_override_store as store
+    res = dict(record.get("result") or {})
+    res["pm"] = pm
+    store.update_result(record["id"], res)
+    record["result"] = res
+    return record
 
 
 def apply_saved(run_id: str, payload: dict) -> dict:

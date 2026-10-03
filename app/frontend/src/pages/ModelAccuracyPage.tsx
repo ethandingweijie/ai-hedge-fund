@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/auth-context';
 import {
   getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory, reviewSegmentMemory,
   getIndustryInputs, reviewIndustryInput, type IndustryInputRow,
+  getCarriedEstimateOverrides, revokeCarriedEstimateOverride, type CarriedEstimateOverride,
   getDynamicMultiples, pinDynamicMultiple, unpinDynamicMultiple,
   type DynamicMultiplesLog, type DynamicMultipleRow,
   promoteCalibration, rollbackCalibration, dismissCalibration,
@@ -629,6 +630,61 @@ function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
 
 /** Inputs FMP does not carry, cited as filed and checked against FMP. Nothing
  *  reaches a valuation until accepted here (owner decision 2026-09-20). */
+/** Owner, 2026-10-03 (interactive agent): the user estimate overrides the next run of each ticker carries. */
+function EstimateOverridesSection({ allowed }: { allowed: boolean }) {
+  const [rows, setRows] = useState<CarriedEstimateOverride[] | null>(null);
+  const [carry, setCarry] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback(() => {
+    getCarriedEstimateOverrides().then((r) => { setRows(r.rows); setCarry(r.carry_enabled); }).catch((e: Error) => setError(e.message));
+  }, []);
+  useEffect(() => { if (allowed) reload(); }, [allowed, reload]);
+  const fmt = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+  return (
+    <section>
+      <SectionTitle hint="Estimates a user saved on a report in place of the agent's. The latest per ticker is carried into that name's next run (its numbers replace the research's in the guidance block; its engine inputs, WACC and terminal growth replace the engine's) until revoked here. Revoking does not change runs that already carry it.">
+        Estimate overrides carried forward {rows && <Chip strong>{rows.length} ticker{rows.length === 1 ? '' : 's'}</Chip>}
+        {!carry && <Chip>carry-forward OFF (ESTIMATE_OVERRIDE_CARRY)</Chip>}
+      </SectionTitle>
+      {error && <Card className="p-4 text-sm text-foreground">Could not load estimate overrides: {error}</Card>}
+      {rows && rows.length === 0 && <Card className="p-4 text-sm text-muted-foreground">None saved.</Card>}
+      {rows && rows.length > 0 && (
+        <Card className="p-0 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-3 py-2">Ticker</th>
+                <th className="text-left font-medium px-3 py-2">Fields</th>
+                <th className="text-left font-medium px-3 py-2">Why</th>
+                <th className="text-right font-medium px-3 py-2">Agent IV → user IV</th>
+                <th className="text-left font-medium px-3 py-2">Saved</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b border-border last:border-0 align-top">
+                  <td className="px-3 py-2 font-medium tabular-nums">{r.ticker}<div className="font-normal text-muted-foreground">run {r.run_id.slice(0, 8)}</div></td>
+                  <td className="px-3 py-2">{r.fields.join(', ')}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{r.note ?? '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmt(r.before?.intrinsic_value)} → {fmt(r.after?.intrinsic_value)}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{r.created_at.slice(0, 10)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button type="button" className="underline decoration-dotted underline-offset-2"
+                      onClick={() => revokeCarriedEstimateOverride(r.ticker).then(reload).catch((e: Error) => setError(e.message))}>
+                      revoke
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </section>
+  );
+}
+
 function IndustryInputsSection({ allowed }: { allowed: boolean }) {
   const [rows, setRows] = useState<IndustryInputRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -937,6 +993,8 @@ export function ModelAccuracyPage() {
             <SegmentMemorySection allowed={allowed} />
 
             <IndustryInputsSection allowed={allowed} />
+
+            <EstimateOverridesSection allowed={allowed} />
 
             <DynamicMultiplesSection allowed={allowed} />
 

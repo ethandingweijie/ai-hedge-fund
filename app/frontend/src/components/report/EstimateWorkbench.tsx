@@ -21,7 +21,7 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { askEstimateAgent, clearEstimateOverride, previewEstimateOverride, saveEstimateOverride } from '@/lib/api';
+import { askEstimateAgent, clearEstimateOverride, previewEstimateOverride, regeneratePmText, saveEstimateOverride } from '@/lib/api';
 import type {
   DcfRange, EstimateOverrides, EstimateRecompute, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
 } from '@/lib/reportTypes';
@@ -30,7 +30,7 @@ const LABEL_CLS = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-mu
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 type Scenario = (typeof SCENARIOS)[number];
 type ScenarioField = keyof GuidanceScenarioRow;
-type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'wacc' | 'tgr';
+type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr';
 
 const SCENARIO_FIELDS: { key: ScenarioField; label: (fy1: string, fy2: string) => string; kind: 'pct' | 'num' }[] = [
   { key: 'revenue_growth_fy1', label: (a) => `Revenue growth ${a}`, kind: 'pct' },
@@ -45,6 +45,7 @@ const SHARED_FIELDS: { key: SharedField; label: string; kind: 'pct' | 'num' | 'i
   { key: 'tax_rate', label: 'Tax rate', kind: 'pct', hint: 'history median unless overridden' },
   { key: 'capex_alpha', label: 'Growth capex per unit of new revenue', kind: 'num', hint: 'capex = D&A + alpha × new revenue' },
   { key: 'nwc_intensity', label: 'Working capital per unit of new revenue', kind: 'num', hint: 'cash absorbed by growth' },
+  { key: 'terminal_roic', label: 'Terminal ROIC', kind: 'pct', hint: 'reinvestment = terminal growth / ROIC; the engine floors it at WACC + 2pp' },
   { key: 'wacc', label: 'WACC', kind: 'pct', hint: 'the discount rate the leg used' },
   { key: 'tgr', label: 'Terminal growth', kind: 'pct', hint: 'the perpetuity rate' },
 ];
@@ -93,7 +94,8 @@ function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceFo
     scenarios,
     shared: {
       fade_years: fmtIn(fc?.fade_years, 'int'), tax_rate: fmtIn(h.tax_rate as number, 'pct'), capex_alpha: fmtIn(h.capex_alpha as number, 'num'),
-      nwc_intensity: fmtIn(h.nwc_intensity as number, 'num'), wacc: fmtIn(inp.wacc, 'pct'), tgr: fmtIn(inp.tgr, 'pct'),
+      nwc_intensity: fmtIn(h.nwc_intensity as number, 'num'), terminal_roic: fmtIn(fc?.terminal?.roic_terminal, 'pct'),
+      wacc: fmtIn(inp.wacc, 'pct'), tgr: fmtIn(inp.tgr, 'pct'),
     },
     mt: { metric: mt?.metric ?? 'eps', target_year: mt?.target_year ?? '', low: fmtIn(mt?.low, 'num'), mid: fmtIn(mt?.mid, 'num'), high: fmtIn(mt?.high, 'num'), enabled: !!mt },
   };
@@ -158,7 +160,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
   const [scenario, setScenario] = useState<Scenario>('base');
   const [note, setNote] = useState('');
   const [preview, setPreview] = useState<EstimateRecompute | null>(null);
-  const [busy, setBusy] = useState<'preview' | 'save' | 'revert' | 'ask' | null>(null);
+  const [busy, setBusy] = useState<'preview' | 'save' | 'revert' | 'ask' | 'pm' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
   const [thread, setThread] = useState<{ role: 'user' | 'agent'; content: string; proposal?: EstimateOverrides | null; proposalError?: string | null }[]>([]);
@@ -197,6 +199,13 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
       onRunUpdated?.(r.run);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   }
+  async function regenerate() {
+    setBusy('pm'); setError(null);
+    try {
+      const r = await regeneratePmText(runId, ticker);
+      onRunUpdated?.(r.run);
+    } catch (e) { setError(e instanceof Error ? e.message.replace(/^HTTP \d+: /, '') : String(e)); } finally { setBusy(null); }
+  }
   async function ask() {
     const q = question.trim();
     if (!q) return;
@@ -233,7 +242,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
       </div>
       {override ? (
         <div className="mt-1 text-[11.5px] text-foreground/85">
-          {override.fields?.join(', ')}{override.note ? ` — ${override.note}` : ''}. Agent's base IV {money(override.before?.intrinsic_value)} → {money(override.after?.intrinsic_value)}; 12-month target {money(override.before?.['12m_price_target'])} → {money(override.after?.['12m_price_target'])}. The PDF and the workbook carry the same figures.
+          {override.fields?.join(', ')}{override.note ? ` — ${override.note}` : ''}. Agent's base IV {money(override.before?.intrinsic_value)} → {money(override.after?.intrinsic_value)}; 12-month target {money(override.before?.['12m_price_target'])} → {money(override.after?.['12m_price_target'])}. The PDF and the workbook carry the same figures. These estimates are carried into the next run of {ticker} until revoked on the Model Accuracy page.
         </div>
       ) : (
         <div className="mt-1 text-[11.5px] text-muted-foreground">
@@ -286,6 +295,11 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
         <input className="h-8 min-w-[12rem] flex-1 rounded border border-input bg-background px-2 text-[12px]" placeholder="Why (saved with the override)" value={note} onChange={(e) => setNote(e.target.value)} />
         <Button size="sm" disabled={busy !== null || nChanges === 0} onClick={() => run('save')}>{busy === 'save' ? 'Saving…' : 'Save override'}</Button>
         {override ? <Button size="sm" variant="ghost" disabled={busy !== null} onClick={revert}>{busy === 'revert' ? 'Reverting…' : 'Revert to the agent'}</Button> : null}
+        {override ? (
+          <Button size="sm" variant="outline" disabled={busy !== null} onClick={regenerate} title="One model call: the PM rewrites its rationale and headline on your figures">
+            {busy === 'pm' ? 'Rewriting…' : 'Rewrite PM rationale on my figures'}
+          </Button>
+        ) : null}
         <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => { setForm(base); setPreview(null); setError(null); }}>Reset fields</Button>
       </div>
       {error ? <div className="mt-2 text-[11.5px] font-medium text-foreground">{error}</div> : null}
@@ -313,6 +327,20 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
               {scenario} DCF {money(sc.before.dcf_value)} → {money(sc.dcf?.value)} at {(sc.dcf_weight * 100).toFixed(0)}% weight; IV {money(sc.before.intrinsic_value)} → {money(sc.intrinsic_value)}; target {money(sc.before.target)} → {money(sc.target)}.
             </div>
           ) : null}
+          {sc?.legs && Object.keys(sc.legs).length ? (
+            <table className="mt-2 w-full tabular-nums text-[11px]">
+              <thead><tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70"><th className="text-left font-medium">Forward leg ({scenario})</th><th className="text-right font-medium">Metric agent → you</th><th className="text-right font-medium">Value agent → you</th></tr></thead>
+              <tbody>
+                {Object.entries(sc.legs).map(([name, lg]) => (
+                  <tr key={name} className="border-t border-border/50">
+                    <td className="py-1 text-foreground/85">{name} <span className="text-muted-foreground">({lg.basis})</span></td>
+                    <td className="py-1 text-right">{lg.metric === 'eps' ? `${money(lg.metric_before)} → ${money(lg.metric_after)}` : `${(lg.metric_before / 1e9).toFixed(2)}bn → ${(lg.metric_after / 1e9).toFixed(2)}bn`}</td>
+                    <td className="py-1 text-right">{money(lg.value_before)} → {money(lg.value_after)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
           {pf?.steps?.length ? (
             <details className="mt-2">
               <summary className="cursor-pointer text-[11px] text-muted-foreground">How your version was built ({pf.archetype_name}, {pf.horizon_years}-year path)</summary>
@@ -339,7 +367,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
               {m.proposal ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="text-[11px] text-muted-foreground">Proposed: {describe(m.proposal)}{m.proposal.rationale ? ` — ${m.proposal.rationale}` : ''}</span>
-                  <Button size="sm" variant="outline" onClick={() => { setForm((f) => applyProposal(f, m.proposal!)); setPreview(null); }}>Load into the form</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setForm((f) => applyProposal(f, m.proposal!)); setPreview(null); if (m.proposal?.rationale && !note) setNote(m.proposal.rationale); }}>Load into the form</Button>
                 </div>
               ) : null}
               {m.proposalError ? <div className="mt-1 text-[11px] text-muted-foreground">The agent's proposal was not in the accepted shape ({m.proposalError}); nothing loaded.</div> : null}

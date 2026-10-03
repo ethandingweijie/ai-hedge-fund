@@ -78,6 +78,14 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           {decision.headline}
         </p>
       )}
+      {/* Owner, 2026-10-03: an estimate override moved the figures; the PM text is the agent's until rewritten. */}
+      {decision?.price_target_override && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          {decision.pm_regenerated_at
+            ? `PM rationale and headline rewritten on your estimate override (${String(decision.pm_regenerated_at).slice(0, 16).replace('T', ' ')} UTC).`
+            : `Target and intrinsic value reflect your estimate override; the PM rationale and headline were written before it. Rewrite them from the estimates panel.`}
+        </p>
+      )}
 
       {/* ── Research rating + disclosure checklist ── */}
       {decision?.research_view && (

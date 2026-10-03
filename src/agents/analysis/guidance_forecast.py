@@ -358,6 +358,9 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                 hist["tax_rate_source"] = "user override"
     if _num(ov.get("fade_years")) is not None:
         applied["fade_years"] = cfg["fade_years"]
+    roic_user = _num(ov.get("terminal_roic"))
+    if roic_user is not None:
+        applied["terminal_roic"] = float(roic_user)
     if not hist.get("revenue"):
         return None
     tg = targets_for(block, scenario, hist)
@@ -475,6 +478,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     last = rows[-1]
     roic_T = hist["roic_median"] if (hist["roic_median"] is not None and hist["roic_median"] == hist["roic_median"]) else None
     roic_terminal = max(float(wacc) + float(cfg["terminal_roic_floor_over_wacc"]), roic_T or 0.0)
+    if roic_user is not None:
+        roic_terminal = float(roic_user)                  # the user's terminal ROIC, as entered
     reinvest = float(tgr) / roic_terminal if roic_terminal > 0 else None
     tv = last["ufcf"] * (1.0 + float(tgr)) / (float(wacc) - float(tgr)) if float(wacc) > float(tgr) else None
     ebitda_T = last["ebit"] + last["da"]

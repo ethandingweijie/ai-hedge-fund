@@ -33,7 +33,10 @@ def _payload():
     legs = {"DCF": {"kind": "dcf", "value": iv, "revenue_base": 42e9, "fcf_margin_base": 0.03, "growth_base": 0.05, "growth_schedule": fc["growth_schedule"],
                     "margin_delta_absolute": 0.0, "wacc": 0.08, "wacc_schedule": None, "tgr": 0.025, "fcf_floor": 0.0, "net_debt": 1e9, "shares": 52e6,
                     "minority_interest": 0.0, "preferred_equity": 0.0, "pv_fcf_per_share": pvf, "pv_tv_per_share": pvt, "projection_rows": rows},
-            "Forward P/E": {"kind": "equity_multiple", "value": 260.0}, "Forward EV/EBITDA": {"kind": "ev_multiple", "value": 240.0}}
+            "Forward P/E": {"kind": "equity_multiple", "value": 260.0, "metric": "EPS (NTM consensus, base)", "metric_value": 13.0, "per_share_metric": 13.0, "multiple": 20.0},
+            "Forward EV/EBITDA": {"kind": "ev_multiple", "value": 240.0, "metric": "EBITDA (NTM consensus, base)", "metric_value": 1.6e9, "multiple": 8.425,
+                                  "ev": 13.48e9, "net_debt": 1e9, "minority_interest": 0.0, "preferred_equity": 0.0},
+            "FCF Yield": {"kind": "yield", "value": 200.0, "metric": "FCF, owner earnings (TTM)", "metric_value": 1.0e9, "multiple": 10.4}}
     eff = [{"method": "DCF", "value_key": "DCF", "bucket": "dcf", "weight": 0.4}, {"method": "Forward P/E", "value_key": "Forward P/E", "bucket": "multi", "weight": 0.3},
            {"method": "Forward EV/EBITDA", "value_key": "Forward EV/EBITDA", "bucket": "multi", "weight": 0.3}]
     blended = 0.4 * iv + 0.3 * 260.0 + 0.3 * 240.0
@@ -49,7 +52,7 @@ def _payload():
                                  "applied": True, "channel": {"schedule": fc["growth_schedule"]}, "guidance": {"revenue_growth": {"mid": -0.075}}},
           "guidance_forecast": gf.summary(fc),
           "forecast_context": {"history": hist, "inputs": fc["inputs"], "fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027"},
-          "projection_rows": rows, "pv_fcf_base": pvf, "pv_tv_base": pvt}
+          "projection_rows": rows, "pv_fcf_base": pvf, "pv_tv_base": pvt, "shares_outstanding": 52e6}
     sa = {"bear": {"probability": 0.3}, "base": {"probability": 0.5}, "bull": {"probability": 0.2}, "12m_price_target": round(tgt, 2),
           "expected_value": round(blended, 2), "current_price": spot,
           "reconciliation": {"current_price": spot, "blended_iv": round(blended, 2), "expected_value": round(blended, 2), "12m_price_target": round(tgt, 2),
@@ -97,6 +100,51 @@ def test_recompute_moves_the_dcf_leg_the_blend_and_the_target_by_the_engine_form
     assert p["data"]["dcf_range"]["MOH"]["base"]["intrinsic_value"] == before
 
 
+def test_forward_legs_reprice_on_the_users_fy1_estimates_by_the_pipelines_rule():
+    """Owner, 2026-10-03: 'especially the management guidance to estimates' -- the forward multiples
+    move with the user's FY+1 EPS and margin, scaled against the agent's own FY+1 figure so the leg keeps
+    its consensus basis; the trailing FCF-yield leg does not move on a forward estimate."""
+    p = _payload()
+    res = eo.recompute(p, "MOH", {"scenarios": {"base": {"eps_fy1": 5.3 * 1.10}}})          # +10% on the research's FY+1 EPS
+    legs = res["scenarios"]["base"]["legs"]
+    assert set(legs) == {"Forward P/E"}                                                      # EBITDA inputs unchanged → EV/EBITDA untouched
+    pe = legs["Forward P/E"]
+    assert pe["metric_after"] == pytest.approx(13.0 * 1.10) and pe["value_after"] == pytest.approx(13.0 * 1.10 * 20.0) and "scaled" in pe["basis"]
+    b = res["scenarios"]["base"]
+    assert b["intrinsic_value"] == pytest.approx(0.4 * b["dcf"]["value"] + 0.3 * pe["value_after"] + 0.3 * 240.0)
+    res2 = eo.recompute(p, "MOH", {"scenarios": {"base": {"ebitda_margin_fy1": 0.035 * 1.20}}})   # +20% on the FY+1 margin
+    ev = res2["scenarios"]["base"]["legs"]["Forward EV/EBITDA"]
+    assert ev["metric_after"] == pytest.approx(1.6e9 * 1.20) and ev["value_after"] == pytest.approx((1.6e9 * 1.20 * 8.425 - 1e9) / 52e6)
+    assert "FCF Yield" not in res2["scenarios"]["base"]["legs"]
+    # applied on read: the leg's value, metric and label move together
+    out = eo.apply_to_payload(copy.deepcopy(p), "MOH", {"id": "o", "created_at": "2026-10-03T00:00:00", "overrides": res["overrides"], "result": res})
+    tr = out["data"]["dcf_range"]["MOH"]["base"]["leg_inputs"]["Forward P/E"]
+    assert tr["value"] == pytest.approx(pe["value_after"]) and tr["metric_agent"] == 13.0 and tr["metric"].endswith("· user estimate")
+    assert out["data"]["dcf_range"]["MOH"]["base"]["method_iv_table"]["Forward P/E"] == pytest.approx(pe["value_after"], abs=0.01)
+
+
+def test_a_dcf_the_agent_dropped_is_reweighted_from_the_profiles_intended_weights_when_it_prices():
+    p = _payload()
+    for s in ("bear", "base", "bull"):
+        sc = p["data"]["dcf_range"]["MOH"][s]
+        sc["effective_weights"] = [{"method": "Forward P/E", "value_key": "Forward P/E", "weight": 0.5}, {"method": "Forward EV/EBITDA", "value_key": "Forward EV/EBITDA", "weight": 0.5}]
+        sc["profile_weights"] = [{"name": "DCF", "weight": 0.4}, {"name": "Forward P/E", "weight": 0.3}, {"name": "Forward EV/EBITDA", "weight": 0.3}]
+        sc["legs_dropped"] = ["DCF"]
+    res = eo.recompute(p, "MOH", {"scenarios": {"base": {"revenue_growth_fy2": 0.20}}})
+    b = res["scenarios"]["base"]
+    assert b["dcf_weight"] == pytest.approx(0.4) and "intended weights" in b["note"]
+    assert b["intrinsic_value"] == pytest.approx(0.4 * b["dcf"]["value"] + 0.3 * 260.0 + 0.3 * 240.0)
+
+
+def test_terminal_roic_is_an_engine_override():
+    p = _payload()
+    res = eo.recompute(p, "MOH", {"shared": {"terminal_roic": 0.30}})
+    fc = res["scenarios"]["base"]["forecast"]
+    assert fc["terminal"]["roic_terminal"] == pytest.approx(0.30) and fc["overrides_applied"] == {"terminal_roic": 0.30}
+    with pytest.raises(ValueError, match="outside"):
+        eo.normalize_overrides({"shared": {"terminal_roic": 1.5}})
+
+
 def test_recompute_without_dcf_weight_moves_the_cross_check_only_and_says_so():
     p = _payload()
     for s in ("bear", "base", "bull"):
@@ -105,7 +153,7 @@ def test_recompute_without_dcf_weight_moves_the_cross_check_only_and_says_so():
     res = eo.recompute(p, "MOH", {"scenarios": {"base": {"revenue_growth_fy2": 0.20}}})
     b = res["scenarios"]["base"]
     assert b["dcf_weight"] == 0 and "no weight" in b["note"]
-    assert b["intrinsic_value"] == pytest.approx(p["data"]["dcf_range"]["MOH"]["base"]["intrinsic_value"])
+    assert b["intrinsic_value"] == pytest.approx(p["data"]["dcf_range"]["MOH"]["base"]["intrinsic_value"])   # growth alone moves no forward leg
     assert b["dcf"]["value"] != p["data"]["dcf_range"]["MOH"]["base"]["leg_inputs"]["DCF"]["value"]
 
 
@@ -166,9 +214,9 @@ def test_the_override_is_applied_on_read_to_every_surface_the_exports_use():
 
 def test_save_get_clear_round_trip_and_apply_on_read(tmp_path, monkeypatch):
     monkeypatch.setenv("RUN_ARCHIVE_PATH", str(tmp_path / "archive.db"))
-    monkeypatch.setattr(eo, "_ensured", False)
-    from app.backend.services import analysis_service as svc
-    monkeypatch.setattr(svc.db, "is_postgres", lambda: False)
+    from src.data import estimate_override_store as store
+    monkeypatch.setattr(store, "_ready_key", None)
+    monkeypatch.setattr(store.db, "is_postgres", lambda: False)
     p = _payload()
     res = eo.recompute(p, "MOH", {"scenarios": {"base": {"revenue_growth_fy2": 0.20}}})
     assert eo.get_active("run-1", "MOH") is None
@@ -180,7 +228,16 @@ def test_save_get_clear_round_trip_and_apply_on_read(tmp_path, monkeypatch):
     assert eo.get_active("run-1", "MOH")["overrides"] == res2["overrides"] and len(eo.list_active("run-1")) == 1   # one active per run+ticker
     applied = eo.apply_saved("run-1", copy.deepcopy(p))
     assert applied["data"]["dcf_range"]["MOH"]["estimate_override"]["fields"] == ["wacc"]
-    assert eo.clear("run-1", "MOH") == 1 and eo.get_active("run-1", "MOH") is None
+    # the carry-forward reads the ticker's latest active row, across runs; revoking the ticker stops it
+    eo.save("run-2", "MOH", 7, res["overrides"], "later run", res)
+    latest = store.latest_for_ticker("MOH")
+    assert latest["run_id"] == "run-2" and [r["ticker"] for r in store.list_carried()] == ["MOH"]
+    blk = store.merge_block({"estimates": {"base": {"revenue_growth_fy1": -0.075}}, "confidence": "MEDIUM"}, latest)
+    assert blk["estimates"]["base"]["revenue_growth_fy2"] == 0.20 and blk["estimates"]["bear"]["revenue_growth_fy2"] == 0.20 and blk["user_override"]["run_id"] == "run-2"
+    assert store.merge_block(None, latest)["confidence"] == "HIGH"
+    assert store.engine_overrides({"overrides": {"shared": {"tax_rate": 0.3, "wacc": 0.1}}}) == {"tax_rate": 0.3} and store.rate_overrides({"overrides": {"shared": {"tax_rate": 0.3, "wacc": 0.1}}}) == {"wacc": 0.1}
+    assert store.revoke_ticker("MOH") == 2 and store.latest_for_ticker("MOH") is None and store.list_carried() == []
+    assert eo.clear("run-1", "MOH") == 0 and eo.get_active("run-1", "MOH") is None
     assert eo.apply_saved("run-1", copy.deepcopy(p))["data"]["dcf_range"]["MOH"].get("estimate_override") is None
 
 
@@ -221,6 +278,7 @@ def client(monkeypatch):
     monkeypatch.setattr(eo, "get_active", lambda run_id, ticker: store.get("rec"))
     monkeypatch.setattr(eo, "save", lambda run_id, ticker, user_id, overrides, note, result: store.__setitem__("rec", {"id": "o1", "ticker": ticker, "note": note, "created_at": "2026-10-03T00:00:00", "overrides": overrides, "result": result}) or store["rec"])
     monkeypatch.setattr(eo, "clear", lambda run_id, ticker: 1 if store.pop("rec", None) else 0)
+    monkeypatch.setattr(eo, "attach_pm", lambda rec, pm: (store["rec"].setdefault("result", {}).__setitem__("pm", pm) or rec))
     app = FastAPI()
     app.include_router(ar.router)
     app.dependency_overrides[get_db] = lambda: None
@@ -270,6 +328,60 @@ def test_ask_answers_from_the_trace_and_proposes_in_the_accepted_shape(client, m
     assert client.post("/analysis/runs/run-1/estimates/ask", json={"ticker": "MOH", "question": "q"}, headers={"Authorization": "Bearer t1"}).status_code == 503
 
 
+def test_regenerate_rewrites_the_pm_text_on_the_overridden_run_and_applies_it_on_read(client, monkeypatch):
+    h = {"Authorization": "Bearer t1"}
+    assert client.post("/analysis/runs/run-1/estimates/regenerate?ticker=MOH", headers=h).status_code == 409      # no override yet
+    client.put("/analysis/runs/run-1/estimates", json={"ticker": "MOH", "overrides": {"shared": {"wacc": 0.1}}}, headers=h)
+    seen = {}
+
+    def fake_pm(state):
+        seen["tickers"] = state["data"]["tickers"]
+        seen["pt"] = state["data"]["decisions"]["MOH"]["price_target"]
+        return {"decisions": {"MOH": {"rationale": "Rewritten on the user's 10% WACC.", "headline": "User WACC 10%: PT Trimmed"}}}
+
+    import src.agents.portfolio_manager as pmm
+    monkeypatch.setattr(pmm, "run_advanced_portfolio_manager", fake_pm)
+    r = client.post("/analysis/runs/run-1/estimates/regenerate?ticker=MOH", headers=h)
+    assert r.status_code == 200 and seen["tickers"] == ["MOH"] and seen["pt"] != _payload()["decisions"]["MOH"]["price_target"]   # the PM saw the overridden run
+    dec = r.json()["run"]["data"]["decisions"]["MOH"]
+    assert dec["rationale"] == "Rewritten on the user's 10% WACC." and dec["headline"] == "User WACC 10%: PT Trimmed" and dec["rationale_agent"] == "x" and dec["pm_regenerated_at"]
+
+
+def test_model_accuracy_lists_and_revokes_carried_overrides(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from app.backend.routes import deps, model_accuracy as ma
+    from src.data import estimate_override_store as store
+    monkeypatch.setenv("MODEL_ACCURACY_EMAILS", "owner@example.com")
+    monkeypatch.setattr(deps, "get_user_from_token", lambda token, db: SimpleNamespace(id=1, email="owner@example.com") if token == "owner" else None)
+    monkeypatch.setattr(store, "list_carried", lambda: [{"id": "o1", "run_id": "run-1", "ticker": "MOH", "note": "n", "created_at": "2026-10-03T00:00:00", "overrides": {}, "fields": ["wacc"]}])
+    revoked = []
+    monkeypatch.setattr(store, "revoke_ticker", lambda t: revoked.append(t) or (1 if t == "MOH" else 0))
+    app = FastAPI()
+    app.include_router(ma.router)
+    from app.backend.database import get_db
+    app.dependency_overrides[get_db] = lambda: None
+    c = TestClient(app)
+    r = c.get("/model-accuracy/estimate-overrides", headers={"Authorization": "Bearer owner"})
+    assert r.status_code == 200 and r.json()["rows"][0]["ticker"] == "MOH" and r.json()["carry_enabled"] is True
+    assert c.post("/model-accuracy/estimate-overrides/MOH/revoke", headers={"Authorization": "Bearer owner"}).json()["revoked"] == 1
+    assert c.post("/model-accuracy/estimate-overrides/NOPE/revoke", headers={"Authorization": "Bearer owner"}).status_code == 404
+    assert c.get("/model-accuracy/estimate-overrides").status_code in (401, 403)
+
+
+def test_the_pm_inputs_capture_the_forward_leg_basis_and_a_carried_override():
+    from src.agents import portfolio_manager as pm
+    p = _payload()
+    dr = p["data"]["dcf_range"]["MOH"]
+    dr["base"]["leg_inputs"]["Forward P/E"].update({"metric": "EPS (guidance-derived FY+1 EPS estimate, base)", "metric_value": 5.3, "consensus_value": 4.8})
+    dr["estimate_override_carried"] = {"run_id": "run-0abcdef", "created_at": "2026-10-02T00:00:00", "fields": ["base.revenue_growth_fy2"], "note": "rate resets"}
+    state = {"data": p["data"]}
+    txt = pm._forward_estimates_block("MOH", state)
+    assert "Forward multiples basis: Forward P/E prices FY+1 EPS" in txt and "(guidance-derived) vs consensus" in txt and "+10%" in txt
+    assert "User estimate override carried from run run-0abc (2026-10-02): base.revenue_growth_fy2 — rate resets" in txt
+    assert "forward multiples price our guidance-derived estimate" in pm._PM_RATIONALE_SYSTEM_PROMPT
+
+
 # ── the DCF leg publishes what the page needs ────────────────────────────────
 
 @pytest.mark.slow
@@ -290,3 +402,8 @@ def test_the_dcf_leg_builds_the_base_forecast_and_publishes_the_context_on_a_gol
     leg = dr["base"]["leg_inputs"]["DCF"]
     assert "minority_interest" in leg and "preferred_equity" in leg and leg["scenario"] == "base"
     assert not any("did not build" in f for f in dr["base"].get("forward_flags") or [])
+    # the forward legs of every scenario price on the guidance-derived estimates, consensus kept beside
+    assert any(f.startswith("Forward multiples priced on guidance-derived estimates") for f in dr["base"].get("forward_flags") or [])
+    fwd = [(n, t) for n, t in dr["base"]["leg_inputs"].items() if isinstance(t, dict) and "guidance" in str(t.get("metric") or "")]
+    assert fwd and all(t.get("consensus_value") is not None or t.get("metric_value") for _, t in fwd)
+    assert dr["guidance_forecast_scenarios"] and set(dr["guidance_forecast_scenarios"]) == {"bear", "bull"}

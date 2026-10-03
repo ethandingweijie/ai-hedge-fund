@@ -463,6 +463,13 @@ function SummaryBody({
               {String(decision.headline)}
             </p>
           )}
+          {decision.price_target_override ? (
+            <p className="mb-3 text-[11px] text-muted-foreground">
+              {decision.pm_regenerated_at
+                ? 'PM rationale and headline rewritten on your estimate override.'
+                : 'Figures reflect your estimate override; the PM text was written before it. Rewrite it from the Valuation tab.'}
+            </p>
+          ) : null}
           {decision.research_view ? (
             /* Rated runs lead with the research rating and its disclosure
                checklist; shared with the desktop header. */

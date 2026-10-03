@@ -100,6 +100,26 @@ async def revoke_industry_input(ticker: str, kind: str, overlay: bool = False,
     return await _review_input(ticker, kind, "revoked", admin, overlay)
 
 
+# ── Estimate overrides carried forward (owner, 2026-10-03, interactive agent) ──
+
+@router.get("/estimate-overrides")
+async def estimate_overrides(admin=Depends(require_model_accuracy_owner)):
+    """The latest active estimate override per ticker: what the next run of each name carries."""
+    from src.data import estimate_override_store as store
+    rows = await asyncio.to_thread(store.list_carried)
+    return {"rows": rows, "carry_enabled": store.carry_enabled()}
+
+
+@router.post("/estimate-overrides/{ticker}/revoke")
+async def revoke_estimate_override(ticker: str, admin=Depends(require_model_accuracy_owner)):
+    """Stop carrying a ticker's user estimates into new runs; runs that already carry them are unchanged."""
+    from src.data import estimate_override_store as store
+    n = await asyncio.to_thread(store.revoke_ticker, ticker)
+    if n == 0:
+        raise HTTPException(status_code=404, detail=f"no active estimate override for {ticker!r}")
+    return {"ticker": ticker.upper(), "revoked": n, "reviewer": _actor(admin)}
+
+
 # ── Dynamic multiples: the quarterly update log (owner, 2026-09-21) ─────────
 
 @router.get("/dynamic-multiples")

@@ -173,3 +173,24 @@ def ask(payload: dict, ticker: str, question: str, history: Optional[list[dict]]
             proposal, err = out.proposal, str(exc)
     return {"answer": (out.answer or "").strip(), "proposal": proposal, "proposal_valid": valid, "proposal_error": err,
             "model": os.environ.get("ESTIMATE_AGENT_MODEL", AGENT_MODEL_NAME)}
+
+
+def regenerate_pm(payload: dict, ticker: str) -> dict:
+    """Rewrite the PM's rationale and headline on the run AS OVERRIDDEN (the payload must already carry
+    the override, i.e. come from get_run_result). One LLM call, on the user's explicit request only.
+    Returns {rationale, headline, headline_flags, regenerated_at}."""
+    from datetime import datetime, timezone
+    from src.agents.portfolio_manager import run_advanced_portfolio_manager
+    data = payload.get("data") or {}
+    if ticker not in (data.get("dcf_range") or {}):
+        raise KeyError(ticker)
+    state = {"messages": [], "data": {**data, "tickers": [ticker]},
+             "metadata": {"model_name": payload.get("model_name"), "model_provider": None, "show_reasoning": False}}
+    out = run_advanced_portfolio_manager(state)
+    dec = ((out.get("decisions") or {}).get(ticker)) or {}
+    if not dec.get("rationale"):
+        raise RuntimeError("the portfolio manager returned no rationale")
+    ovr = ((data.get("dcf_range") or {}).get(ticker) or {}).get("estimate_override") or {}
+    return {"rationale": dec.get("rationale"), "headline": dec.get("headline"), "headline_flags": dec.get("headline_flags"),
+            "rationale_length": dec.get("rationale_length"), "regenerated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "override_id": ovr.get("id"), "fields": ovr.get("fields")}

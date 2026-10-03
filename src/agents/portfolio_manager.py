@@ -108,7 +108,10 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "cites management's latest guidance with its date and source (earnings "
     "release or call), consensus, and our estimate, and says where we sit "
     "against both and why. When the block says management gives no guidance, "
-    "say that and anchor on consensus instead.\n"
+    "say that and anchor on consensus instead. When the block gives a forward-multiples "
+    "basis, say once that the forward multiples price our guidance-derived estimate and "
+    "give the consensus figure beside it; when it names a user estimate override, say "
+    "whose estimate the valuation runs on.\n"
     # Owner, 2026-10-03: the summary is read in one sitting.
     "Length rule — the whole rationale is at most 300 words. Fewer, denser "
     "themes beat more; a theme that only restates another is cut.\n"
@@ -1015,6 +1018,25 @@ def _forward_estimates_block(ticker: str, state) -> str:
                 lines.append("Forecast checks that FAILED: " + "; ".join(f"{i['name']}: {i['detail']}" for i in _bad)[:400])
             for f in (gfc.get("flags") or [])[:2]:
                 lines.append(f"Forecast flag: {f}")
+        # Owner, 2026-10-03 ("rationale should be captured"): the forward multiples price on the
+        # guidance-derived FY+1 estimates; the writer says so once, with consensus beside ours.
+        _legs = ((dcf.get("base") or {}).get("leg_inputs") or {})
+        _basis = []
+        for _ln, _tr in _legs.items():
+            if not isinstance(_tr, dict) or _tr.get("consensus_value") is None or "guidance" not in str(_tr.get("metric") or ""):
+                continue
+            _mv, _cv = _tr.get("metric_value"), _tr.get("consensus_value")
+            if isinstance(_mv, (int, float)) and isinstance(_cv, (int, float)) and _cv:
+                _per_share = _tr.get("kind") == "equity_multiple"
+                _f = (lambda v: f"{_sym}{float(v):,.2f}") if _per_share else (lambda v: f"{_sym}{float(v) / 1e9:,.2f}bn")
+                _basis.append(f"{_ln} prices FY+1 {str(_tr.get('metric')).split(' (')[0]} {_f(_mv)} (guidance-derived) vs consensus {_f(_cv)} ({(float(_mv) / float(_cv) - 1.0):+.0%})")
+        if _basis:
+            lines.append("Forward multiples basis: " + "; ".join(_basis) + ". Say so once in the estimates theme.")
+        _carried = dcf.get("estimate_override_carried") or {}
+        if _carried:
+            lines.append(f"User estimate override carried from run {str(_carried.get('run_id') or '')[:8]} ({str(_carried.get('created_at') or '')[:10]}): "
+                         + ", ".join(_carried.get("fields") or []) + (f" — {_carried.get('note')}" if _carried.get("note") else "")
+                         + ". These are the house's estimates for this run; name them as the user's where they differ from the research.")
     else:
         mg = (data.get("management_guidance") or {}).get(ticker) or {}
         bits = []

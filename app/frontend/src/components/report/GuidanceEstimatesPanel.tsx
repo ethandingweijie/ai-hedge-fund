@@ -10,6 +10,7 @@
  *
  * Monochrome by design-system rule (lib/semanticColors): no green/red outside price change.
  */
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EstimateWorkbench } from '@/components/report/EstimateWorkbench';
@@ -73,7 +74,9 @@ function amountBn(v: number | null | undefined): string {
 }
 
 /** The forecast the DCF ran on: archetype, target-year deconstruction, the intermediate years, the checks. */
-function ForecastSection({ fc }: { fc: GuidanceForecast }) {
+function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenarios?: Partial<Record<'bear' | 'bull', GuidanceForecast>> | null }) {
+  const [which, setWhich] = useState<'bear' | 'base' | 'bull'>('base');
+  const fc = which === 'base' ? base : (scenarios?.[which] ?? base);
   const rows = fc.rows ?? [];
   if (!rows.length) return null;
   const T = fc.horizon_years ?? 0;
@@ -83,9 +86,21 @@ function ForecastSection({ fc }: { fc: GuidanceForecast }) {
   const term = fc.terminal;
   return (
     <div className="mt-5 border-t border-border/60 pt-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={LABEL_CLS}>Forecast the DCF ran on</span>
-        <Badge variant="outline" className="text-[10px]">{fc.archetype_name}</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={LABEL_CLS}>Forecast the DCF ran on</span>
+          <Badge variant="outline" className="text-[10px]">{fc.archetype_name}</Badge>
+        </div>
+        {scenarios && (scenarios.bear || scenarios.bull) ? (
+          <div className="flex gap-1">
+            {(['bear', 'base', 'bull'] as const).map((s) => (
+              <button key={s} type="button" onClick={() => setWhich(s)} disabled={s !== 'base' && !scenarios[s]}
+                className={`rounded px-2 py-0.5 text-[11px] ${s === which ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground disabled:opacity-40'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
       <div className="mt-1 text-[12.5px] text-foreground">
         {T}-year path to {t ? `the ${t.target_year} ${t.metric} target of ${num(t.value)}` : 'the FY+2 estimate'}; EBIT margin {margin(fc.margin_start)} → {margin(fc.margin_target)} ({fc.margin_source}); then a {fc.fade_years}-year fade to {margin(term?.tgr)} growth.
@@ -267,7 +282,12 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
         </div>
       ) : null}
 
-      {forecast ? <ForecastSection fc={forecast} /> : null}
+      {dcfRange?.estimate_override_carried ? (
+        <div className="mt-3 text-[11.5px] font-medium text-foreground">
+          Your earlier estimates were carried into this run ({dcfRange.estimate_override_carried.fields?.join(', ')}{dcfRange.estimate_override_carried.note ? ` — ${dcfRange.estimate_override_carried.note}` : ''}; saved {dcfRange.estimate_override_carried.created_at?.slice(0, 10)}). Revoke on the Model Accuracy page to return to the research's estimates.
+        </div>
+      ) : null}
+      {forecast ? <ForecastSection fc={forecast} scenarios={dcfRange?.guidance_forecast_scenarios} /> : null}
       {canWork ? <EstimateWorkbench runId={runId!} ticker={ticker!} block={blockIn} forecast={forecast} dcfRange={dcfRange} onRunUpdated={onRunUpdated} /> : null}
 
       {block.rationale ? <div className="mt-3 text-[11.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}

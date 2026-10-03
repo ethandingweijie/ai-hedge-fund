@@ -3705,6 +3705,63 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
             "source": "deep research 2G → guidance_estimates"}
 
 
+def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario: str, gf: Optional[dict],
+                              revenue_base: Optional[float]) -> Optional[dict]:
+    """Owner, 2026-10-03: management guidance -> estimates price the forward legs too, not only the DCF.
+
+    Per scenario, the forward legs' metric becomes the guidance-derived FY+1 estimate: EPS from the
+    research's estimate (else the forecast's year-1 EPS), EBITDA from revenue x the FY+1 margin (else
+    the forecast's EBIT + D&A), revenue and EBIT from the forecast's year 1. Consensus stays wherever
+    no estimate exists, the consensus figure is kept beside the estimate (`_consensus`) and the leg
+    label names the source (`_source`). Nothing changes when there is no guidance block."""
+    if not est or not isinstance(est, dict):
+        return fwd
+    cfg = _guidance_channel_cfg()
+    if _GUIDANCE_CONFIDENCE_RANK.get(str(est.get("confidence") or "LOW").upper(), 0) < _GUIDANCE_CONFIDENCE_RANK.get(cfg["min_confidence"], 1):
+        return fwd
+    row = ((est.get("estimates") or {}).get(scenario)) or {}
+    rows = (gf or {}).get("rows") or []
+    y1 = rows[0] if rows else {}
+    g1 = row.get("revenue_growth_fy1")
+    rev1 = (float(revenue_base) * (1.0 + float(g1))) if (isinstance(g1, (int, float)) and revenue_base) else (y1.get("revenue") if y1 else None)
+    cand = {
+        "eps": (float(row["eps_fy1"]) if isinstance(row.get("eps_fy1"), (int, float)) and row["eps_fy1"] > 0 else
+                (float(y1["eps"]) if isinstance(y1.get("eps"), (int, float)) and y1["eps"] > 0 else None)),
+        "ebitda": ((rev1 * float(row["ebitda_margin_fy1"])) if (rev1 and isinstance(row.get("ebitda_margin_fy1"), (int, float))) else
+                   ((float(y1["ebit"]) + float(y1.get("da") or 0.0)) if isinstance(y1.get("ebit"), (int, float)) and (y1["ebit"] + (y1.get("da") or 0.0)) > 0 else None)),
+        "revenue": float(rev1) if rev1 else None,
+        "ebit": float(y1["ebit"]) if isinstance(y1.get("ebit"), (int, float)) and y1["ebit"] > 0 else None,
+    }
+    src_label = {
+        "eps": ("guidance-derived FY+1 EPS estimate" if isinstance(row.get("eps_fy1"), (int, float)) else "guidance forecast year-1 EPS"),
+        "ebitda": ("guidance-derived FY+1 revenue x margin" if isinstance(row.get("ebitda_margin_fy1"), (int, float)) else "guidance forecast year-1 EBIT + D&A"),
+        "revenue": "guidance-derived FY+1 revenue", "ebit": "guidance forecast year-1 EBIT",
+    }
+    if all(v is None for v in cand.values()):
+        return fwd
+    out = {k: dict(v) if isinstance(v, dict) else v for k, v in (fwd or {}).items()}
+    out.setdefault("_source", {})
+    out.setdefault("_consensus", {})
+    for m, v in cand.items():
+        if v is None:
+            continue
+        out.setdefault(m, {})
+        out["_consensus"].setdefault(m, {})[scenario] = out[m].get(scenario)
+        out[m][scenario] = v
+        out["_source"].setdefault(m, {})[scenario] = src_label[m]
+    out.setdefault("period_end", est.get("fiscal_year_1") or "")
+    return out
+
+
+def _fwd_label(fwd: Optional[dict], metric: str, scenario: str, default: str) -> str:
+    src = (((fwd or {}).get("_source") or {}).get(metric) or {}).get(scenario)
+    return f"{default.split(' (')[0]} ({src}, {scenario})" if src else default
+
+
+def _fwd_consensus_value(fwd: Optional[dict], metric: str, scenario: str):
+    return (((fwd or {}).get("_consensus") or {}).get(metric) or {}).get(scenario)
+
+
 def _guidance_forecast_payload(fc: Optional[dict]) -> Optional[dict]:
     """The report's forecast block (base scenario): what the DCF ran on, with the per-year table."""
     try:
@@ -7434,7 +7491,8 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = fwd_rev * mult
-        _leg_trace(kind="ev_multiple", metric=f"Revenue (NTM, {scenario})",
+        _leg_trace(kind="ev_multiple", metric=_fwd_label(forward_consensus, "revenue", scenario, f"Revenue (NTM, {scenario})"),
+                   consensus_value=_fwd_consensus_value(forward_consensus, "revenue", scenario),
                    metric_value=float(fwd_rev), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(base_mult),
                                    "peer_source": str(_ev_rev_basis),
@@ -7510,8 +7568,8 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebit_fwd * mult
-        _leg_trace(kind="ev_multiple", metric="EBIT (NTM consensus)",
-                   metric_value=float(ebit_fwd), multiple=float(mult),
+        _leg_trace(kind="ev_multiple", metric=_fwd_label(forward_consensus, "ebit", scenario, "EBIT (NTM consensus)"),
+                   metric_value=float(ebit_fwd), multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "ebit", scenario),
                    multiple_parts={"peer_multiple": float(base_mult),
                                    "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
@@ -7649,9 +7707,9 @@ def _compute_method_value(
         mult = _fwd_pe * growth_premium * sbc_pe_discount * _own_disc
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
-        _leg_trace(kind="equity_multiple", metric=f"EPS (NTM consensus, {scenario})",
+        _leg_trace(kind="equity_multiple", metric=_fwd_label(forward_consensus, "eps", scenario, f"EPS (NTM consensus, {scenario})"),
                    metric_value=float(eps_fwd), per_share_metric=float(eps_fwd),
-                   multiple=float(mult),
+                   multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "eps", scenario),
                    multiple_parts={"peer_multiple": _fwd_pe,
                                    "peer_source": _fwd_pe_src,
                                    "growth_premium": growth_premium,
@@ -7675,8 +7733,8 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebitda_fwd * mult
-        _leg_trace(kind="ev_multiple", metric=f"EBITDA (NTM consensus, {scenario})",
-                   metric_value=float(ebitda_fwd), multiple=float(mult),
+        _leg_trace(kind="ev_multiple", metric=_fwd_label(forward_consensus, "ebitda", scenario, f"EBITDA (NTM consensus, {scenario})"),
+                   metric_value=float(ebitda_fwd), multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "ebitda", scenario),
                    multiple_parts={"peer_multiple": _fwd_ev,
                                    "peer_source": _fwd_ev_src,
                                    "growth_premium": growth_premium,
@@ -12484,8 +12542,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # over-indexing on a single LLM parse of qualitative text.
         dcf_cal = dcf_calibration_all.get(ticker, {})
         _guid_est = guidance_estimates_all.get(ticker) or {}
+        # Owner, 2026-10-03 (interactive agent): the user's latest saved estimates for this name are
+        # carried into the run -- their numbers replace the research's in the guidance block, their
+        # engine inputs reach the forecast, their WACC / terminal growth replace the engine's below.
+        # ESTIMATE_OVERRIDE_CARRY=off stops it; revoke on the Model Accuracy page removes it.
+        _eo_carry: Optional[dict] = None
+        _eo_engine_ov: dict = {}
+        _eo_rates: dict = {}
+        try:
+            from src.data import estimate_override_store as _eos
+            if _eos.carry_enabled():
+                _eo_carry = _eos.latest_for_ticker(ticker)
+            if _eo_carry:
+                _guid_est = _eos.merge_block(_guid_est, _eo_carry)
+                _eo_engine_ov = _eos.engine_overrides(_eo_carry)
+                _eo_rates = _eos.rate_overrides(_eo_carry)
+                ticker_forward_flags.append(
+                    f"USER ESTIMATES CARRIED FORWARD from run {str(_eo_carry.get('run_id') or '')[:8]} ({str(_eo_carry.get('created_at') or '')[:10]}): "
+                    + ", ".join(((_eo_carry.get("result") or {}).get("fields")) or []) + (f" — {_eo_carry.get('note')}" if _eo_carry.get("note") else "")
+                    + "; revoke on the Model Accuracy page to return to the research's estimates")
+        except Exception:                                  # noqa: BLE001
+            _eo_carry = None
         _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
         _gf_base: Optional[dict] = None             # the base scenario's guidance forecast (five principles)
+        _gf_by_sc: dict = {}                        # every scenario's forecast, for the page's bear / bull traces
         _fc_ctx: Optional[dict] = None              # history ratios + inputs the page rebuilds estimates from
         _peer_for_gf: Optional[dict] = None         # peer multiples for the forecast (hoisted: see the scenario loop)
         _cal_adj = dcf_cal.get("growth_rate_adj")
@@ -13964,6 +14044,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                                      ticker=ticker, market_cap=resolved_mcap)
         except Exception:                                  # noqa: BLE001
             _peer_for_gf = None
+        if _eo_rates.get("wacc") is not None:
+            ticker_forward_flags.append(f"WACC {wacc:.2%} replaced by the user's {float(_eo_rates['wacc']):.2%} (carried estimate override)")
+            wacc = float(_eo_rates["wacc"])
+        if _eo_rates.get("tgr") is not None:
+            tgr_table = {k: float(_eo_rates["tgr"]) for k in ("bear", "base", "bull")}
+            ticker_forward_flags.append(f"Terminal growth replaced by the user's {float(_eo_rates['tgr']):.2%} in every scenario (carried estimate override)")
 
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
@@ -14074,7 +14160,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         spot=((resolved_mcap / shares) if (resolved_mcap and shares) else None),   # `market_cap` was never a name here: NameError on every build (2026-10-03)
                         peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
                         market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
-                        engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base)
+                        engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
+                        overrides=_eo_engine_ov or None)
                 except Exception as _gf_exc:  # noqa: BLE001
                     _gf = None
                     if scenario == "base":
@@ -14082,6 +14169,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if _gf:
                 _growth_schedule = _gf["growth_schedule"]
                 _gf_margin_sched = _gf["fcf_margin_schedule"]
+                _gf_by_sc[scenario] = _gf
                 if scenario == "base":
                     _gf_base = _gf
                     _gc_applied = {"schedule": _gf["growth_schedule"], "explicit": _gf["growth_schedule"][:_gf["horizon_years"]],
@@ -14097,6 +14185,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _inv in _gf["invariants"]:
                         if _inv.get("ok") is False:
                             ticker_forward_flags.append(f"Forecast invariant {_inv['id']} ({_inv['name']}) FAILED: {_inv['detail']}")
+            # Owner, 2026-10-03: the forward multiples of this scenario price on the guidance-derived
+            # FY+1 estimates (EPS, EBITDA, revenue, EBIT) where the research or the forecast gives
+            # them; consensus where not. The leg trace names the source and keeps consensus beside it.
+            _fwd_cons_sc = _guidance_forward_overlay(_guid_est if _guidance_channel_enabled() else None,
+                                                     forward_consensus, scenario, _gf, revenue_base)
+            if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
+                _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
+                ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
+                                            + "; ".join(f"{m.upper() if m == 'eps' else m.upper() if m in ('ebit', 'ebitda') else m} from {lab}" for m, lab in _srcs.items())
+                                            + "; consensus kept beside each leg for comparison")
             _gc = None if _gf else _guidance_channel_schedule(
                 _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS)
             if _gc:
@@ -14803,7 +14901,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 growth_premium=growth_premium,
                                 sbc_pe_discount=_sbc_discount,
                                 profile_name=profile_name,
-                                forward_consensus=forward_consensus,
+                                forward_consensus=_fwd_cons_sc,
                                 ticker=ticker,
                                 end_date=end_date,
                             )
@@ -14857,7 +14955,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             growth_premium=growth_premium,
                             sbc_pe_discount=_sbc_discount,
                             profile_name=profile_name,
-                            forward_consensus=forward_consensus,
+                            forward_consensus=_fwd_cons_sc,
                             ticker=ticker,
                             end_date=end_date,
                         )
@@ -14934,7 +15032,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 growth_premium=growth_premium,
                                 sbc_pe_discount=_sbc_discount,
                                 profile_name=profile_name,
-                                forward_consensus=forward_consensus,
+                                forward_consensus=_fwd_cons_sc,
                                 ticker=ticker,
                                 end_date=end_date,
                             )
@@ -16972,6 +17070,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03 (interactive agent): the history ratios and inputs the page rebuilds
             # estimates from when the user overrides them (or enters them where research gave none).
             "forecast_context": _fc_ctx,
+            # The bear and bull forecasts (steps, rows, checks) beside the base one, for the page's scenario toggle.
+            "guidance_forecast_scenarios": ({sc: _guidance_forecast_payload(v) for sc, v in _gf_by_sc.items() if sc != "base"} or None),
+            # The user's carried-forward override, if one shaped this run.
+            "estimate_override_carried": ({"run_id": _eo_carry.get("run_id"), "created_at": _eo_carry.get("created_at"), "note": _eo_carry.get("note"),
+                                           "fields": ((_eo_carry.get("result") or {}).get("fields")) or [], "id": _eo_carry.get("id")} if _eo_carry else None),
             # Owner, 2026-09-26 (audit): a Degraded analyst SOTP is published with
             # its rows and reason so both renderers can show WHY it did not price.
             # Published only when the profile declared SOTP (analyst): it explains why a declared leg

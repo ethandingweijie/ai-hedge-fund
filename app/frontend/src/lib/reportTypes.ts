@@ -394,7 +394,7 @@ export interface ForecastContext {
 }
 /** The user's estimate overrides, in the shape estimate_override_service accepts. */
 export interface EstimateOverrides {
-  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'wacc' | 'tgr', number>>;
+  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr', number>>;
   scenarios?: Partial<Record<'bear' | 'base' | 'bull', Partial<GuidanceScenarioRow>>>;
   medium_term_target?: { metric: string; target_year: string; low?: number | null; mid?: number | null; high?: number | null; unit?: string | null } | Record<string, never> | null;
   rationale?: string;
@@ -404,8 +404,12 @@ export interface EstimateOverrideMeta {
   id?: string | null; note?: string | null; created_at?: string | null; fields?: string[]; overrides?: EstimateOverrides | null;
   before?: EstimateFigures | null; after?: EstimateFigures | null;
 }
+export interface EstimateLegChange {
+  metric: string; metric_before: number; metric_after: number; multiple: number; value_before: number | null; value_after: number; basis: string;
+}
 export interface EstimateScenarioResult {
   skipped: string | null; note?: string | null; dcf_weight: number;
+  legs?: Record<string, EstimateLegChange>;
   forecast: GuidanceForecast | null;
   dcf: { value: number | null; pv_fcf_per_share: number; pv_tv_per_share: number; growth_schedule: number[]; margin_schedule: number[]; wacc: number; tgr: number } | null;
   intrinsic_value: number | null; target: number | null;
@@ -614,6 +618,10 @@ export interface DcfRange {
   forecast_context?: ForecastContext | null;
   /** The user's accepted estimate override in force on this run, applied on read. */
   estimate_override?: EstimateOverrideMeta | null;
+  /** The bear and bull forecasts beside the base one (steps, rows, checks). */
+  guidance_forecast_scenarios?: Partial<Record<'bear' | 'bull', GuidanceForecast>> | null;
+  /** A user's earlier override carried into this run by the pipeline. */
+  estimate_override_carried?: { run_id?: string | null; created_at?: string | null; note?: string | null; fields?: string[]; id?: string | null } | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.
@@ -888,6 +896,12 @@ export interface PortfolioDecision {
   rationale?: string;
   /** One bold line, at most 18 words, quantifying the catalyst (owner, 2026-10-03). */
   headline?: string;
+  /** Owner, 2026-10-03: set by an estimate override applied on read; the agent's text is kept beside a rewrite. */
+  price_target_override?: boolean;
+  price_target_agent?: number | null;
+  pm_regenerated_at?: string | null;
+  rationale_agent?: string | null;
+  headline_agent?: string | null;
   decision_inputs?: DecisionInputs;
   research_rating?: string | null;
   rating_label?: string | null;

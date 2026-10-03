@@ -2981,3 +2981,26 @@ async def ask_estimate_agent(run_id: str, body: _EstimateAskReq, request: Reques
     except Exception:
         logger.exception("estimate agent failed for %s", run_id)
         raise HTTPException(status_code=502, detail="The estimate agent did not answer")
+
+
+@router.post("/runs/{run_id}/estimates/regenerate")
+async def regenerate_pm_text(run_id: str, request: Request, ticker: str, db: Session = Depends(get_db)):
+    """On the user's request only: rewrite the PM rationale and headline on the overridden run (one LLM call).
+    The text rides the active override record and is applied on read; revert removes it with the override."""
+    from app.backend.services import estimate_override_service as eo
+    from app.backend.services import estimate_agent_service as ea
+    user_id, result = await asyncio.to_thread(_owned_run_or_404, run_id, request, db, True)
+    t = canonical_ticker(ticker)
+    rec = await asyncio.to_thread(eo.get_active, run_id, t)
+    if not rec:
+        raise HTTPException(status_code=409, detail="No active estimate override on this run; the PM text already matches the agent's valuation")
+    try:
+        pm = await asyncio.to_thread(ea.regenerate_pm, result, t)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No valuation for that ticker in this run")
+    except Exception:
+        logger.exception("PM regeneration failed for %s", run_id)
+        raise HTTPException(status_code=502, detail="The portfolio manager did not answer")
+    await asyncio.to_thread(eo.attach_pm, rec, pm)
+    updated = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id)
+    return {"pm": pm, "run": updated}
