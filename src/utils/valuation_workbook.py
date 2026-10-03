@@ -1404,6 +1404,9 @@ class _Book:
         (latest audited) column. Inputs in blue are the agent's estimates and the history-derived
         assumptions; change one and the three statements move together and still balance."""
         th = (self.dr or {}).get("three_statements") or {}
+        if th.get("kind") in ("bank", "insurer") and th.get("fy_labels") and not th.get("skipped"):
+            self._bank_model_tab(th)
+            return
         if not th or th.get("skipped") or not th.get("fy_labels"):
             if th.get("skipped"):
                 sh = self.sheet("Model", "Three-statement forecast: not built for this run")
@@ -1594,6 +1597,100 @@ class _Book:
         sh.label(r, 1, "Engine check (Python build): balance gaps " + ", ".join(f"{c['year']} {c['balance_gap']:,.0f}" for c in th.get("checks") or [])
                        + "; revolver draws in " + (", ".join(c["year"] for c in (th.get("checks") or []) if c.get("revolver_draw")) or "none") + ".")
         sh.widths({"A": 58, "B": 9, **{get_column_letter(c): 14 for c in range(C0, C0 + n + 1)}})
+        sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
+
+    _BANK_ROWS = [("Balance sheet drivers", None), ("Total assets", "total_assets", MIL), ("Asset growth", "asset_growth", PCT), ("Average earning assets", "earning_assets_avg", MIL),
+                  ("Net interest margin", "nim", PCT), ("Average loans", "loans_avg", MIL),
+                  ("Income statement", None), ("Net interest income", "net_interest_income", MIL), ("Non-interest income", "fee_income", MIL), ("Total income", "total_income", MIL),
+                  ("Cost-to-income", "cost_to_income", PCT), ("Operating expenses", "operating_expenses", MIL), ("Pre-provision profit", "pre_provision_profit", MIL),
+                  ("Credit cost (bps of loans)", "credit_cost_bps", "0.0"), ("Provisions", "provisions", MIL), ("Pre-tax profit", "pretax", MIL), ("Tax", "tax", MIL), ("Net income", "net_income", MIL),
+                  ("Capital", None), ("Dividends", "dividends", MIL), ("Share repurchases", "buybacks", MIL), ("Payout ratio", "payout_ratio", PCT), ("Shareholders' equity", "equity", MIL),
+                  ("Tangible equity", "tangible_equity", MIL), ("Risk-weighted assets", "rwa", MIL), ("CET1 capital", "cet1_capital", MIL), ("CET1 ratio", "cet1_ratio", PCT), ("Dividend cut to hold CET1", "distribution_cut", MIL),
+                  ("Per share and returns", None), ("Diluted shares (millions)", "shares", MIL), ("EPS", "eps", NUM), ("Dividend per share", "dividend_per_share", NUM), ("Book value per share", "bvps", NUM),
+                  ("Tangible book value per share", "tbvps", NUM), ("ROE", "roe", PCT), ("RoTE", "rote", PCT), ("ROA", "roa", PCT)]
+    _INSURER_ROWS = [("Premiums", None), ("Net earned premiums", "net_earned_premiums", MIL), ("Premium growth", "premium_growth", PCT), ("Combined ratio", "combined_ratio", PCT),
+                     ("Underwriting result", "underwriting_result", MIL), ("Investments", None), ("Average float", "float_avg", MIL), ("Investment yield", "investment_yield", PCT), ("Investment income", "investment_income", MIL),
+                     ("Earnings", None), ("Pre-tax profit", "pretax", MIL), ("Tax", "tax", MIL), ("Net income", "net_income", MIL), ("Dividends", "dividends", MIL), ("Shareholders' equity", "equity", MIL), ("Total assets", "total_assets", MIL),
+                     ("Per share and returns", None), ("Diluted shares (millions)", "shares", MIL), ("EPS", "eps", NUM), ("Dividend per share", "dividend_per_share", NUM), ("Book value per share", "bvps", NUM),
+                     ("Tangible book value per share", "tbvps", NUM), ("ROE", "roe", PCT)]
+
+    def _bank_model_tab(self, th: dict) -> None:
+        """The earnings-and-capital model (owner, 2026-10-03): drivers, income statement, capital, per-share
+        lines for FY+1E..FY+5E, the assumptions with their sources, and the reconciliation suite."""
+        kind = th.get("kind")
+        sh = self.sheet("Model", f"{'Bank' if kind == 'bank' else 'Insurer'} earnings-and-capital model FY+1E..FY+5E on the valuation agent's drivers")
+        op, a, rows, labels = th.get("opening") or {}, th.get("assumptions") or {}, th.get("rows") or {}, th.get("fy_labels") or []
+        n = len(labels)
+        ovr = th.get("override") or (self.dr or {}).get("estimate_override") or {}
+        sh.title(f"{'Bank' if kind == 'bank' else 'Insurer'} earnings-and-capital model",
+                 f"In statement currency, millions. Opening column = {op.get('fy_label')} as filed. Earnings come from the balance sheet (assets × margin, plus fees), costs and provisions "
+                 "are ratios, retained earnings build capital against the CET1 target; the GGM (P/B) leg prices the steady-state RoTE and the FY+1 book value, the forward P/E the FY+1 EPS."
+                 + (f" USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {', '.join(ovr.get('fields') or [])}." if ovr else "")
+                 + (" Guided by management: " + ", ".join(th.get("guided_fields") or []) + "." if th.get("guided_fields") else " No family guidance in the research: drivers from the bank-metrics extraction and the filings."))
+        C0 = 3
+        r = 4
+        sh.label(r, 1, "Fiscal year", bold=True); sh.put(r, C0, f"{op.get('fy_label')}A").font = Font(bold=True)
+        for i, lab in enumerate(labels):
+            sh.put(r, C0 + 1 + i, lab).font = Font(bold=True)
+        r += 2
+        sh.section(r, "Assumptions (each with its source)", C0 + n); r += 1
+        sh.header(r, ["Assumption", "Value", "Source", "Needed for"]); r += 1
+        for k, rec in a.items():
+            if k.startswith("_") or not isinstance(rec, dict):
+                continue
+            v = rec.get("value")
+            sh.label(r, 1, k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                fmt = PCT if (abs(v) < 1.5 and "bps" not in k and "opening" not in k and k not in ("buyback_annual",)) else (MIL if abs(v) > 1e5 else "0.0")
+                sh.put(r, 2, float(v) * (1e-6 if fmt == MIL else 1.0), fmt).font = Font(color=BLUE)
+            else:
+                sh.put(r, 2, str(v) if v is not None else "—").font = Font(color=BLUE)
+            sh.put(r, 3, str(rec.get("source") or "")).font = Font(color=BLACK)
+            sh.put(r, 4, str(rec.get("needed_for") or "")).font = Font(color=BLACK)
+            r += 1
+        r += 1
+        opening_map = {"total_assets": op.get("total_assets"), "equity": op.get("equity"), "tangible_equity": op.get("tangible_equity"), "net_income": op.get("net_income"),
+                       "total_income": op.get("total_income"), "shares": op.get("shares"), "bvps": op.get("bvps"), "tbvps": op.get("tbvps"), "roe": op.get("roe")}
+        for label, key, *fmt in (self._BANK_ROWS if kind == "bank" else self._INSURER_ROWS):
+            if key is None:
+                sh.section(r, label, C0 + n); r += 1
+                continue
+            series = rows.get(key)
+            if not series:
+                continue
+            f = fmt[0]
+            sh.label(r, 1, label, bold=key in ("total_income", "net_income", "equity", "eps", "bvps", "cet1_ratio", "roe"))
+            sh.label(r, 2, "Model")
+            ov = opening_map.get(key)
+            if isinstance(ov, (int, float)):
+                sh.put(r, C0, float(ov) * (1e-6 if f == MIL else 1.0), f).font = Font(color=BLUE)
+            for i, x in enumerate(series[:n]):
+                if isinstance(x, (int, float)) and not isinstance(x, bool):
+                    sh.put(r, C0 + 1 + i, float(x) * (1e-6 if f == MIL else 1.0), f).font = Font(color=BLACK)
+            r += 1
+        r += 1
+        sh.section(r, "Reconciliation suite (engine build)", C0 + n); r += 1
+        rc = th.get("reconciliation") or {}
+        by_id: dict = {}
+        for asrt in rc.get("assertions") or []:
+            by_id.setdefault(asrt["id"], (asrt["name"], []))[1].append(asrt["ok"])
+        for aid in sorted(by_id):
+            name, oks = by_id[aid]
+            sh.label(r, 1, f"{aid}. {name}")
+            for i, ok in enumerate(oks[:n]):
+                sh.put(r, C0 + 1 + i, "OK" if ok else "FAIL").font = Font(color=BLACK, bold=not ok)
+            r += 1
+        sh.label(r, 1, "Suite result: " + ("ALL OK on every forecast column" if rc.get("ok") else "FAILED"), bold=True); r += 2
+        for c in th.get("checks") or []:
+            if c.get("roe_over_coe") is not None:
+                sh.label(r, 1, f"{c['year']}: ROE {c['roe']:.1%} vs cost of equity {c['coe']:.1%} ({c['roe_over_coe'] * 1e4:+,.0f} bp)"
+                               + (f"; CET1 {c['cet1_ratio']:.1%} vs target {c['cet1_target']:.1%}" if c.get("cet1_ratio") is not None else "")); r += 1
+        for note in th.get("notes") or []:
+            sh.label(r, 1, note); r += 1
+        for row in th.get("coverage") or []:
+            if str(row.get("status", "")).startswith(("missing", "default")):
+                sh.label(r, 1, f"{row.get('assumption')}: {row.get('status')} — {row.get('source')}"); r += 1
+        sh.widths({"A": 52, "B": 14, "C": 44, "D": 40, **{get_column_letter(c): 14 for c in range(C0 + 1, C0 + n + 1)}})
         sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
 
     # ── Banks ───────────────────────────────────────────────────────────────

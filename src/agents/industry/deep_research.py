@@ -1104,6 +1104,12 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     '  "medium_term_target": {"metric": "eps|revenue|revenue_growth|ebitda_margin|operating_margin", "target_year": "<FY label, e.g. FY2029>", '
     '"low": n, "mid": n, "high": n, "unit": "<USD per share | USD bn | decimal>", "basis": "<workplan, investor day, breakeven commitment>", "source": "<publisher, date>"} or null,\n'
     '  "track_record": "<=120 chars: beats/meets/misses and bias>",\n'
+    '  "family_metrics": {"family": "bank|insurer|null",\n'
+    '     "bank": {"loan_growth_fy1": n, "loan_growth_fy2": n, "nim_fy1": n, "nim_fy2": n, "fee_income_growth_fy1": n, "fee_income_growth_fy2": n,\n'
+    '              "cost_to_income_fy1": n, "cost_to_income_fy2": n, "credit_cost_bps_fy1": n, "credit_cost_bps_fy2": n, "payout_ratio": n, "cet1_target": n,\n'
+    '              "roe_target": {"value": n, "target_year": "<FY label>"} or null} or null,\n'
+    '     "insurer": {"premium_growth_fy1": n, "premium_growth_fy2": n, "combined_ratio_fy1": n, "combined_ratio_fy2": n, "investment_yield_fy1": n,\n'
+    '                 "investment_yield_fy2": n, "payout_ratio": n, "roe_target": {"value": n, "target_year": "<FY label>"} or null} or null},\n'
     '  "estimates": {"bear": {"revenue_growth_fy1": n, "revenue_growth_fy2": n, "ebitda_margin_fy1": n, "ebitda_margin_fy2": n, "eps_fy1": n, "eps_fy2": n},\n'
     '                "base": {...same keys...}, "bull": {...same keys...}},\n'
     '  "rationale": "<=320 chars: how the estimates follow from the guidance, consensus and track record>",\n'
@@ -1128,6 +1134,13 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     "- confidence: HIGH = formal ranged guidance within the last quarter and a consistent track "
     "record; MEDIUM = guidance exists but is qualitative, stale or the record is mixed; LOW = no "
     "guidance and thin consensus.\n"
+    "- family_metrics: for a BANK, management guides on loan growth, net interest margin, fee "
+    "income, cost-to-income, credit cost (basis points of loans), payout and a CET1 target; for an "
+    "INSURER on premium growth, the combined ratio, the investment yield and payout. Fill the "
+    "family block with what management stated or what you estimate from it (decimals; credit cost "
+    "in basis points; cost-to-income and combined ratio as decimals, 0.42 = 42%), and set family to "
+    "null with both blocks null for any other company. These feed the bank's earnings-and-capital "
+    "model: its ROE, book value per share and EPS price the shares, not free cash flow.\n"
     "- Use null, never a guess, for a number the text does not support."
 )
 
@@ -1261,7 +1274,30 @@ def _normalize_guidance_estimates(parsed: dict) -> dict:
                        "source": (str(mt_in.get("source"))[:160] if mt_in.get("source") else None)}
         if medium_term["mid"] is None and medium_term["low"] is None and medium_term["high"] is None:
             medium_term = None
+    # Owner, 2026-10-03 (step two): the family's own guided metrics, for the earnings-and-capital model.
+    fm_in = parsed.get("family_metrics") if isinstance(parsed.get("family_metrics"), dict) else {}
+    family_metrics = None
+    if fm_in:
+        fam = str(fm_in.get("family") or "").strip().lower() or None
+        bank_in = fm_in.get("bank") if isinstance(fm_in.get("bank"), dict) else {}
+        ins_in = fm_in.get("insurer") if isinstance(fm_in.get("insurer"), dict) else {}
+
+        def _roe_t(d):
+            if not isinstance(d, dict) or _guidance_rate(d.get("value")) is None:
+                return None
+            return {"value": _guidance_rate(d.get("value")), "target_year": (str(d.get("target_year"))[:12] if d.get("target_year") else None)}
+        bank = {k: _guidance_rate(bank_in.get(k)) for k in ("loan_growth_fy1", "loan_growth_fy2", "nim_fy1", "nim_fy2", "fee_income_growth_fy1", "fee_income_growth_fy2",
+                                                            "cost_to_income_fy1", "cost_to_income_fy2", "payout_ratio", "cet1_target")}
+        bank.update({k: _guidance_num(bank_in.get(k)) for k in ("credit_cost_bps_fy1", "credit_cost_bps_fy2")})
+        bank["roe_target"] = _roe_t(bank_in.get("roe_target"))
+        ins = {k: _guidance_rate(ins_in.get(k)) for k in ("premium_growth_fy1", "premium_growth_fy2", "combined_ratio_fy1", "combined_ratio_fy2",
+                                                          "investment_yield_fy1", "investment_yield_fy2", "payout_ratio")}
+        ins["roe_target"] = _roe_t(ins_in.get("roe_target"))
+        if any(v is not None for v in bank.values()) or any(v is not None for v in ins.values()):
+            family_metrics = {"family": fam, "bank": (bank if any(v is not None for v in bank.values()) else None),
+                              "insurer": (ins if any(v is not None for v in ins.values()) else None)}
     return {
+        "family_metrics": family_metrics,
         "medium_term_target": medium_term,
         "as_of": (str(parsed.get("as_of")) if parsed.get("as_of") else None),
         "fiscal_year_1": (str(parsed.get("fiscal_year_1")) if parsed.get("fiscal_year_1") else None),

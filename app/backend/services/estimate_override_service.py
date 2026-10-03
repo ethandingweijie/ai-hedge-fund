@@ -34,8 +34,15 @@ logger = logging.getLogger(__name__)
 SCENARIOS = ("bear", "base", "bull")
 SCENARIO_FIELDS = ("revenue_growth_fy1", "revenue_growth_fy2", "ebitda_margin_fy1", "ebitda_margin_fy2", "eps_fy1", "eps_fy2")
 SHARED_FIELDS = ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic", "wacc", "tgr",
-                 "gross_margin", "sbc_pct", "interest_rate", "payout_ratio", "buyback_annual")
+                 "gross_margin", "sbc_pct", "interest_rate", "payout_ratio", "buyback_annual",
+                 "bank_loan_growth", "bank_nim", "bank_fee_growth", "bank_cost_to_income", "bank_credit_cost_bps", "bank_cet1_target",
+                 "ins_premium_growth", "ins_combined_ratio", "ins_investment_yield")
 STATEMENT_FIELDS = ("gross_margin", "sbc_pct", "interest_rate", "payout_ratio", "buyback_annual")
+BANK_FIELD_MAP = {"bank_loan_growth": ("asset_growth_fy1", "asset_growth_fy2"), "bank_nim": ("nim_fy1", "nim_fy2"), "bank_fee_growth": ("fee_income_growth_fy1", "fee_income_growth_fy2"),
+                  "bank_cost_to_income": ("cost_to_income_fy1", "cost_to_income_fy2"), "bank_credit_cost_bps": ("credit_cost_bps_fy1", "credit_cost_bps_fy2"),
+                  "bank_cet1_target": ("cet1_target",), "payout_ratio": ("payout_ratio",), "buyback_annual": ("buyback_annual",),
+                  "ins_premium_growth": ("premium_growth_fy1", "premium_growth_fy2"), "ins_combined_ratio": ("combined_ratio_fy1", "combined_ratio_fy2"),
+                  "ins_investment_yield": ("investment_yield_fy1", "investment_yield_fy2")}
 MEDIUM_TERM_METRICS = ("eps", "revenue", "revenue_growth", "ebitda_margin", "operating_margin", "ebit_margin")
 _BOUNDS = {
     "revenue_growth_fy1": (-0.9, 3.0), "revenue_growth_fy2": (-0.9, 3.0),
@@ -44,6 +51,8 @@ _BOUNDS = {
     "fade_years": (1, 8), "tax_rate": (0.0, 0.6), "capex_alpha": (0.0, 3.0), "nwc_intensity": (-0.5, 1.0), "terminal_roic": (0.02, 1.0),
     "wacc": (0.02, 0.30), "tgr": (-0.02, 0.06),
     "gross_margin": (0.0, 0.98), "sbc_pct": (0.0, 0.25), "interest_rate": (0.0, 0.20), "payout_ratio": (0.0, 1.5), "buyback_annual": (0.0, 1e12),
+    "bank_loan_growth": (-0.10, 0.25), "bank_nim": (0.003, 0.08), "bank_fee_growth": (-0.3, 0.4), "bank_cost_to_income": (0.20, 0.90), "bank_credit_cost_bps": (0.0, 400.0),
+    "bank_cet1_target": (0.06, 0.25), "ins_premium_growth": (-0.2, 0.4), "ins_combined_ratio": (0.70, 1.20), "ins_investment_yield": (0.005, 0.10),
 }
 
 
@@ -118,6 +127,91 @@ def changed_fields(ov: dict) -> list[str]:
 
 # ── the recompute ─────────────────────────────────────────────────────────────
 
+def _recompute_bank(payload: dict, ticker: str, ov: dict, dr: dict, ctx: dict, bank_ctx: dict, spot, capture, probs: dict, sa: dict) -> dict:
+    """A bank or insurer: the earnings-and-capital model on the user's drivers; the GGM (P/B) leg
+    re-priced on the model's RoTE and FY+1 book (the same formula and bounds as the engine), the
+    forward P/E on the model's EPS; every other leg as priced; the blend at the run's own weights."""
+    from src.agents.analysis import bank_model as bmod
+    from src.agents.analysis.dcf_agent import _return_on_book_basis
+    shared = ov["shared"]
+    kind = bank_ctx.get("kind") or "bank"
+    a = deepcopy(bank_ctx.get("assumptions") or {})
+    applied = {}
+    for field, targets in BANK_FIELD_MAP.items():
+        if shared.get(field) is None:
+            continue
+        for tname in targets:
+            if tname in a or field.startswith(("bank_", "ins_")) or tname in ("payout_ratio", "buyback_annual"):
+                a[tname] = {"value": shared[field], "source": "user override", "needed_for": (a.get(tname) or {}).get("needed_for")}
+                applied[tname] = shared[field]
+    out_sc: dict = {}
+    for sc in SCENARIOS:
+        scen = dr.get(sc) or {}
+        pb_leg = ((scen.get("leg_inputs") or {}).get("GGM (P/B)")) or {}
+        rec: dict = {"skipped": None, "forecast": None, "dcf": None, "intrinsic_value": _num(scen.get("intrinsic_value")),
+                     "target": _num(((dr.get("pt_bridge") or {}).get("scenarios") or {}).get(sc, {}).get("target")), "dcf_weight": 0.0, "legs": {},
+                     "before": {"intrinsic_value": _num(scen.get("intrinsic_value")), "dcf_value": None,
+                                "target": _num(((dr.get("pt_bridge") or {}).get("scenarios") or {}).get(sc, {}).get("target"))}}
+        out_sc[sc] = rec
+        m = (bmod.build_bank if kind == "bank" else bmod.build_insurer)(bank_ctx["opening"], a, scenario=sc)
+        if not m or m.get("skipped"):
+            rec["skipped"] = (m or {}).get("skipped") or "the model did not build"
+            continue
+        m["coverage"] = bmod.coverage(m)
+        m["overrides_applied"] = applied or None
+        rec["three_statements"] = m
+        legs_changed: dict = {}
+        if not applied:
+            rec["note"] = "no driver changed; the model is as the agent built it"
+            continue
+        # GGM (P/B): target P/B = (ROE_book − g) / (CoE − g), bounded 0.3..4.0, on FY+1 book, times the scenario band
+        pa = pb_leg.get("assumptions") or {}
+        coe, g, band = _num(pa.get("coe")), _num(pa.get("g")), _num(pb_leg.get("scenario_band")) or 1.0
+        rote, bvps, tbvps = _num(m.get("steady_rote") or m.get("steady_roe")), _num(m.get("bvps_fy1")), _num(m.get("tbvps_fy1"))
+        if pb_leg and coe is not None and g is not None and (coe - g) > 0.005 and rote and bvps:
+            roe_book = _return_on_book_basis(rote, bvps, tbvps) or rote
+            if roe_book > g:
+                tpb = max(0.3, min((roe_book - g) / (coe - g), 4.0))
+                new_v = bvps * tpb * band
+                legs_changed["GGM (P/B)"] = {"metric": "bvps", "metric_before": _num(pa.get("bvps")), "metric_after": bvps, "multiple": tpb,
+                                             "value_before": _num(pb_leg.get("value")), "value_after": new_v,
+                                             "basis": f"RoTE {rote:.1%} → book-basis ROE {roe_book:.1%}; target P/B {tpb:.2f}x on FY+1 BVPS {bvps:,.2f}"}
+        # Forward P/E on the model's FY+1 EPS
+        for name, tr in (scen.get("leg_inputs") or {}).items():
+            if isinstance(tr, dict) and tr.get("kind") == "equity_multiple" and "EPS" in str(tr.get("metric") or "") and ("NTM" in str(tr.get("metric")) or "guidance" in str(tr.get("metric"))):
+                eps = _num(m.get("eps_fy1"))
+                if eps and _num(tr.get("multiple")) and eps > 0:
+                    legs_changed[name] = {"metric": "eps", "metric_before": _num(tr.get("metric_value")), "metric_after": eps, "multiple": float(tr["multiple"]),
+                                          "value_before": _num(tr.get("value")), "value_after": eps * float(tr["multiple"]), "basis": "the model's FY+1 EPS in place of the leg's metric"}
+        rec["legs"] = legs_changed
+        eff = scen.get("effective_weights") or []
+        mit = scen.get("method_iv_table") or {}
+        if legs_changed:
+            num = den = 0.0
+            for e in eff:
+                k = e.get("value_key") or e.get("method")
+                w = float(e.get("weight") or 0.0)
+                v = legs_changed[k]["value_after"] if k in legs_changed else _num(mit.get(k))
+                if w > 0 and v is not None:
+                    num += w * v
+                    den += w
+            if den > 0:
+                rec["intrinsic_value"] = num / den
+        else:
+            rec["note"] = "no leg in this profile's blend reads the model (no GGM or forward P/E leg traced)"
+        if spot is not None and capture is not None and rec["intrinsic_value"] is not None:
+            rec["target"] = spot + capture * (rec["intrinsic_value"] - spot)
+    pt = sum(probs[sc] * out_sc[sc]["target"] for sc in SCENARIOS if out_sc[sc]["target"] is not None)
+    ev = sum(probs[sc] * out_sc[sc]["intrinsic_value"] for sc in SCENARIOS if out_sc[sc]["intrinsic_value"] is not None)
+    pb = dr.get("pt_bridge") or {}
+    before = {"intrinsic_value": _num((dr.get("base") or {}).get("intrinsic_value")), "dcf_value": None,
+              "target": _num(((pb.get("scenarios") or {}).get("base") or {}).get("target")), "12m_price_target": _num(sa.get("12m_price_target")), "expected_value": _num(sa.get("expected_value"))}
+    after = {"intrinsic_value": out_sc["base"]["intrinsic_value"], "dcf_value": None, "target": out_sc["base"]["target"],
+             "12m_price_target": pt if pt else None, "expected_value": ev if ev else None}
+    return {"ticker": ticker, "overrides": ov, "fields": changed_fields(ov), "spot": spot, "capture": capture, "probabilities": probs, "scenarios": out_sc,
+            "before": before, "after": after, "model_kind": kind, "computed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 def _statements_for(fc: dict, ctx: dict, shared: dict, dr: dict) -> Optional[dict]:
     """The three statements on the user's forecast and assumption overrides (base scenario)."""
     try:
@@ -190,6 +284,9 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
     sa = (data.get("scenario_analysis") or {}).get(ticker) or {}
     probs = {sc: (_num((sa.get(sc) or {}).get("probability")) or {"bear": 0.25, "base": 0.5, "bull": 0.25}[sc]) for sc in SCENARIOS}
     out_sc: dict = {}
+    bank_ctx = ctx.get("bank_model") or {}
+    if bank_ctx.get("opening"):
+        return _recompute_bank(payload, ticker, ov, dr, ctx, bank_ctx, spot, capture, probs, sa)
     for sc in SCENARIOS:
         scen = dr.get(sc) or {}
         leg = ((scen.get("leg_inputs") or {}).get("DCF")) or {}
@@ -358,15 +455,16 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
                if _num((res.get("before") or {}).get("intrinsic_value")) is not None and _num((res.get("after") or {}).get("intrinsic_value")) is not None else ""))
     for sc, rec in (res.get("scenarios") or {}).items():
         scen = dr.get(sc)
-        if not scen or rec.get("skipped") or not rec.get("dcf"):
+        if not scen or rec.get("skipped") or not (rec.get("dcf") or rec.get("legs")):
             continue
-        leg = (scen.setdefault("leg_inputs", {})).setdefault("DCF", {})
-        d = rec["dcf"]
-        leg.update({"value": d.get("value"), "pv_fcf_per_share": d.get("pv_fcf_per_share"), "pv_tv_per_share": d.get("pv_tv_per_share"),
-                    "projection_rows": d.get("projection_rows"), "growth_schedule": d.get("growth_schedule"), "margin_schedule": d.get("margin_schedule"),
-                    "wacc": d.get("wacc"), "tgr": d.get("tgr"), "user_override": True})
+        d = rec.get("dcf") or {}
         fc = rec.get("forecast") or {}
-        leg["guidance_forecast"] = {k: v for k, v in fc.items() if k not in ("rows", "curve")} or None
+        if d:
+            leg = (scen.setdefault("leg_inputs", {})).setdefault("DCF", {})
+            leg.update({"value": d.get("value"), "pv_fcf_per_share": d.get("pv_fcf_per_share"), "pv_tv_per_share": d.get("pv_tv_per_share"),
+                        "projection_rows": d.get("projection_rows"), "growth_schedule": d.get("growth_schedule"), "margin_schedule": d.get("margin_schedule"),
+                        "wacc": d.get("wacc"), "tgr": d.get("tgr"), "user_override": True})
+            leg["guidance_forecast"] = {k: v for k, v in fc.items() if k not in ("rows", "curve")} or None
         if d.get("value") is not None:
             scen["iv_dcf"] = d["value"]
             if "DCF" in (scen.get("method_iv_table") or {}) or rec.get("dcf_weight"):
@@ -374,8 +472,13 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
         for name, lg in (rec.get("legs") or {}).items():
             tr = (scen.get("leg_inputs") or {}).get(name)
             if isinstance(tr, dict) and lg.get("value_after") is not None:
-                tr.update({"value": lg["value_after"], "metric_value": lg["metric_after"], "per_share_metric": (lg["metric_after"] if tr.get("kind") == "equity_multiple" else tr.get("per_share_metric")),
-                           "metric_agent": lg["metric_before"], "metric": str(tr.get("metric") or "") + " · user estimate", "user_override": True})
+                if tr.get("kind") == "ggm":
+                    tr.update({"value": lg["value_after"], "value_before_band": lg["value_after"] / (float(tr.get("scenario_band") or 1.0) or 1.0), "target_pb": lg["multiple"],
+                               "assumptions": {**(tr.get("assumptions") or {}), "bvps": lg["metric_after"], "bvps_basis": "user estimate: FY+1 book from the bank model", "user_basis": lg.get("basis")},
+                               "user_override": True})
+                else:
+                    tr.update({"value": lg["value_after"], "metric_value": lg["metric_after"], "per_share_metric": (lg["metric_after"] if tr.get("kind") == "equity_multiple" else tr.get("per_share_metric")),
+                               "metric_agent": lg["metric_before"], "metric": str(tr.get("metric") or "") + " · user estimate", "user_override": True})
                 if name in (scen.get("method_iv_table") or {}):
                     scen["method_iv_table"][name] = round(float(lg["value_after"]), 2)
         if rec.get("intrinsic_value") is not None:
@@ -387,12 +490,19 @@ def apply_to_payload(payload: dict, ticker: str, record: dict) -> dict:
         flags = scen.setdefault("forward_flags", [])
         if flag not in flags:
             flags.insert(0, flag)
-        if sc == "base":
-            dr["guidance_forecast"] = {**fc, "override": meta} if fc else dr.get("guidance_forecast")
+        if sc != "base":
             if rec.get("three_statements"):
-                dr["three_statements"] = {**rec["three_statements"], "override": meta}
+                dr.setdefault("three_statements_scenarios", {})
+                if isinstance(dr["three_statements_scenarios"], dict):
+                    dr["three_statements_scenarios"][sc] = rec["three_statements"]
+            continue
+        if fc:
+            dr["guidance_forecast"] = {**fc, "override": meta}
+        if rec.get("three_statements"):
+            dr["three_statements"] = {**rec["three_statements"], "override": meta}
+        if True:
             dr["projection_rows"] = d.get("projection_rows") or dr.get("projection_rows")
-            if d.get("pv_fcf_per_share") is not None:
+            if d and d.get("pv_fcf_per_share") is not None:
                 dr["pv_fcf_base"] = d["pv_fcf_per_share"]
                 dr["pv_tv_base"] = d["pv_tv_per_share"]
             ge = dr.get("guidance_estimates")

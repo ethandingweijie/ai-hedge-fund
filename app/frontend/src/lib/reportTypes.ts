@@ -393,12 +393,15 @@ export interface ForecastContext {
   opening_balance_sheet?: Record<string, number | string | null> | null;
   statement_assumptions?: Record<string, { value?: number | string | null; source?: string; needed_for?: string }> | null;
   statements_family_ok?: boolean;
+  /** The bank / insurer earnings-and-capital model's inputs (step three, 2026-10-03). */
+  bank_model?: { kind?: 'bank' | 'insurer' | string; opening?: Record<string, unknown>; assumptions?: Record<string, { value?: number | string | string[] | null; source?: string; needed_for?: string }> } | null;
   fiscal_year_1?: string | null;
   fiscal_year_2?: string | null;
 }
 /** The user's estimate overrides, in the shape estimate_override_service accepts. */
 export interface EstimateOverrides {
-  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual', number>>;
+  shared?: Partial<Record<'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual'
+    | 'bank_loan_growth' | 'bank_nim' | 'bank_fee_growth' | 'bank_cost_to_income' | 'bank_credit_cost_bps' | 'bank_cet1_target' | 'ins_premium_growth' | 'ins_combined_ratio' | 'ins_investment_yield', number>>;
   scenarios?: Partial<Record<'bear' | 'base' | 'bull', Partial<GuidanceScenarioRow>>>;
   medium_term_target?: { metric: string; target_year: string; low?: number | null; mid?: number | null; high?: number | null; unit?: string | null } | Record<string, never> | null;
   rationale?: string;

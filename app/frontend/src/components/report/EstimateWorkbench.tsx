@@ -30,7 +30,8 @@ const LABEL_CLS = 'text-[12px] font-semibold uppercase tracking-[0.14em] text-mu
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 type Scenario = (typeof SCENARIOS)[number];
 type ScenarioField = keyof GuidanceScenarioRow;
-type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual';
+type SharedField = 'fade_years' | 'tax_rate' | 'capex_alpha' | 'nwc_intensity' | 'terminal_roic' | 'wacc' | 'tgr' | 'gross_margin' | 'sbc_pct' | 'interest_rate' | 'payout_ratio' | 'buyback_annual'
+  | 'bank_loan_growth' | 'bank_nim' | 'bank_fee_growth' | 'bank_cost_to_income' | 'bank_credit_cost_bps' | 'bank_cet1_target' | 'ins_premium_growth' | 'ins_combined_ratio' | 'ins_investment_yield';
 
 const SCENARIO_FIELDS: { key: ScenarioField; label: (fy1: string, fy2: string) => string; kind: 'pct' | 'num' }[] = [
   { key: 'revenue_growth_fy1', label: (a) => `Revenue growth ${a}`, kind: 'pct' },
@@ -40,7 +41,7 @@ const SCENARIO_FIELDS: { key: ScenarioField; label: (fy1: string, fy2: string) =
   { key: 'eps_fy1', label: (a) => `EPS ${a}`, kind: 'num' },
   { key: 'eps_fy2', label: (_a, b) => `EPS ${b}`, kind: 'num' },
 ];
-const SHARED_FIELDS: { key: SharedField; label: string; kind: 'pct' | 'num' | 'int'; hint: string }[] = [
+const SHARED_FIELDS: { key: SharedField; label: string; kind: 'pct' | 'num' | 'int'; hint: string; family?: 'bank' | 'insurer' }[] = [
   { key: 'fade_years', label: 'Fade years after the target', kind: 'int', hint: 'growth decays linearly to the terminal rate over these years' },
   { key: 'tax_rate', label: 'Tax rate', kind: 'pct', hint: 'history median unless overridden' },
   { key: 'capex_alpha', label: 'Growth capex per unit of new revenue', kind: 'num', hint: 'capex = D&A + alpha × new revenue' },
@@ -54,6 +55,16 @@ const SHARED_FIELDS: { key: SharedField; label: string; kind: 'pct' | 'num' | 'i
   { key: 'interest_rate', label: 'Interest rate on debt', kind: 'pct', hint: 'interest expense on opening debt' },
   { key: 'payout_ratio', label: 'Dividend payout ratio', kind: 'pct', hint: 'dividends in financing cash flow' },
   { key: 'buyback_annual', label: 'Share repurchases per year (currency)', kind: 'num', hint: 'capped at cash above the minimum' },
+  // Owner, 2026-10-03 (step three): the bank / insurer earnings-and-capital model's drivers; shown only where the run built one.
+  { key: 'bank_loan_growth', label: 'Loan / asset growth (bank)', kind: 'pct', hint: 'earning assets and loans, both years', family: 'bank' },
+  { key: 'bank_nim', label: 'Net interest margin (bank)', kind: 'pct', hint: 'NII = average earning assets × NIM', family: 'bank' },
+  { key: 'bank_fee_growth', label: 'Non-interest income growth (bank)', kind: 'pct', hint: 'fees, trading and other income', family: 'bank' },
+  { key: 'bank_cost_to_income', label: 'Cost-to-income (bank)', kind: 'pct', hint: 'operating expenses as a share of total income', family: 'bank' },
+  { key: 'bank_credit_cost_bps', label: 'Credit cost, bps of loans (bank)', kind: 'num', hint: 'provisions = credit cost × average loans', family: 'bank' },
+  { key: 'bank_cet1_target', label: 'CET1 target (bank)', kind: 'pct', hint: 'distributions are cut to hold it', family: 'bank' },
+  { key: 'ins_premium_growth', label: 'Premium growth (insurer)', kind: 'pct', hint: 'net earned premiums, both years', family: 'insurer' },
+  { key: 'ins_combined_ratio', label: 'Combined ratio (insurer)', kind: 'pct', hint: 'underwriting result = premiums × (1 − combined ratio)', family: 'insurer' },
+  { key: 'ins_investment_yield', label: 'Investment yield (insurer)', kind: 'pct', hint: 'investment income = float × yield', family: 'insurer' },
 ];
 
 type Form = {
@@ -98,6 +109,8 @@ function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceFo
   const inp = fc?.inputs ?? {};
   const saRaw = (ctx?.statement_assumptions ?? {}) as Record<string, { value?: number | null } | undefined>;
   const sa: Record<string, number | null | undefined> = Object.fromEntries(Object.entries(saRaw).map(([k, v]) => [k, v?.value]));
+  const baRaw = ((ctx?.bank_model as { assumptions?: Record<string, { value?: number | null } | undefined> } | undefined)?.assumptions ?? {});
+  const ba: Record<string, number | null | undefined> = Object.fromEntries(Object.entries(baRaw).map(([k, v]) => [k, typeof v?.value === 'number' ? v.value : undefined]));
   return {
     scenarios,
     shared: {
@@ -105,7 +118,10 @@ function initialForm(block: GuidanceEstimates | null | undefined, fc: GuidanceFo
       nwc_intensity: fmtIn(h.nwc_intensity as number, 'num'), terminal_roic: fmtIn(fc?.terminal?.roic_terminal, 'pct'),
       wacc: fmtIn(inp.wacc, 'pct'), tgr: fmtIn(inp.tgr, 'pct'),
       gross_margin: fmtIn(sa.gross_margin, 'pct'), sbc_pct: fmtIn(sa.sbc_pct, 'pct'), interest_rate: fmtIn(sa.interest_rate, 'pct'),
-      payout_ratio: fmtIn(sa.payout_ratio, 'pct'), buyback_annual: fmtIn(sa.buyback_annual, 'num'),
+      payout_ratio: fmtIn(sa.payout_ratio ?? ba.payout_ratio, 'pct'), buyback_annual: fmtIn(sa.buyback_annual ?? ba.buyback_annual, 'num'),
+      bank_loan_growth: fmtIn(ba.asset_growth_fy1, 'pct'), bank_nim: fmtIn(ba.nim_fy1, 'pct'), bank_fee_growth: fmtIn(ba.fee_income_growth_fy1, 'pct'),
+      bank_cost_to_income: fmtIn(ba.cost_to_income_fy1, 'pct'), bank_credit_cost_bps: fmtIn(ba.credit_cost_bps_fy1, 'num'), bank_cet1_target: fmtIn(ba.cet1_target, 'pct'),
+      ins_premium_growth: fmtIn(ba.premium_growth_fy1, 'pct'), ins_combined_ratio: fmtIn(ba.combined_ratio_fy1, 'pct'), ins_investment_yield: fmtIn(ba.investment_yield_fy1, 'pct'),
     },
     mt: { metric: mt?.metric ?? 'eps', target_year: mt?.target_year ?? '', low: fmtIn(mt?.low, 'num'), mid: fmtIn(mt?.mid, 'num'), high: fmtIn(mt?.high, 'num'), enabled: !!mt },
   };
@@ -175,6 +191,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
   const [question, setQuestion] = useState('');
   const [thread, setThread] = useState<{ role: 'user' | 'agent'; content: string; proposal?: EstimateOverrides | null; proposalError?: string | null }[]>([]);
   const override = dcfRange?.estimate_override ?? null;
+  const modelKind = (dcfRange?.forecast_context as { bank_model?: { kind?: string } } | undefined)?.bank_model?.kind ?? null;
   const fy1 = block?.fiscal_year_1 ?? dcfRange?.forecast_context?.fiscal_year_1 ?? 'FY+1';
   const fy2 = block?.fiscal_year_2 ?? dcfRange?.forecast_context?.fiscal_year_2 ?? 'FY+2';
   const overrides = useMemo(() => diffOverrides(form, base), [form, base]);
@@ -288,7 +305,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
         </div>
         <div>
           <div className={LABEL_CLS}>Engine inputs (all scenarios)</div>
-          {SHARED_FIELDS.map((f) => (
+          {SHARED_FIELDS.filter((f) => !f.family || f.family === modelKind).map((f) => (
             <label key={f.key} className="mt-1 flex items-center justify-between gap-3" title={f.hint}>
               <span className="text-foreground/85">{f.label}{f.kind === 'pct' ? ' (%)' : ''}</span>
               <input className={INPUT_CLS} value={form.shared[f.key] ?? ''} onChange={(e) => setSh(f.key, e.target.value)} placeholder="—" />

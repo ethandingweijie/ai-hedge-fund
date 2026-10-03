@@ -5716,7 +5716,10 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
     prov: list[str] = []
 
     research_roe = _safe(most_recent.get("_bank_target_roe_research"))
-    if research_roe and 0.0 < research_roe < 0.60:
+    model_roe = _safe(most_recent.get("_bank_model_rote"))
+    if model_roe and 0.0 < model_roe < 0.60:
+        roe, src = model_roe, "bank model: steady-state RoTE on the guided drivers"
+    elif research_roe and 0.0 < research_roe < 0.60:
         roe, src = research_roe, "research"
     elif ovr.get("roe"):
         roe, src = ovr["roe"], "broker"
@@ -5842,6 +5845,9 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     if (bvps is None or bvps <= 0) and shares and shares > 0:
         eq = _safe(most_recent.get("total_equity"))
         bvps = (eq / shares) if eq else None
+    _bvps_basis = "latest book"
+    if _safe(most_recent.get("_bank_model_bvps")) and _safe(most_recent.get("_bank_model_bvps")) > 0:
+        bvps, _bvps_basis = float(most_recent["_bank_model_bvps"]), "bank model: FY+1 book value per share"
     if bvps is None or bvps <= 0:
         return None
     # ── Negative / zero tangible book: hard stop ────────────────────────────
@@ -5889,8 +5895,10 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     # the goodwill and intangibles the bank has already paid for.
     _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
     _tbvps = _safe(_bank_m.get("tbv_per_share"))
+    if _bvps_basis.startswith("bank model") and _safe(most_recent.get("_bank_model_tbvps")):
+        _tbvps = float(most_recent["_bank_model_tbvps"])
     roe_book = _return_on_book_basis(roe, bvps, _tbvps)
-    a = {**a, "roe_book": roe_book, "bvps": bvps, "tbv_per_share": _tbvps}
+    a = {**a, "roe_book": roe_book, "bvps": bvps, "tbv_per_share": _tbvps, "bvps_basis": _bvps_basis}
     if roe_book is None or roe_book <= g:
         return None          # conversion pushed it under g — no franchise value
     target_pb = (roe_book - g) / (coe - g)
@@ -12589,6 +12597,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
         _gf_base: Optional[dict] = None             # the base scenario's guidance forecast (five principles)
         _gf_by_sc: dict = {}                        # every scenario's forecast, for the page's bear / bull traces
+        _bank_models: dict = {}                     # bank / insurer earnings-and-capital model per scenario (step three)
         _fc_ctx: Optional[dict] = None              # history ratios + inputs the page rebuilds estimates from
         _peer_for_gf: Optional[dict] = None         # peer multiples for the forecast (hoisted: see the scenario loop)
         _cal_adj = dcf_cal.get("growth_rate_adj")
@@ -13137,6 +13146,51 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 most_recent["_bank_coe_research"] = _bm_override["cost_of_equity"]
             if _bm_override.get("terminal_growth_rate") is not None:
                 most_recent["_bank_ggm_g_research"] = _bm_override["terminal_growth_rate"]
+            # Owner, 2026-10-03 (step three): the earnings-and-capital model. Management's guidance
+            # arrives as loan growth, NIM, fees, cost-to-income, credit cost, payout and a CET1
+            # target (research family_metrics), else the bank-metrics extraction; the model's RoTE
+            # and FY+1 book value price the GGM leg, its EPS the forward P/E, and it is published as
+            # this family's statements in place of the working-capital roll.
+            try:
+                from src.agents.analysis import bank_model as _bmod
+                _bm_open = _bmod.opening_from_line_items(most_recent, shares, _bank_total_income(most_recent),
+                                                         fy_label=str(most_recent.get("report_period") or "")[:4])
+                if _bm_open:
+                    _bm_ggm = _bank_ggm_assumptions(ticker, profile_name, most_recent)
+                    _bm_a = _bmod.bank_assumptions(_bm_open, _bm_override, _guid_est or {}, coe=_bm_ggm.get("coe"),
+                                                   target_roe=_bank_cfg.get("target_roe"), cet1_target=_bank_cfg.get("target_cet1"))
+                    for _sc in ("bear", "base", "bull"):
+                        _bm_out = _bmod.build_bank(_bm_open, _bm_a, scenario=_sc)
+                        if _bm_out and not _bm_out.get("skipped"):
+                            _bank_models[_sc] = _bm_out
+                    _bm_base = _bank_models.get("base")
+                    if _bm_base:
+                        _bm_base["coverage"] = _bmod.coverage(_bm_base)
+                        _bm_guided = _bm_base.get("guided_fields") or []
+                        _bm_cal = _bm_base.get("calibration") or {}
+                        # The model prices the legs when management's own drivers built it (family
+                        # guidance), or when no research ROE target exists and it reproduces the latest
+                        # year. Otherwise it is a cross-check beside the research's target: a line-item
+                        # NIM or a default tax rate must not re-price a bank (02888.HK fell 17% on them).
+                        _bm_feeds = bool(_bm_guided) or (not most_recent.get("_bank_target_roe_research") and bool(_bm_cal.get("ok")))
+                        _bm_base["feeds_legs"] = _bm_feeds
+                        for _sc_m in _bank_models.values():
+                            _sc_m["feeds_legs"] = _bm_feeds
+                        if _bm_feeds:
+                            most_recent["_bank_model_rote"] = _bm_base.get("steady_rote") or _bm_base.get("steady_roe")
+                            most_recent["_bank_model_bvps"] = _bm_base.get("bvps_fy1")
+                            most_recent["_bank_model_tbvps"] = _bm_base.get("tbvps_fy1")
+                            most_recent["_bank_model_eps"] = {sc: m.get("eps_fy1") for sc, m in _bank_models.items()}
+                        ticker_forward_flags.append(
+                            f"Bank earnings-and-capital model: FY+1 EPS {_bm_base['eps_fy1']:,.2f}, BVPS {_bm_base['bvps_fy1']:,.2f}, "
+                            f"steady RoTE {(_bm_base.get('steady_rote') or _bm_base.get('steady_roe') or 0):.1%} on "
+                            + (f"guided {', '.join(_bm_guided)}" if _bm_guided else "the bank-metrics extraction (no family guidance in the research)")
+                            + ("; the GGM leg prices its RoTE and FY+1 book, the forward P/E its EPS" if _bm_feeds
+                               else "; shown as a cross-check beside the research's ROE target, which still prices the GGM leg"
+                                    + (f" ({_bm_cal.get('detail')})" if _bm_cal.get("detail") else ""))
+                            + ("; " + "; ".join(_bm_base["notes"]) if _bm_base.get("notes") else ""))
+            except Exception as _bm_exc:                     # noqa: BLE001
+                ticker_forward_flags.append(f"Bank earnings-and-capital model did not build ({type(_bm_exc).__name__}: {str(_bm_exc)[:100]})")
             if _bm_override.get("target_price_to_book"):
                 most_recent["_bank_target_pb_research"] = _bm_override["target_price_to_book"]
 
@@ -14183,11 +14237,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _fc_ctx["statement_assumptions"] = _ts.assumptions_from_history(
                             _raw_fin, _fc_ctx["history"], spot=_fc_ctx["inputs"].get("spot"))
                         _fc_ctx["statements_family_ok"] = not _interest_is_cost_of_goods(profile_name, sector)
+                        if _bank_models.get("base"):
+                            _fc_ctx["bank_model"] = {"kind": _bank_models["base"].get("kind"), "opening": _bank_models["base"].get("opening"),
+                                                     "assumptions": _bank_models["base"].get("assumptions")}
                     except Exception:                      # noqa: BLE001
                         pass
                 except Exception:                          # noqa: BLE001
                     _fc_ctx = None
-            if _guid_est and _guidance_channel_enabled():
+            if _guid_est and _guidance_channel_enabled() and not _bank_models:
                 try:
                     from src.agents.analysis import guidance_forecast as _gfm
                     _gf = _gfm.build_forecast(
@@ -14224,8 +14281,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03: the forward multiples of this scenario price on the guidance-derived
             # FY+1 estimates (EPS, EBITDA, revenue, EBIT) where the research or the forecast gives
             # them; consensus where not. The leg trace names the source and keeps consensus beside it.
-            _fwd_cons_sc = _guidance_forward_overlay(_guid_est if _guidance_channel_enabled() else None,
-                                                     forward_consensus, scenario, _gf, revenue_base)
+            _gf_for_legs = _gf
+            if _bank_models.get(scenario) and _bank_models[scenario].get("feeds_legs"):
+                _bmm = _bank_models[scenario]
+                _gf_for_legs = {"rows": [{"eps": _bmm.get("eps_fy1"), "revenue": (_bmm["rows"].get("total_income") or [None])[0], "ebit": None, "da": 0.0}]}
+            _fwd_cons_sc = _guidance_forward_overlay((_guid_est or ({"confidence": "HIGH", "estimates": {}} if (_bank_models and _bank_models.get("base", {}).get("feeds_legs")) else None)) if _guidance_channel_enabled() else None,
+                                                     forward_consensus, scenario, _gf_for_legs, revenue_base)
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
                 ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
@@ -17107,7 +17168,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # estimates from when the user overrides them (or enters them where research gave none).
             "forecast_context": _fc_ctx,
             # Owner, 2026-10-03: the three statements FY+1E..FY+5E the estimates imply (web, PDF, Excel).
-            "three_statements": _three_statements_payload(_gf_base, _fc_ctx, profile_name, sector),
+            "three_statements": (_bank_models.get("base") if _bank_models.get("base") else _three_statements_payload(_gf_base, _fc_ctx, profile_name, sector)),
+            "three_statements_scenarios": ({sc: m for sc, m in _bank_models.items() if sc != "base"} or None),
             # The bear and bull forecasts (steps, rows, checks) beside the base one, for the page's scenario toggle.
             "guidance_forecast_scenarios": ({sc: _guidance_forecast_payload(v) for sc, v in _gf_by_sc.items() if sc != "base"} or None),
             # The user's carried-forward override, if one shaped this run.

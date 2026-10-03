@@ -2160,6 +2160,70 @@ def _guidance_estimates_block_pdf(dcf_t: dict, styles, width: float) -> list:
     return out
 
 
+def _bank_model_block_pdf(th: dict, dcf_t: dict, st_l, st_lb, st_v, width: float) -> list:
+    """The bank / insurer earnings-and-capital model (owner, 2026-10-03): drivers, earnings, capital, per share."""
+    labels, rows, op = th["fy_labels"], th.get("rows") or {}, th.get("opening") or {}
+    kind = th.get("kind")
+    ovr = th.get("override") or dcf_t.get("estimate_override") or {}
+    ccy = dcf_t.get("reported_currency") or ""
+    out = [Spacer(1, 4), Paragraph(f"{'Bank' if kind == 'bank' else 'Insurer'} earnings-and-capital model ({ccy or 'statement currency'} millions) — {op.get('fy_label')}A as filed, "
+                                   f"{labels[0]}–{labels[-1]} on the valuation agent's drivers"
+                                   + ("; guided: " + _strip(", ".join(th.get("guided_fields") or [])) if th.get("guided_fields") else "; drivers from the bank-metrics extraction and the filings")
+                                   + (f"; USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {_strip(', '.join(ovr.get('fields') or []))}" if ovr else ""), st_lb),
+           Paragraph("Flow: " + " → ".join(_strip(str(x)) for x in (th.get("flow") or [])), st_l)]
+
+    def _fmt(v, f):
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return "—"
+        return f"{x / 1e6:,.0f}" if f == "m" else f"{x:.1%}" if f == "p" else f"{x:,.1f}" if f == "b" else f"{x:,.2f}"
+
+    bank_lines = [("Total assets", "total_assets", "m"), ("Asset growth", "asset_growth", "p"), ("Net interest margin", "nim", "p"), ("Net interest income", "net_interest_income", "m"),
+                  ("Non-interest income", "fee_income", "m"), ("Total income", "total_income", "m"), ("Cost-to-income", "cost_to_income", "p"), ("Operating expenses", "operating_expenses", "m"),
+                  ("Pre-provision profit", "pre_provision_profit", "m"), ("Credit cost (bps)", "credit_cost_bps", "b"), ("Provisions", "provisions", "m"), ("Pre-tax profit", "pretax", "m"), ("Tax", "tax", "m"),
+                  ("Net income", "net_income", "m"), ("Dividends", "dividends", "m"), ("Shareholders' equity", "equity", "m"), ("Risk-weighted assets", "rwa", "m"), ("CET1 ratio", "cet1_ratio", "p"),
+                  ("EPS", "eps", "n"), ("Dividend per share", "dividend_per_share", "n"), ("Book value per share", "bvps", "n"), ("Tangible BVPS", "tbvps", "n"), ("ROE", "roe", "p"), ("RoTE", "rote", "p")]
+    ins_lines = [("Net earned premiums", "net_earned_premiums", "m"), ("Premium growth", "premium_growth", "p"), ("Combined ratio", "combined_ratio", "p"), ("Underwriting result", "underwriting_result", "m"),
+                 ("Average float", "float_avg", "m"), ("Investment yield", "investment_yield", "p"), ("Investment income", "investment_income", "m"), ("Pre-tax profit", "pretax", "m"), ("Tax", "tax", "m"),
+                 ("Net income", "net_income", "m"), ("Dividends", "dividends", "m"), ("Shareholders' equity", "equity", "m"), ("EPS", "eps", "n"), ("Dividend per share", "dividend_per_share", "n"),
+                 ("Book value per share", "bvps", "n"), ("ROE", "roe", "p")]
+    opening_map = {"total_assets": op.get("total_assets"), "equity": op.get("equity"), "net_income": op.get("net_income"), "total_income": op.get("total_income"), "bvps": op.get("bvps"),
+                   "tbvps": op.get("tbvps"), "roe": op.get("roe"), "net_earned_premiums": None}
+    body = [[Paragraph(_wh("Line"), st_lb), Paragraph(_wh(f"{op.get('fy_label')}A"), st_lb)] + [Paragraph(_wh(l), st_lb) for l in labels]]
+    for label, key, f in (bank_lines if kind == "bank" else ins_lines):
+        series = rows.get(key)
+        if not series:
+            continue
+        o = opening_map.get(key)
+        body.append([Paragraph(_wh(label), st_l), Paragraph(_fmt(o, f) if o is not None else "", st_v)] + [Paragraph(_fmt(x, f), st_v) for x in series[:len(labels)]])
+    t = Table(body, colWidths=[width * 0.30, width * 0.11] + [width * 0.59 / len(labels)] * len(labels))
+    t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8)]))
+    out.append(t)
+    rc = th.get("reconciliation") or {}
+    if rc.get("assertions"):
+        by_id: dict = {}
+        for asrt in rc["assertions"]:
+            by_id.setdefault(asrt["id"], (asrt["name"], []))[1].append(asrt["ok"])
+        b2 = [[Paragraph(_wh("Reconciliation suite"), st_lb)] + [Paragraph(_wh(l), st_lb) for l in labels]]
+        for aid in sorted(by_id):
+            name, oks = by_id[aid]
+            b2.append([Paragraph(_wh(f"{aid}. {name}"), st_l)] + [Paragraph("OK" if ok else "FAIL", st_v) for ok in oks[:len(labels)]])
+        b2.append([Paragraph(_wh("Suite result"), st_lb)] + [Paragraph("ALL OK" if rc.get("ok") else "FAIL", st_v) for _ in labels])
+        t2 = Table(b2, colWidths=[width * 0.45] + [width * 0.55 / len(labels)] * len(labels))
+        t2.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.4, colors.black), ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8)]))
+        out += [Spacer(1, 3), t2]
+    for c in (th.get("checks") or [])[:5]:
+        if c.get("roe_over_coe") is not None:
+            out.append(Paragraph(f"{c['year']}: ROE {c['roe']:.1%} vs cost of equity {c['coe']:.1%} ({c['roe_over_coe'] * 1e4:+,.0f} bp)" + (f"; CET1 {c['cet1_ratio']:.1%} vs target {c['cet1_target']:.1%}" if c.get("cet1_ratio") is not None else ""), st_l))
+    for note in th.get("notes") or []:
+        out.append(Paragraph(_strip(str(note))[:300], st_l))
+    cov = [c for c in (th.get("coverage") or []) if str(c.get("status", "")).startswith(("missing", "default"))]
+    if cov:
+        out.append(Paragraph("Assumptions not from guidance or the filings: " + "; ".join(f"{_strip(str(c.get('assumption')))} ({_strip(str(c.get('status')))})" for c in cov)[:400], st_l))
+    return out
+
+
 def _three_statement_block_pdf(dcf_t: dict, styles, width: float) -> list:
     """IS, CF and BS for FY+1E..FY+5E on the agent's estimates (owner, 2026-10-03); or why there are none."""
     th = dcf_t.get("three_statements") or {}
@@ -2168,6 +2232,8 @@ def _three_statement_block_pdf(dcf_t: dict, styles, width: float) -> list:
     st_v = ParagraphStyle("_tsv", parent=st_l, alignment=2)
     if not th:
         return []
+    if th.get("kind") in ("bank", "insurer") and th.get("fy_labels") and not th.get("skipped"):
+        return _bank_model_block_pdf(th, dcf_t, st_l, st_lb, st_v, width)
     if th.get("skipped") or not th.get("fy_labels"):
         out = [Spacer(1, 3), Paragraph("Three-statement forecast: " + _strip(str(th.get("skipped") or "not built")), st_lb if str(th.get("skipped", "")).startswith("RECONCILIATION") else st_l)]
         for f in ((th.get("reconciliation") or {}).get("failures") or [])[:10]:
