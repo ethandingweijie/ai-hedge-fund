@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { EstimateWorkbench } from '@/components/report/EstimateWorkbench';
 import type { DcfRange, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult } from '@/lib/reportTypes';
 
-const LABEL_CLS = 'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
+const LABEL_CLS = 'text-[12px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 
 function pct(v: number | null | undefined, digits = 1): string {
@@ -89,35 +89,35 @@ function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenar
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className={LABEL_CLS}>Forecast the DCF ran on</span>
-          <Badge variant="outline" className="text-[10px]">{fc.archetype_name}</Badge>
+          <Badge variant="outline" className="text-[12px]">{fc.archetype_name}</Badge>
         </div>
         {scenarios && (scenarios.bear || scenarios.bull) ? (
           <div className="flex gap-1">
             {(['bear', 'base', 'bull'] as const).map((s) => (
               <button key={s} type="button" onClick={() => setWhich(s)} disabled={s !== 'base' && !scenarios[s]}
-                className={`rounded px-2 py-0.5 text-[11px] ${s === which ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground disabled:opacity-40'}`}>
+                className={`rounded px-2 py-0.5 text-[13px] ${s === which ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground disabled:opacity-40'}`}>
                 {s}
               </button>
             ))}
           </div>
         ) : null}
       </div>
-      <div className="mt-1 text-[12.5px] text-foreground">
+      <div className="mt-1 text-[14.5px] text-foreground">
         {T}-year path to {t ? `the ${t.target_year} ${t.metric} target of ${num(t.value)}` : 'the FY+2 estimate'}; EBIT margin {margin(fc.margin_start)} → {margin(fc.margin_target)} ({fc.margin_source}); then a {fc.fade_years}-year fade to {margin(term?.tgr)} growth.
       </div>
       {fc.override ? (
-        <div className="mt-1 text-[11.5px] font-medium text-foreground">
+        <div className="mt-1 text-[13.5px] font-medium text-foreground">
           User override{fc.override.created_at ? ` (${fc.override.created_at.slice(0, 10)})` : ''}: {fc.override.fields?.join(', ')}{fc.override.note ? ` — ${fc.override.note}` : ''}. Agent's base IV {num(fc.override.before?.intrinsic_value)} → {num(fc.override.after?.intrinsic_value)}.
         </div>
       ) : null}
       {/* Owner, 2026-10-03: the agent's thinking, step by step, so the user can query and contest it. */}
       {fc.steps?.length ? (
         <details className="mt-2" open>
-          <summary className="cursor-pointer text-[11px] text-muted-foreground">How the agent built this estimate ({fc.steps.length} steps)</summary>
-          <ol className="mt-1 space-y-1 text-[11.5px] leading-snug text-foreground/85">
+          <summary className="cursor-pointer text-[13px] text-muted-foreground">How the agent built this estimate ({fc.steps.length} steps)</summary>
+          <ol className="mt-1 space-y-1 text-[13.5px] leading-snug text-foreground/85">
             {fc.steps.map((s) => (
               <li key={s.n} className="flex gap-2">
-                <span className="shrink-0 font-mono text-[10px] text-muted-foreground">{s.n}</span>
+                <span className="shrink-0 font-mono text-[12px] text-muted-foreground">{s.n}</span>
                 <span><span className="font-medium text-foreground">{s.title}.</span> {s.detail}</span>
               </li>
             ))}
@@ -125,9 +125,9 @@ function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenar
         </details>
       ) : null}
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-[12px] tabular-nums">
+        <table className="w-full text-[14px] tabular-nums">
           <thead>
-            <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+            <tr className="text-[12px] uppercase tracking-[0.08em] text-muted-foreground/70">
               <th className="pb-1.5 text-left font-medium">Year</th>
               <th className="pb-1.5 text-right font-medium">Revenue (bn)</th>
               <th className="pb-1.5 text-right font-medium">Growth</th>
@@ -155,20 +155,20 @@ function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenar
         </table>
       </div>
       {dec.ebit_T_implied != null ? (
-        <div className="mt-2 text-[11px] text-muted-foreground">
+        <div className="mt-2 text-[13px] text-muted-foreground">
           Target year back-solved: revenue {amountBn(dec.revenue_T as number)}bn, implied EBIT {amountBn(dec.ebit_T_implied as number)}bn
           {dec.implied_tax_rate != null ? `, implied tax-and-non-operating take ${margin(dec.implied_tax_rate as number)}` : ''}
           {dec.guided_cagr != null && dec.market_cagr != null ? `; guided CAGR ${margin(dec.guided_cagr as number)} vs market ${margin(dec.market_cagr as number)}` : ''}.
         </div>
       ) : null}
       {term ? (
-        <div className="mt-1 text-[11px] text-muted-foreground">
+        <div className="mt-1 text-[13px] text-muted-foreground">
           Terminal: growth {margin(term.tgr)}, ROIC {margin(term.roic_terminal)}, reinvestment {margin(term.reinvestment_rate)}
           {term.implied_exit_ev_ebitda != null ? `; implied exit EV/EBITDA ${term.implied_exit_ev_ebitda.toFixed(1)}x` : ''}
           {term.peer_ev_ebitda_median != null ? ` vs peer median ${term.peer_ev_ebitda_median.toFixed(1)}x` : ''}.
         </div>
       ) : null}
-      <ul className="mt-2 space-y-0.5 text-[11px]">
+      <ul className="mt-2 space-y-0.5 text-[13px]">
         {(fc.invariants ?? []).map((inv) => (
           <li key={inv.id} className="flex gap-2">
             <span className={`shrink-0 font-mono ${inv.ok === false ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
@@ -206,21 +206,21 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className={LABEL_CLS}>Management guidance → estimates</div>
-          <div className="mt-0.5 text-[13px] text-foreground">
+          <div className="mt-0.5 text-[15px] text-foreground">
             {block.applied
               ? `Sets the DCF's year 1–${explicitYears} growth per scenario, fading onto the engine path by year ${explicitYears + fadeYears + 1}`
               : `Shown, not applied — ${block.not_applied_reason ?? 'the DCF did not use it'}`}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="text-[10px]">confidence {block.confidence ?? '—'}</Badge>
-          {g.status && g.status !== 'none' ? <Badge variant="outline" className="text-[10px]">guidance {g.status}</Badge> : null}
-          {block.as_of ? <span className="text-[10px] text-muted-foreground">as of {block.as_of}</span> : null}
+          <Badge variant="outline" className="text-[12px]">confidence {block.confidence ?? '—'}</Badge>
+          {g.status && g.status !== 'none' ? <Badge variant="outline" className="text-[12px]">guidance {g.status}</Badge> : null}
+          {block.as_of ? <span className="text-[12px] text-muted-foreground">as of {block.as_of}</span> : null}
         </div>
       </div>
 
       {/* 1. Guidance as stated vs consensus */}
-      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-[12px] sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-[14px] sm:grid-cols-2">
         <div>
           <div className={LABEL_CLS}>Guidance ({fy1})</div>
           <dl className="mt-1 space-y-1 tabular-nums">
@@ -242,14 +242,14 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
         </div>
       </div>
       {g.quote ? (
-        <div className="mt-2 text-[11px] italic leading-snug text-muted-foreground">“{g.quote}”{g.source ? <span className="not-italic"> — {g.source}</span> : null}</div>
+        <div className="mt-2 text-[13px] italic leading-snug text-muted-foreground">“{g.quote}”{g.source ? <span className="not-italic"> — {g.source}</span> : null}</div>
       ) : null}
 
       {/* 2. The model's estimates */}
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-[12px] tabular-nums">
+        <table className="w-full text-[14px] tabular-nums">
           <thead>
-            <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+            <tr className="text-[12px] uppercase tracking-[0.08em] text-muted-foreground/70">
               <th className="pb-1.5 text-left font-medium">Model estimate</th>
               {SCENARIOS.map((s) => <th key={s} className="pb-1.5 text-right font-medium">{s}</th>)}
             </tr>
@@ -267,7 +267,7 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
 
       {/* 3. How the DCF used it */}
       {ch?.schedule?.length ? (
-        <div className="mt-3 text-[11px] text-muted-foreground">
+        <div className="mt-3 text-[13px] text-muted-foreground">
           <span className={LABEL_CLS}>Base DCF growth path</span>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
             {ch.schedule.map((v, i) => (
@@ -283,17 +283,17 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
       ) : null}
 
       {dcfRange?.estimate_override_carried ? (
-        <div className="mt-3 text-[11.5px] font-medium text-foreground">
+        <div className="mt-3 text-[13.5px] font-medium text-foreground">
           Your earlier estimates were carried into this run ({dcfRange.estimate_override_carried.fields?.join(', ')}{dcfRange.estimate_override_carried.note ? ` — ${dcfRange.estimate_override_carried.note}` : ''}; saved {dcfRange.estimate_override_carried.created_at?.slice(0, 10)}). Revoke on the Model Accuracy page to return to the research's estimates.
         </div>
       ) : null}
       {forecast ? <ForecastSection fc={forecast} scenarios={dcfRange?.guidance_forecast_scenarios} /> : null}
       {canWork ? <EstimateWorkbench runId={runId!} ticker={ticker!} block={blockIn} forecast={forecast} dcfRange={dcfRange} onRunUpdated={onRunUpdated} /> : null}
 
-      {block.rationale ? <div className="mt-3 text-[11.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}
-      {block.track_record ? <div className="mt-1 text-[11px] text-muted-foreground">Track record: {block.track_record}</div> : null}
+      {block.rationale ? <div className="mt-3 text-[13.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}
+      {block.track_record ? <div className="mt-1 text-[13px] text-muted-foreground">Track record: {block.track_record}</div> : null}
       {block.citations?.length ? (
-        <div className="mt-2 text-[10.5px] text-muted-foreground/80">
+        <div className="mt-2 text-[12.5px] text-muted-foreground/80">
           Sources: {block.citations.join(' · ')}{block.model ? ` · model ${block.model}` : ''}
         </div>
       ) : null}
