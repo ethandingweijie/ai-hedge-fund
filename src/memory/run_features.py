@@ -34,7 +34,7 @@ from src.memory import valuation_outcomes as vo
 
 logger = logging.getLogger(__name__)
 
-FEATURES_VERSION = 2          # 2: + pt_calibration_version (Phase C)
+FEATURES_VERSION = 3          # 2: + pt_calibration_version (Phase C); 3: FYE month from financials_used, balance-sheet families keep no forecast EPS / margin
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS run_features (
@@ -149,16 +149,42 @@ def _fy_int(v) -> Optional[int]:
     return int(m.group(0)) if m else None
 
 
+def _month_of(v) -> Optional[int]:
+    m = re.match(r"^(19|20)\d{2}-(\d{2})", str(v or ""))
+    if not m:
+        return None
+    month = int(m.group(2))
+    return month if 1 <= month <= 12 else None
+
+
 def _fye_month(dr: dict) -> Optional[int]:
-    """Fiscal-year-end month when the opening balance sheet carries a period date; None
-    means December is assumed (the scorer flags that assumption)."""
+    """Fiscal-year-end month: the latest annual row the engine used (financials_used.rows,
+    e.g. NKE 2026-05-31 -> 5), else the opening balance sheet's period; None means December
+    is assumed (the scorer flags that assumption)."""
+    rows = (dr.get("financials_used") or {}).get("rows") if isinstance(dr.get("financials_used"), dict) else None
+    if isinstance(rows, list):
+        months = [_month_of((r or {}).get("period")) for r in rows if isinstance(r, dict)]
+        months = [m for m in months if m]
+        if months:
+            return months[-1]
     opening = ((dr.get("forecast_context") or {}).get("opening_balance_sheet") or {})
     for key in ("period_end", "report_period", "date", "period"):
-        m = re.match(r"^(19|20)\d{2}-(\d{2})", str(opening.get(key) or ""))
+        m = _month_of(opening.get(key))
         if m:
-            month = int(m.group(2))
-            return month if 1 <= month <= 12 else None
+            return m
     return None
+
+
+def _balance_sheet_family(dr: dict) -> bool:
+    """Banks, insurers and property: the generic forecast's EPS and EBITDA margin do not
+    describe them, so the ledger keeps only the research's estimates (or the bank model's)."""
+    fcx = dr.get("forecast_context") if isinstance(dr.get("forecast_context"), dict) else {}
+    if fcx.get("statements_family_ok") is False or fcx.get("bank_model"):
+        return True
+    if dr.get("bank_breakdown"):
+        return True
+    ts = dr.get("three_statements") if isinstance(dr.get("three_statements"), dict) else {}
+    return bool(ts.get("bank_metrics") or ts.get("steady_rote") or ts.get("kind") in ("bank", "insurer"))
 
 
 def _prob(case) -> Optional[float]:
@@ -228,23 +254,28 @@ def _agent_fy1(dr: dict) -> tuple[dict, Optional[str]]:
     est = ((dr.get("guidance_estimates") or {}).get("estimates") or {})
     fc_base = dr.get("guidance_forecast") if isinstance(dr.get("guidance_forecast"), dict) else None
     fc_sc = dr.get("guidance_forecast_scenarios") or {}
+    balance_sheet = _balance_sheet_family(dr)
+    fcx = dr.get("forecast_context") if isinstance(dr.get("forecast_context"), dict) else {}
+    bank_eps = _num((fcx.get("bank_model") or {}).get("eps_fy1")) if isinstance(fcx.get("bank_model"), dict) else None
     out: dict = {}
-    used_fc = used_est = used_proxy = False
+    used_fc = used_est = used_proxy = used_bank = False
     for sc in _SCENARIOS:
         row = _first_row(fc_base if sc == "base" else fc_sc.get(sc))
         e = est.get(sc) if isinstance(est.get(sc), dict) else {}
         rg = _num(row.get("growth")) if row else None
-        eps = _num(row.get("eps")) if row else None
+        eps = _num(row.get("eps")) if (row and not balance_sheet) else None
         if rg is not None or eps is not None:
             used_fc = True
         if rg is None and _num(e.get("revenue_growth_fy1")) is not None:
             rg = _num(e.get("revenue_growth_fy1")); used_est = True
+        if balance_sheet and sc == "base" and bank_eps is not None:
+            eps = bank_eps; used_bank = True
         if eps is None and _num(e.get("eps_fy1")) is not None:
             eps = _num(e.get("eps_fy1")); used_est = True
-        em = _num(e.get("ebitda_margin_fy1"))
+        em = _num(e.get("ebitda_margin_fy1")) if not balance_sheet else None
         if em is not None:
             used_est = True
-        elif row and _num(row.get("ebit_margin")) is not None:
+        elif row and not balance_sheet and _num(row.get("ebit_margin")) is not None:
             em = _num(row.get("ebit_margin")); used_proxy = True
         out[sc] = {"rg": rg, "em": em, "eps": eps}
     parts = []
@@ -252,8 +283,12 @@ def _agent_fy1(dr: dict) -> tuple[dict, Optional[str]]:
         parts.append("guidance_forecast.rows[0]")
     if used_est:
         parts.append("guidance_estimates")
+    if used_bank:
+        parts.append("bank_model.eps_fy1")
     if used_proxy:
         parts.append("ebit_margin_proxy")
+    if balance_sheet:
+        parts.append("balance_sheet_family")
     return out, ("+".join(parts) or None)
 
 

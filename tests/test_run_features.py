@@ -137,6 +137,26 @@ class TestExtract:
         assert row["agent_em_fy1_base"] == 0.18
         assert row["agent_source"].endswith("+ebit_margin_proxy")
 
+    def test_the_fiscal_year_end_comes_from_the_rows_the_engine_used(self):
+        d = _dr(financials_used={"rows": [{"period": "2025-05-31", "revenue": 1.0}, {"period": "2026-05-31", "revenue": 1.0}]})
+        assert rf.extract("r1", "NKE", d, SCEN, run_at="2026-01-01")["fye_month"] == 5       # beats the opening sheet's June
+        d2 = _dr(); d2["forecast_context"]["opening_balance_sheet"].pop("period_end")
+        assert rf.extract("r1", "ZZCO", d2, SCEN, run_at="2026-01-01")["fye_month"] is None
+
+    def test_a_balance_sheet_family_keeps_no_forecast_eps_or_margin(self):
+        # a bank: the generic forecast's EPS (-0.15) and EBIT margin do not describe it
+        d = _dr(bank_breakdown={"ggm": 1.0})
+        d["guidance_forecast"]["rows"][0]["eps"] = -0.15
+        row = rf.extract("r1", "D05.SI", d, SCEN, run_at="2026-01-01")
+        assert row["agent_eps_fy1_base"] == 4.5 and row["agent_em_fy1_base"] is None    # research EPS, no margin
+        assert row["agent_rg_fy1_base"] == 0.085                                          # growth still from the forecast
+        assert row["agent_source"].endswith("+balance_sheet_family")
+        # with a bank model, its FY+1 EPS is the agent's base estimate
+        d["forecast_context"]["bank_model"] = {"eps_fy1": 3.9}
+        row2 = rf.extract("r1", "D05.SI", d, SCEN, run_at="2026-01-01")
+        assert row2["agent_eps_fy1_base"] == 3.9 and "bank_model.eps_fy1" in row2["agent_source"]
+        assert row2["agent_eps_fy1_bull"] == 5.0
+
     def test_flags(self):
         row = rf.extract("r1", "ZZCO", _dr(estimate_override_carried={"id": "o1"},
                                           rating_state={"state": "unrated"}, is_cache_copy=True),
