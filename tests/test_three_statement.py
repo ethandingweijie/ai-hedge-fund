@@ -176,15 +176,16 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     # Owner, 2026-10-03 (Anta): FY+1E..FY+5E on the statements themselves, linked to the Model tab, which sits right after CFS
     assert wb.sheetnames.index("Model") == wb.sheetnames.index("CFS") + 1
     is_ws, bs_ws, cf_ws = wb["IS"], wb["BS"], wb["CFS"]
+    def _first_fc(ws_):                                                                       # the first EDATE() header = FY+1E
+        return next(c for c in range(3, 20) if str(ws_.cell(row=4, column=c).value).startswith("=EDATE("))
     for ws_, label in ((is_ws, "Revenue"), (is_ws, "Net income"), (bs_ws, "Cash & equivalents"), (bs_ws, "Total assets"), (bs_ws, "Shareholders' equity"), (cf_ws, "Cash from operations"), (cf_ws, "Free cash flow (CFO + capex)")):
         rr = [c.row for c in ws_["A"] if c.value == label][-1]
-        first = ws_.cell(row=rr, column=8).value                                              # FY2026E is the first forecast column after five actuals
-        assert str(first).startswith("='Model'!D"), (ws_.title, label, first)
-        assert str(ws_.cell(row=rr, column=12).value).startswith("='Model'!H")
-    assert str(bs_ws.cell(row=4, column=8).value).startswith("=EDATE(") and str(cf_ws.cell(row=4, column=8).value).startswith("=EDATE(")
+        f0 = _first_fc(ws_)
+        assert str(ws_.cell(row=rr, column=f0).value).startswith("='Model'!D"), (ws_.title, label, ws_.cell(row=rr, column=f0).value)
+        assert str(ws_.cell(row=rr, column=f0 + 4).value).startswith("='Model'!H")
     rev_model = next(c.row for c in ws["A"] if c.value == "Revenue")
     rr = [c.row for c in is_ws["A"] if c.value == "Revenue"][-1]
-    assert is_ws.cell(row=rr, column=8).value == f"='Model'!D{rev_model}"
+    assert is_ws.cell(row=rr, column=_first_fc(is_ws)).value == f"='Model'!D{rev_model}"
     assert not any("{" in str(c.value) for row in ws.iter_rows(min_col=4, max_col=8) for c in row if isinstance(c.value, str))   # every forward reference resolved
     from src.utils import pdf_report as pr
     from reportlab.lib.styles import getSampleStyleSheet
@@ -202,7 +203,7 @@ def test_the_model_tab_and_the_pdf_print_the_four_blocks_and_the_suite():
     assert not any(v.startswith("1. Income statement") for v in a2) and any(v == "FY2026E" for v in a2)
     # a withheld model leaves the statements' forecast columns with the reason, not blanks
     is2 = wb2["IS"]
-    assert any(str(c.value).startswith("Forecast columns: RECONCILIATION FAILED") for row in is2.iter_rows(min_col=8, max_col=8) for c in row)
-    assert wb2["BS"].cell(row=4, column=8).value is None                                       # no forecast columns without a model
+    assert any(str(c.value).startswith("Forecast columns: RECONCILIATION FAILED") for row in is2.iter_rows(min_col=3, max_col=14) for c in row)
+    assert not any(str(wb2["BS"].cell(row=4, column=c).value).startswith("=EDATE(") for c in range(3, 14))   # no forecast columns without a model
     flow2 = pr._three_statement_block_pdf(bad["data"]["dcf_range"]["MOH"], getSampleStyleSheet(), 500.0)
     assert "RECONCILIATION FAILED" in " ".join(getattr(f, "text", "") for f in flow2) and not [f for f in flow2 if f.__class__.__name__ == "Table"]
