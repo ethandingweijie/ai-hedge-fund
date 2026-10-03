@@ -336,7 +336,8 @@ def test_both_fixed_names_reach_the_branch_set_they_claim():
 #: that the profile documents a proxy.
 _PROXY_EQUIVALENCES = {
     "Power Price DCF":  ("DCF",       "Energy",       "Merchant Power"),
-    "PPA-backed DCF":   ("DCF",       "Energy",       "IPP"),
+    # "PPA-backed DCF" left this table 2026-10-03: it computes the project-finance DCF on an accepted
+    # ppa input (Wave 10 renewables, owner methodology) and its note no longer says "proxied by".
     # "EV/EBITDAR" renamed to EV/EBITDA in every profile 2026-09-26 (audit A5)
 }
 
@@ -391,5 +392,7 @@ def test_which_profiles_put_their_anchor_on_a_proxied_name():
         where = f"{sector} / {profile}: {m['name']} w={m.get('weight')}"
         (dcf_anchored if _PROXY_EQUIVALENCES[m["name"]][0] == "DCF"
          else ebitdar_anchored).append(where)
-    assert len(dcf_anchored) == 1, dcf_anchored   # EPC Contractor removed 2026-09-27
+    # 2026-10-03: none left. IPP's anchor (PPA-backed DCF) now computes the project-finance DCF on an
+    # accepted ppa input and is no longer a prose proxy; EPC Contractor was removed 2026-09-27.
+    assert len(dcf_anchored) == 0, dcf_anchored
     assert len(ebitdar_anchored) == 0, ebitdar_anchored   # EV/EBITDAR renamed to EV/EBITDA (2026-09-26)

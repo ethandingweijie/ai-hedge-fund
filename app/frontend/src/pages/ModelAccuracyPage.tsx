@@ -425,6 +425,8 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   pipeline: 'Pipeline assets (rNPV, Gemini, cited)',
   embedded_value: 'Embedded value (life insurer, Gemini, cited)',
   alt_manager: 'Distributable earnings and multiples (alt manager, Gemini, cited)',
+  nav: 'Published NAV / RNAV and cap rate (Gemini, cited)',
+  ppa: 'PPA portfolio: capacity, generation, contracts, project debt (renewable owner, Gemini, cited)',
 };
 
 /** kind === 'sotp': the segment table with a period label on every figure (owner, 2026-09-24). */

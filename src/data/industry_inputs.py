@@ -31,7 +31,8 @@ from typing import Callable, Optional
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
 KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance", "sotp", "pipeline",
          "embedded_value", "alt_manager",   # Wave 6 (owner, 2026-09-27)
-         "nav")                             # Wave 8 (owner, 2026-09-27): published NAV / RNAV per share and cap rate
+         "nav",                             # Wave 8 (owner, 2026-09-27): published NAV / RNAV per share and cap rate
+         "ppa")                             # Wave 10 renewables (owner methodology, 2026-10-03): the operating portfolio and its PPAs
 
 #: Kinds that ARE guidance. Everywhere else a figure for a year that has not
 #: ended fails its period check; here one for a year that HAS ended does.
@@ -58,7 +59,7 @@ RESERVE_MEASURE_REMARK = (
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
 #: and NAV curves, where the audit trail can separate price from reserve life.
-NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager", "nav")
+NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager", "nav", "ppa")
 
 #: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
 #: pre-fill whose segments sum to more than the group can only be rebuilt.
@@ -76,6 +77,10 @@ BOUNDS = {
     # Total NAV / market cap: REITs and landlords trade from a premium to a deep discount to NAV
     # (P/NAV 0.2x to 3x). Wave 8, owner 2026-09-27.
     "nav": ("market_cap", 0.3, 5.0),
+    # Contracted revenue (or PPA price x contracted generation) / latest revenue: the contracted
+    # book is most of a renewable owner's revenue, never more than all of it plus a merchant year.
+    # Wave 10 renewables, 2026-10-03.
+    "ppa": ("revenue", 0.3, 1.5),
     # Forward distributable earnings / market cap: the inverse of P/DE, 7x to 50x.
     "alt_manager": ("market_cap", 0.02, 0.15),
     # Backlog / annual revenue: weeks of work (short-cycle services) to years (drillers).
@@ -545,6 +550,23 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                           "nav_total": _cf(data.get("nav_total")), "nav_per_share": _cf(data.get("nav_per_share")),
                           "cap_rate": ((data.get("cap_rate") or {}).get("value") if isinstance(data.get("cap_rate"), dict) else None),
                           "cap_rate_basis": ((data.get("cap_rate") or {}).get("basis") if isinstance(data.get("cap_rate"), dict) else None)}
+            if kind == "ppa":
+                # Wave 10 renewables (owner methodology, 2026-10-03): the portfolio and its contracts,
+                # every figure with its period, so the reviewer sees what the project-finance DCF will run on.
+                def _cf(c):
+                    return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
+                             "unit": c.get("unit"), "period_label": c.get("period"), "source_url": c.get("source_url"),
+                             "quote": c.get("quote")} if isinstance(c, dict) else None)
+                detail = {"fiscal_year": data.get("fiscal_year"),
+                          "capacity_mw": _cf(data.get("capacity_mw")), "generation_gwh": _cf(data.get("generation_gwh")),
+                          "contracted_pct": ((data.get("contracted_pct") or {}).get("value") if isinstance(data.get("contracted_pct"), dict) else None),
+                          "remaining_ppa_years": _cf(data.get("remaining_ppa_years")),
+                          "avg_ppa_price": _cf(data.get("avg_ppa_price")), "contracted_revenue": _cf(data.get("contracted_revenue")),
+                          "merchant_price": _cf(data.get("merchant_price")), "opex": _cf(data.get("opex")),
+                          "project_debt": _cf(data.get("project_debt")),
+                          "project_debt_cost": ((data.get("project_debt_cost") or {}).get("value") if isinstance(data.get("project_debt_cost"), dict) else None),
+                          "tax_equity": _cf(data.get("tax_equity")), "tax_credits_annual": _cf(data.get("tax_credits_annual")),
+                          "technology_mix": data.get("technology_mix") or []}
             if kind == "alt_manager":
                 def _cf(c):
                     return ({"value": c.get("value"), "currency": c.get("currency"), "scale": c.get("scale"),
@@ -607,7 +629,7 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                             if ov and kind not in NO_OVERLAY else None),
                 "overlay_allowed": kind not in NO_OVERLAY,
                 "value": v.get("value"), "currency": v.get("currency"), "scale": v.get("scale"),
-                "period": (v.get("period") or (data.get("fiscal_year") if kind in ("sotp", "embedded_value", "alt_manager") else None)
+                "period": (v.get("period") or (data.get("fiscal_year") if kind in ("sotp", "embedded_value", "alt_manager", "ppa") else None)
                            or (data.get("as_of") if kind == "pipeline" else None)),
                 "source_url": v.get("source_url"), "quote": v.get("quote"),
                 "detail": detail,

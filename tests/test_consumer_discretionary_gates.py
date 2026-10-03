@@ -473,6 +473,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # GATE_LONG_CYCLE_ELIGIBILITY removed 2026-09-27 with the Backlog-Gated Long Cycle profile
         "GATE_MARGIN_PEAK",
         "GATE_MARGIN_TURNAROUND",
+        "GATE_PPA_INPUT",   # Wave 10 renewables (owner methodology, 2026-10-03): the accepted ppa input behind PPA-backed DCF
         "GATE_PT_IV_BAND",
         "GATE_REIT_MULTIPLE_OUTLIER",
         "GATE_REVENUE_SCALE_CAP",

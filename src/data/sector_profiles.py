@@ -1916,7 +1916,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "methods": [
                 # Wave 2: "NAV (Project)" was P/BV at 0.30 under a NAV label. It is
                 # named for what it computes and carries less.
-                {"name": "PPA-backed DCF", "weight": 0.40, "anchor": True,  "implementable": True,  "note": "proxied by DCF"},
+                # Wave 10 renewables (owner methodology, 2026-10-03): the project-finance DCF on an accepted
+                # `ppa` input (contracted window at the PPA, capture-adjusted merchant tail, bifurcated
+                # discounting, FCFE through the project debt); the core DCF until one is accepted.
+                {"name": "PPA-backed DCF", "weight": 0.40, "anchor": True,  "implementable": True,  "note": "project-finance DCF on an accepted ppa input; the core DCF until then"},
                 {"name": "EV/EBITDA",      "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "P/BV",           "weight": 0.15, "anchor": False, "implementable": True},
                 {"name": "DDM",            "weight": 0.10, "anchor": False, "implementable": True},

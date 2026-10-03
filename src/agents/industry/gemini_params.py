@@ -605,6 +605,39 @@ class FcfGuidance(BaseModel):
                                      "particular customer advances, progress payments or reservation fees")
 
 
+class PpaTechnologyShare(BaseModel):
+    technology: Literal["solar", "wind", "hydro", "storage", "other"]
+    share_pct: float = Field(description="Share of operating capacity, decimal (0.45 for 45%)")
+
+
+class PpaPortfolio(BaseModel):
+    """The operating renewable portfolio and its contracts, for the PPA project-finance DCF
+    (owner methodology, 2026-10-03). Latest reported figures only."""
+    fiscal_year: str = Field(description="The fiscal year or period the figures refer to, e.g. 'FY2025'")
+    capacity_mw: CitedQuantity = Field(description="Net operating capacity attributable to the company, MW, at period end")
+    generation_gwh: CitedQuantity = Field(description="Generation for the period in GWh -- the actual, or the company's "
+                                                      "P50 long-term average when it states one (say which in the quote)")
+    contracted_pct: CitedRatio = Field(description="Share of generation or revenue under long-term contracts (PPAs, "
+                                                   "feed-in tariffs, CfDs), decimal")
+    remaining_ppa_years: CitedQuantity = Field(description="Weighted-average remaining contract term, years")
+    avg_ppa_price: Optional[Cited] = Field(default=None, description="Average contracted price per MWh (the number as "
+                                                                     "printed, with its currency; scale 'units')")
+    contracted_revenue: Optional[Cited] = Field(default=None, description="Revenue from contracted generation for the "
+                                                                          "period, when the company states it")
+    ppa_escalator_pct: Optional[CitedRatio] = Field(default=None, description="Average annual contract escalation, decimal")
+    merchant_price: Optional[Cited] = Field(default=None, description="The merchant / forward power price per MWh the "
+                                                                      "company or a named source states for uncontracted output")
+    opex: Optional[Cited] = Field(default=None, description="Operating costs excluding depreciation for the period "
+                                                            "(O&M, lease, insurance, property taxes, G&A)")
+    project_debt: Optional[Cited] = Field(default=None, description="Non-recourse project-level debt at period end")
+    project_debt_cost: Optional[CitedRatio] = Field(default=None, description="Average interest rate on the project debt, decimal")
+    tax_equity: Optional[Cited] = Field(default=None, description="Tax-equity financing balance at period end (US)")
+    tax_credits_annual: Optional[Cited] = Field(default=None, description="Production or investment tax credits recognised "
+                                                                          "in the period (PTC / ITC)")
+    degradation_pct: Optional[CitedRatio] = Field(default=None, description="Annual output degradation the company states, decimal")
+    technology_mix: list[PpaTechnologyShare] = Field(default_factory=list, description="Capacity by technology")
+
+
 class RateBase(BaseModel):
     """Regulated rate base and the return the regulator allows on it (utilities)."""
     value: Cited = Field(description="Total regulated rate base at the latest reported period end, "
@@ -708,6 +741,65 @@ def nav_prompt(company: str, ticker: str, anchors: dict) -> str:
     )
 
 
+def ppa_prompt(company: str, ticker: str, anchors: dict) -> str:
+    return (
+        f"You are collecting the OPERATING PORTFOLIO and CONTRACT inputs for the renewable power owner "
+        f"{company} ({ticker}), for a project-finance DCF. From the latest annual report, results announcement, "
+        "investor presentation or 20-F / 10-K, report: net operating capacity (MW) by technology; generation for "
+        "the period in GWh (the actual, or the stated P50 long-term average -- say which); the share of generation or "
+        "revenue under long-term contracts (PPAs, feed-in tariffs, CfDs); the weighted-average remaining contract "
+        "term in years; the average contracted price per MWh or the contracted revenue; the average annual escalator; "
+        "any merchant or forward power price the company states for uncontracted output; operating costs excluding "
+        "depreciation; non-recourse project debt and its average interest rate; tax-equity balances; production or "
+        "investment tax credits recognised in the period; and the degradation rate if stated. Reported figures "
+        f"only -- no estimates of your own. Do NOT value the company.\n{_AMOUNT_RULE}\n"
+        f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def ppa_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
+    """Accepted ppa input -> the engine's inputs: physical quantities as numbers, money in the
+    statement currency (full units), ratios as decimals. Missing optionals are absent."""
+    d = data or {}
+    out: dict = {"period": d.get("fiscal_year")}
+
+    def _q(c):
+        v = (c or {}).get("value") if isinstance(c, dict) else None
+        return float(v) if isinstance(v, (int, float)) and v > 0 else None
+
+    def _r(c):
+        v = (c or {}).get("value") if isinstance(c, dict) else None
+        if not isinstance(v, (int, float)):
+            return None
+        v = float(v)
+        return v / 100.0 if v > 1.0 else v
+
+    def _m(c):
+        return amount(c, fx_to_ccy) if isinstance(c, dict) else None
+
+    for k, f in (("capacity_mw", _q), ("generation_gwh", _q), ("remaining_ppa_years", _q),
+                 ("contracted_pct", _r), ("ppa_escalator_pct", _r), ("project_debt_cost", _r), ("degradation_pct", _r),
+                 ("avg_ppa_price", _m), ("contracted_revenue", _m), ("merchant_price", _m), ("opex", _m),
+                 ("project_debt", _m), ("tax_equity", _m), ("tax_credits_annual", _m)):
+        v = f(d.get(k))
+        if v is not None:
+            out[k] = v
+    mix = []
+    for t in d.get("technology_mix") or []:
+        if isinstance(t, dict) and t.get("technology") and isinstance(t.get("share_pct"), (int, float)):
+            sh = float(t["share_pct"])
+            mix.append({"technology": str(t["technology"]), "share": sh / 100.0 if sh > 1.0 else sh})
+    if mix:
+        out["technology_mix"] = mix
+    # the contracted price when only contracted revenue is given
+    if "avg_ppa_price" not in out and out.get("contracted_revenue") and out.get("generation_gwh") and out.get("contracted_pct"):
+        mwh_c = out["generation_gwh"] * 1000.0 * out["contracted_pct"]
+        if mwh_c > 0:
+            out["avg_ppa_price"] = out["contracted_revenue"] / mwh_c
+            out["avg_ppa_price_derived"] = True
+    return out
+
+
 def nav_to_engine(data: dict, fx_to_ccy: Callable[[str], Optional[float]]) -> dict:
     """Accepted nav input -> {nav_per_share (statement ccy), cap_rate, basis, period}."""
     out: dict = {"basis": (data or {}).get("basis"), "period": (data or {}).get("fiscal_year")}
@@ -765,6 +857,7 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "embedded_value": EmbeddedValueInputs,   # Wave 6 (owner, 2026-09-27)
     "alt_manager": AltManagerInputs,
     "nav": NavInputs,                        # Wave 8 (owner, 2026-09-27)
+    "ppa": PpaPortfolio,                     # Wave 10 renewables (owner methodology, 2026-10-03)
 }
 
 _INDUSTRY_ASK = {
@@ -789,6 +882,7 @@ _INDUSTRY_ASK = {
     "embedded_value": "its group embedded value, per share and total, with VNB (see embedded_value_prompt)",
     "alt_manager": "its forward fee-related and distributable earnings with cited P/DE and P/FRE ranges (see alt_manager_prompt)",
     "nav": "its published NAV / RNAV per share and the stated cap rate (see nav_prompt)",
+    "ppa": "its operating renewable portfolio and contract terms for the PPA project-finance DCF (see ppa_prompt)",
     "fcf_guidance": (
         "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
         "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
@@ -820,6 +914,7 @@ _OVERLAY_ASK = {
     "embedded_value": "embedded value",       # NO_OVERLAY kinds: listed for the schema census only
     "alt_manager": "distributable earnings",
     "nav": "net asset value",
+    "ppa": "contracted generation",           # NO_OVERLAY: listed for the schema census only
     "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",

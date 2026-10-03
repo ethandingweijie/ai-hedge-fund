@@ -611,6 +611,65 @@
    "growth_cap": 0.4,
    "growth_floor": -0.3
   },
+  "ppa_project_finance": {
+   "_doc": "PROPOSED 2026-10-03 (the owner set the methodology -- P50 generation with degradation, a contracted PPA window then a capture-adjusted merchant tail, opex and maintenance reserves, tax credits, bifurcated discounting and FCFE through sculpted non-recourse debt; the numbers here are the builder's and await the owner's review). degradation_by_technology: solar 0.5%/yr is the module-warranty standard the owner cited; wind 0.2%, hydro nil, storage 2% (cycling). asset_life_by_technology: solar 30, wind 25, hydro 60, storage 15 years. capture_rate 0.85: solar and wind realise 80-90% of the average wholesale price in liquid markets (profile risk). merchant_wacc_premium 150bp over the contracted WACC: the profile table carries IPP 6.0% vs Merchant Power 6.5% (50bp) for a near-term merchant book; a tail 15+ years out carries price-formation and curtailment risk on top. maint_capex_pct_revenue 6%: inverter and gearbox reserves plus repowering provisions on yieldco disclosures run 4-8% of revenue. opex_pct_revenue_default 30% and da_pct_revenue_default 35% apply only when the statements give no EBITDA or D&A. equity_spread 150bp reuses ddm_equity_spread (the cost of equity over WACC where no CoE row exists). scenario: bear takes P75-like generation (-5%) and merchant prices -20%, bull merchant +15%.",
+   "status": "PROPOSED",
+   "reviewed": {
+    "last_reviewed": null,
+    "reviewer": null
+   },
+   "degradation_by_technology": {
+    "solar": 0.005,
+    "wind": 0.002,
+    "hydro": 0.0,
+    "storage": 0.02,
+    "other": 0.003
+   },
+   "asset_life_by_technology": {
+    "solar": 30,
+    "wind": 25,
+    "hydro": 60,
+    "storage": 15,
+    "other": 30
+   },
+   "capture_rate": 0.85,
+   "capture_rate_band": [
+    0.75,
+    0.95
+   ],
+   "merchant_wacc_premium": 0.015,
+   "merchant_wacc_premium_band": [
+    0.01,
+    0.025
+   ],
+   "maint_capex_pct_revenue": 0.06,
+   "maint_capex_band": [
+    0.04,
+    0.08
+   ],
+   "inflation": 0.02,
+   "escalator_default": 0.0,
+   "opex_pct_revenue_default": 0.3,
+   "da_pct_revenue_default": 0.35,
+   "tax_rate_default": 0.21,
+   "tax_credit_years": 10,
+   "debt_amort_max_years": 15,
+   "equity_spread": 0.015,
+   "scenario": {
+    "bear": {
+     "generation": 0.95,
+     "merchant_price": 0.8
+    },
+    "base": {
+     "generation": 1.0,
+     "merchant_price": 1.0
+    },
+    "bull": {
+     "generation": 1.0,
+     "merchant_price": 1.15
+    }
+   }
+  },
   "target_margins": {
     "_doc": "Owner rule 1 (2026-09-23): the unprofitability fallback for the projection family. A name the OE<=0 gate flags keeps its DCF weight through `Rev DCF (Target Margin)`: revenue projected on the run's growth path, the EBIT margin ramped linearly from today's to a terminal margin benchmarked to mature defence/aerospace peers, taxed, discounted at the firm's cost of capital. No reinvestment charge (the engine's charge is observation-only everywhere) and no EV/Backlog: backlog conversion differs too much between a prime subcontractor and a launch manufacturer for one constant.",
     "reviewed": {

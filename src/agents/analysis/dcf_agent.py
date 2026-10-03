@@ -3685,6 +3685,159 @@ def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict]) ->
     return out
 
 
+# ── PPA project-finance DCF (Wave 10 renewables; owner methodology, 2026-10-03) ──
+# Runs behind the IPP profile's "PPA-backed DCF" anchor when a review-gated `ppa`
+# input is accepted (src/data/industry_inputs.py, kind "ppa"). The method:
+#   1. generation: P50 (or the latest actual) x (1 - degradation)^(t-1)
+#   2. revenue: the contracted share at the PPA price (escalating) for the remaining
+#      contract term; the rest, and every year after the term, at a capture-adjusted
+#      merchant price; the asset life ends the cash flows (no terminal value)
+#   3. opex, maintenance reserves and cash tax net of production / investment credits
+#   4. FCFF discounted in two pieces: the contracted share at the profile WACC, the
+#      merchant share at WACC + merchant premium
+#   5. FCFE, preferred where the input carries the project debt: debt sculpted to the
+#      contract term, interest and principal deducted, discounted at the cost of equity
+# Constants: valuation_constants.json["ppa_project_finance"] (PROPOSED).
+_PPA_DEFAULTS = {
+    "degradation_by_technology": {"solar": 0.005, "wind": 0.002, "hydro": 0.0, "storage": 0.02, "other": 0.003},
+    "asset_life_by_technology": {"solar": 30, "wind": 25, "hydro": 60, "storage": 15, "other": 30},
+    "capture_rate": 0.85, "merchant_wacc_premium": 0.015, "maint_capex_pct_revenue": 0.06,
+    "inflation": 0.02, "escalator_default": 0.0, "opex_pct_revenue_default": 0.30,
+    "da_pct_revenue_default": 0.35, "tax_rate_default": 0.21, "tax_credit_years": 10,
+    "debt_amort_max_years": 15, "equity_spread": 0.015,
+    "scenario": {"bear": {"generation": 0.95, "merchant_price": 0.80}, "base": {"generation": 1.0, "merchant_price": 1.0},
+                 "bull": {"generation": 1.0, "merchant_price": 1.15}},
+}
+
+
+def _ppa_cfg() -> dict:
+    import json as _json
+    cfg = _json.loads(_json.dumps(_PPA_DEFAULTS))
+    try:
+        from src.data import valuation_constants as _vc_ppa
+        blk = (_vc_ppa.load().get("ppa_project_finance") or {})
+        for k, v in blk.items():
+            if k in cfg and isinstance(v, type(cfg[k])):
+                cfg[k] = v
+    except Exception:  # noqa: BLE001
+        pass
+    return cfg
+
+
+def _ppa_weighted(table: dict, mix: list, default_key: str = "other") -> float:
+    """A technology-weighted constant from the input's capacity mix; the 'other' row without one."""
+    if not mix:
+        return float(table.get(default_key, 0.0))
+    tot = sum(float(m.get("share") or 0.0) for m in mix) or 1.0
+    return sum(float(table.get(str(m.get("technology") or default_key), table.get(default_key, 0.0))) * float(m.get("share") or 0.0)
+               for m in mix) / tot
+
+
+def _ppa_project_finance_dcf(inp: dict, *, scenario: str, wacc: float, shares: float, net_debt: float,
+                             minority_interest: float = 0.0, preferred_equity: float = 0.0,
+                             revenue_base: float = 0.0, ebitda: Optional[float] = None, da: Optional[float] = None,
+                             cfg: Optional[dict] = None) -> Optional[dict]:
+    """The PPA project-finance DCF. `inp` is gemini_params.ppa_to_engine's output in the statement
+    currency. Returns {value, value_fcff, value_fcfe, basis, rows, ...} or None when the input
+    cannot price (no generation, no contract term, or no contracted price)."""
+    cfg = cfg or _ppa_cfg()
+    gen_gwh = inp.get("generation_gwh")
+    L = inp.get("remaining_ppa_years")
+    ppa = inp.get("avg_ppa_price")
+    c = inp.get("contracted_pct")
+    if not (gen_gwh and L and ppa and shares and shares > 0) or c is None:
+        return None
+    sc = (cfg.get("scenario") or {}).get(scenario) or {"generation": 1.0, "merchant_price": 1.0}
+    mix = inp.get("technology_mix") or []
+    deg = inp.get("degradation_pct")
+    if deg is None:
+        deg = _ppa_weighted(cfg["degradation_by_technology"], mix)
+    life = int(round(_ppa_weighted(cfg["asset_life_by_technology"], mix)))
+    L = int(round(min(max(float(L), 1.0), 35.0)))
+    life = max(life, L)
+    c = min(max(float(c), 0.0), 1.0)
+    esc = inp.get("ppa_escalator_pct")
+    esc = float(esc) if esc is not None else float(cfg["escalator_default"])
+    infl = float(cfg["inflation"])
+    capture = float(cfg["capture_rate"])
+    merchant_base = inp.get("merchant_price") or ppa          # no stated forward price: the PPA level, capture-adjusted
+    merchant = float(merchant_base) * capture * float(sc.get("merchant_price", 1.0))
+    gen0 = float(gen_gwh) * 1000.0 * float(sc.get("generation", 1.0))   # MWh
+    if inp.get("opex"):
+        opex_per_mwh = float(inp["opex"]) / (float(gen_gwh) * 1000.0)
+        opex_basis = "stated opex / generation"
+    elif ebitda is not None and revenue_base and revenue_base > 0 and ebitda < revenue_base:
+        opex_per_mwh = (float(revenue_base) - float(ebitda)) / (float(gen_gwh) * 1000.0)
+        opex_basis = "statements: (revenue - EBITDA) / generation"
+    else:
+        opex_per_mwh = float(ppa) * float(cfg["opex_pct_revenue_default"])
+        opex_basis = f"default {cfg['opex_pct_revenue_default']:.0%} of the PPA price"
+    da_ratio = (float(da) / float(revenue_base)) if (da and revenue_base and revenue_base > 0 and 0 < da < revenue_base) else float(cfg["da_pct_revenue_default"])
+    tax_rate = float(cfg["tax_rate_default"])
+    credits = float(inp.get("tax_credits_annual") or 0.0)
+    maint_pct = float(cfg["maint_capex_pct_revenue"])
+    wacc_c = float(wacc)
+    wacc_m = wacc_c + float(cfg["merchant_wacc_premium"])
+    coe = wacc_c + float(cfg["equity_spread"])
+    debt = float(inp.get("project_debt") or 0.0)
+    debt_cost = inp.get("project_debt_cost")
+    fcfe_ok = debt > 0 and debt_cost is not None
+    amort_years = min(L, int(cfg["debt_amort_max_years"]))
+    bal = debt
+    rows = []
+    ev = pv_c_sum = pv_m_sum = pv_e_sum = 0.0
+    for t in range(1, life + 1):
+        mwh = gen0 * (1.0 - float(deg)) ** (t - 1)
+        share_c = c if t <= L else 0.0
+        rev_c = mwh * share_c * float(ppa) * (1.0 + esc) ** (t - 1)
+        rev_m = mwh * (1.0 - share_c) * merchant * (1.0 + infl) ** (t - 1)
+        rev = rev_c + rev_m
+        opex_t = opex_per_mwh * mwh * (1.0 + infl) ** (t - 1)
+        ebitda_y = rev - opex_t
+        dep_y = da_ratio * rev
+        tax_t = max(ebitda_y - dep_y, 0.0) * tax_rate - (credits if t <= int(cfg["tax_credit_years"]) else 0.0)
+        maint_t = maint_pct * rev
+        fcff_t = ebitda_y - tax_t - maint_t
+        w_c = (rev_c / rev) if rev > 0 else 0.0
+        pv_c = fcff_t * w_c / (1.0 + wacc_c) ** t
+        pv_m = fcff_t * (1.0 - w_c) / (1.0 + wacc_m) ** t
+        pv_c_sum += pv_c
+        pv_m_sum += pv_m
+        interest_t = principal_t = fcfe_t = pv_e = 0.0
+        if fcfe_ok:
+            if t <= amort_years and bal > 0:
+                interest_t = bal * float(debt_cost)
+                principal_t = debt / amort_years
+                bal = max(bal - principal_t, 0.0)
+            fcfe_t = fcff_t - interest_t * (1.0 - tax_rate) - principal_t
+            pv_e = fcfe_t / (1.0 + coe) ** t
+            pv_e_sum += pv_e
+        rows.append({"year": t, "mwh": round(mwh), "contracted": t <= L, "revenue_contracted": round(rev_c), "revenue_merchant": round(rev_m),
+                     "ebitda": round(ebitda_y), "tax": round(tax_t), "maint_capex": round(maint_t), "fcff": round(fcff_t),
+                     "pv_contracted": round(pv_c), "pv_merchant": round(pv_m),
+                     **({"interest": round(interest_t), "principal": round(principal_t), "fcfe": round(fcfe_t), "pv_fcfe": round(pv_e)} if fcfe_ok else {})})
+    ev = pv_c_sum + pv_m_sum
+    tax_eq = float(inp.get("tax_equity") or 0.0)
+    equity_fcff = ev - float(net_debt or 0.0) - tax_eq - float(minority_interest or 0.0) - float(preferred_equity or 0.0)
+    value_fcff = equity_fcff / shares
+    out = {"basis": "FCFF (bifurcated WACC)", "value": value_fcff, "value_fcff": value_fcff, "value_fcfe": None,
+           "ev": ev, "pv_contracted": pv_c_sum, "pv_merchant": pv_m_sum, "equity": equity_fcff,
+           "generation_mwh_y1": gen0, "degradation": float(deg), "asset_life_years": life, "contract_years": L,
+           "contracted_pct": c, "ppa_price": float(ppa), "escalator": esc, "merchant_price_realised": merchant,
+           "capture_rate": capture, "opex_per_mwh": opex_per_mwh, "opex_basis": opex_basis, "da_ratio": da_ratio,
+           "tax_rate": tax_rate, "tax_credits_annual": credits, "maint_capex_pct": maint_pct,
+           "wacc_contracted": wacc_c, "wacc_merchant": wacc_m, "cost_of_equity": coe,
+           "net_debt": float(net_debt or 0.0), "tax_equity": tax_eq, "shares": shares, "scenario": scenario,
+           "scenario_multipliers": sc, "rows": rows}
+    if fcfe_ok:
+        corporate_net_debt = float(net_debt or 0.0) - debt           # the project debt is serviced inside the FCFE
+        equity_fcfe = pv_e_sum - corporate_net_debt - tax_eq - float(minority_interest or 0.0) - float(preferred_equity or 0.0)
+        out.update({"basis": "FCFE (sculpted project debt)", "value": equity_fcfe / shares, "value_fcfe": equity_fcfe / shares,
+                    "project_debt": debt, "project_debt_cost": float(debt_cost), "debt_amort_years": amort_years,
+                    "pv_fcfe": pv_e_sum, "corporate_net_debt": corporate_net_debt, "equity_fcfe": equity_fcfe})
+    return out
+
+
 # ── R1: structured company guidance (Priority 0 over the regex parse) ────────
 # The assumption store (src/memory/assumption_store.py) holds guidance
 # extracted from PRIMARY sources — the EDGAR press release (FPI 6-K
@@ -6553,6 +6706,17 @@ def _compute_method_value(
         most_recent["_backlog_multiple_gate"] = _bg_rec
         _leg_trace(kind="backlog_multiple", ev_ebitda_value=_bg_base, **_bg_rec)
         return _bg_base * _bg_scale
+    # Wave 10 renewables (owner methodology, 2026-10-03): the PPA project-finance DCF on an
+    # accepted ppa input; without one the name falls through to the core DCF below.
+    if method_name == "PPA-backed DCF" and isinstance(most_recent.get("_ppa_detail"), dict):
+        _ppa_out = _ppa_project_finance_dcf(
+            most_recent["_ppa_detail"], scenario=scenario, wacc=wacc, shares=shares, net_debt=net_debt,
+            minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
+            revenue_base=revenue_base, ebitda=most_recent.get("ebitda"),
+            da=most_recent.get("depreciation_and_amortization"))
+        if _ppa_out is not None:
+            _leg_trace(kind="ppa_dcf", source="accepted ppa input", **{k: v for k, v in _ppa_out.items() if k != "value"})
+            return _ppa_out["value"] if _ppa_out["value"] > 0 else None
     peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
                                      ticker=ticker, market_cap=market_cap)
     # Owner-set discount on PEER multiples for one ticker (valuation_constants
@@ -13683,6 +13847,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 })
         except Exception:                                  # noqa: BLE001
             _pv10_d = _backlog_d = None
+        # Wave 10 renewables (owner methodology, 2026-10-03): the accepted ppa input rides on
+        # `most_recent` to the PPA-backed DCF leg; without one the leg is the core DCF and says so.
+        try:
+            if any(m.get("name") == "PPA-backed DCF" for m in _pe_norm_methods):
+                from src.data import industry_inputs as _ii_p
+                from src.agents.industry import gemini_params as _gp_p
+                _ppa_e = _ii_p.accepted_entry(ticker, "ppa")
+                _ppa_in = _gp_p.ppa_to_engine((_ppa_e or {}).get("data") or {}, _ii_p._fx(_stmt_ccy)) if _ppa_e else {}
+                _ppa_ok = bool(_ppa_in.get("generation_gwh") and _ppa_in.get("remaining_ppa_years") and _ppa_in.get("avg_ppa_price")
+                               and _ppa_in.get("contracted_pct") is not None)
+                if _ppa_ok:
+                    most_recent["_ppa_detail"] = _ppa_in
+                    ticker_forward_flags.append(
+                        f"PPA-backed DCF: project-finance DCF on the accepted portfolio ({_ppa_in.get('period')}): "
+                        f"{_ppa_in['generation_gwh']:,.0f} GWh, {_ppa_in['contracted_pct']:.0%} contracted for "
+                        f"{_ppa_in['remaining_ppa_years']:.0f} years at {_ppa_in['avg_ppa_price']:,.1f}/MWh"
+                        + ("; FCFE through the project debt" if _ppa_in.get("project_debt") and _ppa_in.get("project_debt_cost") is not None else "; FCFF, bifurcated WACC"))
+                else:
+                    ticker_forward_flags.append(
+                        "PPA-backed DCF ran as the core DCF: no accepted ppa input (operating portfolio, contract term, "
+                        "PPA price) for this name yet")
+                gate_evaluations.append({
+                    "gate_id": "GATE_PPA_INPUT", "metric": "contracted_generation_share",
+                    "raw_input_path_a": None,
+                    "gated_output_path_b": (round(float(_ppa_in["contracted_pct"]), 4) if _ppa_ok else None),
+                    "basis": ("accepted ppa input" if _ppa_ok else "no accepted ppa input: the leg ran the core DCF"),
+                    "leg": "PPA-backed DCF", "applied": _ppa_ok,
+                })
+        except Exception:                                  # noqa: BLE001
+            pass
 
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).

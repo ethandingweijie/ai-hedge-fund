@@ -85,7 +85,12 @@ WAVE8 = {
     # earnings, and the alt_manager pre-fill came back twice with no cited DE amount.
     "sotp": ["9CI.SI"],
 }
-WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6, "8": WAVE8}
+#: Wave 10 renewables (owner methodology, 2026-10-03): the operating portfolio and its PPAs for the
+#: names the Renewable Utilities row routes to IPP and the US renewable-owner sub-cohort.
+WAVE10 = {
+    "ppa": ["00916.HK", "BEPI", "ENLT", "BEPC", "CWEN", "XIFR", "ORA"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2, "3": WAVE3, "5": WAVE5, "6": WAVE6, "8": WAVE8, "10": WAVE10}
 
 
 def sotp_profile_tickers() -> list[str]:
@@ -193,6 +198,45 @@ def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
+    if kind == "ppa":
+        # Wave 10 renewables (owner methodology, 2026-10-03): the portfolio, the contract terms and the
+        # project financing the PPA project-finance DCF runs on. Headline = contracted revenue for the
+        # period (stated, or PPA price x contracted generation) against FMP revenue.
+        anchors = {"reported_currency": (ctx.get("reported_currency") or "USD"),
+                   "market_cap_usd_bn": round((ctx.get("market_cap") or 0) / 1e9, 2),
+                   "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2)}
+        out = gp.generate(gp.ppa_prompt(ctx["company"], ticker, anchors), schema=schema, grounded=True, timeout=300.0)
+        data = out.get("json")
+        if not isinstance(data, dict):
+            raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
+        data, _urls = gp.canonicalize_citations(data)
+        _fx_usd = ii._fx("USD")
+        eng = gp.ppa_to_engine(data, _fx_usd)
+        _gen_mwh = (eng.get("generation_gwh") or 0.0) * 1000.0
+        headline = eng.get("contracted_revenue") or (
+            (eng["avg_ppa_price"] * _gen_mwh * eng["contracted_pct"])
+            if eng.get("avg_ppa_price") and _gen_mwh and eng.get("contracted_pct") else None)
+        checks = ii.reconcile("ppa", headline, ctx, period=data.get("fiscal_year"))
+        _cf = ((eng.get("generation_gwh") or 0.0) * 1000.0 / ((eng.get("capacity_mw") or 0.0) * 8760.0)
+               if eng.get("capacity_mw") and eng.get("generation_gwh") else None)
+        checks.append({"check": "capacity factor plausible", "ok": (0.08 <= _cf <= 0.65) if _cf is not None else None,
+                       "detail": f"{_cf:.1%} = {eng.get('generation_gwh')} GWh / ({eng.get('capacity_mw')} MW x 8,760h)" if _cf is not None else "capacity or generation missing"})
+        checks.append({"check": "contracted share cited", "ok": (0.0 < (eng.get("contracted_pct") or 0.0) <= 1.0) or None,
+                       "detail": f"{eng.get('contracted_pct')}" if eng.get("contracted_pct") is not None else "missing"})
+        checks.append({"check": "remaining PPA term plausible", "ok": (1.0 <= (eng.get("remaining_ppa_years") or 0.0) <= 35.0) or None,
+                       "detail": f"{eng.get('remaining_ppa_years')} years" if eng.get("remaining_ppa_years") else "missing"})
+        checks.append({"check": "contracted price available", "ok": bool(eng.get("avg_ppa_price")),
+                       "detail": (f"{eng.get('avg_ppa_price'):,.2f} USD/MWh" + (" (derived from contracted revenue)" if eng.get("avg_ppa_price_derived") else ""))
+                       if eng.get("avg_ppa_price") else "no PPA price and no contracted revenue: the leg cannot price"})
+        checks.append(_url_check(_urls))
+        preview = {k: eng.get(k) for k in ("capacity_mw", "generation_gwh", "contracted_pct", "remaining_ppa_years",
+                                           "avg_ppa_price", "merchant_price", "project_debt", "project_debt_cost", "tax_equity")}
+        return {"basis": "actual", "data": data, "company": ctx["company"],
+                "fmp_context_usd": ctx, "anchors": anchors, "value_usd": headline, "checks": checks,
+                "engine_preview": preview, "ok": all(c["ok"] is not False for c in checks),
+                "grounding_urls": out.get("grounding_urls") or [],
+                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if kind == "nav":
         # Wave 8 (owner, 2026-09-27): the published NAV / RNAV per share and the stated cap rate;
         # quarantined until accepted; prices ahead of the computed NAV when it is.

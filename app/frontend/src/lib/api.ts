@@ -365,7 +365,7 @@ export interface SotpInputSegment {
 export interface IndustryInputRow {
   ticker: string;
   company?: string | null;
-  kind: 'pv10' | 'backlog' | 'maintenance_capex' | 'rate_base' | 'fcf_guidance' | 'sotp' | 'pipeline' | 'embedded_value' | 'alt_manager';
+  kind: 'pv10' | 'backlog' | 'maintenance_capex' | 'rate_base' | 'fcf_guidance' | 'sotp' | 'pipeline' | 'embedded_value' | 'alt_manager' | 'nav' | 'ppa';
   value?: number | null;
   currency?: string | null;
   scale?: string | null;
