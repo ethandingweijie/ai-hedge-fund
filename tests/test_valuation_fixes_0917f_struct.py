@@ -126,9 +126,11 @@ def test_every_peer_call_site_resolves_market_cap_the_same_way():
     assert "revenue_base * 10.0 if revenue_base else None" in src, (
         "the falsy-revenue_base guard is gone, so a name with no revenue and no "
         "quote cap raises TypeError instead of resolving no size")
-    # Five uses of that one binding, and no surviving copy of either expression.
-    assert src.count("market_cap=resolved_mcap") == 5, (
-        f"expected the five aligned call sites to pass resolved_mcap, found "
+    # Six uses of that one binding (the sixth, 2026-10-03: the guidance forecast's peer
+    # EV/EBITDA, `_peer_for_gf`, hoisted before the scenario loop), and no surviving
+    # copy of either expression.
+    assert src.count("market_cap=resolved_mcap") == 6, (
+        f"expected the six aligned call sites to pass resolved_mcap, found "
         f"{src.count('market_cap=resolved_mcap')}")
     assert "_market_cap or revenue_base" not in src, (
         "a call site has gone back to inlining the fallback expression")
@@ -152,7 +154,7 @@ def test_resolved_mcap_is_bound_after_both_of_its_inputs_are_final():
     currency or no size at all — silently, because the result is still a float.
 
     So the ordering is the assertion: one binding, below all three assignments,
-    above all five uses. Line indices rather than values, because the values are
+    above all six uses. Line indices rather than values, because the values are
     what the ordering exists to get right.
     """
     lines = _run_src().splitlines()
@@ -167,7 +169,7 @@ def test_resolved_mcap_is_bound_after_both_of_its_inputs_are_final():
     assert len(rev) == 2, rev        # the anchor, and the post-FX re-derivation
     assert len(cap) == 1, cap
     assert len(bind) == 1, bind
-    assert len(uses) == 5, uses
+    assert len(uses) == 6, uses      # the five legs and the forecast's peer multiple
     assert max(rev + cap) < bind[0], (
         "resolved_mcap is bound above an assignment to one of its inputs")
     assert bind[0] < min(uses), "resolved_mcap is used before it is bound"
