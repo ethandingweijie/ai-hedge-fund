@@ -351,15 +351,17 @@ def run_data_router(state: AgentState) -> AgentState:
     # which executes searches server-side within the API call.
     # Only ANTHROPIC_API_KEY is required; run_deep_research_agent handles its
     # own absence check and degrades gracefully to "".
-    progress.update_status(agent_id, ticker, "Starting deep research (Phase 3.5)")
+    # Owner, 2026-10-03: the router's work is done here; the research start is deep research's own
+    # event, so the progress header names the phase that is actually running (it used to read
+    # "Data Router — Starting deep research" while the timeline showed research still pending).
+    progress.update_status(agent_id, ticker, "Data routing complete")
+    progress.update_status("deep_research_agent", ticker, "Starting deep research (Phase 3.5)")
     state = run_deep_research_agent(state)
     # Ensure keys always exist even if research was skipped
     state["data"].setdefault("deep_research", "")
     state["data"].setdefault("deep_research_sections", {})
     state["data"].setdefault("web_intelligence", {})
     state["data"].setdefault("citation_registry", [])   # populated by _extract_citation_registry
-
-    progress.update_status(agent_id, ticker, "Data routing complete")
 
     state["data"]["routed_data"] = routed_data
 

@@ -2511,7 +2511,7 @@ def _lookthrough_as_sotp_breakdown(detail: dict) -> Optional[dict]:
     per_share_listing = detail.get("per_share")
     return {
         "method": "SOTP / NAV (look-through)", "reporting_currency": listing, "revenue_label": "Revenue", "earnings_label": "EBITDA",
-        "sentence": _sotp_sentence(listing, per_share_listing, rows, gross, [("parent net debt", -nd)], shares)
+        "sentence": _sotp_sentence(listing, per_share_listing, rows, gross, [(("parent net cash" if nd < 0 else "parent net debt"), -nd)], shares)   # the label follows the sign (Anta: "+ parent net cash", not "+ parent net debt")
                     + (f" − {disc:.0%} holdco" if disc else ""),
         "rows": rows, "segment_value": gross, "associates": 0.0, "net_cash": -nd, "adjustments": [],
         "nav": nav_pre, "holdco_discount_pct": disc, "holdco_discount": nav_pre * disc, "final": final,

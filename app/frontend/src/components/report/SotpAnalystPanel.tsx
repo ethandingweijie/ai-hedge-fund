@@ -167,7 +167,7 @@ function NavBridge({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
         <span className="text-[24px] font-semibold tabular-nums tracking-tight text-foreground leading-none">
           {fmtPs(breakdown.per_share_reporting, sym)}
         </span>
-        {(breakdown.reporting_currency ?? 'USD') !== 'USD' && breakdown.per_share != null && (
+        {(breakdown.reporting_currency ?? 'USD') !== 'USD' && breakdown.per_share != null && !!breakdown.fx_to_reporting && breakdown.fx_to_reporting !== 1 && (
           <span className="text-[10.5px] text-muted-foreground tabular-nums">
             {fmtPs(breakdown.per_share, '$')} USD
           </span>
@@ -368,7 +368,10 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
   const w = weight ?? breakdown.weight ?? null;
   const ccy = (breakdown.reporting_currency ?? 'USD').toUpperCase();
   const sym = CCY_SYM[ccy] ?? `${ccy} `;
-  const usd = '$';
+  // Owner, 2026-10-03 (Anta): a holdco-template SOTP is built in the reporting currency with no
+  // conversion (fx_to_reporting 1), so its amounts carry that currency's symbol, not "$".
+  const converted = !!breakdown.fx_to_reporting && breakdown.fx_to_reporting !== 1;
+  const usd = converted ? '$' : sym;
   const basis = breakdown.multiple_basis;
   const flags = basis?.divergence_flags ?? [];
   const sources = breakdown.sources ?? {};
