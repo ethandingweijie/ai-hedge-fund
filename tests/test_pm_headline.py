@@ -14,7 +14,10 @@ def test_the_prompt_and_the_model_carry_the_headline_and_the_length_rule():
     assert AdvancedPortfolioDecision.model_fields["headline"].default == ""
     src = inspect.getsource(pm.run_advanced_portfolio_manager)
     assert '"headline": "<one line, at most 18 words, with a figure>"' in src
-    assert "d = _enforce_pm_length(d, _inputs_text)" in src
+    # held once after the fidelity guard and again after the stylist rewrites the prose
+    # (prod MOH 2026-10-03: 297 words in, 439 out before the second pass)
+    assert src.count("d = _enforce_pm_length(d, _inputs_text)") == 2
+    assert src.index("restyle_rationale(") < src.rindex("d = _enforce_pm_length(d, _inputs_text)")
     assert (pm.PM_RATIONALE_MAX_WORDS, pm.PM_HEADLINE_MAX_WORDS) == (300, 18)
 
 

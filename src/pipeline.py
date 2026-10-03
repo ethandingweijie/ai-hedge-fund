@@ -903,6 +903,16 @@ def run_advanced_pipeline(
                     _cached_brief = _phase_cache[_t]["industry_brief"]  # type: ignore[index]
                 # The brief is global (same for all tickers in the run), use the first one
                 state["data"]["industry_brief"] = _phase_cache[tickers[0]]["industry_brief"]  # type: ignore[index]
+                # Owner, 2026-10-03: a cached brief carries its citations too -- the research text
+                # is no longer printed, so the brief's [n] markers are resolved from the (cached)
+                # sections' REFERENCES blocks here as well as on the merged-assembly path.
+                try:
+                    from src.agents.industry.deep_research import resolve_brief_references as _rbr
+                    state["data"]["industry_footnotes"] = _rbr(
+                        state["data"].get("industry_brief") or "",
+                        state["data"].get("deep_research_sections") or {})
+                except Exception:  # noqa: BLE001
+                    state["data"].setdefault("industry_footnotes", [])
                 progress.update_status("industry_specialist", tickers[0],
                                        f"[cache] Loaded from archive ({_phase_cache[tickers[0]]['age_days']:.1f}d old)")  # type: ignore[index]
                 print(f"  [cache] Industry brief loaded from archive — skipping LLM call")

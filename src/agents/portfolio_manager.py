@@ -1825,6 +1825,12 @@ def run_advanced_portfolio_manager(state) -> dict:
             )
             d["rationale"] = _styled
             state["data"].setdefault("style_audit", {})[ticker] = _style_audit
+            # Owner, 2026-10-03: the stylist rewrites the prose, so the 300-word cap is held
+            # again on what it returned (prod MOH 2026-10-03: 297 words in, 439 out).
+            try:
+                d = _enforce_pm_length(d, _inputs_text)
+            except Exception:                              # noqa: BLE001
+                pass
         except Exception as _exc:
             state["data"].setdefault("style_audit", {})[ticker] = (
                 f"stylist skipped ({type(_exc).__name__})"

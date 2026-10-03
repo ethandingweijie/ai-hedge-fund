@@ -364,3 +364,8 @@ def test_the_brief_markers_resolve_to_the_sections_references_in_order():
     from src.agents.industry import specialist as sp_
     src = inspect.getsource(sp_.assemble_industry_brief_merged)
     assert "resolve_brief_references" in src and 'state["data"]["industry_footnotes"] = []' not in src.split("except")[0]
+    # a brief loaded from the archive's phase cache resolves its footnotes too (prod 2026-10-03:
+    # four cached runs carried a brief with [n] markers and no footnotes)
+    from pathlib import Path
+    pipe = (Path(__file__).resolve().parents[1] / "src" / "pipeline.py").read_text(encoding="utf-8")
+    assert pipe.index("Industry brief loaded from archive") > pipe.index("resolve_brief_references as _rbr")
