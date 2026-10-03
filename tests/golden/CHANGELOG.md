@@ -1674,3 +1674,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: self-learning loop 6 (2026-10-04): the OE<=0 cascade writes a GATE_OE_CASCADE record; BN4.SI gains the metric name fcf_margin_base in gate_metrics, zero numeric leaves moved
 
+## 2026-10-03T16:31:16+00:00
+
+- regenerated at HEAD: `d32af66c`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: self-learning loops 3-4 (2026-10-04): pt_bridge gains capture_source ('rule' until a pt calibration is promoted); one new leaf on every fixture, zero numeric leaves moved
+

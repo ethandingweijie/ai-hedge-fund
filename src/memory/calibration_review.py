@@ -432,33 +432,39 @@ def dismiss(version_id: str, *, actor: Optional[str] = None, reason: str = "") -
 
 # ── live safeguards ─────────────────────────────────────────────────────────
 
-def canary_check(*, auto_rollback: bool = True) -> dict:
+def canary_check(*, auto_rollback: bool = True, family: str = "iv") -> dict:
     """FT4: runs made under the active calibration vs the same runs with its
-    effect divided out, on its own horizon."""
+    effect divided out, on its own horizon. family="pt" canaries the target
+    calibration on the runs whose pt_bridge named it."""
     _ensure_tables()
     row = _db.query_one("SELECT version_id, horizon, params_json, promoted_at FROM "
-                        "calibration_versions WHERE status = 'active' AND family = 'iv' "
-                        "ORDER BY promoted_at DESC LIMIT 1")
+                        "calibration_versions WHERE status = 'active' AND family = ? "
+                        "ORDER BY promoted_at DESC LIMIT 1", [family])
     if row is None:
-        return {"active": None}
+        return {"active": None} if family == "iv" else {"active": None, "family": family}
     version_id = row["version_id"]
-    predict = cf.predictor(vo._loads(row["params_json"]) or {})
+    params = vo._loads(row["params_json"]) or {}
+    predict = cf.predictor_pt(params) if family == "pt" else cf.predictor(params)
     promoted = wf._d(row["promoted_at"])
     promoted_errs, prior_errs = [], []
-    for r in wf.load_rows(row["horizon"]):
+    rows = wf.load_rows(row["horizon"], family="pt") if family == "pt" else wf.load_rows(row["horizon"])
+    for r in rows:
         if promoted and r["run_date"] < promoted:
             continue
-        if not str((r.get("dcf") or {}).get("param_version") or "").startswith(version_id):
+        made_under = (str(r.get("pt_calibration_version") or "") == version_id if family == "pt"
+                      else str((r.get("dcf") or {}).get("param_version") or "").startswith(version_id))
+        if not made_under:
             continue                   # not actually made under this calibration
         with_it = predict(r)
         if not with_it:
             continue
-        live = float(r["base_iv"])
+        live = float(r["pt_12m"] if family == "pt" else r["base_iv"])
         k = with_it / live
         label = float(r["label_value"])
         promoted_errs.append(abs(math.log(live / label)))
         prior_errs.append(abs(math.log((live / k) / label)))
-    report = {"version_id": version_id, "horizon": row["horizon"], "n": len(promoted_errs)}
+    report = {"version_id": version_id, "horizon": row["horizon"], "family": family,
+              "n": len(promoted_errs)}
     if len(promoted_errs) < CANARY_MIN_LABELS:
         return {**report, "status": "collecting", "need": CANARY_MIN_LABELS}
     promoted_miss, prior_miss = median(promoted_errs), median(prior_errs)

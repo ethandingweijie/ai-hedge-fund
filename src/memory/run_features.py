@@ -34,7 +34,7 @@ from src.memory import valuation_outcomes as vo
 
 logger = logging.getLogger(__name__)
 
-FEATURES_VERSION = 1
+FEATURES_VERSION = 2          # 2: + pt_calibration_version (Phase C)
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS run_features (
@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS run_features (
     routing_winner       TEXT,
     param_version        TEXT,
     calibration_version  TEXT,
+    pt_calibration_version TEXT,
     regime_risk          TEXT,
     research_tier        TEXT,
     spot                 REAL,
@@ -89,7 +90,7 @@ _DDL_IDX = (
 COLUMNS = [
     "feature_key", "run_id", "ticker", "run_at", "run_date", "features_version",
     "market", "sector", "profile", "routing_winner", "param_version", "calibration_version",
-    "regime_risk", "research_tier", "spot",
+    "pt_calibration_version", "regime_risk", "research_tier", "spot",
     "iv_bear", "iv_base", "iv_bull", "pt_bear", "pt_base", "pt_bull", "pt_12m", "pm_target",
     "capture", "prob_bear", "prob_base", "prob_bull", "methods_json", "gates_json",
     "archetype", "confidence", "fiscal_year_1", "fye_month",
@@ -118,6 +119,7 @@ def _ensure_tables() -> None:
     if key == _tables_ready_key:
         return
     _db.ensure_table(_DDL)
+    _db.add_column_if_missing("run_features", "pt_calibration_version", "TEXT")
     for ddl in _DDL_IDX:
         _db.execute(ddl)
     _tables_ready_key = key
@@ -255,6 +257,18 @@ def _agent_fy1(dr: dict) -> tuple[dict, Optional[str]]:
     return out, ("+".join(parts) or None)
 
 
+def _pt_version(bridge: dict, scenario: dict) -> Optional[str]:
+    """The pt calibration a run was made under: pt_bridge.capture_source 'calibration:<id>'
+    or the scenario agent's probability_shrink.version_id."""
+    src = str((bridge or {}).get("capture_source") or "")
+    if src.startswith("calibration:"):
+        return src.split(":", 1)[1] or None
+    ps = (scenario or {}).get("probability_shrink") if isinstance(scenario, dict) else None
+    if isinstance(ps, dict) and ps.get("version_id"):
+        return str(ps["version_id"])
+    return None
+
+
 def _guidance_mid(block: dict, field: str) -> Optional[float]:
     g = (block.get("guidance") or {}).get(field) if isinstance(block.get("guidance"), dict) else None
     if not isinstance(g, dict):
@@ -307,6 +321,7 @@ def extract(run_id: str, ticker: str, dr: dict, scenario: Optional[dict], *,
         "routing_winner": (dr.get("routing_trace") or {}).get("winner"),
         "param_version": dr.get("param_version"),
         "calibration_version": calib.get("version_id"),
+        "pt_calibration_version": _pt_version(bridge, scenario),
         "regime_risk": regime_risk, "research_tier": research_tier,
         "spot": spot,
         "iv_bear": vo._pos((dr.get("bear") or {}).get("intrinsic_value")),

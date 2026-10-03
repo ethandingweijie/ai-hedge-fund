@@ -616,6 +616,11 @@ async def run_valuation_outcomes_task(ctx: dict) -> dict:
             report["canary"] = await asyncio.to_thread(_review.canary_check)
         except Exception as exc:                           # noqa: BLE001
             report["canary"] = {"error": str(exc)[:200]}
+        try:
+            from src.memory import calibration_review as _review_pt
+            report["canary_pt"] = await asyncio.to_thread(_review_pt.canary_check, family="pt")
+        except Exception as exc:                           # noqa: BLE001
+            report["canary_pt"] = {"error": str(exc)[:200]}
         await asyncio.to_thread(vo.mark_swept, report)
     except Exception as exc:                               # noqa: BLE001
         logger.warning("[sched] valuation_outcomes raised %s: %s",
@@ -642,6 +647,17 @@ async def run_calibration_fit_task(ctx: dict) -> dict:
             report["est"] = await asyncio.to_thread(_eo.propose_est)
         except Exception as exc:                           # noqa: BLE001
             report["est"] = {"error": str(exc)[:200]}
+        # Loops 3 and 4: the target family on the long price horizons (dormant until
+        # px_180d labels exist; reports insufficient_data until then).
+        try:
+            report["pt"] = await asyncio.to_thread(cf.fit_and_record, family="pt")
+        except Exception as exc:                           # noqa: BLE001
+            report["pt"] = {"error": str(exc)[:200]}
+        try:
+            from src.memory import gate_outcomes as _go
+            report["gates"] = await asyncio.to_thread(_go.propose)
+        except Exception as exc:                           # noqa: BLE001
+            report["gates"] = {"error": str(exc)[:200]}
         await asyncio.to_thread(cf.mark_fit_run, report)
     except Exception as exc:                               # noqa: BLE001
         logger.warning("[sched] calibration_fit raised %s: %s",
@@ -650,7 +666,7 @@ async def run_calibration_fit_task(ctx: dict) -> dict:
     logger.info("[sched] calibration_fit: %s", {k: report.get(k) for k in
                                                 ("status", "version_id", "horizon")})
     return {k: report.get(k) for k in ("status", "version_id", "horizon",
-                                       "backtest_verdict", "est")}
+                                       "backtest_verdict", "est", "pt", "gates")}
 
 
 async def run_regional_comps_refresh_task(ctx: dict) -> dict:

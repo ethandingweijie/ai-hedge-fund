@@ -150,6 +150,39 @@ def archetype_adj_map(active=_UNSET) -> dict:
     return out
 
 
+def capture(ticker: str, profile: Optional[str], active=_UNSET) -> Optional[float]:
+    """The pt family's capture for this name: the profile scope first, then the market.
+    None when nothing is promoted -- the engine's capture rule then stands."""
+    active = active_version("pt") if active is _UNSET else active
+    if not active:
+        return None
+    from src.memory.valuation_outcomes import market_of
+    table = active["params"].get("capture") or {}
+    for scope in (f"profile:{profile}" if profile else None, f"market:{market_of(ticker)}"):
+        if scope and scope in table:
+            try:
+                c = float(table[scope])
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(c) and 0.0 < c <= 0.60:
+                return c
+    return None
+
+
+def prob_shrink(active=_UNSET) -> Optional[float]:
+    """The pt family's shrink of the scenario probabilities toward 25/50/25 (0 < lambda <= 1),
+    or None."""
+    active = active_version("pt") if active is _UNSET else active
+    if not active:
+        return None
+    raw = (active["params"].get("scenario_prob_shrink") or {}).get("lambda")
+    try:
+        lam = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return lam if math.isfinite(lam) and 0.0 < lam <= 1.0 else None
+
+
 def iv_multiplier(ticker: str, active=_UNSET) -> Optional[float]:
     """The active calibration's IV multiplier for this ticker's market, or None."""
     active = active_version() if active is _UNSET else active

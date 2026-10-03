@@ -86,10 +86,17 @@ def _d(v) -> Optional[date]:
         return None
 
 
-def load_rows(horizon: str) -> list[dict]:
-    """Ledger rows for one horizon, joined to the run's stored dcf_range."""
+def load_rows(horizon: str, *, family: str = "iv") -> list[dict]:
+    """Ledger rows for one horizon, joined to the run's stored dcf_range.
+
+    family="pt" (self-learning loops 3 and 4): the rows a target calibration is scored on,
+    joined to run_features instead -- the engine's 12-month target, spot, the capture it
+    used, the three scenario targets and intrinsic values and the scenario probabilities.
+    Price horizons only: a target is never fitted toward the consensus label."""
     if horizon not in vo.HORIZONS:
         raise ValueError(f"unknown horizon {horizon!r}; allowed: {list(vo.HORIZONS)}")
+    if family == "pt":
+        return _load_pt_rows(horizon)
     from src.memory import valuation_attribution as va
     vo._ensure_tables()
     rows = _db.query(
@@ -105,6 +112,35 @@ def load_rows(horizon: str) -> list[dict]:
                    dcf=dcf.get((r["run_id"], (r["ticker"] or "").upper())) or {})
         if row["run_date"] and row["label_date"] and vo._pos(row["base_iv"]) \
                 and vo._pos(row["label_value"]):
+            out.append(row)
+    return out
+
+
+PT_ROW_KEYS = ("pt_12m", "spot", "capture", "pt_bear", "pt_base", "pt_bull",
+               "iv_bear", "iv_base", "iv_bull", "prob_bear", "prob_base", "prob_bull",
+               "pt_calibration_version")
+
+
+def _load_pt_rows(horizon: str) -> list[dict]:
+    if horizon == vo.CONSENSUS:
+        raise ValueError("a target calibration is never scored against the consensus label")
+    from src.memory import run_features as rf
+    vo._ensure_tables()
+    rf._ensure_tables()
+    rows = _db.query(
+        "SELECT o.run_id, o.ticker, o.run_date, o.label_date, o.label_value, o.market, "
+        "o.profile, " + ", ".join(f"f.{k}" for k in PT_ROW_KEYS) + " "
+        "FROM valuation_outcomes o JOIN run_features f "
+        "ON f.run_id = o.run_id AND f.ticker = o.ticker "
+        "WHERE o.horizon = ? AND " + rf.AGENT_ONLY_WHERE, [horizon])
+    out = []
+    for r in rows:
+        row = {k: r[k] for k in ("run_id", "ticker", "label_value", "market", "profile")}
+        row.update({k: r[k] for k in PT_ROW_KEYS})
+        row.update(run_date=_d(r["run_date"]), label_date=_d(r["label_date"]),
+                   base_iv=r["iv_base"], bear_iv=r["iv_bear"], bull_iv=r["iv_bull"], dcf={})
+        if row["run_date"] and row["label_date"] and vo._pos(row["pt_12m"]) \
+                and vo._pos(row["spot"]) and vo._pos(row["label_value"]):
             out.append(row)
     return out
 
@@ -146,10 +182,11 @@ def build_folds(rows: list[dict], n_folds: int = 4) -> list[Fold]:
 
 # ── scoring ─────────────────────────────────────────────────────────────────
 
-def _scored(rows: list[dict], predict: Predict) -> list[dict]:
+def _scored(rows: list[dict], predict: Predict, *, value_key: str = "base_iv",
+            band_keys: tuple[str, str] = ("bear_iv", "bull_iv")) -> list[dict]:
     out = []
     for r in rows:
-        live = float(r["base_iv"])
+        live = float(r[value_key])
         try:
             revised = predict(r)
         except Exception:                                  # noqa: BLE001
@@ -157,7 +194,7 @@ def _scored(rows: list[dict], predict: Predict) -> list[dict]:
         cand = vo._pos(revised) or live
         label = float(r["label_value"])
         k = cand / live
-        bear, bull = vo._pos(r.get("bear_iv")), vo._pos(r.get("bull_iv"))
+        bear, bull = vo._pos(r.get(band_keys[0])), vo._pos(r.get(band_keys[1]))
         band = lambda s: (int(min(bear, bull) * s <= label <= max(bear, bull) * s)
                           if bear and bull else None)
         out.append({**r, "live_err": math.log(live / label),
@@ -176,8 +213,11 @@ def _coverage(vals: list) -> Optional[float]:
 
 
 def walk_forward(rows: list[dict], fit: Fit, *, n_folds: int = 4,
-                 windows: Iterable[tuple[str, str, str]] = ()) -> dict:
-    """Score `fit` against live, fold by fold. Raises LeakageError on lookahead."""
+                 windows: Iterable[tuple[str, str, str]] = (), value_key: str = "base_iv",
+                 band_keys: tuple[str, str] = ("bear_iv", "bull_iv")) -> dict:
+    """Score `fit` against live, fold by fold. Raises LeakageError on lookahead.
+    `value_key` is the live figure a fitter revises (the IV, or the 12-month target for
+    the pt family) and `band_keys` the bear/bull pair whose coverage must not fall."""
     folds = build_folds(rows, n_folds)
     fold_reports, pooled, skipped = [], [], []
     for fold in folds:
@@ -187,7 +227,7 @@ def walk_forward(rows: list[dict], fit: Fit, *, n_folds: int = 4,
                             "test": len(fold.test)})
             continue
         predict = fit(list(fold.train))
-        scored = _scored(fold.test, predict)
+        scored = _scored(fold.test, predict, value_key=value_key, band_keys=band_keys)
         live_miss = median(abs(s["live_err"]) for s in scored)
         cand_miss = median(abs(s["cand_err"]) for s in scored)
         if cand_miss < IMPLAUSIBLE_MISS and live_miss > IMPLAUSIBLE_LIVE_FLOOR:

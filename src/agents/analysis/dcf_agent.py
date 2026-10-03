@@ -16046,6 +16046,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 or all(v < _spot_for_cap for v in _scen_ivs))
             if _unanimous:
                 _max_capture = min(0.50, _max_capture + 0.15)
+            # Self-learning loop 3 (2026-10-04): a PROMOTED pt calibration replaces the
+            # rule's capture for this profile / market; nothing promoted = the rule.
+            _capture_source = "rule"
+            try:
+                from src.memory import calibration as _cal_pt
+                _cal_capture = _cal_pt.capture(ticker, profile_name)
+                if _cal_capture is not None:
+                    _max_capture = float(_cal_capture)
+                    _cal_pt_active = _cal_pt.active_version("pt") or {}
+                    _capture_source = f"calibration:{_cal_pt_active.get('version_id')}"
+            except Exception:  # noqa: BLE001
+                _cal_capture = None
             _capped_any = False
             _cap_diagnostics: list[str] = []
             # SOTP-led valuation: the generic forward multiple (one peer-set
@@ -16185,6 +16197,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "rule": "target = spot + capture x (IV - spot)",
                     "spot": float(_spot_for_cap),
                     "capture": _max_capture,
+                    "capture_source": _capture_source,
                     "scenarios": _pt_rows,
                     "cross_checks": _pt_cross,
                 }

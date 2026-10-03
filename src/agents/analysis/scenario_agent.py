@@ -265,6 +265,29 @@ def run_scenario_agent(state: AgentState) -> AgentState:
         _bull_p  = _case_prob(result.bull, 0.25)
         _base_p  = _case_prob(result.base, 0.50)
         _bear_p  = _case_prob(result.bear, 0.25)
+        # Self-learning loop 4 (2026-10-04): a PROMOTED pt calibration shrinks the LLM's
+        # probabilities toward 25/50/25 by lambda before the target is weighted; the raw
+        # figures are kept beside. Nothing promoted = the LLM's probabilities as before.
+        try:
+            from src.memory import calibration as _cal_pt
+            _lam = _cal_pt.prob_shrink()
+        except Exception:  # noqa: BLE001
+            _lam = None
+        if _lam:
+            _raw_p = {"bear": _bear_p, "base": _base_p, "bull": _bull_p}
+            _bear_p = (1.0 - _lam) * _bear_p + _lam * 0.25
+            _base_p = (1.0 - _lam) * _base_p + _lam * 0.50
+            _bull_p = (1.0 - _lam) * _bull_p + _lam * 0.25
+            _tot_p = _bear_p + _base_p + _bull_p
+            if _tot_p > 0:
+                _bear_p, _base_p, _bull_p = _bear_p / _tot_p, _base_p / _tot_p, _bull_p / _tot_p
+            try:
+                _pt_vid = (_cal_pt.active_version("pt") or {}).get("version_id")
+            except Exception:  # noqa: BLE001
+                _pt_vid = None
+            scenario_dict["probability_shrink"] = {
+                "lambda": _lam, "raw": _raw_p, "version_id": _pt_vid,
+                "applied": {"bear": round(_bear_p, 4), "base": round(_base_p, 4), "bull": round(_bull_p, 4)}}
         _12m_bull = _12m_raw.get("bull")
         _12m_base = _12m_raw.get("base")
         _12m_bear = _12m_raw.get("bear")
