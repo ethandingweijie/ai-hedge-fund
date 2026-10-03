@@ -1865,6 +1865,11 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
         ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
     out += [pill, Spacer(1, 5)]
+    # Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured under the rating.
+    if decision.get("headline"):
+        _hl_style = ParagraphStyle("_pm_headline", parent=styles["RptBody"], fontName="Helvetica-Bold",
+                                   fontSize=11.5, leading=14.5, spaceAfter=2)
+        out += [Paragraph(_strip(str(decision["headline"])), _hl_style), Spacer(1, 5)]
 
     price = scen.get("current_price") or rv.get("price")
     _unrated = ((dcf_t.get("rating_state") or {}).get("state") == "unrated")
@@ -1899,10 +1904,6 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
     # Owner, 2026-09-27: the computed reconciliation when momentum signals run against the rating.
     if decision.get("signals_reconciliation"):
         out.append(Paragraph(_strip(str(decision["signals_reconciliation"])), styles["RptSource"]))
-    # Owner, 2026-10-03: the one-line headline, bold, above the themes.
-    if decision.get("headline"):
-        out.append(Paragraph(f"<b>{_strip(str(decision['headline']))}</b>", styles["RptBody"]))
-        out.append(Spacer(1, 2))
     points = _rationale_points(decision.get("rationale") or decision.get("reasoning") or "")
     for p in points:
         out.append(Paragraph(p, styles["RptBullet"], bulletText="•"))

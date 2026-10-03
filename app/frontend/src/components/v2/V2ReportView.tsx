@@ -451,6 +451,12 @@ function SummaryBody({
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
+          {/* Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured. */}
+          {decision.headline && (
+            <p className="mb-3 border-l-4 border-foreground pl-3 text-[17px] font-bold leading-snug tracking-tight text-foreground">
+              {String(decision.headline)}
+            </p>
+          )}
           {decision.research_view ? (
             /* Rated runs lead with the research rating and its disclosure
                checklist; shared with the desktop header. */
@@ -478,15 +484,12 @@ function SummaryBody({
               </span>
             </div>
           )}
-          {decision.headline && (
-            <p className="mt-3 text-[14px] font-bold leading-snug text-foreground">{String(decision.headline)}</p>
-          )}
           {decision.rationale && (
             /* Shared with the desktop path via RationaleBlock so the two
                render paths cannot drift apart again. */
             <RationaleBlock
               text={String(decision.rationale)}
-              className={decision.headline ? 'mt-2' : 'mt-3'}
+              className="mt-3"
               itemClassName="text-[12.5px] text-foreground/80 leading-relaxed"
             />
           )}
