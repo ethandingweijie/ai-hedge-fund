@@ -696,6 +696,7 @@ def save_run(state: dict, decisions: dict) -> str:
             # Debate round decommissioned (M2 Track E): the columns stay for
             # historical rows but new runs always write 0/NULL.
             dcf_range: dict = data.get("dcf_range", {})
+            _prices_at_run: dict[str, float | None] = {}   # reused by the run_features hook
 
             for ticker in tickers:
                 decision = decisions.get(ticker, {})
@@ -727,6 +728,7 @@ def save_run(state: dict, decisions: dict) -> str:
                         price_at_run = float(prices[-1].close)
                 except Exception:
                     pass
+                _prices_at_run[ticker] = price_at_run
 
                 # DCF margin-of-safety
                 dcf_iv_vs_price: float | None = None
@@ -902,6 +904,24 @@ def save_run(state: dict, decisions: dict) -> str:
 
         conn.close()
         print(f"  [archive] Run saved: {run_id}")
+
+        # Self-learning ledger (run_features): written AFTER the archive commit, through
+        # src.data.db's own connection -- a second sqlite connection inside _Txn would
+        # block on the open write. Best effort: the daily backfill is the source of truth.
+        try:
+            from src.memory import run_features as _rf
+            if _rf.enabled():
+                _scen_all = data.get("scenario_analysis", {}) or {}
+                for ticker in tickers:
+                    _rf.record(
+                        run_id, ticker, dcf_range.get(ticker) or {}, _scen_all.get(ticker),
+                        run_at=run_at, sector=data.get("sector"),
+                        price_at_run=_prices_at_run.get(ticker),
+                        pm_target=(decisions.get(ticker) or {}).get("price_target"),
+                        research_tier=data.get("research_tier"),
+                        regime_risk=regime.get("risk_appetite"))
+        except Exception as exc:                                   # noqa: BLE001
+            logger.warning("[archive] run_features hook skipped: %s", exc)
         return run_id
 
     except Exception as exc:

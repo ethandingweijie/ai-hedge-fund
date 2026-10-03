@@ -373,7 +373,35 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["valuation_outcomes"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 13. Self-learning ledger: run_features rows and what the agent-only filter removes.
+    try:
+        import asyncio as _aio
+
+        def _features_counts() -> dict:
+            from src.memory import run_features as _rf
+            return {**_rf.counts(), "enabled": _rf.enabled()}
+
+        out["run_features"] = await _aio.to_thread(_features_counts)
+        out["run_features"]["ok"] = True
+    except Exception:
+        out["run_features"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
+
+
+# ── Self-learning ledger ────────────────────────────────────────────────────
+
+@router.post("/admin/run-features/backfill")
+async def run_features_backfill(request: Request, secret: str = "",
+                                write: bool = False, force: bool = False):
+    """Build the flat per-run ledger from the archive. write=false (default) reports
+    what it WOULD write; idempotent, so write=true is safe to repeat. force=true rewrites
+    rows written by an older extractor version."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import run_features as rf
+    return await asyncio.to_thread(rf.backfill, write=write, force=force)
 
 
 # ── B2: valuation outcome labels ────────────────────────────────────────────
