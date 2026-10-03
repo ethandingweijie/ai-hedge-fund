@@ -70,6 +70,45 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "adopt — never restate it as our own, and never treat its price "
     "target as ours. If our call is the opposite of theirs, say so "
     "explicitly and give the reason.\n"
+    # Owner, 2026-10-03 -- institutional write-up critique (five findings).
+    "Voice rule (no engine residue) — the reader is an investment committee, "
+    "not an operator reading a dashboard. Never name a model flag, gate, leg, "
+    "method that did not compute, scenario label, run or tag (no \"TRAP RISK "
+    "MEDIUM flag\", \"outer-boundary signal\", \"structural flag\", \"Anchor P/E "
+    "(Ops)\", \"this run\", \"scenario EV\"). Translate every such input into "
+    "the operating or balance-sheet reality it describes: a trap flag on a "
+    "state-owned name becomes \"downside is cushioned by a mandated payout and "
+    "a sovereign ownership floor\"; a missing method is simply not mentioned.\n"
+    "One-anchor rule — the 12-month price target is the ONE price the thesis "
+    "argues, stated once with its method and driver. The intrinsic value may "
+    "appear ONCE, as a cross-check (\"cross-check: intrinsic value about "
+    "US$334\"), and the bear and bull cases only in the risk theme. Never list "
+    "scenario values, leg values, or several intrinsic values side by side.\n"
+    "Rounding rule — prices and price targets to whole currency units (one "
+    "decimal when the price is below 20); percentages to the nearest whole "
+    "percent; gaps as \"about 29 points\" or a percent, never basis points "
+    "below 50bp resolution; two decimals only for per-share earnings, "
+    "dividends and multiples. Use the \"Rounded for prose\" line.\n"
+    "Arithmetic rule — write a formula only when the supplied inputs reproduce "
+    "its result; otherwise name the method and the driver without the "
+    "arithmetic. Never print a multiple that the stated inputs do not give.\n"
+    "Bear-case rule — the risk theme states the bear-case price from the "
+    "supplied bear figure, the operating stress that produces it (margin "
+    "slip, volume, rate, contract loss, regulatory freeze), and the skew from "
+    "the risk-reward line as \"about 2:1 upside to downside\". When the inputs "
+    "flag the bear case as under-stressed, say so: a bear within a few percent "
+    "of the base on a cyclical or an operationally levered name is not a bear "
+    "case, and the thesis should treat the published downside as a floor "
+    "that has not been tested.\n"
+    "Bridge rule — a claim that the market misprices trough, peak or mid-cycle "
+    "earnings must carry the bridge: the current metric, the operating lever "
+    "(volume, margin, rate), and the normalised run-rate it reaches (the "
+    "FY+1 / FY+2 estimate supplied). No bridge, no \"normalised\" claim.\n"
+    "Guidance rule — when the forward-estimates block is supplied, one theme "
+    "cites management's latest guidance with its date and source (earnings "
+    "release or call), consensus, and our estimate, and says where we sit "
+    "against both and why. When the block says management gives no guidance, "
+    "say that and anchor on consensus instead.\n"
     "Output JSON only."
 )
 
@@ -719,7 +758,170 @@ def _quant_block_text(ticker: str, state, scenario: dict) -> str:
     _pc = (data.get("peer_comparison") or {}).get(ticker) or {}
     if _pc:
         lines.append("Peer comparison: " + str(_pc)[:280].replace("\n", " "))
+    lines.extend(_anchor_and_risk_reward_lines(ticker, state, scenario, _sym))
     return "\n".join(f"  {l}" for l in lines) or "  (valuation data unavailable)"
+
+
+def _round_for_prose(v, sym: str) -> str:
+    """Whole currency units; one decimal below 20 (owner, 2026-10-03: no penny targets)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "n/a"
+    return f"{sym}{f:,.1f}" if abs(f) < 20 else f"{sym}{f:,.0f}"
+
+
+def _anchor_and_risk_reward_lines(ticker: str, state, scenario: dict, sym: str) -> list[str]:
+    """The one price the thesis argues, its cross-check, the stressed downside and the skew,
+    and the rounded figures the prose should use (owner, 2026-10-03). Every number is read
+    from the scenario and the valuation record; nothing is estimated here."""
+    data = state["data"]
+    dcf = (data.get("dcf_range") or {}).get(ticker) or {}
+    recon = scenario.get("reconciliation") or {}
+    out: list[str] = []
+    spot = recon.get("current_price") or scenario.get("current_price")
+    pt = scenario.get("12m_price_target")
+    method = scenario.get("12m_pt_method") or dcf.get("12m_pt_method")
+    iv = recon.get("blended_iv")
+    by = scenario.get("12m_targets_by_scenario") or {}
+    bear = by.get("bear") if isinstance(by.get("bear"), (int, float)) else ((dcf.get("bear") or {}).get("intrinsic_value"))
+    bull = by.get("bull") if isinstance(by.get("bull"), (int, float)) else ((dcf.get("bull") or {}).get("intrinsic_value"))
+    base = by.get("base") if isinstance(by.get("base"), (int, float)) else ((dcf.get("base") or {}).get("intrinsic_value"))
+    if isinstance(pt, (int, float)) and pt > 0:
+        out.append(f"PRIMARY ANCHOR: 12m price target {_round_for_prose(pt, sym)}"
+                   + (f" on {method}" if method else "") + " — the one price the thesis argues")
+    if isinstance(iv, (int, float)) and iv > 0:
+        out.append(f"CROSS-CHECK ONLY: intrinsic value about {_round_for_prose(iv, sym)} (cite once, as a sanity boundary)")
+    if isinstance(spot, (int, float)) and spot > 0:
+        rr = []
+        if isinstance(pt, (int, float)) and pt > 0:
+            rr.append(f"upside to target {((pt / spot) - 1) * 100:+.0f}%")
+        if isinstance(bear, (int, float)) and bear > 0:
+            rr.append(f"bear case {_round_for_prose(bear, sym)} ({((bear / spot) - 1) * 100:+.0f}% from spot)")
+        if isinstance(bull, (int, float)) and bull > 0:
+            rr.append(f"bull case {_round_for_prose(bull, sym)} ({((bull / spot) - 1) * 100:+.0f}%)")
+        if isinstance(pt, (int, float)) and pt > spot and isinstance(bear, (int, float)) and 0 < bear < spot:
+            skew = (pt - spot) / (spot - bear)
+            rr.append(f"skew about {skew:.1f}:1 upside to downside")
+        elif isinstance(pt, (int, float)) and isinstance(bear, (int, float)) and bear >= spot and pt > 0:
+            rr.append("bear case at or above spot: the downside has not been modelled below the current price")
+        if rr:
+            out.append("RISK-REWARD: " + "; ".join(rr))
+        if isinstance(bear, (int, float)) and isinstance(base, (int, float)) and base > 0 and bear > 0:
+            gap = (base - bear) / base
+            if gap < 0.10:
+                out.append(f"BEAR CASE UNDER-STRESSED: the bear case sits only {gap * 100:.0f}% below the base — "
+                           "treat the published downside as an untested floor")
+    rounded = [f"spot {_round_for_prose(spot, sym)}" if isinstance(spot, (int, float)) and spot > 0 else None,
+               f"12m target {_round_for_prose(pt, sym)}" if isinstance(pt, (int, float)) and pt > 0 else None,
+               f"intrinsic value {_round_for_prose(iv, sym)}" if isinstance(iv, (int, float)) and iv > 0 else None,
+               f"bear {_round_for_prose(bear, sym)}" if isinstance(bear, (int, float)) and bear > 0 else None,
+               f"bull {_round_for_prose(bull, sym)}" if isinstance(bull, (int, float)) and bull > 0 else None]
+    rounded = [r for r in rounded if r]
+    if rounded:
+        out.append("Rounded for prose: " + ", ".join(rounded))
+    return out
+
+
+def _forward_estimates_block(ticker: str, state) -> str:
+    """Management guidance → the house estimates, for the writer (owner, 2026-10-03).
+
+    Reads dcf_range[ticker].guidance_estimates (deep research 2G → the
+    guidance_estimates extractor → the DCF's guidance channel). Falls back to
+    the regex-parsed management_guidance. Every figure here is already in the
+    valuation record, so the number guard accepts it."""
+    data = state["data"]
+    dcf = (data.get("dcf_range") or {}).get(ticker) or {}
+    ge = dcf.get("guidance_estimates") or {}
+    _ccy = dcf.get("reported_currency") or data.get("reported_currency") or "USD"
+    _sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£", "JPY": "¥",
+            "AUD": "A$", "INR": "₹"}.get(str(_ccy).upper(), str(_ccy).upper() + " ")
+
+    def _p(v):
+        return f"{float(v):+.1%}" if isinstance(v, (int, float)) else None
+
+    def _m(v):
+        return f"{float(v):.1%}" if isinstance(v, (int, float)) else None
+
+    def _rng(r, fmt):
+        if not isinstance(r, dict):
+            return None
+        lo, mid, hi = r.get("low"), r.get("mid"), r.get("high")
+        if lo is None and mid is None and hi is None:
+            return None
+        if lo is not None and hi is not None and lo != hi:
+            return f"{fmt(lo)} to {fmt(hi)}" + (f" (midpoint {fmt(mid)})" if mid is not None else "")
+        return fmt(mid if mid is not None else (lo if lo is not None else hi))
+
+    lines: list[str] = []
+    if ge and isinstance(ge.get("estimates"), dict):
+        g = ge.get("guidance") or {}
+        c = ge.get("consensus") or {}
+        fy1 = ge.get("fiscal_year_1") or "FY+1"
+        fy2 = ge.get("fiscal_year_2") or "FY+2"
+        src_bits = [b for b in (g.get("source"), ge.get("as_of")) if b]
+        status = g.get("status")
+        head = f"Management guidance for {fy1}"
+        if status and status != "none":
+            head += f" ({status})"
+        head += (" — " + ", ".join(str(b) for b in src_bits)) if src_bits else ""
+        g_bits = []
+        if _rng(g.get("revenue_growth"), _p):
+            g_bits.append(f"revenue growth {_rng(g.get('revenue_growth'), _p)}")
+        rv = g.get("revenue") or {}
+        if isinstance(rv, dict) and any(rv.get(k) is not None for k in ("low", "mid", "high")):
+            unit = " ".join(str(x) for x in (rv.get("currency"), rv.get("scale")) if x)
+            g_bits.append("revenue " + _rng(rv, lambda v: f"{float(v):,.1f}") + (f" {unit}" if unit else ""))
+        if _rng(g.get("ebitda_margin"), _m):
+            g_bits.append(f"EBITDA / operating margin {_rng(g.get('ebitda_margin'), _m)}")
+        ep = g.get("eps") or {}
+        if isinstance(ep, dict) and any(ep.get(k) is not None for k in ("low", "mid", "high")):
+            g_bits.append("EPS " + _rng(ep, lambda v: f"{(ep.get('currency') or _ccy)} {float(v):.2f}"))
+        lines.append(head + ": " + ("; ".join(g_bits) if g_bits else "no quantitative guidance given"))
+        if g.get("quote"):
+            lines.append(f'Management, verbatim: "{str(g["quote"])[:200]}"')
+        c_bits = []
+        if _p(c.get("revenue_growth_fy1")):
+            c_bits.append(f"revenue growth {_p(c.get('revenue_growth_fy1'))}")
+        if isinstance(c.get("eps_fy1"), (int, float)):
+            c_bits.append(f"EPS {_ccy} {float(c['eps_fy1']):.2f}")
+        if c_bits:
+            lines.append(f"Consensus {fy1}" + (f" (as of {c.get('as_of')})" if c.get("as_of") else "") + ": " + "; ".join(c_bits))
+        if _p(ge.get("guidance_vs_consensus_pct")):
+            lines.append(f"Guidance midpoint vs consensus: {_p(ge.get('guidance_vs_consensus_pct'))}")
+        est = ge.get("estimates") or {}
+        for label, f, fmt in ((f"revenue growth {fy1}", "revenue_growth_fy1", _p), (f"revenue growth {fy2}", "revenue_growth_fy2", _p),
+                              (f"EBITDA margin {fy1}", "ebitda_margin_fy1", _m), (f"EBITDA margin {fy2}", "ebitda_margin_fy2", _m),
+                              (f"EPS {fy1}", "eps_fy1", lambda v: f"{_ccy} {float(v):.2f}"), (f"EPS {fy2}", "eps_fy2", lambda v: f"{_ccy} {float(v):.2f}")):
+            vals = [(est.get(sc) or {}).get(f) for sc in ("bear", "base", "bull")]
+            if all(v is None for v in vals):
+                continue
+            lines.append(f"Our estimate, {label}: " + " / ".join(
+                f"{sc} {fmt(v) if isinstance(v, (int, float)) else 'n/a'}" for sc, v in zip(("bear", "base", "bull"), vals)))
+        if ge.get("track_record"):
+            lines.append(f"Guidance track record: {str(ge['track_record'])[:160]}")
+        if ge.get("rationale"):
+            lines.append(f"Estimate rationale: {str(ge['rationale'])[:300]}")
+        lines.append("Estimates confidence: " + str(ge.get("confidence") or "n/a")
+                     + ("; the DCF's first two years run on these estimates" if ge.get("applied")
+                        else f"; the DCF did not use them ({ge.get('not_applied_reason') or 'not applied'})"))
+    else:
+        mg = (data.get("management_guidance") or {}).get(ticker) or {}
+        bits = []
+        if isinstance(mg.get("revenue_growth_pct"), (int, float)):
+            bits.append(f"revenue growth {float(mg['revenue_growth_pct']):.1f}%")
+        if isinstance(mg.get("revenue_guidance_mid"), (int, float)):
+            bits.append(f"revenue {_sym}{float(mg['revenue_guidance_mid']) / 1e9:,.2f}bn (midpoint)")
+        if isinstance(mg.get("ebitda_guidance_mid"), (int, float)):
+            bits.append(f"EBITDA {_sym}{float(mg['ebitda_guidance_mid']) / 1e9:,.2f}bn (midpoint)")
+        if mg.get("margin_direction") and mg.get("margin_direction") != "stable":
+            bits.append(f"margin {mg['margin_direction']}")
+        if bits:
+            lines.append("Management guidance (parsed from the research, next fiscal year): " + "; ".join(bits))
+        else:
+            lines.append("Management gives no quantitative forward guidance in the research supplied; "
+                         "anchor the estimates theme on consensus.")
+    return "\n".join(f"  {l}" for l in lines)
 
 
 def _macro_one_liner(state) -> str:
@@ -1340,6 +1542,7 @@ def run_advanced_portfolio_manager(state) -> dict:
                 "{macro_line}\n"
                 "{rating_block}\n"
                 "Quantitative anchors:\n{quant_block}\n"
+                "Forward estimates (management guidance, earnings release → house estimates):\n{forward_block}\n"
                 "Catalyst continuity:\n{catalyst_block}\n"
                 "Research vs books checks:\n{div_block}\n"
                 "Base scenario: {base_assumptions}\n"
@@ -1370,6 +1573,7 @@ def run_advanced_portfolio_manager(state) -> dict:
             "macro_line": _macro_line,
             "rating_block": _rating_block_text(research_view),
             "quant_block": _quant_block,
+            "forward_block": _forward_estimates_block(ticker, state),
             "analyst_thesis": _analyst_thesis_block(ticker),
             "catalyst_block": _catalyst_block,
             "div_block": _div_block,
