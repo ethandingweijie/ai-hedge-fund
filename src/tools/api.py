@@ -191,6 +191,7 @@ _BALANCE_MAP: dict[str, str] = {
     "retainedEarnings":                  "retained_earnings",
     "shortTermDebt":                     "short_term_debt",
     "shortTermInvestments":              "short_term_investments",
+    "longTermInvestments":               "long_term_investments",   # plan IV3: biotech treasury
     "minorityInterest":                  "minority_interest",
     "preferredStock":                    "preferred_equity",   # owner bridge, 2026-09-26
     # Lease liabilities inside FMP's totalDebt (owner, 2026-10-04, plan 1C.2): the bridge states its

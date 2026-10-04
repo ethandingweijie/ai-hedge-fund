@@ -163,6 +163,60 @@ def _regime_cache_put(key: str, value: dict) -> None:
             _REGIME_CACHE.pop(oldest, None)
 
 
+# ── One regime per date across processes (owner, 2026-10-04) ──────────────────
+# The regime is an LLM classification and the cache above is per process. Runs a minute apart on
+# the web service and the worker read different regimes (risk-on for five names, risk-off for three
+# at 06:13 UTC on 2026-10-04), and the overlay moved WACC by 2pp between them. The first
+# classification for a date is stored in the shared database; every later run that date reads it.
+_SHARED_DDL = """
+CREATE TABLE IF NOT EXISTS macro_regime_daily (
+    regime_date TEXT PRIMARY KEY,
+    regime_json TEXT NOT NULL,
+    position_size_cap REAL,
+    created_at TEXT
+)
+"""
+
+
+def _shared_enabled() -> bool:
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    return os.environ.get("MACRO_REGIME_SHARED", "true").lower() not in ("0", "false", "no")
+
+
+def _shared_get(end_date: str) -> dict | None:
+    if not _shared_enabled():
+        return None
+    try:
+        import json as _json
+        from src.data import db as _db
+        _db.execute_script(_SHARED_DDL)
+        row = _db.query_one("SELECT regime_json, position_size_cap FROM macro_regime_daily WHERE regime_date = ?", [end_date])
+        if row and row["regime_json"]:
+            return {"regime": _json.loads(row["regime_json"]), "position_size_cap": row["position_size_cap"]}
+    except Exception:  # noqa: BLE001 -- never block a run on the shared store
+        return None
+    return None
+
+
+def _shared_put(end_date: str, value: dict) -> dict:
+    """Store this date's regime unless one is stored already; return the stored one (first writer wins)."""
+    if not _shared_enabled():
+        return value
+    try:
+        import json as _json
+        from src.data import db as _db
+        _db.execute_script(_SHARED_DDL)
+        _db.execute("INSERT INTO macro_regime_daily (regime_date, regime_json, position_size_cap, created_at) "
+                    "VALUES (?, ?, ?, ?) ON CONFLICT (regime_date) DO NOTHING",
+                    [end_date, _json.dumps(value["regime"]), value.get("position_size_cap"),
+                     datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")])
+        stored = _shared_get(end_date)
+        return stored or value
+    except Exception:  # noqa: BLE001
+        return value
+
+
 def run_macro_regime_classifier(state: AgentState) -> AgentState:
     """Phase 1: classify macro regime using economic indicators + treasury rates + SPY prices."""
     agent_id = "macro_regime_classifier"
@@ -175,7 +229,7 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
     ).strftime("%Y-%m-%d")
 
     _cache_key = _regime_cache_key(state, end_date)
-    _hit = _regime_cache_get(_cache_key)
+    _hit = _regime_cache_get(_cache_key) or _shared_get(end_date)
     if _hit is not None:
         state["data"]["macro_regime"] = dict(_hit["regime"])
         state["data"]["position_size_cap"] = _hit["position_size_cap"]
@@ -441,6 +495,13 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
     state["data"]["position_size_cap"]        = position_size_cap
 
     if "LLM fallback" not in str(regime_dict.get("regime_notes") or ""):
+        _stored = _shared_put(end_date, {"regime": dict(regime_dict), "position_size_cap": position_size_cap})
+        if _stored.get("regime") != regime_dict:
+            # Another run classified this date first: its regime is the date's regime.
+            regime_dict = dict(_stored["regime"])
+            position_size_cap = _stored.get("position_size_cap") or position_size_cap
+            state["data"]["macro_regime"] = regime_dict
+            state["data"]["position_size_cap"] = position_size_cap
         _regime_cache_put(_cache_key, {"regime": dict(regime_dict),
                                        "position_size_cap": position_size_cap})
 

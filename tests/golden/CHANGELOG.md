@@ -1722,3 +1722,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner-accepted DBS payout (2026-10-04): the bank model's cross-check flag cites the accepted 80.1% total payout; no value moved
 
+## 2026-10-04T14:00:40+00:00
+
+- regenerated at HEAD: `31572727`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Visa/Vertex reviews (2026-10-04): forward legs on NTM (EV6), symmetric CAPM band holds risk-off/insider overlays within 1pp of CAPM (EV2; MELI 11.25->10.47%, U96 9.67->8.17%), immaterial insider selling ignored, payment networks unlevered (IV1)
+

@@ -40,7 +40,9 @@ DEFAULTS: dict = {
     "organic_spread_flag": 0.05,
     "cash_conversion_bounds": [0.60, 1.20],
     "capex_alpha_bounds": [0.0, 1.5],
-    "nwc_intensity_bounds": [-0.10, 0.50],
+    # Owner, 2026-10-04 (Visa review), PROPOSED: 0.50 let a non-operating working-capital line (Visa's
+    # litigation escrow and settlement flows) set half of every new revenue dollar as absorbed.
+    "nwc_intensity_bounds": [-0.10, 0.30],
     "da_useful_life_years": 10,
     "tax_rate_default": 0.21,
     "tax_rate_bounds": [0.10, 0.35],
@@ -214,7 +216,9 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
                 cx, da = abs(_f(r.get("capital_expenditure")) or 0.0), _f(r.get("depreciation_and_amortization")) or 0.0
                 alphas.append((cx - da) / drev)
                 cwc = _f(r.get("change_in_working_capital"))
-                if cwc is not None:
+                # A year whose working-capital swing exceeds 10% of revenue is a non-operating flow
+                # (escrow, settlements, customer float), not the working capital growth needs.
+                if cwc is not None and abs(cwc) <= 0.10 * (_f(r.get("revenue")) or 0.0):
                     nwcs.append(-cwc / drev)             # cash-flow sign: a negative change absorbs cash
     tb = cfg["tax_rate_bounds"]
     return {
@@ -576,9 +580,29 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     tv = last["ufcf"] * (1.0 + float(tgr)) / (float(wacc) - float(tgr)) if float(wacc) > float(tgr) else None
     ebitda_T = last["ebit"] + last["da"]
     exit_mult = (tv / ebitda_T) if (tv and ebitda_T > 0) else None
-    inv.append({"id": 4, "name": "Terminal multiple bounds", "ok": (exit_mult <= peer_ev_ebitda) if (exit_mult is not None and peer_ev_ebitda) else None,
-                "detail": (f"implied exit EV/EBITDA {exit_mult:.1f}x vs mid-cycle peer median {peer_ev_ebitda:.1f}x" if (exit_mult is not None and peer_ev_ebitda)
-                           else "no peer median or no positive terminal EBITDA")})
+    # Owner, 2026-10-04 (Visa review, plan EV7): the check is two-sided and value-driver aware. The
+    # ceiling is the higher of the peer median and the multiple the terminal ROIC itself justifies
+    # ((1 - g/ROIC) x NOPAT/EBITDA x (1+g) / (WACC - g), +10%) -- Visa's 11.8x against a weak 8.8x peer
+    # median was conservative at a 40% ROIC, not a failure. The floor is half the peer median: an exit
+    # that low prices the business as if it were in run-off.
+    _just = None
+    if roic_terminal and roic_terminal > 0 and ebitda_T > 0 and float(wacc) > float(tgr):
+        _just = ((1.0 - float(tgr) / roic_terminal) * (last["ebit"] * (1.0 - float(tax)) / ebitda_T)
+                 * (1.0 + float(tgr)) / (float(wacc) - float(tgr)))
+    _ceil = max(peer_ev_ebitda or 0.0, (_just or 0.0) * 1.10) or None
+    _floor = (0.5 * peer_ev_ebitda) if peer_ev_ebitda else None
+    _ok = None
+    if exit_mult is not None and _ceil:
+        _ok = (exit_mult <= _ceil) and (_floor is None or exit_mult >= _floor)
+    _detail = "no peer median or no positive terminal EBITDA"
+    if exit_mult is not None and peer_ev_ebitda:
+        _detail = (f"implied exit EV/EBITDA {exit_mult:.1f}x vs mid-cycle peer median {peer_ev_ebitda:.1f}x"
+                   + (f", ROIC-justified {_just:.1f}x" if _just else "")
+                   + f"; band {_floor:.1f}x-{_ceil:.1f}x")
+        if _ok is False:
+            _detail += " -- BELOW the floor (run-off pricing)" if exit_mult < _floor else " -- ABOVE the ceiling"
+    inv.append({"id": 4, "name": "Terminal multiple bounds", "ok": _ok, "detail": _detail,
+                "justified_ev_ebitda": _just, "floor": _floor, "ceiling": _ceil})
     inv.append({"id": 5, "name": "No engine residue", "ok": None, "detail": "held by the PM rationale prompt's voice and rounding rules"})
     fcf_sched = [r["fcf_margin"] for r in rows]
     steps = _trace_steps(scenario=scenario, block=block, tg=tg, code=code, arche=arche, arche_reason=arche_reason, dec=dec, T=T, F=F,

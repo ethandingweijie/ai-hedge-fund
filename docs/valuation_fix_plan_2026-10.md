@@ -199,3 +199,37 @@ already fixed by Phase 1 (marked), and one was not reproduced.
 - JD: stakes in JD Logistics, JD Health, Dada and JD Industrials (D3 registry); the Ceconomy deal; the FY2025 reclassification.
 - 9988.HK: the Ant Group stake and listed holdings in the SOTP input; four vs five segments; convertible notes.
 - D05.SI: the capital-return programme (special dividends); a NIM-vs-SORA scenario.
+
+## Phase 1c: the Visa (V) and Vertex (VRTX) reviews (2026-10-04)
+
+### Engine-wide: implemented automatically
+
+| # | Severity | Fix |
+|---|---|---|
+| EV1 | Critical | One macro regime per day. The first classification of the day is stored in `macro_regime_daily`, and every run, worker and web process reads it, so two runs on the same day can't land on opposite sides of risk-on/off. V and VRTX moved WACC by 2pp on a regime flip. |
+| EV2 | Critical | The CAPM band is symmetric. Regime and insider overlays can't take WACC more than 1pp **above** CAPM, and the table rate itself is never cut. An implausible beta is clipped to 0.40–2.50 for this ceiling only (VRTX 0.32). Insider **selling** below 0.5% of market cap is ignored, including the conviction-sell flag (V: $83m, +16bp). |
+| EV3 | High | Scenario margin shifts flow through. The wider of the scenario delta and the guidance block's own delta applies (V: bear, base and bull were within 0.5pt of each other). |
+| EV4 | Critical | A guided EBITDA margin more than 10pt from both history and consensus is rejected for the consensus margin, keeping each scenario's offset (V: a "~50%" guide against a 74–78% consensus). The constant is PROPOSED. |
+| EV5 | High | NWC intensity is bounded to [−10%, 30%] of incremental revenue, and years with \|ΔWC\| > 10% of revenue are excluded (V: 50%). |
+| EV6 | High | Forward legs price the next twelve months: (1−e)·FY+1 + e·FY+2, where e is the elapsed share of FY+1. This applies to the consensus and to the research overlay when its FY+1 is the year in progress (VRTX: FY2026 EPS in October 2026). |
+| EV7 | Medium | The terminal-multiple check is two-sided and ROIC-aware. The ceiling is max(peer median, 1.1 × the ROIC-justified multiple) and the floor is 0.5 × the peer median (V's 11.8x at a 40% ROIC passes; VRTX's 10.1x against 25x fails). |
+
+### Industry-wide: implemented automatically
+
+| # | Severity | Industry | Fix |
+|---|---|---|---|
+| IV1 | Critical | Payment networks | Asset-light, not a balance-sheet business: unlevered basis and the three-statement model. **The curated peer basket is an owner decision** (see below). |
+| IV2 | Critical | Commercial Biotech, Large Cap Pharma | Pipeline rNPV is a sum-of-the-parts **add-on**: its risk-adjusted PV per diluted share is added to each operating leg, and its weight rolls into them. Pre-approval Biotech is unchanged, since there the pipeline is the company. |
+| IV3 | High | Biotechnology | Long-term marketable securities count as cash (VRTX ~US$10bn); pharma strategic stakes do not. |
+
+### Owner decisions (open)
+
+- Payment Networks basket. Medians below exclude V and are live from FMP on 2026-10-04:
+  - MA/AXP/PYPL/FI/FIS: EV/EBITDA 8.8x, P/E 12.2x.
+  - MA/AXP/SPGI/MCO/ICE/CME/MSCI: EV/EBITDA 17.9x, P/E 23.5x.
+- The ±50bp scenario WACC shift (D8). The VRTX reviewer calls it double counting.
+
+### Equity-specific: questions for the owner
+
+- V: class B/C as-converted shares and the litigation escrow treated as debt-like; the FY25 litigation accrual; diluted shares.
+- VRTX: Trikafta LOE (~2037) and IRA pricing; re-check the accepted pipeline inputs (is Trikafta inside them?).

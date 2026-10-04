@@ -309,7 +309,9 @@ class _Book:
             return f"Less: net debt — valuation basis (balance sheet {date_}; leases as in FMP total debt)"
         return (f"Less: net debt — valuation basis (balance sheet {date_}; short-term investments "
                 f"{'counted as cash' if b.get('short_term_investments_netted') else 'not netted'}; "
-                f"{b.get('accounting_basis')}: leases {b.get('leases')})")
+                + (f"long-term marketable securities {float(b['long_term_investments_netted']) / 1e6:,.0f}m counted as cash; "
+                   if b.get("long_term_investments_netted") else "")
+                + f"{b.get('accounting_basis')}: leases {b.get('leases')})")
 
     def dcf_weighted(self) -> bool:
         """True when any DCF-family leg (kind "dcf") carries weight in the blend."""
@@ -452,7 +454,7 @@ class _Book:
             sh.section(r, "Scenario drivers", 8); r += 1
             sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
             drivers = [("revenue_base", "Revenue base (last actual, valuation currency)", BIG),
-                       ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials and property)", PCT2),
+                       ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials other than payment networks, and property)", PCT2),
                        ("margin_delta_absolute", "Scenario margin change (absolute)", PCT2),
                        ("fcf_floor", "FCF margin floor", PCT2),
                        ("tgr", "Terminal growth", PCT2),
@@ -1092,6 +1094,7 @@ class _Book:
                 f"beta {_cp.get('beta'):.2f}, cost of equity {_cp.get('cost_of_equity'):.2%}, CAPM WACC {_cp.get('wacc'):.2%}"
                 if _cp.get("status") == "used" else str(_cp.get("status") or "no beta"))
                 + (f"; risk-on band held WACC at {(_cp.get('risk_on_band') or {}).get('after'):.2%}" if _cp.get("risk_on_band") else "")
+                + (f"; risk-off band held WACC at {(_cp.get('risk_off_band') or {}).get('after'):.2%}" if _cp.get("risk_off_band") else "")
                 + ("; WACC ABOVE the cost of equity" if _cp.get("wacc_above_cost_of_equity") else ""))
             r += 1
         r += 1
@@ -2109,8 +2112,11 @@ class _Book:
                 sh.put(r, 3, w.get("bucket")).font = Font(color=BLACK)
                 sh.put(r, 4, _num(w.get("weight")), "0.0000")
                 ref = self.leg_cell.get((s, key))
+                _pa = sc.get("pipeline_addon") or {}
+                _pa_add = (f"+{float(_pa['per_share']):.6f}" if (_pa.get("per_share") and key in (_pa.get("legs") or [])) else "")
                 if ref:
-                    sh.put(r, 5, "=" + ref, NUM)
+                    # Plan IV2: an operating leg carries the pipeline rNPV add-on (per share), stated in the formula.
+                    sh.put(r, 5, "=" + ref + _pa_add, NUM)
                 else:
                     # Not rebuilt anywhere: the engine's unrounded value, flagged on Data Gaps.
                     tr = (sc.get("leg_inputs") or {}).get(key) or {}

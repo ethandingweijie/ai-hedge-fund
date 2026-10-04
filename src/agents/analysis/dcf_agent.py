@@ -123,6 +123,9 @@ _DEFAULT_FADE_ALPHA = 0.75
 #: Plan EN1 (2026-10-04), PROPOSED: years a profile with no schedule holds its year-1 growth before the
 #: straight-line fade to terminal growth by year 10.
 _TWO_STAGE_HOLD_YEARS = 5
+#: Owner, 2026-10-04 (Visa review), PROPOSED: a guided EBITDA margin further than this from both the
+#: company's latest margin and consensus is treated as an extraction error.
+_GUIDED_MARGIN_TOLERANCE = 0.10
 #: Plan EN4 (2026-10-04), PROPOSED: latest capex intensity above this multiple of its own prior-year
 #: median marks a capex-cycle trough.
 _CAPEX_SPIKE_RATIO = 1.3
@@ -131,6 +134,10 @@ _BANK_SCENARIO_ROE_SHIFT = 0.10
 _BANK_SCENARIO_COE_SHIFT = 0.005
 _BETA_PLAUSIBLE = (0.4, 2.5)
 _RISK_ON_CAPM_BAND = 0.01
+# Owner, 2026-10-04 (Visa review, plan EV2): insider SELLING is routine (10b5-1 plans, tax, diversification);
+# it moves WACC only when it is material -- net or gross selling of at least this share of market cap.
+# Visa's $83m (~0.01%) of sales had added +16bp through the conviction-sell flag.
+_INSIDER_SELL_MATERIALITY = 0.005
 #: Owner, 2026-10-04 (decision D8), PROPOSED: the discount-rate move by scenario. Bear prices a
 #: dearer cost of capital, bull a cheaper one; the base rate is the build's.
 _WACC_SCENARIO_SHIFT = {"bear": 0.005, "base": 0.0, "bull": -0.005}
@@ -160,9 +167,20 @@ _UFCF_TAX_BOUNDS = (0.10, 0.35)
 _INTEREST_IS_COST_FAMILIES = frozenset({"Banks", "Insurance", "Fee financials", "Property, REITs and holdcos"})
 
 
+#: Owner, 2026-10-04 (Visa review, plan IV1): fee platforms that neither lend nor fund on client
+#: balances. A payment network carries no credit risk; its interest is a financing charge, so it
+#: takes the unlevered basis and the three-statement model like any asset-light compounder.
+_ASSET_LIGHT_FEE_PROFILES = frozenset({"Payment Networks"})
+#: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
+#: add-on to the operating value; for a Pre-approval Biotech the pipeline IS the company and stays a leg.
+_PIPELINE_ADDON_PROFILES = frozenset({"Commercial Biotech", "Large Cap Pharma"})
+
+
 def _interest_is_cost_of_goods(profile_name, sector) -> bool:
     """A balance-sheet intermediary's interest expense is its cost of goods (deposits, client cash,
     policy liabilities), not a financing charge to add back; those names keep the levered basis."""
+    if (profile_name or "") in _ASSET_LIGHT_FEE_PROFILES:
+        return False
     try:
         from src.data.report_families import report_family_for
         if report_family_for(profile_name or "") in _INTEREST_IS_COST_FAMILIES:
@@ -782,7 +800,7 @@ _BALANCE_SHEET_LINES = ("cash_and_equivalents", "short_term_investments",
 #: Owner, 2026-10-04 (plan 1A.3): the bridge's other balance lines, moved to the quarter with the cash
 #: and debt when the quarter reports them, so net debt, minorities, preferreds and leases share one
 #: date. Optional: a quarter that does not report one leaves the annual figure in place.
-_BRIDGE_BALANCE_LINES = ("minority_interest", "preferred_equity", "lease_liabilities")
+_BRIDGE_BALANCE_LINES = ("minority_interest", "preferred_equity", "lease_liabilities", "long_term_investments")
 
 
 #: Step-change threshold for the quarterly balance-sheet overlay, as a ratio of
@@ -1100,6 +1118,16 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
                 and abs(float(raw) - (float(td) - float(cash))) <= 0.01 * max(abs(float(td)), 1.0)):
             nd = float(raw) - float(sti)
             netted = True
+    # Plan IV3 (owner, 2026-10-04, Vertex review): a biotech's treasury runs past one year -- Vertex's
+    # long-term marketable securities (~US$10bn inside "other non-current assets") are spare cash like
+    # the short-term book, $10-20 a share left out. Biotechnology industry only: a pharma's long-term
+    # investments are strategic stakes, not a treasury.
+    lti = row.get("long_term_investments")
+    lti_netted = 0.0
+    if ((sector or "") in _HEALTHCARE_SECTORS and "biotech" in str(industry or "").lower()
+            and isinstance(lti, (int, float)) and lti > 0):
+        lti_netted = float(lti)
+        nd = nd - lti_netted
     # Plan IN1 (2026-10-04): a claims-backed insurer's cash and investments are regulated capital in its
     # insurance subsidiaries; the parent cannot pay them out. Only parent-level cash counts (owner-set per
     # ticker in valuation_constants.parent_cash; none on record = none counted), against the full debt,
@@ -1124,6 +1152,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
     basis = {
         "balance_sheet_date": row.get("_balance_sheet_period") or row.get("period"),
         "short_term_investments_netted": bool(netted),
+        "long_term_investments_netted": lti_netted or None,
         "accounting_basis": "US GAAP" if us_gaap else "IFRS",
         "lease_liabilities": float(lease) if isinstance(lease, (int, float)) else None,
         "regulated_cash_excluded": regulated_cash,
@@ -1378,7 +1407,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
-    "short_term_investments",
+    "short_term_investments", "long_term_investments",
     "minority_interest", "preferred_equity", "lease_liabilities",
     "pretax_income", "income_tax_expense",
     "goodwill", "intangible_assets",
@@ -1448,6 +1477,8 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "pretax_income":       _safe(getattr(li, "pretax_income", None)),
             "income_tax_expense":  _safe(getattr(li, "income_tax_expense", None)),
             "lease_liabilities":   _safe(getattr(li, "lease_liabilities", None)),
+            # Plan IV3 (2026-10-04, Vertex review): a biotech's long-term marketable securities.
+            "long_term_investments": _safe(getattr(li, "long_term_investments", None)),
             "shares_outstanding_basic": _safe(getattr(li, "shares_outstanding_basic", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
             "book_value_per_share":_safe(getattr(li, "book_value_per_share", None)),
@@ -3947,7 +3978,7 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
 
 
 def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario: str, gf: Optional[dict],
-                              revenue_base: Optional[float]) -> Optional[dict]:
+                              revenue_base: Optional[float], ntm_e: float = 0.0) -> Optional[dict]:
     """Owner, 2026-10-03: management guidance -> estimates price the forward legs too, not only the DCF.
 
     Per scenario, the forward legs' metric becomes the guidance-derived FY+1 estimate: EPS from the
@@ -3960,11 +3991,24 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
     cfg = _guidance_channel_cfg()
     if _GUIDANCE_CONFIDENCE_RANK.get(str(est.get("confidence") or "LOW").upper(), 0) < _GUIDANCE_CONFIDENCE_RANK.get(cfg["min_confidence"], 1):
         return fwd
-    row = ((est.get("estimates") or {}).get(scenario)) or {}
+    row = dict(((est.get("estimates") or {}).get(scenario)) or {})
     rows = (gf or {}).get("rows") or []
     y1 = rows[0] if rows else {}
     g1 = row.get("revenue_growth_fy1")
     rev1 = (float(revenue_base) * (1.0 + float(g1))) if (isinstance(g1, (int, float)) and revenue_base) else (y1.get("revenue") if y1 else None)
+    # Plan EV6 (2026-10-04): the next twelve months -- FY+1 and FY+2 weighted by the elapsed share of
+    # FY+1 (passed as `ntm_e`; 0 when the research's FY+1 is not the year in progress).
+    if ntm_e and ntm_e > 0:
+        if isinstance(row.get("eps_fy1"), (int, float)) and isinstance(row.get("eps_fy2"), (int, float)):
+            row["eps_fy1"] = (1.0 - ntm_e) * float(row["eps_fy1"]) + ntm_e * float(row["eps_fy2"])
+        g2 = row.get("revenue_growth_fy2")
+        if rev1 and isinstance(g2, (int, float)):
+            rev2 = rev1 * (1.0 + float(g2))
+            m1, m2 = row.get("ebitda_margin_fy1"), row.get("ebitda_margin_fy2")
+            if isinstance(m1, (int, float)) and isinstance(m2, (int, float)):
+                e1, e2 = rev1 * float(m1), rev2 * float(m2)
+                row["ebitda_margin_fy1"] = ((1.0 - ntm_e) * e1 + ntm_e * e2) / ((1.0 - ntm_e) * rev1 + ntm_e * rev2)
+            rev1 = (1.0 - ntm_e) * rev1 + ntm_e * rev2
     cand = {
         "eps": (float(row["eps_fy1"]) if isinstance(row.get("eps_fy1"), (int, float)) and row["eps_fy1"] > 0 else
                 (float(y1["eps"]) if isinstance(y1.get("eps"), (int, float)) and y1["eps"] > 0 else None)),
@@ -3974,7 +4018,8 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
         "ebit": float(y1["ebit"]) if isinstance(y1.get("ebit"), (int, float)) and y1["ebit"] > 0 else None,
     }
     src_label = {
-        "eps": ("guidance-derived FY+1 EPS estimate" if isinstance(row.get("eps_fy1"), (int, float)) else "guidance forecast year-1 EPS"),
+        "eps": ((f"guidance-derived NTM EPS (FY+2 at {ntm_e:.0%})" if (ntm_e and ntm_e > 0) else "guidance-derived FY+1 EPS estimate")
+                if isinstance(row.get("eps_fy1"), (int, float)) else "guidance forecast year-1 EPS"),
         "ebitda": ("guidance-derived FY+1 revenue x margin" if isinstance(row.get("ebitda_margin_fy1"), (int, float)) else "guidance forecast year-1 EBIT + D&A"),
         "revenue": "guidance-derived FY+1 revenue", "ebit": "guidance forecast year-1 EBIT",
     }
@@ -4531,6 +4576,11 @@ def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float],
     if margin_headroom is None:
         return 0.0
     return min(raw, max(margin_headroom, 0.0))
+
+
+def _year_of(s: str) -> Optional[int]:
+    m = re.search(r"(19|20)\d{2}", s or "")
+    return int(m.group(0)) if m else None
 
 
 def _parse_iso_date(v) -> Optional[date]:
@@ -6661,6 +6711,14 @@ def _insider_wacc_modifier(
     # not worth emitting an audit flag for.
     if abs(signal_pct) < 0.0002 and not cluster and not conv_sell:
         return 0.0, ""
+    # Plan EV2: immaterial selling is ignored -- the widening side needs material selling.
+    _sell_pct = max(-signal_pct, gross_sell / market_cap)
+    if _sell_pct < _INSIDER_SELL_MATERIALITY:
+        conv_sell = False
+        if signal_pct < 0:
+            signal_pct = 0.0
+        if signal_pct == 0.0 and not cluster:
+            return 0.0, ""
 
     base_bps = -max(-25.0, min(25.0, signal_pct * 5000))
     if cluster and net_30d > 0:
@@ -11496,6 +11554,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # (Boeing's mandatory convertible), the diluted/basic ratio never resolved, and
                      # the lease basis of net debt could not be stated.
                      "preferred_equity", "lease_liabilities", "shares_outstanding_basic",
+                     # Plan IV3: requested AND copied AND converted (both FX lists), or it is None.
+                     "long_term_investments",
                      "book_value_per_share", "capital_expenditure", "ebit",
                      # Plan 1E.1 (2026-10-04): the operating line core earnings is read from. Copied by
                      # _extract_annual_series but never requested, so core earnings never fired in the
@@ -13051,6 +13111,31 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
                 "period_end":            getattr(_fwd, "period_end",            ""),
             }
+            # Owner, 2026-10-04 (Vertex review, plan EV6): the forward legs price the NEXT TWELVE MONTHS.
+            # FY+1 is the nearest fiscal year not yet ended, and part of it may be gone: Vertex's FY2026
+            # EPS priced a year that was three-quarters over in October 2026. Each metric is
+            # (1 - e) x FY+1 + e x FY+2, e = the elapsed share of FY+1 at the valuation date.
+            _ntm_e = 0.0
+            try:
+                _p1 = _parse_iso_date(getattr(estimates[0], "period_end", None))
+                _vd = _parse_iso_date(end_date)
+                if _p1 and _vd and len(estimates) >= 2:
+                    _ntm_e = min(max((_vd - _add_years(_p1, -1)).days / 365.25, 0.0), 1.0)
+                    _e2f = estimates[1]
+                    for _m, _attrs in (("eps", ("eps_low", "eps_avg", "eps_high")), ("ebitda", ("ebitda_low", "ebitda_avg", "ebitda_high")),
+                                       ("revenue", ("revenue_low", "revenue_avg", "revenue_high")), ("ebit", ("ebit_low", "ebit_avg", "ebit_high"))):
+                        for _sc, _at in zip(("bear", "base", "bull"), _attrs):
+                            _v1, _v2 = forward_consensus[_m].get(_sc), _fx(_safe(getattr(_e2f, _at, None)))
+                            if _v1 is not None and _v2 is not None and _ntm_e > 0:
+                                forward_consensus[_m][_sc] = (1.0 - _ntm_e) * _v1 + _ntm_e * _v2
+                    forward_consensus["ntm_elapsed_share"] = round(_ntm_e, 4)
+                    if _ntm_e > 0.05:
+                        ticker_forward_flags.append(
+                            f"Forward legs on the next twelve months: {_ntm_e:.0%} of FY+1 ({str(_p1)}) has elapsed, so "
+                            f"each forward metric weights FY+2 {_ntm_e:.0%}")
+            except Exception:                              # noqa: BLE001
+                _ntm_e = 0.0
+            most_recent["_ntm_elapsed_share"] = _ntm_e
             # Consensus EPS growth into the second forward year, for the PEG
             # leg. estimates are sorted ascending by period_end.
             if len(estimates) >= 2:
@@ -13131,6 +13216,42 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     + "; revoke on the Model Accuracy page to return to the research's estimates")
         except Exception:                                  # noqa: BLE001
             _eo_carry = None
+        # ── Guided-margin sanity (owner, 2026-10-04, Visa review) ─────────────────────────────────
+        # A guided EBITDA margin that sits more than _GUIDED_MARGIN_TOLERANCE from BOTH the company's own
+        # latest margin and consensus is an extraction error, not guidance (Visa: "~50% EBITDA margin" --
+        # its net margin -- against ~70% history and 74-78% consensus; the DCF ran at 34-38% against a
+        # 56.7% base). The endpoint is replaced by consensus, each scenario keeping its offset from base.
+        try:
+            _est_blk = (_guid_est or {}).get("estimates") or {}
+            _e0 = (estimates or [None])[0]
+            _cons_m = ((float(_e0.ebitda_avg) / float(_e0.revenue_avg))
+                       if (_e0 is not None and getattr(_e0, "ebitda_avg", None) and getattr(_e0, "revenue_avg", None)) else None)
+            _hist_e = most_recent.get("ebitda_core") if most_recent.get("ebitda_core") is not None else most_recent.get("ebitda")
+            _hist_m = (float(_hist_e) / float(most_recent["revenue"])) if (_hist_e is not None and most_recent.get("revenue")) else None
+            _gb = (_est_blk.get("base") or {}).get("ebitda_margin_fy1")
+            if (_cons_m is not None and _hist_m is not None and isinstance(_gb, (int, float))
+                    and abs(_gb - _cons_m) > _GUIDED_MARGIN_TOLERANCE and abs(_gb - _hist_m) > _GUIDED_MARGIN_TOLERANCE):
+                import copy as _copy
+                _guid_est = _copy.deepcopy(_guid_est)
+                for _sc, _row in (_guid_est.get("estimates") or {}).items():
+                    for _k in ("ebitda_margin_fy1", "ebitda_margin_fy2"):
+                        if isinstance((_row or {}).get(_k), (int, float)):
+                            _row[_k] = round(_cons_m + (float(_row[_k]) - float(_gb)), 4)
+                ticker_forward_flags.append(
+                    f"Guided EBITDA margin {_gb:.0%} rejected: it is more than {_GUIDED_MARGIN_TOLERANCE:.0%} from both "
+                    f"the company's own {_hist_m:.0%} and consensus {_cons_m:.0%} -- an extraction error, not guidance; "
+                    f"the forecast takes consensus, each scenario keeping its offset")
+        except Exception:                                  # noqa: BLE001
+            pass
+        # Plan EV6: the research's FY+1 takes the NTM roll only when it IS the year in progress.
+        _ntm_e_for_research = 0.0
+        try:
+            _ry1 = _year_of(str((_guid_est or {}).get("fiscal_year_1") or ""))
+            _cy1 = _parse_iso_date((forward_consensus or {}).get("period_end"))
+            if _ry1 and _cy1 and _ry1 == _cy1.year:
+                _ntm_e_for_research = float(most_recent.get("_ntm_elapsed_share") or 0.0)
+        except Exception:                                  # noqa: BLE001
+            _ntm_e_for_research = 0.0
         _gc_applied: Optional[dict] = None          # the base scenario's channel record, for the payload
         _gf_base: Optional[dict] = None             # the base scenario's guidance forecast (five principles)
         _gf_by_sc: dict = {}                        # every scenario's forecast, for the page's bear / bull traces
@@ -14097,6 +14218,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception:                                  # noqa: BLE001
             _beta = None
         _capm = {"beta": _beta, "rf": _CAPM_RF, "erp": _CAPM_ERP}
+        # Plan EV2: an implausible beta is not used as the check, but the risk-off ceiling still reads a
+        # CAPM rate on the beta held to the plausible band (Vertex's 0.32 -> 0.40): overlays are not
+        # exempt from the band because the beta is unusual.
+        _beta_clip = (min(max(_beta, _BETA_PLAUSIBLE[0]), _BETA_PLAUSIBLE[1]) if _beta is not None else None)
         if _beta is not None and not (_BETA_PLAUSIBLE[0] <= _beta <= _BETA_PLAUSIBLE[1]):
             _capm["status"] = f"beta {_beta:.2f} outside {_BETA_PLAUSIBLE[0]}-{_BETA_PLAUSIBLE[1]}: not used"
             _beta = None
@@ -14115,11 +14240,34 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"{_RISK_ON_CAPM_BAND:.0%} below the CAPM rate {_capm_wacc:.2%} (beta {_beta:.2f}); held at {_floor:.2%}")
                 _capm["risk_on_band"] = {"before": round(wacc, 6), "after": _floor}
                 wacc = _floor
+            _band_capm, _band_beta = _capm_wacc, _beta
             if _dv > 0 and _rd < _coe and wacc > _coe + 1e-9:
                 ticker_forward_flags.append(
                     f"WACC {wacc:.2%} exceeds the CAPM cost of equity {_coe:.2%} although debt is cheaper: "
                     "the table rate and the market disagree; read the discount rate with care")
                 _capm["wacc_above_cost_of_equity"] = True
+        elif _beta_clip is not None:
+            _crp_capm = float((_wacc_build.get("base_breakdown") or {}).get("crp_embedded") or 0.0)                 + float(_wacc_build.get("country_risk_premium") or 0.0)
+            _rd = float(_wacc_build.get("rd_live") or (_CAPM_RF + 0.016))
+            _dv = float(_wacc_build.get("dv_ratio") or 0.0)
+            _band_beta = _beta_clip
+            _band_capm = (1.0 - _dv) * (_CAPM_RF + _beta_clip * _CAPM_ERP + _crp_capm) + _dv * _rd * (1.0 - 0.25)
+            _capm["band_wacc_on_clipped_beta"] = round(_band_capm, 6)
+        if _beta_clip is not None:
+            # Plan EV2 (owner, 2026-10-04, Visa and Vertex reviews): the band is symmetric. The overlays
+            # (the risk-off regime's add and the insider widening) may not take WACC more than
+            # _RISK_ON_CAPM_BAND ABOVE the CAPM rate; the table rate itself is never cut by this.
+            _ov = float((_wacc_build.get("base_breakdown") or {}).get("macro_overlay") or 0.0)
+            _ins = float(_wacc_build.get("insider_bps") or 0.0) / 10000.0
+            _adds = max(_ov, 0.0) + max(_ins, 0.0)
+            _ceil = _band_capm + _RISK_ON_CAPM_BAND
+            if _adds > 0 and wacc > _ceil + 1e-9:
+                _new = round(max(wacc - _adds, _ceil), 4)
+                ticker_forward_flags.append(
+                    f"Risk-off band: WACC {wacc:.2%} (after {_adds:+.2%} of regime/insider overlays) sat more than "
+                    f"{_RISK_ON_CAPM_BAND:.0%} above the CAPM rate {_band_capm:.2%} (beta {_band_beta:.2f}); held at {_new:.2%}")
+                _capm["risk_off_band"] = {"before": round(wacc, 6), "after": _new}
+                wacc = _new
         _wacc_build["capm"] = _capm
 
         # P1.1 — extract anchor method and rationale for PDF display (§6 Step 4)
@@ -14947,12 +15095,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # identical margins when the block gives none per scenario. The scenario move rides
                 # on the schedule unless the block set this scenario's margin endpoint itself.
                 _est_sc = ((_guid_est or {}).get("estimates") or {})
-                _own_margin = any(
-                    (_est_sc.get(scenario) or {}).get(k) is not None
-                    and (_est_sc.get(scenario) or {}).get(k) != (_est_sc.get("base") or {}).get(k)
-                    for k in ("ebitda_margin_fy1", "ebitda_margin_fy2"))
-                if scenario != "base" and not _own_margin and md_abs:
-                    _gf_margin_sched = [m + md_abs for m in _gf_margin_sched]
+                # Owner, 2026-10-04 (Visa review): a block with its OWN scenario margins (0.49 / 0.50 /
+                # 0.51) kept the scenario move to that 1pp while the scenario's rule asked for 11pp, so
+                # bear and bull projected the same margin. The scenario takes the WIDER of the two moves.
+                _own_delta = 0.0
+                for _k in ("ebitda_margin_fy2", "ebitda_margin_fy1"):
+                    _vs, _vb = (_est_sc.get(scenario) or {}).get(_k), (_est_sc.get("base") or {}).get(_k)
+                    if isinstance(_vs, (int, float)) and isinstance(_vb, (int, float)):
+                        _own_delta = float(_vs) - float(_vb)
+                        break
+                if scenario != "base" and md_abs and abs(md_abs) > abs(_own_delta):
+                    _gf_margin_sched = [m + (md_abs - _own_delta) for m in _gf_margin_sched]
                 _gf_by_sc[scenario] = _gf
                 if scenario == "base":
                     _gf_base = _gf
@@ -14991,7 +15144,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _bmm = _bank_models[scenario]
                 _gf_for_legs = {"rows": [{"eps": _bmm.get("eps_fy1"), "revenue": (_bmm["rows"].get("total_income") or [None])[0], "ebit": None, "da": 0.0}]}
             _fwd_cons_sc = _guidance_forward_overlay((_guid_est or ({"confidence": "HIGH", "estimates": {}} if (_bank_models and _bank_models.get("base", {}).get("feeds_legs")) else None)) if _guidance_channel_enabled() else None,
-                                                     forward_consensus, scenario, _gf_for_legs, revenue_base)
+                                                     forward_consensus, scenario, _gf_for_legs, revenue_base,
+                                                     ntm_e=_ntm_e_for_research)
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
                 ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
@@ -16069,6 +16223,34 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             f"{_xc}: an add-on to the operating value, not a standalone leg; its weight "
                             f"(w={_xc_rec.get('dropped_weight', 0.0):.2f}) rolls into "
                             + ", ".join(f"{k} +{v:.3f}" for k, v in (_xc_rec.get("rolled") or {}).items()))
+            # Plan IV2 (owner, 2026-10-04, Vertex review): on a revenue-stage drug company the pipeline rNPV
+            # values the unlaunched assets only -- a PART of the company. Averaged with whole-company legs at
+            # 15% it pulled Vertex's blend down; it is a sum-of-the-parts ADD-ON. Its weight rolls pro rata
+            # into the operating legs and the pipeline's risk-adjusted PV per diluted share (no cash, debt or
+            # R&D bridge -- the operating legs carry those) is added to each operating leg's value.
+            if (profile_name or "") in _PIPELINE_ADDON_PROFILES and any(
+                    isinstance(m, dict) and m.get("name") in ("rNPV (Pipeline)", "rNPV") for m in _eff_profile_methods):
+                _pa = (most_recent.get("_rnpv_audit") or {}).get(scenario) or {}
+                _pipe_ps = None
+                for _rn in ("rNPV (Pipeline)", "rNPV"):
+                    if method_values.get(_rn) is not None and _pa.get("pipeline_pv") and _pa.get("shares_diluted"):
+                        _pipe_ps = float(_pa["pipeline_pv"]) / float(_pa["shares_diluted"])
+                for _rn in ("rNPV (Pipeline)", "rNPV"):
+                    _ops = [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") not in ("rNPV (Pipeline)", "rNPV")]
+                    _eff_profile_methods, _rn_rec = _roll_leg_weight(_eff_profile_methods, _rn, _ops)
+                    if _rn_rec.get("dropped") and _pipe_ps:
+                        _added = []
+                        for _op in _ops:
+                            if method_values.get(_op) is not None:
+                                method_values[_op] = float(method_values[_op]) + _pipe_ps
+                                _added.append(_op)
+                        most_recent.setdefault("_pipeline_addon", {})[scenario] = {
+                            "per_share": round(_pipe_ps, 4), "legs": _added, "rolled": _rn_rec.get("rolled")}
+                        if scenario == "base":
+                            forward_flags.append(
+                                f"{_rn}: a sum-of-the-parts add-on, not an averaged leg -- the risk-adjusted pipeline PV "
+                                f"({_pipe_ps:,.2f}/share, {_pa.get('n_assets')} asset(s)) is added to each operating leg "
+                                f"({', '.join(_added)}); its weight (w={_rn_rec.get('dropped_weight', 0.0):.2f}) rolls pro rata into them")
             for _lf_leg, _lf_into in (((profile_data or {}).get("leg_fallback") or {}).items()):
                 if (any(isinstance(m, dict) and m.get("name") == _lf_leg for m in _eff_profile_methods)
                         and method_values.get(_lf_leg) is None):
@@ -16293,6 +16475,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_dcf":        blend_breakdown.get("weight_dcf"),
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
+                # Plan IV2: the pipeline rNPV added to each operating leg (per share), when it is an add-on.
+                "pipeline_addon":    (most_recent.get("_pipeline_addon") or {}).get(scenario),
                 # Legs in `method_iv_table` that carry no weight: published as
                 # cross-checks, never as part of the blend.
                 "cross_check_methods": _cross_check_methods(
@@ -16421,6 +16605,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _methods_unavailable = [
                 _m["name"] for _m in _pe_norm_methods
                 if _m.get("name") not in _base_used and _m.get("name") not in ("Excess Capital", "CET1 Capital")
+                and not ((profile_name or "") in _PIPELINE_ADDON_PROFILES and _m.get("name") in ("rNPV (Pipeline)", "rNPV")
+                         and (most_recent.get("_pipeline_addon") or {}).get("base"))
             ]
 
         # ── rNPV per-asset audit (Biopharma only) ────────────────────────

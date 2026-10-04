@@ -268,3 +268,57 @@ def test_an_accepted_parent_cash_entry_counts_and_a_proposed_one_does_not(monkey
     doc = {"parent_cash": {"entries": {"MOH": {"value": 290e6, "status": "ACCEPTED"}, "XMCO": {"value": 1e9, "status": "PROPOSED"}}}}
     monkeypatch.setattr(vc, "load", lambda *a, **k: doc)
     assert d._parent_cash("MOH") == 290e6 and d._parent_cash("XMCO") is None
+
+
+# ── Visa / Vertex reviews (owner, 2026-10-04): EV2, EV7, IV1, IV3 ───────────────
+
+def test_ev2_routine_insider_selling_does_not_move_wacc():
+    # Visa: $83m of sales (~0.01% of a ~$700bn cap) with a CEO/CFO conviction-sell flag added +16bp.
+    bps, _ = d._insider_wacc_modifier({"net_buying_12m_usd": -83e6, "gross_sell_value_12m": 83e6,
+                                       "conviction_sell_flag": True}, 700e9)
+    assert bps == 0.0
+    # Material selling (1% of cap) still widens.
+    bps2, _ = d._insider_wacc_modifier({"net_buying_12m_usd": -7e9, "gross_sell_value_12m": 7e9}, 700e9)
+    assert bps2 > 0
+    # Buying is unaffected by the selling threshold.
+    bps3, _ = d._insider_wacc_modifier({"net_buying_12m_usd": 1.4e9, "gross_buy_value_12m": 1.4e9}, 700e9)
+    assert bps3 < 0
+
+
+def test_ev7_terminal_multiple_band_is_two_sided_and_roic_aware():
+    import inspect
+    src = inspect.getsource(gfm)
+    assert "ROIC-justified" in src and "BELOW the floor" in src
+
+
+def test_iv1_payment_networks_take_the_unlevered_basis():
+    assert d._interest_is_cost_of_goods("Payment Networks", "Financials") is False
+    assert d._interest_is_cost_of_goods("Asset Manager", "Financials") is True
+    assert d._interest_is_cost_of_goods("Money Center Bank", "Financials") is True
+
+
+def test_iv3_biotech_long_term_securities_are_cash_pharma_stakes_are_not():
+    r = _row(net_debt=-500.0, total_debt=1240.0, cash_and_equivalents=1740.0, short_term_investments=3200.0,
+             long_term_investments=10000.0)
+    biotech, b = d._valuation_net_debt(dict(r), "Healthcare", "VRTX", "USD", "Biotechnology")
+    pharma, _ = d._valuation_net_debt(dict(r), "Healthcare", "PFE", "USD", "Drug Manufacturers - General")
+    assert biotech == -13700.0 and b["long_term_investments_netted"] == 10000.0
+    assert pharma == -3700.0
+
+
+def test_iv2_pipeline_is_an_add_on_for_revenue_stage_drug_profiles():
+    assert "Commercial Biotech" in d._PIPELINE_ADDON_PROFILES
+    assert "Pre-approval Biotech" not in d._PIPELINE_ADDON_PROFILES
+
+
+def test_ev6_ntm_roll_on_the_guidance_overlay():
+    # Vertex, October 2026: FY2026 EPS $17.45 is three-quarters gone; NTM weights FY2027's $20.50 at 75%.
+    est = {"confidence": "HIGH",
+           "estimates": {"base": {"eps_fy1": 17.45, "eps_fy2": 20.50, "revenue_growth_fy1": 0.10,
+                                  "revenue_growth_fy2": 0.10, "ebitda_margin_fy1": 0.45, "ebitda_margin_fy2": 0.45}}}
+    fwd = {"eps": {"base": 18.0}, "ebitda": {"base": 1.0}, "revenue": {"base": 1.0}, "ebit": {"base": 1.0}}
+    o0 = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, 1000.0)
+    o75 = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, 1000.0, ntm_e=0.75)
+    assert o0["eps"]["base"] == pytest.approx(17.45)
+    assert o75["eps"]["base"] == pytest.approx(0.25 * 17.45 + 0.75 * 20.50)
+    assert o75["revenue"]["base"] == pytest.approx(1100.0 * (0.25 + 0.75 * 1.10))

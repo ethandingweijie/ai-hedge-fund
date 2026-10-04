@@ -690,7 +690,7 @@
    ],
    "nwc_intensity_bounds": [
     -0.1,
-    0.5
+    0.3
    ],
    "da_useful_life_years": 10,
    "tax_rate_default": 0.21,
