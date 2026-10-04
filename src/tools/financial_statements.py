@@ -364,3 +364,148 @@ def build_financial_statements(
         "periods":    periods,
         "statements": statements,
     }
+
+
+# ── Forecast columns (owner, 2026-10-04) ─────────────────────────────────────
+# The valuation agent's three-statement forecast (FY+1E..FY+5E) printed on the SAME rows as
+# the reported years, for the web and mobile Financials tab. One mapping, shared with the
+# PDF's statements page, so every surface shows the same figure on the same line.
+
+def forecast_values(th: dict) -> dict:
+    """The three-statement model's series keyed like the reported rows, in the reported sign
+    conventions (expenses positive on the income statement; outflows negative on the cash
+    flow), per forecast year."""
+    IS, BS, CF = th.get("income") or {}, th.get("balance") or {}, th.get("cashflow") or {}
+    op = th.get("opening") or {}
+    n = len(th.get("fy_labels") or [])
+
+    def ser(d, k, sign=1.0):
+        v = d.get(k)
+        return [((sign * x) if isinstance(x, (int, float)) else None) for x in v][:n] if v else None
+
+    def add(a, b):
+        return [((x or 0.0) + (y or 0.0)) if (x is not None or y is not None) else None
+                for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    def sub(a, b):
+        return [((x or 0.0) - (y or 0.0)) if (x is not None or y is not None) else None
+                for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    def div(a, b):
+        return [((x / y) if (x is not None and y) else None) for x, y in zip(a or [None] * n, b or [None] * n)]
+
+    held = lambda key: [op.get(key)] * n if isinstance(op.get(key), (int, float)) else None     # noqa: E731
+    return {
+        "income": {
+            "revenue": ser(IS, "revenue"), "cost_of_revenue": ser(IS, "cogs", -1.0), "gross_profit": ser(IS, "gross_profit"),
+            "operating_expense": sub([0.0] * n, add(ser(IS, "opex_ex_da"), ser(IS, "da"))), "operating_income": ser(IS, "ebit"),
+            "interest_expense": ser(IS, "interest_expense", -1.0), "other_income_expense": ser(IS, "interest_income"),
+            "pretax_income": ser(IS, "pretax"), "income_tax_expense": ser(IS, "tax", -1.0), "net_income": ser(IS, "net_income"),
+            "earnings_per_share": ser(IS, "eps"), "ebitda": ser(IS, "ebitda"),
+        },
+        "balance": {
+            "cash_and_equivalents": ser(BS, "cash"), "short_term_investments": ser(BS, "sti"),
+            "accounts_receivable": ser(BS, "receivables"), "inventory": ser(BS, "inventory"),
+            "current_assets": ser(BS, "current_assets"), "property_plant_equipment": ser(BS, "ppe"),
+            "goodwill": held("goodwill"), "intangible_assets": held("intangibles"),
+            "non_current_assets": sub(ser(BS, "total_assets"), ser(BS, "current_assets")), "total_assets": ser(BS, "total_assets"),
+            "accounts_payable": ser(BS, "payables"), "short_term_debt": ser(BS, "short_term_debt"),
+            "current_liabilities": ser(BS, "current_liabilities"), "long_term_debt": ser(BS, "long_term_debt"),
+            "non_current_liabilities": sub(ser(BS, "total_liabilities"), ser(BS, "current_liabilities")),
+            "total_liabilities": ser(BS, "total_liabilities"), "retained_earnings": ser(BS, "retained_earnings"),
+            "minority_interest": ser(BS, "minority_interest"), "shareholders_equity": ser(BS, "equity"),
+            "total_debt": add(ser(BS, "short_term_debt"), ser(BS, "long_term_debt")), "net_debt": ser(BS, "net_debt"),
+            "book_value_per_share": div(ser(BS, "equity"), ser(IS, "shares")),
+        },
+        "cashflow": {
+            "net_income": ser(CF, "net_income"), "depreciation_and_amortization": ser(CF, "da"),
+            "stock_based_compensation": ser(CF, "sbc"), "change_in_working_capital": ser(CF, "change_nwc"),
+            "operating_cash_flow": ser(CF, "cfo"), "capital_expenditure": ser(CF, "capex"),
+            "acquisitions_net": ser(CF, "acquisitions"), "investing_cash_flow": ser(CF, "cfi"),
+            "net_debt_issuance": ser(CF, "debt_change"), "share_buyback": ser(CF, "buybacks"),
+            "dividends_and_distributions": ser(CF, "dividends"), "financing_cash_flow": ser(CF, "cff"),
+            "net_change_in_cash": ser(CF, "net_change_cash"), "cash_at_end_of_period": ser(CF, "closing_cash"),
+            "free_cash_flow": ser(CF, "fcf"),
+        },
+    }
+
+
+def forecast_labels(th: Optional[dict]) -> list[str]:
+    """The forecast years an operating company's statements can carry; [] for a withheld
+    model, a bank or insurer (their earnings-and-capital model has its own lines) or none."""
+    th = th or {}
+    if th.get("fy_labels") and not th.get("skipped") and th.get("kind") in (None, "operating") and th.get("income"):
+        return [str(x) for x in th["fy_labels"]]
+    return []
+
+
+def attach_forecast(fs: Optional[dict], th: Optional[dict], override: Optional[dict] = None) -> Optional[dict]:
+    """A copy of the statements payload with the forecast years on the reported rows.
+
+    `periods` stays the reported years (the PDF and the workbook read it as such);
+    `forecast_periods` lists the appended labels, each row's `values` and `growth` gain those
+    keys, and `forecast` says what the columns are, whether the reconciliation suite passed,
+    or why they are absent. Idempotent: an earlier forecast on the payload is stripped first,
+    so a recompute (a user override applied on read) replaces rather than stacks."""
+    if not isinstance(fs, dict) or not fs.get("statements"):
+        return fs
+    import copy
+    out = copy.deepcopy(fs)
+    stale = [str(x) for x in (out.pop("forecast_periods", None) or [])]
+    out.pop("forecast", None)
+    for st in (out.get("statements") or {}).values():
+        for r in (st or {}).get("rows") or []:
+            for lab in stale:
+                (r.get("values") or {}).pop(lab, None)
+                (r.get("growth") or {}).pop(lab, None)
+
+    th = th if isinstance(th, dict) else {}
+    labels = forecast_labels(th)
+    periods = [str(x) for x in (out.get("periods") or [])]
+    if not labels:
+        if th.get("skipped"):
+            meta = {"status": "withheld", "reason": str(th["skipped"])[:300]}
+        elif th.get("kind") in ("bank", "insurer"):
+            meta = {"status": "not_applicable",
+                    "reason": "The earnings-and-capital model carries this family's forecast; the reported layout does not."}
+        else:
+            meta = {"status": "none"}
+        out["forecast_periods"] = []
+        out["forecast"] = meta
+        return out
+
+    fv = forecast_values(th)
+    filled = 0
+    for sec, keyed in fv.items():
+        for r in ((out.get("statements") or {}).get(sec) or {}).get("rows") or []:
+            series = keyed.get(r.get("key"))
+            if not series:
+                continue
+            vals = r.setdefault("values", {})
+            growth = r.setdefault("growth", {})
+            prev = periods[-1] if periods else None
+            for lab, x in zip(labels, series):
+                vals[lab] = x
+                if r.get("key") not in _NO_GROWTH:
+                    growth[lab] = _growth(x, vals.get(prev)) if prev else None
+                prev = lab
+            filled += 1
+
+    rc = th.get("reconciliation") or {}
+    by_id: dict = {}
+    for a in rc.get("assertions") or []:
+        if isinstance(a, dict) and a.get("id") is not None:
+            slot = by_id.setdefault(a["id"], {"id": a["id"], "name": a.get("name"), "ok": True})
+            slot["ok"] = bool(slot["ok"] and a.get("ok"))
+    meta = {
+        "status": "ok",
+        "source": "the valuation agent's three-statement forecast on its guidance-derived estimates",
+        "rows_filled": filled,
+        "reconciliation": {"ok": rc.get("ok"), "assertions": [by_id[k] for k in sorted(by_id)]},
+    }
+    ovr = th.get("override") or override
+    if isinstance(ovr, dict) and ovr:
+        meta["override"] = {"created_at": str(ovr.get("created_at") or "")[:10], "fields": list(ovr.get("fields") or [])}
+    out["forecast_periods"] = labels
+    out["forecast"] = meta
+    return out

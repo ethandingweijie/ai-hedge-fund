@@ -37,10 +37,23 @@ interface Statement {
   rows:  StatementRow[];
 }
 
+/** What the forecast columns are, or why there are none (attach_forecast, server-side). */
+export interface StatementForecastMeta {
+  status:  'ok' | 'withheld' | 'not_applicable' | 'none';
+  reason?: string;
+  source?: string;
+  reconciliation?: { ok?: boolean | null; assertions?: { id: number; name?: string; ok: boolean }[] };
+  override?: { created_at?: string; fields?: string[] };
+}
+
 export interface FinancialStatementsPayload {
   layout?:     string;
   currency?:   string;
   periods?:    string[];
+  /** Owner, 2026-10-04: FY+1E..FY+5E from the valuation agent's three-statement forecast,
+   *  on the same rows as the reported years. `periods` stays the reported years. */
+  forecast_periods?: string[];
+  forecast?:   StatementForecastMeta;
   statements?: Partial<Record<StatementId, Statement>>;
 }
 
@@ -69,12 +82,14 @@ function fmtValue(v: number | null, sym: string): string {
 function fmtGrowth(g: number | null): string {
   if (g == null || !isFinite(g)) return '';
   const pct = g * 100;
+  if (Math.abs(pct) < 0.05) return '0.0%';   // a held line: no sign on a rounded zero
   const sign = pct >= 0 ? '+' : '−';
   return `${sign}${Math.abs(pct).toFixed(1)}%`;
 }
 
 function shortPeriod(p: string): string {
-  return p.replace(/^FY/, "'").replace(/^'(\d{2})(\d{2})$/, "'$2");
+  // FY2025 -> '25, FY2026E -> '26E
+  return p.replace(/^FY/, "'").replace(/^'(\d{2})(\d{2})(E?)$/, "'$2$3");
 }
 
 /** The payload carries a currency CODE (reported_currency, e.g. "SGD"),
@@ -110,6 +125,16 @@ export function FinancialStatements({
   const stmt = statements!.statements![active]!;
   const sym = resolveSymbol(statements?.currency, ticker);
 
+  // Forecast years ride on the reported rows; a column is shown only when at least one
+  // row of the active statement carries a figure for it.
+  const forecast = (statements?.forecast_periods ?? []).filter(p =>
+    stmt.rows.some(r => r.values?.[p] != null));
+  const fcSet = new Set(forecast);
+  const columns = [...periods, ...forecast];
+  const meta = statements?.forecast;
+  const suite = meta?.reconciliation;
+  const failed = (suite?.assertions ?? []).filter(a => !a.ok);
+
   return (
     <Card className="p-0 overflow-hidden">
       {/* Statement selector */}
@@ -139,14 +164,32 @@ export function FinancialStatements({
       <div className="overflow-x-auto">
         <table className="w-full text-sm tabular-nums">
           <thead>
+            {forecast.length > 0 && (
+              <tr>
+                <th className="sticky left-0 z-10 bg-card" />
+                <th colSpan={periods.length}
+                  className={`text-right font-medium px-3 pt-2 text-[10px] uppercase tracking-wide ${emphasisTone('ghost')}`}>
+                  Reported
+                </th>
+                <th colSpan={forecast.length}
+                  className={`text-right font-medium px-3 pt-2 text-[10px] uppercase tracking-wide border-l border-border ${emphasisTone('ghost')}`}>
+                  Forecast (valuation agent)
+                </th>
+              </tr>
+            )}
             <tr className="border-b border-border">
-              <th className={`text-left font-medium px-3 py-2 ${emphasisTone('muted')}`}>
+              <th className={`sticky left-0 z-10 bg-card text-left font-medium px-3 py-2 ${emphasisTone('muted')}`}>
                 {stmt.title}
               </th>
-              {periods.map(p => (
+              {columns.map((p, i) => (
                 <th
                   key={p}
-                  className={`text-right font-medium px-3 py-2 whitespace-nowrap ${emphasisTone('muted')}`}
+                  className={[
+                    'text-right font-medium px-3 py-2 whitespace-nowrap',
+                    emphasisTone('muted'),
+                    fcSet.has(p) ? 'italic bg-muted/30' : '',
+                    i === periods.length && forecast.length ? 'border-l border-border' : '',
+                  ].join(' ')}
                 >
                   {shortPeriod(p)}
                 </th>
@@ -161,17 +204,22 @@ export function FinancialStatements({
               >
                 <td
                   className={[
-                    'px-3 py-1.5 whitespace-nowrap',
+                    'sticky left-0 z-10 bg-card px-3 py-1.5 whitespace-nowrap',
                     row.indent ? 'pl-7' : '',
                     row.emphasis ? 'font-medium text-foreground' : emphasisTone('medium'),
                   ].join(' ')}
                 >
                   {row.label}
                 </td>
-                {periods.map(p => {
+                {columns.map((p, i) => {
                   const g = row.growth?.[p] ?? null;
                   return (
-                    <td key={p} className="px-3 py-1.5 text-right whitespace-nowrap">
+                    <td key={p}
+                      className={[
+                        'px-3 py-1.5 text-right whitespace-nowrap',
+                        fcSet.has(p) ? 'bg-muted/30' : '',
+                        i === periods.length && forecast.length ? 'border-l border-border' : '',
+                      ].join(' ')}>
                       <span className={row.emphasis ? 'font-medium' : ''}>
                         {fmtValue(row.values?.[p] ?? null, sym)}
                       </span>
@@ -189,9 +237,30 @@ export function FinancialStatements({
         </table>
       </div>
 
-      <div className={`px-3 py-2 text-[11px] ${emphasisTone('ghost')}`}>
-        Growth is year-on-year, derived from the reported series. Blank where
-        the prior year is zero or the sign flips.
+      <div className={`px-3 py-2 text-[11px] space-y-1 ${emphasisTone('ghost')}`}>
+        <p>
+          Growth is year-on-year, derived from the reported series. Blank where
+          the prior year is zero or the sign flips.
+        </p>
+        {forecast.length > 0 && (
+          <p>
+            {shortPeriod(forecast[0])}–{shortPeriod(forecast[forecast.length - 1])} are the valuation
+            agent's three-statement forecast on its guidance-derived estimates; a line the model does not
+            build stays blank.{' '}
+            {suite && (suite.ok
+              ? `Reconciliation suite: all ${suite.assertions?.length ?? 5} checks pass in every forecast year.`
+              : `Reconciliation suite: FAILED${failed.length ? ` (${failed.map(a => a.name ?? `check ${a.id}`).join('; ')})` : ''}.`)}
+            {meta?.override?.fields?.length
+              ? ` Built on your saved estimates (${meta.override.fields.join(', ')}).`
+              : ''}
+          </p>
+        )}
+        {forecast.length === 0 && meta?.status === 'withheld' && (
+          <p>Forecast columns withheld: {meta.reason}</p>
+        )}
+        {forecast.length === 0 && meta?.status === 'not_applicable' && (
+          <p>Forecast: {meta.reason}</p>
+        )}
       </div>
     </Card>
   );

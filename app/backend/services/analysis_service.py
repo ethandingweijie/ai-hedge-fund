@@ -973,6 +973,33 @@ def delete_run(run_id: str, user_id: int = None) -> bool:
 
 # ── Public read helpers ───────────────────────────────────────────────────────
 
+def _attach_statement_forecast(payload: dict) -> None:
+    """Owner, 2026-10-04: the Financials tab prints FY+1E..FY+5E beside the reported years on
+    web and mobile. The forecast is the run's own three-statement model (dcf_range[ticker]
+    .three_statements), mapped onto the reported rows by the same function the PDF uses.
+    Runs AFTER an estimate override is applied on read, so the columns follow the user's
+    estimates exactly as the PDF and the workbook do. Idempotent; never raises."""
+    try:
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return
+        fs = data.get("financial_statements")
+        if not isinstance(fs, dict) or not fs.get("statements"):
+            return
+        dr = data.get("dcf_range") if isinstance(data.get("dcf_range"), dict) else {}
+        tickers = data.get("tickers") or []
+        cand = [t for t in ([payload.get("ticker")] + list(tickers)) if t]
+        entry = next((dr[t] for t in cand if isinstance(dr.get(t), dict)), None)
+        if entry is None:
+            real = [v for k, v in dr.items() if isinstance(v, dict) and (v.get("base") or v.get("three_statements"))]
+            entry = real[0] if len(real) == 1 else {}
+        from src.tools.financial_statements import attach_forecast
+        data["financial_statements"] = attach_forecast(
+            fs, entry.get("three_statements"), override=entry.get("estimate_override"))
+    except Exception as exc:                               # noqa: BLE001
+        logger.debug("[statements] forecast columns skipped: %s", exc)
+
+
 def _hydrate_financial_statements(run_id: str, payload: dict) -> None:
     """Fill in the three-statement view for runs whose stored blob predates it.
 
@@ -1037,6 +1064,7 @@ def get_run_result(run_id: str, user_id: int = None, apply_overrides: bool = Tru
         if apply_overrides:
             from app.backend.services import estimate_override_service as _eo
             _eo.apply_saved(run_id, _payload)
+        _attach_statement_forecast(_payload)
         return _sanitize_floats(_payload)
 
     # ── 2. Try reconstructing from CLI archive tables ─────────────────────
@@ -1942,6 +1970,9 @@ async def run_analysis_pipeline(
         result.setdefault("data", {})["progress_log"] = _pop_progress_log(run_id)
     except Exception as _pl_err:
         logger.warning("[progress-log] %s: could not attach trail: %s", t, _pl_err)
+    # The live page reads this result as it completes: give its Financials tab the forecast
+    # columns now (the read path recomputes them, so a later override still flows through).
+    _attach_statement_forecast(result)
     _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
     await asyncio.to_thread(_save_web_run, run_id, t, model_name, result,
                             archive_run_id=archive_run_id, user_id=user_id)
