@@ -795,6 +795,21 @@
   "parent_cash": {
     "status": "PROPOSED",
     "note": "Plan IN1 (2026-10-04): parent-level (holding company) cash of claims-backed insurers (managed care), filing currency; subsidiary cash and investments are regulated capital and do not count. Owner-set: {ticker: {value, as_of, source}}.",
-    "entries": {}
+    "entries": {"MOH": {"value": 290000000.0, "currency": "USD", "as_of": "2026-06-30", "status": "PROPOSED", "source": "Molina Q2 2026 earnings release (8-K, 2026-07-22): 'Cash and investments at the parent company were approximately $290 million as of June 30, 2026'", "url": "https://www.sec.gov/Archives/edgar/data/0001179929/000117992926000036/moh2q26_er.htm", "note": "Parent debt: senior notes $3,800m principal (none drawn on the $1.25bn revolver); parent net debt ~ $3.51bn"}}
+  },
+  "bank_payout": {
+    "status": "PROPOSED",
+    "note": "Plan IN2 (2026-10-04): owner-set total payout (ordinary + capital-return dividends) for banks; the bank model reads ACCEPTED entries only.",
+    "entries": {
+      "D05.SI": {
+        "payout_ratio": 0.801,
+        "status": "PROPOSED",
+        "as_of": "2025-12-31",
+        "basis": "FY2025 total DPS S$3.06 (ordinary S$2.46 + capital return S$0.60) / reported diluted EPS S$3.82",
+        "forward": "FY2026 run-rate S$3.24 annualised (66c ordinary + 15c capital return per quarter); capital return 15c/qtr through FY2027 (S$8bn excess-capital programme to end-2027, per the 4Q25 analyst call)",
+        "source": "DBS 4Q25 press statement and performance summary, 9 Feb 2026",
+        "url": "https://www.dbs.com/iwov-resources/images/investors/quarterly-financials/2025/4Q25_press_statement.pdf"
+      }
+    }
   }
 }

@@ -253,3 +253,11 @@ def test_in2_bank_scenarios_move_drivers_not_the_answer():
     import inspect
     src = inspect.getsource(d._compute_method_value)
     assert "_BANK_SCENARIO_ROE_SHIFT" in src and "_BANK_SCENARIO_COE_SHIFT" in src
+
+
+def test_managed_care_regulated_cash_matches_the_engines_sector_name():
+    # Molina resolves to "HealthcareServices"; the guard keyed on "Healthcare" never fired.
+    r = {"net_debt": -4000.0, "total_debt": 4000.0, "cash_and_equivalents": 5000.0, "short_term_investments": 3000.0,
+         "lease_liabilities": 184.0, "period": "2025-12-31"}
+    nd, b = d._valuation_net_debt(dict(r), "HealthcareServices", "MOH", "USD", "Medical - Healthcare Plans")
+    assert b["regulated_cash_excluded"] is True and nd == 4000.0 - 184.0

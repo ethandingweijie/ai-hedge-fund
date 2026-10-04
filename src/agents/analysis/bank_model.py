@@ -79,7 +79,21 @@ def opening_from_line_items(most_recent: dict, shares: Optional[float], total_in
             "tbvps": (max(eq - gw, 0.0) / sh) if sh else None, "roe": (ni / eq) if eq else None,
             "interest_income": _f(most_recent.get("interest_income")), "interest_expense": _f(most_recent.get("interest_expense")),
             "pretax": _f(most_recent.get("pretax_income")), "tax": _f(most_recent.get("income_tax_expense")),
-            "dps": _f(most_recent.get("dividends_per_share"))}
+            "dps": _f(most_recent.get("dividends_per_share")), "ticker": most_recent.get("ticker")}
+
+
+def _accepted_bank_payout(ticker) -> Optional[float]:
+    """Plan IN2 (2026-10-04): an owner-ACCEPTED total payout (ordinary + capital-return dividends) from
+    valuation_constants.bank_payout; a PROPOSED entry prices nothing."""
+    try:
+        from src.data import valuation_constants as _vc
+        e = ((_vc.load().get("bank_payout") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        if str(e.get("status") or "").upper() != "ACCEPTED":
+            return None
+        v = e.get("payout_ratio")
+        return float(v) if isinstance(v, (int, float)) else None
+    except Exception:                                      # noqa: BLE001
+        return None
 
 
 def _year(s) -> Optional[int]:
@@ -144,7 +158,9 @@ def bank_assumptions(opening: dict, bank_metrics: Optional[dict], block: Optiona
     # share x shares over net income) before the 40% default -- DBS runs a capital-return programme.
     _dps, _sh, _ni = _f(opening.get("dps")), _f(opening.get("shares")), _f(opening.get("net_income"))
     payout_hist = (_dps * _sh / _ni) if (_dps and _sh and _ni and _ni > 0) else None
-    pick("payout_ratio", "dividends and the equity roll", (fam.get("payout_ratio"), "guidance: payout"), (bm.get("dividend_payout_ratio"), "bank metrics: payout"),
+    _owner_payout = _accepted_bank_payout(opening.get("ticker"))
+    pick("payout_ratio", "dividends and the equity roll", (_owner_payout, "owner-accepted bank payout (ordinary + capital return)"),
+         (fam.get("payout_ratio"), "guidance: payout"), (bm.get("dividend_payout_ratio"), "bank metrics: payout"),
          (payout_hist, "line items: dividends per share x shares / net income"), bounds=cfg["payout_bounds"], default=0.40)
     pick("cet1_target", "the capital constraint on distributions", (fam.get("cet1_target"), "guidance: CET1 target"), (cet1_target, "profile calibration: target CET1"), bounds=(0.06, 0.25), default=cfg["cet1_target_default"])
     pick("cet1_ratio_opening", "opening CET1 ratio", (bm.get("cet1_ratio"), "bank metrics: CET1"), bounds=(0.04, 0.30), default=a["cet1_target"]["value"])

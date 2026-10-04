@@ -1050,6 +1050,10 @@ _US_GAAP_NON_USD_REPORTERS = frozenset({
 
 #: Healthcare industries whose investments back claims inside regulated subsidiaries (FMP labels).
 _CLAIMS_BACKED_HEALTHCARE = ("healthcare plans", "managed care", "insurance")
+#: The engine's healthcare sector names. Molina resolves to "HealthcareServices", which the original
+#: managed-care guard ("Healthcare", "Health Care") never matched: its $5.1bn of subsidiary cash and
+#: investments was netted on every run (owner, 2026-10-04, MOH review).
+_HEALTHCARE_SECTORS = ("Healthcare", "Health Care", "HealthcareServices", "Biopharma")
 
 
 def _parent_cash(ticker: str) -> Optional[float]:
@@ -1058,6 +1062,8 @@ def _parent_cash(ticker: str) -> Optional[float]:
     try:
         from src.data import valuation_constants as _vc
         e = ((_vc.load().get("parent_cash") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        if str(e.get("status") or "").upper() != "ACCEPTED":      # owner-set: a PROPOSED entry prices nothing
+            return None
         v = e.get("value")
         return float(v) if isinstance(v, (int, float)) else None
     except Exception:                                      # noqa: BLE001
@@ -1086,7 +1092,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
     _raw_nd = row.get("net_debt")
     netted = isinstance(_raw_nd, (int, float)) and abs(float(nd) - float(_raw_nd)) > 1e-6
     sti = row.get("short_term_investments") or 0.0
-    if ((sector or "") in ("Healthcare", "Health Care") and sti and sti > 0
+    if ((sector or "") in _HEALTHCARE_SECTORS and sti and sti > 0
             and not any(k in str(industry or "").lower() for k in _CLAIMS_BACKED_HEALTHCARE)):
         td, cash = row.get("total_debt"), row.get("cash_and_equivalents")
         raw = row.get("net_debt")
@@ -1099,7 +1105,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
     # ticker in valuation_constants.parent_cash; none on record = none counted), against the full debt,
     # which is the parent's. Molina carried $5.1bn of subsidiary cash as spare, ~$99 a share on every leg.
     regulated_cash = False
-    if ((sector or "") in ("Healthcare", "Health Care")
+    if ((sector or "") in _HEALTHCARE_SECTORS
             and any(k in str(industry or "").lower() for k in _CLAIMS_BACKED_HEALTHCARE)):
         td = row.get("total_debt")
         if isinstance(td, (int, float)):
@@ -11629,7 +11635,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if _bs_flag:
             print(f"  [balance-sheet] {ticker}: {_bs_flag}")
         try:
-            _nd_industry = _company_industry(ticker) if sector in ("Healthcare", "Health Care") else None
+            _nd_industry = _company_industry(ticker) if sector in _HEALTHCARE_SECTORS else None
         except Exception:                                  # noqa: BLE001
             _nd_industry = None
         net_debt, _net_debt_basis = _valuation_net_debt(most_recent, sector, ticker, reported_currency, _nd_industry)
@@ -13684,7 +13690,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # this family's statements in place of the working-capital roll.
             try:
                 from src.agents.analysis import bank_model as _bmod
-                _bm_open = _bmod.opening_from_line_items(most_recent, shares, _bank_total_income(most_recent),
+                _bm_open = _bmod.opening_from_line_items({**most_recent, "ticker": ticker}, shares, _bank_total_income(most_recent),
                                                          fy_label=str(most_recent.get("report_period") or "")[:4])
                 if _bm_open:
                     _bm_ggm = _bank_ggm_assumptions(ticker, profile_name, most_recent)

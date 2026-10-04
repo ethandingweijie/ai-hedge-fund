@@ -187,6 +187,8 @@ def listed_minority_at_market(ticker: str, end_date: str, to_ccy: str) -> Option
     try:
         from src.data import valuation_constants as _vc
         for e in (((_vc.load().get("listed_subsidiaries") or {}).get("entries") or {}).get(ticker.upper()) or []):
+            if str(e.get("status") or "").upper() != "ACCEPTED":   # owner-set: a PROPOSED stake prices nothing
+                continue
             if e.get("listed") and isinstance(e.get("stake_pct"), (int, float)) and 0.5 <= float(e["stake_pct"]) < 1.0:
                 stakes.append((str(e["listed"]), float(e["stake_pct"])))
     except Exception:                                      # noqa: BLE001
