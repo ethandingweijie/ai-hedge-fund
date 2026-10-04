@@ -43,7 +43,7 @@ class _LI:
         self.__dict__.update(kw)
 
 
-def _feat(run_id, ticker="ZZCO", run_date="2026-06-01", fy1=2026, fye=None, rg=(0.05, 0.08, 0.11),
+def _feat(run_id, ticker="ZZCO", run_date="2026-06-01", fy1=2026, fye=None, fy0_end=None, rg=(0.05, 0.08, 0.11),
           em=(0.20, 0.22, 0.24), eps=(4.0, 4.5, 5.0), cons_rg=0.07, cons_eps=4.4, guid_rg=0.09,
           guid_eps=4.6, archetype="IV", confidence="MEDIUM", market="US", sector="Tech",
           profile="Mature SaaS", **flags):
@@ -54,7 +54,7 @@ def _feat(run_id, ticker="ZZCO", run_date="2026-06-01", fy1=2026, fye=None, rg=(
     row.update(feature_key=f"{run_id}|{ticker}", run_id=run_id, ticker=ticker,
                run_at=run_date + "T10:00:00", run_date=run_date, features_version=rf.FEATURES_VERSION,
                market=market, sector=sector, profile=profile, archetype=archetype, confidence=confidence,
-               fiscal_year_1=fy1, fye_month=fye,
+               fiscal_year_1=fy1, fye_month=fye, fy0_end=fy0_end,
                agent_rg_fy1_bear=rg[0], agent_rg_fy1_base=rg[1], agent_rg_fy1_bull=rg[2],
                agent_em_fy1_bear=em[0], agent_em_fy1_base=em[1], agent_em_fy1_bull=em[2],
                agent_eps_fy1_bear=eps[0], agent_eps_fy1_base=eps[1], agent_eps_fy1_bull=eps[2],
@@ -102,7 +102,7 @@ class TestScoring:
         assert rg["err_base"] == pytest.approx(math.log(1.08 / 1.10), abs=1e-6)
         assert rg["err_consensus"] == pytest.approx(math.log(1.07 / 1.10), abs=1e-6)
         assert rg["agent_closer_than_consensus"] == 1 and rg["in_band"] == 1
-        assert rg["guidance_mid"] == 0.09 and rg["actual_source"] == "statements;fye_assumed_dec"
+        assert rg["guidance_mid"] == 0.09 and rg["actual_source"] == "statements;fy_from_label"
         em = got["ebitda_margin"]
         assert em["actual"] == pytest.approx(0.21) and em["err_base"] == pytest.approx(0.01)
         assert em["consensus"] is None and em["err_consensus"] is None
@@ -125,7 +125,41 @@ class TestScoring:
         rep = eo.score_matured(today=date(2027, 1, 20), annuals_fn=fn, quarters_fn=lambda t, e: [])
         assert [c[0] for c in fn.calls] == ["JUNE"]
         r = _rows(ticker="JUNE", field="revenue_growth", period_kind="fy")[0]
-        assert r["actual"] == pytest.approx(0.20) and r["actual_source"] == "statements"
+        assert r["actual"] == pytest.approx(0.20) and r["actual_source"] == "statements;fy_from_label"
+
+    def test_the_forecast_year_is_anchored_on_the_last_reported_year_end_not_the_label(self):
+        """Production, 2026-10-04: LULU's run labels FY+1 'FY2026' (the year ending early 2027) while
+        the statements date FY2026 to the year that ENDED Feb 2026. The scorer dates FY+1 as the last
+        reported annual period end + one year, so the estimate meets the right print."""
+        annuals = [{"period_end": "2027-01-31", "revenue": 11500.0, "ebitda": 2760.0, "eps": 13.8},
+                   {"period_end": "2026-02-01", "revenue": 11000.0, "ebitda": 2750.0, "eps": 14.6},
+                   {"period_end": "2025-02-02", "revenue": 10600.0, "ebitda": 2700.0, "eps": 14.0}]
+        _feat("r1", ticker="LULU", run_date="2026-10-03", fy1=2026, fye=2, fy0_end="2026-02-01",
+              rg=(0.02, 0.045, 0.07), guid_rg=0.04)
+        # before the year ending Jan 2027 can have printed: nothing fetched, nothing scored
+        rep = eo.score_matured(today=date(2026, 12, 1), annuals_fn=_never, quarters_fn=lambda t, e: [])
+        assert rep["no_print_yet"] == 1 and rep["written"] == 0
+        rep = eo.score_matured(today=date(2027, 4, 1), annuals_fn=_annuals({"LULU": annuals}),
+                               quarters_fn=lambda t, e: [])
+        r = _rows(ticker="LULU", field="revenue_growth", period_kind="fy")[0]
+        assert r["actual_period_end"] == "2027-01-31"                    # a 52/53-week year end floats
+        assert r["actual"] == pytest.approx(11500.0 / 11000.0 - 1, abs=1e-5)   # against the year ending Feb 2026
+        assert r["actual_source"] == "statements"                        # anchored, not from the label
+
+    def test_a_label_that_points_at_an_already_ended_year_is_not_scored_without_an_anchor(self):
+        _feat("r1", ticker="LULU", run_date="2026-10-03", fy1=2026, fye=2)     # label says FY ended 2026-02-28
+        rep = eo.score_matured(today=date(2027, 4, 1), annuals_fn=_never, quarters_fn=_never)
+        assert rep["no_fiscal_anchor"] == 1 and rep["written"] == 0 and rep["tickers_fetched"] == 0
+
+    def test_a_quarter_that_ended_before_the_run_is_history_not_a_forecast(self):
+        # run on 2026-10-03: Q2 (June) and Q3 (Sept 30) had ended; only a quarter ending after the run counts
+        _feat("r1", run_date="2026-10-03", fy0_end="2025-12-31")
+        rep = eo.score_matured(today=date(2026, 11, 20), annuals_fn=_never, quarters_fn=lambda t, e: QUARTERS)
+        assert rep["q_written"] == 0 and _rows(period_kind="q_track") == []
+        later = [{"period_end": "2026-12-31", "revenue": 300.0}] + QUARTERS
+        rep = eo.score_matured(today=date(2027, 2, 20), annuals_fn=lambda t, e: [], quarters_fn=lambda t, e: later)
+        q = _rows(period_kind="q_track")[0]
+        assert q["actual_period_end"] == "2026-12-31" and q["actual"] == pytest.approx(300.0 / 265.0 - 1, abs=1e-5)
 
     def test_idempotent_and_write_false(self):
         _feat("r1")

@@ -129,6 +129,52 @@ def _d(s) -> Optional[date]:
         return None
 
 
+_FY_MATCH_DAYS = 31          # a 52/53-week year end floats by a few days year to year
+
+
+def _plus_year(d: date) -> date:
+    try:
+        return d.replace(year=d.year + 1)
+    except ValueError:                                     # Feb 29
+        return d.replace(year=d.year + 1, day=28)
+
+
+def fy_window(feat: dict) -> Optional[tuple[date, date, bool]]:
+    """(fy0_end, fy1_end, anchored) for a ledger row: the forecast year is the one that ends a
+    year after the last REPORTED annual period (fy0_end). Without that date the FY label and
+    the year-end month stand in (anchored False), and only when the labelled year ends after
+    the run was made -- a labelled year that had already ended is the label mismatch this
+    guards against, and is not scored."""
+    run_d = _d(feat.get("run_date"))
+    f0 = _d(feat.get("fy0_end"))
+    if f0:
+        return f0, _plus_year(f0), True
+    if feat.get("fiscal_year_1") is None:
+        return None
+    end1 = fy_end(int(feat["fiscal_year_1"]), feat.get("fye_month"))
+    if run_d and end1 <= run_d:
+        return None
+    return fy_end(int(feat["fiscal_year_1"]) - 1, feat.get("fye_month")), end1, False
+
+
+def _near(rows: list[dict], target: date) -> Optional[dict]:
+    best = None
+    for r in rows or []:
+        d = _d(r.get("period_end"))
+        if d is None:
+            continue
+        gap = abs((d - target).days)
+        if gap <= _FY_MATCH_DAYS and (best is None or gap < best[0]):
+            best = (gap, r)
+    return best[1] if best else None
+
+
+def fy_rows(annuals: list[dict], window: tuple[date, date, bool]) -> tuple[Optional[dict], Optional[dict]]:
+    """(the FY+1 annual row, the prior-year row) matched by period-end DATE."""
+    f0, f1, _ = window
+    return _near(annuals, f1), _near(annuals, f0)
+
+
 # ── actuals (injectable) ─────────────────────────────────────────────────────
 
 def _li_rows(items, *, with_eps: bool) -> list[dict]:
@@ -207,7 +253,8 @@ def _row(feat: dict, field: str, kind: str, actual: float, period_end: str, sour
     return {
         "outcome_key": _key(feat["run_id"], feat["ticker"], field, kind),
         "run_id": feat["run_id"], "ticker": feat["ticker"], "run_date": feat["run_date"],
-        "fiscal_year_1": int(feat["fiscal_year_1"]), "field": field, "period_kind": kind,
+        "fiscal_year_1": int(feat.get("fiscal_year_1") or (_d(period_end).year if _d(period_end) else 0)),
+        "field": field, "period_kind": kind,
         "agent_bear": a_bear, "agent_base": a_base, "agent_bull": a_bull,
         "consensus": cons, "guidance_mid": guid,
         "actual": round(float(actual), 6), "actual_period_end": period_end, "actual_source": source,
@@ -219,14 +266,9 @@ def _row(feat: dict, field: str, kind: str, actual: float, period_end: str, sour
     }
 
 
-def _fy_actuals(annuals: list[dict], fy1: int) -> Optional[dict]:
+def _fy_actuals(annuals: list[dict], window: tuple[date, date, bool]) -> Optional[dict]:
     """{revenue_growth, ebitda_margin, eps, period_end} from the FY+1 and FY print rows."""
-    by_year = {}
-    for r in annuals:
-        y = _d(r.get("period_end"))
-        if y:
-            by_year.setdefault(y.year, r)
-    cur, prev = by_year.get(fy1), by_year.get(fy1 - 1)
+    cur, prev = fy_rows(annuals, window)
     if not cur:
         return None
     out = {"period_end": cur["period_end"], "revenue_growth": None, "ebitda_margin": None,
@@ -238,10 +280,12 @@ def _fy_actuals(annuals: list[dict], fy1: int) -> Optional[dict]:
     return out
 
 
-def _q_track(quarters: list[dict], fy0_end: date, fy1_end: date) -> Optional[dict]:
-    """Year-on-year revenue growth of the latest reported quarter inside FY+1."""
+def _q_track(quarters: list[dict], fy0_end: date, fy1_end: date, after: Optional[date] = None) -> Optional[dict]:
+    """Year-on-year revenue growth of the latest reported quarter inside FY+1. `after` is the
+    run date: a quarter that had already ENDED when the run was made is history the agent could
+    see, not a forecast it can be tracked against."""
     rows = [(d, r) for r in quarters for d in [_d(r.get("period_end"))] if d and r.get("revenue")]
-    inside = [(d, r) for d, r in rows if fy0_end < d <= fy1_end]
+    inside = [(d, r) for d, r in rows if fy0_end < d <= fy1_end and (after is None or d > after)]
     if not inside:
         return None
     d1, r1 = max(inside, key=lambda x: x[0])
@@ -263,7 +307,7 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
     """Score every agent FY+1 estimate whose print has arrived. Idempotent: a scored
     (run, field, kind) is never rescored, so the first sweep is the backfill."""
     report = {k: 0 for k in ("candidates", "tickers_fetched", "fy_written", "q_written",
-                             "no_print_yet", "unscorable", "fetch_errors")}
+                             "no_print_yet", "unscorable", "fetch_errors", "no_fiscal_anchor")}
     if not enabled():
         report["disabled"] = True
         return report
@@ -273,7 +317,7 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
     quarters_fn = quarters_fn or _default_quarters
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     existing = {r["outcome_key"] for r in _db.query("SELECT outcome_key FROM estimate_outcomes")}
-    feats = rf.rows(where="fiscal_year_1 IS NOT NULL AND agent_rg_fy1_base IS NOT NULL")
+    feats = rf.rows(where="(fiscal_year_1 IS NOT NULL OR fy0_end IS NOT NULL) AND agent_rg_fy1_base IS NOT NULL")
     report["candidates"] = len(feats)
 
     by_ticker: dict[str, list[dict]] = {}
@@ -285,15 +329,21 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
     for ticker, items in sorted(by_ticker.items()):
         need_fy, need_q = [], []
         for f in items:
-            fy1 = int(f["fiscal_year_1"])
-            end1 = fy_end(fy1, f.get("fye_month"))
+            win = fy_window(f)
+            if win is None:
+                report["no_fiscal_anchor"] += 1
+                continue
+            f["_window"] = win
+            end0, end1, _anchored = win
+            run_d = _d(f.get("run_date")) or end0
             if any(_key(f["run_id"], ticker, fld, "fy") not in existing for fld in FIELDS):
                 if today >= end1 + timedelta(days=MIN_DAYS_AFTER_FYE):
                     need_fy.append(f)
                 else:
                     report["no_print_yet"] += 1
+            # a quarter can only be tracked once one has ENDED after the run and had time to print
             if _key(f["run_id"], ticker, "revenue_growth", "q_track") not in existing \
-                    and today > end1 - timedelta(days=365) + timedelta(days=MIN_DAYS_AFTER_FYE):
+                    and today >= max(run_d, end0) + timedelta(days=MIN_DAYS_AFTER_FYE):
                 need_q.append(f)
         if not need_fy and not need_q:
             continue
@@ -314,11 +364,11 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
             logger.warning("estimate_outcomes: quarters for %s failed: %s", ticker, exc)
 
         for f in need_fy:
-            act = _fy_actuals(annuals or [], int(f["fiscal_year_1"]))
+            act = _fy_actuals(annuals or [], f["_window"])
             if not act:
                 report["no_print_yet"] += 1
                 continue
-            source = "statements" + ("" if f.get("fye_month") else ";fye_assumed_dec")
+            source = "statements" + ("" if f["_window"][2] else ";fy_from_label")
             for fld in FIELDS:
                 if _key(f["run_id"], ticker, fld, "fy") in existing or act.get(fld) is None:
                     continue
@@ -329,8 +379,8 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
                 out.append(row)
                 report["fy_written"] += 1
         for f in need_q:
-            fy1 = int(f["fiscal_year_1"])
-            qt = _q_track(quarters or [], fy_end(fy1 - 1, f.get("fye_month")), fy_end(fy1, f.get("fye_month")))
+            end0, end1, _a = f["_window"]
+            qt = _q_track(quarters or [], end0, end1, after=_d(f.get("run_date")))
             if not qt:
                 continue
             row = _row(f, "revenue_growth", "q_track", qt["revenue_growth"], qt["period_end"],

@@ -34,7 +34,8 @@ from src.memory import valuation_outcomes as vo
 
 logger = logging.getLogger(__name__)
 
-FEATURES_VERSION = 3          # 2: + pt_calibration_version (Phase C); 3: FYE month from financials_used, balance-sheet families keep no forecast EPS / margin
+FEATURES_VERSION = 4          # 4: + fy0_end (the last reported annual period end; the scorers' anchor)
+#          # 2: + pt_calibration_version (Phase C); 3: FYE month from financials_used, balance-sheet families keep no forecast EPS / margin
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS run_features (
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS run_features (
     confidence           TEXT,
     fiscal_year_1        INTEGER,
     fye_month            INTEGER,
+    fy0_end              TEXT,
     agent_rg_fy1_bear REAL, agent_rg_fy1_base REAL, agent_rg_fy1_bull REAL,
     agent_em_fy1_bear REAL, agent_em_fy1_base REAL, agent_em_fy1_bull REAL,
     agent_eps_fy1_bear REAL, agent_eps_fy1_base REAL, agent_eps_fy1_bull REAL,
@@ -93,7 +95,7 @@ COLUMNS = [
     "pt_calibration_version", "regime_risk", "research_tier", "spot",
     "iv_bear", "iv_base", "iv_bull", "pt_bear", "pt_base", "pt_bull", "pt_12m", "pm_target",
     "capture", "prob_bear", "prob_base", "prob_bull", "methods_json", "gates_json",
-    "archetype", "confidence", "fiscal_year_1", "fye_month",
+    "archetype", "confidence", "fiscal_year_1", "fye_month", "fy0_end",
     "agent_rg_fy1_bear", "agent_rg_fy1_base", "agent_rg_fy1_bull",
     "agent_em_fy1_bear", "agent_em_fy1_base", "agent_em_fy1_bull",
     "agent_eps_fy1_bear", "agent_eps_fy1_base", "agent_eps_fy1_bull",
@@ -120,6 +122,7 @@ def _ensure_tables() -> None:
         return
     _db.ensure_table(_DDL)
     _db.add_column_if_missing("run_features", "pt_calibration_version", "TEXT")
+    _db.add_column_if_missing("run_features", "fy0_end", "TEXT")
     for ddl in _DDL_IDX:
         _db.execute(ddl)
     _tables_ready_key = key
@@ -172,6 +175,26 @@ def _fye_month(dr: dict) -> Optional[int]:
         m = _month_of(opening.get(key))
         if m:
             return m
+    return None
+
+
+def _fy0_end(dr: dict) -> Optional[str]:
+    """The period-end date of the latest ANNUAL row the engine used (financials_used.rows),
+    else the opening balance sheet's. FY+1 is the fiscal year that ends one year after this
+    date -- the scorers anchor on it, never on the FY label, because labels disagree across
+    sources (a retailer's "FY2026" ends in early 2027 by its own naming and in early 2026 by
+    the data vendor's)."""
+    rows = (dr.get("financials_used") or {}).get("rows") if isinstance(dr.get("financials_used"), dict) else None
+    if isinstance(rows, list):
+        dates = [str((r or {}).get("period") or "")[:10] for r in rows if isinstance(r, dict)]
+        dates = sorted(d for d in dates if re.match(r"^(19|20)\d{2}-\d{2}-\d{2}$", d))
+        if dates:
+            return dates[-1]
+    opening = ((dr.get("forecast_context") or {}).get("opening_balance_sheet") or {})
+    for key in ("period_end", "report_period", "date", "period"):
+        d = str(opening.get(key) or "")[:10]
+        if re.match(r"^(19|20)\d{2}-\d{2}-\d{2}$", d):
+            return d
     return None
 
 
@@ -373,7 +396,7 @@ def extract(run_id: str, ticker: str, dr: dict, scenario: Optional[dict], *,
         "archetype": ((dr.get("guidance_forecast") or {}).get("archetype")
                       if isinstance(dr.get("guidance_forecast"), dict) else None),
         "confidence": ge.get("confidence"),
-        "fiscal_year_1": fy1, "fye_month": _fye_month(dr),
+        "fiscal_year_1": fy1, "fye_month": _fye_month(dr), "fy0_end": _fy0_end(dr),
         "agent_rg_fy1_bear": agent["bear"]["rg"], "agent_rg_fy1_base": agent["base"]["rg"],
         "agent_rg_fy1_bull": agent["bull"]["rg"],
         "agent_em_fy1_bear": agent["bear"]["em"], "agent_em_fy1_base": agent["base"]["em"],

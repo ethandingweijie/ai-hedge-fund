@@ -139,7 +139,10 @@ class TestExtract:
 
     def test_the_fiscal_year_end_comes_from_the_rows_the_engine_used(self):
         d = _dr(financials_used={"rows": [{"period": "2025-05-31", "revenue": 1.0}, {"period": "2026-05-31", "revenue": 1.0}]})
-        assert rf.extract("r1", "NKE", d, SCEN, run_at="2026-01-01")["fye_month"] == 5       # beats the opening sheet's June
+        row = rf.extract("r1", "NKE", d, SCEN, run_at="2026-01-01")
+        assert row["fye_month"] == 5                                    # beats the opening sheet's June
+        assert row["fy0_end"] == "2026-05-31"                           # the scorers' anchor: the last reported year end
+        assert rf.extract("r1", "ZZCO", _dr(), SCEN, run_at="2026-01-01")["fy0_end"] == "2025-06-30"   # opening sheet fallback
         d2 = _dr(); d2["forecast_context"]["opening_balance_sheet"].pop("period_end")
         assert rf.extract("r1", "ZZCO", d2, SCEN, run_at="2026-01-01")["fye_month"] is None
 

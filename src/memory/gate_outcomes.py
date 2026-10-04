@@ -97,15 +97,6 @@ def _ensure_tables() -> None:
     _tables_ready_key = key
 
 
-def _fy_rows(annuals: list[dict], fy1: int) -> tuple[Optional[dict], Optional[dict]]:
-    by_year: dict[int, dict] = {}
-    for r in annuals or []:
-        d = eo._d(r.get("period_end"))
-        if d:
-            by_year.setdefault(d.year, r)
-    return by_year.get(fy1), by_year.get(fy1 - 1)
-
-
 def score_record(rec: dict, cur: Optional[dict], prev: Optional[dict]) -> dict:
     """The verdict for one gate record against the printed year. Pure."""
     metric = str(rec.get("metric") or "")
@@ -149,7 +140,7 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
     annuals_fn = annuals_fn or eo._default_annuals
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     existing = {r["outcome_key"] for r in _db.query("SELECT outcome_key FROM gate_outcomes")}
-    feats = rf.rows(where="fiscal_year_1 IS NOT NULL AND gates_json IS NOT NULL AND gates_json != '[]'")
+    feats = rf.rows(where="(fiscal_year_1 IS NOT NULL OR fy0_end IS NOT NULL) AND gates_json IS NOT NULL AND gates_json != '[]'")
     report["candidates"] = len(feats)
     by_ticker: dict[str, list[dict]] = {}
     for f in feats:
@@ -166,9 +157,14 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
                     and f"{f['run_id']}|{ticker}|{g['gate_id']}" not in existing]
             if not todo:
                 continue
-            if today < eo.fy_end(int(f["fiscal_year_1"]), f.get("fye_month")) + timedelta(days=eo.MIN_DAYS_AFTER_FYE):
+            win = eo.fy_window(f)                  # FY+1 by the last reported year-end DATE, never the label
+            if win is None:
+                report["no_fiscal_anchor"] = report.get("no_fiscal_anchor", 0) + 1
+                continue
+            if today < win[1] + timedelta(days=eo.MIN_DAYS_AFTER_FYE):
                 report["no_print_yet"] += 1
                 continue
+            f["_window"] = win
             pending.append((f, todo))
         if not pending:
             continue
@@ -182,7 +178,7 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
             logger.warning("gate_outcomes: annuals for %s failed: %s", ticker, exc)
             continue
         for f, todo in pending:
-            cur, prev = _fy_rows(annuals, int(f["fiscal_year_1"]))
+            cur, prev = eo.fy_rows(annuals, f["_window"])
             if cur is None:
                 report["no_print_yet"] += 1
                 continue
@@ -196,7 +192,8 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
                 verdicts[sc["verdict"]] = verdicts.get(sc["verdict"], 0) + 1
                 out.append({
                     "outcome_key": f"{f['run_id']}|{ticker}|{gid}", "run_id": f["run_id"],
-                    "ticker": ticker, "run_date": f["run_date"], "fiscal_year_1": int(f["fiscal_year_1"]),
+                    "ticker": ticker, "run_date": f["run_date"],
+                    "fiscal_year_1": int(f.get("fiscal_year_1") or f["_window"][1].year),
                     "gate_id": gid, "applied": (None if g.get("applied") is None else int(bool(g.get("applied")))),
                     "profile": f.get("profile"), "market": f.get("market"), "scored_at": now_iso, **sc,
                 })
