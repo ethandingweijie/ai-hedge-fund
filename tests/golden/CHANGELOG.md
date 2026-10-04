@@ -1730,3 +1730,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Visa/Vertex reviews (2026-10-04): forward legs on NTM (EV6), symmetric CAPM band holds risk-off/insider overlays within 1pp of CAPM (EV2; MELI 11.25->10.47%, U96 9.67->8.17%), immaterial insider selling ignored, payment networks unlevered (IV1)
 
+## 2026-10-04T15:55:02+00:00
+
+- regenerated at HEAD: `fd9cdf38`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner 2026-10-04: D8 scenario WACC shift removed (bear/bull one WACC; Vertex review: double counting); Payment Networks priced on the toll-road basket MA/AXP/SPGI/MCO/ICE/CME/MSCI (V base 417.90->327.31)
+

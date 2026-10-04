@@ -823,6 +823,11 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
         # names); the static fill was the condition before a live copper cohort was read.
         assert b["basis"] == "industry" and b["key"] == "Copper" and b["peer_count"] == 7, (name, b)
         return
+    if name == "V":
+        # Owner, 2026-10-04 (Visa review): Payment Networks carry the curated toll-road basket
+        # (MA, AXP, SPGI, MCO, ICE, CME, MSCI; V itself excluded), so growth_avg resolves live.
+        assert b["basis"] == "profile" and b["key"] == "Payment Networks" and b["peer_count"] == 7, (name, b)
+        return
     assert b == {"basis": "static", "cohort": "US", "peer_count": None}, (name, b)
 
 

@@ -635,7 +635,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
         # fires, and the leaves below are no longer this fix's evidence.
         # V re-recorded 2026-09-27 (Wave 7): the absolute-spread premium reads 1.116 base /
         # 1.120 bull against the ratio's 1.139 / 1.144, and the leg follows it exactly.
-        "V":    {"bear": 280.94, "base": 418.09, "bull": 524.66},
+        # V re-recorded 2026-10-04: the toll-road Payment Networks basket's FCF yield (4.3%)
+        # replaces the static 3.0%, and the bear premium is 1.065.
+        "V":    {"bear": 193.93, "base": 277.49, "bull": 348.28},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

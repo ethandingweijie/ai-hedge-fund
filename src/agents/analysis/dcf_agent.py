@@ -138,9 +138,10 @@ _RISK_ON_CAPM_BAND = 0.01
 # it moves WACC only when it is material -- net or gross selling of at least this share of market cap.
 # Visa's $83m (~0.01%) of sales had added +16bp through the conviction-sell flag.
 _INSIDER_SELL_MATERIALITY = 0.005
-#: Owner, 2026-10-04 (decision D8), PROPOSED: the discount-rate move by scenario. Bear prices a
-#: dearer cost of capital, bull a cheaper one; the base rate is the build's.
-_WACC_SCENARIO_SHIFT = {"bear": 0.005, "base": 0.0, "bull": -0.005}
+#: Owner, 2026-10-04 (decision D8), REMOVED the same day (Vertex review): bear and bull already move
+#: the cash flows; a scenario discount rate counts the same risk twice. One WACC across scenarios.
+#: Kept as a table (all zero) so the schedule plumbing and the workbook stay unchanged.
+_WACC_SCENARIO_SHIFT = {"bear": 0.0, "base": 0.0, "bull": 0.0}
 _MIN_HISTORY_YEARS = 2
 _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 
@@ -1088,6 +1089,20 @@ def _parent_cash(ticker: str) -> Optional[float]:
         return None
 
 
+def _bridge_adjustment(ticker: str) -> dict:
+    """Owner-set equity-bridge items for one company (valuation_constants.bridge_adjustments; owner,
+    2026-10-04, Visa review): `debt_like` (filing currency, added to net debt -- e.g. accrued
+    litigation not funded by restricted escrow), `shares_as_converted` (the share count every
+    per-share value divides by, when the feed's count misses convertible share classes). An entry
+    prices only when ACCEPTED; {} otherwise."""
+    try:
+        from src.data import valuation_constants as _vc
+        e = ((_vc.load().get("bridge_adjustments") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        return e if str(e.get("status") or "").upper() == "ACCEPTED" else {}
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
 def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
     return (str(reported_currency or "").upper() == "USD"
             or str(ticker or "").upper() in _US_GAAP_NON_USD_REPORTERS)
@@ -1140,6 +1155,9 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
             _pc = _parent_cash(ticker)
             nd = float(td) - (_pc or 0.0)
             regulated_cash = True
+    _ba = _bridge_adjustment(ticker)
+    debt_like = float(_ba["debt_like"]) if isinstance(_ba.get("debt_like"), (int, float)) else 0.0
+    nd = nd + debt_like
     us_gaap = _reports_us_gaap(ticker, reported_currency)
     lease = row.get("lease_liabilities")
     lease_out = 0.0
@@ -1153,6 +1171,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
         "balance_sheet_date": row.get("_balance_sheet_period") or row.get("period"),
         "short_term_investments_netted": bool(netted),
         "long_term_investments_netted": lti_netted or None,
+        "debt_like_items": debt_like or None,
         "accounting_basis": "US GAAP" if us_gaap else "IFRS",
         "lease_liabilities": float(lease) if isinstance(lease, (int, float)) else None,
         "regulated_cash_excluded": regulated_cash,
@@ -11855,6 +11874,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     shares = _shares_implied
                     _shares_source = "quote_current_basic"
 
+        # Owner-set as-converted share count (valuation_constants.bridge_adjustments, ACCEPTED only):
+        # the count when convertible share classes sit outside the feed's figure.
+        _ba_sh = _bridge_adjustment(ticker).get("shares_as_converted")
+        if isinstance(_ba_sh, (int, float)) and _ba_sh > 0:
+            _ba_flag = f"Shares: owner-accepted as-converted count {float(_ba_sh)/1e6:,.1f}m replaces {float(shares or 0)/1e6:,.1f}m ({_shares_source})"
+            shares = float(_ba_sh)
+            _shares_source = "owner_as_converted"
+            if _bridge_adjustment(ticker).get("preferred_in_shares"):
+                # The convertible preferreds are inside the as-converted count: deducting their book
+                # value as well would count them twice (Visa: ~10m class A equivalents, $514m book).
+                most_recent["preferred_equity"] = 0.0
+                _ba_flag += "; convertible preferred counted in the shares, not deducted in the bridge"
+            most_recent["_shares_override_flag"] = _ba_flag
+
         # ── FX Conversion (ADR / cross-listed tickers) ───────────────────
         # Some tickers trade on US exchanges (ADRs or direct listings) but
         # report financials in their home currency (e.g. BABA/BIDU in CNY,
@@ -11990,6 +12023,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         ticker_forward_flags: list[str] = []
         if _bs_flag:
             ticker_forward_flags.append(_bs_flag)
+        if most_recent.get("_shares_override_flag"):
+            ticker_forward_flags.append(most_recent["_shares_override_flag"])
+        if (_net_debt_basis or {}).get("debt_like_items"):
+            ticker_forward_flags.append(
+                f"Net debt includes owner-accepted debt-like items of {float(_net_debt_basis['debt_like_items'])/1e6:,.0f}m "
+                "(valuation_constants.bridge_adjustments)")
         # Forward-test substrate. A gate holds BOTH values at the moment it
         # fires, but the flag records them only as prose, which cannot be
         # scored. These structured pairs are what the reconciliation worker
@@ -12116,6 +12155,33 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _ce = _core_earnings(_row, series[max(0, _i - 4):_i])
             for _k in ("ebitda_core", "ebit_core", "net_income_core", "non_operating_gap"):
                 _row[_k] = _ce.get(_k)
+        # Owner-accepted one-off operating charges (valuation_constants.bridge_adjustments.one_off_opex,
+        # {fiscal year: amount, filing currency}) are added back to core EBITDA, EBIT and net income
+        # (after tax at the year's bounded effective rate): Visa's U.S. covered litigation provision,
+        # funded by class B conversion-rate cuts, not by class A holders.
+        _oo = _bridge_adjustment(ticker).get("one_off_opex") or {}
+        if isinstance(_oo, dict) and _oo:
+            _oo_done = []
+            for _row in series:
+                _amt = _oo.get(str(_row.get("period") or "")[:4])
+                if not isinstance(_amt, (int, float)) or _amt <= 0:
+                    continue
+                _amt = float(_amt) * float(fx_rate or 1.0)
+                _tx = _UFCF_TAX_DEFAULT
+                try:
+                    if (_row.get("pretax_income") or 0) > 0 and _row.get("income_tax_expense") is not None:
+                        _tx = min(max(float(_row["income_tax_expense"]) / float(_row["pretax_income"]), _UFCF_TAX_BOUNDS[0]), _UFCF_TAX_BOUNDS[1])
+                except Exception:                          # noqa: BLE001
+                    pass
+                for _k, _v in (("ebitda", _amt), ("ebit", _amt), ("net_income", _amt * (1.0 - _tx))):
+                    _base = _row.get(_k + "_core") if _row.get(_k + "_core") is not None else _row.get(_k)
+                    if isinstance(_base, (int, float)):
+                        _row[_k + "_core"] = float(_base) + _v
+                _oo_done.append(f"FY{str(_row.get('period'))[:4]} {_amt / 1e6:,.0f}m")
+            if _oo_done:
+                ticker_forward_flags.append(
+                    "One-off operating charges added back to core EBITDA, EBIT and net income (owner-accepted, "
+                    "valuation_constants.bridge_adjustments): " + ", ".join(_oo_done))
         _norm_series = [{**_row, **{k: _row[k + "_core"] for k in ("ebitda", "ebit", "net_income")
                                     if _row.get(k + "_core") is not None}} for _row in series]
         _norm_ni     = _normalized_earnings(_norm_series, "net_income", window=5)

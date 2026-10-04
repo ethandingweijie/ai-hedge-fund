@@ -310,6 +310,11 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     # "Healthcare Plans" label (Progyny; CVS and Cigna, whose earnings are pharmacy and PBM). Centene is
     # in the basket; a negative multiple falls out of the in-band median by itself.
     "Managed Care":                {"US": ("UNH", "ELV", "CNC", "HUM", "MOH", "OSCR", "ALHC")},
+    # Owner, 2026-10-04 (Visa review, plan IV1): payment networks price on asset-light, high-ROIC toll
+    # roads -- the networks plus exchange and ratings franchises -- not FMP's "Credit Services" label
+    # (lenders: COF, SYF, SOFI, AFRM) nor processors (PYPL, FI, FIS: an 8.8x EV/EBITDA median ex-V,
+    # the defect). Live 2026-10-04 ex-V: EV/EBITDA 17.9x, P/E 23.5x. The subject is excluded.
+    "Payment Networks":            {"US": ("V", "MA", "AXP", "SPGI", "MCO", "ICE", "CME", "MSCI")},
     # Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform prices its relative
     # legs on China internet peers (the owner's pins plus the store's internet, gaming and travel
     # platforms) instead of FMP's Specialty Retail label (Amazon, O'Reilly; Meituan, MINISO).

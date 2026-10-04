@@ -222,14 +222,16 @@ already fixed by Phase 1 (marked), and one was not reproduced.
 | IV2 | Critical | Commercial Biotech, Large Cap Pharma | Pipeline rNPV is a sum-of-the-parts **add-on**: its risk-adjusted PV per diluted share is added to each operating leg, and its weight rolls into them. Pre-approval Biotech is unchanged, since there the pipeline is the company. |
 | IV3 | High | Biotechnology | Long-term marketable securities count as cash (VRTX ~US$10bn); pharma strategic stakes do not. |
 
-### Owner decisions (open)
+### Owner decisions (2026-10-04)
 
-- Payment Networks basket. Medians below exclude V and are live from FMP on 2026-10-04:
-  - MA/AXP/PYPL/FI/FIS: EV/EBITDA 8.8x, P/E 12.2x.
-  - MA/AXP/SPGI/MCO/ICE/CME/MSCI: EV/EBITDA 17.9x, P/E 23.5x.
-- The ±50bp scenario WACC shift (D8). The VRTX reviewer calls it double counting.
+- **Payment Networks basket:** the toll-road basket. MA, AXP, SPGI, MCO, ICE, CME and MSCI (V excluded) price at EV/EBITDA 17.9x and P/E 23.5x live. The reviewer's processor basket gave 8.8x and 12.2x, the same defect.
+- **D8 scenario WACC ±50bp: removed.** Bear and bull already move the cash flows, so one WACC applies across scenarios.
+- **Pipeline add-on:** carries unapproved assets only. Approved products' sales are already in the operating revenue (VRTX production: CASGEVY, JOURNAVX and PALSONIFY).
 
-### Equity-specific: questions for the owner
+### Equity-specific
 
-- V: class B/C as-converted shares and the litigation escrow treated as debt-like; the FY25 litigation accrual; diluted shares.
-- VRTX: Trikafta LOE (~2037) and IRA pricing; re-check the accepted pipeline inputs (is Trikafta inside them?).
+- **V:** researched and staged as PROPOSED in `valuation_constants.bridge_adjustments`. It prices only when accepted.
+  - As-converted shares: 1,880m. The convertible preferreds are inside that count, so the $514m book is not deducted.
+  - Debt-like: uncovered accrued litigation of $363m. U.S. covered litigation ($822m) nets against the $888m escrow, and VE-covered is recovered from series B/C.
+  - Added back: the FY2025 U.S. covered litigation provision of $2,210m.
+- **VRTX:** pipeline re-check and Trikafta loss of exclusivity are deferred by the owner.

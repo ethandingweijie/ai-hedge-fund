@@ -186,7 +186,7 @@ _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW", "U
 _BULL_MOVED = {
     "02888_HK": (0.719, 0.85),    # 0.815 until the 2026-09-26 bridge; 0.719 until Wave 7's floor (2026-09-27)
     "09988_HK": (1.167, 1.023),   # 1.0 until Phase 1 (2026-10-04, D8): the bull margin is the name's own sigma
-    "BABA":     (1.019, 1.041),   # 1.0 until Phase 1 (2026-10-04, D8), likewise
+    "BABA":     (1.019, 1.043),   # 1.0 until Phase 1 (2026-10-04, D8), likewise
     "C38U_SI":  (1.2,   1.0),
     "FCX":      (1.8,   1.148),   # 1.0 until Phase 1 (2026-10-04, D8), likewise
     "SCHW":     (1.654, 1.111),   # 1.267 until Wave 7's absolute-spread premium (2026-09-27)
@@ -386,7 +386,8 @@ _WAVE6_MOVED = {
 #: +21.2%), so the ratio penalty (0.65-0.79) lifts to the floor in every scenario.
 #: AAPL, V, SCHW and COST move on the same premium (AAPL also on the EV/EBITDA leg reading the
 #: live Consumer Electronics cohort in place of the static table, decision 2).
-_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.087}   # AAPL 1.097 until Phase 1 (2026-10-04: interest income out of UFCF lowers its ROIC)
+_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.077, "AAPL": 1.087}   # V 1.12 until 2026-10-04 (toll-road Payment Networks basket: growth_avg 11.7%)
+_WAVE7_BULL_GP_NOTE = None   # AAPL 1.097 until Phase 1 (2026-10-04: interest income out of UFCF lowers its ROIC)
 #: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
 #: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
 _WAVE8_MOVED = {
@@ -435,21 +436,21 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 
 #: Valuation fix plan Phase 1 (owner, 2026-10-04, decisions D1-D8): the dated mid-year DCF, the one
 #: net-debt basis, interest income out of UFCF, core earnings, the latest-year trough kept in the base
-#: margin, the sigma scenario spread bounded by each name's own history, WACC +/-50bp by scenario, the
+#: margin, the sigma scenario spread bounded by each name's own history (the +/-50bp scenario WACC was removed the same day), the
 #: subject out of its own peer medians. Bear and bull widen most (the spread is the company's own).
 _PHASE1_MOVED = {
     "02888_HK": (294.91, 246.96, 346.94, (238.98, 262.96, 288.97)),
-    "09988_HK": (104.97, 74.03, 252.66, (96.96, 107.78, 159.48)),
-    "AAPL": (180.62, 126.0, 251.39, (228.67, 255.98, 291.37)),
-    "BABA": (104.84, 69.12, 240.18, (95.52, 108.02, 155.39)),
-    "COST": (494.24, 335.39, 707.92, (629.08, 708.5, 815.34)),
+    "09988_HK": (104.97, 74.03, 233.53, (96.96, 107.78, 152.78)),
+    "AAPL": (180.62, 128.4, 243.22, (229.87, 255.98, 287.28)),
+    "BABA": (106.51, 69.12, 227.75, (95.52, 108.61, 151.04)),
+    "COST": (494.24, 341.88, 678.37, (632.32, 708.5, 800.57)),
     "D05_SI": (46.75, 39.47, 55.2, (57.56, 61.2, 65.43)),
     "FCX": (67.36, 47.49, 101.89, (63.62, 70.57, 82.66)),
-    "MELI": (3324.38, 2466.01, 4055.45, (2051.91, 2352.34, 2608.22)),
-    "MU": (181.72, 135.16, 234.74, (531.38, 554.66, 581.17)),
+    "MELI": (3772.32, 2873.05, 4466.75, (2194.38, 2509.12, 2752.17)),
+    "MU": (181.79, 135.16, 233.94, (531.38, 554.69, 580.77)),
     "SCHW": (72.14, 51.85, 96.05, (79.82, 89.97, 101.92)),
     "U96_SI": (5.72, 2.33, 9.12, (4.68, 5.87, 7.06)),
-    "V": (415.22, 296.63, 541.91, (347.97, 389.48, 433.82)),
+    "V": (327.31, 236.4, 410.28, (326.89, 358.71, 387.75)),
 }
 
 
@@ -1220,7 +1221,9 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
             # on the six-name hyperscaler basket (bear leg 151.55 -> 123.73 a share, decision 2), which
             # outweighs the +2% the bear deactivation added; the value is pinned instead.
             assert got == _current(name)[1], name
-            if name == "AAPL":
+            if name in ("AAPL", "V"):
+                # V (2026-10-04): repriced on the toll-road Payment Networks basket (EV/EBITDA 18.3x,
+                # P/E 24.6x against the static 25x / 32x), which outweighs the bear deactivation.
                 assert got < before[name], name
             else:
                 assert got > before[name], name
@@ -1308,10 +1311,12 @@ _02888_LEGS = {
     # 144.22 -> 137.84; bull 0.719 -> 0.85: 135.22 -> 159.86, 194.34 -> 229.74); bank legs unchanged.
     # Plan IN2 (2026-10-04): GGM bear / bull move the drivers (return on book -10% / +10%, CoE +/-50bp),
     # not x0.75 / x1.25 of the base: 252.98 -> 271.40 bear, 421.63 -> 414.19 bull.
+    # Plan EV6 (2026-10-04): the forward leg prices the next twelve months: Forward P/E 121.29 -> 134.74
+    # bear, 159.86 -> 183.41 bull (not weighted on this fixture).
     "bear": {"Excess Capital": 188.02, "GGM (P/B)": 271.4, "P/TBV": 268.28,
-             "Residual Income": 238.57, "Forward P/E": 121.29, "P/E (norm)": 137.84},
+             "Residual Income": 238.57, "Forward P/E": 134.74, "P/E (norm)": 137.84},
     "bull": {"Excess Capital": 188.02, "GGM (P/B)": 414.19, "P/TBV": 447.13,
-             "Residual Income": 238.57, "Forward P/E": 159.86, "P/E (norm)": 229.74},
+             "Residual Income": 238.57, "Forward P/E": 183.41, "P/E (norm)": 229.74},
 }
 
 

@@ -325,3 +325,28 @@ def test_ev6_ntm_roll_on_the_guidance_overlay():
     assert o0["eps"]["base"] == pytest.approx(17.45)
     assert o75["eps"]["base"] == pytest.approx(0.25 * 17.45 + 0.75 * 20.50)
     assert o75["revenue"]["base"] == pytest.approx(1100.0 * (0.25 + 0.75 * 1.10))
+
+
+def test_bridge_adjustments_price_only_when_accepted(monkeypatch):
+    from src.data import valuation_constants as vc
+    doc = {"bridge_adjustments": {"entries": {"V": {"debt_like": 363.0, "status": "ACCEPTED"},
+                                              "MA": {"debt_like": 999.0, "status": "PROPOSED"}}}}
+    monkeypatch.setattr(vc, "load", lambda *a, **k: doc)
+    v, b = d._valuation_net_debt(_row(), "Financials", "V", "USD")
+    ma, _ = d._valuation_net_debt(_row(), "Financials", "MA", "USD")
+    assert v == 463.0 and b["debt_like_items"] == 363.0 and ma == 100.0
+
+
+def test_the_visa_entry_ships_proposed():
+    from src.data import valuation_constants as vc
+    e = vc.load()["bridge_adjustments"]["entries"]["V"]
+    assert e["status"] == "PROPOSED" and e["preferred_in_shares"] is True
+
+
+def test_d8_scenario_wacc_shift_is_removed():
+    assert set(d._WACC_SCENARIO_SHIFT.values()) == {0.0}
+
+
+def test_payment_networks_price_on_the_toll_road_basket():
+    from src.data.regional_comps import PROFILE_PEER_BASKETS
+    assert PROFILE_PEER_BASKETS["Payment Networks"]["US"] == ("V", "MA", "AXP", "SPGI", "MCO", "ICE", "CME", "MSCI")

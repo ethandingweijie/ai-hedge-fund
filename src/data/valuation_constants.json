@@ -811,5 +811,22 @@
         "url": "https://www.dbs.com/iwov-resources/images/investors/quarterly-financials/2025/4Q25_press_statement.pdf"
       }
     }
+  },
+  "bridge_adjustments": {
+    "status": "PROPOSED",
+    "note": "Owner, 2026-10-04 (Visa review): per-company equity-bridge items, filing currency. debt_like is added to net debt; shares_as_converted replaces the share count (preferred_in_shares: the convertible preferreds are inside it, so their book value is not deducted); one_off_opex {fiscal year: amount} is added back to core EBITDA/EBIT/net income. Only ACCEPTED entries price.",
+    "entries": {
+      "V": {
+        "status": "PROPOSED",
+        "as_of": "2026-06-30",
+        "shares_as_converted": 1880000000.0,
+        "preferred_in_shares": true,
+        "debt_like": 363000000.0,
+        "one_off_opex": {"2025": 2210000000.0},
+        "basis": "Shares: class A 1,702m + B-1 3m + B-2 1m + B-3 91m + C 73m + series A/B/C preferred 10m class A equivalents = 1,880m as-converted (10-Q Q3 FY26 stockholders' equity note); diluted weighted average 1,898m (Q3 FY26) for reference. Debt-like: the uncovered accrued litigation ~$363m (accrued $1,274m less U.S. covered $822m, which the $888m restricted escrow funds, and VE-covered $89m, recovered from series B/C). One-off: FY2025 U.S. covered litigation provision $2,210m (non-GAAP special item $2,533m; the ~$300-350m uncovered provision recurs and stays in costs).",
+        "source": "Visa 10-Q for the quarter ended 2026-06-30 and FY2025 10-K; Q3 FY26 and Q4 FY25 earnings releases",
+        "url": "https://www.sec.gov/Archives/edgar/data/1403161/000140316126000104/v-20260630.htm"
+      }
+    }
   }
 }
