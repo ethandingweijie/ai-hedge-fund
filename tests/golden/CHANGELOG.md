@@ -1714,3 +1714,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Phase 1b follow-up (2026-10-04): the analyst SOTP keeps the broker convention (holdco discount on the whole NAV; Meituan reproduces GS HK$123), plan EN5 reverted; methods_unavailable no longer lists an add-on rolled out on purpose (Excess Capital). No value moved.
 
+## 2026-10-04T09:11:50+00:00
+
+- regenerated at HEAD: `340e8326`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner-accepted DBS payout (2026-10-04): the bank model's cross-check flag cites the accepted 80.1% total payout; no value moved
+
