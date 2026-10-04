@@ -49,6 +49,7 @@ const SECTIONS = [
   { id: 'risk',       label: 'Risk'       },
   { id: 'research',   label: 'Research'   },
   { id: 'financials', label: 'Financials' },
+  { id: 'news',       label: 'News'       },   // owner, 2026-10-04: news has its own tab
 ] as const;
 
 function scrollTo(id: string) {
@@ -408,7 +409,6 @@ export function ReportViewPage() {
           pipelineData={data as Record<string, unknown>}
           ticker={ticker}
         />
-        <NewsPanel ticker={ticker} />
 
         {/* ── Financials ─────────────────────────────────────────────────── */}
         <SectionAnchor id="financials" label="Financials" />
@@ -418,6 +418,10 @@ export function ReportViewPage() {
         />
         <FinancialsChart ticker={ticker} />
         <CitationPanel data={data as Record<string, unknown>} ticker={ticker} />
+
+        {/* ── News (owner, 2026-10-04: its own tab, no longer inside Research) ── */}
+        <SectionAnchor id="news" label="News" />
+        <NewsPanel ticker={ticker} />
 
       </div>
       {/* Export: Report (PDF) / Model (XLSX) */}

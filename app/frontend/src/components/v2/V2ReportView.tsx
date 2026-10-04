@@ -1,7 +1,7 @@
 /**
  * V2ReportView.tsx — Reimagined Report view (live + complete states)
  *
- * Tabs: Summary · Valuation · Decision · Risk · Research · Financials
+ * Tabs: Summary · Valuation · Decision · Risk · Research · Financials · News
  *
  * Wraps existing report panel components (ValuationLadder, PowerLawRadar,
  * ValueTrapChecklist, DecisionInputsCard, FinancialsChart,
@@ -76,7 +76,7 @@ import { ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBl
 import { Markdown } from '@/components/report/shared/Markdown';
 import { currencySymbol } from '@/lib/utils';
 
-type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials';
+type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials' | 'news';
 
 interface V2ReportViewProps {
   result: RunResult | null;
@@ -107,6 +107,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'risk',       label: 'Risk'       },
   { id: 'research',   label: 'Research'   },
   { id: 'financials', label: 'Financials' },
+  { id: 'news',       label: 'News'       },   // owner, 2026-10-04: news has its own tab
 ];
 
 export function V2ReportView({
@@ -369,6 +370,7 @@ export function V2ReportView({
             statements={data.financial_statements as FinancialStatementsPayload | undefined}
           />
         )}
+        {tab === 'news' && <NewsBody ticker={ticker} />}
       </div>
       {/* Export (saved run only): Report (PDF) / Model (XLSX), above the nav pill. */}
       {!isRunning && runId && <ExportFab runId={runId} ticker={ticker} />}
@@ -1061,22 +1063,12 @@ function ResearchBody({
     return (
       <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="Research streaming — 14+ source synthesis" minH={200} />
-        {/* News does not depend on the research phase, so it renders here too
-            rather than behind this early return. Mounted in V2ReportView as
-            well as ReportViewPage: the desktop JSX is bypassed on this path,
-            so a card added only there is invisible on mobile — which is
-            exactly what had happened to NewsPanel. */}
-        {ticker && <NewsPanel ticker={ticker} />}
       </div>
     );
   }
 
   return (
     <div className="px-4 pt-5 pb-10 space-y-5">
-      {/* Latest news — see the note in the early return above for why this is
-          mounted on this path as well as the desktop one. */}
-      {ticker && <NewsPanel ticker={ticker} />}
-
       {/* Research complete status card */}
       {hasData && (
         <div className="rounded-lg border border-brand/25 bg-brand/10 shadow-sm p-4 flex items-center gap-3">
@@ -1213,6 +1205,19 @@ function StreamingResearchSummary({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ───────── News Tab (owner, 2026-10-04) ─────────
+   The news panel left the Research tab for a tab of its own. It does not depend on any
+   pipeline phase, so it renders while a run is still in progress. Mounted here as well as
+   on the desktop pages: the desktop JSX is bypassed on this path, so a card added only
+   there is invisible on mobile. */
+function NewsBody({ ticker }: { ticker: string }) {
+  return (
+    <div className="px-4 pt-5 pb-10 space-y-5">
+      {ticker ? <NewsPanel ticker={ticker} /> : <LoadingCard label="News" minH={160} />}
     </div>
   );
 }

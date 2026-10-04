@@ -65,6 +65,7 @@ const SECTIONS = [
   { id: 'valuation',     label: 'Valuation'  },
   { id: 'analysis',      label: 'Analysis'   },
   { id: 'financials',    label: 'Financials' },
+  { id: 'news',          label: 'News'       },   // owner, 2026-10-04: news has its own tab
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]['id'];
@@ -80,6 +81,7 @@ const SECTION_PHASES: Record<SectionId, string[]> = {
                'earnings_quality', 'short_interest', 'analyst_revision',
                'intelligence'],
   financials: ['routing', 'financial'],
+  news:       [],                       // the news store is not a pipeline phase
 };
 
 function getEventsForSection(sectionId: SectionId, phaseMap: Record<string, ProgressEvent>): ProgressEvent[] {
@@ -565,6 +567,7 @@ export function ReportPage() {
       case 'valuation':  return !!(dcfRange || scenarioAnalysis || vgpm);
       case 'analysis':   return !!(industryBrief || deepResearch);
       case 'financials': return true;
+      case 'news':       return !!liveTicker;
       default:           return false;
     }
   }
@@ -1432,7 +1435,6 @@ export function ReportPage() {
             {renderSection('risk', 'Value Trap Audit', (
               <ValueTrapChecklist analysis={valueTrap} ticker={liveTicker} />
             ))}
-            <NewsPanel ticker={liveTicker} />
             {/* Decision-inputs card (M2 D3) — replaces the investor persona
                 panel retired with the committee. Shows the quantitative
                 anchors + qualitative inputs the PM decided from. */}
@@ -1494,6 +1496,10 @@ export function ReportPage() {
         {renderSection('citation', 'Citation Registry', (
           <CitationPanel data={data as Record<string, unknown>} ticker={liveTicker} />
         ))}
+
+        {/* ── News (owner, 2026-10-04: its own tab) ───────────────────────── */}
+        <SectionAnchor id="news" label="News" />
+        {liveTicker ? <NewsPanel ticker={liveTicker} /> : null}
 
         {/* Bottom padding */}
         <div className="h-16" />
