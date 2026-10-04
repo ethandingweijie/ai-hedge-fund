@@ -453,6 +453,9 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         # market-implied cost of equity, recorded when outside the plausible band of
         # the rate used; `applied` is a literal False (never a discount rate).
         "GATE_BANK_IMPLIED_COE",
+        # Plan EN4 (2026-10-04): a capex-cycle trough starts the margin at the latest year and fades
+        # it to the base; `applied` True.
+        "GATE_CAPEX_CYCLE_FADE",
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
         "GATE_DISTRESSED_DEVELOPER",
@@ -520,7 +523,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 13   # +GATE_REVENUE_SCALE_CAP (plan 1A.2, 2026-10-04: every record states applied); +GATE_OE_CASCADE (self-learning loop 6, 2026-10-04); +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
+    assert src.count('"applied": True,') == 14   # +GATE_CAPEX_CYCLE_FADE (plan EN4, 2026-10-04); +GATE_REVENUE_SCALE_CAP (plan 1A.2, 2026-10-04: every record states applied); +GATE_OE_CASCADE (self-learning loop 6, 2026-10-04); +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
@@ -1390,11 +1393,13 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # earnings. Phillips 66's segments summed to $16.6bn of EBITDA against the
     # $9.8bn it reported, because a peer basket's margin is a pure-play margin
     # and segment revenue is not pure-play revenue.
-    assert src.count('"normalized_ebitda"') == 3
+    # FOUR since 2026-10-04 (plan EN2): the recovery discount re-reads it.
+    assert src.count('"normalized_ebitda"') == 4
     # SEVEN since 2026-09-19: the P/E (norm) leg trace reads it once more, to
     # label whether the bank fallback (equity x target ROE) supplied the
     # earnings -- a disclosure read for the Excel export, not a valuation one.
-    assert src.count('"normalized_net_income"') == 7
+    # EIGHT since 2026-10-04 (plan EN2): the recovery discount re-reads it.
+    assert src.count('"normalized_net_income"') == 8
     # SIX since 2026-09-20: the FCF Yield leg on a cyclical profile now stands
     # on the same five-year normalisation as the EV/EBITDA and P/E legs, so
     # `_norm_fcf` is computed beside the other three (with a `free_cash_flow`
@@ -2127,7 +2132,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (145, 26, 26, 8)   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
+    assert (tot, trail, elig, anchored) == (145, 26, 26, 7)   # plan IN1 (2026-10-04): Managed Care's anchor moved to Forward P/E;   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -2139,7 +2144,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
         ("Membership / Subscription Retail", "P/E", 0.4),
     ], consumer_anchors
     assert sorted(added_anchors) == [
-        ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4),
+        # ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4) -- plan IN1 (2026-10-04): Forward P/E anchors
         ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4),
     ], added_anchors
     assert dcf_agent._PE_NORM_SWAP_LEGS == {
@@ -2257,7 +2262,7 @@ def test_the_ops_spellings_are_now_in_the_swap():
         ("Financials", "Insurance", "P/E (ops)", 0.2, False),     # Wave 6 (2026-09-27): life profile re-weighted, CR gate removed
         ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
         ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
-        ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),
+        ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.3, False),   # plan IN1 (2026-10-04): Forward P/E anchors managed care
         ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
     ], carriers
     # The six are the whole of the former gap, and the gap is now closed.

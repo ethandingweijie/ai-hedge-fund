@@ -336,8 +336,17 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
         implied_tax = 1.0 - ni_T_from_eps / (ebit_T - interest)
         out["implied_tax_rate"] = implied_tax
         if not (0.0 <= implied_tax <= 0.45):
+            # Owner, 2026-10-04 (plan EN3): flagged AND resolved. Guided EPS is the endpoint management and
+            # the street both state, and it carries the share count; the margin that delivers it at the
+            # history's tax and interest replaces the incompatible margin (Molina: the margin path put
+            # FY27 EBIT at 2.7x consensus while guided EPS supported a third of it).
+            out["margin_T_conflicting"] = mT
+            out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest
+            out["margin_T_guided"] = out["ebit_T_implied"] / revT if revT else mT
+            out["margin_T_basis"] = "EBIT implied by guided EPS (the guided margin conflicted with it)"
             out["flags"].append(f"Guided EPS and guided margin are not compatible: they imply a {implied_tax:.0%} tax-and-non-operating take "
-                                f"(history {tax:.0%}); one endpoint is wrong or the share count moves")
+                                f"(history {tax:.0%}); the forecast takes the EBIT margin guided EPS implies "
+                                f"({out['margin_T_guided']:.1%}, not {mT:.1%})")
     if ni_T_from_eps is not None and ebit_T is None:
         # back-solve the EBIT the EPS needs at the history's tax and interest
         out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest
@@ -517,10 +526,13 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         if need is not None and hist["buyback_median"] >= 0:
             ok = need <= hist["buyback_median"] * T * 1.5 + 1e-9
         elif d_sh <= 0:
-            ok = True
+            # Owner, 2026-10-04 (plan EN3): implied shares ABOVE today's are not a pass -- beyond 15% they
+            # are an endpoint conflict (Molina: 141m implied against 52m read PASS).
+            ok = implied_shares <= float(shares) * 1.15
         inv.append({"id": 3, "name": "Share-count integrity", "ok": ok, "detail": detail})
-        for r in rows:
-            r["eps"] = (r["net_income"] / implied_shares) if (r["year"] >= T and implied_shares > 0) else r["eps"]
+        if ok is not False:                       # a failed check does not re-base EPS on an implausible count
+            for r in rows:
+                r["eps"] = (r["net_income"] / implied_shares) if (r["year"] >= T and implied_shares > 0) else r["eps"]
     # operating jaws
     jaws = []
     for t in range(2, T + 1):

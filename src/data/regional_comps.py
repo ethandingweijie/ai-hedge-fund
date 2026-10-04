@@ -306,6 +306,10 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Cruise Lines":                {"US": ("RCL", "CCL", "NCLH", "VIK", "LIND")},
     "City Gas Distribution (HK / China)": {"HKSE": ("0003.HK", "2688.HK", "0392.HK", "1193.HK", "0384.HK")},
     "Specialty & Generic Pharma":  {"US": ("TEVA", "ZTS", "VTRS", "ELAN", "ANIP")},
+    # Plan IN1 (2026-10-04, MOH review): managed care prices on managed-care insurers, not on FMP's
+    # "Healthcare Plans" label (Progyny; CVS and Cigna, whose earnings are pharmacy and PBM). Centene is
+    # in the basket; a negative multiple falls out of the in-band median by itself.
+    "Managed Care":                {"US": ("UNH", "ELV", "CNC", "HUM", "MOH", "OSCR", "ALHC")},
     # Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform prices its relative
     # legs on China internet peers (the owner's pins plus the store's internet, gaming and travel
     # platforms) instead of FMP's Specialty Retail label (Amazon, O'Reilly; Meituan, MINISO).
@@ -1396,28 +1400,39 @@ def get_regional_multiples(
                 "key": key,
                 "exchange": exchange,
             }
-            # Owner, 2026-10-04 (plan 1F.3): a company is not its own peer. The stored median is
-            # over the whole basket; when the subject is a named in-band member, the median is
-            # re-taken over the others (Boeing sat in its own basket at 27.6x EV/EBITDA and 72.5x
-            # P/E; Birkenstock in every one of its comparisons). Too few left -> the stored figure
-            # stands, and the field says the subject could not be taken out.
-            if exclude_symbol:
-                _subj = subject_symbol(exclude_symbol)
-                _mk = (level, key, cohort)
-                if _mk not in _members_seen:
+            # Owner, 2026-10-04 (plan 1F.3 / EN8): the median is re-taken over the named in-band members
+            # without (a) the valued company -- not its own peer -- and (b) any member with no market
+            # cap (a feed error: UNH and CVS read $0m in Molina's basket), and the members and values it
+            # was taken over are frozen into the run, so the workbook's Comps check cannot drift when
+            # the weekly refresh rewrites the basket. Too few left -> the stored figure stands.
+            _mk = (level, key, cohort)
+            if _mk not in _members_seen:
+                try:
                     _members_seen[_mk] = load_members(exchange, level, key, cohort)
-                _mem = _members_seen[_mk]
-                _own = [m for m in _mem if subject_symbol(m.get("symbol")) == _subj]
-                if _own and ((_own[0].get("metrics") or {}).get(field) or {}).get("in_band"):
-                    _vals = [float(((m.get("metrics") or {}).get(field) or {}).get("value"))
-                             for m in _mem if subject_symbol(m.get("symbol")) != _subj
-                             and ((m.get("metrics") or {}).get(field) or {}).get("in_band")
-                             and ((m.get("metrics") or {}).get(field) or {}).get("value") is not None]
-                    if len(_vals) >= floor:
-                        resolved[field].update(value=round(statistics.median(_vals), 4), peer_count=len(_vals),
-                                               subject_excluded=True, value_with_subject=row["value"])
-                    else:
-                        resolved[field]["subject_excluded"] = False
+                except Exception:                          # noqa: BLE001
+                    _members_seen[_mk] = []
+            _mem = _members_seen[_mk]
+            if _mem:
+                _subj = subject_symbol(exclude_symbol) if exclude_symbol else None
+                _cell = lambda m_: ((m_.get("metrics") or {}).get(field) or {})        # noqa: E731
+                _inband = [m_ for m_ in _mem if _cell(m_).get("in_band") and _cell(m_).get("value") is not None]
+                _keep = [m_ for m_ in _inband
+                         if subject_symbol(m_.get("symbol")) != _subj and (m_.get("market_cap") or 0) > 0]
+                _dropped_self = any(subject_symbol(m_.get("symbol")) == _subj for m_ in _inband) if _subj else False
+                _dropped_mcap = [m_.get("symbol") for m_ in _inband if not (m_.get("market_cap") or 0) > 0]
+                if (_dropped_self or _dropped_mcap) and len(_keep) >= floor:
+                    resolved[field].update(value=round(statistics.median(float(_cell(m_)["value"]) for m_ in _keep), 4),
+                                           peer_count=len(_keep), value_with_subject=row["value"])
+                    if _dropped_self:
+                        resolved[field]["subject_excluded"] = True
+                    if _dropped_mcap:
+                        resolved[field]["excluded_no_market_cap"] = _dropped_mcap
+                elif _dropped_self:
+                    resolved[field]["subject_excluded"] = False
+                _frozen = _keep if (_dropped_self or _dropped_mcap) and len(_keep) >= floor else _inband
+                resolved[field]["members_used"] = [
+                    {"symbol": m_.get("symbol"), "name": m_.get("name"), "market_cap": m_.get("market_cap"),
+                     "value": float(_cell(m_)["value"])} for m_ in _frozen]
     # Aging out is the failure mode this module exists to prevent, and it is
     # the one that hides best: every field simply goes missing, the caller
     # keeps its static table, and an HK stock is quietly valued on US

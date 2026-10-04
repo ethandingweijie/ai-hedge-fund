@@ -132,7 +132,9 @@ def test_biotech_treasury_is_cash_managed_care_float_is_not():
     biotech, _ = d._valuation_net_debt(dict(r), "Healthcare", "MRNA", "USD", "Biotechnology")
     plan, _ = d._valuation_net_debt(dict(r), "Healthcare", "MOH", "USD", "Medical - Healthcare Plans")
     assert biotech == -3700.0
-    assert plan == -500.0
+    # Plan IN1: a managed-care plan's cash and investments are regulated capital; with no parent-only
+    # cash on record, net debt is the gross debt.
+    assert plan == 1240.0
 
 
 def test_interest_income_leaves_unlevered_fcf():
@@ -228,3 +230,26 @@ def test_the_valued_company_is_not_in_its_own_curated_basket(monkeypatch):
     monkeypatch.setattr(rc, "_ensure_table", lambda: None)
     rc.basket_multiples("HKSE", ("09988.HK", "00700.HK"), "China Internet Platform", exclude="09988.HK")
     assert "9988.HK" not in seen["params"] and "0700.HK" in seen["params"]
+
+
+# ── Phase 1b (MOH / JD / D05 / 9988 reviews) ───────────────────────────────────
+
+def test_en2_recovery_discount_prices_the_excess_when_consensus_reaches_it():
+    v, info = d._recovery_discounted(1220.0, [274.0, 532.0, 700.0, 900.0, 1240.0], 0.08)
+    assert info["years_to_recover"] == 5
+    assert v == pytest.approx(274.0 + (1220.0 - 274.0) / 1.08 ** 5)
+    assert d._recovery_discounted(200.0, [274.0], 0.08) == (200.0, None)          # below forward: unchanged
+
+
+def test_en3_an_incompatible_margin_gives_way_to_guided_eps():
+    blk = {"fiscal_year_1": "FY2026", "estimates": {"base": {"revenue_growth_fy1": 0.05, "ebitda_margin_fy1": 0.30, "eps_fy1": 0.5}}}
+    fc = _fc(blk)
+    dec = fc["deconstruction"]
+    assert "margin_T_conflicting" in dec and dec["margin_T_guided"] < 0.10
+    assert any("guided EPS implies" in f or "not compatible" in f for f in fc["flags"])
+
+
+def test_in2_bank_scenarios_move_drivers_not_the_answer():
+    import inspect
+    src = inspect.getsource(d._compute_method_value)
+    assert "_BANK_SCENARIO_ROE_SHIFT" in src and "_BANK_SCENARIO_COE_SHIFT" in src

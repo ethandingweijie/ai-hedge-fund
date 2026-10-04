@@ -205,7 +205,8 @@ def test_the_dbs_golden_keeps_the_research_roe_without_family_guidance_and_reads
     ggm = dr_["base"]["leg_inputs"]["GGM (P/B)"]
     assert ggm["assumptions"]["bvps_basis"] == "latest book" and not any("bank model" in s for s in ggm["assumptions"]["provenance"])
     assert any(f.startswith("Bank earnings-and-capital model") and "cross-check" in f for f in dr_["base"]["forward_flags"])
-    assert out["base_iv"] == pytest.approx(44.44, abs=0.05)                     # unchanged: the golden holds
+    # 44.44 until plan IN2 (2026-10-04): Excess Capital's weight rolls into the operating legs.
+    assert out["base_iv"] == pytest.approx(46.75, abs=0.05)
     block = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "HIGH", "estimates": {"base": {"revenue_growth_fy1": 0.022, "revenue_growth_fy2": 0.035}},
              "family_metrics": {"family": "bank", "bank": {"loan_growth_fy1": 0.05, "nim_fy1": 0.0205, "cost_to_income_fy1": 0.40, "credit_cost_bps_fy1": 20.0, "payout_ratio": 0.55}}}
     out2 = replay_fixture("D05_SI", state_patch={"guidance_estimates": {"D05.SI": block}})

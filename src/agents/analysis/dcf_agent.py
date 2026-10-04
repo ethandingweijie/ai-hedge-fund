@@ -117,6 +117,18 @@ _CAPM_RF, _CAPM_ERP = 0.0395, 0.0446
 #: Owner, 2026-10-04 (decision D6), PROPOSED: years over which a cascaded (OE <= 0) margin fades from
 #: the trailing figure to the positive-year median.
 _CASCADE_FADE_YEARS = 5
+#: Plan EN1 (2026-10-04), PROPOSED: the annual share of the gap to terminal growth a profile with no
+#: schedule of its own keeps (0.75: a quarter closes each year; 7.5% of the gap is left by year 10).
+_DEFAULT_FADE_ALPHA = 0.75
+#: Plan EN1 (2026-10-04), PROPOSED: years a profile with no schedule holds its year-1 growth before the
+#: straight-line fade to terminal growth by year 10.
+_TWO_STAGE_HOLD_YEARS = 5
+#: Plan EN4 (2026-10-04), PROPOSED: latest capex intensity above this multiple of its own prior-year
+#: median marks a capex-cycle trough.
+_CAPEX_SPIKE_RATIO = 1.3
+#: Plan IN2 (2026-10-04), PROPOSED: bank scenario drivers for the GGM leg.
+_BANK_SCENARIO_ROE_SHIFT = 0.10
+_BANK_SCENARIO_COE_SHIFT = 0.005
 _BETA_PLAUSIBLE = (0.4, 2.5)
 _RISK_ON_CAPM_BAND = 0.01
 #: Owner, 2026-10-04 (decision D8), PROPOSED: the discount-rate move by scenario. Bear prices a
@@ -1040,6 +1052,18 @@ _US_GAAP_NON_USD_REPORTERS = frozenset({
 _CLAIMS_BACKED_HEALTHCARE = ("healthcare plans", "managed care", "insurance")
 
 
+def _parent_cash(ticker: str) -> Optional[float]:
+    """Owner-set parent-level (holding company) cash for a claims-backed insurer, in the filing
+    currency, from valuation_constants.parent_cash; None when none is on record."""
+    try:
+        from src.data import valuation_constants as _vc
+        e = ((_vc.load().get("parent_cash") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        v = e.get("value")
+        return float(v) if isinstance(v, (int, float)) else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
 def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
     return (str(reported_currency or "").upper() == "USD"
             or str(ticker or "").upper() in _US_GAAP_NON_USD_REPORTERS)
@@ -1070,6 +1094,18 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
                 and abs(float(raw) - (float(td) - float(cash))) <= 0.01 * max(abs(float(td)), 1.0)):
             nd = float(raw) - float(sti)
             netted = True
+    # Plan IN1 (2026-10-04): a claims-backed insurer's cash and investments are regulated capital in its
+    # insurance subsidiaries; the parent cannot pay them out. Only parent-level cash counts (owner-set per
+    # ticker in valuation_constants.parent_cash; none on record = none counted), against the full debt,
+    # which is the parent's. Molina carried $5.1bn of subsidiary cash as spare, ~$99 a share on every leg.
+    regulated_cash = False
+    if ((sector or "") in ("Healthcare", "Health Care")
+            and any(k in str(industry or "").lower() for k in _CLAIMS_BACKED_HEALTHCARE)):
+        td = row.get("total_debt")
+        if isinstance(td, (int, float)):
+            _pc = _parent_cash(ticker)
+            nd = float(td) - (_pc or 0.0)
+            regulated_cash = True
     us_gaap = _reports_us_gaap(ticker, reported_currency)
     lease = row.get("lease_liabilities")
     lease_out = 0.0
@@ -1084,6 +1120,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
         "short_term_investments_netted": bool(netted),
         "accounting_basis": "US GAAP" if us_gaap else "IFRS",
         "lease_liabilities": float(lease) if isinstance(lease, (int, float)) else None,
+        "regulated_cash_excluded": regulated_cash,
         "leases": ("excluded (US GAAP: rent is inside EBITDA and cash flow)" if lease_out
                    else "included (IFRS 16: lease cost is below EBITDA)" if not us_gaap
                    else "none reported"),
@@ -1337,6 +1374,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
     "short_term_investments",
     "minority_interest", "preferred_equity", "lease_liabilities",
+    "pretax_income", "income_tax_expense",
     "goodwill", "intangible_assets",
     # The two operating-capital lines the deterministic ROIC denominator floor
     # needs (operating working capital + net PP&E). Both were already fetched
@@ -1401,6 +1439,8 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "total_equity":        _safe(getattr(li, "total_equity", None)),
             "minority_interest":   _safe(getattr(li, "minority_interest", None)),
             "preferred_equity":    _safe(getattr(li, "preferred_equity", None)),
+            "pretax_income":       _safe(getattr(li, "pretax_income", None)),
+            "income_tax_expense":  _safe(getattr(li, "income_tax_expense", None)),
             "lease_liabilities":   _safe(getattr(li, "lease_liabilities", None)),
             "shares_outstanding_basic": _safe(getattr(li, "shares_outstanding_basic", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
@@ -3490,6 +3530,9 @@ def _sotp_analyst_style(
     _mi_usd = max(float(minority_interest or 0.0), 0.0)
     nav = total_seg_value + associates + net_cash - _mi_usd
     holdco_pct = float(assumptions.get("holdco_discount_pct", 0.0) or 0.0)
+    # The discount is on the whole NAV, cash included: the analyst SOTP reproduces the published
+    # method, and that is the broker convention (Meituan reproduces GS's HK$123 on it). Plan EN5
+    # (discount on segments only) was tried 2026-10-04 and reverted; it is an owner question.
     holdco_value = nav * holdco_pct
     final = nav - holdco_value
     fx = float(fx_to_reporting or 1.0)
@@ -3562,6 +3605,24 @@ def _core_earnings(row: dict, prior_rows: Optional[list] = None) -> dict:
             "ebit_core": (float(row["ebit"]) - excess) if isinstance(row.get("ebit"), (int, float)) else None,
             "net_income_core": (float(ni) - excess * (1.0 - tax)) if isinstance(ni, (int, float)) else None,
             "non_operating_gap": excess}
+
+
+def _recovery_discounted(norm: Optional[float], path: list, rate: float,
+                         max_years: int = 5) -> tuple[Optional[float], Optional[dict]]:
+    """Owner, 2026-10-04 (plan EN2): normalised earnings priced as if the recovery were today are not
+    today's earnings. When the cycle-normalised figure exceeds the first forward-year consensus, the
+    EXCESS is earned only from the year consensus first reaches it (at most `max_years`) and is
+    discounted back at `rate`. Molina: a $23.3 normalised EPS against guidance of $5.25 that consensus
+    does not reach until FY+5. Normalised figures at or below the forward year stand unchanged."""
+    if norm is None or not path or path[0] is None or rate is None or rate <= -1:
+        return norm, None
+    f1 = float(path[0])
+    if norm <= f1 or f1 <= 0:
+        return norm, None
+    n = next((i + 1 for i, v in enumerate(path[:max_years]) if v is not None and v >= norm), max_years)
+    out = f1 + (float(norm) - f1) / (1.0 + rate) ** n
+    return out, {"normalised": float(norm), "forward_year_1": f1, "years_to_recover": n,
+                 "rate": rate, "recovery_discounted": out}
 
 
 def _normalized_earnings(
@@ -6994,6 +7055,9 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
             fields[name]["exchange"] = b.get("exchange")
         if b.get("subject_excluded") is not None:              # plan 1F.3
             fields[name]["subject_excluded"] = b.get("subject_excluded")
+        for _k in ("members_used", "excluded_no_market_cap"):  # plan EN8: frozen into the run
+            if b.get(_k):
+                fields[name][_k] = b.get(_k)
     age = peer.get("_comp_age_days")
     return {
         "fields": fields,
@@ -8741,6 +8805,22 @@ def _compute_method_value(
         if ggm is None:
             return None
         value_ps, _target_pb, _a = ggm
+        # Plan IN2 (2026-10-04, D05.SI review): a bank's bear and bull move its DRIVERS, not its answer.
+        # The return on book falls (rises) by _BANK_SCENARIO_ROE_SHIFT of itself and the cost of equity
+        # rises (falls) by _BANK_SCENARIO_COE_SHIFT; the band multiplier is retired for this leg.
+        _sg = -1.0 if sm < 1.0 else (1.0 if sm > 1.0 else 0.0)
+        if _sg and _a.get("roe_book") is not None and _a.get("coe") is not None and _a.get("g") is not None:
+            _roe_s = float(_a["roe_book"]) * (1.0 + _sg * _BANK_SCENARIO_ROE_SHIFT)
+            _coe_s = float(_a["coe"]) - _sg * _BANK_SCENARIO_COE_SHIFT
+            _g = float(_a["g"])
+            if _coe_s > _g and _roe_s > _g:
+                _target_pb = max(0.3, min((_roe_s - _g) / (_coe_s - _g), 4.0))
+                value_ps = round(float(_a["bvps"]) * _target_pb, 4)
+                _a = {**_a, "roe_book": _roe_s, "coe": _coe_s,
+                      "scenario_drivers": f"return on book {_sg * _BANK_SCENARIO_ROE_SHIFT:+.0%} of itself, cost of equity {-_sg * _BANK_SCENARIO_COE_SHIFT:+.2%}"}
+                _leg_trace(kind="ggm", target_pb=round(_target_pb, 4), assumptions=_a,
+                           value_before_band=float(value_ps), scenario_band=1.0)
+                return value_ps
         _leg_trace(kind="ggm", target_pb=_target_pb, assumptions=_a,
                    value_before_band=float(value_ps), scenario_band=sm)
         return value_ps * sm
@@ -10523,15 +10603,25 @@ def _blend_methods(
         _ad = next((d for d in dropped if d["method"] == _anchor_m["name"]), None)
         if _ad is not None:
             _dcf_v = method_values.get("DCF")
+            _fpe_v = method_values.get("Forward P/E")
             _aw = float(_ad["weight"] or 0.0)
-            if (_anchor_m["name"] not in _DCF_FAMILY_NAMES and isinstance(_dcf_v, (int, float))
-                    and _dcf_v > 0 and _aw > 0):
+            # Plan EN6 (2026-10-04): the DCF is the fallback only for a profile that values the company
+            # on its cash flows at all; a profile with no DCF-family leg (banks, insurers, managed care
+            # once its DCF is retired) falls back to Forward P/E, the leg closest to how it is priced.
+            _profile_has_dcf = any(m.get("name") in _DCF_FAMILY_NAMES for m in profile_methods)
+            if (_profile_has_dcf and _anchor_m["name"] not in _DCF_FAMILY_NAMES
+                    and isinstance(_dcf_v, (int, float)) and _dcf_v > 0 and _aw > 0):
                 dcf_bucket.append((float(_dcf_v), _aw))
                 parts.append(("DCF (anchor fallback)", "DCF", _aw, "dcf"))
                 surviving_w += _aw
                 _to = "the DCF"
+            elif isinstance(_fpe_v, (int, float)) and _fpe_v > 0 and _aw > 0 and _anchor_m["name"] != "Forward P/E":
+                multi_bucket.append((float(_fpe_v), _aw))
+                parts.append(("Forward P/E (anchor fallback)", "Forward P/E", _aw, "multi"))
+                surviving_w += _aw
+                _to = "Forward P/E"
             else:
-                _to = "the remaining legs, pro rata (no positive DCF)"
+                _to = "the remaining legs, pro rata (no positive DCF or Forward P/E)"
             anchor_degraded = {"method": _anchor_m["name"], "reason": _ad["reason"], "weight": _aw, "moved_to": _to}
             _flag = (f"DEGRADED: anchor leg {_anchor_m['name']} did not compute ({_ad['reason']}); "
                      f"its {_aw:.0%} weight went to {_to}")
@@ -11405,6 +11495,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # _extract_annual_series but never requested, so core earnings never fired in the
                      # first production runs (Boeing's Jeppesen gain stayed in EBITDA).
                      "operating_income",
+                     # Plan IN2 (2026-10-04): the bank model's own effective tax rate (D05.SI ran on a 21%
+                     # default against ~16% because neither line was requested).
+                     "pretax_income", "income_tax_expense",
                      "interest_expense", "invested_capital",
                      "research_and_development", "stock_based_compensation",
                      # REIT-specific
@@ -12508,6 +12601,38 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"5y window → DCF-family methods disabled, blend is "
                     f"multiples-only"
                 )
+
+        # ── Capex-cycle trough (plan EN4, 2026-10-04) ──────────────────────────────────────────────
+        # A latest year whose capex intensity is well above the company's own history (an AI / cloud
+        # build, a capacity cycle) prints a margin far below the base. Projecting the base from year 1
+        # ignores the trough the company is in: 09988.HK's FY26 FCF was -5% of revenue on capex of 12.4%
+        # while the DCF started at +8.8%. The margin fades from the latest year to the base over
+        # _CASCADE_FADE_YEARS (the D6 mechanism). A cascaded loss-maker already fades from trailing.
+        _capex_fade: Optional[list[float]] = None
+        if _cascade_fade is None and not _dcf_family_disabled:
+            try:
+                _ci = [abs(float(r.get("capital_expenditure") or 0.0)) / float(r["revenue"])
+                       for r in series[-5:] if r.get("revenue")]
+                _lm_row = series[-1]
+                _lm = (float(_lm_row[_oe_basis_field]) / float(_lm_row["revenue"])
+                       if _lm_row.get(_oe_basis_field) is not None and _lm_row.get("revenue") else None)
+                if (len(_ci) >= 3 and _lm is not None and _lm < float(fcf_margin_base)
+                        and _ci[-1] > _CAPEX_SPIKE_RATIO * statistics.median(_ci[:-1])):
+                    _capex_fade = [_lm + (float(fcf_margin_base) - _lm) * min(t, _CASCADE_FADE_YEARS) / _CASCADE_FADE_YEARS
+                                   for t in range(1, _PROJECTION_YEARS + 1)]
+                    gate_evaluations.append({
+                        "gate_id": "GATE_CAPEX_CYCLE_FADE", "metric": "fcf_margin_year1",
+                        "raw_input_path_a": round(float(fcf_margin_base), 6),
+                        "gated_output_path_b": round(_capex_fade[0], 6),
+                        "basis": (f"latest capex {_ci[-1]:.1%} of revenue vs {statistics.median(_ci[:-1]):.1%} median of the prior years; "
+                                  f"margin fades from {_lm:.1%} to the {float(fcf_margin_base):.1%} base over {_CASCADE_FADE_YEARS} years"),
+                        "applied": True,
+                    })
+                    ticker_forward_flags.append(
+                        f"Capex cycle: latest capex {_ci[-1]:.1%} of revenue against {statistics.median(_ci[:-1]):.1%} historically; "
+                        f"the FCF margin starts at the latest {_lm:.1%} and recovers to {float(fcf_margin_base):.1%} over {_CASCADE_FADE_YEARS} years")
+            except Exception:                              # noqa: BLE001
+                _capex_fade = None
 
         # ── Cash-conversion gate: reported FCF that is not earnings ───────
         # Runs AFTER the OE<=0 cascade so it caps whatever basis that settled
@@ -14585,6 +14710,49 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             tgr_table = {k: float(_eo_rates["tgr"]) for k in ("bear", "base", "bull")}
             ticker_forward_flags.append(f"Terminal growth replaced by the user's {float(_eo_rates['tgr']):.2%} in every scenario (carried estimate override)")
 
+        # ── The year in progress (plan EN7, 2026-10-04) ────────────────────────────────────────────
+        # Year 1 is the fiscal year after the last audited one, and part of it has been reported. The
+        # elapsed share grows at the trailing-twelve-month rate (last four quarters on the four before),
+        # the rest at the scenario's own rate: JD's FY26 ran at +3% while H1 revenue fell 2.9%.
+        _ttm_g = None
+        _elapsed = 0.0
+        try:
+            _q = search_line_items(ticker, ["revenue"], end_date, period="quarterly", limit=8, api_key=api_key) or []
+            _qr = sorted(((str(getattr(x, "report_period", "") or ""), getattr(x, "revenue", None)) for x in _q),
+                         key=lambda t: t[0])
+            _qv = [v for _, v in _qr if isinstance(v, (int, float))]
+            if len(_qv) == 8 and sum(_qv[:4]) > 0 and _qr[-1][0] > str(most_recent.get("period") or ""):
+                _ttm_g = sum(_qv[4:]) / sum(_qv[:4]) - 1.0
+                _tm1 = _dcf_timing(most_recent.get("period"), _qr[-1][0], end_date)
+                _elapsed = 1.0 - float((_tm1 or {}).get("flow_fractions", [1.0])[0])
+        except Exception:                                  # noqa: BLE001
+            _ttm_g = None
+
+        # ── Recovery-discounted normalisation (plan EN2, 2026-10-04) ───────────────────────────────
+        # The normalised NI and EBITDA legs price a mid-cycle level. Where that sits above the first
+        # forward year of consensus, the excess arrives only when consensus reaches it, discounted at
+        # WACC. Estimates are in the filing currency: converted at the statements' rate.
+        try:
+            _fxe = float(fx_rate) if (fx_rate and fx_rate > 0) else 1.0
+            _recov = {}
+            for _fld, _key in (("normalized_net_income", "net_income_avg"), ("normalized_ebitda", "ebitda_avg")):
+                _path = [(getattr(e, _key, None) * _fxe) if getattr(e, _key, None) is not None else None
+                         for e in (estimates or [])][:5]
+                _new, _info = _recovery_discounted(most_recent.get(_fld), _path, float(wacc))
+                if _info:
+                    most_recent[_fld] = _new
+                    _recov[_fld] = _info
+            if _recov:
+                most_recent["_recovery_discount"] = _recov
+                for _fld, _info in _recov.items():
+                    ticker_forward_flags.append(
+                        f"Recovery-discounted normalisation ({_fld.replace('normalized_', '').replace('_', ' ')}): "
+                        f"the 5-year normalised {_info['normalised'] / 1e9:,.2f}bn exceeds forward consensus "
+                        f"{_info['forward_year_1'] / 1e9:,.2f}bn; the excess is reached in year {_info['years_to_recover']} "
+                        f"and discounted at {_info['rate']:.2%} -> {_info['recovery_discounted'] / 1e9:,.2f}bn")
+        except Exception as _rd_exc:                       # noqa: BLE001
+            ticker_forward_flags.append(f"Recovery discount not applied ({type(_rd_exc).__name__})")
+
         # Owner, 2026-10-04 (decision D8): the scenario spread is the company's own. The margin move
         # is the larger of the profile's multiplicative rule and one standard deviation of the
         # company's own margin history (the last five years, on the basis the DCF uses), so a
@@ -14676,6 +14844,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             elif profile_name in _GROWTH_DECAY_DELTA:
                 _growth_schedule = _decayed_growth_schedule(
                     g, profile_name, years=_PROJECTION_YEARS)
+            else:
+                # Owner, 2026-10-04 (plan EN1): no profile holds its year-1 rate for ten years and then
+                # steps straight to terminal growth (09988.HK held -2% / +9.4% / +16.3% flat to year 10;
+                # the bull's terminal value was 75% of its EV). A profile with no schedule of its own runs
+                # the standard two-stage path: the year-1 rate for _TWO_STAGE_HOLD_YEARS, then a straight
+                # line to terminal growth by year 10. The cyclicals keep their faster geometric fade; the
+                # steady compounders keep a growth phase (a full fade from year 1 cut V's and AAPL's DCF
+                # by 40-45%, which no review asked for).
+                _h = _TWO_STAGE_HOLD_YEARS
+                _n_f = _PROJECTION_YEARS - _h
+                _growth_schedule = [g] * _h + [g + (tgr - g) * k / _n_f for k in range(1, _n_f + 1)]
             if profile_name in _EARLY_STAGE_PROFILES:
                 _wacc_schedule = [
                     _staged_wacc_for_year(wacc, profile_name, y)
@@ -14784,9 +14963,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _inv in _gf["invariants"]:
                         if _inv.get("ok") is False:
                             ticker_forward_flags.append(f"Forecast invariant {_inv['id']} ({_inv['name']}) FAILED: {_inv['detail']}")
+            # Plan EN7: the reported part of year 1 at its trailing rate, unless management guided that year.
+            _y1_guided = bool(_gf) and not ((_gf.get("deconstruction") or {}).get("lead_years"))
+            if (_ttm_g is not None and 0.0 < _elapsed < 1.0 and _growth_schedule and not _y1_guided):
+                _g1_old = _growth_schedule[0]
+                _growth_schedule = [_elapsed * _ttm_g + (1.0 - _elapsed) * _g1_old] + list(_growth_schedule[1:])
+                if scenario == "base":
+                    ticker_forward_flags.append(
+                        f"Year in progress: {_elapsed:.0%} of the fiscal year is reported at {_ttm_g:+.1%} "
+                        f"(trailing twelve months); year-1 growth {_g1_old:+.1%} -> {_growth_schedule[0]:+.1%}")
             # Owner, 2026-10-04 (D6): with no guidance forecast, a cascaded loss-maker runs the fade path.
             if _gf_margin_sched is None and _cascade_fade is not None:
                 _gf_margin_sched = [m + md_abs for m in _cascade_fade]
+            elif _gf_margin_sched is None and _capex_fade is not None:
+                _gf_margin_sched = [m + md_abs for m in _capex_fade]      # plan EN4
             # Owner, 2026-10-03: the forward multiples of this scenario price on the guidance-derived
             # FY+1 estimates (EPS, EBITDA, revenue, EBIT) where the research or the forecast gives
             # them; consensus where not. The leg trace names the source and keeps consensus beside it.
@@ -15860,10 +16050,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # when the leg has no input this run (Insurance (P&C): the Combined
             # Ratio Gate rolls into P/E (ops)). Copies the rows; the registry is
             # untouched; disclosed on the flag.
+            # Plan IN2 (2026-10-04, D05.SI review): Excess Capital is an ADD-ON to an operating value (the
+            # surplus capital per share, ~S$1 at DBS), not a standalone value: as a leg it priced tangible
+            # book plus the surplus (S$22.79 on a S$24.28 book) at 10% of the blend. Its weight rolls into
+            # the operating legs; the surplus is disclosed on the trace.
+            if any(isinstance(m, dict) and m.get("name") in ("Excess Capital", "CET1 Capital") for m in _eff_profile_methods):
+                for _xc in ("Excess Capital", "CET1 Capital"):
+                    _eff_profile_methods, _xc_rec = _roll_leg_weight(
+                        _eff_profile_methods, _xc, ["GGM (P/B)", "Residual Income", "P/TBV"])
+                    if scenario == "base" and _xc_rec.get("dropped"):
+                        forward_flags.append(
+                            f"{_xc}: an add-on to the operating value, not a standalone leg; its weight "
+                            f"(w={_xc_rec.get('dropped_weight', 0.0):.2f}) rolls into "
+                            + ", ".join(f"{k} +{v:.3f}" for k, v in (_xc_rec.get("rolled") or {}).items()))
             for _lf_leg, _lf_into in (((profile_data or {}).get("leg_fallback") or {}).items()):
                 if (any(isinstance(m, dict) and m.get("name") == _lf_leg for m in _eff_profile_methods)
                         and method_values.get(_lf_leg) is None):
                     _eff_profile_methods, _lf_rec = _roll_leg_weight(_eff_profile_methods, _lf_leg, list(_lf_into or []))
+                    if scenario == "base" and _lf_rec.get("anchor_dropped"):
+                        # Plan EN6: an anchor rolled away is a degraded run, said on the front page.
+                        forward_flags.append(
+                            f"DEGRADED: anchor leg {_lf_leg} had no input this run; its weight rolled into "
+                            f"{', '.join(_lf_into or []) or 'the remaining legs'} (profile leg_fallback)")
                     if scenario == "base":
                         forward_flags.append(
                             f"{_lf_leg}: no input this run; its weight (w={_lf_rec.get('dropped_weight', 0.0):.2f}) rolls into "
@@ -16202,9 +16410,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _methods_unavailable: list = []
         if profile_data and profile_data.get("methods"):
             _base_used = set((scenario_results.get("base") or {}).get("methods_used") or [])
+            # Plan IN2 (2026-10-04): an add-on rolled out of the weights on purpose (Excess Capital) is
+            # not "unavailable" -- it computed and was redistributed; the list names failures only.
             _methods_unavailable = [
                 _m["name"] for _m in _pe_norm_methods
-                if _m.get("name") not in _base_used
+                if _m.get("name") not in _base_used and _m.get("name") not in ("Excess Capital", "CET1 Capital")
             ]
 
         # ── rNPV per-asset audit (Biopharma only) ────────────────────────

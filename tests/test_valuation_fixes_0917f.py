@@ -727,6 +727,12 @@ def test_the_persisted_net_income_is_the_one_the_flag_announced():
                 continue
             seen.append(name)
             billions = float(m.group(1))
+            # Plan EN2 (2026-10-04): when the recovery discount then moved the figure, the persisted
+            # field is the one ITS flag announces ("... -> X.XXbn"), the last word on the number.
+            _rd = next((f for f in p.get("scenarios.base.forward_flags") or []
+                        if f.startswith("Recovery-discounted normalisation (net income)")), None)
+            if _rd:
+                billions = float(re.search(r"-> ([\d.,]+)bn", _rd).group(1).replace(",", ""))
             assert abs(p["normalized_net_income"] / 1e9 - billions) < 0.005, (
                 name, billions, p["normalized_net_income"])
     # BABA left the list on Phase 1 (2026-10-04): its normalised net income, each year at today's

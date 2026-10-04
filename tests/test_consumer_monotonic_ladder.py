@@ -1124,7 +1124,7 @@ class TestTheOpsSpellingsAreInTheSwap:
         # (see the same census in test_consumer_discretionary_gates.py).
         # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
         # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles.
-        assert (tot, trail, elig, anchored) == (145, 26, 26, 8)   # Wave 10 (2026-09-27): +10 profiles, Traditional Retail left trailing P/E; 2026-09-27: 14 unrouted profiles removed; Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
+        assert (tot, trail, elig, anchored) == (145, 26, 26, 7)   # plan IN1 (2026-10-04): Managed Care anchors on Forward P/E;   # Wave 10 (2026-09-27): +10 profiles, Traditional Retail left trailing P/E; 2026-09-27: 14 unrouted profiles removed; Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 (-3 trailing P/E, +1)
         assert sorted(consumer_anchors) == [
             # ("Food & Beverage", "P/E", 0.5) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
             # ("Household / Personal", "P/E", 0.4) -- Wave 4 (2026-09-26): anchor moved to Forward P/E
@@ -1134,7 +1134,7 @@ class TestTheOpsSpellingsAreInTheSwap:
         # The three the widening added, all at 0.40, none Consumer.
         added = sorted(a for a in anchors if a[2] in ("P/E (ops)", "P/E (Ops)"))
         assert added == [
-            ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4),
+            # ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4) -- plan IN1 (2026-10-04): Forward P/E anchors
             ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4),
         ], added
 
@@ -1159,7 +1159,7 @@ class TestTheOpsSpellingsAreInTheSwap:
             ("Financials", "Insurance", "P/E (ops)", 0.2, False),   # Wave 6 (2026-09-27): life profile re-weighted
             ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
             ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
-            ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),
+            ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.3, False),   # plan IN1 (2026-10-04)
             ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
         ], carriers
         assert len(carriers) == 37 - 31 - 1   # the Biopharma copy of Managed Care removed 2026-09-27

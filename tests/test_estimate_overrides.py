@@ -84,7 +84,7 @@ def test_overrides_are_validated_and_bounded():
 def test_recompute_moves_the_dcf_leg_the_blend_and_the_target_by_the_engine_formulas():
     p = _payload()
     before = p["data"]["dcf_range"]["MOH"]["base"]["intrinsic_value"]
-    res = eo.recompute(p, "MOH", {"scenarios": {"base": {"revenue_growth_fy2": 0.20}}})
+    res = eo.recompute(p, "MOH", {"scenarios": {"base": {"revenue_growth_fy2": 0.20}}, "medium_term_target": {"metric": "eps", "target_year": "FY2029", "low": 25, "mid": 30, "high": 35}})   # plan EN3 (2026-10-04): a guided EPS binds the margin, so the growth comes with the EPS it implies
     b = res["scenarios"]["base"]
     assert b["skipped"] is None and b["dcf_weight"] == pytest.approx(0.4)
     assert b["forecast"]["rows"][1]["growth"] == pytest.approx(0.20) and b["forecast"]["steps"][0]["title"] == "Read the guidance"
@@ -289,7 +289,7 @@ def client(monkeypatch):
 
 def test_preview_save_and_revert_through_the_api(client):
     h = {"Authorization": "Bearer t1"}
-    r = client.post("/analysis/runs/run-1/estimates/preview", json={"ticker": "MOH", "overrides": {"scenarios": {"base": {"revenue_growth_fy2": 0.2}}}}, headers=h)
+    r = client.post("/analysis/runs/run-1/estimates/preview", json={"ticker": "MOH", "overrides": {"scenarios": {"base": {"revenue_growth_fy2": 0.2}}, "medium_term_target": {"metric": "eps", "target_year": "FY2029", "low": 25, "mid": 30, "high": 35}}}, headers=h)
     assert r.status_code == 200 and r.json()["after"]["intrinsic_value"] > r.json()["before"]["intrinsic_value"] and not client.store
     r = client.post("/analysis/runs/run-1/estimates/preview", json={"ticker": "MOH", "overrides": {"scenarios": {"base": {"revenue_growth_fy2": 9.0}}}}, headers=h)
     assert r.status_code == 422 and "outside" in r.json()["detail"]

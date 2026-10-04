@@ -78,7 +78,8 @@ def opening_from_line_items(most_recent: dict, shares: Optional[float], total_in
             "total_income": _f(total_income) or _f(most_recent.get("revenue")), "shares": sh, "bvps": (eq / sh) if sh else None,
             "tbvps": (max(eq - gw, 0.0) / sh) if sh else None, "roe": (ni / eq) if eq else None,
             "interest_income": _f(most_recent.get("interest_income")), "interest_expense": _f(most_recent.get("interest_expense")),
-            "pretax": _f(most_recent.get("pretax_income")), "tax": _f(most_recent.get("income_tax_expense"))}
+            "pretax": _f(most_recent.get("pretax_income")), "tax": _f(most_recent.get("income_tax_expense")),
+            "dps": _f(most_recent.get("dividends_per_share"))}
 
 
 def _year(s) -> Optional[int]:
@@ -139,7 +140,12 @@ def bank_assumptions(opening: dict, bank_metrics: Optional[dict], block: Optiona
     if opening.get("pretax") and opening.get("tax") is not None and opening["pretax"] > 0:
         tax_hist = abs(opening["tax"]) / opening["pretax"]
     pick("tax_rate", "income tax", (tax_hist, "line items: tax / pre-tax"), bounds=cfg["tax_rate_bounds"], default=cfg["tax_rate_default"])
-    pick("payout_ratio", "dividends and the equity roll", (fam.get("payout_ratio"), "guidance: payout"), (bm.get("dividend_payout_ratio"), "bank metrics: payout"), bounds=cfg["payout_bounds"], default=0.40)
+    # Plan IN2 (2026-10-04): the bank's own payout from the filing (ordinary and special dividends per
+    # share x shares over net income) before the 40% default -- DBS runs a capital-return programme.
+    _dps, _sh, _ni = _f(opening.get("dps")), _f(opening.get("shares")), _f(opening.get("net_income"))
+    payout_hist = (_dps * _sh / _ni) if (_dps and _sh and _ni and _ni > 0) else None
+    pick("payout_ratio", "dividends and the equity roll", (fam.get("payout_ratio"), "guidance: payout"), (bm.get("dividend_payout_ratio"), "bank metrics: payout"),
+         (payout_hist, "line items: dividends per share x shares / net income"), bounds=cfg["payout_bounds"], default=0.40)
     pick("cet1_target", "the capital constraint on distributions", (fam.get("cet1_target"), "guidance: CET1 target"), (cet1_target, "profile calibration: target CET1"), bounds=(0.06, 0.25), default=cfg["cet1_target_default"])
     pick("cet1_ratio_opening", "opening CET1 ratio", (bm.get("cet1_ratio"), "bank metrics: CET1"), bounds=(0.04, 0.30), default=a["cet1_target"]["value"])
     a["loan_share_of_assets"] = _src(cfg["loan_share_of_assets"], "default (PROPOSED)", "loans for the credit-cost charge")

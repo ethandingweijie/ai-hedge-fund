@@ -2472,14 +2472,19 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     # KPIs. These sub-profile keys mirror SECTOR_KPI_FRAMEWORK exactly.
     "HealthcareServices": {
         "Managed Care": {
+            # Plan IN1 (2026-10-04, MOH review): a managed-care insurer's firm-level cash flow is not owner
+            # cash -- premiums fund claims inside regulated subsidiaries -- so the DCF carries no weight.
+            # The market prices the forward year: Forward P/E anchors; normalised P/E (recovery-discounted,
+            # plan EN2) and EV/EBITDA carry the cycle; EPV the steady state.
             "methods": [
-                {"name": "P/E (Ops)",  "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "DCF",        "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EPV",        "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "P/E (Ops)",   "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",   "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EPV",         "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            "excluded": [],
-            "rationale": "Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy.",
+            "excluded": ["DCF"],
+            "rationale": ("Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy; the forward "
+                          "year anchors because the market prices the MLR recovery, not the trough or the average."),
             # Owner, 2026-09-26: "keep valuation intact; emit structural flag Trough MLR Cycle".
             # Observation only, on every run of the profile until the owner retires it.
             "structural_flags": [{"name": "Trough MLR Cycle",

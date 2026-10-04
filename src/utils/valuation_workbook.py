@@ -280,6 +280,9 @@ class _Book:
             out.append(f"DEGRADED: the anchor leg {ad.get('method')} did not compute ({ad.get('reason')}); its "
                        f"{float(ad.get('weight') or 0):.0%} weight went to {ad.get('moved_to') or 'the remaining legs'}.")
         else:
+            for f in (self.scen("base").get("forward_flags") or []):
+                if str(f).startswith("DEGRADED:"):
+                    out.append(str(f))
             for d in (self.scen("base").get("legs_dropped") or []):
                 if d.get("method") == self.dr.get("anchor_method"):
                     out.append(f"DEGRADED: the anchor leg {d.get('method')} did not compute ({d.get('reason')}); "
@@ -1428,7 +1431,14 @@ class _Book:
                           + (f" — {info.get('exchange')} '{info.get('key')}'" if info.get("key") else ""), 7)
             r += 1
             members = []
-            if info.get("key") and self.load_members:
+            # Plan EN8 (2026-10-04): the members and values the engine's median was taken over, frozen
+            # into the run -- the live basket is read only for runs that predate the freeze.
+            _frozen = info.get("members_used") or []
+            if _frozen:
+                members = [{"symbol": m.get("symbol"), "name": m.get("name"), "market_cap": m.get("market_cap"),
+                            "metrics": {field: {"value": m.get("value"), "in_band": True}},
+                            "computed_at": str(self.run.get("run_at") or "")[:10]} for m in _frozen]
+            elif info.get("key") and self.load_members:
                 try:
                     members = self.load_members(info.get("exchange"), info.get("basis"),
                                                 info.get("key"), info.get("cohort") or "all")
@@ -1436,6 +1446,9 @@ class _Book:
                     members = []
             eng_row = None
             if members:
+                if info.get("excluded_no_market_cap"):
+                    sh.note(r, 1, "Excluded (no market cap in the feed): " + ", ".join(info["excluded_no_market_cap"]))
+                    r += 1
                 sh.header(r, ["Ticker", "Company", "Market cap (m)", lab, "In band", "In-band value"])
                 first = r + 1
                 try:
@@ -1532,11 +1545,17 @@ class _Book:
                 sh.label(r, 1, "Net asset value", bold=True)
                 sh.put(r, 7, f"=G{seg}+G{asso}+G{nc}+G{mi_r}", MIL, bold=True); nav = r; r += 1
                 nav_eng, disc_eng = _num(t.get("nav")), _num(t.get("holdco_discount"))
-                sh.label(r, 1, "Holdco discount rate")
-                sh.put(r, 7, (disc_eng / nav_eng) if nav_eng else _num(t.get("holdco_discount_pct")), PCT)
+                _seg_eng, _as_eng = _num(t.get("segment_value")), _num(t.get("associates")) or 0.0
+                # Plan EN5 (2026-10-04): the discount applies to segments and associates, not to cash.
+                # A table priced before the rule recorded a discount on the whole NAV; its rate is read
+                # back on that basis so the check still ties.
+                _on_assets = (disc_eng is not None and _seg_eng is not None and nav_eng
+                              and abs(disc_eng - (_num(t.get("holdco_discount_pct")) or 0.0) * (_seg_eng + _as_eng)) < 1.0)
+                sh.label(r, 1, "Holdco discount rate" + (" (on segments and associates)" if _on_assets else " (on NAV)"))
+                sh.put(r, 7, (_num(t.get("holdco_discount_pct")) if _on_assets else ((disc_eng / nav_eng) if nav_eng else _num(t.get("holdco_discount_pct")))), PCT)
                 dr_ = r; r += 1
                 sh.label(r, 1, "Equity value after holdco discount", bold=True)
-                sh.put(r, 7, f"=G{nav}*(1-G{dr_})", MIL, bold=True); fin = r; r += 1
+                sh.put(r, 7, (f"=G{nav}-G{dr_}*(G{seg}+G{asso})" if _on_assets else f"=G{nav}*(1-G{dr_})"), MIL, bold=True); fin = r; r += 1
                 sh.label(r, 1, "Shares (millions)")
                 sh.put(r, 7, _mil(t.get("shares")), MIL); shr = r; r += 1
                 sh.label(r, 1, "FX to valuation currency")
@@ -2255,6 +2274,31 @@ class _Book:
                                  f"pre-tax income by {((gp - opx + oth) - pt) / 1e6:,.0f}m",
                                  "Provider line items do not tie; IS tie-out row shows the gap "
                                  "(valuation unaffected: legs use reported EBIT/EBITDA/net income)", "Low"))
+            # Owner, 2026-10-04 (plan EN9): the statement defects the reviews found by eye (D05.SI inventory
+            # of -86,700; receivables and payables zeroed in one year; 09988.HK payables 0 -> 0 -> 358.7bn;
+            # JD's gross margin doubling on a reclassification) -- listed, not silently carried.
+            for key, lab in (("inventory", "Inventory"), ("accounts_receivable", "Receivables"),
+                             ("accounts_payable", "Payables"), ("cash_and_equivalents", "Cash")):
+                neg = [y for y, x in zip(years, rows) if isinstance(x.get(key), (int, float)) and x.get(key) < 0]
+                if neg:
+                    gaps.append(("Statements", f"{lab} negative in {', '.join(neg)}", "A balance cannot be negative: a mapping error in the feed", "Medium"))
+                vals = [x.get(key) for x in rows]
+                for i in range(1, len(vals)):
+                    a_, b_ = vals[i - 1], vals[i]
+                    if isinstance(a_, (int, float)) and isinstance(b_, (int, float)) and abs(a_) > 0 and b_ == 0:
+                        gaps.append(("Statements", f"{lab} drops to zero in FY{years[i]} from {a_ / 1e6:,.0f}m",
+                                     "Likely unreported, not zero: working-capital lines that read it are off", "Medium"))
+                    if isinstance(a_, (int, float)) and isinstance(b_, (int, float)) and a_ == 0 and abs(b_) > 0 and i >= 2 and vals[i - 2] == 0:
+                        gaps.append(("Statements", f"{lab} appears in FY{years[i]} ({b_ / 1e6:,.0f}m) after zero years",
+                                     "A reporting change, not a business change: compare like with like", "Medium"))
+            _gm = [(_num(x.get("gross_profit")) / _num(x.get("revenue"))) if (_num(x.get("gross_profit")) is not None and _num(x.get("revenue"))) else None
+                   for x in rows]
+            _prior = [g for g in _gm[:-1] if g is not None]
+            if _gm and _gm[-1] is not None and len(_prior) >= 2:
+                _med = sorted(_prior)[len(_prior) // 2]
+                if _med > 0 and (_gm[-1] / _med > 1.5 or _gm[-1] / _med < 0.67):
+                    gaps.append(("Statements", f"FY{years[-1]} gross margin {_gm[-1]:.1%} against {_med:.1%} in prior years",
+                                 "A step this size is usually a reclassification of costs; the margin history is not like for like", "Medium"))
             for key, lab, sev in _GAP_LINES:
                 miss = [y for y, x in zip(years, rows) if x.get(key) is None]
                 if miss:
@@ -2492,6 +2536,32 @@ class _Book:
         elif not getattr(self, "dcf_excluded", None):
             sh.note(r, 1, "No DCF leg recorded for this run."); r += 1
         r += 1
+        # Owner, 2026-10-04 (plan EN10): every net-debt figure a reader meets in this workbook, in one
+        # place, each with its date and basis -- the reviews found four on four tabs and no reconciliation.
+        _fu = self.dr.get("financials_used") or {}
+        _rows_nd = []
+        _li_b = (self.scen("base").get("leg_inputs") or {})
+        _v_nd = next((_num(tr.get("net_debt")) for tr in _li_b.values() if isinstance(tr, dict) and _num(tr.get("net_debt")) is not None), None)
+        if _v_nd is not None:
+            _rows_nd.append((self._net_debt_label().replace("Less: net debt — ", "Net debt used by every EV leg and the DCF — "), _v_nd, self.ccy))
+        _st_rows = self._stmt_rows()
+        if _st_rows:
+            _x = _st_rows[-1]
+            _std = sum(_num(_x.get(k)) or 0.0 for k in ("short_term_debt", "long_term_debt")) - sum(_num(_x.get(k)) or 0.0 for k in ("cash_and_equivalents", "short_term_investments"))
+            _rows_nd.append((f"BS tab: debt − cash − short-term investments, FY{str(_x.get('period'))[:4]} as filed (leases excluded)", _std,
+                             (self.statements or {}).get("currency") or _fu.get("source_currency") or self.ccy))
+        for _n, _tr in _li_b.items():
+            if isinstance(_tr, dict) and _tr.get("kind") == "sotp" and isinstance((_tr.get("table") or {}).get("net_cash"), (int, float)):
+                _rows_nd.append((f"{_n}: net debt in its NAV (cited net cash where one was accepted)", -float(_tr["table"]["net_cash"]), "SOTP currency"))
+        if _rows_nd:
+            sh.section(r, "Net debt reconciliation (millions)", 6); r += 1
+            for _lab, _v, _c in _rows_nd:
+                sh.label(r, 1, _lab, indent=1)
+                sh.put(r, 2, _v / 1e6, MIL).font = Font(color=BLUE)
+                sh.put(r, 4, _c).font = Font(color=BLACK)
+                r += 1
+            sh.note(r, 1, "They differ by date (annual vs latest quarter), by what counts as cash (short-term investments; "
+                          "regulated or float cash), by leases, and by currency; only the first prices the valuation."); r += 2
         sh.section(r, "Comps (peer multiples used)", 6); r += 1
         _mu = ((self.dr.get("multiples_used") or {}).get("fields") or {})
         _mu_key = {"EV/EBITDA": "ev_ebitda", "P/E": "pe", "EV/Revenue": "ev_revenue", "P/B": "pb",

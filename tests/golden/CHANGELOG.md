@@ -1698,3 +1698,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Phase 1 follow-up (2026-10-04, first production re-runs): operating_income is requested so core earnings can fire in production; only the ABNORMAL non-operating gap (vs the name's own prior-year median) is stripped, so recurring associate/investment income stays (U96.SI unchanged); a failed guidance-forecast cash-conversion check now caps UFCF at 1.20x net income. BABA 125.44->124.57, 09988.HK 125.00->123.68
 
+## 2026-10-04T08:28:20+00:00
+
+- regenerated at HEAD: `284888b5`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Phase 1b (2026-10-04, MOH / JD / D05 / 9988 reviews): two-stage growth (year-1 rate 5 years, straight line to terminal by year 10) for profiles with no schedule; recovery-discounted normalisation; guided-EPS-consistent margin when the margin endpoint conflicts; capex-cycle margin fade; SOTP holdco discount on segments and associates only; anchor fallback by family; peers frozen and zero-market-cap peers out; banks: Excess Capital rolled into the operating legs, GGM scenarios move ROE and CoE; managed care: regulated cash out, Forward P/E anchor, no DCF weight. D05.SI 44.44->46.75, BABA 124.57->104.84, 09988.HK 123.68->104.97, AAPL 195.20->180.62, V 446.95->415.22, COST 512.93->494.24
+
+## 2026-10-04T08:41:30+00:00
+
+- regenerated at HEAD: `284888b5`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Phase 1b follow-up (2026-10-04): the analyst SOTP keeps the broker convention (holdco discount on the whole NAV; Meituan reproduces GS HK$123), plan EN5 reverted; methods_unavailable no longer lists an add-on rolled out on purpose (Excess Capital). No value moved.
+

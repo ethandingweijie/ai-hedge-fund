@@ -438,16 +438,18 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 #: margin, the sigma scenario spread bounded by each name's own history, WACC +/-50bp by scenario, the
 #: subject out of its own peer medians. Bear and bull widen most (the spread is the company's own).
 _PHASE1_MOVED = {
-    "09988_HK": (123.68,  42.58,   310.07,   (85.95,  114.33, 179.57)),
-    "AAPL":     (195.2,  134.43,   277.5,    (232.88, 263.27, 304.42)),
-    "BABA":     (124.57,  39.9,    286.9,    (85.3,   114.93, 171.75)),
-    "COST":     (512.93, 342.17,   750.25,   (632.47, 717.85, 836.51)),
-    "FCX":      (68.57,   48.4,    103.63,   (63.94,  70.99,  83.27)),
-    "MELI":     (3324.38, 2466.01, 4055.45,  (2051.91, 2352.34, 2608.22)),
-    "MU":       (181.72, 135.16,   234.74,   (531.38, 554.66, 581.17)),
-    "SCHW":     (72.14,   51.85,    96.05,   (79.82,  89.97,  101.92)),
-    "U96_SI":   (5.72,     2.33,     9.12,   (4.68,   5.87,   7.06)),
-    "V":        (446.95, 316.39,   587.72,   (354.89, 400.59, 449.86)),
+    "02888_HK": (294.91, 246.96, 346.94, (238.98, 262.96, 288.97)),
+    "09988_HK": (104.97, 74.03, 252.66, (96.96, 107.78, 159.48)),
+    "AAPL": (180.62, 126.0, 251.39, (228.67, 255.98, 291.37)),
+    "BABA": (104.84, 69.12, 240.18, (95.52, 108.02, 155.39)),
+    "COST": (494.24, 335.39, 707.92, (629.08, 708.5, 815.34)),
+    "D05_SI": (46.75, 39.47, 55.2, (57.56, 61.2, 65.43)),
+    "FCX": (67.36, 47.49, 101.89, (63.62, 70.57, 82.66)),
+    "MELI": (3324.38, 2466.01, 4055.45, (2051.91, 2352.34, 2608.22)),
+    "MU": (181.72, 135.16, 234.74, (531.38, 554.66, 581.17)),
+    "SCHW": (72.14, 51.85, 96.05, (79.82, 89.97, 101.92)),
+    "U96_SI": (5.72, 2.33, 9.12, (4.68, 5.87, 7.06)),
+    "V": (415.22, 296.63, 541.91, (347.97, 389.48, 433.82)),
 }
 
 
@@ -1294,7 +1296,7 @@ def test_the_fcf_yield_leg_reaches_the_same_scaling_from_the_other_side():
     assert "(fcf / shares) / target_yield" in body
 
 
-_BANK_LEGS = ["Excess Capital", "GGM (P/B)", "P/TBV", "Residual Income"]
+_BANK_LEGS = ["GGM (P/B)", "P/TBV", "Residual Income"]   # Excess Capital: an add-on, not weighted (plan IN2, 2026-10-04)
 _02888_LEGS = {
     # Forward P/E 138.28 -> 126.90 and P/E (norm) 132.80 -> 121.87 on 2026-09-26: the
     # bridge deducts Standard Chartered's preferred equity on the earnings legs' path.
@@ -1304,9 +1306,11 @@ _02888_LEGS = {
     # Wave 7 (2026-09-27): the premium sits on the 0.85 floor in every scenario, so the two
     # premium-scaled legs move (bear 0.889 -> 0.85: Forward P/E 126.90 -> 121.29, P/E (norm)
     # 144.22 -> 137.84; bull 0.719 -> 0.85: 135.22 -> 159.86, 194.34 -> 229.74); bank legs unchanged.
-    "bear": {"Excess Capital": 188.02, "GGM (P/B)": 252.98, "P/TBV": 268.28,
+    # Plan IN2 (2026-10-04): GGM bear / bull move the drivers (return on book -10% / +10%, CoE +/-50bp),
+    # not x0.75 / x1.25 of the base: 252.98 -> 271.40 bear, 421.63 -> 414.19 bull.
+    "bear": {"Excess Capital": 188.02, "GGM (P/B)": 271.4, "P/TBV": 268.28,
              "Residual Income": 238.57, "Forward P/E": 121.29, "P/E (norm)": 137.84},
-    "bull": {"Excess Capital": 188.02, "GGM (P/B)": 421.63, "P/TBV": 447.13,
+    "bull": {"Excess Capital": 188.02, "GGM (P/B)": 414.19, "P/TBV": 447.13,
              "Residual Income": 238.57, "Forward P/E": 159.86, "P/E (norm)": 229.74},
 }
 
@@ -1315,7 +1319,9 @@ _02888_LEGS = {
 # bear 214.6404 -> 213.5474, bull 301.759 -> 299.57; the x1.10 composite column follows.
 # Wave 6 (2026-09-27): bank calibration re-derived; bear 213.5474 -> 237.5914, bull 299.5748 -> 337.4028.
 # Wave 7 (2026-09-27): premium floor 0.85; bear 237.5914 -> 236.9541, bull 337.4028 -> 340.9431.
-_02888_BLEND = {"bear": (236.9541, 260.6495), "bull": (340.9431, 375.0374)}
+# Plan IN2 (2026-10-04): Excess Capital's weight rolls into GGM / RI / P/TBV and GGM moves its drivers;
+# bear 236.9541 -> 246.9554, bull 340.9431 -> 346.936 (the x1.10 column is history, restated with it).
+_02888_BLEND = {"bear": (246.9554, 271.65094), "bull": (346.936, 381.6296)}
 
 
 def test_02888_six_legs_split_exactly_along_the_premium_line():
@@ -1413,6 +1419,10 @@ def test_the_leg_table_is_a_superset_of_the_weighted_set():
     # Wave 9 (2026-09-27): BN4.SI's two reverse pairs ((bear, EV/EBITDA), (base, DCF)) left with its
     # re-route to Asian Holding Company (Look-Through); every weighted leg now has a table entry.
     assert reverse == {
+        # Phase 1b (2026-10-04): the Alibaba bear DCF starts at FY26's capex-cycle trough (EN4) with the
+        # name's own bear spread (D8), goes non-positive and drops from the bear blend.
+        ("09988_HK", "bear"): ["DCF"],
+        ("BABA", "bear"): ["DCF"],
         ("MELI", "bear"): ["Power Law Score"],
         ("MELI", "base"): ["Power Law Score"],
         ("MELI", "bull"): ["Power Law Score"],

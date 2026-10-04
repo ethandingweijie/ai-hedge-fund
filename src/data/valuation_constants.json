@@ -791,5 +791,10 @@
     "status": "PROPOSED",
     "note": "Owner, 2026-10-04 (decision D3): majority-owned LISTED subsidiaries whose minority interest is deducted at market value (outside holders' share of the subsidiary's market capitalisation) instead of book. Entries are owner-set: {ticker: [{listed, stake_pct, source, as_of}]}; holdco templates with market_stake divisions are read too.",
     "entries": {}
+  },
+  "parent_cash": {
+    "status": "PROPOSED",
+    "note": "Plan IN1 (2026-10-04): parent-level (holding company) cash of claims-backed insurers (managed care), filing currency; subsidiary cash and investments are regulated capital and do not count. Owner-set: {ticker: {value, as_of, source}}.",
+    "entries": {}
   }
 }

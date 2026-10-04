@@ -153,3 +153,49 @@ ship PROPOSED.
 | D9 | Cross-market peers for global duopolies (Airbus) | 2.5 |
 | D10 | Insider overhang: a general constant or BIRK only | 3.4 |
 | D11 | Rating capped at Hold when the target is below the cost of equity (a rating rule; capture is unchanged) | after 1F |
+
+---
+
+## Phase 1b: the MOH, JD (9618.HK), D05.SI and 9988.HK reviews (2026-10-04)
+
+Checked against the production runs of 06:51 UTC, which already include Phase 1. Some findings were
+already fixed by Phase 1 (marked), and one was not reproduced.
+
+### Engine-wide: implemented automatically
+
+| # | Severity | Finding | Fix |
+|---|---|---|---|
+| EN1 | Critical | Profiles without a growth schedule hold the year-1 growth flat for 10 years (9988.HK: -2% / +9.4% / +16.3%) | Two-stage path: the year-1 rate for 5 years, then a straight line to terminal growth by year 10 (cyclicals keep their geometric fade; a full fade cut V's and AAPL's DCF by 40-45%) |
+| EN2 | Critical | Normalised earnings are priced as if recovery were immediate (MOH normalised EPS $23.3 against guidance >= $5.25; JD normalised EBITDA 2.8x FY25) | Recovery-discounted normalisation: any excess over forward earnings is discounted over the years consensus needs to reach it (at most 5) |
+| EN3 | Critical | The guidance forecast prices the margin endpoint when it conflicts with guided EPS (MOH FY27 EBIT 2.7x the street); the share-count check reads PASS on 141m implied shares against 52m | When the two conflict, the EPS-consistent margin is used; the share-count check FAILs beyond 15% |
+| EN4 | High | Capex-cycle trough: the DCF starts at the base margin while the latest year is a capex-driven trough (9988.HK FY26 -5% FCF, capex 12.4% of revenue) | The margin fades from trailing to base over 5 years (the D6 mechanism) when capex intensity is above 1.3x its own history |
+| EN5 | -- | SOTP: the holdco discount on net cash | **Reverted.** The analyst SOTP reproduces the published method, and broker convention discounts the whole NAV (Meituan reproduces GS's HK$123 only that way). Now an owner question |
+| EN6 | High | Anchor fallback: profile leg fallbacks rolled the anchor's weight pro rata without a DEGRADED flag (MOH P/E (Ops)); for insurers and banks the DCF is the wrong fallback | The anchor roll goes through D7; balance-sheet families fall back to Forward P/E |
+| EN7 | Medium | Year 1 ignores interim results (JD Q2 -2.9% revenue against +3% for FY26) | The elapsed part of year 1 grows at the trailing-twelve-month rate |
+| EN8 | Medium | The Comps check fails because the basket is re-read at export (basket drift); peers with zero or missing market cap are counted | Member values are frozen into the run; zero or missing market cap is excluded and flagged |
+| EN9 | Medium | Statement data defects are not surfaced (negative inventory, lines zeroed, a gross margin step that doubles) | Statement sanity checks go on Data Gaps |
+| EN10 | Medium | Four net-debt figures on four tabs | One reconciliation block on the Summary (each figure with its date and basis) |
+| -- | Done in Phase 1 | Interest income in FCF (JD); minorities and preferred everywhere; lease basis; workbook = engine | -- |
+| -- | Not reproduced | 9988.HK "P/E leg in CNY": normalised NI is taken after FX (HK$4.92 a share) | -- |
+
+### Industry-wide: implemented automatically
+
+| # | Severity | Industry | Fix |
+|---|---|---|---|
+| IN1 | Critical | Managed care | Cash and investments are regulated capital: net debt = gross debt unless a parent-only cash figure is supplied. Forward P/E anchors the profile; the DCF carries no weight (an insurer's firm cash flow is not owner cash). Curated US basket: CNC, ELV, UNH, HUM, OSCR, ALHC (not PGNY, CVS or CI) |
+| IN2 | Critical | Banks | Excess Capital is an add-on to GGM, not a standalone leg (its weight goes to GGM and RI). GGM flags state the ROE actually used. Scenarios move ROE and CoE instead of x0.75 / x1.25. Tax rate from the bank's own history; payout from history (ordinary plus special) |
+
+### Owner decisions (not changed)
+
+- The capture rule's unanimous +15 points (MOH and D05 reviewers): your rule of 2026-09-15.
+- Calibration stays at 1.0 despite MARKET_CLOSER: calibration proposes, only you accept.
+- China/HK country premium zero (9988.HK reviewer): your stance of 2026-09-26.
+- An e-commerce / first-party retail profile for JD (backlog #11).
+- Cross-market bank peers for SGX banks (each market owns its multiples).
+
+### Equity-specific: questions for the owner
+
+- MOH: parent-only cash; Florida / Medicare Advantage exit; MLR by segment.
+- JD: stakes in JD Logistics, JD Health, Dada and JD Industrials (D3 registry); the Ceconomy deal; the FY2025 reclassification.
+- 9988.HK: the Ant Group stake and listed holdings in the SOTP input; four vs five segments; convertible notes.
+- D05.SI: the capital-return programme (special dividends); a NIM-vs-SORA scenario.

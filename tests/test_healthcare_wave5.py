@@ -138,7 +138,9 @@ def test_managed_care_declares_the_trough_mlr_structural_flag_on_both_copies():
     for sec in ("HealthcareServices",):
         flags = P[sec]["Managed Care"]["structural_flags"]
         assert [f["name"] for f in flags] == ["Trough MLR Cycle"]
-        assert P[sec]["Managed Care"]["methods"][0] == {"name": "P/E (Ops)", "weight": 0.40, "anchor": True, "implementable": True}
+        # Plan IN1 (2026-10-04): Forward P/E anchors managed care; the DCF carries no weight.
+        assert P[sec]["Managed Care"]["methods"][0] == {"name": "Forward P/E", "weight": 0.35, "anchor": True, "implementable": True}
+        assert "DCF" not in [m["name"] for m in P[sec]["Managed Care"]["methods"]]
     src = inspect.getsource(d.run_dcf_agent)
     assert '"gate_id": "GATE_STRUCTURAL_FLAG"' in src and 'f"Structural: {_sf_name}"' in src
 

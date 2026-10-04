@@ -108,7 +108,9 @@ def test_the_invariants_report_each_principle():
     assert set(ids) == {1, 2, 3, 4, 5}
     assert ids[2]["ok"] is True and "UFCF / net income" in ids[2]["detail"]
     assert ids[4]["ok"] is False and "vs mid-cycle peer median 9.0x" in ids[4]["detail"]     # the toy's exit multiple is above 9x
-    assert ids[3]["ok"] is True and "implies" in ids[3]["detail"]
+    # Plan EN3 (2026-10-04): guided EPS implying 62m shares against 52m today (+19%) is beyond the 15%
+    # band -- a FAIL, and the EPS rows are not re-based on that count (it passed before: any increase did).
+    assert ids[3]["ok"] is False and "implies" in ids[3]["detail"]
     assert ids[5]["ok"] is None
     t = fc["terminal"]
     assert t["roic_terminal"] >= 0.10 and t["reinvestment_rate"] == pytest.approx(0.025 / t["roic_terminal"])
