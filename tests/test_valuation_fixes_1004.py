@@ -130,7 +130,7 @@ def test_us_gaap_leases_come_out_ifrs_leases_stay():
 def test_biotech_treasury_is_cash_managed_care_float_is_not():
     r = _row(net_debt=-500.0, total_debt=1240.0, cash_and_equivalents=1740.0, short_term_investments=3200.0)
     biotech, _ = d._valuation_net_debt(dict(r), "Healthcare", "MRNA", "USD", "Biotechnology")
-    plan, _ = d._valuation_net_debt(dict(r), "Healthcare", "MOH", "USD", "Medical - Healthcare Plans")
+    plan, _ = d._valuation_net_debt(dict(r), "Healthcare", "XMCO", "USD", "Medical - Healthcare Plans")
     assert biotech == -3700.0
     # Plan IN1: a managed-care plan's cash and investments are regulated capital; with no parent-only
     # cash on record, net debt is the gross debt.
@@ -259,5 +259,12 @@ def test_managed_care_regulated_cash_matches_the_engines_sector_name():
     # Molina resolves to "HealthcareServices"; the guard keyed on "Healthcare" never fired.
     r = {"net_debt": -4000.0, "total_debt": 4000.0, "cash_and_equivalents": 5000.0, "short_term_investments": 3000.0,
          "lease_liabilities": 184.0, "period": "2025-12-31"}
-    nd, b = d._valuation_net_debt(dict(r), "HealthcareServices", "MOH", "USD", "Medical - Healthcare Plans")
+    nd, b = d._valuation_net_debt(dict(r), "HealthcareServices", "XMCO", "USD", "Medical - Healthcare Plans")
     assert b["regulated_cash_excluded"] is True and nd == 4000.0 - 184.0
+
+
+def test_an_accepted_parent_cash_entry_counts_and_a_proposed_one_does_not(monkeypatch):
+    from src.data import valuation_constants as vc
+    doc = {"parent_cash": {"entries": {"MOH": {"value": 290e6, "status": "ACCEPTED"}, "XMCO": {"value": 1e9, "status": "PROPOSED"}}}}
+    monkeypatch.setattr(vc, "load", lambda *a, **k: doc)
+    assert d._parent_cash("MOH") == 290e6 and d._parent_cash("XMCO") is None
