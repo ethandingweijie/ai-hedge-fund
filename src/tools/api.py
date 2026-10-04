@@ -193,6 +193,10 @@ _BALANCE_MAP: dict[str, str] = {
     "shortTermInvestments":              "short_term_investments",
     "minorityInterest":                  "minority_interest",
     "preferredStock":                    "preferred_equity",   # owner bridge, 2026-09-26
+    # Lease liabilities inside FMP's totalDebt (owner, 2026-10-04, plan 1C.2): the bridge states its
+    # lease basis and takes operating leases out for US GAAP filers, whose EBITDA and FCF already
+    # carry the lease cost.
+    "capitalLeaseObligations":           "lease_liabilities",
     "totalNonCurrentAssets":             "non_current_assets",
     "totalNonCurrentLiabilities":        "non_current_liabilities",
 }

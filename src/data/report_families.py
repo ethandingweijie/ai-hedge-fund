@@ -179,7 +179,15 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3) -> 
         return [], []
 
     def get(fy, field):
-        return _num((raw_financials.get(fy) or {}).get(field)) if field else None
+        if not field:
+            return None
+        row = raw_financials.get(fy) or {}
+        v = _num(row.get(field))
+        # Owner, 2026-10-04 (plan 1A.6): the raw records carry operating income, not "ebit";
+        # the EBIT margin read n/a on every Summary.
+        if v is None and field == "ebit":
+            v = _num(row.get("operating_income"))
+        return v
 
     out = []
     for label, kind, source in family_row_specs(family):

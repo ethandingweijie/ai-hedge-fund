@@ -520,7 +520,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     src = _engine_src()
     # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
     # composite as its decision variable and was retired with it.
-    assert src.count('"applied": True,') == 12   # +GATE_OE_CASCADE (self-learning loop 6, 2026-10-04); +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
+    assert src.count('"applied": True,') == 13   # +GATE_REVENUE_SCALE_CAP (plan 1A.2, 2026-10-04: every record states applied); +GATE_OE_CASCADE (self-learning loop 6, 2026-10-04); +GATE_MARGIN_TURNAROUND, +GATE_SOTP_PRECEDENCE, +GATE_FORWARD_PE_SANITY (2026-09-26); +GATE_DISTRESSED_DEVELOPER (Wave 8, 2026-09-27); +GATE_MARGIN_PEAK, +GATE_BACKLOG_MULTIPLE (Wave 9)
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
@@ -1081,6 +1081,9 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         # 2026-09-26 (owner, Priority 1): the one equity bridge -- minority interest
         # and preferred equity come off the DCF as they do off every EV leg.
         "minority_interest", "preferred_equity",
+        # 2026-10-04 (owner, decision D2): the projection is dated -- flows after the balance-sheet
+        # date, discounted mid-window, carried to the valuation date. None keeps whole years at year end.
+        "timing",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
                    "depreciation", "ebit",
@@ -1398,8 +1401,11 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # fallback for filers disclosing no SBC, hence two new call sites, not one).
     # Before this the blend was two-thirds mean-reverted and one-fifth raw TTM:
     # Phillips 66's FCF leg priced $64.31 against a $273.13 quote off a trough.
-    assert src.count("_normalized_earnings(") == 6   # def + five call sites
-    assert '_norm_ebit   = _normalized_earnings(series, "ebit",       window=5)' in src
+    # SEVEN since 2026-10-04 (plan 1E.2): normalised net income is re-taken with each year at today's
+    # interest burden -- one more call site.
+    assert src.count("_normalized_earnings(") == 7   # def + six call sites
+    # 2026-10-04 (plan 1E.1): normalised on CORE earnings (a disposal gain is not cycle profit).
+    assert '_norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src
 
 

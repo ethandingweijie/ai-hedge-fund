@@ -318,13 +318,14 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
 
 
 def profile_basket_multiples(exchange: str, profile: Optional[str],
-                             max_age_days: float = MAX_AGE_DAYS) -> dict[str, dict]:
+                             max_age_days: float = MAX_AGE_DAYS, exclude: Optional[str] = None) -> dict[str, dict]:
     """{field: {value, basis: "profile", cohort, peer_count, key, exchange, members}}
-    for a profile with a curated basket in this market, else {}."""
+    for a profile with a curated basket in this market, else {}. `exclude` (owner, 2026-10-04,
+    plan 1F.3): the valued company, which is not its own peer."""
     syms = (PROFILE_PEER_BASKETS.get(profile or "") or {}).get(exchange)
     if not syms:
         return {}
-    return basket_multiples(exchange, tuple(syms), profile or "", max_age_days=max_age_days)
+    return basket_multiples(exchange, tuple(syms), profile or "", max_age_days=max_age_days, exclude=exclude)
 
 
 #: Wave 8c (owner verdict D): the developer cluster's basket and band.
@@ -482,7 +483,7 @@ def basket_field_values(exchange: str, syms: tuple, field: str, max_age_days: fl
 
 
 def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: float = MAX_AGE_DAYS,
-                     exclude_loss_makers: bool = False) -> dict[str, dict]:
+                     exclude_loss_makers: bool = False, exclude: Optional[str] = None) -> dict[str, dict]:
     """Medians over an explicit member list (basis "profile", key as given).
 
     Wave 8b step 4 (owner decision D): with `exclude_loss_makers`, a member whose stored P/E is out of
@@ -501,6 +502,11 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
             return digits.zfill(4) + ".HK"
         return s_
     _canon = {_store_symbol(x): str(x).upper() for x in syms}
+    _self_removed = False
+    if exclude:
+        _self_removed = _canon.pop(_store_symbol(exclude), None) is not None   # plan 1F.3: never the valued company
+        if not _canon:
+            return {}
     syms = tuple(_canon)
     try:
         marks = ",".join("?" for _ in syms)
@@ -529,6 +535,11 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
     out: dict[str, dict] = {}
     # a sub-cohort is small by construction: three names is the floor, not the industry's five
     floor = 3 if exclude_loss_makers else MIN_INDUSTRY_PEERS
+    # A curated basket is sized with its subject in it; taking the subject out costs it one seat, not
+    # the basket (BABA's six-name China-internet basket fell to four P/E readings and the leg went to
+    # FMP's "Specialty Retail" label at 24.4x).
+    if _self_removed:
+        floor = max(3, floor - 1)
     for field in FIELDS:
         vals, used = [], []
         for sym, m in metrics.items():
@@ -1309,12 +1320,21 @@ def load_comps(exchange: str, level: str, key: str, cohort: str = "all",
 
 # ── Public read: the resolution ladder ──────────────────────────────────────
 
+def subject_symbol(sym: str) -> str:
+    """A ticker as the members table stores it (HK: four-digit code)."""
+    s_ = str(sym or "").upper()
+    if s_.endswith(".HK"):
+        return (s_.split(".")[0].lstrip("0") or "0").zfill(4) + ".HK"
+    return s_
+
+
 def get_regional_multiples(
     exchange: str,
     industry: Optional[str] = None,
     sector: Optional[str] = None,
     market_cap: Optional[float] = None,
     max_age_days: float = MAX_AGE_DAYS,
+    exclude_symbol: Optional[str] = None,
 ) -> dict[str, dict]:
     """Live comps for one stock, resolved field by field.
 
@@ -1336,6 +1356,7 @@ def get_regional_multiples(
     a comp set two orders of magnitude smaller than the target.
     """
     resolved: dict[str, dict] = {}
+    _members_seen: dict[tuple, list] = {}
 
     rungs: list[tuple[str, str, str, int]] = []
     if market_cap:
@@ -1375,6 +1396,28 @@ def get_regional_multiples(
                 "key": key,
                 "exchange": exchange,
             }
+            # Owner, 2026-10-04 (plan 1F.3): a company is not its own peer. The stored median is
+            # over the whole basket; when the subject is a named in-band member, the median is
+            # re-taken over the others (Boeing sat in its own basket at 27.6x EV/EBITDA and 72.5x
+            # P/E; Birkenstock in every one of its comparisons). Too few left -> the stored figure
+            # stands, and the field says the subject could not be taken out.
+            if exclude_symbol:
+                _subj = subject_symbol(exclude_symbol)
+                _mk = (level, key, cohort)
+                if _mk not in _members_seen:
+                    _members_seen[_mk] = load_members(exchange, level, key, cohort)
+                _mem = _members_seen[_mk]
+                _own = [m for m in _mem if subject_symbol(m.get("symbol")) == _subj]
+                if _own and ((_own[0].get("metrics") or {}).get(field) or {}).get("in_band"):
+                    _vals = [float(((m.get("metrics") or {}).get(field) or {}).get("value"))
+                             for m in _mem if subject_symbol(m.get("symbol")) != _subj
+                             and ((m.get("metrics") or {}).get(field) or {}).get("in_band")
+                             and ((m.get("metrics") or {}).get(field) or {}).get("value") is not None]
+                    if len(_vals) >= floor:
+                        resolved[field].update(value=round(statistics.median(_vals), 4), peer_count=len(_vals),
+                                               subject_excluded=True, value_with_subject=row["value"])
+                    else:
+                        resolved[field]["subject_excluded"] = False
     # Aging out is the failure mode this module exists to prevent, and it is
     # the one that hides best: every field simply goes missing, the caller
     # keeps its static table, and an HK stock is quietly valued on US
@@ -1538,6 +1581,7 @@ def get_fmp_classification(ticker: str) -> dict:
                 "industry": (row.get("industry") or "").strip(),
                 "name": (row.get("companyName") or "").strip(),
                 "currency": (row.get("currency") or "").strip(),
+                "beta": row.get("beta"),          # owner, 2026-10-04: the CAPM cross-check (same request)
             }
     except Exception as exc:
         logger.debug("get_fmp_classification(%s) failed: %s", ticker, exc)

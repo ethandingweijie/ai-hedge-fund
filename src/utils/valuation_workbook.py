@@ -174,6 +174,21 @@ def _ref(sheet: str, r: int, c: int, absolute: bool = True) -> str:
     return f"'{sheet}'!${col}${r}" if absolute else f"'{sheet}'!{col}{r}"
 
 
+def _driver(tr: dict, key: str) -> Any:
+    """A DCF driver from a leg trace. The two timing drivers (owner, 2026-10-04, D2) come from the
+    trace's `timing`: a dated trace discounts each year's flows at the middle of their window and
+    carries the value from the balance-sheet date to the valuation date; an undated one (older runs,
+    the T-1 backtest) discounts whole years at year end with no carry."""
+    if key == "disc_point":
+        return 0.5 if (tr.get("timing") or {}).get("flow_fractions") else 1.0
+    if key == "roll_forward_years":
+        return (tr.get("timing") or {}).get("roll_forward_years") or 0.0
+    v = tr.get(key)
+    if key == "margin_delta_absolute" and v is None and tr:
+        return 0.0
+    return v
+
+
 _DCF_DRIVER_KEYS = ("revenue_base", "fcf_margin_base", "margin_delta_absolute", "fcf_floor",
                     "tgr", "net_debt", "shares", "wacc")
 
@@ -253,6 +268,51 @@ class _Book:
             blend = self._blend
         return True if blend is None else leg in blend
 
+    def front_page_flags(self) -> list[str]:
+        """Owner, 2026-10-04 (plan 1A.6, 1E.3, 1F.1): what the front page must say about this run -- a
+        DCF left out of the blend, an anchor leg that did not compute, a margin the engine replaced, a
+        forecast check that failed. Every line reads off the run's own record."""
+        out: list[str] = []
+        if getattr(self, "dcf_excluded", None):
+            out.append(self.dcf_excluded)
+        ad = self.dr.get("anchor_degraded") or self.scen("base").get("anchor_degraded") or {}
+        if ad:
+            out.append(f"DEGRADED: the anchor leg {ad.get('method')} did not compute ({ad.get('reason')}); its "
+                       f"{float(ad.get('weight') or 0):.0%} weight went to {ad.get('moved_to') or 'the remaining legs'}.")
+        else:
+            for d in (self.scen("base").get("legs_dropped") or []):
+                if d.get("method") == self.dr.get("anchor_method"):
+                    out.append(f"DEGRADED: the anchor leg {d.get('method')} did not compute ({d.get('reason')}); "
+                               f"its {float(d.get('weight') or 0):.0%} weight was spread over the other legs.")
+        for g in self.dr.get("gate_evaluations") or []:
+            if g.get("gate_id") == "GATE_OE_CASCADE" and g.get("applied"):
+                a, b = _num(g.get("raw_input_path_a")), _num(g.get("gated_output_path_b"))
+                out.append("FCF MARGIN REPLACED: the trailing owner-earnings margin "
+                           + (f"{a:.1%}" if a is not None else "n/a") + " is not positive; the DCF uses "
+                           + (f"{b:.1%}" if b is not None else "n/a") + f" ({g.get('basis')}).")
+        for inv in ((self.dr.get("guidance_forecast") or {}).get("invariants") or []):
+            if inv.get("ok") is False:
+                out.append(f"FORECAST CHECK FAILED — {inv.get('name')}: {inv.get('detail')}")
+        return out
+
+    def _net_debt_label(self) -> str:
+        """Owner, 2026-10-04 (plan 1A.3): the valuation's net debt with the basis the engine recorded --
+        its date, whether short-term investments count as cash, and the lease treatment. The old label
+        said "leases excluded" while FMP's total debt carried them."""
+        fu = self.dr.get("financials_used") or {}
+        b = fu.get("net_debt_basis") or {}
+        date_ = b.get("balance_sheet_date") or fu.get("balance_sheet_period") or "latest"
+        if not b:
+            return f"Less: net debt — valuation basis (balance sheet {date_}; leases as in FMP total debt)"
+        return (f"Less: net debt — valuation basis (balance sheet {date_}; short-term investments "
+                f"{'counted as cash' if b.get('short_term_investments_netted') else 'not netted'}; "
+                f"{b.get('accounting_basis')}: leases {b.get('leases')})")
+
+    def dcf_weighted(self) -> bool:
+        """True when any DCF-family leg (kind "dcf") carries weight in the blend."""
+        return any(tr.get("kind") == "dcf" and self.in_blend(name)
+                   for sc in SCENARIOS for name, tr in (self.scen(sc).get("leg_inputs") or {}).items())
+
     def sheet(self, name: str, desc: str) -> _Sheet:
         self.tabs.append((name, desc))
         return _Sheet(self.wb.create_sheet(name))
@@ -318,17 +378,23 @@ class _Book:
     def cover_tab(self, sh: _Sheet) -> None:
         sh.title(f"{self.ticker} — Valuation Model")
         run_at = _parse_date(self.run.get("run_at") or self.data.get("end_date")) or date.today()
-        rows = [("Ticker", self.ticker), ("Company", self.data.get("company_name") or ""),
+        # Owner, 2026-10-04 (plan 1A.6): the company name from the run or the FMP profile; the
+        # valuation date as a date value (a DATE() formula showed as 46299 in viewers that do not
+        # calculate).
+        rows = [("Ticker", self.ticker),
+                ("Company", self.data.get("company_name") or self.dr.get("company_name")
+                 or (self.statements or {}).get("company_name") or ""),
                 ("Run ID", self.run.get("run_id") or self.meta.get("run_id") or ""),
-                ("Valuation date", f"=DATE({run_at.year},{run_at.month},{run_at.day})"),
+                ("Valuation date", datetime(run_at.year, run_at.month, run_at.day)),
                 ("Model version", self.dr.get("param_version") or self.dr.get("_engine_cache_version") or ""),
                 ("Prepared by", "AI Hedge Fund valuation engine (automated)"),
                 ("Currency", f"{self.ccy}; statements in millions unless stated")]
         for i, (k, v) in enumerate(rows):
             sh.label(4 + i, 1, k, bold=True)
-            c = sh.put(4 + i, 2, v, "yyyy-mm-dd" if k == "Valuation date" else None)
-            if not (isinstance(v, str) and v.startswith("=")):
-                c.font = Font(color=BLACK)
+            c = sh.ws.cell(row=4 + i, column=2, value=v)
+            if k == "Valuation date":
+                c.number_format = "yyyy-mm-dd"
+            c.font = Font(color=BLACK)
         r = 4 + len(rows) + 1
         sh.section(r, "Colour code", 4)
         sh.ws.cell(row=r + 1, column=1, value="Blue: hardcoded input / historical actual").font = Font(color=BLUE)
@@ -376,115 +442,164 @@ class _Book:
         add("tv_guard", "Terminal spread guard: WACC ≥ g + (engine)", _TV_SPREAD_GUARD, PCT2)
         r += 1
 
-        sh.section(r, "Scenario drivers", 8); r += 1
-        sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
-        drivers = [("revenue_base", "Revenue base (last actual, valuation currency)", BIG),
-                   ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials and property)", PCT2),
-                   ("margin_delta_absolute", "Scenario margin change (absolute)", PCT2),
-                   ("fcf_floor", "FCF margin floor", PCT2),
-                   ("tgr", "Terminal growth", PCT2),
-                   ("net_debt", "Net debt (valuation currency)", BIG),
-                   ("shares", "Shares outstanding", BIG)]
-        for key, lab, fmt in drivers:
-            sh.label(r, 1, lab, indent=1)
-            for j, s in enumerate(SCENARIOS):
-                tr = (self.scen(s).get("leg_inputs") or {}).get("DCF") or {}
-                v = tr.get(key)
-                if key == "margin_delta_absolute" and v is None and tr:
-                    v = 0.0
-                sh.put(r, 3 + j, _num(v), fmt)
-                self.A[f"{key}:{s}"] = _ref("Assumptions", r, 3 + j)
-            r += 1
-        sh.label(r, 1, "Revenue growth by projection year", bold=True); r += 1
-        sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
-        for t in range(10):
-            sh.label(r, 1, f"Year {t + 1}", indent=1)
-            for j, s in enumerate(SCENARIOS):
-                rows = ((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") or []
-                sh.put(r, 3 + j, _num(rows[t].get("growth_pct")) if t < len(rows) else None, PCT2)
-                self.A[f"g{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
-            r += 1
-        sh.label(r, 1, "Discount rate by projection year (staged where the profile stages it)", bold=True); r += 1
-        sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
-        for t in range(10):
-            sh.label(r, 1, f"Year {t + 1}", indent=1)
-            for j, s in enumerate(SCENARIOS):
-                tr = (self.scen(s).get("leg_inputs") or {}).get("DCF") or {}
-                staged = tr.get("wacc_schedule")
-                if staged and t < len(staged):
-                    sh.put(r, 3 + j, _num(staged[t]), PCT2)
-                else:
-                    sh.note(r, 3 + j, "flat: WACC tab")
-                self.A[f"w{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
-            r += 1
-        r += 1
-        # DCF-family legs (DCF (5-yr), DCF (LTG), DCF (FCF+), Rev DCF, ...) that
-        # project differently from the core DCF get their own drivers; the ones
-        # that are the same projection link to the core block on the DCF tab.
         self.dcf_variants: dict[str, dict[str, dict]] = {}
-        for s_ in SCENARIOS:
-            legs = self.scen(s_).get("leg_inputs") or {}
-            core = legs.get("DCF") or {}
-            for leg, tr in legs.items():
-                if leg == "DCF" or tr.get("kind") != "dcf" or not tr.get("projection_rows"):
-                    continue
-                if core.get("projection_rows") and _same_projection(tr, core):
-                    self.dcf_variants.setdefault(leg, {})[s_] = {"same_as_core": True}
-                else:
-                    self.dcf_variants.setdefault(leg, {})[s_] = {"trace": tr}
-        for leg, per in self.dcf_variants.items():
-            own = {s_: v["trace"] for s_, v in per.items() if "trace" in v}
-            if not own:
-                continue
-            sfx = f"|{leg}"
-            sh.section(r, f"DCF-family leg: {leg} (projects differently from the core DCF)", 8); r += 1
+        # Owner, 2026-10-04 (decision D1): a DCF the blend does not weight is not an output. Its
+        # drivers and its tab are left out; the Summary states, in one line, that it was excluded.
+        if self.dcf_weighted():
+            sh.section(r, "Scenario drivers", 8); r += 1
             sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
-            for key, lab, fmt in drivers + [("wacc", "Discount rate (flat, where not staged)", PCT2)]:
+            drivers = [("revenue_base", "Revenue base (last actual, valuation currency)", BIG),
+                       ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials and property)", PCT2),
+                       ("margin_delta_absolute", "Scenario margin change (absolute)", PCT2),
+                       ("fcf_floor", "FCF margin floor", PCT2),
+                       ("tgr", "Terminal growth", PCT2),
+                       ("net_debt", "Net debt (valuation currency)", BIG),
+                       ("shares", "Shares outstanding", BIG),
+                       ("disc_point", "Discount point within each year's cash-flow window (0.5 = mid-year; 1 = year end)", "0.00"),
+                       ("roll_forward_years", "Years from the balance-sheet date to the valuation date (value carried at the year-1 rate)", "0.0000")]
+            for key, lab, fmt in drivers:
                 sh.label(r, 1, lab, indent=1)
-                for j, s_ in enumerate(SCENARIOS):
-                    tr = own.get(s_)
-                    if tr is None:
-                        continue
-                    v = tr.get(key)
-                    if key == "margin_delta_absolute" and v is None:
-                        v = 0.0
-                    sh.put(r, 3 + j, _num(v), fmt)
-                    self.A[f"{key}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                for j, s in enumerate(SCENARIOS):
+                    tr = (self.scen(s).get("leg_inputs") or {}).get("DCF") or {}
+                    sh.put(r, 3 + j, _num(_driver(tr, key)) if tr else None, fmt)
+                    self.A[f"{key}:{s}"] = _ref("Assumptions", r, 3 + j)
                 r += 1
-            n_max = max(len(tr.get("projection_rows") or []) for tr in own.values())
-            for t in range(n_max):
-                sh.label(r, 1, f"Revenue growth, year {t + 1}", indent=1)
-                for j, s_ in enumerate(SCENARIOS):
-                    rows = (own.get(s_) or {}).get("projection_rows") or []
-                    if t < len(rows):
-                        sh.put(r, 3 + j, _num(rows[t].get("growth_pct")), PCT2)
-                        self.A[f"g{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+            _tm = ((self.scen("base").get("leg_inputs") or {}).get("DCF") or {}).get("timing") or {}
+            if _tm:
+                sh.note(r, 1, f"Dating: fiscal year {_tm.get('fy0_end')} is the last actual; net debt is struck at "
+                              f"{_tm.get('balance_sheet_date')}, so each projection year counts only its flows after that "
+                              f"date; valued {_tm.get('valuation_date')}.")
                 r += 1
-            if any(tr.get("wacc_schedule") for tr in own.values()):
-                for t in range(n_max):
-                    sh.label(r, 1, f"Discount rate, year {t + 1}", indent=1)
-                    for j, s_ in enumerate(SCENARIOS):
-                        st = (own.get(s_) or {}).get("wacc_schedule") or []
-                        if t < len(st):
-                            sh.put(r, 3 + j, _num(st[t]), PCT2)
-                            self.A[f"w{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
-                    r += 1
+            sh.label(r, 1, "Revenue growth by projection year", bold=True); r += 1
+            sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
+            for t in range(10):
+                sh.label(r, 1, f"Year {t + 1}", indent=1)
+                for j, s in enumerate(SCENARIOS):
+                    rows = ((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") or []
+                    sh.put(r, 3 + j, _num(rows[t].get("growth_pct")) if t < len(rows) else None, PCT2)
+                    self.A[f"g{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
+            # Owner, 2026-10-04 (plan 1A.1): the margin the engine projected, year by year. A guidance forecast,
+            # an FCF-guidance fade or a turnaround path sets it per year; rebuilding a flat base + change put a
+            # different projection in the workbook from the one the engine valued (09618.HK 229.44 vs 157.14).
+            sh.label(r, 1, "FCF margin by projection year (as projected: guidance path, fade, floor and cap applied)", bold=True); r += 1
+            sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
+            for t in range(10):
+                sh.label(r, 1, f"Year {t + 1}", indent=1)
+                for j, s in enumerate(SCENARIOS):
+                    rows = ((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") or []
+                    sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")) if t < len(rows) else None, PCT2)
+                    self.A[f"m{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
+            sh.label(r, 1, "Share of each projection year's cash flow after the balance-sheet date", bold=True); r += 1
+            sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
+            for t in range(10):
+                sh.label(r, 1, f"Year {t + 1}", indent=1)
+                for j, s in enumerate(SCENARIOS):
+                    rows = ((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") or []
+                    sh.put(r, 3 + j, (_num(rows[t].get("flow_fraction")) if rows[t].get("flow_fraction") is not None else 1.0)
+                           if t < len(rows) else None, "0.0000")
+                    self.A[f"f{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
+            sh.label(r, 1, "Discount rate by projection year (staged where the profile stages it)", bold=True); r += 1
+            sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
+            for t in range(10):
+                sh.label(r, 1, f"Year {t + 1}", indent=1)
+                for j, s in enumerate(SCENARIOS):
+                    tr = (self.scen(s).get("leg_inputs") or {}).get("DCF") or {}
+                    staged = tr.get("wacc_schedule")
+                    if staged and t < len(staged):
+                        sh.put(r, 3 + j, _num(staged[t]), PCT2)
+                    else:
+                        sh.note(r, 3 + j, "flat: WACC tab")
+                    self.A[f"w{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
             r += 1
+            # DCF-family legs (DCF (5-yr), DCF (LTG), DCF (FCF+), Rev DCF, ...) that
+            # project differently from the core DCF get their own drivers; the ones
+            # that are the same projection link to the core block on the DCF tab.
+            for s_ in SCENARIOS:
+                legs = self.scen(s_).get("leg_inputs") or {}
+                core = legs.get("DCF") or {}
+                for leg, tr in legs.items():
+                    if leg == "DCF" or tr.get("kind") != "dcf" or not tr.get("projection_rows"):
+                        continue
+                    if core.get("projection_rows") and _same_projection(tr, core):
+                        self.dcf_variants.setdefault(leg, {})[s_] = {"same_as_core": True}
+                    else:
+                        self.dcf_variants.setdefault(leg, {})[s_] = {"trace": tr}
+            for leg, per in self.dcf_variants.items():
+                own = {s_: v["trace"] for s_, v in per.items() if "trace" in v}
+                if not own:
+                    continue
+                sfx = f"|{leg}"
+                sh.section(r, f"DCF-family leg: {leg} (projects differently from the core DCF)", 8); r += 1
+                sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
+                for key, lab, fmt in drivers + [("wacc", "Discount rate (flat, where not staged)", PCT2)]:
+                    sh.label(r, 1, lab, indent=1)
+                    for j, s_ in enumerate(SCENARIOS):
+                        tr = own.get(s_)
+                        if tr is None:
+                            continue
+                        sh.put(r, 3 + j, _num(_driver(tr, key)), fmt)
+                        self.A[f"{key}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                    r += 1
+                n_max = max(len(tr.get("projection_rows") or []) for tr in own.values())
+                for t in range(n_max):
+                    sh.label(r, 1, f"Revenue growth, year {t + 1}", indent=1)
+                    for j, s_ in enumerate(SCENARIOS):
+                        rows = (own.get(s_) or {}).get("projection_rows") or []
+                        if t < len(rows):
+                            sh.put(r, 3 + j, _num(rows[t].get("growth_pct")), PCT2)
+                            self.A[f"g{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                    r += 1
+                for t in range(n_max):
+                    sh.label(r, 1, f"FCF margin, year {t + 1} (as projected)", indent=1)
+                    for j, s_ in enumerate(SCENARIOS):
+                        rows = (own.get(s_) or {}).get("projection_rows") or []
+                        if t < len(rows):
+                            sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")), PCT2)
+                            self.A[f"m{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                    r += 1
+                for t in range(n_max):
+                    sh.label(r, 1, f"Cash-flow share after the balance-sheet date, year {t + 1}", indent=1)
+                    for j, s_ in enumerate(SCENARIOS):
+                        rows = (own.get(s_) or {}).get("projection_rows") or []
+                        if t < len(rows):
+                            _f = rows[t].get("flow_fraction")
+                            sh.put(r, 3 + j, _num(_f) if _f is not None else 1.0, "0.0000")
+                            self.A[f"f{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                    r += 1
+                if any(tr.get("wacc_schedule") for tr in own.values()):
+                    for t in range(n_max):
+                        sh.label(r, 1, f"Discount rate, year {t + 1}", indent=1)
+                        for j, s_ in enumerate(SCENARIOS):
+                            st = (own.get(s_) or {}).get("wacc_schedule") or []
+                            if t < len(st):
+                                sh.put(r, 3 + j, _num(st[t]), PCT2)
+                                self.A[f"w{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                        r += 1
+                r += 1
         sh.section(r, "Target and blend", 6); r += 1
-        add("capture", "Share of the IV gap closed in 12 months (capture)", _num(pb.get("capture")), PCT)
+        # Owner, 2026-10-04 (plan 1A.4): the rate is stated with the rule that set it.
+        add("capture", "Share of the IV gap closed in 12 months (capture)"
+            + (f" — {pb.get('capture_reason')}" if pb.get("capture_reason") else
+               f" — source: {pb.get('capture_source')}" if pb.get("capture_source") else ""),
+            _num(pb.get("capture")), PCT)
         sa = (self.data.get("scenario_analysis") or {}).get(self.ticker) or {}
         for s in SCENARIOS:
             add(f"prob:{s}", f"Scenario probability — {s}", _num((sa.get(s) or {}).get("probability")), PCT)
         add("dp", "Published rounding (decimal places) for IV and targets", 2, "0")
         add("dp_ggm", "GGM value rounding (decimal places, engine)", 4, "0")
         add("tol", "Reconciliation tolerance (one rounding unit)", 0.01, NUM)
+        add("dp_check", "Check precision (decimal places; floating-point residue below it reads zero)", 6, "0")
         add("dp_comps", "Recorded peer-median precision (decimal places, engine)", 4, "0")
         add("calibration", "Calibration multiplier (market bias correction)",
             _num((self.dr.get("calibration") or {}).get("iv_multiplier")) or 1.0, "0.0000")
         r += 1
         sh.section(r, "Discount-rate constants", 6); r += 1
         bb = (self.dr.get("wacc_build") or {}).get("base_breakdown") or {}
-        add("lev_threshold", "Leverage premium threshold (net debt / equity)",
+        add("lev_threshold", "Leverage premium threshold (leverage as on the WACC tab)",
             _num(bb.get("leverage_threshold")) or 1.5, "0.00\"x\"")
         add("lev_slope", "Leverage premium per 1.0x above threshold",
             _num(bb.get("leverage_slope")) or 0.01, PCT2)
@@ -629,17 +744,32 @@ class _Book:
         # the DCF's own revenue path, side by side. ──
         r += 1
         sh.section(r, "Forecast — FMP analyst consensus (average)", last + n_fc); r += 1
-        est = {str(e.get("period_end") or "")[:4]: e for e in (st.get("estimates") or [])}
+        # Owner, 2026-10-04 (plan 1B.4): a consensus year is matched to the forecast column by its
+        # fiscal year-END DATE (within 45 days), not by a year label -- the dating rule of 6130d6e2.
+        _ests = [(e, _parse_date(e.get("period_end"))) for e in (st.get("estimates") or [])]
+        est: dict = {}
         fc_years = []
+        last_d = _parse_date(rows[-1].get("period"))
         for k in range(n_fc):
-            last_d = _parse_date(rows[-1].get("period"))
-            fc_years.append(str(last_d.year + 1 + k) if last_d else "")
+            if not last_d:
+                fc_years.append("")
+                continue
+            try:
+                _end = last_d.replace(year=last_d.year + 1 + k)
+            except ValueError:
+                _end = last_d.replace(year=last_d.year + 1 + k, day=28)
+            _y = str(_end.year)
+            fc_years.append(_y)
+            _hit = [e for e, d_ in _ests if d_ and abs((d_ - _end).days) <= 45]
+            if _hit:
+                est[_y] = _hit[0]
 
         def crow(key, label, sign=1.0, per_share=False):
             nonlocal r
             sh.label(r, 1, label); sh.label(r, 2, "Consensus")
             for k, y in enumerate(fc_years):
                 v = _num((est.get(y) or {}).get(key))
+                v = None if v == 0 else v                     # FMP zero-fills uncovered years: blank, not 0%
                 sh.put(r, last + 1 + k, None if v is None else (sign * v if per_share else sign * v / 1e6),
                        NUM if per_share else MIL)
             r += 1
@@ -650,7 +780,8 @@ class _Book:
         for k in range(n_fc):
             L, P = get_column_letter(last + 1 + k), get_column_letter(last + k)
             prev = f"{P}{rev}" if k == 0 else f"{P}{c_rev}"
-            sh.put(r, last + 1 + k, f'=IFERROR({L}{c_rev}/{prev}-1,"")', PCT)
+            # a blank consensus year stays blank (it read -100%)
+            sh.put(r, last + 1 + k, f'=IF(OR({L}{c_rev}="",{prev}=""),"",IFERROR({L}{c_rev}/{prev}-1,""))', PCT)
         r += 1
         c_ebitda = crow("ebitda_avg", "EBITDA")
         c_ebit = crow("ebit_avg", "EBIT")
@@ -661,7 +792,7 @@ class _Book:
             sh.label(r, 1, lab); sh.label(r, 2, "Formula")
             for k in range(n_fc):
                 L = get_column_letter(last + 1 + k)
-                sh.put(r, last + 1 + k, f'=IFERROR({L}{num}/{L}{c_rev},"")', PCT)
+                sh.put(r, last + 1 + k, f'=IF(OR({L}{num}="",{L}{c_rev}=""),"",IFERROR({L}{num}/{L}{c_rev},""))', PCT)
             r += 1
         r += 1
         if self.model_rows and self.model_kind == "bank":
@@ -680,7 +811,7 @@ class _Book:
         sh.label(r, 1, "Variance vs consensus revenue (%)"); sh.label(r, 2, "Formula")
         for k in range(n_fc):
             L = get_column_letter(last + 1 + k)
-            sh.put(r, last + 1 + k, f'=IFERROR({L}{dcf_rev}/{L}{c_rev}-1,"")', PCT)
+            sh.put(r, last + 1 + k, f'=IF({L}{c_rev}="","",IFERROR({L}{dcf_rev}/{L}{c_rev}-1,""))', PCT)
         r += 1
         self._is_sheet, self._is_rev_row, self._is_g_row, self._is_last = sh, dcf_rev, None, last
         sh.widths({"A": 46, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1 + n_fc)}})
@@ -759,6 +890,16 @@ class _Book:
         r += 1
         td = frow("Total debt", lambda L: f"={L}{std}+{L}{ltd}")
         frow("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)", lambda L: f"={L}{td}-{L}{cash}-{L}{sti}", bold=True, key="nd")
+        # Owner, 2026-10-04 (plan 1A.3): the one figure the valuation used, beside this tab's history,
+        # so the three net debts a reader meets reconcile in one place.
+        _nd_v = _num(((self.scen("base").get("leg_inputs") or {}).get("DCF") or {}).get("net_debt"))
+        if _nd_v is None:
+            _nd_v = next((_num(tr.get("net_debt")) for tr in (self.scen("base").get("leg_inputs") or {}).values()
+                          if _num(tr.get("net_debt")) is not None), None)
+        if _nd_v is not None:
+            sh.note(r, 1, self._net_debt_label().replace("Less: net debt", "Net debt the valuation used")
+                    + f": {_nd_v / 1e6:,.1f}m in {self.ccy} (valuation currency)")
+            r += 1
         if self.model_kind == "operating" and n_fc:
             # the current-asset / liability sub-totals the model carries
             self._model_link(sh, tca, "tca", _fc0)
@@ -875,7 +1016,7 @@ class _Book:
             self._crp_cell = f"C{r}"
             r += 1
             lev_r = r
-            sh.label(r, 1, "Leverage (net debt / equity)", indent=1)
+            sh.label(r, 1, f"Leverage ({bb.get('leverage_basis') or 'gross debt / book equity'})", indent=1)
             sh.put(r, 3, _num(bb.get("leverage")), "0.00\"x\""); r += 1
             app_r = r
             # Owner, 2026-10-03 (SBUX review, A8): net debt / equity on negative book equity has no
@@ -940,10 +1081,20 @@ class _Book:
         r += 1
         sh.note(r, 1, "Shown for comparison: the engine's WACC is table-driven by sector/profile, "
                       "adjusted for live cost of debt, not built from beta.")
-        r += 2
+        r += 1
+        _cp = b.get("capm") or {}
+        if _cp:
+            # Owner, 2026-10-04 (plan 1D.4, D5): what the engine's own CAPM check found.
+            sh.note(r, 1, "Engine CAPM check: " + (
+                f"beta {_cp.get('beta'):.2f}, cost of equity {_cp.get('cost_of_equity'):.2%}, CAPM WACC {_cp.get('wacc'):.2%}"
+                if _cp.get("status") == "used" else str(_cp.get("status") or "no beta"))
+                + (f"; risk-on band held WACC at {(_cp.get('risk_on_band') or {}).get('after'):.2%}" if _cp.get("risk_on_band") else "")
+                + ("; WACC ABOVE the cost of equity" if _cp.get("wacc_above_cost_of_equity") else ""))
+            r += 1
+        r += 1
         sh.section(r, "Cost of debt detail (hybrid model)", 4); r += 1
         for lab, key, fmt in (("Live cost of debt", "rd_live", PCT2), ("Baseline cost of debt", "rd_baseline", PCT2),
-                              ("Debt / (debt + equity)", "dv_ratio", PCT), ("Implied rating", "rating", None),
+                              ("Debt / (debt + equity)", "dv_ratio", PCT), ("Synthetic rating (from interest cover; sets only the live-spread overlay, not an agency rating)", "rating", None),
                               ("Credit spread source", "source", None), ("Leverage (net debt / equity)", "leverage", "0.00"),
                               ("Macro regime", "macro_regime", None)):
             if b.get(key) is None:
@@ -956,6 +1107,22 @@ class _Book:
 
     # ── DCF ─────────────────────────────────────────────────────────────────
     def dcf_tab(self) -> None:
+        self.dcf_excluded: Optional[str] = None
+        if not self.dcf_weighted():
+            # Owner, 2026-10-04 (D1): no tab for a DCF the blend does not weight -- one Summary line.
+            _li = (self.scen("base").get("leg_inputs") or {})
+            _dv = (_li.get("DCF") or {}).get("value")
+            _iv = self.scen("base").get("intrinsic_value")
+            _w = [n for n in _li if self.in_blend(n)]
+            if _li.get("DCF"):
+                self.dcf_excluded = (
+                    "DCF EXCLUDED from the blend: the " + str(self.dr.get("profile")) + " profile weights "
+                    + (", ".join(_w) or "other legs") + ". The DCF gave "
+                    + (f"{float(_dv):,.2f}" if isinstance(_dv, (int, float)) else "no value")
+                    + " a share against the blended intrinsic value "
+                    + (f"{float(_iv):,.2f}" if isinstance(_iv, (int, float)) else "n/a")
+                    + "; it is not an input to the target and is not shown.")
+            return
         sh = self.sheet("DCF", "Discounted cash flow per scenario, terminal value, sensitivity")
         sh.title("DCF valuation", "Revenue × FCF margin, discounted; drivers from Assumptions, WACC from the "
                                   "WACC tab.")
@@ -977,20 +1144,6 @@ class _Book:
                 r = self._dcf_block(sh, r, s, v["trace"], sfx=f"|{leg}", leg=leg) + 2
         if r == 4:
             sh.note(4, 1, "No DCF projection recorded for this run.")
-        # Owner, 2026-10-03 (SBUX review, A1): a DCF the blend does not weight says so, and the gap to
-        # the blended intrinsic value is reconciled to the profile's choice of methods.
-        _base_li = (self.scen("base").get("leg_inputs") or {})
-        _weighted = [n for n in _base_li if self.in_blend(n)]
-        _dcf_weighted = any(n == "DCF" or n in getattr(self, "dcf_variants", {}) for n in _weighted)
-        if r > 4 and not _dcf_weighted:
-            _dcf_v = (_base_li.get("DCF") or {}).get("value")
-            _iv_v = self.scen("base").get("intrinsic_value")
-            sh.note(r, 1, "NOT IN THE BLEND: the " + str(self.dr.get("profile")) + " profile weights "
-                          + (", ".join(_weighted) or "other legs") + "; the DCF value per share "
-                          + (f"{float(_dcf_v):,.2f}" if isinstance(_dcf_v, (int, float)) else "n/a")
-                          + " against the blended intrinsic value "
-                          + (f"{float(_iv_v):,.2f}" if isinstance(_iv_v, (int, float)) else "n/a")
-                          + " is the profile's choice of methods, recorded here for reconciliation; it is not an input to the target.")
         sh.widths({"A": 42, "B": 14, **{get_column_letter(c): 13 for c in range(3, 14)}})
 
     def _dcf_block(self, sh: _Sheet, r: int, s: str, tr: dict, sfx: str = "", leg: str = "DCF") -> int:
@@ -1039,70 +1192,89 @@ class _Book:
             prev = A[f"revenue_base:{s}{sfx}"] if t == 0 else f"{get_column_letter(c0 + t - 1)}{r}"
             sh.put(r, c0 + t, f"={prev}*(1+{L}{gr})", BIG)
         r += 1
-        sh.label(r, 1, "Reinvestment deduction (charge off: 0)"); rd = r
+        # Owner, 2026-10-04 (plan 1A.1 / D2): the margin path the engine projected, the share of each year
+        # still to come after the balance-sheet date, and mid-window discounting -- the same arithmetic as
+        # `_project_dcf`, so the Check reads zero.
+        sh.label(r, 1, "FCF margin (as projected; Assumptions)"); mr = r
         for t in range(n):
-            sh.put(r, c0 + t, _num(rows[t].get("reinvest_margin_deduction")) or 0.0, PCT2)
+            sh.put(r, c0 + t, "=" + A[f"m{t + 1}:{s}{sfx}"], PCT2)
         r += 1
-        sh.label(r, 1, "FCF margin (base + change, within floor and cap)"); mr = r
+        sh.label(r, 1, "Share of the year after the balance-sheet date"); fsr = r
+        for t in range(n):
+            sh.put(r, c0 + t, "=" + A[f"f{t + 1}:{s}{sfx}"], "0.0000")
+        r += 1
+        sh.label(r, 1, "Free cash flow (revenue × margin × share)"); fr = r
         for t in range(n):
             L = get_column_letter(c0 + t)
-            sh.put(r, c0 + t, f"=MAX(MIN({A[f'fcf_margin_base:{s}{sfx}']}+{A[f'margin_delta_absolute:{s}{sfx}']}"
-                              f"-{L}{rd},{A['margin_cap']}),{A[f'fcf_floor:{s}{sfx}']})", PCT2)
+            sh.put(r, c0 + t, f"={L}{rv}*{L}{mr}*{L}{fsr}", BIG)
         r += 1
-        sh.label(r, 1, "Free cash flow"); fr = r
-        for t in range(n):
-            L = get_column_letter(c0 + t)
-            sh.put(r, c0 + t, f"={L}{rv}*{L}{mr}", BIG)
-        r += 1
-        sh.label(r, 1, "Discount factor"); dfr = r
+        pt = A[f"disc_point:{s}{sfx}"]
+        sh.label(r, 1, "Discount factor, end of the year's window"); der = r
         for t in range(n):
             L = get_column_letter(c0 + t)
             prev = "1" if t == 0 else f"{get_column_letter(c0 + t - 1)}{r}"
-            sh.put(r, c0 + t, f"=IFERROR({prev}/(1+{L}{wr}),0)", "0.0000")
+            sh.put(r, c0 + t, f"=IFERROR({prev}/(1+{L}{wr})^{L}{fsr},0)", "0.0000")
         r += 1
-        sh.label(r, 1, "PV of FCF"); pvr = r
+        sh.label(r, 1, "Discount factor at the cash-flow point (mid-window when dated)"); dfr = r
+        for t in range(n):
+            L = get_column_letter(c0 + t)
+            prev = "1" if t == 0 else f"{get_column_letter(c0 + t - 1)}{der}"
+            sh.put(r, c0 + t, f"=IFERROR({prev}/(1+{L}{wr})^({L}{fsr}*{pt}),0)", "0.0000")
+        r += 1
+        sh.label(r, 1, "Discount time at the cash-flow point (years from the balance-sheet date)"); tpr = r
+        for t in range(n):
+            L = get_column_letter(c0 + t)
+            prev_end = "0" if t == 0 else f"SUM(${get_column_letter(c0)}{fsr}:{get_column_letter(c0 + t - 1)}{fsr})"
+            sh.put(r, c0 + t, f"={prev_end}+{L}{fsr}*{pt}", "0.0000")
+        r += 1
+        sh.label(r, 1, "PV of FCF (at the balance-sheet date)"); pvr = r
         for t in range(n):
             L = get_column_letter(c0 + t)
             sh.put(r, c0 + t, f"={L}{fr}*{L}{dfr}", BIG)
         r += 2
         F, Lc = get_column_letter(c0), get_column_letter(c0 + n - 1)
         tg, nd, shs = A[f"tgr:{s}{sfx}"], A[f"net_debt:{s}{sfx}"], A[f"shares:{s}{sfx}"]
+        roll = A[f"roll_forward_years:{s}{sfx}"]
         out = r
         lines = [
-            ("Sum of PV of FCF", f"=SUM({F}{pvr}:{Lc}{pvr})", BIG),
-            ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),
-            ("Terminal value", f"=IFERROR({Lc}{fr}*(1+{tg})/(B{out + 1}-{tg}),0)", BIG),
-            ("PV of terminal value", f"=B{out + 2}*{Lc}{dfr}", BIG),
-            ("Enterprise value", f"=B{out}+B{out + 3}", BIG),
-            ("Less: net debt", f"=-{nd}", BIG),
+            ("Sum of PV of FCF (balance-sheet date)", f"=SUM({F}{pvr}:{Lc}{pvr})", BIG),                 # 0
+            ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),  # 1
+            ("Terminal value (final full year × (1 + g))", f"=IFERROR({Lc}{rv}*{Lc}{mr}*(1+{tg})/(B{out + 1}-{tg}),0)", BIG),  # 2
+            ("PV of terminal value (balance-sheet date)", f"=B{out + 2}*{Lc}{der}", BIG),                 # 3
+            ("Carry to the valuation date: (1 + year-1 rate) ^ years", f"=(1+{F}{wr})^{roll}", "0.0000"),  # 4
+            ("PV of FCF (valuation date)", f"=B{out}*B{out + 4}", BIG),                                 # 5
+            ("PV of terminal value (valuation date)", f"=B{out + 3}*B{out + 4}", BIG),                  # 6
+            ("Enterprise value", f"=B{out + 5}+B{out + 6}", BIG),                                      # 7
+            ("Less: net debt", f"=-{nd}", BIG),                                                        # 8
             # Owner, 2026-10-03 (Alibaba review, section 1): the engine deducts minority interest and
-            # preferred equity in the DCF bridge; the tab did not, so every check read REVIEW
-            # (HK$3.965 a share on 09988.HK = the HK$76.3bn of minorities over 19,235m shares).
-            ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0), BIG),
-            ("Less: preferred equity", -(_num(tr.get("preferred_equity")) or 0.0), BIG),
-            ("Equity value", f"=B{out + 4}+B{out + 5}+B{out + 6}+B{out + 7}", BIG),
-            ("Intrinsic value per share", f"=IFERROR(B{out + 8}/{shs},0)", NUM),
-            ("Engine value", _num(tr.get("value")), NUM),
-            ("Check", f"=B{out + 9}-B{out + 10}", NUM),
-            ("Terminal value share of EV", f"=IFERROR(B{out + 3}/B{out + 4},0)", PCT),
+            # preferred equity in the DCF bridge.
+            ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0), BIG),             # 9
+            ("Less: preferred equity", -(_num(tr.get("preferred_equity")) or 0.0), BIG),               # 10
+            ("Equity value", f"=B{out + 7}+B{out + 8}+B{out + 9}+B{out + 10}", BIG),                   # 11
+            ("Intrinsic value per share", f"=IFERROR(B{out + 11}/{shs},0)", NUM),                      # 12
+            ("Engine value", _num(tr.get("value")), NUM),                                              # 13
+            ("Check", f"=B{out + 12}-B{out + 13}", NUM),                                               # 14
+            ("Terminal value share of EV", f"=IFERROR(B{out + 6}/B{out + 7},0)", PCT),                 # 15
         ]
         for i, (lab, v, fmt) in enumerate(lines):
             sh.label(out + i, 1, lab, bold=lab in ("Intrinsic value per share", "Enterprise value"))
             sh.put(out + i, 2, v, fmt, bold=lab == "Intrinsic value per share")
         if not core:
-            self.leg_cell[(s, leg)] = _ref("DCF", out + 9, 2)
+            self.leg_cell[(s, leg)] = _ref("DCF", out + 12, 2)
             return out + len(lines)
-        self.dcf[s] = {"iv": _ref("DCF", out + 9, 2), "pv_fcf": _ref("DCF", out, 2),
-                       "pv_tv": _ref("DCF", out + 3, 2), "ev": _ref("DCF", out + 4, 2),
-                       "nd": _ref("DCF", out + 5, 2), "mi": _ref("DCF", out + 6, 2), "pe": _ref("DCF", out + 7, 2),
-                       "eq": _ref("DCF", out + 8, 2),
+        self.dcf[s] = {"iv": _ref("DCF", out + 12, 2), "pv_fcf": _ref("DCF", out + 5, 2),
+                       "pv_tv": _ref("DCF", out + 6, 2), "ev": _ref("DCF", out + 7, 2),
+                       "nd": _ref("DCF", out + 8, 2), "mi": _ref("DCF", out + 9, 2), "pe": _ref("DCF", out + 10, 2),
+                       "eq": _ref("DCF", out + 11, 2),
                        "fcf_row": fr, "rev_row": rv, "c0": c0, "n": n}
         self.leg_cell[(s, "DCF")] = self.dcf[s]["iv"]
         if s == "base" and getattr(self, "_is_sheet", None) is not None:
             self._link_is_forecast(s)
         r = out + len(lines) + 1
-        # Sensitivity: FCF is independent of the discount rate, so a flat WACC
-        # re-discounts the same stream exactly.
+        # Sensitivity: FCF is independent of the discount rate, so a flat WACC re-discounts the same
+        # stream exactly -- at the same discount points, with the same carry and the same bridge
+        # (owner, 2026-10-04, plan 1A.3: the grid used to leave out minorities and preferreds,
+        # HK$27 a share on 09618.HK).
         sh.label(r, 1, "Sensitivity: value per share, flat WACC × terminal growth", bold=True)
         r += 1
         center_w = A.get("wacc") or f"{Lc}{wr}"
@@ -1110,14 +1282,16 @@ class _Book:
         for j, k in enumerate((-2, -1, 0, 1, 2)):
             sh.put(r, 2 + j, f"={tg}+({k})*{A['sens_g']}", PCT2, bold=True)
         top = r
+        t_end = f"SUM(${F}${fsr}:${Lc}${fsr})"
+        bridge = f"-{nd}+$B${out + 9}+$B${out + 10}"
         for i, k in enumerate((-2, -1, 0, 1, 2)):
             rr = r + 1 + i
             sh.put(rr, 1, f"={center_w}+({k})*{A['sens_w']}", PCT2, bold=True)
             for j in range(5):
                 gc = f"{get_column_letter(2 + j)}${top}"
                 wc = f"$A{rr}"
-                f = (f"=IFERROR(IF({wc}<={gc},NA(),(SUMPRODUCT(${F}${fr}:${Lc}${fr}/(1+{wc})^${F}${yr}:${Lc}${yr})"
-                     f"+${Lc}${fr}*(1+{gc})/({wc}-{gc})/(1+{wc})^${Lc}${yr}-{nd})/{shs}),NA())")
+                f = (f"=IFERROR(IF({wc}<={gc},NA(),((SUMPRODUCT(${F}${fr}:${Lc}${fr}/(1+{wc})^${F}${tpr}:${Lc}${tpr})"
+                     f"+${Lc}${rv}*${Lc}${mr}*(1+{gc})/({wc}-{gc})/(1+{wc})^{t_end})*(1+{wc})^{roll}{bridge})/{shs}),NA())")
                 sh.put(rr, 2 + j, f, NUM)
         return r + 6
 
@@ -1264,14 +1438,21 @@ class _Book:
             if members:
                 sh.header(r, ["Ticker", "Company", "Market cap (m)", lab, "In band", "In-band value"])
                 first = r + 1
+                try:
+                    from src.data.regional_comps import subject_symbol as _subj_sym
+                except Exception:                          # noqa: BLE001
+                    _subj_sym = lambda x: str(x or "").upper()   # noqa: E731
+                _me = _subj_sym(self.ticker)
                 for m in members:
                     r += 1
                     mv = (m.get("metrics") or {}).get(field) or {}
+                    # Owner, 2026-10-04 (plan 1F.3): the valued company is listed, never counted.
+                    _is_me = _subj_sym(m.get("symbol")) == _me and info.get("subject_excluded") is True
                     sh.put(r, 1, m.get("symbol")).font = Font(color=BLACK)
-                    sh.put(r, 2, m.get("name")).font = Font(color=BLACK)
+                    sh.put(r, 2, (m.get("name") or "") + (" (the valued company: not its own peer)" if _is_me else "")).font = Font(color=BLACK)
                     sh.put(r, 3, _mil(m.get("market_cap")), MIL)
                     sh.put(r, 4, _num(mv.get("value")), "0.00")
-                    sh.put(r, 5, "yes" if mv.get("in_band") else "no").font = Font(color=BLUE)
+                    sh.put(r, 5, "yes" if (mv.get("in_band") and not _is_me) else "no").font = Font(color=BLUE)
                     sh.put(r, 6, f'=IF(E{r}="yes",D{r},"")', "0.00")
                 last = r
                 r += 1
@@ -1426,11 +1607,14 @@ class _Book:
             sh.section(r, "Base DCF growth path", 6); r += 1
             sh.header(r, ["Year", "Growth used", "Source"])
             E, F = int(ch.get("explicit_years") or 0), int(ch.get("fade_years") or 0)
+            # Owner, 2026-10-04 (plan 1B.4): years before the research's FY+1 run on the engine path.
+            _lead = len((((self.dr or {}).get("guidance_forecast") or {}).get("deconstruction") or {}).get("lead_years") or [])
             for i, v in enumerate(sched, start=1):
                 r += 1
                 sh.put(r, 1, i, "0")
                 sh.put(r, 2, _num(v), PCT)
-                sh.put(r, 3, ("guidance-derived estimate" if i <= E else "fade onto the engine path" if i <= E + F
+                sh.put(r, 3, ("engine path (before the research's FY+1)" if i <= _lead else
+                              "guidance-derived estimate" if i <= E else "fade onto the engine path" if i <= E + F
                               else "engine path")).font = Font(color=BLACK)
             r += 1
             sh.label(r, 1, "Engine year-1 growth before the channel"); sh.put(r, 2, _num(ch.get("engine_year1")), PCT); r += 1
@@ -1483,6 +1667,11 @@ class _Book:
         if ge.get("citations"):
             r += 1
             sh.label(r, 1, "Sources: " + " · ".join(str(x) for x in ge.get("citations")))
+        _sec = [t["source"] for t in (ge.get("source_tiers") or []) if t.get("tier") != "primary"]
+        if _sec:
+            r += 1
+            sh.label(r, 1, ("SECONDARY SOURCES ONLY: " if ge.get("secondary_only") else "Secondary sources (aggregator / market research): ")
+                     + " · ".join(_sec), bold=bool(ge.get("secondary_only")))
         sh.widths({"A": 46, "B": 14, "C": 14, "D": 14, "E": 14, "F": 14, "G": 12, "H": 14, "I": 12, "J": 10})
 
     # ── Three-statement forecast (owner, 2026-10-03) ─────────────────────────
@@ -1547,7 +1736,10 @@ class _Book:
         arow("iir", "Interest income rate on opening cash", av("interest_income_rate"), PCT)
         arow("po", "Dividend payout ratio", av("payout_ratio"), PCT)
         arow("bb", "Share repurchases, target", av("buyback_annual"), MIL, 1e-6)
-        arow("px", "Buyback price (spot, held)", av("buyback_price"), NUM)
+        # Owner, 2026-10-04 (plan 1B.1): the spot is quoted in the valuation currency; the sheet is the filing's.
+        _px = av("buyback_price")
+        _fxv = th.get("fx_to_valuation") or 1.0
+        arow("px", "Buyback price (spot, held; statement currency)", (float(_px) / float(_fxv)) if isinstance(_px, (int, float)) and _fxv else _px, NUM)
         arow("mincash", "Minimum cash (revolver trigger)", av("min_cash"), MIL, 1e-6)
         arow("ard", "Receivable days (blank = held)", av("receivable_days"), "0.0")
         arow("invd", "Inventory days (blank = held)", av("inventory_days"), "0.0")
@@ -1943,7 +2135,7 @@ class _Book:
             sh.put(r, 4, _num(targets.get(s)), NUM)
             sh.put(r, 6, "=" + A[f"prob:{s}"], PCT)
             if pb:
-                sh.put(r, 7, f'=IF(ABS(E{r})<={A["tol"]},"OK","REVIEW")')
+                sh.put(r, 7, f'=IF(ROUND(ABS(E{r}),{A["dp_check"]})<={A["tol"]},"OK","REVIEW")')
         sh.label(9, 1, "Probability-weighted target", bold=True)
         if pb:
             sh.put(9, 3, f"=ROUND(IFERROR(SUMPRODUCT(C5:C7,F5:F7)/SUM(F5:F7),0),{A['dp']})", NUM, bold=True)
@@ -1951,7 +2143,7 @@ class _Book:
         sh.put(9, 4, _num(rec.get("12m_price_target")), NUM)
         if pb:
             sh.put(9, 5, "=C9-D9", NUM)
-            sh.put(9, 7, f'=IF(ABS(E9)<={A["tol"]},"OK","REVIEW")')
+            sh.put(9, 7, f'=IF(ROUND(ABS(E9),{A["dp_check"]})<={A["tol"]},"OK","REVIEW")')
         sh.label(10, 1, "Implied return vs spot")
         sh.put(10, 3, f"=IFERROR(C9/{A['spot']}-1,0)" if pb else None, PCT)
         self.target_cell = _ref("Target", 9, 3 if pb else 4)
@@ -2008,11 +2200,25 @@ class _Book:
         if isinstance(self.dr.get("wacc"), (int, float)):
             r += 2
             _ov_ = _num(_bb_.get("macro_overlay"))
+            # Owner, 2026-10-04 (plan 1D.3): the same parts, in the same order, as the WACC tab -- the
+            # regime overlay sits INSIDE the base rate; the old wording read as if it were added twice.
+            _parts = [("table rate", _num(_bb_.get("table_rate"))),
+                      ("leverage premium", _num(_bb_.get("leverage_premium"))),
+                      (f"macro-regime overlay ({_bb_.get('macro_regime')})" if _bb_.get("macro_regime") else "macro-regime overlay", _ov_),
+                      ("cost-of-debt adjustment", (_num(_wb_.get("wacc")) - _num(_wb_.get("wacc_base")))
+                       if _num(_wb_.get("wacc")) is not None and _num(_wb_.get("wacc_base")) is not None else None),
+                      ("insider overlay", (_num(_wb_.get("insider_bps")) or 0.0) / 10000.0),
+                      ("research risk", _num(_wb_.get("research_risk_loading"))),
+                      ("country risk premium", _num(_wb_.get("country_risk_premium"))),
+                      ("contracted-revenue discount", _num(_wb_.get("contracted_revenue_discount")))]
+            _txt = " ".join(f"{'+' if v >= 0 else '−'} {lab} {abs(v):.2%}" for lab, v in _parts
+                            if isinstance(v, (int, float)) and abs(v) > 1e-9).lstrip("+ ")
             sh.ws.cell(row=r, column=1, value=(
                 f"WACC used by the valuation {float(self.dr['wacc']):.2%}"
                 + (f" = build {float(_wb_['wacc']):.2%}" if isinstance(_wb_.get("wacc"), (int, float)) else "")
                 + (f" + macro-regime overlay {_ov_:+.2%}" if _ov_ is not None else "")
-                + (f" ({_bb_.get('macro_regime')} regime)" if _bb_.get("macro_regime") else "") + "."))
+                + (f" ({_bb_.get('macro_regime')} regime)" if _bb_.get("macro_regime") else "") + "; parts, as on the WACC tab: "
+                + (_txt or "n/a") + " (the regime overlay is inside the base rate, counted once)."))
             sh.ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
         sh.widths({"A": 60, "B": 50, "C": 16, "D": 16, "E": 10})
 
@@ -2086,9 +2292,16 @@ class _Book:
         if not ((self.dr.get("wacc_build") or {}).get("base_breakdown")):
             gaps.append(("WACC", "Base-rate assumption (table, lookup, premia) not recorded for this run",
                          "Base WACC shown as a single input", "Medium"))
+        # Owner, 2026-10-04 (plan 1A.6): this run's own failures first -- an excluded DCF, a degraded
+        # anchor, a replaced margin, a failed forecast check -- not only the structural limits.
+        run_gaps = [("This run", line, "Stated on the Summary; read the valuation with it", "High")
+                    for line in self.front_page_flags()]
+        for f in (self.scen("base").get("forward_flags") or []):
+            if any(k in str(f) for k in ("FAILED", "did not build", "DEGRADED", "not compatible")):
+                run_gaps.append(("This run", str(f)[:400], "Engine flag", "Medium"))
         sh.header(4, ["Area", "Gap", "Impact", "Severity"])
         r = 5
-        for area, gap, impact, sev in gaps + _STRUCTURAL_GAPS:
+        for area, gap, impact, sev in run_gaps + gaps + _STRUCTURAL_GAPS:
             for j, v in enumerate((area, gap, impact, sev)):
                 c = sh.ws.cell(row=r, column=1 + j, value=v)
                 c.alignment = Alignment(wrap_text=True, vertical="top")
@@ -2161,7 +2374,10 @@ class _Book:
             r += 1
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)
-        r += 2
+        r += 1
+        for _line in self.front_page_flags():
+            sh.label(r, 1, _line, bold=True); r += 1
+        r += 1
         # Owner, 2026-09-27: the key metrics the profile's report FAMILY is judged on,
         # read from the run's per-year raw financials (static values, input colour).
         try:
@@ -2173,6 +2389,9 @@ class _Book:
         if _frows:
             sh.section(r, f"Key metrics ({_fam})", 6); r += 1
             sh.header(r, ["Metric"] + [str(fy) for fy in _fys]); r += 1
+            # Owner, 2026-10-04 (plan 1A.6): the units, stated (the statements elsewhere are in millions).
+            _sc = (self.dr.get("financials_used") or {}).get("source_currency") or self.ccy   # raw records are as filed
+            sh.note(r, 1, f"Units: amounts in {_sc} billions (as filed); per-share figures in {_sc}; ratios as shown."); r += 1
             for label, kind, vals in _frows:
                 sh.label(r, 1, label, indent=1)
                 for j, v in enumerate(vals):
@@ -2230,8 +2449,11 @@ class _Book:
             chart.height, chart.width = 8, 18
             sh.ws.add_chart(chart, f"K4")
         r += 2
-        sh.section(r, "DCF summary (base)", 6); r += 1
         d = self.dcf.get("base")
+        if not d and getattr(self, "dcf_excluded", None):
+            pass                         # D1: stated once, in the headline flags above
+        else:
+            sh.section(r, "DCF summary (base)", 6); r += 1
         if d:
             # static engine values from the DCF leg trace (per-share PVs times the share count)
             _li = ((self.dr.get("base") or {}).get("leg_inputs") or {}).get("DCF") or {}
@@ -2249,7 +2471,7 @@ class _Book:
                        "iv": _li.get("value") if isinstance(_li.get("value"), (int, float)) else None}
             for lab, key in (("PV of forecast FCF", "pv_fcf"), ("PV of terminal value", "pv_tv"),
                              ("Enterprise value", "ev"),
-                             (f"Less: net debt — valuation basis (balance sheet {((self.dr.get('financials_used') or {}).get('balance_sheet_period') or 'latest')}, leases excluded)", "nd"),
+                             (self._net_debt_label(), "nd"),
                              ("Less: minority interest", "mi"), ("Less: preferred equity", "pe"),
                              ("Equity value", "eq"),
                              ("DCF value per share", "iv")):
@@ -2258,7 +2480,7 @@ class _Book:
                     sh.put(r, 2, float(_static[key]), NUM if key == "iv" else BIG).font = Font(color=BLUE)
                 sh.put(r, 3, "=" + d[key], NUM if key == "iv" else BIG)
                 r += 1
-        else:
+        elif not getattr(self, "dcf_excluded", None):
             sh.note(r, 1, "No DCF leg recorded for this run."); r += 1
         r += 1
         sh.section(r, "Comps (peer multiples used)", 6); r += 1
@@ -2278,7 +2500,8 @@ class _Book:
         _cap_v = _pb.get("capture")
         _bt_v = ((_pb.get("scenarios") or {}).get("base") or {}).get("target")
         for lab, v, fmt, sv in (("Spot", "=" + A["spot"], NUM, _spot_v),
-                                ("Capture", "=" + A["capture"], PCT, _cap_v),
+                                ("Capture" + (f" ({_pb.get('capture_reason')})" if _pb.get("capture_reason") else ""),
+                                 "=" + A["capture"], PCT, _cap_v),
                                 ("Intrinsic value — base", ("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None, NUM, _iv_v),
                                 ("Base target = spot + capture × (IV − spot)", "='Target'!$C$6", NUM, _bt_v),
                                 ("Probability-weighted target", ("=" + self.target_cell) if self.target_cell else None, NUM, _tgt_v)):

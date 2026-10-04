@@ -172,6 +172,45 @@ def _net_debt_of(ticker: str, end_date: str) -> Optional[tuple[float, str]]:
         return None
 
 
+def listed_minority_at_market(ticker: str, end_date: str, to_ccy: str) -> Optional[dict]:
+    """Owner, 2026-10-04 (decision D3): the outside holders' share of majority-owned LISTED
+    subsidiaries at market value, in `to_ccy`; None when the name has no such stake on record.
+
+    Sources: the owner-set `listed_subsidiaries` registry in valuation_constants.json, then the holdco
+    template's market_stake divisions (stake >= 50%). Book minority interest prices a listed
+    subsidiary at its accounting equity (JD Logistics and JD Health carry RMB63bn of minorities on
+    JD's balance sheet); the claim the market prices is the minority's share of the subsidiary's
+    market capitalisation. A stake whose market value or FX cannot be fetched voids the figure:
+    a partial sum would understate the claim.
+    """
+    stakes: list[tuple[str, float]] = []
+    try:
+        from src.data import valuation_constants as _vc
+        for e in (((_vc.load().get("listed_subsidiaries") or {}).get("entries") or {}).get(ticker.upper()) or []):
+            if e.get("listed") and isinstance(e.get("stake_pct"), (int, float)) and 0.5 <= float(e["stake_pct"]) < 1.0:
+                stakes.append((str(e["listed"]), float(e["stake_pct"])))
+    except Exception:                                      # noqa: BLE001
+        pass
+    if not stakes:
+        tpl = template_for(ticker) or {}
+        for d in tpl.get("divisions") or []:
+            st = d.get("stake_pct")
+            if d.get("basis") == "market_stake" and d.get("listed") and isinstance(st, (int, float)) and 0.5 <= st < 1.0:
+                stakes.append((str(d["listed"]), float(st)))
+    if not stakes:
+        return None
+    total, parts = 0.0, []
+    for listed, stake in stakes:
+        mv = _market_value(listed, end_date)
+        rate = _fx(currency_of(listed), to_ccy)
+        if mv is None or rate is None:
+            return None
+        claim = (1.0 - stake) * float(mv) * rate
+        total += claim
+        parts.append({"listed": listed, "stake_pct": stake, "market_cap": float(mv), "fx": rate, "minority_claim": claim})
+    return {"value": total, "parts": parts, "currency": to_ccy}
+
+
 def parent_net_debt(ticker: str, end_date: str, consolidated_net_debt: Optional[float],
                     to_ccy: str) -> Optional[float]:
     """Consolidated net debt less the net debt of majority-owned LISTED stakes.

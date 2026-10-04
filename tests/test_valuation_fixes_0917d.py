@@ -625,14 +625,17 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
     # The relationship this test exists to guard is untouched -- bear is still
     # its pre-Gate-B value times the published premium, to 3dp -- so only the
     # recorded literals are restated onto the new divisor.
+    # RE-STRUCK 2026-10-04 (valuation fix plan Phase 1): the divisor is now the current count times the
+    # filing's diluted/basic ratio -- the basic count is fetched at last (plan 1C.6), so the dilution
+    # the 2026-09-20 rule meant to carry is carried: AAPL x0.9835, V x0.9878. Relationship unchanged.
     expected = {
-        "AAPL": {"bear": 137.10, "base": 195.14, "bull": 251.62},
+        "AAPL": {"bear": 136.63, "base": 191.92, "bull": 247.57},
         # COST re-recorded 2026-09-26 on the Wave 4 pin (Membership / Subscription
         # Retail, live Discount Stores comps): its bear premium is now 0.941, Gate B
         # fires, and the leaves below are no longer this fix's evidence.
         # V re-recorded 2026-09-27 (Wave 7): the absolute-spread premium reads 1.116 base /
         # 1.120 bull against the ratio's 1.139 / 1.144, and the leg follows it exactly.
-        "V":    {"bear": 284.55, "base": 423.25, "bull": 531.14},
+        "V":    {"bear": 280.94, "base": 418.09, "bull": 524.66},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

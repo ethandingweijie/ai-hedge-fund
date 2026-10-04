@@ -41,12 +41,15 @@ def test_an_unweighted_sotp_trace_creates_no_tab_and_an_unweighted_dcf_says_so()
     wb = load_workbook(io.BytesIO(build_workbook(_run_without_dcf_weight(), "TEST", load_statements=_wbt._statements)))
     assert "SOTP" not in wb.sheetnames
     assert "SOTP" not in _col_a(wb["Cover"])
-    dcf_notes = [v for v in _col_a(wb["DCF"]) if "NOT IN THE BLEND" in v]
-    assert len(dcf_notes) == 1 and "Test Profile profile weights EV/EBITDA, P/E" in dcf_notes[0]
-    assert "DCF value per share" in dcf_notes[0] and "blended intrinsic value" in dcf_notes[0]
-    # the default fixture weights the DCF: no such note
+    # Owner, 2026-10-04 (decision D1): an unweighted DCF is not an output -- no tab, one Summary line.
+    assert "DCF" not in wb.sheetnames
+    notes = [v for v in _col_a(wb["Summary"]) if v.startswith("DCF EXCLUDED from the blend")]
+    assert len(notes) == 1 and "Test Profile profile weights EV/EBITDA, P/E" in notes[0]
+    assert "blended intrinsic value" in notes[0]
+    # the default fixture weights the DCF: the tab stands and no such line
     wb2 = load_workbook(io.BytesIO(build_workbook(_wbt._run(), "TEST")))
-    assert not [v for v in _col_a(wb2["DCF"]) if "NOT IN THE BLEND" in v]
+    assert "DCF" in wb2.sheetnames
+    assert not [v for v in _col_a(wb2["Summary"]) if v.startswith("DCF EXCLUDED")]
 
 
 def test_the_two_targets_and_the_three_net_debts_are_each_named():
@@ -60,15 +63,23 @@ def test_the_two_targets_and_the_three_net_debts_are_each_named():
     assert s.cell(row=r_base, column=3).value == "='Target'!$C$6"
     from src.data.report_families import _R
     assert _R["net_debt"][0] == "Net debt / (cash) — FMP annual, lease liabilities included"   # the family history row's label
-    assert any(v.startswith("Less: net debt — valuation basis (balance sheet 2026-06-28, leases excluded)") for v in labels)
     # Alibaba review (2026-10-03, section 1): the bridge deducts minorities and preferreds on both tabs,
     # and the Summary's static column carries the same sign as the linked "Less:" cells.
-    assert "Less: minority interest" in labels and "Less: preferred equity" in labels
-    assert "Less: minority interest" in _col_a(wb["DCF"]) and "Less: preferred equity" in _col_a(wb["DCF"])
-    r_nd = next(c.row for c in s["A"] if str(c.value).startswith("Less: net debt — valuation basis"))
-    _static, _linked = s.cell(row=r_nd, column=2).value, s.cell(row=r_nd, column=3).value
-    run = _run_without_dcf_weight()
-    _nd_trace = run["data"]["dcf_range"]["TEST"]["base"]["leg_inputs"]["DCF"]["net_debt"]
+    assert "DCF" not in wb.sheetnames                 # D1: this fixture's DCF carries no weight
+    _r3 = _wbt._run()
+    _r3["data"]["dcf_range"]["TEST"]["financials_used"] = {"balance_sheet_period": "2026-06-28", "net_debt_basis": {
+        "balance_sheet_date": "2026-06-28", "short_term_investments_netted": True, "accounting_basis": "US GAAP",
+        "leases": "excluded (US GAAP: rent is inside EBITDA and cash flow)"}}
+    wb3 = load_workbook(io.BytesIO(build_workbook(_r3, "TEST", load_statements=_wbt._statements)))
+    s3 = wb3["Summary"]
+    assert "Less: minority interest" in _col_a(s3) and "Less: preferred equity" in _col_a(s3)
+    # Owner, 2026-10-04 (plan 1A.3): the label states the recorded basis.
+    assert any(v.startswith("Less: net debt — valuation basis (balance sheet 2026-06-28; short-term investments counted as cash; "
+                            "US GAAP: leases excluded") for v in _col_a(s3))
+    assert "Less: minority interest" in _col_a(wb3["DCF"]) and "Less: preferred equity" in _col_a(wb3["DCF"])
+    r_nd = next(c.row for c in s3["A"] if str(c.value).startswith("Less: net debt — valuation basis"))
+    _static, _linked = s3.cell(row=r_nd, column=2).value, s3.cell(row=r_nd, column=3).value
+    _nd_trace = _wbt._run()["data"]["dcf_range"]["TEST"]["base"]["leg_inputs"]["DCF"]["net_debt"]
     assert _static == -_nd_trace                      # "Less:" sign, matching the DCF tab's =-nd cell
     assert str(_linked).startswith("='DCF'!") or str(_linked).startswith("=DCF!")
     assert any(v.startswith("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)") for v in _col_a(wb["BS"]))

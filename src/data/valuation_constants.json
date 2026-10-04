@@ -786,5 +786,10 @@
       "last_reviewed": "2026-09-26",
       "reviewer": "owner, 2026-09-26: strongly endorsed; threshold 50%"
     }
+  },
+  "listed_subsidiaries": {
+    "status": "PROPOSED",
+    "note": "Owner, 2026-10-04 (decision D3): majority-owned LISTED subsidiaries whose minority interest is deducted at market value (outside holders' share of the subsidiary's market capitalisation) instead of book. Entries are owner-set: {ticker: [{listed, stake_pct, source, as_of}]}; holdco templates with market_stake divisions are read too.",
+    "entries": {}
   }
 }

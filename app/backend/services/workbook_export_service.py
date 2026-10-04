@@ -54,8 +54,10 @@ def load_statements(ticker: str, end_date: Optional[str]) -> dict:
     rows.sort(key=lambda r: str(r.get("period") or ""))
     currency = next((getattr(li, "currency", None) for li in items
                      if getattr(li, "currency", None)), None)
+    prof = _profile(ticker)
     return {"rows": rows, "currency": currency,
-            "estimates": _consensus(ticker, end_date), "beta": _beta(ticker)}
+            "estimates": _consensus(ticker, end_date), "beta": _num_or_none(prof.get("beta")),
+            "company_name": prof.get("companyName")}
 
 
 def _consensus(ticker: str, end_date: Optional[str]) -> list[dict]:
@@ -76,8 +78,15 @@ def _consensus(ticker: str, end_date: Optional[str]) -> list[dict]:
     return sorted(out, key=lambda r: str(r.get("period_end") or ""))
 
 
-def _beta(ticker: str) -> Optional[float]:
-    """Company beta from the FMP profile (CAPM cross-check only)."""
+def _num_or_none(v) -> Optional[float]:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _profile(ticker: str) -> dict:
+    """The FMP profile: beta (CAPM cross-check only) and the company name for the Cover."""
     try:
         import os
         from src.tools.api import _fmp_get
@@ -85,11 +94,15 @@ def _beta(ticker: str) -> Optional[float]:
         rows = _fmp_get("https://financialmodelingprep.com/stable/profile",
                         {"symbol": to_fmp_symbol(ticker)}, os.environ.get("FMP_API_KEY"))
         if isinstance(rows, list) and rows:
-            b = rows[0].get("beta")
-            return float(b) if b is not None else None
+            return rows[0] or {}
     except Exception:  # noqa: BLE001
-        return None
-    return None
+        return {}
+    return {}
+
+
+def _beta(ticker: str) -> Optional[float]:
+    """Company beta from the FMP profile (CAPM cross-check only)."""
+    return _num_or_none(_profile(ticker).get("beta"))
 
 
 def _members(exchange, level, key, cohort="all"):

@@ -290,7 +290,7 @@ class TestTheBalanceSheetComesFromTheLatestQuarter:
 
     def test_the_engine_refreshes_before_it_reads_net_debt(self):
         src = inspect.getsource(d)
-        assert src.index("_bs_flag = _refresh_balance_sheet_from_latest_quarter(") <             src.index("net_debt     = _net_debt_net_of_investments(most_recent, sector)")
+        assert src.index("_bs_flag = _refresh_balance_sheet_from_latest_quarter(") <             src.index("net_debt, _net_debt_basis = _valuation_net_debt(most_recent, sector, ticker, reported_currency, _nd_industry)")
 
 
 class TestOneHoldcoDiscountPerCompany:

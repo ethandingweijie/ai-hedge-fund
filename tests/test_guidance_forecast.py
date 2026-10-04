@@ -53,8 +53,12 @@ def test_the_target_year_is_back_solved_and_the_horizon_reaches_it():
     fc = _fc()
     assert fc["archetype"] == "I" and fc["horizon_years"] == 4                     # FY2026..FY2029
     dec = fc["deconstruction"]
-    assert dec["eps_T_guided"] == 25.0 and dec["margin_T_guided"] == 0.05
-    assert dec["ebit_T_implied"] == pytest.approx(dec["revenue_T"] * 0.05)
+    # 2026-10-04 (plan 1E.4): the FY+2 endpoint is an EBITDA margin; the path is EBIT, so the
+    # history's D&A intensity (200 / 42,000) comes off it.
+    _ebit_T = 0.05 - 200e6 / 42e9
+    assert dec["eps_T_guided"] == 25.0 and dec["margin_T_guided"] == pytest.approx(_ebit_T)
+    assert dec["margin_T_ebitda"] == 0.05
+    assert dec["ebit_T_implied"] == pytest.approx(dec["revenue_T"] * _ebit_T)
     assert dec["net_income_T_from_eps"] == pytest.approx(25.0 * 52e6)
     assert 0.0 <= dec["implied_tax_rate"] <= 0.45                                  # compatible endpoints: no flag
     assert fc["flags"] == []
@@ -73,7 +77,7 @@ def test_the_three_statements_and_the_fade_hold_their_identities():
     rows = fc["rows"]
     assert len(rows) == 10 and [r["phase"] for r in rows] == ["guided"] * 4 + ["fade"] * 4 + ["steady"] * 2
     assert rows[0]["growth"] == pytest.approx(-0.075) and rows[1]["growth"] == pytest.approx(0.107)
-    assert rows[3]["ebit_margin"] == pytest.approx(0.05)                             # the target margin in the target year
+    assert rows[3]["ebit_margin"] == pytest.approx(0.05 - 200e6 / 42e9)              # the target (EBIT basis) in the target year
     g = fc["growth_schedule"]
     assert g[-1] == pytest.approx(0.025) and g[-2] == pytest.approx(0.025)
     assert all(abs(g[i + 1] - 0.025) <= abs(g[i] - 0.025) + 1e-9 for i in range(4, 8))   # fade converges on tgr from either side

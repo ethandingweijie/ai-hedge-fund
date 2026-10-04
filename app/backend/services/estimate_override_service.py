@@ -225,7 +225,8 @@ def _statements_for(fc: dict, ctx: dict, shared: dict, dr: dict) -> Optional[dic
         for k in STATEMENT_FIELDS:
             if shared.get(k) is not None:
                 a[k] = {"value": shared[k], "source": "user override", "needed_for": (a.get(k) or {}).get("needed_for")}
-        out = ts.build(fc, opening, a)
+        out = ts.build(fc, opening, a, fx=ctx.get("fx_to_valuation")
+                       or ((dr.get("financials_used") or {}).get("fx_rate")) or 1.0)
         if out:
             out["coverage"] = ts.coverage(fc, opening, a)
         return out
@@ -308,7 +309,10 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
                                     profile_name=inputs.get("profile_name") or dr.get("profile"), sector=inputs.get("sector") or data.get("sector"),
                                     wacc=wacc, tgr=tgr, shares=float(leg["shares"]), net_debt=float(leg.get("net_debt") or 0.0), spot=spot,
                                     peer_ev_ebitda=_num(inputs.get("peer_ev_ebitda")), market_growth=_num(inputs.get("market_growth")),
-                                    engine_growth_path=leg.get("growth_schedule"), fcf_margin_base=_num(leg.get("fcf_margin_base")))
+                                    engine_growth_path=inputs.get("engine_growth_path") or leg.get("growth_schedule"),
+                                    fcf_margin_base=_num(leg.get("fcf_margin_base")),
+                                    fx_to_valuation=_num(inputs.get("fx_to_valuation")) or _num((dr.get("financials_used") or {}).get("fx_rate")) or 1.0,
+                                    valuation_currency=inputs.get("valuation_currency") or (dr.get("financials_used") or {}).get("currency"))
         except Exception as exc:                            # noqa: BLE001
             rec["skipped"] = f"the forecast did not build: {type(exc).__name__}: {exc}"
             continue
@@ -321,13 +325,15 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
             fcf_floor=float(leg.get("fcf_floor") or 0.0), net_debt=float(leg.get("net_debt") or 0.0), shares=float(leg["shares"]),
             growth_schedule=fc["growth_schedule"], wacc_schedule=leg.get("wacc_schedule") if not shared.get("wacc") else None,
             margin_delta_absolute=_num(leg.get("margin_delta_absolute")), margin_schedule=fc["fcf_margin_schedule"],
-            minority_interest=float(leg.get("minority_interest") or 0.0), preferred_equity=float(leg.get("preferred_equity") or 0.0))
+            minority_interest=float(leg.get("minority_interest") or 0.0), preferred_equity=float(leg.get("preferred_equity") or 0.0),
+            timing=leg.get("timing"))                       # D2: the run's dating, so an override re-prices like-for-like
         iv_dcf = _num(iv_dcf)
         rec["forecast"] = gfm.summary(fc)
         if sc == "base":
             rec["three_statements"] = _statements_for(fc, ctx, shared, dr)
         rec["dcf"] = {"value": iv_dcf, "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv, "projection_rows": rows,
-                      "growth_schedule": fc["growth_schedule"], "margin_schedule": fc["fcf_margin_schedule"], "wacc": float(wacc), "tgr": float(tgr)}
+                      "growth_schedule": fc["growth_schedule"], "margin_schedule": fc["fcf_margin_schedule"], "wacc": float(wacc), "tgr": float(tgr),
+                      "timing": leg.get("timing")}
         # Owner, 2026-10-03 ("especially the management guidance to estimates"): the forward multiples
         # re-price on the user's FY+1 estimates by the pipeline's own rule. The agent's metric for the
         # same leg is rebuilt from the agent's block and forecast, and the leg moves by that ratio, so
@@ -339,7 +345,10 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
                                      wacc=_num(leg.get("wacc")) or wacc, tgr=_num(leg.get("tgr")) if _num(leg.get("tgr")) is not None else tgr,
                                      shares=float(leg["shares"]), net_debt=float(leg.get("net_debt") or 0.0), spot=spot,
                                      peer_ev_ebitda=_num(inputs.get("peer_ev_ebitda")), market_growth=_num(inputs.get("market_growth")),
-                                     engine_growth_path=leg.get("growth_schedule"), fcf_margin_base=_num(leg.get("fcf_margin_base")))
+                                     engine_growth_path=inputs.get("engine_growth_path") or leg.get("growth_schedule"),
+                                    fcf_margin_base=_num(leg.get("fcf_margin_base")),
+                                    fx_to_valuation=_num(inputs.get("fx_to_valuation")) or _num((dr.get("financials_used") or {}).get("fx_rate")) or 1.0,
+                                    valuation_currency=inputs.get("valuation_currency") or (dr.get("financials_used") or {}).get("currency"))
         except Exception:                                   # noqa: BLE001
             fc0 = None
         user_m = _dcf_mod()._guidance_forward_overlay(block, None, sc, fc, _num(leg.get("revenue_base"))) or {}

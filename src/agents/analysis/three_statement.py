@@ -166,9 +166,18 @@ def coverage(fc: Optional[dict], opening: Optional[dict], a: dict) -> list[dict]
     return rows
 
 
-def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional[int] = None, interest_base: Optional[float] = None) -> Optional[dict]:
-    """IS, CF and BS for FY+1 .. FY+years from the forecast rows, the opening sheet and the assumptions."""
-    rows = (fc or {}).get("rows") or []
+def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional[int] = None, interest_base: Optional[float] = None,
+          fx: float = 1.0) -> Optional[dict]:
+    """IS, CF and BS for FY+1 .. FY+years from the forecast rows, the opening sheet and the assumptions.
+
+    `fx` is the statement-to-valuation rate the forecast rows were converted at (owner, 2026-10-04,
+    plan 1B.1). The opening sheet is the filing, in statement currency; the forecast rows are in the
+    valuation currency, so they -- and the spot price the buyback uses -- are divided back by it. Without
+    this BIRK's FY26E revenue was the USD figure in a EUR sheet: +24.6% "growth" against 10.7% guided."""
+    fx = float(fx) if isinstance(fx, (int, float)) and fx > 0 else 1.0
+    rows = [{**r, **{k: (float(r[k]) / fx if isinstance(r.get(k), (int, float)) else r.get(k))
+                     for k in ("revenue", "ebit", "da", "capex", "delta_nwc", "net_income", "ufcf", "nopat")}}
+            for r in ((fc or {}).get("rows") or [])]
     if not rows or not opening:
         return None
     v = lambda k, d=0.0: (a.get(k, {}).get("value") if isinstance(a.get(k), dict) else a.get(k))  # noqa: E731
@@ -177,6 +186,8 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
     labels = [f"FY{(fy0 or 0) + i + 1}E" if fy0 else f"FY+{i + 1}E" for i in range(years)]
     gm, sbc_pct, ir, iir, po = v("gross_margin"), val("sbc_pct"), val("interest_rate", 0.05), val("interest_income_rate"), val("payout_ratio")
     bb_target, price = val("buyback_annual"), v("buyback_price")
+    if price is not None:
+        price = float(price) / fx                                 # the spot is quoted in the valuation currency
     ar_d, inv_d, ap_d = v("receivable_days"), v("inventory_days"), v("payable_days")
     min_cash = val("min_cash", opening.get("cash") or 0.0)
     o = {k: (opening.get(k) or 0.0) for k in ("cash", "sti", "receivables", "inventory", "other_current_assets", "ppe", "goodwill_intangibles", "other_noncurrent_assets",
@@ -290,6 +301,6 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
                            + ". Trace the discrepancy to sign conventions, unlinked cash balances or missing equity deductions.",
                 "reconciliation": reconciliation, "fy_labels": None, "opening": opening, "assumptions": a}
     return {"fy_labels": labels[:len(IS.get("revenue", []))], "opening": opening, "assumptions": a, "income": IS, "schedules": SCH, "cashflow": CF, "balance": BS,
-            "checks": checks, "notes": notes, "currency": None, "reconciliation": reconciliation,
+            "checks": checks, "notes": notes, "currency": "statement", "fx_to_valuation": fx, "reconciliation": reconciliation,
             "flow": ["Income statement (revenue & EBIT)", "Supporting schedules (working capital, capex & D&A, debt)",
                      "Cash flow statement (net change in cash & free cash flow)", "Balance sheet (cash, PP&E, debt, retained earnings: A = L + E)"]}

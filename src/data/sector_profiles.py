@@ -4330,7 +4330,7 @@ def get_sector_peer_multiples(
     # blend businesses the profile has just told us apart.
     try:
         from src.data.regional_comps import profile_basket_multiples
-        _pb = profile_basket_multiples(_market or "US", profile_name)
+        _pb = profile_basket_multiples(_market or "US", profile_name, exclude=ticker or None)
         if _pb:
             regional = {**(regional or {}), **_pb}
     except Exception:                                      # noqa: BLE001
@@ -4348,7 +4348,7 @@ def get_sector_peer_multiples(
                     regional = {**(regional or {}), **_lr}
             _sc9 = SUBCOHORT_OF.get((ticker or "").upper())
             if _sc9:
-                _scb = basket_multiples(_market or "US", tuple(SUBCOHORT_BASKETS[_sc9]), _sc9)
+                _scb = basket_multiples(_market or "US", tuple(SUBCOHORT_BASKETS[_sc9]), _sc9, exclude=ticker or None)
                 if _scb:
                     regional = {**(regional or {}), **_scb}
     except Exception:                                      # noqa: BLE001
@@ -4486,7 +4486,8 @@ def _regional_peer_multiples(
         return {}
     try:
         return get_regional_multiples(market, industry, fmp_sector,
-                                      market_cap=market_cap or None)
+                                      market_cap=market_cap or None,
+                                      exclude_symbol=ticker or None)
     except Exception:
         return {}
 

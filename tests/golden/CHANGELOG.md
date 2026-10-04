@@ -1682,3 +1682,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: self-learning loops 3-4 (2026-10-04): pt_bridge gains capture_source ('rule' until a pt calibration is promoted); one new leaf on every fixture, zero numeric leaves moved
 
+## 2026-10-04T05:41:11+00:00
+
+- regenerated at HEAD: `6130d6e2`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: valuation fix plan Phase 1 (2026-10-04, owner D1-D8): dated mid-year DCF with flows after the balance-sheet date; one net-debt basis (US GAAP leases out, biotech treasury netted); interest income out of UFCF; core earnings strip non-operating gains; normalised NI at today's interest burden; latest-year trough never dropped from the base margin; scenario margin spread = sigma bounded by own history, WACC +/-50bp; market-leverage premium + CAPM band; subject excluded from its own peer medians; failed anchor -> DCF; capture_reason. Largest: BABA 145.08->125.44, 09988.HK 136.95->125.00 (FY26 investment-year trough now in the base margin)
+

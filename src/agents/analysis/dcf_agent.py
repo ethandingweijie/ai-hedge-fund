@@ -110,6 +110,18 @@ _log = logging.getLogger(__name__)
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _PROJECTION_YEARS = 10
+#: Owner, 2026-10-04 (plan 1D, D5), PROPOSED: the CAPM cross-check's inputs (the workbook's
+#: Damodaran January 2026 figures), the beta band it trusts, and how far a risk-on WACC may sit
+#: below the CAPM rate.
+_CAPM_RF, _CAPM_ERP = 0.0395, 0.0446
+#: Owner, 2026-10-04 (decision D6), PROPOSED: years over which a cascaded (OE <= 0) margin fades from
+#: the trailing figure to the positive-year median.
+_CASCADE_FADE_YEARS = 5
+_BETA_PLAUSIBLE = (0.4, 2.5)
+_RISK_ON_CAPM_BAND = 0.01
+#: Owner, 2026-10-04 (decision D8), PROPOSED: the discount-rate move by scenario. Bear prices a
+#: dearer cost of capital, bull a cheaper one; the base rate is the build's.
+_WACC_SCENARIO_SHIFT = {"bear": 0.005, "base": 0.0, "bull": -0.005}
 _MIN_HISTORY_YEARS = 2
 _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 
@@ -755,6 +767,10 @@ _NO_INVESTMENT_NETTING_SECTORS = frozenset({"Financials", "Insurance", "Banks",
 #: flow (revenue, EBIT, FCF) and must stay on the annual series.
 _BALANCE_SHEET_LINES = ("cash_and_equivalents", "short_term_investments",
                         "total_debt", "net_debt")
+#: Owner, 2026-10-04 (plan 1A.3): the bridge's other balance lines, moved to the quarter with the cash
+#: and debt when the quarter reports them, so net debt, minorities, preferreds and leases share one
+#: date. Optional: a quarter that does not report one leaves the annual figure in place.
+_BRIDGE_BALANCE_LINES = ("minority_interest", "preferred_equity", "lease_liabilities")
 
 
 #: Step-change threshold for the quarterly balance-sheet overlay, as a ratio of
@@ -878,7 +894,7 @@ def _refresh_balance_sheet_from_latest_quarter(
     this function can second-guess it.
     """
     try:
-        q = search_line_items(ticker, list(_BALANCE_SHEET_LINES), end_date,
+        q = search_line_items(ticker, list(_BALANCE_SHEET_LINES) + list(_BRIDGE_BALANCE_LINES), end_date,
                               period="quarterly", limit=1, api_key=api_key)
     except Exception:
         return None
@@ -901,6 +917,10 @@ def _refresh_balance_sheet_from_latest_quarter(
     before = _net_debt_net_of_investments(row, sector)
     for field in _BALANCE_SHEET_LINES:
         row[field] = getattr(qr, field, None)
+    for field in _BRIDGE_BALANCE_LINES:
+        v = getattr(qr, field, None)
+        if isinstance(v, (int, float)):
+            row[field] = v
     if not isinstance(row.get("net_debt"), (int, float)):
         row["net_debt"] = float(debt) - float(cash)
     row["_balance_sheet_period"] = q_period
@@ -1000,6 +1020,73 @@ def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
     if abs(float(nd) - (float(td) - float(cash))) > 0.01 * max(abs(float(td)), 1.0):
         return float(nd)
     return float(nd) - float(sti)
+
+
+#: Non-USD reporters that file under US GAAP (owner, 2026-10-04, plan 1C.2). A US GAAP filer's
+#: operating-lease cost sits inside EBITDA and operating cash flow, so its lease liabilities are not
+#: debt to an EV built on those figures; an IFRS 16 filer's lease cost is below EBITDA and its
+#: principal repayments are financing flows, so they are. Every USD reporter is treated as US GAAP;
+#: the Chinese issuers below report in RMB under US GAAP (both listings named).
+_US_GAAP_NON_USD_REPORTERS = frozenset({
+    "BABA", "09988.HK", "9988.HK", "JD", "09618.HK", "9618.HK", "PDD", "BIDU", "09888.HK", "9888.HK",
+    "NTES", "09999.HK", "9999.HK", "TCOM", "09961.HK", "9961.HK", "BILI", "09626.HK", "9626.HK",
+    "ZTO", "02057.HK", "2057.HK", "YUMC", "09987.HK", "9987.HK", "LI", "02015.HK", "2015.HK",
+    "NIO", "09866.HK", "9866.HK", "XPEV", "09868.HK", "9868.HK", "BEKE", "02423.HK", "2423.HK",
+    "TME", "01698.HK", "1698.HK", "WB", "09898.HK", "9898.HK", "VIPS", "HTHT", "01179.HK", "1179.HK",
+    "BZ", "02076.HK", "2076.HK", "TAL", "EDU", "09901.HK", "9901.HK", "QFIN", "03660.HK", "3660.HK",
+})
+
+#: Healthcare industries whose investments back claims inside regulated subsidiaries (FMP labels).
+_CLAIMS_BACKED_HEALTHCARE = ("healthcare plans", "managed care", "insurance")
+
+
+def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
+    return (str(reported_currency or "").upper() == "USD"
+            or str(ticker or "").upper() in _US_GAAP_NON_USD_REPORTERS)
+
+
+def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
+                        reported_currency: Optional[str] = None,
+                        industry: Optional[str] = None) -> tuple[float, dict]:
+    """The one net-debt figure every EV leg and the DCF bridge use, with its basis (owner,
+    2026-10-04, plan 1A.3 / 1C.1 / 1C.2).
+
+    * Short-term investments count as cash (`_net_debt_net_of_investments`), except for banks,
+      insurers and claims-backed healthcare (managed care). A biotech's treasury is spare cash:
+      Moderna's US$3.2bn of short-term investments were left out of its bridge.
+    * Lease liabilities follow the earnings basis: kept for IFRS 16 filers, taken out for US GAAP
+      filers, whose EBITDA and cash flows already pay the rent (FMP's totalDebt carries them:
+      Starbucks US$10.5bn, JD RMB25.4bn).
+    """
+    nd = _net_debt_net_of_investments(row, sector)
+    sti = row.get("short_term_investments") or 0.0
+    if ((sector or "") in ("Healthcare", "Health Care") and sti and sti > 0
+            and not any(k in str(industry or "").lower() for k in _CLAIMS_BACKED_HEALTHCARE)):
+        td, cash = row.get("total_debt"), row.get("cash_and_equivalents")
+        raw = row.get("net_debt")
+        if (td is not None and cash is not None and raw is not None
+                and abs(float(raw) - (float(td) - float(cash))) <= 0.01 * max(abs(float(td)), 1.0)):
+            nd = float(raw) - float(sti)
+    us_gaap = _reports_us_gaap(ticker, reported_currency)
+    lease = row.get("lease_liabilities")
+    lease_out = 0.0
+    if us_gaap and isinstance(lease, (int, float)) and lease > 0:
+        td = row.get("total_debt")
+        # Only when the feed's debt visibly includes the leases (FMP: debt = short + long + leases).
+        if isinstance(td, (int, float)) and td >= lease:
+            lease_out = float(lease)
+            nd = nd - lease_out
+    basis = {
+        "balance_sheet_date": row.get("_balance_sheet_period") or row.get("period"),
+        "short_term_investments_netted": bool(sti and abs(nd + lease_out - float(row.get("net_debt") or 0.0)) > 1e-6
+                                              and row.get("net_debt") is not None),
+        "accounting_basis": "US GAAP" if us_gaap else "IFRS",
+        "lease_liabilities": float(lease) if isinstance(lease, (int, float)) else None,
+        "leases": ("excluded (US GAAP: rent is inside EBITDA and cash flow)" if lease_out
+                   else "included (IFRS 16: lease cost is below EBITDA)" if not us_gaap
+                   else "none reported"),
+    }
+    return float(nd), basis
 
 
 #: Methods that make a valuation SOTP-led. Owner policy (2026-09-15): a SOTP
@@ -1238,14 +1325,16 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     "research_and_development", "stock_based_compensation",
     "depreciation_and_amortization",
     # Cash flow
-    "free_cash_flow", "fcf_owner_earnings", "ufcf_owner_earnings", "operating_cash_flow",
+    "free_cash_flow", "fcf_owner_earnings", "ufcf_owner_earnings", "ufcf_interest_income_removed",
+    "ebitda_core", "ebit_core", "net_income_core", "non_operating_gap",
+    "operating_cash_flow",
     "capital_expenditure", "change_in_working_capital",
     "share_buyback", "common_stock_repurchased",
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
     "short_term_investments",
-    "minority_interest",
+    "minority_interest", "preferred_equity", "lease_liabilities",
     "goodwill", "intangible_assets",
     # The two operating-capital lines the deterministic ROIC denominator floor
     # needs (operating working capital + net PP&E). Both were already fetched
@@ -1275,6 +1364,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
 _FX_NON_MONETARY_FIELDS: frozenset[str] = frozenset({
     "period",              # date string
     "shares_outstanding",  # a count
+    "shares_outstanding_basic",  # a count
     "debt_to_equity",      # a ratio
 })
 
@@ -1308,6 +1398,9 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "total_assets":        _safe(getattr(li, "total_assets", None)),
             "total_equity":        _safe(getattr(li, "total_equity", None)),
             "minority_interest":   _safe(getattr(li, "minority_interest", None)),
+            "preferred_equity":    _safe(getattr(li, "preferred_equity", None)),
+            "lease_liabilities":   _safe(getattr(li, "lease_liabilities", None)),
+            "shares_outstanding_basic": _safe(getattr(li, "shares_outstanding_basic", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
             "book_value_per_share":_safe(getattr(li, "book_value_per_share", None)),
             "capital_expenditure": _safe(getattr(li, "capital_expenditure", None)),
@@ -1428,7 +1521,14 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
                 _tax = min(max(1.0 - _ni / _pretax, _UFCF_TAX_BOUNDS[0]), _UFCF_TAX_BOUNDS[1])
             else:
                 _tax = _UFCF_TAX_DEFAULT
-            row["ufcf_owner_earnings"] = row["fcf_owner_earnings"] + abs(_int) * (1.0 - _tax)
+            # Owner, 2026-10-04 (plan 1C.3): and LESS after-tax interest earned on cash. Operating
+            # cash flow carries the yield on the cash pile, and the bridge credits the pile itself
+            # (net debt nets cash and short-term investments), so leaving the yield in the margin
+            # valued the cash twice -- JD: ~RMB7.6bn a year on ~RMB116bn net cash.
+            _iinc = row.get("interest_income")
+            _iinc_at = (abs(_iinc) * (1.0 - _tax)) if isinstance(_iinc, (int, float)) and _iinc > 0 else 0.0
+            row["ufcf_owner_earnings"] = row["fcf_owner_earnings"] + abs(_int) * (1.0 - _tax) - _iinc_at
+            row["ufcf_interest_income_removed"] = _iinc_at
             row["ufcf_tax_rate"] = _tax
         else:
             row["ufcf_owner_earnings"] = None
@@ -1581,7 +1681,13 @@ def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optio
     iqr = q3 - q1
     med = statistics.median(margins)
     threshold = max(iqr * 2, 0.05)  # minimum 5pp threshold to avoid over-filtering
-    filtered = [m for m in margins if abs(m - med) <= threshold]
+    # Owner, 2026-10-04: the LATEST year is never dropped on the downside. A trough in the most
+    # recent year is the business as it stands (an investment cycle, a price war), not a one-off to
+    # average away; dropping it RAISED the base -- BABA's FY26 (-11.8% unlevered, capex surge and
+    # quick commerce) fell outside the band and the base margin rose 10.9% -> 14.4%. Spikes up are
+    # still filtered, and a structural loss still goes through the OE<=0 cascade when the mean is <= 0.
+    filtered = [m for i, m in enumerate(margins)
+                if abs(m - med) <= threshold or (i == len(margins) - 1 and m < med)]
 
     if len(filtered) >= 2:
         return statistics.mean(filtered)
@@ -1764,6 +1870,7 @@ def _shift_analyst_bands_to_floor(
 
 def _projectable_fcf_margin_cap(
     series: list[dict],
+    unlevered: bool = False,
 ) -> tuple[Optional[float], Optional[float], str]:
     """(cap, trailing_fcf_margin, basis) — the FCF margin that is repeatable.
 
@@ -1815,14 +1922,20 @@ def _projectable_fcf_margin_cap(
         if not r or r <= 0:
             continue
         rev += r
+        # Owner, 2026-10-04 (plan 1F.2): on the unlevered basis the cap is unlevered too -- the
+        # same after-tax net interest the base margin adds back (UFCF − owner-earnings FCF). A
+        # levered cap against an unlevered margin fired by the interest margin alone.
+        _unlev = 0.0
+        if unlevered and row.get("ufcf_owner_earnings") is not None and row.get("fcf_owner_earnings") is not None:
+            _unlev = float(row["ufcf_owner_earnings"]) - float(row["fcf_owner_earnings"])
         if row.get("free_cash_flow") is not None:
-            fcf += row["free_cash_flow"]
+            fcf += row["free_cash_flow"] + _unlev
             have_fcf = True
             wc = row.get("change_in_working_capital")
             if wc is not None:
-                wc_margins.append((row["free_cash_flow"] - wc) / r)
+                wc_margins.append((row["free_cash_flow"] + _unlev - wc) / r)
         if row.get("net_income") is not None:
-            ni += row["net_income"]
+            ni += row["net_income"] + _unlev
             have_ni = True
         capex += abs(row.get("capital_expenditure") or 0.0)
         dep += row.get("depreciation_and_amortization") or 0.0
@@ -2807,6 +2920,7 @@ def _sotp_12m_probabilistic(
     fallback_growth: float = 0.0,
     n_iter: int = _SOTP_MC_ITERATIONS,
     seed: int = 20260421,
+    other_claims: float = 0.0,
 ) -> Optional[dict]:
     """Monte Carlo probabilistic SOTP 12m.
 
@@ -2855,7 +2969,8 @@ def _sotp_12m_probabilistic(
         for _name, rev, mult, scen in segment_data:
             rate = _draw_scenario_rate(scen, rng) if scen else fallback_growth
             total_ev += rev * (1.0 + rate) * mult
-        equity = total_ev - (net_debt or 0.0)
+        # other_claims: minority interest + preferred equity (owner, 2026-10-04: one bridge everywhere).
+        equity = total_ev - (net_debt or 0.0) - (other_claims or 0.0)
         per_share_ivs.append(max(equity / shares, 0.0))
 
     per_share_ivs.sort()
@@ -3410,6 +3525,32 @@ def _sotp_analyst_style(
 _NORMALIZED_OUTLIER_REL = 0.30
 
 
+def _core_earnings(row: dict) -> dict:
+    """Owner, 2026-10-04 (plan 1E.1): earnings without the large non-operating items a multiple must
+    not capitalise. FMP's EBITDA is pre-tax profit + interest + D&A, so it carries everything below
+    operating income: Boeing's FY2025 $7.36bn EBITDA held a ~$10.8bn gain on the Jeppesen sale against
+    an operating loss of $5.42bn, and its $2.23bn net income the same gain after tax. The interest
+    earned on cash sits there too, and the bridge already credits the cash.
+
+    When the gap between FMP EBITDA and operating EBITDA (operating income + D&A) exceeds a quarter of
+    EBITDA and 2% of revenue, the core figures replace it: EBITDA and EBIT at the operating line, net
+    income less the after-tax gap. Below the threshold the reported figures stand (ordinary noise).
+    Returns {} when operating income is not reported."""
+    opi, ebitda, rev = row.get("operating_income"), row.get("ebitda"), row.get("revenue")
+    da = row.get("depreciation_and_amortization") or 0.0
+    if not isinstance(opi, (int, float)) or not isinstance(ebitda, (int, float)) or not rev:
+        return {}
+    gap = float(ebitda) - (float(opi) + float(da))
+    if abs(gap) <= max(0.25 * abs(float(ebitda)), 0.02 * abs(float(rev))):
+        return {}
+    tax = row.get("ufcf_tax_rate")
+    tax = float(tax) if isinstance(tax, (int, float)) else _UFCF_TAX_DEFAULT
+    ni = row.get("net_income")
+    return {"ebitda_core": float(opi) + float(da), "ebit_core": float(opi),
+            "net_income_core": (float(ni) - gap * (1.0 - tax)) if isinstance(ni, (int, float)) else None,
+            "non_operating_gap": gap}
+
+
 def _normalized_earnings(
     series: list[dict],
     field: str,
@@ -3795,7 +3936,8 @@ def _three_statements_payload(fc: Optional[dict], ctx: Optional[dict], profile_n
             return {"skipped": "no audited balance sheet in the run's raw financials"}
         if not fc or not fc.get("rows"):
             return {"skipped": "no guidance-derived forecast on this run; enter estimates in the workbench to build the statements"}
-        out = _ts.build(fc, ctx["opening_balance_sheet"], ctx.get("statement_assumptions") or {})
+        out = _ts.build(fc, ctx["opening_balance_sheet"], ctx.get("statement_assumptions") or {},
+                        fx=ctx.get("fx_to_valuation") or 1.0)
         if out:
             out["coverage"] = _ts.coverage(fc, ctx["opening_balance_sheet"], ctx.get("statement_assumptions") or {})
             if out.get("skipped", "").startswith("RECONCILIATION FAILED"):
@@ -3814,12 +3956,31 @@ def _guidance_forecast_payload(fc: Optional[dict]) -> Optional[dict]:
         return None
 
 
+#: Plan 1F.5: markers of a secondary source in a citation (aggregators and market-research vendors).
+_SECONDARY_SOURCE_MARKERS = ("tikr", "mordor", "simply wall", "simplywall", "marketbeat", "macrotrends",
+                             "stockanalysis", "zacks", "seeking alpha", "seekingalpha", "investing.com",
+                             "statista", "grand view research", "fortune business insights", "yahoo finance",
+                             "marketscreener", "gurufocus", "wallstreetzen")
+
+
 def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict]) -> Optional[dict]:
     """What the report shows: the research block plus how (or why not) the DCF used it."""
     if not est or not isinstance(est, dict):
         return None
     out = {k: v for k, v in est.items() if not k.startswith("_")}
     out["model"] = est.get("_model")
+    # Owner, 2026-10-04 (plan 1F.5): grade the guidance's sources. A filing, results release or the
+    # company's own IR is primary; a data aggregator or market-research vendor (TIKR, Mordor) is
+    # secondary and is named as such, so a reader can see which estimates rest on whom.
+    _tier = []
+    for _c in list(est.get("citations") or []) + [((est.get("guidance") or {}).get("source"))]:
+        if not _c:
+            continue
+        _t = str(_c).lower()
+        _sec = any(k in _t for k in _SECONDARY_SOURCE_MARKERS)
+        _tier.append({"source": str(_c)[:200], "tier": "secondary (aggregator / market research)" if _sec else "primary"})
+    out["source_tiers"] = _tier
+    out["secondary_only"] = bool(_tier) and all(x["tier"] != "primary" for x in _tier)
     out["applied"] = bool(applied)
     out["channel"] = ({k: applied.get(k) for k in ("explicit", "explicit_years", "fade_years", "engine_year1",
                                                  "schedule", "confidence", "source")} if applied else None)
@@ -4292,6 +4453,52 @@ def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float],
     return min(raw, max(margin_headroom, 0.0))
 
 
+def _parse_iso_date(v) -> Optional[date]:
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _add_years(d: date, n: int) -> date:
+    try:
+        return d.replace(year=d.year + n)
+    except ValueError:                       # 29 Feb
+        return d.replace(year=d.year + n, day=28)
+
+
+def _dcf_timing(fy0_end, balance_sheet_date, valuation_date, years: int = _PROJECTION_YEARS) -> Optional[dict]:
+    """Owner, 2026-10-04 (plan 1B.3, decision D2): the DCF is dated, not counted in whole years.
+
+    Projection year k is fiscal year FY0+k, ending `fy0_end` + k years. Net debt is struck at the
+    balance-sheet date, so the cash a year generated BEFORE that date is already in the bridge: only
+    the fraction of each year after it is a future flow (BIRK, valued 4-Oct-26: FY26 ended 30-Sep-26,
+    balance sheet 30-Jun-26, so a quarter of FY26 is still to count, not all of it; JD: the H1 cash is
+    in the June balance, the H2 half is not). Flows are discounted at the middle of their window
+    (mid-year convention), the terminal value at the end of year N, and the present value struck at
+    the balance-sheet date is carried to the valuation date at the year-1 rate.
+
+    Returns None when the fiscal year end is unknown: the caller then projects whole years discounted
+    at their year end, as before (the T-1 backtest uses that legacy shape on purpose).
+    """
+    f0 = _parse_iso_date(fy0_end)
+    if f0 is None:
+        return None
+    bs = _parse_iso_date(balance_sheet_date) or f0
+    val = _parse_iso_date(valuation_date) or date.today()
+    t0 = max(bs, f0)
+    fractions: list[float] = []
+    for k in range(1, years + 1):
+        start, end = _add_years(f0, k - 1), _add_years(f0, k)
+        length = max((end - start).days, 1)
+        inside = (end - max(start, t0)).days
+        fractions.append(round(min(max(inside / length, 0.0), 1.0), 6))
+    roll = max((val - t0).days, 0) / 365.25
+    return {"fy0_end": f0.isoformat(), "balance_sheet_date": t0.isoformat(),
+            "valuation_date": val.isoformat(), "flow_fractions": fractions,
+            "roll_forward_years": round(roll, 6), "convention": "mid-year; flows after the balance-sheet date"}
+
+
 def _project_dcf(
     revenue_base: float,
     fcf_margin_base: float,
@@ -4311,6 +4518,7 @@ def _project_dcf(
     margin_schedule: Optional[list[float]] = None,
     minority_interest: float = 0.0,
     preferred_equity: float = 0.0,
+    timing: Optional[dict] = None,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -4427,6 +4635,11 @@ def _project_dcf(
     pv_sum = 0.0
     rev_t = revenue_base
     disc_cum = 1.0
+    # Owner, 2026-10-04 (D2): `timing` (see _dcf_timing) dates the projection -- each year counts only
+    # its flows after the balance-sheet date and is discounted at their midpoint. None keeps whole
+    # years discounted at year end.
+    _fr = list((timing or {}).get("flow_fractions") or [])
+    _dated = len(_fr) >= years
     for t in range(1, years + 1):
         g_t   = _g_by_year[t - 1]
         w_t   = _w_by_year[t - 1]
@@ -4474,10 +4687,12 @@ def _project_dcf(
         # byte-identical to `min(max(base + delta, floor), cap)`.
         margin_t = max(margin_t, fcf_floor)
         margin_t = min(margin_t, _FCF_MARGIN_CAP)
-        fcf_t    = rev_t * margin_t
+        f_t      = _fr[t - 1] if _dated else 1.0
+        fcf_t    = rev_t * margin_t * f_t
         # Compound discount factor using per-year WACC (staged fade).
-        disc_cum = disc_cum / (1 + w_t)
-        pv_fcf_t = fcf_t * disc_cum
+        disc_mid = disc_cum / (1 + w_t) ** (f_t / 2.0) if _dated else disc_cum / (1 + w_t)
+        disc_cum = disc_cum / (1 + w_t) ** f_t if _dated else disc_cum / (1 + w_t)
+        pv_fcf_t = fcf_t * disc_mid
         pv_sum  += pv_fcf_t
         annual_rows.append({
             "year_label":      f"Yr {t}",
@@ -4486,7 +4701,9 @@ def _project_dcf(
             "fcf_margin":      margin_t,
             "wacc":            w_t,
             "fcf":             fcf_t,
-            "discount_factor": disc_cum,
+            "flow_fraction":   f_t,
+            "discount_factor": disc_mid,
+            "discount_factor_end": disc_cum,
             "pv_fcf":          pv_fcf_t,
             # Not projected into the golden snapshot — `projection_rows` is in
             # neither `_SCALAR_KEYS` nor `_DICT_KEYS` — so this is a payload
@@ -4518,6 +4735,10 @@ def _project_dcf(
 
     # Owner, 2026-09-26: the same bridge as the multiples legs (minority
     # interest and preferred deducted); see build_equity_bridge.
+    if _dated:
+        # Struck at the balance-sheet date; carried to the valuation date at the year-1 rate.
+        _roll = (1 + _w_by_year[0]) ** float((timing or {}).get("roll_forward_years") or 0.0)
+        pv_sum, pv_tv = pv_sum * _roll, pv_tv * _roll
     equity_value = build_equity_bridge(pv_sum + pv_tv, net_debt, minority_interest, preferred_equity)
     iv = equity_value / shares
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
@@ -6573,7 +6794,9 @@ def _compute_rnpv(
             annuity_factor = (1 - (1 + effective_wacc) ** (-avg_years_to_launch)) / effective_wacc
             future_rd_pv = current_rd * annuity_factor
 
-    equity_value = total_pipeline_pv + cash - debt - future_rd_pv
+    # Owner, 2026-10-04 (plan 1A.3): the same claims every other bridge deducts.
+    other_claims = _minority_interest(most_recent) + _preferred_equity(most_recent)
+    equity_value = total_pipeline_pv + cash - debt - future_rd_pv - other_claims
     iv_per_share = max(equity_value / effective_shares, 0.0)
 
     audit = {
@@ -6581,6 +6804,7 @@ def _compute_rnpv(
         "cash":                     cash,
         "debt":                     debt,
         "future_rd_pv":             future_rd_pv,
+        "minority_and_preferred":   other_claims,
         "equity_value":             equity_value,
         "shares_reported":          shares,
         "shares_diluted":           effective_shares,
@@ -6755,6 +6979,8 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
         if b.get("key"):
             fields[name]["key"] = b.get("key")
             fields[name]["exchange"] = b.get("exchange")
+        if b.get("subject_excluded") is not None:              # plan 1F.3
+            fields[name]["subject_excluded"] = b.get("subject_excluded")
     age = peer.get("_comp_age_days")
     return {
         "fields": fields,
@@ -6891,9 +7117,11 @@ def _compute_method_value(
         _own_disc = _vc_disc.ticker_multiple_discount(ticker)
     except Exception:                                      # noqa: BLE001
         _own_disc = 1.0
-    ebitda = most_recent.get("ebitda")
-    net_income = most_recent.get("net_income")
-    ebit = most_recent.get("ebit")
+    # Owner, 2026-10-04 (plan 1E.1): the core figures when a large non-operating item was found.
+    ebitda = most_recent.get("ebitda_core") if most_recent.get("ebitda_core") is not None else most_recent.get("ebitda")
+    net_income = (most_recent.get("net_income_core") if most_recent.get("net_income_core") is not None
+                  else most_recent.get("net_income"))
+    ebit = most_recent.get("ebit_core") if most_recent.get("ebit_core") is not None else most_recent.get("ebit")
     bvps = most_recent.get("book_value_per_share")
     total_equity = most_recent.get("total_equity")
     total_assets = most_recent.get("total_assets")
@@ -6948,6 +7176,9 @@ def _compute_method_value(
             growth_schedule=_pj.get("growth_schedule"),
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_schedule=_sched,
+            minority_interest=_minority_interest(most_recent),
+            preferred_equity=_preferred_equity(most_recent),
+            timing=_pj.get("timing"),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(_tgt * (1.0 - _tax)), growth_base=float(growth_base),
@@ -6958,7 +7189,7 @@ def _compute_method_value(
                    minority_interest=_minority_interest(most_recent),
                    preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
-                   projection_rows=_rows,
+                   projection_rows=_rows, timing=_pj.get("timing"),
                    target_margin={"ebit_margin_start": float(_m0), "ebit_margin_terminal": float(_tgt),
                                   "band": _tm.get("band"), "ramp_years": _n, "tax_rate": _tax,
                                   "basis": _tm.get("basis"), "source": _tm.get("source"),
@@ -7013,6 +7244,9 @@ def _compute_method_value(
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
             margin_schedule=_m_sched,
+            minority_interest=_minority_interest(most_recent),
+            preferred_equity=_preferred_equity(most_recent),
+            timing=_pj.get("timing"),
         )
         if _fade:
             _bound = {**(_bound or {}), "fcf_guidance_fade": {
@@ -7029,7 +7263,7 @@ def _compute_method_value(
                    minority_interest=_minority_interest(most_recent),
                    preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
-                   projection_rows=_rows, **({"backlog_bound": _bound} if _bound else {}))
+                   projection_rows=_rows, timing=_pj.get("timing"), **({"backlog_bound": _bound} if _bound else {}))
         return iv
 
     # ── DCF / DCF variants ─────────────────────────────────────────────────
@@ -7051,6 +7285,9 @@ def _compute_method_value(
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
             margin_schedule=_pj.get("margin_schedule"),
+            minority_interest=_minority_interest(most_recent),
+            preferred_equity=_preferred_equity(most_recent),
+            timing=_pj.get("timing"),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
@@ -7062,7 +7299,7 @@ def _compute_method_value(
                    minority_interest=_minority_interest(most_recent),
                    preferred_equity=_preferred_equity(most_recent),
                    pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
-                   projection_rows=_rows)
+                   projection_rows=_rows, timing=_pj.get("timing"))
         return iv
 
     # ── Depleting Asset DCF (finite life, no terminal value) ───────────────
@@ -7386,6 +7623,7 @@ def _compute_method_value(
             net_debt=(net_debt or 0.0),
             shares=shares,
             fallback_growth=float(fallback_g),
+            other_claims=_minority_interest(most_recent) + _preferred_equity(most_recent),
         )
         if dist is None:
             return None
@@ -7685,7 +7923,8 @@ def _compute_method_value(
         _leg_trace(kind="equity_multiple",
                    metric=("Net income (equity x target ROE, bank)"
                            if (_is_bank and most_recent.get("normalized_net_income") in (None, 0))
-                           else "Net income (5y normalised)"),
+                           else "Net income (5y normalised: "
+                           + str(most_recent.get("_normalized_net_income_basis") or "net margin, 5y mean") + ")"),
                    metric_value=float(norm_ni), shares=float(shares),
                    per_share_metric=float(eps_norm), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(_bank_profile_calibration(profile_name)["pe"]
@@ -10259,6 +10498,33 @@ def _blend_methods(
         surviving_w += float(w or 0.0)
         parts.append((raw_name, value_key, w, "dcf" if is_dcf else "multi"))
 
+    # ── A failed anchor degrades the run (owner, 2026-10-04, decision D7) ──────────
+    # The anchor is the method the profile says the answer rests on. When it cannot compute, its
+    # weight goes to the DCF -- the one method that reads the company's own cash flows -- not
+    # pro-rata onto the trailing legs (Boeing: EV/EBIT (norm) 30% failed and the weight landed on
+    # P/E and EV/EBITDA, which priced a disposal gain). With no positive DCF the old renormalisation
+    # stands; either way the run is marked DEGRADED and says so on the front page.
+    anchor_degraded = None
+    _anchor_m = next((m for m in profile_methods if m.get("anchor")), None)
+    if _anchor_m is not None:
+        _ad = next((d for d in dropped if d["method"] == _anchor_m["name"]), None)
+        if _ad is not None:
+            _dcf_v = method_values.get("DCF")
+            _aw = float(_ad["weight"] or 0.0)
+            if (_anchor_m["name"] not in _DCF_FAMILY_NAMES and isinstance(_dcf_v, (int, float))
+                    and _dcf_v > 0 and _aw > 0):
+                dcf_bucket.append((float(_dcf_v), _aw))
+                parts.append(("DCF (anchor fallback)", "DCF", _aw, "dcf"))
+                surviving_w += _aw
+                _to = "the DCF"
+            else:
+                _to = "the remaining legs, pro rata (no positive DCF)"
+            anchor_degraded = {"method": _anchor_m["name"], "reason": _ad["reason"], "weight": _aw, "moved_to": _to}
+            _flag = (f"DEGRADED: anchor leg {_anchor_m['name']} did not compute ({_ad['reason']}); "
+                     f"its {_aw:.0%} weight went to {_to}")
+            if _flag not in forward_flags:
+                forward_flags.append(_flag)
+
     # Asset floor reweight goes to multi (P/BV is a multi-method anchor)
     if asset_floor_reweight > 0:
         asset_floor_val = method_values.get("P/BV")
@@ -10294,6 +10560,7 @@ def _blend_methods(
         # DCF bucket that computed and came out non-positive. These keys close
         # that gap without moving a single number.
         "legs_dropped": dropped,
+        "anchor_degraded": anchor_degraded,
         # Share of the profile's intended weight that actually voted. `intended_w`
         # sums the raw table weights; `surviving_w` sums the weights of the legs
         # that reached a bucket, plus the Gate A asset-floor share when that
@@ -11115,6 +11382,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # note below records: requested AND copied, or it is None
                      # on every row and the deduction silently does nothing.
                      "minority_interest",
+                     # Owner, 2026-10-04 (plan 1C.2/1C.5/1C.6): requested AND copied AND classified,
+                     # or each is None on every row -- preferred equity read 0.0 on every name
+                     # (Boeing's mandatory convertible), the diluted/basic ratio never resolved, and
+                     # the lease basis of net debt could not be stated.
+                     "preferred_equity", "lease_liabilities", "shares_outstanding_basic",
                      "book_value_per_share", "capital_expenditure", "ebit",
                      "interest_expense", "invested_capital",
                      "research_and_development", "stock_based_compensation",
@@ -11246,7 +11518,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             ticker, most_recent, end_date, api_key, sector)
         if _bs_flag:
             print(f"  [balance-sheet] {ticker}: {_bs_flag}")
-        net_debt     = _net_debt_net_of_investments(most_recent, sector)
+        try:
+            _nd_industry = _company_industry(ticker) if sector in ("Healthcare", "Health Care") else None
+        except Exception:                                  # noqa: BLE001
+            _nd_industry = None
+        net_debt, _net_debt_basis = _valuation_net_debt(most_recent, sector, ticker, reported_currency, _nd_industry)
 
         # ── Spot + 52w + moving averages — FMP /stable/quote (PRIMARY) ────
         # Strict superset of quote-short. One call returns:
@@ -11462,7 +11738,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # Re-derive anchored scalars after conversion
                 most_recent = series[-1]
                 revenue_base = most_recent["revenue"]
-                net_debt     = _net_debt_net_of_investments(most_recent, sector)
+                net_debt, _net_debt_basis = _valuation_net_debt(most_recent, sector, ticker, reported_currency, _nd_industry)
                 # Change 9: store the pre-FX (raw currency) revenue for debugging
                 revenue_base_raw_ccy = revenue_base / fx_rate if fx_rate else revenue_base
                 _ccy_label = f"{reported_currency}→{_target_ccy}"
@@ -11636,9 +11912,44 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # trough-earnings IV (and vice versa). For stable businesses the delta
         # is small — safe to apply uniformly. Stored on most_recent so the method
         # branches pick them up automatically; None when insufficient history.
-        _norm_ni     = _normalized_earnings(series, "net_income", window=5)
-        _norm_ebitda = _normalized_earnings(series, "ebitda",     window=5)
-        _norm_ebit   = _normalized_earnings(series, "ebit",       window=5)
+        # Owner, 2026-10-04 (decision D3): minority interest in majority-owned LISTED subsidiaries at
+        # market value where the stake is on record (see holdco_sotp.listed_minority_at_market). The
+        # larger of book and market stands: book stays the floor for minorities in unlisted entities
+        # the registry does not list.
+        try:
+            from src.agents.analysis import holdco_sotp as _hs_mi
+            _mi_ccy = (_target_ccy if (reported_currency != _target_ccy and fx_rate and fx_rate != 1.0)
+                       else reported_currency)
+            _mi_mkt = _hs_mi.listed_minority_at_market(ticker, end_date, _mi_ccy)
+        except Exception:                                  # noqa: BLE001
+            _mi_mkt = None
+        if _mi_mkt and _mi_mkt.get("value") is not None:
+            _mi_book = float(most_recent.get("minority_interest") or 0.0)
+            most_recent["minority_interest_book"] = _mi_book
+            most_recent["_minority_at_market"] = _mi_mkt
+            if _mi_mkt["value"] > _mi_book:
+                most_recent["minority_interest"] = float(_mi_mkt["value"])
+            _mi_parts = ", ".join(f"{p_['listed']} {1.0 - p_['stake_pct']:.0%} outside" for p_ in _mi_mkt["parts"])
+            ticker_forward_flags.append(
+                f"Minority interest: listed subsidiaries at market {_mi_mkt['value'] / 1e9:,.1f}bn vs book "
+                f"{_mi_book / 1e9:,.1f}bn ({_mi_parts}); the bridge deducts the larger")
+
+        # Owner, 2026-10-04 (plan 1E.1): core earnings per year, so neither the trailing legs nor the
+        # five-year normalisation capitalise a disposal gain (see _core_earnings).
+        for _row in series:
+            _ce = _core_earnings(_row)
+            for _k in ("ebitda_core", "ebit_core", "net_income_core", "non_operating_gap"):
+                _row[_k] = _ce.get(_k)
+        _norm_series = [{**_row, **{k: _row[k + "_core"] for k in ("ebitda", "ebit", "net_income")
+                                    if _row.get(k + "_core") is not None}} for _row in series]
+        _norm_ni     = _normalized_earnings(_norm_series, "net_income", window=5)
+        _norm_ebitda = _normalized_earnings(_norm_series, "ebitda",     window=5)
+        _norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)
+        if most_recent.get("non_operating_gap") is not None:
+            ticker_forward_flags.append(
+                f"Core earnings: {most_recent['non_operating_gap'] / 1e9:+,.2f}bn sits between operating "
+                f"income and FMP's EBITDA in the last fiscal year (a disposal gain, investment income or "
+                f"interest on cash); the trailing and normalised multiples price the operating line")
         # Owner decision 2026-09-20: a cyclical profile normalises its EARNINGS
         # legs and then capitalised raw TTM cash flow in the FCF leg, so the
         # blend was two-thirds mean-reverted and one-fifth whatever the last
@@ -11648,6 +11959,34 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # earnings, while its own five-year median is $4.16bn.
         _norm_fcf = (_normalized_earnings(series, "fcf_owner_earnings", window=5)
                      or _normalized_earnings(series, "free_cash_flow", window=5))
+        # Owner, 2026-10-04 (plan 1E.2): the five-year net margin carries each year's OWN financing cost --
+        # Birkenstock's post-buyout interest (FY23 net income $84m on $1.68bn) took 28% off the normalised
+        # earnings of a company that has since refinanced. Each year's after-tax interest burden (as a
+        # share of revenue) is replaced by today's before the mean is taken: the cycle stays in the
+        # normalisation, the old capital structure does not. Nothing else in the year moves (a first
+        # version normalised the operating line instead and also stripped BABA's investment write-downs,
+        # +185% on its P/E leg). Balance-sheet intermediaries keep the plain mean: interest is their cost
+        # of goods.
+        _norm_ni_basis = "net margin, 5y mean"
+        _ie_cur = most_recent.get("interest_expense")
+        if (isinstance(_ie_cur, (int, float)) and most_recent.get("revenue")
+                and not _interest_is_cost_of_goods("", sector)
+                and (sector or "") not in ("Financials", "Banks", "Insurance")):
+            _int_m_cur = abs(float(_ie_cur)) / float(most_recent["revenue"])
+            _swapped = []
+            for _row in _norm_series:
+                _r = dict(_row)
+                _ie_y, _rev_y, _ni_y = _row.get("interest_expense"), _row.get("revenue"), _row.get("net_income")
+                if isinstance(_ie_y, (int, float)) and _rev_y and isinstance(_ni_y, (int, float)):
+                    _tx_y = _row.get("ufcf_tax_rate")
+                    _tx_y = float(_tx_y) if isinstance(_tx_y, (int, float)) else _UFCF_TAX_DEFAULT
+                    _r["net_income"] = _ni_y + (abs(float(_ie_y)) - _int_m_cur * float(_rev_y)) * (1.0 - _tx_y)
+                _swapped.append(_r)
+            _norm_ni_swapped = _normalized_earnings(_swapped, "net_income", window=5)
+            if _norm_ni_swapped is not None:
+                _norm_ni = _norm_ni_swapped
+                _norm_ni_basis = "net margin, 5y mean, each year at today's interest burden"
+        most_recent["_normalized_net_income_basis"] = _norm_ni_basis
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
@@ -12108,6 +12447,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # reflect demonstrated economics, not the repaired DCF basis.
         _fcf_margin_for_classify = fcf_margin_base
         _dcf_family_disabled = False
+        _cascade_fade: Optional[list[float]] = None
         if fcf_margin_base <= 0:
             _pos_median = _median_positive_fcf_margin(series, field=_oe_basis_field)
             # Self-learning loop 6 (2026-10-03): the cascade writes a gate record like every
@@ -12132,6 +12472,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"{fcf_margin_base:.1%} ≤ 0 → DCF basis = median of "
                     f"positive years {_pos_median:.1%}"
                 )
+                # Owner, 2026-10-04 (decision D6): a loss-maker starts from where it is. The margin
+                # fades from the trailing figure to the positive-year median over
+                # _CASCADE_FADE_YEARS and holds there, instead of jumping to the median in year 1
+                # (Boeing: -3.6% trailing projected at +4.7% from the first year). The median stays
+                # the base the scenario moves scale on.
+                _trail_m = float(fcf_margin_base)
+                _cascade_fade = [_trail_m + (_pos_median - _trail_m) * min(t, _CASCADE_FADE_YEARS) / _CASCADE_FADE_YEARS
+                                 for t in range(1, _PROJECTION_YEARS + 1)]
+                gate_evaluations[-1]["fade"] = {"from": round(_trail_m, 6), "to": round(float(_pos_median), 6),
+                                                "years": _CASCADE_FADE_YEARS}
+                gate_evaluations[-1]["basis"] += f"; faded from the trailing margin over {_CASCADE_FADE_YEARS} years"
                 fcf_margin_base = _pos_median
             else:
                 _dcf_family_disabled = True
@@ -12152,6 +12503,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # cost at all, just not repeatable. A name can legitimately trip both.
         if not _dcf_family_disabled:
             _cc_cap, _cc_trailing, _cc_basis = _projectable_fcf_margin_cap(
+                unlevered=(_oe_basis_field == "ufcf_owner_earnings"),
+                series=
                 series)
             _cc_deep_cut = (
                 _cc_cap is not None
@@ -13413,11 +13766,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _coverage = _ebit_v / _int_v
         else:
             _coverage = None  # no interest expense → rated AAA
+        # Owner, 2026-10-04 (plan 1D.2): the leverage premium is priced on MARKET leverage (net debt /
+        # market value of equity), not gross debt over book equity. Book equity is an accounting
+        # residual -- buybacks and losses take it to near zero -- so Boeing's D/E read ~14x, the premium
+        # hit its +4pp cap and WACC (11.46%) came out above the company's own CAPM cost of equity.
+        if _market_cap and _market_cap > 0 and net_debt is not None:
+            _wacc_leverage = max(float(net_debt), 0.0) / float(_market_cap)
+            _wacc_leverage_basis = "net debt / market capitalisation"
+        else:
+            _wacc_leverage = leverage
+            _wacc_leverage_basis = "gross debt / book equity (no market capitalisation)"
         try:
             from src.data.sector_profiles import compute_wacc_hybrid as _compute_wacc_hybrid
             _wacc_info = _compute_wacc_hybrid(
                 sector=sector,
-                leverage=leverage,
+                leverage=_wacc_leverage,
                 macro_regime=_risk_appetite,
                 profile=profile_name or "",
                 is_hk=_is_hk,
@@ -13434,7 +13797,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
                          ticker, _wacc_exc)
             wacc = get_wacc_for_exchange(
-                sector, leverage, macro_regime=_risk_appetite,
+                sector, _wacc_leverage, macro_regime=_risk_appetite,
                 profile=profile_name, is_hk=_is_hk, is_sg=_is_sg,
             )
             _wacc_build = {"wacc_base": wacc,
@@ -13445,8 +13808,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         try:
             from src.data.sector_profiles import wacc_base_breakdown as _wacc_base_breakdown
             _wacc_build["base_breakdown"] = _wacc_base_breakdown(
-                sector, leverage, macro_regime=_risk_appetite,
+                sector, _wacc_leverage, macro_regime=_risk_appetite,
                 profile=profile_name or "", is_hk=_is_hk, is_sg=_is_sg)
+            _wacc_build["base_breakdown"]["leverage_basis"] = _wacc_leverage_basis
         except Exception:  # noqa: BLE001 - disclosure only, never blocks the DCF
             pass
 
@@ -13571,6 +13935,44 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"Contracted-revenue discount: {_CONTRACTED_DISCOUNT*100:+.0f}bps "
                     f"(PPA/contracted keywords found) → WACC={wacc:.3f}"
                 )
+
+        # ── CAPM cross-check and the risk-on band (owner, 2026-10-04, plan 1D.2/1D.4, D5) ─────
+        # The table rate is the engine's; CAPM (rf + beta x ERP + country premium, blended with the
+        # after-tax cost of debt at market weights) is the check. A beta outside a plausible band is
+        # not used (09618.HK's 0.36). In a risk-on regime the -50bp overlay may not take WACC more
+        # than _RISK_ON_CAPM_BAND below the CAPM rate; a WACC above the cost of equity when debt is
+        # cheaper is flagged -- it cannot be right.
+        try:
+            from src.data.regional_comps import get_fmp_classification as _gfc
+            _beta = _gfc(ticker).get("beta")
+            _beta = float(_beta) if _beta is not None else None
+        except Exception:                                  # noqa: BLE001
+            _beta = None
+        _capm = {"beta": _beta, "rf": _CAPM_RF, "erp": _CAPM_ERP}
+        if _beta is not None and not (_BETA_PLAUSIBLE[0] <= _beta <= _BETA_PLAUSIBLE[1]):
+            _capm["status"] = f"beta {_beta:.2f} outside {_BETA_PLAUSIBLE[0]}-{_BETA_PLAUSIBLE[1]}: not used"
+            _beta = None
+        if _beta is not None:
+            _crp_capm = float((_wacc_build.get("base_breakdown") or {}).get("crp_embedded") or 0.0)                 + float(_wacc_build.get("country_risk_premium") or 0.0)
+            _coe = _CAPM_RF + _beta * _CAPM_ERP + _crp_capm
+            _rd = float(_wacc_build.get("rd_live") or (_CAPM_RF + 0.016))
+            _dv = float(_wacc_build.get("dv_ratio") or 0.0)
+            _capm_wacc = (1.0 - _dv) * _coe + _dv * _rd * (1.0 - 0.25)
+            _capm.update(cost_of_equity=round(_coe, 6), wacc=round(_capm_wacc, 6), status="used")
+            _ov = float((_wacc_build.get("base_breakdown") or {}).get("macro_overlay") or 0.0)
+            if _ov < 0 and wacc < _capm_wacc - _RISK_ON_CAPM_BAND:
+                _floor = round(_capm_wacc - _RISK_ON_CAPM_BAND, 4)
+                ticker_forward_flags.append(
+                    f"Risk-on band: WACC {wacc:.2%} (after the {_ov:+.2%} regime overlay) sat more than "
+                    f"{_RISK_ON_CAPM_BAND:.0%} below the CAPM rate {_capm_wacc:.2%} (beta {_beta:.2f}); held at {_floor:.2%}")
+                _capm["risk_on_band"] = {"before": round(wacc, 6), "after": _floor}
+                wacc = _floor
+            if _dv > 0 and _rd < _coe and wacc > _coe + 1e-9:
+                ticker_forward_flags.append(
+                    f"WACC {wacc:.2%} exceeds the CAPM cost of equity {_coe:.2%} although debt is cheaper: "
+                    "the table rate and the market disagree; read the discount rate with care")
+                _capm["wacc_above_cost_of_equity"] = True
+        _wacc_build["capm"] = _capm
 
         # P1.1 — extract anchor method and rationale for PDF display (§6 Step 4)
         _anchor_method = "DCF"  # fallback
@@ -13772,6 +14174,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     float(_analyst_bands["base"]) / _band_scale, 6),
                 "gated_output_path_b": round(float(_analyst_bands["base"]), 6),
                 "basis": "revenue-tier cap",
+                "applied": True,          # plan 1A.2: every gate record says whether it moved the number
             })
             ticker_forward_flags.append(
                 f"Revenue-scale cap on analyst bands: base growth capped to "
@@ -14081,7 +14484,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if profile_name in _RESERVE_FLOOR_PROFILES:
                 _pv10_d = _ii_g.accepted_detail(ticker, "pv10", _stmt_ccy)
                 if _pv10_d and shares and shares > 0:
-                    _pv10_floor_ps = (_pv10_d["value"] - (net_debt or 0.0)) / shares
+                    _pv10_floor_ps = build_equity_bridge(_pv10_d["value"], net_debt, _minority_interest(most_recent),
+                                                         _preferred_equity(most_recent)) / shares
             if profile_name in _BACKLOG_VISIBILITY_PROFILES:
                 _backlog_d = _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
                 if _backlog_d and revenue_base and revenue_base > 0:
@@ -14164,6 +14568,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             tgr_table = {k: float(_eo_rates["tgr"]) for k in ("bear", "base", "bull")}
             ticker_forward_flags.append(f"Terminal growth replaced by the user's {float(_eo_rates['tgr']):.2%} in every scenario (carried estimate override)")
 
+        # Owner, 2026-10-04 (decision D8): the scenario spread is the company's own. The margin move
+        # is the larger of the profile's multiplicative rule and one standard deviation of the
+        # company's own margin history (the last five years, on the basis the DCF uses), so a
+        # thin-margin name with a volatile history is not stressed by half a point (09618.HK: bear
+        # cut 2.48% by 0.5pp while FY25 printed ~0%).
+        # Not for balance-sheet businesses (a bank's or insurer's FCF margin swings with deposits and
+        # float, not with its earnings: Standard Chartered's sigma read 53pp), and never wider than the
+        # base margin itself, so the bear case can take a margin to zero but not through it.
+        try:
+            _hist_m = [float(r[_oe_basis_field]) / float(r["revenue"]) for r in series[-5:]
+                       if r.get(_oe_basis_field) is not None and r.get("revenue")]
+            _margin_sigma = statistics.pstdev(_hist_m) if len(_hist_m) >= 3 else 0.0
+            if _interest_is_cost_of_goods(profile_name, sector) or (sector or "") in ("Financials", "Banks", "Insurance"):
+                _margin_sigma = 0.0
+            _margin_sigma = min(_margin_sigma, max(abs(float(fcf_margin_base)), 0.0))
+            _hist_lo, _hist_hi = (min(_hist_m), max(_hist_m)) if _hist_m else (None, None)
+        except Exception:                                  # noqa: BLE001
+            _margin_sigma, _hist_lo, _hist_hi = 0.0, None, None
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -14195,6 +14617,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Replaces the legacy ±0.2pp/yr drift which barely moved the
             # needle for mid-margin Tech names.
             md_abs = fcf_margin_base * (_m_mult[scenario] - 1.0)
+            # D8: one sigma of the company's own margins, bounded by its own history -- the bear margin
+            # no lower than its worst year, the bull no higher than its best (BABA's bull doubled the
+            # base margin past anything it has printed).
+            if scenario == "bear" and _margin_sigma > 0:
+                _room = max(float(fcf_margin_base) - _hist_lo, 0.0) if _hist_lo is not None else _margin_sigma
+                md_abs = min(md_abs, -min(_margin_sigma, _room))
+            elif scenario == "bull" and _margin_sigma > 0:
+                _room = max(_hist_hi - float(fcf_margin_base), 0.0) if _hist_hi is not None else _margin_sigma
+                md_abs = max(md_abs, min(_margin_sigma, _room))
             if scenario != "bear":
                 md_abs += guidance_margin_adj
 
@@ -14233,6 +14664,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _staged_wacc_for_year(wacc, profile_name, y)
                     for y in range(1, _PROJECTION_YEARS + 1)
                 ]
+            # Owner, 2026-10-04 (decision D8): the discount rate flexes with the scenario too
+            # (_WACC_SCENARIO_SHIFT, PROPOSED). Carried as a per-year schedule so every DCF-family
+            # leg and the workbook read the same rate.
+            _w_shift = _WACC_SCENARIO_SHIFT.get(scenario, 0.0)
+            if _w_shift:
+                _wacc_schedule = [w + _w_shift for w in (_wacc_schedule or [wacc] * _PROJECTION_YEARS)]
 
             # ── Guidance channel (owner, 2026-10-03) ──────────────────────
             # The research's recommended estimates set years 1–E of THIS
@@ -14259,6 +14696,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                    "peer_ev_ebitda": _peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
                                    "market_growth": _peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                                    "profile_name": profile_name, "sector": sector, "fcf_margin_base": fcf_margin_base,
+                                   "fx_to_valuation": float(fx_rate or 1.0),
+                                   "valuation_currency": (_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency),
                                    "engine_growth_path": _growth_schedule},
                         "fiscal_year_1": (_guid_est or {}).get("fiscal_year_1"), "fiscal_year_2": (_guid_est or {}).get("fiscal_year_2"),
                     }
@@ -14270,6 +14709,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         from src.agents.analysis import three_statement as _ts
                         _raw_fin = state["data"].get("raw_financials")
                         _fc_ctx["opening_balance_sheet"] = _ts.opening_from_raw(_raw_fin)
+                        _fc_ctx["fx_to_valuation"] = float(fx_rate or 1.0)       # statement → valuation currency
                         _fc_ctx["statement_assumptions"] = _ts.assumptions_from_history(
                             _raw_fin, _fc_ctx["history"], spot=_fc_ctx["inputs"].get("spot"))
                         _fc_ctx["statements_family_ok"] = not _interest_is_cost_of_goods(profile_name, sector)
@@ -14290,7 +14730,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
                         market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                         engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
-                        overrides=_eo_engine_ov or None)
+                        overrides=_eo_engine_ov or None,
+                        fx_to_valuation=float(fx_rate or 1.0),
+                        valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
                 except Exception as _gf_exc:  # noqa: BLE001
                     _gf = None
                     if scenario == "base":
@@ -14298,6 +14740,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if _gf:
                 _growth_schedule = _gf["growth_schedule"]
                 _gf_margin_sched = _gf["fcf_margin_schedule"]
+                # Owner, 2026-10-04 (plan 1F.4): a margin schedule used to override the scenario's
+                # margin move, so bear and bull differed only by the research's own estimates --
+                # identical margins when the block gives none per scenario. The scenario move rides
+                # on the schedule unless the block set this scenario's margin endpoint itself.
+                _est_sc = ((_guid_est or {}).get("estimates") or {})
+                _own_margin = any(
+                    (_est_sc.get(scenario) or {}).get(k) is not None
+                    and (_est_sc.get(scenario) or {}).get(k) != (_est_sc.get("base") or {}).get(k)
+                    for k in ("ebitda_margin_fy1", "ebitda_margin_fy2"))
+                if scenario != "base" and not _own_margin and md_abs:
+                    _gf_margin_sched = [m + md_abs for m in _gf_margin_sched]
                 _gf_by_sc[scenario] = _gf
                 if scenario == "base":
                     _gf_base = _gf
@@ -14314,6 +14767,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _inv in _gf["invariants"]:
                         if _inv.get("ok") is False:
                             ticker_forward_flags.append(f"Forecast invariant {_inv['id']} ({_inv['name']}) FAILED: {_inv['detail']}")
+            # Owner, 2026-10-04 (D6): with no guidance forecast, a cascaded loss-maker runs the fade path.
+            if _gf_margin_sched is None and _cascade_fade is not None:
+                _gf_margin_sched = [m + md_abs for m in _cascade_fade]
             # Owner, 2026-10-03: the forward multiples of this scenario price on the guidance-derived
             # FY+1 estimates (EPS, EBITDA, revenue, EBIT) where the research or the forecast gives
             # them; consensus where not. The leg trace names the source and keeps consensus beside it.
@@ -14548,11 +15004,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Per-leg inputs recorded for the Excel export (see _LEG_TRACE).
             leg_inputs: dict[str, dict] = {}
             # The same context every DCF-family leg projects with below.
+            _dcf_timing_ctx = _dcf_timing(most_recent.get("period"),
+                                          most_recent.get("_balance_sheet_period"), end_date)
             _dcf_projection = {
                 "growth_schedule": _growth_schedule,
                 "wacc_schedule": _wacc_schedule,
                 "margin_delta_absolute": md_abs,
                 "margin_schedule": _gf_margin_sched,      # the guidance forecast's FCF margins, else None
+                "timing": _dcf_timing_ctx,                # D2: dated, mid-year (None = whole years)
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
@@ -14570,6 +15029,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 wacc_schedule=_wacc_schedule,
                 margin_delta_absolute=md_abs,
                 margin_schedule=_gf_margin_sched,
+                timing=_dcf_timing_ctx,
             )
             leg_inputs["DCF"] = {
                 "kind": "dcf", "value": iv_dcf,
@@ -14583,6 +15043,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "scenario": scenario,
                 "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
                 "projection_rows": _proj_rows,
+                "timing": _dcf_timing_ctx,
                 "guidance_channel": _gc,          # None when guidance did not set years 1–E
                 "guidance_forecast": ({k: v for k, v in _gf.items() if k not in ("rows", "curve")} if _gf else None),
             }
@@ -15621,6 +16082,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # counts legs that voted, including the P/BV asset floor Gate A
                 # adds.
                 "legs_dropped":      blend_breakdown.get("legs_dropped"),
+                "anchor_degraded":   blend_breakdown.get("anchor_degraded"),
                 "weight_surviving":  blend_breakdown.get("weight_surviving"),
                 "weight_intended":   blend_breakdown.get("weight_intended"),
                 "methods_surviving": blend_breakdown.get("methods_surviving"),
@@ -15965,10 +16427,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
                 if _ebitda_margin_ok and _yr1_ebit > 0 and shares and shares > 0:
                     _ev = _yr1_ebit * peer.get("ev_ebitda", 15.0) * _smult * _adr_h * _gp_pt
-                    _pt = max((_ev - _nd) / shares, 0.0)
+                    _pt = max(build_equity_bridge(_ev, _nd, _minority_interest(most_recent),
+                                                  _preferred_equity(most_recent)) / shares, 0.0)
                 elif _yr1_rev and _yr1_rev > 0 and shares and shares > 0:
                     _ev = _yr1_rev * peer.get("ev_revenue", 4.0) * _smult * _adr_h * _gp_pt
-                    _pt = max((_ev - _nd) / shares, 0.0)
+                    _pt = max(build_equity_bridge(_ev, _nd, _minority_interest(most_recent),
+                                                  _preferred_equity(most_recent)) / shares, 0.0)
                 elif _yr1_eps and _yr1_eps > 0:
                     _pt = _yr1_eps * peer.get("pe", 20.0) * _smult * _adr_h * _gp_pt
             _12m_targets[scen_name] = round(_pt, 2) if _pt else None
@@ -16022,10 +16486,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _high_sbc = profile_name in _HIGH_SBC_PROFILES
             if _is_reaccel and _high_sbc:
                 _max_capture = 0.30
+                _capture_reason = "30%: high-SBC profile, re-accelerating growth"
             elif _high_sbc:
                 _max_capture = 0.20
+                _capture_reason = "20%: high-SBC profile"
             else:
                 _max_capture = 0.35
+                _capture_reason = "35%: the standard rule"
             # Unanimous scenarios: when bear, base AND bull all land on the
             # same side of spot, the model is not arguing about direction,
             # only about distance, and the cap is the only thing holding the
@@ -16046,6 +16513,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 or all(v < _spot_for_cap for v in _scen_ivs))
             if _unanimous:
                 _max_capture = min(0.50, _max_capture + 0.15)
+                _capture_reason = (f"{_max_capture:.0%}: bear, base and bull all sit "
+                                   f"{'above' if _scen_ivs[0] > _spot_for_cap else 'below'} spot, "
+                                   f"so the rule adds 15 points (cap 50%)")
             # Self-learning loop 3 (2026-10-04): a PROMOTED pt calibration replaces the
             # rule's capture for this profile / market; nothing promoted = the rule.
             _capture_source = "rule"
@@ -16054,6 +16524,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _cal_capture = _cal_pt.capture(ticker, profile_name)
                 if _cal_capture is not None:
                     _max_capture = float(_cal_capture)
+                    _capture_reason = f"{_max_capture:.0%}: promoted calibration"
                     _cal_pt_active = _cal_pt.active_version("pt") or {}
                     _capture_source = f"calibration:{_cal_pt_active.get('version_id')}"
             except Exception:  # noqa: BLE001
@@ -16198,6 +16669,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "spot": float(_spot_for_cap),
                     "capture": _max_capture,
                     "capture_source": _capture_source,
+                    "capture_reason": _capture_reason,
                     "scenarios": _pt_rows,
                     "cross_checks": _pt_cross,
                 }
@@ -17279,7 +17751,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # row where one was newer. The Excel export's Inputs sheet.
             # Discount-rate build: sector/profile base, hybrid cost-of-debt
             # adjustment, insider overlay, and the rate actually used.
-            "wacc_build": {**_wacc_build, "leverage": _ledger_num(leverage),
+            "wacc_build": {**_wacc_build, "leverage": _ledger_num(_wacc_leverage),
                            "macro_regime": _risk_appetite, "wacc_final": round(wacc, 6)},
             "financials_used": {
                 "currency": _output_currency,
@@ -17287,6 +17759,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "fx_rate": round(fx_rate, 6),
                 "source": "FMP annual statements",
                 "balance_sheet_period": most_recent.get("_balance_sheet_period"),
+                "net_debt_basis": _net_debt_basis,
                 "rows": [
                     {k: (_ledger_num(r.get(k)) if k != "period" else r.get(k))
                      for k in _FINANCIALS_USED_FIELDS}

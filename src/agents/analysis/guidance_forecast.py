@@ -226,6 +226,9 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         "nwc_intensity": _median(nwcs, cfg["nwc_intensity_bounds"][0], cfg["nwc_intensity_bounds"][1], 0.0), "nwc_n": len(nwcs),
         "buyback_median": _median(buybacks, 0.0, float("inf"), 0.0), "roic_median": (_median(roics, -1.0, 2.0, float("nan")) if roics else None),
         "years": len(rows),
+        # Owner, 2026-10-04 (plan 1B.4): the last audited fiscal year, so the research's FY+1 can be
+        # placed on the right projection year.
+        "fy0": _year(str(last.get("period") or "")),
     }
 
 
@@ -312,6 +315,15 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
             epsT = float(tgt["value"])
         elif tgt["metric"] in ("ebitda_margin", "operating_margin", "ebit_margin"):
             mT = float(tgt["value"])
+    # Owner, 2026-10-04 (plan 1E.4): the estimate fields and an EBITDA-margin target are EBITDA
+    # margins; the path below is an EBIT margin (`ebit = revenue × margin`). The EBITDA endpoint
+    # used to be applied as EBIT, overstating EBIT by D&A / revenue every year. Converted at the
+    # history's D&A intensity; an operating/EBIT-margin target is already on the right basis.
+    _ebitda_basis = not (tgt and tgt["year_index"] > T and tgt["metric"] in ("operating_margin", "ebit_margin"))
+    if mT is not None and _ebitda_basis:
+        out["margin_T_ebitda"] = mT
+        mT = mT - float(hist.get("da_pct_revenue") or 0.0)
+    out["margin_T_basis"] = "EBIT (EBITDA endpoint less D&A / revenue)" if (_ebitda_basis and "margin_T_ebitda" in out) else "EBIT"
     out["margin_T_guided"] = mT
     out["eps_T_guided"] = epsT
     ebit_T = revT * mT if mT is not None else None
@@ -339,7 +351,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                    wacc: float, tgr: float, shares: float, net_debt: float, spot: Optional[float] = None,
                    peer_ev_ebitda: Optional[float] = None, market_growth: Optional[float] = None,
                    engine_growth_path: Optional[list[float]] = None, fcf_margin_base: Optional[float] = None,
-                   cfg: Optional[dict] = None, hist: Optional[dict] = None, overrides: Optional[dict] = None) -> Optional[dict]:
+                   cfg: Optional[dict] = None, hist: Optional[dict] = None, overrides: Optional[dict] = None,
+                   fx_to_valuation: float = 1.0, valuation_currency: Optional[str] = None) -> Optional[dict]:
     """The intermediate years from today to the guided endpoints, by the owner's five principles.
 
     Returns the per-year table, the schedules the DCF leg runs on (growth and FCF margin for
@@ -374,6 +387,36 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     tg = targets_for(block, scenario, hist)
     if tg["g1"] is None:
         return None
+    # Owner, 2026-10-04 (plan 1B.1): guided EPS is in the filing's currency; net income here is in
+    # the valuation currency. BIRK's EUR EPS against USD net income implied 279m shares for 184m.
+    _eps_ccy = str((((block or {}).get("guidance") or {}).get("eps") or {}).get("currency") or "").upper()
+    _fxe = float(fx_to_valuation) if isinstance(fx_to_valuation, (int, float)) and fx_to_valuation > 0 else 1.0
+    if _eps_ccy and valuation_currency and _eps_ccy == str(valuation_currency).upper():
+        _fxe = 1.0
+    if _fxe != 1.0:
+        for _k in ("eps1", "eps2"):
+            if tg.get(_k) is not None:
+                tg[_k] = tg[_k] * _fxe
+        if tg.get("target") and tg["target"].get("metric") == "eps":
+            tg["target"]["value"] = float(tg["target"]["value"]) * _fxe
+    # Owner, 2026-10-04 (plan 1B.4): place the research's FY+1 on the right projection year. Year 1
+    # is the fiscal year after the last audited one; research that labels a LATER year as its FY+1
+    # (09618.HK: FY2027 against an FY2025 last actual) had its growth applied a year early. The
+    # skipped years run on the engine's own path; research whose FY+1 is already reported drops it.
+    _fy0, _y1 = hist.get("fy0"), _year(str(block.get("fiscal_year_1") or ""))
+    lead: list[float] = []
+    if _fy0 and _y1:
+        _off = _y1 - (_fy0 + 1)
+        if _off > 0:
+            _eng = list(engine_growth_path or [])
+            lead = [(_eng[i] if i < len(_eng) and _eng[i] is not None else tg["g1"]) for i in range(min(_off, 3))]
+        elif _off < 0:
+            if tg["g2"] is None:
+                return None
+            tg.update(g1=tg["g2"], g2=None, m1=tg["m2"] if tg["m2"] is not None else tg["m1"], m2=None,
+                      eps1=tg["eps2"], eps2=None, T=1)
+            if tg.get("target"):
+                tg["target"]["year_index"] -= 1
     code, arche, arche_reason = archetype_route(profile_name, sector)
     _adj_map = cfg.get("archetype_growth_adj") if isinstance(cfg.get("archetype_growth_adj"), dict) else {}
     _adj = _num(_adj_map.get(code))
@@ -384,8 +427,15 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             tg["g2"] = tg["g2"] + _adj
         calibration_applied = {"archetype_growth_adj": round(_adj, 6), "archetype": code,
                                "version_id": _adj_map.get("_version_id")}
-    dec = deconstruct(tg, hist, shares, cfg, market_growth)
-    T = int(dec["horizon_years"])
+    _lead_rev = hist["revenue"]
+    for _l in lead:
+        _lead_rev *= (1.0 + _l)
+    dec = deconstruct(tg, {**hist, "revenue": _lead_rev}, shares, cfg, market_growth)
+    if lead:
+        dec["lead_years"] = [round(x, 6) for x in lead]
+        dec["flags"].append(f"Research FY+1 is {block.get('fiscal_year_1')} against a last actual of FY{_fy0}: "
+                            f"{len(lead)} year(s) before it run on the engine path ({', '.join(f'{x:+.1%}' for x in lead)})")
+    T = min(int(dec["horizon_years"]) + len(lead), PROJECTION_YEARS)
     rev0, m0 = hist["revenue"], hist["ebit_margin"] if hist["ebit_margin"] is not None else 0.0
     tax, interest = hist["tax_rate"], hist["interest"]
     mT = dec.get("margin_T_guided") if dec.get("margin_T_guided") is not None else dec.get("margin_T_implied")
@@ -397,7 +447,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     curve = margin_curve(code, T, cfg)
     # revenue path: the guided years, then a constant CAGR to the target revenue
     revs = [rev0]
-    for g in (tg["g1"], tg["g2"]):
+    for g in list(lead) + [tg["g1"], tg["g2"]]:
         if g is not None and len(revs) <= T:
             revs.append(revs[-1] * (1.0 + g))
     if len(revs) - 1 < T:
@@ -450,7 +500,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                      "tax": (ebit - interest) * tax if ebit > interest else 0.0, "nopat": nopat, "da": da, "capex": capex,
                      "capex_maintenance": da, "capex_growth": capex - da, "delta_nwc": dnwc, "ufcf": ufcf,
                      "net_income": ni, "shares": sh, "eps": (ni / sh) if sh else None, "fcf_margin": (ufcf / rev) if rev else 0.0,
-                     "phase": "guided" if t <= T else ("fade" if t <= T + F else "steady")})
+                     "phase": ("engine path" if t <= len(lead) else "guided") if t <= T else ("fade" if t <= T + F else "steady")})
         da_prev = da + (capex - da) / life
         shares_path.append(sh)
     # share-count integrity: the EPS endpoint implies a share count; the buyback that gets there
@@ -485,7 +535,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                                  "the archetype's catch-up (rate resets / fixed-cost absorption)" if code in ("I", "II") else "NONE NAMED"))})
     # cash conversion in the steady state
     lo, hi = cfg["cash_conversion_bounds"]
-    steady = [r for r in rows if r["phase"] != "guided" and r["net_income"] > 0]
+    steady = [r for r in rows if r["phase"] not in ("guided", "engine path") and r["net_income"] > 0]
     conv = [r["ufcf"] / r["net_income"] for r in steady] if steady else []
     conv_med = median(conv) if conv else None
     inv.insert(1, {"id": 2, "name": "Cash-conversion bounds", "ok": (lo <= conv_med <= hi) if conv_med is not None else None,
@@ -521,7 +571,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
         "history": {k: hist.get(k) for k in ("revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",
                                               "tax_rate", "tax_rate_source", "capex_alpha", "capex_alpha_n", "nwc_intensity", "nwc_n",
-                                              "buyback_median", "roic_median", "years")},
+                                              "buyback_median", "roic_median", "years", "fy0")},
         "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0), "spot": spot,
                    "peer_ev_ebitda": peer_ev_ebitda, "market_growth": market_growth, "profile_name": profile_name, "sector": sector,
                    "fcf_margin_base": fcf_margin_base, "engine_growth_path": engine_growth_path},

@@ -185,10 +185,10 @@ _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW", "U
 #: said nine; the three extra were `forward_flags` prose containing "bull:".
 _BULL_MOVED = {
     "02888_HK": (0.719, 0.85),    # 0.815 until the 2026-09-26 bridge; 0.719 until Wave 7's floor (2026-09-27)
-    "09988_HK": (1.167, 1.0),
-    "BABA":     (1.019, 1.0),
+    "09988_HK": (1.167, 1.023),   # 1.0 until Phase 1 (2026-10-04, D8): the bull margin is the name's own sigma
+    "BABA":     (1.019, 1.041),   # 1.0 until Phase 1 (2026-10-04, D8), likewise
     "C38U_SI":  (1.2,   1.0),
-    "FCX":      (1.8,   1.0),
+    "FCX":      (1.8,   1.148),   # 1.0 until Phase 1 (2026-10-04, D8), likewise
     "SCHW":     (1.654, 1.111),   # 1.267 until Wave 7's absolute-spread premium (2026-09-27)
 }
 
@@ -386,7 +386,7 @@ _WAVE6_MOVED = {
 #: +21.2%), so the ratio penalty (0.65-0.79) lifts to the floor in every scenario.
 #: AAPL, V, SCHW and COST move on the same premium (AAPL also on the EV/EBITDA leg reading the
 #: live Consumer Electronics cohort in place of the static table, decision 2).
-_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.097}
+_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.12, "AAPL": 1.087}   # AAPL 1.097 until Phase 1 (2026-10-04: interest income out of UFCF lowers its ROIC)
 #: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
 #: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
 _WAVE8_MOVED = {
@@ -433,9 +433,27 @@ _UFCF_MOVED = {
 _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 
 
+#: Valuation fix plan Phase 1 (owner, 2026-10-04, decisions D1-D8): the dated mid-year DCF, the one
+#: net-debt basis, interest income out of UFCF, core earnings, the latest-year trough kept in the base
+#: margin, the sigma scenario spread bounded by each name's own history, WACC +/-50bp by scenario, the
+#: subject out of its own peer medians. Bear and bull widen most (the spread is the company's own).
+_PHASE1_MOVED = {
+    "09988_HK": (125.0,   43.58,   311.76,   (86.3,   114.8,  180.16)),
+    "AAPL":     (195.2,  134.43,   277.5,    (232.88, 263.27, 304.42)),
+    "BABA":     (125.44,  40.56,   288.03,   (85.53,  115.23, 172.14)),
+    "COST":     (512.93, 342.17,   750.25,   (632.47, 717.85, 836.51)),
+    "FCX":      (68.57,   48.4,    103.63,   (63.94,  70.99,  83.27)),
+    "MELI":     (3324.38, 2466.01, 4055.45,  (2051.91, 2352.34, 2608.22)),
+    "MU":       (181.72, 135.16,   234.74,   (531.38, 554.66, 581.17)),
+    "SCHW":     (72.14,   51.85,    96.05,   (79.82,  89.97,  101.92)),
+    "U96_SI":   (5.72,     2.33,     9.12,   (4.68,   5.87,   7.06)),
+    "V":        (446.95, 316.39,   587.72,   (354.89, 400.59, 449.86)),
+}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -722,7 +740,13 @@ def test_the_published_delta_is_the_multiplier_identity():
         for scen in ("bear", "bull"):
             want = round(fmb * (m_mult[scen] - 1.0), 4)
             got = p[f"scenarios.{scen}.margin_delta_absolute"]
-            assert got == pytest.approx(want, abs=5e-5), f"{name}/{scen}"
+            # RE-STRUCK 2026-10-04 (owner decision D8): the multiplier move is now the FLOOR of the
+            # scenario's margin move -- one sigma of the company's own margins, bounded by its own
+            # best and worst years, replaces it when wider. Never narrower, never the wrong sign.
+            if scen == "bear":
+                assert got <= want + 5e-5, f"{name}/{scen}"
+            else:
+                assert got >= want - 5e-5, f"{name}/{scen}"
             assert (got < 0) == (scen == "bear"), f"{name}/{scen} sign"
 
 
@@ -787,6 +811,12 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
     baseline the section exists to compare against.
     """
     for name, fx in _fixtures().items():
+        if name in _PHASE1_MOVED:
+            # Valuation fix plan Phase 1 (2026-10-04); the pre-fix pins stay as history.
+            assert fx["base_iv"] == _current(name)[0], name
+            if name == "FCX":
+                assert _PREFIX["FCX"][0] == 25.58, "the pre-×-10 pin stays as history"
+            continue
         if name == "FCX":
             assert fx["base_iv"] == _current("FCX")[0]          # 26.78 -> 24.31: minority interest in the bridge (2026-09-26)
             assert _PREFIX["FCX"][0] == 25.58, "the pre-×-10 pin stays as history"
@@ -1050,7 +1080,10 @@ def test_fcx_bull_premium_came_off_its_clamp_ceiling():
     value the × 10 fix produced, and the live value is asserted separately.
     """
     p = _proj("FCX")
-    assert p["scenarios.bull.growth_premium"] == 1.0
+    # 1.0 off the 1.8 ceiling was this fix; Phase 1's D8 bull margin (FCX's own sigma, bounded by its
+    # best year) lifts the bull ROIC back over WACC and the quality gate grants 1.148 -- a measured
+    # premium, still well off the clamp.
+    assert p["scenarios.bull.growth_premium"] == 1.148
     assert _PREFIX["FCX"][3] == 1.8
     assert _REMEDIATION_MOVED["FCX"][2] == 44.60, "the pre-Wave-9 bull stays as history"
     assert 46.92 / 72.62 == pytest.approx(1 - 0.354, abs=5e-4), (
