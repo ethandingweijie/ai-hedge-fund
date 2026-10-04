@@ -1318,7 +1318,7 @@ class _Book:
                                             "other adjustments (named). Check = rebuilt − engine.")
         cols = ["Scenario", "Leg", "Metric", "Metric value", "Peer multiple", "Scenario band",
                 "Growth premium", "Other adj.", "Multiple", "Enterprise value", "Net debt",
-                "Minority interest", "Equity value", "Shares", "Value per share", "Engine value",
+                "Minority + preferred", "Equity value", "Shares", "Value per share", "Engine value",
                 "Check", "Notes"]
         sh.header(4, cols)
         r = 5
@@ -1360,7 +1360,8 @@ class _Book:
                     sh.put(r, 9, f"=E{r}*F{r}*G{r}*H{r}", MULT)
                     sh.put(r, 10, f"=D{r}*I{r}", MIL)
                     sh.put(r, 11, _mil(tr.get("net_debt")), MIL)
-                    sh.put(r, 12, _mil(tr.get("minority_interest")), MIL)
+                    # Minority interest AND preferred equity: the engine's one bridge deducts both (V: $514m).
+                    sh.put(r, 12, _mil((_num(tr.get("minority_interest")) or 0.0) + (_num(tr.get("preferred_equity")) or 0.0)), MIL)
                     sh.put(r, 13, f"=J{r}-K{r}-L{r}", MIL)
                     sh.put(r, 14, _mil(tr.get("shares")), MIL)
                     sh.put(r, 15, f"=IFERROR(MAX(M{r}/N{r},0),0)", NUM)
@@ -1391,7 +1392,8 @@ class _Book:
                     sh.put(r, 9, _num(tr.get("capitalisation_rate")), PCT2)
                     sh.put(r, 10, f"=IFERROR(D{r}*F{r}*H{r}/I{r},0)", MIL)
                     sh.put(r, 11, _mil(tr.get("net_debt")), MIL)
-                    sh.put(r, 12, _mil(tr.get("minority_interest")), MIL)
+                    # Minority interest AND preferred equity: the engine's one bridge deducts both (V: $514m).
+                    sh.put(r, 12, _mil((_num(tr.get("minority_interest")) or 0.0) + (_num(tr.get("preferred_equity")) or 0.0)), MIL)
                     sh.put(r, 13, f"=J{r}-K{r}-L{r}", MIL)
                     sh.put(r, 14, _mil(tr.get("shares")), MIL)
                     sh.put(r, 15, f"=IFERROR(MAX(M{r}/N{r},0),0)", NUM)
