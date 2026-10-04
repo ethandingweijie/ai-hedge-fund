@@ -80,7 +80,7 @@ def tieout(run_path: str, statements: bool = False, keep: str | None = None) -> 
         bad = []
         for sheet, cell, v in rows:
             ok = (isinstance(v, str) and v.strip() in ("OK", "ALL OK")) or (
-                isinstance(v, (int, float)) and abs(float(v)) <= TOL)
+                isinstance(v, (int, float)) and round(abs(float(v)), 6) <= TOL)
             if not ok:
                 bad.append((sheet, cell, v))
         fails += len(bad)

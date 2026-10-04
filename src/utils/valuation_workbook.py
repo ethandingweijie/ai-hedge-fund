@@ -1520,8 +1520,17 @@ class _Book:
                 sh.put(r, 7, _mil(t.get("associates")), MIL); asso = r; r += 1
                 sh.label(r, 1, "Net cash")
                 sh.put(r, 7, _mil(t.get("net_cash")), MIL); nc = r; r += 1
+                # Owner, 2026-10-04 (plan 1A.3): the minorities the engine's NAV deducts -- the gap between
+                # its segments + associates + net cash and its NAV (09988.HK: RMB9.7bn, HK$3.36 a share the
+                # tab used to leave in). Stated as the input it is, so every scenario's NAV takes it.
+                _mi_sotp = t.get("minority_interest")
+                if _mi_sotp is None and all(_num(t.get(k)) is not None for k in ("segment_value", "nav")):
+                    _mi_sotp = ((_num(t.get("segment_value")) or 0.0) + (_num(t.get("associates")) or 0.0)
+                                + (_num(t.get("net_cash")) or 0.0) - (_num(t.get("nav")) or 0.0))
+                sh.label(r, 1, "Less: minority interest (as the engine's NAV deducts it)")
+                sh.put(r, 7, -(_mil(_mi_sotp) or 0.0), MIL); mi_r = r; r += 1
                 sh.label(r, 1, "Net asset value", bold=True)
-                sh.put(r, 7, f"=G{seg}+G{asso}+G{nc}", MIL, bold=True); nav = r; r += 1
+                sh.put(r, 7, f"=G{seg}+G{asso}+G{nc}+G{mi_r}", MIL, bold=True); nav = r; r += 1
                 nav_eng, disc_eng = _num(t.get("nav")), _num(t.get("holdco_discount"))
                 sh.label(r, 1, "Holdco discount rate")
                 sh.put(r, 7, (disc_eng / nav_eng) if nav_eng else _num(t.get("holdco_discount_pct")), PCT)
