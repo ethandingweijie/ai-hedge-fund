@@ -1690,3 +1690,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: valuation fix plan Phase 1 (2026-10-04, owner D1-D8): dated mid-year DCF with flows after the balance-sheet date; one net-debt basis (US GAAP leases out, biotech treasury netted); interest income out of UFCF; core earnings strip non-operating gains; normalised NI at today's interest burden; latest-year trough never dropped from the base margin; scenario margin spread = sigma bounded by own history, WACC +/-50bp; market-leverage premium + CAPM band; subject excluded from its own peer medians; failed anchor -> DCF; capture_reason. Largest: BABA 145.08->125.44, 09988.HK 136.95->125.00 (FY26 investment-year trough now in the base margin)
 
+## 2026-10-04T06:22:01+00:00
+
+- regenerated at HEAD: `1d547d5c`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Phase 1 follow-up (2026-10-04, first production re-runs): operating_income is requested so core earnings can fire in production; only the ABNORMAL non-operating gap (vs the name's own prior-year median) is stripped, so recurring associate/investment income stays (U96.SI unchanged); a failed guidance-forecast cash-conversion check now caps UFCF at 1.20x net income. BABA 125.44->124.57, 09988.HK 125.00->123.68
+

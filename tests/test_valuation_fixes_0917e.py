@@ -438,9 +438,9 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 #: margin, the sigma scenario spread bounded by each name's own history, WACC +/-50bp by scenario, the
 #: subject out of its own peer medians. Bear and bull widen most (the spread is the company's own).
 _PHASE1_MOVED = {
-    "09988_HK": (125.0,   43.58,   311.76,   (86.3,   114.8,  180.16)),
+    "09988_HK": (123.68,  42.58,   310.07,   (85.95,  114.33, 179.57)),
     "AAPL":     (195.2,  134.43,   277.5,    (232.88, 263.27, 304.42)),
-    "BABA":     (125.44,  40.56,   288.03,   (85.53,  115.23, 172.14)),
+    "BABA":     (124.57,  39.9,    286.9,    (85.3,   114.93, 171.75)),
     "COST":     (512.93, 342.17,   750.25,   (632.47, 717.85, 836.51)),
     "FCX":      (68.57,   48.4,    103.63,   (63.94,  70.99,  83.27)),
     "MELI":     (3324.38, 2466.01, 4055.45,  (2051.91, 2352.34, 2608.22)),

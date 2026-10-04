@@ -3525,30 +3525,41 @@ def _sotp_analyst_style(
 _NORMALIZED_OUTLIER_REL = 0.30
 
 
-def _core_earnings(row: dict) -> dict:
-    """Owner, 2026-10-04 (plan 1E.1): earnings without the large non-operating items a multiple must
-    not capitalise. FMP's EBITDA is pre-tax profit + interest + D&A, so it carries everything below
-    operating income: Boeing's FY2025 $7.36bn EBITDA held a ~$10.8bn gain on the Jeppesen sale against
-    an operating loss of $5.42bn, and its $2.23bn net income the same gain after tax. The interest
-    earned on cash sits there too, and the bridge already credits the cash.
+def _non_operating_gap(row: dict) -> Optional[float]:
+    """FMP EBITDA less operating EBITDA (operating income + D&A); None when either is missing."""
+    opi, ebitda = row.get("operating_income"), row.get("ebitda")
+    if not isinstance(opi, (int, float)) or not isinstance(ebitda, (int, float)):
+        return None
+    return float(ebitda) - (float(opi) + float(row.get("depreciation_and_amortization") or 0.0))
 
-    When the gap between FMP EBITDA and operating EBITDA (operating income + D&A) exceeds a quarter of
-    EBITDA and 2% of revenue, the core figures replace it: EBITDA and EBIT at the operating line, net
-    income less the after-tax gap. Below the threshold the reported figures stand (ordinary noise).
-    Returns {} when operating income is not reported."""
-    opi, ebitda, rev = row.get("operating_income"), row.get("ebitda"), row.get("revenue")
-    da = row.get("depreciation_and_amortization") or 0.0
-    if not isinstance(opi, (int, float)) or not isinstance(ebitda, (int, float)) or not rev:
+
+def _core_earnings(row: dict, prior_rows: Optional[list] = None) -> dict:
+    """Owner, 2026-10-04 (plan 1E.1): earnings without a non-recurring item a multiple must not
+    capitalise. FMP's EBITDA is pre-tax profit + interest + D&A, so it carries everything below
+    operating income: Boeing's FY2025 $7.36bn EBITDA held a ~$10.8bn gain on the Jeppesen sale against
+    an operating loss of $5.42bn, and its $2.23bn net income the same gain after tax.
+
+    Only the ABNORMAL part of the gap is stripped: the gap less its median over the company's own
+    prior years. What sits below the operating line every year -- an associate's share of profit
+    (Sembcorp), interest and investment income on a cash pile -- is recurring earnings and stays; the
+    first build stripped all of it and took U96.SI from 5.72 to 1.11. The excess must clear a quarter
+    of EBITDA and 2% of revenue, else the reported figures stand. Returns {} when nothing is stripped."""
+    gap = _non_operating_gap(row)
+    rev = row.get("revenue")
+    if gap is None or not rev:
         return {}
-    gap = float(ebitda) - (float(opi) + float(da))
-    if abs(gap) <= max(0.25 * abs(float(ebitda)), 0.02 * abs(float(rev))):
+    prior = [g for g in (_non_operating_gap(r) for r in (prior_rows or [])) if g is not None]
+    normal = statistics.median(prior) if len(prior) >= 2 else 0.0
+    excess = gap - normal
+    if abs(excess) <= max(0.25 * abs(float(row["ebitda"])), 0.02 * abs(float(rev))):
         return {}
     tax = row.get("ufcf_tax_rate")
     tax = float(tax) if isinstance(tax, (int, float)) else _UFCF_TAX_DEFAULT
     ni = row.get("net_income")
-    return {"ebitda_core": float(opi) + float(da), "ebit_core": float(opi),
-            "net_income_core": (float(ni) - gap * (1.0 - tax)) if isinstance(ni, (int, float)) else None,
-            "non_operating_gap": gap}
+    return {"ebitda_core": float(row["ebitda"]) - excess,
+            "ebit_core": (float(row["ebit"]) - excess) if isinstance(row.get("ebit"), (int, float)) else None,
+            "net_income_core": (float(ni) - excess * (1.0 - tax)) if isinstance(ni, (int, float)) else None,
+            "non_operating_gap": excess}
 
 
 def _normalized_earnings(
@@ -11388,6 +11399,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # the lease basis of net debt could not be stated.
                      "preferred_equity", "lease_liabilities", "shares_outstanding_basic",
                      "book_value_per_share", "capital_expenditure", "ebit",
+                     # Plan 1E.1 (2026-10-04): the operating line core earnings is read from. Copied by
+                     # _extract_annual_series but never requested, so core earnings never fired in the
+                     # first production runs (Boeing's Jeppesen gain stayed in EBITDA).
+                     "operating_income",
                      "interest_expense", "invested_capital",
                      "research_and_development", "stock_based_compensation",
                      # REIT-specific
@@ -11936,8 +11951,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # Owner, 2026-10-04 (plan 1E.1): core earnings per year, so neither the trailing legs nor the
         # five-year normalisation capitalise a disposal gain (see _core_earnings).
-        for _row in series:
-            _ce = _core_earnings(_row)
+        for _i, _row in enumerate(series):
+            _ce = _core_earnings(_row, series[max(0, _i - 4):_i])
             for _k in ("ebitda_core", "ebit_core", "net_income_core", "non_operating_gap"):
                 _row[_k] = _ce.get(_k)
         _norm_series = [{**_row, **{k: _row[k + "_core"] for k in ("ebitda", "ebit", "net_income")
@@ -11947,9 +11962,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)
         if most_recent.get("non_operating_gap") is not None:
             ticker_forward_flags.append(
-                f"Core earnings: {most_recent['non_operating_gap'] / 1e9:+,.2f}bn sits between operating "
-                f"income and FMP's EBITDA in the last fiscal year (a disposal gain, investment income or "
-                f"interest on cash); the trailing and normalised multiples price the operating line")
+                f"Core earnings: {most_recent['non_operating_gap'] / 1e9:+,.2f}bn below the operating line "
+                f"in the last fiscal year is out of line with the company's own history (a disposal gain or a "
+                f"one-off charge); the trailing and normalised multiples price earnings without it")
         # Owner decision 2026-09-20: a cyclical profile normalises its EARNINGS
         # legs and then capitalised raw TTM cash flow in the FCF leg, so the
         # blend was two-thirds mean-reverted and one-fifth whatever the last

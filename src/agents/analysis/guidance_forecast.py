@@ -541,6 +541,19 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     inv.insert(1, {"id": 2, "name": "Cash-conversion bounds", "ok": (lo <= conv_med <= hi) if conv_med is not None else None,
                    "detail": (f"steady-state UFCF / net income {conv_med:.2f}x (bounds {lo:.2f}-{hi:.2f}); capex alpha {alpha:.2f}, "
                               f"NWC intensity {nwc_i:.2f} of new revenue" if conv_med is not None else "no positive steady-state net income")})
+    # Owner, 2026-10-04 (plan 1F.2): a failed check ACTS. Cash conversion above the upper bound is a
+    # forecast projecting cash the earnings do not support (Boeing: 1.50x net income on a working-
+    # capital release the history cannot repeat, year-1 FCF 2-3x management's $1-3bn guide). Every
+    # year's UFCF is held to the bound x that year's net income; the check stays FAILED and says so.
+    if conv_med is not None and conv_med > hi:
+        _capped = 0
+        for r in rows:
+            if r["net_income"] > 0 and r["ufcf"] > hi * r["net_income"]:
+                r["ufcf"] = hi * r["net_income"]
+                r["fcf_margin"] = (r["ufcf"] / r["revenue"]) if r["revenue"] else 0.0
+                _capped += 1
+        inv[1]["acted"] = True
+        inv[1]["detail"] += f"; ACTED: UFCF held to {hi:.2f}x net income in {_capped} year(s)"
     # terminal: ROIC consistency and the implied exit multiple against the mid-cycle peer median
     last = rows[-1]
     roic_T = hist["roic_median"] if (hist["roic_median"] is not None and hist["roic_median"] == hist["roic_median"]) else None

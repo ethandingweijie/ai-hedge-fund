@@ -752,11 +752,11 @@ def test_the_two_alibaba_lines_agree_on_the_currency_invariant_margin():
     scale = a["revenue_base"] / b["revenue_base"]
     # Phase 1 (2026-10-04, plan 1E.1): normalised net income is now taken on CORE earnings, which
     # read each feed's operating-income line -- and the HK and US feeds for the same company do not
-    # report the same one, so the two lines no longer agree (8.44% vs 9.29% of revenue). Recorded as
+    # report the same one, so the two lines no longer agree (7.89% vs 9.02% of revenue). Recorded as
     # a data-feed difference the rule exposes; revenue still converts at the one rate.
     assert scale == pytest.approx(7.856, abs=0.001)
-    assert a["normalized_net_income"] / a["revenue_base"] == pytest.approx(0.0844, abs=5e-5)
-    assert b["normalized_net_income"] / b["revenue_base"] == pytest.approx(0.0929, abs=5e-5)
+    assert a["normalized_net_income"] / a["revenue_base"] == pytest.approx(0.07885, abs=5e-5)
+    assert b["normalized_net_income"] / b["revenue_base"] == pytest.approx(0.09017, abs=5e-5)
     # History: until Phase 1 both lines read 0.0857, -9.47% off the all-five-years 0.094710 when the
     # relative floor excluded FY2025 from both series identically.
 

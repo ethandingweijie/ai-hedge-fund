@@ -147,12 +147,20 @@ def test_interest_income_leaves_unlevered_fcf():
 
 
 def test_boeing_disposal_gain_is_not_core_earnings():
+    prior = [{"operating_income": 1e9, "ebitda": 3.2e9, "depreciation_and_amortization": 2e9, "revenue": 80e9}] * 3
     ce = d._core_earnings({"operating_income": -5.42e9, "ebitda": 7.36e9, "depreciation_and_amortization": 1.95e9,
-                           "revenue": 89.46e9, "net_income": 2.23e9, "ufcf_tax_rate": 0.15})
-    assert ce["ebitda_core"] == pytest.approx(-3.47e9)
+                           "revenue": 89.46e9, "net_income": 2.23e9, "ufcf_tax_rate": 0.15}, prior)
+    assert ce["ebitda_core"] == pytest.approx(-3.47e9 + 0.2e9)        # the usual 0.2bn below the line stays
     assert ce["net_income_core"] < 0
     assert d._core_earnings({"operating_income": 10e9, "ebitda": 13.1e9, "depreciation_and_amortization": 3e9,
                              "revenue": 50e9, "net_income": 7e9}) == {}
+
+
+def test_recurring_associate_income_is_core():
+    # Sembcorp-shaped: a large share of associates' profit below the operating line, every year.
+    rows = [{"operating_income": 0.5e9, "ebitda": 1.8e9, "depreciation_and_amortization": 0.3e9, "revenue": 7e9}] * 4
+    assert d._core_earnings({"operating_income": 0.55e9, "ebitda": 1.9e9, "depreciation_and_amortization": 0.3e9,
+                             "revenue": 7.2e9, "net_income": 1.0e9}, rows) == {}
 
 
 # ── 1B / 1E: the guidance forecast ─────────────────────────────────────────────
