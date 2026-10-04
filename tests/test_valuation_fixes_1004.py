@@ -309,6 +309,9 @@ def test_iv3_biotech_long_term_securities_are_cash_pharma_stakes_are_not():
 def test_iv2_pipeline_is_an_add_on_for_revenue_stage_drug_profiles():
     assert "Commercial Biotech" in d._PIPELINE_ADDON_PROFILES
     assert "Pre-approval Biotech" not in d._PIPELINE_ADDON_PROFILES
+    # An approved product's sales are in the operating legs' revenue: the add-on carries unapproved assets only.
+    import inspect
+    assert 'a.get("phase") != "approved"' in inspect.getsource(d)
 
 
 def test_ev6_ntm_roll_on_the_guidance_overlay():

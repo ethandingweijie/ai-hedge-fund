@@ -16232,9 +16232,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     isinstance(m, dict) and m.get("name") in ("rNPV (Pipeline)", "rNPV") for m in _eff_profile_methods):
                 _pa = (most_recent.get("_rnpv_audit") or {}).get(scenario) or {}
                 _pipe_ps = None
+                # Only assets not yet approved: an approved product's sales are already in the revenue the
+                # operating legs price (Vertex's accepted list carried CASGEVY, JOURNAVX and PALSONIFY).
+                _pipe_assets = [a for a in (_pa.get("assets") or []) if a.get("phase") != "approved"]
+                _n_approved = len(_pa.get("assets") or []) - len(_pipe_assets)
                 for _rn in ("rNPV (Pipeline)", "rNPV"):
-                    if method_values.get(_rn) is not None and _pa.get("pipeline_pv") and _pa.get("shares_diluted"):
-                        _pipe_ps = float(_pa["pipeline_pv"]) / float(_pa["shares_diluted"])
+                    if method_values.get(_rn) is not None and _pa.get("shares_diluted"):
+                        _pv = sum(float(a.get("risk_adjusted_pv") or 0.0) for a in _pipe_assets)
+                        _pipe_ps = (_pv / float(_pa["shares_diluted"])) if _pv > 0 else None
                 for _rn in ("rNPV (Pipeline)", "rNPV"):
                     _ops = [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") not in ("rNPV (Pipeline)", "rNPV")]
                     _eff_profile_methods, _rn_rec = _roll_leg_weight(_eff_profile_methods, _rn, _ops)
@@ -16245,11 +16250,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 method_values[_op] = float(method_values[_op]) + _pipe_ps
                                 _added.append(_op)
                         most_recent.setdefault("_pipeline_addon", {})[scenario] = {
-                            "per_share": round(_pipe_ps, 4), "legs": _added, "rolled": _rn_rec.get("rolled")}
+                            "per_share": round(_pipe_ps, 4), "legs": _added, "rolled": _rn_rec.get("rolled"),
+                            "assets": [a.get("name") for a in _pipe_assets], "approved_excluded": _n_approved}
                         if scenario == "base":
                             forward_flags.append(
                                 f"{_rn}: a sum-of-the-parts add-on, not an averaged leg -- the risk-adjusted pipeline PV "
-                                f"({_pipe_ps:,.2f}/share, {_pa.get('n_assets')} asset(s)) is added to each operating leg "
+                                f"({_pipe_ps:,.2f}/share, {len(_pipe_assets)} unapproved asset(s); {_n_approved} approved asset(s) "
+                                f"left out, their sales being in the operating legs' revenue) is added to each operating leg "
                                 f"({', '.join(_added)}); its weight (w={_rn_rec.get('dropped_weight', 0.0):.2f}) rolls pro rata into them")
             for _lf_leg, _lf_into in (((profile_data or {}).get("leg_fallback") or {}).items()):
                 if (any(isinstance(m, dict) and m.get("name") == _lf_leg for m in _eff_profile_methods)
