@@ -23,6 +23,17 @@ BLOCK = {"fiscal_year_1": "FY2026", "confidence": "HIGH", "estimates": {"base": 
          "family_metrics": {"family": "bank", "bank": {"loan_growth_fy1": 0.05, "nim_fy1": 0.0205, "cost_to_income_fy1": 0.40, "credit_cost_bps_fy1": 20.0, "payout_ratio": 0.55, "cet1_target": 0.135}}}
 
 
+@pytest.fixture(autouse=True)
+def _live_clock_after():
+    """The D05.SI golden below replays IN-PROCESS, and replay pins the clock to the fixture's capture
+    date for every first-party module. Hand the interpreter back live: left frozen, every later test in
+    the session ran on 2026-09 (the comps slot gate, the fast-path reuse windows, the freshness pulse
+    date and the research-age tests all failed only in a full run)."""
+    yield
+    from src.memory.golden_replay import unfreeze_clock
+    unfreeze_clock()
+
+
 def _opening():
     return bmod.opening_from_line_items(MR, 2.85e9, 22.3e9, "FY2025")
 

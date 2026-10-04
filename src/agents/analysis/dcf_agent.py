@@ -1059,6 +1059,8 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
       Starbucks US$10.5bn, JD RMB25.4bn).
     """
     nd = _net_debt_net_of_investments(row, sector)
+    _raw_nd = row.get("net_debt")
+    netted = isinstance(_raw_nd, (int, float)) and abs(float(nd) - float(_raw_nd)) > 1e-6
     sti = row.get("short_term_investments") or 0.0
     if ((sector or "") in ("Healthcare", "Health Care") and sti and sti > 0
             and not any(k in str(industry or "").lower() for k in _CLAIMS_BACKED_HEALTHCARE)):
@@ -1067,6 +1069,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
         if (td is not None and cash is not None and raw is not None
                 and abs(float(raw) - (float(td) - float(cash))) <= 0.01 * max(abs(float(td)), 1.0)):
             nd = float(raw) - float(sti)
+            netted = True
     us_gaap = _reports_us_gaap(ticker, reported_currency)
     lease = row.get("lease_liabilities")
     lease_out = 0.0
@@ -1078,8 +1081,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
             nd = nd - lease_out
     basis = {
         "balance_sheet_date": row.get("_balance_sheet_period") or row.get("period"),
-        "short_term_investments_netted": bool(sti and abs(nd + lease_out - float(row.get("net_debt") or 0.0)) > 1e-6
-                                              and row.get("net_debt") is not None),
+        "short_term_investments_netted": bool(netted),
         "accounting_basis": "US GAAP" if us_gaap else "IFRS",
         "lease_liabilities": float(lease) if isinstance(lease, (int, float)) else None,
         "leases": ("excluded (US GAAP: rent is inside EBITDA and cash flow)" if lease_out

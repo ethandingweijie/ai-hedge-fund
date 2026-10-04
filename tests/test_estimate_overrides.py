@@ -384,7 +384,17 @@ def test_the_pm_inputs_capture_the_forward_leg_basis_and_a_carried_override():
 
 # ── the DCF leg publishes what the page needs ────────────────────────────────
 
+@pytest.fixture
+def _live_clock_after():
+    """The AAPL golden replays IN-PROCESS and pins the clock to the fixture's capture date; hand the
+    interpreter back live (left frozen, later time-based tests ran on the fixture's date)."""
+    yield
+    from src.memory.golden_replay import unfreeze_clock
+    unfreeze_clock()
+
+
 @pytest.mark.slow
+@pytest.mark.usefixtures("_live_clock_after")
 def test_the_dcf_leg_builds_the_base_forecast_and_publishes_the_context_on_a_golden_replay():
     """Before this change the forecast block read `_peer_for_gp` before the scenario loop assigned
     it, so the BASE scenario's build raised UnboundLocalError and the FY+1/FY+2 channel ran instead

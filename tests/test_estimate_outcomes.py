@@ -25,6 +25,10 @@ def isolated_db(monkeypatch, tmp_path):
     monkeypatch.setattr(ra, "_sqlite_schema_paths", set())
     for m in (vo, rf, eo, cf):
         m._tables_ready_key = None
+    # assumption_store creates its tables once per PROCESS (`_ensured`); against a fresh database
+    # that flag must be cleared too, or the steward scorecard write meets "no such table".
+    from src.memory import assumption_store as _as
+    monkeypatch.setattr(_as, "_ensured", False)
     cal.clear_cache()
     yield
     for m in (vo, rf, eo, cf):

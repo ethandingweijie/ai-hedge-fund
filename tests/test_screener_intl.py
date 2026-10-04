@@ -389,9 +389,13 @@ class TestCacheKeyVersionFallback:
     def test_previous_version_serves_when_the_new_key_is_empty(self, monkeypatch):
         rows = [{"symbol": "D05.SI"}]
         monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        # Dated relative to now: a fixed date aged past _STALE_VERSION_MAX_AGE_DAYS (30) on 2026-09-19
+        # and turned this into a calendar time-bomb.
+        import datetime as _dt
+        _recent = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=2)).isoformat()
         monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
             {"cache_key": "sg_fmp_v2", "results_json": json.dumps(rows),
-             "fetched_at": "2026-08-20T00:00:00"},
+             "fetched_at": _recent},
         ])
         assert ss._get_cached_stale("sg_fmp_v3") == rows
 
