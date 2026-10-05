@@ -10049,43 +10049,43 @@
      "revenue_latest_usd_bn": 12.07
     },
     "basis": "estimate",
-    "built_at": "2026-09-26T14:43:46+00:00",
+    "built_at": "2026-10-05T01:01:37+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
-      "detail": "1.97x (plausible 0.02x to 8.0x)",
+      "detail": "1.94x (plausible 0.02x to 8.0x)",
       "ok": true,
-      "ratio": 1.9711
+      "ratio": 1.938
      },
      {
       "check": "late-stage only",
-      "detail": "phases: approved, approved, filed, phase_3, approved, phase_3",
+      "detail": "phases: approved, approved, approved, approved, filed, phase_3, phase_3, phase_3",
       "ok": true
      },
      {
       "check": "launch years plausible",
-      "detail": "2025 (approved), 2025 (approved), 2026, 2027, 2024 (approved), 2028",
+      "detail": "2025 (approved), 2025 (approved), 2024 (approved), 2025 (approved), 2026, 2028, 2029, 2028",
       "ok": true
      },
      {
       "check": "PTRS cited and in range",
-      "detail": "6 of 6 carry a usable PTRS",
+      "detail": "8 of 8 carry a usable PTRS",
       "ok": true
      },
      {
       "check": "assets with cited peak sales",
-      "detail": "6 usable; dropped none",
+      "detail": "8 usable; dropped none",
       "ok": true
      },
      {
       "check": "sources resolve to canonical URLs",
-      "detail": "no grounding wrappers",
+      "detail": "no grounding wrappers (owner re-check, direct URLs)",
       "ok": true
      }
     ],
     "company": "Vertex Pharmaceuticals Incorporated",
     "data": {
-     "as_of": "2026-09-26",
+     "as_of": "2026-10-05",
      "assets": [
       {
        "indication": "Cystic fibrosis",
@@ -10132,50 +10132,6 @@
        "ptrs_basis": "Approved product for acute pain; Phase 3 underway for diabetic peripheral neuropathy"
       },
       {
-       "indication": "IgA nephropathy (IgAN)",
-       "launch_year": 2026,
-       "name": "Povetacicept (ALPN-303)",
-       "patent_expiry": 2035,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "2039E",
-        "quote": "before scaling further to peak global sales of $4.3 billion by 2039.",
-        "scale": "bn",
-        "source_url": "https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/vertex-s-igan-drug-outlook-strengthens-on-positive-phase-3-data-87005161",
-        "value": 4.3
-       },
-       "phase": "filed",
-       "ptrs": {
-        "period": "2026",
-        "quote": "Analysts have responded swiftly, raising the drug's probability of success to 80% from 70.86%, reflecting increased confidence in both regulatory prospects and commercial viability.",
-        "source_url": "https://www.spglobal.com/marketintelligence/en/news-insights/latest-news-headlines/vertex-s-igan-drug-outlook-strengthens-on-positive-phase-3-data-87005161",
-        "value": 0.8
-       },
-       "ptrs_basis": "Sell-side probability of success following positive Phase 3 RAINIER interim data and BLA filing"
-      },
-      {
-       "indication": "APOL1-mediated kidney disease (AMKD)",
-       "launch_year": 2027,
-       "name": "Inaxaplin (VX-147)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "Peak",
-        "quote": "TD Cowen currently projects around $1 billion in peak sales for the drug",
-        "scale": "bn",
-        "source_url": "https://www.fiercebiotech.com/biotech/vertexs-midstage-data-amplify-kidney-disease-market-opportunity",
-        "value": 1.0
-       },
-       "phase": "phase_3",
-       "ptrs": {
-        "period": "2026",
-        "quote": "In an Aug. 3 note to investors, Guggenheim Securities analysts put the probability of success in primary AMKD at 65%.",
-        "source_url": "https://www.fiercebiotech.com/biotech/vertexs-midstage-data-amplify-kidney-disease-market-opportunity",
-        "value": 0.65
-       },
-       "ptrs_basis": "Guggenheim Securities sell-side estimate for pivotal Phase 2/3 development in primary AMKD"
-      },
-      {
        "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
        "launch_year": 2024,
        "name": "Casgevy (exagamglogene autotemcel)",
@@ -10198,29 +10154,117 @@
        "ptrs_basis": "Approved product; commercial ramp underway"
       },
       {
-       "indication": "Congenital adrenal hyperplasia (CAH)",
-       "launch_year": 2028,
-       "name": "Atumelnant (CRN04894)",
+       "indication": "Acromegaly",
+       "launch_year": 2025,
+       "name": "Palsonify (paltusotine)",
        "patent_expiry": null,
        "peak_sales": {
         "currency": "USD",
         "period": "Peak",
-        "quote": "Vertex estimates that Palsonify and atumelnant will add more than $5 billion in annual peak sales potential to its portfolio.",
+        "quote": "Jefferies: CAH $2 billion to $3 billion, Cushing's another $1 billion to $2 billion, Palsonify the remaining $1 billion",
         "scale": "bn",
-        "source_url": "https://www.fiercepharma.com/pharma/vertex-its-largest-ever-deal-acquires-endocrine-disease-specialist-crinetics-10b",
-        "value": 5.0
+        "source_url": "https://www.genengnews.com/topics/translational-medicine/vertex-eyes-expansion-beyond-cystic-fibrosis-with-planned-10b-crinetics-buyout/",
+        "value": 1.0
+       },
+       "phase": "approved",
+       "ptrs": {
+        "period": "2025",
+        "quote": "Palsonify approved by the FDA (September 2025) and in the EU",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0000875320/000087532026000256/ex-991_q22026.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01)"
+      },
+      {
+       "indication": "IgA nephropathy (IgAN)",
+       "launch_year": 2026,
+       "name": "Povetacicept (ALPN-303)",
+       "patent_expiry": 2038,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2039E",
+        "quote": "peak global sales of $4.3 billion by 2039",
+        "scale": "bn",
+        "source_url": "https://www.spglobal.com/market-intelligence/en/news-insights/research/2026/04/vertex-s-igan-drug-outlook-strengthens-on-positive-phase-3-data",
+        "value": 4.3
+       },
+       "phase": "filed",
+       "ptrs": {
+        "period": "2026",
+        "quote": "NDA/BLA to approval 90.6% (BIO/Informa 2011-2020); BLA accepted 2026-06-01 with Breakthrough designation and priority review, PDUFA 2026-11-30",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.9
+       },
+       "ptrs_basis": "Filed BLA (accelerated approval), positive Phase 3 RAINIER interim; filing-to-approval base rate. Exclusivity: 12-year BPCIA from a Nov-2026 approval (~2038); patents 2036-2043 before extension. Low case: William Blair $2.1bn peak"
+      },
+      {
+       "indication": "APOL1-mediated kidney disease (AMKD)",
+       "launch_year": 2028,
+       "name": "Inaxaplin (VX-147)",
+       "patent_expiry": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2035E",
+        "quote": "Leerink: $1.2 billion in 2035",
+        "scale": "bn",
+        "source_url": "https://www.biospace.com/drug-development/vertex-opens-up-larger-kidney-disease-opportunity-with-mid-stage-readout",
+        "value": 1.2
        },
        "phase": "phase_3",
        "ptrs": {
         "period": "2026",
-        "quote": "Phase 3 to approval is approximately 60%.",
+        "quote": "Phase III to approval ~58% (industry base rate); positive Phase 2 data September 2026",
         "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
         "value": 0.6
        },
-       "ptrs_basis": "BIO industry historical benchmark for Phase 3 transition success rate in rare/endocrine indications"
+       "ptrs_basis": "Ph2/3 AMPLITUDE fully enrolled; 48-week interim analysis early 2027 for US accelerated approval, so filing 2027 and launch 2028"
+      },
+      {
+       "indication": "Congenital adrenal hyperplasia (CAH)",
+       "launch_year": 2029,
+       "name": "Atumelnant (CRN04894)",
+       "patent_expiry": 2036,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Jefferies' Dennis Ding: CAH $2 billion to $3 billion (midpoint; Cushing's, Phase 1b/2, excluded)",
+        "scale": "bn",
+        "source_url": "https://www.genengnews.com/topics/translational-medicine/vertex-eyes-expansion-beyond-cystic-fibrosis-with-planned-10b-crinetics-buyout/",
+        "value": 2.5
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Phase III to approval ~58% base rate, raised for strong Phase 2 data, orphan designation and a pathway validated by crinecerfont",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.65
+       },
+       "ptrs_basis": "Adult Phase 3 CALM-CAH primary completion May 2027 -> filing late 2027, launch 2029. Exclusivity ~2036 (5-year NCE + 7-year orphan). Vertex's >$5bn is Palsonify and atumelnant COMBINED (https://crinetics.com/press-releases/vertex-to-acquire-crinetics-pharmaceuticals/)"
+      },
+      {
+       "indication": "Type 1 diabetes with severe hypoglycemia",
+       "launch_year": 2028,
+       "name": "Zimislecel (VX-880)",
+       "patent_expiry": 2040,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2032E",
+        "quote": "BMO: $900 million by 2032",
+        "scale": "bn",
+        "source_url": "https://www.biospace.com/drug-development/vertex-cuts-diabetes-asset-but-analysts-keen-on-phase-iii-option",
+        "value": 0.9
+       },
+       "phase": "phase_3",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Dosing paused for a manufacturing analysis then resumed; 2026 filing timeline withdrawn, updated timelines expected later in 2026",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0000875320/000087532026000256/ex-991_q22026.htm",
+        "value": 0.45
+       },
+       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. The BMO peak predates 2026"
       }
      ],
-     "notes": "Fixed financial anchor: Vertex Pharmaceuticals reported revenue latest is USD 12.07 bn in reported currency USD."
+     "notes": "Owner re-check 2026-10-05 of the 2026-09-26 Gemini entry: atumelnant's $5.0bn was the combined Palsonify + atumelnant figure (CAH alone $2-3bn); inaxaplin launches 2028 (interim early 2027), not 2027; povetacicept exclusivity >=2038, not 2035; PTRS sourced to stage base rates; zimislecel added; suzetrigine DPN left out (label expansion, no sourced peak); Palsonify added as approved. Approved assets are excluded from the rNPV add-on (their sales are in the operating legs)."
     },
     "engine_preview": {
      "assets": [
@@ -10249,30 +10293,6 @@
        "source": "gemini_accepted"
       },
       {
-       "indication": "IgA nephropathy (IgAN)",
-       "launch_year": 2026,
-       "name": "Povetacicept (ALPN-303)",
-       "patent_expiry": 2035,
-       "peak_sales_period": "2039E",
-       "peak_sales_usd": 4300000000.0,
-       "phase": "filed",
-       "ptrs_basis": "Sell-side probability of success following positive Phase 3 RAINIER interim data and BLA filing",
-       "ptrs_override": 0.8,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "APOL1-mediated kidney disease (AMKD)",
-       "launch_year": 2027,
-       "name": "Inaxaplin (VX-147)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 1000000000.0,
-       "phase": "phase_3",
-       "ptrs_basis": "Guggenheim Securities sell-side estimate for pivotal Phase 2/3 development in primary AMKD",
-       "ptrs_override": 0.65,
-       "source": "gemini_accepted"
-      },
-      {
        "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
        "launch_year": 2024,
        "name": "Casgevy (exagamglogene autotemcel)",
@@ -10285,21 +10305,71 @@
        "source": "gemini_accepted"
       },
       {
-       "indication": "Congenital adrenal hyperplasia (CAH)",
-       "launch_year": 2028,
-       "name": "Atumelnant (CRN04894)",
+       "indication": "Acromegaly",
+       "launch_year": 2025,
+       "name": "Palsonify (paltusotine)",
        "patent_expiry": null,
        "peak_sales_period": "Peak",
-       "peak_sales_usd": 5000000000.0,
+       "peak_sales_usd": 1000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01)",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "IgA nephropathy (IgAN)",
+       "launch_year": 2026,
+       "name": "Povetacicept (ALPN-303)",
+       "patent_expiry": 2038,
+       "peak_sales_period": "2039E",
+       "peak_sales_usd": 4300000000.0,
+       "phase": "filed",
+       "ptrs_basis": "Filed BLA (accelerated approval), positive Phase 3 RAINIER interim; filing-to-approval base rate. Exclusivity: 12-year BPCIA from a Nov-2026 approval (~2038); patents 2036-2043 before extension. Low case: William Blair $2.1bn peak",
+       "ptrs_override": 0.9,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "APOL1-mediated kidney disease (AMKD)",
+       "launch_year": 2028,
+       "name": "Inaxaplin (VX-147)",
+       "patent_expiry": null,
+       "peak_sales_period": "2035E",
+       "peak_sales_usd": 1200000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "BIO industry historical benchmark for Phase 3 transition success rate in rare/endocrine indications",
+       "ptrs_basis": "Ph2/3 AMPLITUDE fully enrolled; 48-week interim analysis early 2027 for US accelerated approval, so filing 2027 and launch 2028",
        "ptrs_override": 0.6,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Congenital adrenal hyperplasia (CAH)",
+       "launch_year": 2029,
+       "name": "Atumelnant (CRN04894)",
+       "patent_expiry": 2036,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 2500000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Adult Phase 3 CALM-CAH primary completion May 2027 -> filing late 2027, launch 2029. Exclusivity ~2036 (5-year NCE + 7-year orphan). Vertex's >$5bn is Palsonify and atumelnant COMBINED (https://crinetics.com/press-releases/vertex-to-acquire-crinetics-pharmaceuticals/)",
+       "ptrs_override": 0.65,
+       "source": "gemini_accepted"
+      },
+      {
+       "indication": "Type 1 diabetes with severe hypoglycemia",
+       "launch_year": 2028,
+       "name": "Zimislecel (VX-880)",
+       "patent_expiry": 2040,
+       "peak_sales_period": "2032E",
+       "peak_sales_usd": 900000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. The BMO peak predates 2026",
+       "ptrs_override": 0.45,
        "source": "gemini_accepted"
       }
      ],
      "checks": {
       "citation_coverage": 1.0,
       "currencies": [
+       "USD bn",
+       "USD bn",
        "USD bn",
        "USD bn",
        "USD bn",
@@ -10320,11 +10390,58 @@
      "period": "2025-12-31",
      "revenue": 12074600000.0
     },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
+    "model": "owner re-check (research agent, primary sources)",
     "ok": true,
-    "secs": 50.2,
-    "value_usd": 23800000000.0
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2025,
+       "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
+       "peak_usd_bn": 8.3,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2025,
+       "name": "Suzetrigine (Journavx / VX-548)",
+       "peak_usd_bn": 3.0,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2026,
+       "name": "Povetacicept (ALPN-303)",
+       "peak_usd_bn": 4.3,
+       "phase": "filed",
+       "ptrs": 0.8
+      },
+      {
+       "launch_year": 2027,
+       "name": "Inaxaplin (VX-147)",
+       "peak_usd_bn": 1.0,
+       "phase": "phase_3",
+       "ptrs": 0.65
+      },
+      {
+       "launch_year": 2024,
+       "name": "Casgevy (exagamglogene autotemcel)",
+       "peak_usd_bn": 2.2,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2028,
+       "name": "Atumelnant (CRN04894)",
+       "peak_usd_bn": 5.0,
+       "phase": "phase_3",
+       "ptrs": 0.6
+      }
+     ],
+     "built_at": "2026-09-26T14:43:46+00:00",
+     "model": "gemini-3.8-flash",
+     "value_usd": 23800000000.0
+    },
+    "value_usd": 23400000000.0
    }
   },
   "VTR": {

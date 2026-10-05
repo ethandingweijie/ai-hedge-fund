@@ -817,7 +817,8 @@
     "note": "Owner, 2026-10-04 (Visa review): per-company equity-bridge items, filing currency. debt_like is added to net debt; shares_as_converted replaces the share count (preferred_in_shares: the convertible preferreds are inside it, so their book value is not deducted); one_off_opex {fiscal year: amount} is added back to core EBITDA/EBIT/net income. Only ACCEPTED entries price.",
     "entries": {
       "V": {
-        "status": "PROPOSED",
+        "status": "ACCEPTED",
+        "accepted": "owner, 2026-10-05",
         "as_of": "2026-06-30",
         "shares_as_converted": 1880000000.0,
         "preferred_in_shares": true,

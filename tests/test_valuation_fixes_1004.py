@@ -337,10 +337,11 @@ def test_bridge_adjustments_price_only_when_accepted(monkeypatch):
     assert v == 463.0 and b["debt_like_items"] == 363.0 and ma == 100.0
 
 
-def test_the_visa_entry_ships_proposed():
+def test_the_visa_entry_is_owner_accepted():
     from src.data import valuation_constants as vc
     e = vc.load()["bridge_adjustments"]["entries"]["V"]
-    assert e["status"] == "PROPOSED" and e["preferred_in_shares"] is True
+    assert e["status"] == "ACCEPTED" and e["preferred_in_shares"] is True
+    assert d._bridge_adjustment("V")["shares_as_converted"] == 1880000000.0
 
 
 def test_d8_scenario_wacc_shift_is_removed():
