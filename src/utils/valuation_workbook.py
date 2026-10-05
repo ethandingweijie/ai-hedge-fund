@@ -2145,8 +2145,12 @@ class _Book:
             sh.label(r, 5, "Engine" + (" (ordering clamp applied)" if clamp else ""))
             sh.put(r, 6, _num(sc.get("intrinsic_value")), NUM)
             r += 1
-            sh.label(r, 5, "Check" + (" (≠0: clamp)" if clamp else ""))
-            sh.put(r, 6, f"=F{iv_row}-F{r - 1}", NUM)
+            if sc.get("intrinsic_value") is None:
+                # Unrated (pre-revenue, CRSP): the engine publishes no intrinsic value, so there is nothing to tie to.
+                sh.label(r, 5, "Unrated: the engine publishes no intrinsic value")
+            else:
+                sh.label(r, 5, "Check" + (" (≠0: clamp)" if clamp else ""))
+                sh.put(r, 6, f"=F{iv_row}-F{r - 1}", NUM)
             self.iv_cell[s] = _ref("Blend", r - 1 if clamp else iv_row, 6)
             r += 2
         sh.widths({"A": 30, "B": 22, "C": 8, "D": 10, "E": 26, "F": 14})
