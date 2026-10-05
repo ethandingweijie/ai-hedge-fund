@@ -1216,6 +1216,26 @@
       "check": "sources resolve to canonical URLs",
       "detail": "no grounding wrappers",
       "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "0 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
      }
     ],
     "company": "CSPC Pharmaceutical Group Limited",
@@ -1488,6 +1508,287 @@
     "value_usd": 50546355000.0
    }
   },
+  "01276.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 4.48
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:46:31+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.33x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.3325
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2025 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "1 of 1 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "1 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Trastuzumab rezetecan (SHR-A1811)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "61 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Jiangsu Hengrui Pharmaceuticals Co.,Ltd",
+    "data": {
+     "approved_portfolio": [
+      "Camrelizumab (SHR-1210, AiRuiKa, 卡瑞利珠单抗)",
+      "Apatinib / Rivoceranib (Apatinib Mesylate, 阿帕替尼)",
+      "Pyrotinib (SHR-1258, 吡咯替尼)",
+      "Dalpiciclib (SHR6390, 达尔西利)",
+      "Fuzuloparib / Fluzoparib (SHR3162, 氟唑帕利)",
+      "Rezvilutamide (SHR3680, Rezvilutamide Tablets, 瑞维鲁胺)",
+      "Hetrombopag (Hetrombopag Olamine, 海曲泊帕)",
+      "Adebrelimab (SHR-1316, adebelizumab, 阿得贝利单抗)",
+      "Famitinib (famitinib malate, 法米替尼)",
+      "Retlirafusp alfa (SHR-1701, 瑞拉芙普α)",
+      "Zeprumetostat (SHR2554, 泽美司他)",
+      "Irinotecan Hydrochloride Liposome Injection (II) (HR070803)",
+      "Ivarmacitinib (SHR0302, 艾玛昔替尼)",
+      "Vunakizumab (SHR-1314, IL-17A)",
+      "Henagliflozin (SHR3824, 恒格列净)",
+      "Retagliptin (SP2086, 瑞格列汀)",
+      "Recaticimab (SHR-1209, PCSK9)",
+      "SHR4640 (URAT1, 鲁兹诺雷钠)",
+      "Shudi insulin (INS068, 舒地胰岛素)",
+      "Remimazolam (瑞马唑仑)",
+      "Fosrolapitant and Palonosetron (HR20013)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "SHR-A1811",
+        "Trastuzumab Rezetecan",
+        "trastuzumab rezetecan",
+        "瑞康曲妥珠单抗",
+        "艾维达"
+       ],
+       "indication": "HER2 ADC: approved China May 2025 (HER2-mutant NSCLC) and Mar 2026 (2L/2L+ HER2+ breast cancer); Phase 3 label expansions in HER2+ BC (1L, adjuvant, neoadjuvant), HER2-low BC, TNBC, gastric/GEJ (2L, 1L), CRC, HER2-mutant NSCLC 1L, ovarian",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2025,
+       "modality": "biologic",
+       "name": "Trastuzumab rezetecan (SHR-A1811)",
+       "nct_ids": [
+        "NCT05424835",
+        "NCT06057610",
+        "NCT05814354",
+        "NCT06126640",
+        "NCT07196774",
+        "NCT06123494",
+        "NCT07118527",
+        "NCT06430437",
+        "NCT06199973",
+        "NCT07676162",
+        "NCT06828354",
+        "NCT07111832",
+        "NCT07679360"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "CNY",
+        "period": "Peak",
+        "quote": "更有卖方分析师对SHR-A1811未来的销售峰值预判是：超100亿人民币",
+        "scale": "bn",
+        "source_url": "https://finance.sina.com.cn/stock/stockzmt/2023-04-17/doc-imyqtivx1434693.shtml",
+        "value": 10
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "trastuzumab rezetecan ... 10 BTDs received; 2 marketed (NSCLC & BC)",
+        "source_url": "https://www.hengrui.com/images/investor/Investor%20Presentation%20FY2025.pdf",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved and marketed in China (NSCLC May 2025, HER2+ BC Mar 2026); label expansions carried inside the asset."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "HRS9531 / ribupatide (瑞普泊肽, KAI-9531)",
+       "reason": "no sourced peak sales for Hengrui's Greater China rights (obesity NDA accepted by NMPA Sep 2025, company: potential approval by early 2027; T2D NDA accepted 2026-09-10). Ex-China licensed to Kailera; William Blair (2026-05-12) estimates Kailera's probability-adjusted US peak revenues ~$2.4bn in 2033 -- that is partner revenue, Hengrui receives royalties only (mid-single-digit to low-tens %), so not used."
+      },
+      {
+       "name": "SHR-A2009 (瑞康芦泽妥塔单抗, HER3 ADC)",
+       "reason": "no sourced peak sales (NMPA NDA accepted 2026-07-29, EGFRm NSCLC post-TKI with bevacizumab; BTD Sep 2026; company expects launch 2027-28)"
+      },
+      {
+       "name": "SHR-A1904 (Claudin 18.2 ADC)",
+       "reason": "no sourced peak sales (Phase 3 2L CLDN18.2+ GC/GEJ, NCT06649292; ex-China licensed to Merck KGaA)"
+      },
+      {
+       "name": "SHR-A2102 (Nectin-4 ADC)",
+       "reason": "no sourced peak sales (Phase 3 urothelial, cervical, MIBC)"
+      },
+      {
+       "name": "SHR-A1921 (TROP2 ADC)",
+       "reason": "no sourced peak sales (Phase 3 platinum-resistant ovarian, NCT06394492)"
+      },
+      {
+       "name": "SHR-A1912 (CD79b ADC)",
+       "reason": "no sourced peak sales (Phase 3 r/r DLBCL, NCT06929624)"
+      },
+      {
+       "name": "SHR-8068 (CTLA-4)",
+       "reason": "no sourced peak sales (Phase 3 HCC, NSCLC, BTC, rectal with adebrelimab)"
+      },
+      {
+       "name": "HRS-4642 (KRAS G12D)",
+       "reason": "no sourced peak sales (Phase 3 1L pancreatic, NCT07232875)"
+      },
+      {
+       "name": "HRS-4357 (PSMA radioligand)",
+       "reason": "no sourced peak sales (Phase 3 mCRPC, NCT07311694)"
+      },
+      {
+       "name": "SHR-1501 (IL-15)",
+       "reason": "no sourced peak sales (Phase 3 NMIBC with BCG)"
+      },
+      {
+       "name": "FH-006",
+       "reason": "no sourced peak sales (Phase 3 2L ESCC, NCT07790380, not yet recruiting)"
+      },
+      {
+       "name": "SHR-1819 (IL-4Ra)",
+       "reason": "no sourced peak sales (Phase 3 AD, adolescent AD, prurigo nodularis, seasonal allergic rhinitis)"
+      },
+      {
+       "name": "SHR-1905 (TSLP)",
+       "reason": "no sourced peak sales (Phase 3 asthma, CRSwNP in China; ex-China partnered)"
+      },
+      {
+       "name": "SHR-1703 / HR-1703 (IL-5)",
+       "reason": "no sourced peak sales (Phase 3 EGPA, eosinophilic asthma)"
+      },
+      {
+       "name": "HRS-9190",
+       "reason": "no sourced peak sales (Phase 3 neuromuscular blockade vs rocuronium, NCT07746726)"
+      },
+      {
+       "name": "HRS-7535 (oral GLP-1)",
+       "reason": "no sourced peak sales (Phase 3 obesity met endpoints 2026; NDA planned)"
+      },
+      {
+       "name": "SHR-1918 (ANGPTL3)",
+       "reason": "no sourced peak sales (HoFH NDA accepted, priority review)"
+      },
+      {
+       "name": "HRS-5965 (Factor B)",
+       "reason": "no sourced peak sales (PNH NDA)"
+      },
+      {
+       "name": "HRS-1780 (MR antagonist)",
+       "reason": "no sourced peak sales (Phase 3 CKD, China)"
+      },
+      {
+       "name": "HRS-1893 (myosin)",
+       "reason": "no sourced peak sales (Phase 3 oHCM China; ex-China Braveheart)"
+      },
+      {
+       "name": "SHR-2004 (FXI)",
+       "reason": "no sourced peak sales (Phase 3 VTE prevention after TKA)"
+      },
+      {
+       "name": "HRS-8080 (oral SERD)",
+       "reason": "no sourced peak sales (Phase 3 ER+/HER2- BC)"
+      },
+      {
+       "name": "Lutetium (177Lu) Oxodotreotide",
+       "reason": "Lutathera-equivalent radioligand (non-innovative), no sourced peak sales"
+      },
+      {
+       "name": "trastuzumab (Suncadia trastuzumab + bevacizumab, NCT07779538)",
+       "reason": "off-patent trastuzumab maintenance study (biosimilar-class mAb), no sourced peak sales"
+      }
+     ],
+     "notes": "Material changes in the last 6 months: trastuzumab rezetecan (SHR-A1811) approved for 2L/2L+ HER2+ BC (Mar 2026); retlirafusp alfa (SHR-1701) approved 1L gastric cancer (Q1 2026); SHR4640 URAT1 approved (H1 2026); dalpiciclib adjuvant HR+/HER2- early BC approved (announced 2026-06-17); Shudi insulin approved (post-H1 2026); SHR-A2009 NDA accepted 2026-07-29 and BTD Sep 2026; ribupatide (HRS9531) T2D NDA accepted 2026-09-10, obesity NDA (accepted Sep 2025) still under review -- company guides potential approval by early 2027 (FY2025 results presentation, Mar 2026); HRS-7535 oral GLP-1 Phase 3 positive; Kailera (ex-China ribupatide licensee, Hengrui holds equity) IPO'd on Nasdaq Apr 2026; famitinib + camrelizumab approved 2L cervical (Sep 2025), 1L cervical filed. Kailera deal economics (Kailera S-1/424B4, 2026): US$100m upfront, preferred stock ~US$96.4m, US$10m tech transfer, up to US$200m clinical/regulatory and US$5.725bn commercial milestones, tiered royalties mid-single-digit to low-tens percent; Glenmark (SHR-A1811, emerging markets): US$18m upfront, up to ~US$1.093bn milestones plus royalties. SHR-A1811 peak: the only single-asset figure found is a 2023 unnamed sell-side estimate quoted by Sina ('超100亿人民币' = >CNY 10bn, a floor, recorded as 10 bn; period undated, within biologic exclusivity to 2037). Hengrui-specific single-asset peak sales are rarely published by brokers (checked SPDBI, CMBI, Guojin, Huayuan, CICC-referenced pieces, company FY2025 presentation); every other late-stage asset is therefore excluded as 'no sourced peak sales' rather than estimated. Web search budget was exhausted during the run, so parallel searches for ADC, non-oncology and IO peaks could not be completed; a re-run with more search budget may fill ribupatide China, SHR-A2009 and SHR-A1904. Registry mapping: all 61 live Phase 3s are covered by the SHR-A1811 asset aliases, approved_portfolio (label expansions/comparators) or excluded_assets."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "HER2 ADC: approved China May 2025 (HER2-mutant NSCLC) and Mar 2026 (2L/2L+ HER2+ breast cancer); Phase 3 label expansions in HER2+ BC (1L, adjuvant, neoadjuvant), HER2-low BC, TNBC, gastric/GEJ (2L, 1L), CRC, HER2-mutant NSCLC 1L, ovarian",
+       "launch_year": 2025,
+       "name": "Trastuzumab rezetecan (SHR-A1811)",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 1491100000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved and marketed in China (NSCLC May 2025, HER2+ BC Mar 2026); label expansions carried inside the asset.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "CNY bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Jiangsu Hengrui Pharmaceuticals Co.,Ltd",
+     "depreciation_and_amortization": 119768613.85872,
+     "market_cap": 40668214717.48104,
+     "net_ppe": 1121133391.92,
+     "operating_cash_flow": 1592918205.05736,
+     "period": "2025-12-31",
+     "revenue": 4484323801.44,
+     "shares": 6637199717.990849
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": 1491100000.0
+   }
+  },
   "01299.HK": {
    "embedded_value": {
     "anchors": {
@@ -1592,163 +1893,250 @@
      "revenue_latest_usd_bn": 1.94
     },
     "basis": "estimate",
-    "built_at": "2026-09-26T14:44:40+00:00",
+    "built_at": "2026-10-05T02:54:37+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
-      "detail": "4.18x (plausible 0.02x to 8.0x)",
+      "detail": "1.12x (plausible 0.02x to 8.0x)",
       "ok": true,
-      "ratio": 4.1846
+      "ratio": 1.1164
+     },
+     {
+      "check": "registry dates applied",
+      "detail": "IBI363 (PD-1/IL-2alpha-bias bispecific fusion protein): primary completion 2028-11-01 -> 2028-10-19 (ClinicalTrials.gov)",
+      "ok": true
      },
      {
       "check": "late-stage only",
-      "detail": "phases: approved, phase_3, filed, approved",
+      "detail": "phases: filed, phase_3",
       "ok": true
      },
      {
       "check": "launch years plausible",
-      "detail": "2025 (approved), 2027, 2026, 2019 (approved)",
+      "detail": "2027, 2028",
       "ok": true
      },
      {
       "check": "PTRS cited and in range",
-      "detail": "4 of 4 carry a usable PTRS",
+      "detail": "2 of 2 carry a usable PTRS",
       "ok": true
      },
      {
       "check": "assets with cited peak sales",
-      "detail": "4 usable; dropped none",
+      "detail": "2 usable; dropped none",
       "ok": true
      },
      {
       "check": "sources resolve to canonical URLs",
-      "detail": "1 of 1 grounding wrapper(s) resolved",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): IBI363 (PD-1/IL-2alpha-bias bispecific fusion protein)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "16 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
       "ok": true
      }
     ],
     "company": "Innovent Biologics, Inc.",
     "data": {
-     "as_of": "2026-09-26",
+     "approved_portfolio": [
+      "TYVYT (sintilimab, IBI308)",
+      "Sintilimab",
+      "BYVASDA (bevacizumab biosimilar, IBI305)",
+      "HALPRYZA (rituximab biosimilar, IBI301)",
+      "SULINNO (adalimumab biosimilar, IBI303)",
+      "Pemazyre (pemigatinib, IBI375)",
+      "Olverembatinib (HQP1351, IBI348)",
+      "Cyramza (ramucirumab)",
+      "Retsevmo (selpercatinib)",
+      "FUCASO (equecabtagene autoleucel, IBI326)",
+      "DUPERT (fulzerasib, IBI351)",
+      "Jaypirca (pirtobrutinib)",
+      "DOVBLERON (taletrectinib, IBI344)",
+      "Limertinib",
+      "TABOSUN (ipilimumab N01, IBI310)",
+      "Verzenios (abemaciclib)",
+      "Vanflyta (quizartinib)",
+      "SINTBILO (tafolecimab, IBI306)",
+      "SYCUME (teprotumumab N01, IBI311)",
+      "PECONDLE (picankibart, IBI112)",
+      "Mazdutide (IBI362, LY3305677, Xinermei)"
+     ],
+     "as_of": "2026-10-05",
      "assets": [
       {
-       "indication": "Obesity and Type 2 Diabetes",
-       "launch_year": 2025,
-       "name": "Mazdutide (IBI362)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "CNY",
-        "period": "2031E",
-        "quote": "Macquarie Capital estimated mazdutide could reach peak sales of 8.6 billion yuan in 2031, with 80 per cent of revenue coming from obesity treatment and the remainder from diabetes drugs.",
-        "scale": "bn",
-        "source_url": "https://www.thestar.com.my/business/business-news/2026/01/17/china039s-weight-loss-drug-war-prices-slashed-up-to-80-as-obesity-crisis-worsens",
-        "value": 8.6
-       },
-       "phase": "approved",
-       "ptrs": {
-        "period": "FY2025",
-        "quote": "Mazdutide, the first home-grown obesity drug that was approved in June last year",
-        "source_url": "https://www.thestar.com.my/business/business-news/2026/01/17/china039s-weight-loss-drug-war-prices-slashed-up-to-80-as-obesity-crisis-worsens",
-        "value": 1.0
-       },
-       "ptrs_basis": "approved drug benchmark 100%"
-      },
-      {
-       "indication": "Non-Small Cell Lung Cancer (NSCLC) and Colorectal Cancer",
+       "aliases": [
+        "IBI343",
+        "TAK-921",
+        "arcotatug tavatecan",
+        "Arcotatug Tavatecan",
+        "CLDN18.2 ADC"
+       ],
+       "indication": "CLDN18.2+ advanced gastric/GEJ adenocarcinoma, 3L+ (China NDA under priority review); 3L+ pancreatic cancer Phase 3 (China); 1L GC/PDAC PoC",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2027,
-       "name": "IBI363 (TAK-928)",
+       "modality": "biologic",
+       "name": "Arcotatug tavatecan (IBI343)",
+       "nct_ids": [
+        "NCT06238843",
+        "NCT07066098"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": "2026-12-15",
+       "peak_risk_adjusted": true,
        "peak_sales": {
         "currency": "CNY",
-        "period": "Peak",
-        "quote": "该行预测IBI363中国峰值销售有望达到约25亿元（风险调整后数字）",
+        "period": "Peak (China, risk-adjusted; SPDBI 2025-06-11)",
+        "quote": "IBI343中国峰值销售有望达到约15亿元（同风险调整后数字）",
         "scale": "bn",
-        "source_url": "https://finance.sina.com.cn",
-        "value": 25.0
-       },
-       "phase": "phase_3",
-       "ptrs": null,
-       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
-      },
-      {
-       "indication": "Claudin 18.2-positive Advanced Gastric Cancer and Pancreatic Cancer",
-       "launch_year": 2026,
-       "name": "IBI343",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "CNY",
-        "period": "Peak",
-        "quote": "IBI343中国峰值销售有望达到约15亿元（同风险调整后数字）。",
-        "scale": "bn",
-        "source_url": "https://finance.sina.com.cn",
-        "value": 15.0
+        "source_url": "https://www.spdbi.com/getfile/index/action/images/name/%E4%BF%A1%E8%BE%BE%E7%94%9F%E7%89%A9%EF%BC%881801.HK%EF%BC%89%EF%BC%9AIBI363%E8%82%BA%E9%B3%9E%E7%99%8C%E6%9B%B4%E6%96%B0mPFS%E6%95%B0%E6%8D%AE%E8%BF%9B%E4%B8%80%E6%AD%A5%E5%BB%B6%E9%95%BF_%E6%B5%A6%E9%93%B6%E5%9B%BD%E9%99%85%E7%A0%94%E7%A9%B6.pdf",
+        "value": 1.5
        },
        "phase": "filed",
-       "ptrs": null,
-       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+       "primary_completion": "2026-12-30",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa/QLS 2011-2020 base rate: NDA/BLA filing to approval ~90%",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.9
+       },
+       "ptrs_basis": "Filed: China NDA accepted 2026-06-04 with priority review, backed by the G-HOPE-001 Phase 3 first interim analysis meeting its PFS primary endpoint (Innovent/Takeda, June 2026). The filed-to-approval base rate is about 0.90; no oncology haircut at the filed stage. NOTE: the SPDBI peak is China-only and already risk-adjusted by the broker (Innovent books China sales; ex-China rights are Takeda's, paying milestones plus tiered royalties up to the high teens). 15亿元 = CNY 1.5bn (亿 = 100mn; a unit, not a currency conversion)."
       },
       {
-       "indication": "Non-Small Cell Lung Cancer, Lymphoma, and Solid Tumors",
-       "launch_year": 2019,
-       "name": "Sintilimab (Tyvyt)",
+       "aliases": [
+        "IBI363",
+        "TAK-928",
+        "MarsLight-11"
+       ],
+       "indication": "IO-resistant squamous NSCLC (global MRCT Phase 3 MarsLight-11, Takeda-run); 3L CRC with bevacizumab (China Phase 3); IO-naive acral/mucosal melanoma (China pivotal Phase 2); 1L NSCLC/1L CRC PoC",
+       "interim_readout": "2026-12",
+       "interim_source_url": "https://www.prnewswire.com/news-releases/innovent-announces-2026-interim-results-and-business-updates-302859305.html",
+       "launch_year": 2028,
+       "modality": "biologic",
+       "name": "IBI363 (PD-1/IL-2alpha-bias bispecific fusion protein)",
+       "nct_ids": [
+        "NCT07217301",
+        "NCT07722494",
+        "NCT06081920"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_risk_adjusted": true,
        "peak_sales": {
         "currency": "CNY",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHNYbnlcdomLjsQaJ8JtNHoIn4H8GvY69wRYaRyFSLIznXRZCHbvDuJZbqaz3LNSftge08IIB4soNLgw1v5svAVFX4F5apBB04LPjiiNyPfYsvykz17hLb-43Fw5moZOAO-X7oH_Frk7c1JGv4=",
-        "period": "Peak",
-        "quote": "We expect Tyvyt to realize RMB5,974mn peak sales in China and US$1,565mn peak sales in overseas markets.",
-        "scale": "mn",
-        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202107221505385442_1.pdf",
-        "value": 5974.0
+        "period": "Peak (China, PoS-adjusted; CITIC Securities 2025-07-28)",
+        "quote": "其中中国市场成功率调整后峰值销售预计达到 130.6 亿元",
+        "scale": "bn",
+        "source_url": "https://www.vzkoo.com/read/20250728ecf0fe44cd0e0972c85aee95.html",
+        "value": 13.06
        },
-       "phase": "approved",
-       "ptrs": null,
-       "ptrs_basis": "approved drug benchmark 100%"
+       "phase": "phase_3",
+       "primary_completion": "2028-10-19",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa/QLS 2011-2020: oncology Phase III to approval ~0.44 (Phase III->NDA ~48% x NDA->approval ~92%); all-TA Phase III to approval ~0.58",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.5
+       },
+       "ptrs_basis": "Phase 3 oncology base is about 0.44, raised to 0.50 for several independent pivotal shots (MarsLight-11 MRCT, China CRC Phase 3, China melanoma pivotal Phase 2) and Phase 1 IO-resistant sqNSCLC 24-month OS of 47.8% (3mg/kg) vs 14.8% for docetaxel (H1-2026 results deck). Launch 2028 uses the interim exception: Innovent states the China melanoma pivotal Phase 2 reads out in 2H/end-2026 and could support the first NDA (H1-2026 results release), so 2026-12 + 22 months = 2028. Without it, the Phase 3 floor is 2028-11 + 22 months = 2030. NOTE: the CITIC peak is China-only and already PoS-adjusted by the broker. CITIC's overseas PoS-adjusted 433.5亿元 is NOT used. 130.6亿元 = CNY 13.06bn. Economics: China 100% Innovent; US 40% of profit/loss (60/40 Takeda/Innovent) and 40% of global development cost; royalties outside the US and Greater China."
       }
      ],
-     "notes": "Fixed anchors: reported currency is USD and revenue latest is USD 1.94 bn. Pipeline inputs include late-stage and recently approved pre-peak assets for Innovent Biologics."
+     "excluded_assets": [
+      {
+       "name": "IBI362 / mazdutide label expansions (NCT07469800 obesity higher dose, NCT06884293 MAFLD vs semaglutide, NCT06931028 OSA, NCT07255209 adolescents)",
+       "reason": "label expansion of marketed mazdutide (approved in China June 2025 for obesity, later for T2D); valued in operating revenue, not in the pipeline"
+      },
+      {
+       "name": "IBI306 / tafolecimab (NCT07473960 non-familial hypercholesterolemia)",
+       "reason": "label expansion of marketed SINTBILO (1L hyperlipidemia label update)"
+      },
+      {
+       "name": "IBI311 / teprotumumab N01 (NCT07113262 thyroid eye disease vs placebo)",
+       "reason": "label expansion of marketed SYCUME (inactive TED / 1L TED)"
+      },
+      {
+       "name": "Sintilimab (NCT05116462 NSCLC)",
+       "reason": "label expansion of marketed TYVYT"
+      },
+      {
+       "name": "IBI310 + sintilimab (NCT05890742 MSI-H neoadjuvant)",
+       "reason": "label expansion of marketed TABOSUN (ipilimumab N01) / TYVYT"
+      },
+      {
+       "name": "IBI3027 (IL-4R; NCT07754786 equivalence vs dupilumab in atopic dermatitis)",
+       "reason": "biosimilar (dupilumab biosimilar: equivalence design vs Dupixent)"
+      },
+      {
+       "name": "IBI354 (HER2 ADC; NCT06834672 PROC Phase 3, PC 2027-12-28; NCT07377643 1L HER2+ mBC Phase 3, PC 2028-04-28)",
+       "reason": "no sourced peak sales"
+      },
+      {
+       "name": "IBI302 / efdamrofusp alfa (VEGF/complement; NCT05972473 nAMD vs aflibercept, PC 2027-02-28)",
+       "reason": "no sourced peak sales"
+      },
+      {
+       "name": "IBI128 / tigulixostat (XOI; NCT07414394 gout vs febuxostat, PC 2027-04-30; in-licensed from LG Chem for Greater China)",
+       "reason": "no sourced peak sales"
+      },
+      {
+       "name": "IBI3003 (GPRC5D/BCMA/CD3; NCT07623798 2-5L RRMM Phase 3, PC 2029-05-31)",
+       "reason": "no sourced peak sales"
+      },
+      {
+       "name": "IBI324 / OLN324 (VEGF-A/ANG2; Ollin-sponsored Phase 3 NCT07816289, NCT07816315, NCT07841899, NCT07842016, not yet recruiting, PC 2028-12-15)",
+       "reason": "no sourced peak sales (partner-run; company cites only a ~US$15bn TAM, not a peak)"
+      },
+      {
+       "name": "IBI3001, IBI3009, IBI3014, IBI3020, IBI3005, IBI3026, IBI3028, IBI3032, IBI3042, IBI3040, IBI3046, IBI3030, IBI3016, IBI3002, IBI355, IBI3011, IBI3013, IBI3031, IBI3038, IBI3034",
+       "reason": "Phase 1 / early PoC"
+      }
+     ],
+     "notes": "Rebuilt 2026-10-05 from Innovent's H1-2026 results (25 Aug 2026 release and deck), the ClinicalTrials.gov API and broker reports. ERRORS IN THE PREVIOUS ENTRY: (1) peaks were stored 10x too high: 25亿元 and 15亿元 were written as CNY 25.0bn and 15.0bn, but 亿 = 100mn, so they are CNY 2.5bn and 1.5bn; (2) the IBI363/IBI343 source_url was the bare finance.sina.com.cn homepage; the figures are from SPDB International (浦银国际), 11 Jun 2025, risk-adjusted China peaks; (3) Tyvyt and mazdutide were listed as assets although marketed, so they are moved to approved_portfolio to avoid double-counting operating revenue; (4) IBI343 launch_year 2026 cannot be reached (NDA accepted 2026-06-04, priority review). IBI363 now uses the CITIC Securities (中信建投) China PoS-adjusted peak of 130.6亿元 (28 Jul 2025, after the ASCO-2025 data), which is more recent than SPDBI's 25亿元. The two broker figures differ by about 5x, so uncertainty is large. Both peaks used are China-only and already risk-adjusted by the brokers, so applying PTRS again double-counts risk. IBI343 pdufa_date 2026-12-15 is ESTIMATED: there is no company-stated decision date. It is computed as acceptance on 2026-06-04 plus the NMPA priority-review clock of 130 working days (Drug Registration Regulation 2020), adjusted for China public holidays. Clock stops for questions usually push this into early 2027. CHANGES IN THE LAST 6 MONTHS: IBI343 G-HOPE-001 (NCT06238843) met PFS at the first interim analysis; the NMPA NDA was accepted 2026-06-04 with priority review (world-first CLDN18.2 ADC filing); late-breaking oral at ESMO 2026; Takeda targets a Japan filing in FY2027. IBI363: China CRC Phase 3 (NCT07722494) started mid-2026; nsqNSCLC MRCT expansion in preparation; 1L NSCLC PoC data at ASCO 2026; melanoma pivotal readout at end-2026. IBI354 1L HER2+ BC Phase 3 started 1H26; PROC Phase 3 readout and NDA planned for 2H26. IBI3003 China pivotal Phase 3 (TriadicMM-1) started mid-2026. Tigulixostat Phase 3 started 1H26. IBI3027 is a dupilumab biosimilar (equivalence trial, not yet recruiting). Mazdutide 9mg (GLORY-2) approval expected 2H26; mazdutide had price cuts of up to 80% on e-commerce platforms (China Daily, Apr 2026). PECONDLE (picankibart) was approved at end-2025; Jaypirca received a CLL/SLL label in 2026. Deals: 7th Lilly collaboration (US$350mn upfront, early 2026); Pfizer strategic collaboration (Jun 2026); company states about US$34bn total deal value. TAKEDA DEAL (closed late 2025): US$1.2bn upfront including a US$100mn equity investment, and up to about US$10.2bn in milestones across IBI363, IBI343 and IBI3001 (option). IBI363: 60/40 Takeda/Innovent split of global development cost and of US profit/loss (Takeda leads); royalties outside the US and Greater China. IBI343: Takeda holds rights outside Greater China; Innovent receives milestones and tiered royalties. FIGURES FROM SNIPPETS: the IBI343 15亿元 quote text comes from search snippets of press summaries of the SPDBI report. The PDF's Chinese text would not extract, but its numeric line '25 IBI343 15' matches. For mazdutide, a Macquarie peak of 8.6 billion yuan in 2031 (via a secondary page dated 2026-01-15; the original thestar.com.my URL now returns 404) and CITIC's 84.5亿元 (Jul 2025) are noted only, because the product is marketed. No sourced single-asset peaks were found for IBI354, IBI302, tigulixostat, IBI3003 or IBI324 (web search budget was exhausted before IBI302/tigulixostat-specific searches)."
     },
     "engine_preview": {
      "assets": [
       {
-       "indication": "Obesity and Type 2 Diabetes",
-       "launch_year": 2025,
-       "name": "Mazdutide (IBI362)",
+       "economic_share": null,
+       "indication": "CLDN18.2+ advanced gastric/GEJ adenocarcinoma, 3L+ (China NDA under priority review); 3L+ pancreatic cancer Phase 3 (China); 1L GC/PDAC PoC",
+       "launch_year": 2027,
+       "name": "Arcotatug tavatecan (IBI343)",
        "patent_expiry": null,
-       "peak_sales_period": "2031E",
-       "peak_sales_usd": 1281228000.0,
-       "phase": "approved",
-       "ptrs_basis": "approved drug benchmark 100%",
+       "peak_sales_period": "Peak (China, risk-adjusted; SPDBI 2025-06-11)",
+       "peak_sales_usd": 223665000.0,
+       "phase": "filed",
+       "ptrs_basis": "peak already risk-adjusted at source; Filed: China NDA accepted 2026-06-04 with priority review, backed by the G-HOPE-001 Phase 3 first interim analysis meeting its PFS primary endpoint (Innovent/Takeda, June 2026). The filed-to-approval base rate is about 0.90; no oncology haircut at the filed stage. NOTE: the SPDBI peak is China-only and already risk-adjusted by the broker (Innovent books China sales; ex-China rights are Takeda's, paying milestones plus tiered royalties up to the high teens). 15亿元 = CNY 1.5bn (亿 = 100mn; a unit, not a currency conversion).",
        "ptrs_override": 1.0,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Non-Small Cell Lung Cancer (NSCLC) and Colorectal Cancer",
-       "launch_year": 2027,
-       "name": "IBI363 (TAK-928)",
+       "economic_share": null,
+       "indication": "IO-resistant squamous NSCLC (global MRCT Phase 3 MarsLight-11, Takeda-run); 3L CRC with bevacizumab (China Phase 3); IO-naive acral/mucosal melanoma (China pivotal Phase 2); 1L NSCLC/1L CRC PoC",
+       "launch_year": 2028,
+       "name": "IBI363 (PD-1/IL-2alpha-bias bispecific fusion protein)",
        "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 3724500000.0,
+       "peak_sales_period": "Peak (China, PoS-adjusted; CITIC Securities 2025-07-28)",
+       "peak_sales_usd": 1947376600.0,
        "phase": "phase_3",
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Claudin 18.2-positive Advanced Gastric Cancer and Pancreatic Cancer",
-       "launch_year": 2026,
-       "name": "IBI343",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 2234700000.0,
-       "phase": "filed",
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Non-Small Cell Lung Cancer, Lymphoma, and Solid Tumors",
-       "launch_year": 2019,
-       "name": "Sintilimab (Tyvyt)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 890006520.0,
-       "phase": "approved",
+       "ptrs_basis": "peak already risk-adjusted at source; Phase 3 oncology base is about 0.44, raised to 0.50 for several independent pivotal shots (MarsLight-11 MRCT, China CRC Phase 3, China melanoma pivotal Phase 2) and Phase 1 IO-resistant sqNSCLC 24-month OS of 47.8% (3mg/kg) vs 14.8% for docetaxel (H1-2026 results deck). Launch 2028 uses the interim exception: Innovent states the China melanoma pivotal Phase 2 reads out in 2H/end-2026 and could support the first NDA (H1-2026 results release), so 2026-12 + 22 months = 2028. Without it, the Phase 3 floor is 2028-11 + 22 months = 2030. NOTE: the CITIC peak is China-only and already PoS-adjusted by the broker. CITIC's overseas PoS-adjusted 433.5亿元 is NOT used. 130.6亿元 = CNY 13.06bn. Economics: China 100% Innovent; US 40% of profit/loss (60/40 Takeda/Innovent) and 40% of global development cost; royalties outside the US and Greater China.",
+       "ptrs_override": 1.0,
        "source": "gemini_accepted"
       }
      ],
@@ -1756,28 +2144,66 @@
       "citation_coverage": 1.0,
       "currencies": [
        "CNY bn",
-       "CNY bn",
-       "CNY bn",
-       "CNY mn"
+       "CNY bn"
       ],
       "dropped_assets": [],
-      "ptrs_ignored": []
+      "ptrs_ignored": [],
+      "risk_adjusted_peaks": [
+       "Arcotatug tavatecan (IBI343)",
+       "IBI363 (PD-1/IL-2alpha-bias bispecific fusion protein)"
+      ]
      }
     },
     "fmp_context_usd": {
      "company": "Innovent Biologics, Inc.",
-     "depreciation_and_amortization": 89584206.66,
-     "market_cap": 22130139810.0,
-     "net_ppe": 811021346.46,
-     "operating_cash_flow": 1489950767.76,
+     "depreciation_and_amortization": 89662377.86999999,
+     "market_cap": 21332112527.52,
+     "net_ppe": 811729043.9699999,
+     "operating_cash_flow": 1491250899.32,
      "period": "2025-12-31",
-     "revenue": 1942926096.54
+     "revenue": 1944621494.53,
+     "shares": 1740920000.0
     },
     "grounding_urls": [],
-    "model": "gemini-3.8-flash",
+    "model": "verified research (owner re-check, primary sources)",
     "ok": true,
-    "secs": 48.0,
-    "value_usd": 8130434520.0
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2025,
+       "name": "Mazdutide (IBI362)",
+       "peak": 8.6,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2027,
+       "name": "IBI363 (TAK-928)",
+       "peak": 25.0,
+       "phase": "phase_3",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2026,
+       "name": "IBI343",
+       "peak": 15.0,
+       "phase": "filed",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2019,
+       "name": "Sintilimab (Tyvyt)",
+       "peak": 5974.0,
+       "phase": "approved",
+       "ptrs": null
+      }
+     ],
+     "built_at": "2026-09-26T14:44:40+00:00",
+     "model": "gemini-3.8-flash",
+     "value_usd": 8130434520.0
+    },
+    "secs": null,
+    "value_usd": 2171041600.0
    }
   },
   "01816.HK": {
@@ -1922,6 +2348,135 @@
     "ok": true,
     "secs": 49.4,
     "value_usd": 34804312500.0
+   }
+  },
+  "02197.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.0
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:46:13+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "not meaningful pre-revenue / with no valued asset (no cited amount of known scale and convertible currency)",
+      "ok": null
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: none",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "none stated",
+      "ok": null
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "0 of 0 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "0 usable; dropped none; every programme excluded with a reason",
+      "ok": null
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "0 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Clover Biopharmaceuticals, Ltd.",
+    "data": {
+     "approved_portfolio": [
+      "SCB-2019 (CpG 1018/Alum-adjuvanted recombinant SARS-CoV-2 trimeric S-protein vaccine; China emergency use Dec 2022; no material commercial revenue)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [],
+     "excluded_assets": [
+      {
+       "name": "SCB-1022 (RSV + hMPV PreF-trimer combination vaccine, older adults)",
+       "reason": "no sourced peak sales -- Phase 2 (Australia, 420 adults 60-85, positive preliminary data 2026-09-07; registry NCT06984094 Phase 1/2, primary completion 2028-03 est.). No asset-specific peak-sales estimate found in company filings, press or broker commentary; only a category-level 'global RSV vaccine market peak >USD 10bn' statement, which fails the single-asset rule."
+      },
+      {
+       "name": "SCB-1033 (RSV + hMPV + PIV3 PreF-trimer combination vaccine, older adults)",
+       "reason": "no sourced peak sales -- Phase 2 (same Australian Phase 2 as SCB-1022, NCT06984094). No asset-specific peak-sales estimate found."
+      },
+      {
+       "name": "SCB-1019 / SCB-1019T (bivalent RSV PreF-trimer vaccine, older adults incl. re-vaccination)",
+       "reason": "Phase 1 (NCT06194318 completed; re-vaccination NCT06843317 Phase 1; used as active comparator arm in NCT06984094)"
+      },
+      {
+       "name": "SCB-1019T paediatric (NCT06666179)",
+       "reason": "Phase 1, withdrawn"
+      },
+      {
+       "name": "SCB-219M (TNFR2-Fc-TPO fusion protein, chemotherapy-induced thrombocytopenia)",
+       "reason": "Phase 1 (Phase Ib started Nov 2024; NCT05426369)"
+      },
+      {
+       "name": "AdimFlu-S (QIS) (in-licensed quadrivalent influenza vaccine, mainland China)",
+       "reason": "discontinued -- commercial activities in mainland China terminated (2026 interim results)"
+      },
+      {
+       "name": "SCB-2023 / SCB-2023B / SCB-2020S (COVID-19 variant boosters)",
+       "reason": "discontinued -- Phase 3 studies NCT05926440 and NCT06567457 withdrawn"
+      },
+      {
+       "name": "SCB-313 / SCB-420",
+       "reason": "discontinued (Phase 1 only; trials completed/terminated/withdrawn)"
+      }
+     ],
+     "notes": "Registry file was empty (no live Phase 3 studies); ClinicalTrials.gov sponsor search 2026-10-05 confirms none (all Clover Phase 3s are completed/terminated/withdrawn SCB-2019/SCB-2023 COVID studies). Company has NO marketed product with meaningful sales: 1H26 revenue was only ~CNY 0.18mn because AdimFlu-S (QIS) commercial activities in mainland China were terminated (2026 interim results, 2026-08-26, https://news.qq.com/rain/a/20260826A0482800 -- figures from search snippet, page fetch failed). 1H26 net profit ~CNY 955mn was driven by a one-off ~CNY 1,087mn gain from the GAVI settlement agreement (non-recurring, not pipeline value). Last 6 months: Phase 2 of SCB-1022/SCB-1033 in Australia initiated (1H26) and positive preliminary data announced 2026-09-07 (https://www.prnewswire.com/news-releases/clover-announces-positive-phase-2-clinical-data-for-rsv--hmpv--piv3-respiratory-combination-vaccine-candidates-in-older-adults-302870886.html): RSV nAb ~6-9x, hMPV ~6-8x, ~62% lower respiratory tract infection rate vs placebo within 28 days; company will 'continue evaluating mid/late-stage development plans and potential international partnerships' -- no Phase 3 start date or launch timeline disclosed, no partner yet. The only peak-type figure found is market-level (global RSV vaccine market peak sales >USD 10bn; e.g. https://m.jrj.com.cn/madapter/finance/2023/11/24085538551881.shtml and search-snippet references to 'RSV combined vaccine global peak >USD 10bn'), not attributable to a single Clover asset, so not used. Company pipeline web page still shows SCB-1022/1033 as Phase I (stale vs the Sept 2026 Phase 2 announcement). No broker asset-level peak sales or PTRS found."
+    },
+    "engine_preview": {
+     "assets": [],
+     "checks": {
+      "citation_coverage": 0.0,
+      "currencies": [],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Clover Biopharmaceuticals, Ltd.",
+     "depreciation_and_amortization": 3954019.05704,
+     "market_cap": 299367285.22296,
+     "net_ppe": 14093044.86798,
+     "operating_cash_flow": -28408164.62692,
+     "period": "2025-12-31",
+     "revenue": 509104.18545999995,
+     "shares": 1297836551.9337015
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": null
    }
   },
   "02202.HK": {
@@ -2655,6 +3210,26 @@
       "check": "sources resolve to canonical URLs",
       "detail": "2 of 2 grounding wrapper(s) resolved",
       "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Sacituzumab tirumotecan (sac-TMT / SKB264 / MK-2870)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "missing (add or exclude with a reason): NCT05294172 (KL-A167, Gemcitabine)",
+      "ok": false
      }
     ],
     "company": "Sichuan Kelun-Biotech Biopharmaceutical Co., Ltd.",
@@ -2958,6 +3533,588 @@
     "value_usd": 216674426280.0
    }
   },
+  "09688.HK": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.46
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:54:46+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "6.57x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 6.5685
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved, approved, approved, phase_3, approved, approved, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2023 (approved), 2026 (approved), 2020 (approved), 2020 (approved), 2027, 2024 (approved), 2024 (approved), 2029",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "8 of 8 carry a usable PTRS; banded: Zocilurtatug pelitecan (ZL-1310, DLL3 ADC) - global: 0.50 -> 0.42 (held at table 0.27 + 0.15)",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "8 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): VYVGART / VYVGART Hytrulo (efgartigimod alfa) - Greater China, Optune / Tumor Treating Fields (TTFields) - GBM, Greater China, Tumor Treating Fields - locally advanced pancreatic cancer (PANOVA-3), Greater China, AUGTYRO (repotrectinib) - Greater China, XACDURO (sulbactam-durlobactam) - Greater China",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "3 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Zai Lab Limited",
+    "data": {
+     "approved_portfolio": [
+      "VYVGART / VYVGART Hytrulo (efgartigimod alfa)",
+      "KarXT / Cobenfy (xanomeline-trospium)",
+      "ZEJULA (niraparib)",
+      "Optune (Tumor Treating Fields, TTFields)",
+      "QINLOCK (ripretinib)",
+      "NUZYRA (omadacycline)",
+      "XACDURO (sulbactam-durlobactam)",
+      "AUGTYRO (repotrectinib)",
+      "TIVDAK (tisotumab vedotin)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "VYVGART",
+        "VYVGART Hytrulo",
+        "efgartigimod",
+        "efgartigimod alfa",
+        "艾加莫德",
+        "卫伟迦",
+        "卫力迦",
+        "ARGX-113"
+       ],
+       "indication": "Generalized myasthenia gravis (AChR+), CIDP - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2023,
+       "modality": "biologic",
+       "name": "VYVGART / VYVGART Hytrulo (efgartigimod alfa) - Greater China",
+       "nct_ids": [],
+       "orphan": true,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2031E",
+        "quote": "我们预计随着艾加莫德渗透率提升，有望于2031年达到6.19亿美元的销售峰值",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 619
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "VYVGART and VYVGART Hytrulo...was $94.2 million in full-year 2025, compared to $93.6 million for the same period in 2024.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1704292/000170429226000014/zlab-20260226x8kex991.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "Marketed in China since Sept 2023 (gMG, NRDL from 2024; CIDP approved Nov 2024). Peak is GF Securities (2024-12-27) China gMG+CIDP model; printed as 6.19亿美元 = USD 619 mn (亿 = 100 mn, unit relabelled only). Biologic: 2023+12y = 2035 covers the 2031E peak."
+      },
+      {
+       "aliases": [
+        "KarXT",
+        "COBENFY",
+        "Cobenfy",
+        "xanomeline-trospium",
+        "xanomeline and trospium chloride",
+        "ZL-2701"
+       ],
+       "indication": "Schizophrenia in adults - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2026,
+       "modality": "small_molecule",
+       "name": "KarXT / Cobenfy (xanomeline-trospium) - Greater China",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "Management guidance suggests peak sales of USD1bn for KarXT (excluding Alzheimer's indications).",
+        "scale": "bn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202503111644262186_1.pdf",
+        "value": 1
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "commercially launched KarXT in mainland China...for the treatment of schizophrenia",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1704292/000162828026053791/zlab-202686x8kex991.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "NMPA approved Dec 2025; commercial launch in mainland China June 2026; NRDL application planned 2027. Peak = Zai Lab management guidance quoted by Haitong International (2025-03-10), China schizophrenia only, excludes Alzheimer's psychosis. Alternative cited range: analysts CNY 3-5bn (Sina, 2025-12-26). Small molecule: China launch 2026 + 5y = 2031; no peak year stated by source."
+      },
+      {
+       "aliases": [
+        "ZEJULA",
+        "niraparib",
+        "则乐",
+        "尼拉帕利"
+       ],
+       "indication": "Ovarian cancer maintenance - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2020,
+       "modality": "small_molecule",
+       "name": "ZEJULA (niraparib) - Greater China",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2025A",
+        "quote": "ZEJULA...was $189.0 million in full-year 2025, compared to $187.1 million for the same period in 2024.",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1704292/000170429226000014/zlab-20260226x8kex991.htm",
+        "value": 189.0
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "ZEJULA...was $189.0 million in full-year 2025",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1704292/000170429226000014/zlab-20260226x8kex991.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "Mature marketed product (China approval Dec 2019). No forward peak forecast found; FY2025 actual (company-reported) used as the realised peak: Q1 2026 sales fell to $30.0m from $49.5m (PARPi competition + NRDL price cut), so 2025 is at or past peak. Period 2025 = 2020 launch + 5y, within the small-molecule window."
+      },
+      {
+       "aliases": [
+        "Optune",
+        "TTFields",
+        "Tumor Treating Fields",
+        "肿瘤电场治疗",
+        "爱普盾",
+        "Optune Lua"
+       ],
+       "indication": "Glioblastoma (newly diagnosed and recurrent) - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2020,
+       "modality": "small_molecule",
+       "name": "Optune / Tumor Treating Fields (TTFields) - GBM, Greater China",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": 2041,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2033E",
+        "quote": "GBM 适应症销售收入（亿美元） 0.43 0.50 0.54 0.58 0.62 0.66 0.70 0.74 0.79 0.83",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 83
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "GBM 适应症销售收入（亿美元） 0.43 0.50",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 1.0
+       },
+       "ptrs_basis": "Marketed medical device in China since 2020 (GBM). Peak = GF Securities (2024-12-27) table 10, GBM row, 2024E-2033E, last column 2033E = 0.83亿美元 = USD 83 mn (unit relabelled only). Device: no modality class fits, set small_molecule (shortest exclusivity) and patent_expiry 2041 from Novocure FY2025 10-K: 'In the U.S., our patents have expected expiration dates between 2025 and 2041.' (https://www.sec.gov/Archives/edgar/data/1645113/000164511326000017/nvcr-20251231.htm)."
+      },
+      {
+       "aliases": [
+        "TTFields pancreatic",
+        "PANOVA-3",
+        "PANOVA 3",
+        "Tumor Treating Fields pancreatic"
+       ],
+       "indication": "First-line unresectable locally advanced pancreatic adenocarcinoma with gemcitabine + nab-paclitaxel - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2027,
+       "modality": "small_molecule",
+       "name": "Tumor Treating Fields - locally advanced pancreatic cancer (PANOVA-3), Greater China",
+       "nct_ids": [
+        "NCT03377491"
+       ],
+       "orphan": false,
+       "patent_expiry": 2041,
+       "pdufa_date": null,
+       "peak_risk_adjusted": true,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2033E",
+        "quote": "胰腺癌适应症风险调整销售收入（亿美元） 0.37 0.74 1.13 1.52 1.92 2.32 2.74 3.16",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 316
+       },
+       "phase": "phase_3",
+       "primary_completion": "2024-10-16",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 base rate Phase 3->approval ~0.49-0.58; adjusted up for a completed positive Phase 3 and NMPA Innovative Medical Device Designation",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.65
+       },
+       "ptrs_basis": "PANOVA-3 (Novocure, Zai participated) met its OS primary endpoint (mOS 16.2 vs 14.2 mo, HR 0.819); NMPA granted Innovative Medical Device Designation Aug 2025; Zai Q2 2026 release lists it under 'Upcoming Potential NMPA Acceptance' (submission not yet accepted), so classed phase_3 (completed) rather than filed. Launch 2027 >= PC 2024-10 + 22m. CAUTION: GF's 2033E 3.16亿美元 (USD 316 mn) is RISK-ADJUSTED at an 85% approval probability (GF text); unadjusted ~USD 372 mn. Do not double-discount, or gross up by 1/0.85. Device: modality set small_molecule; patent 2041 (Novocure FY2025 10-K)."
+      },
+      {
+       "aliases": [
+        "AUGTYRO",
+        "repotrectinib",
+        "奥凯乐",
+        "瑞普替尼",
+        "TPX-0005"
+       ],
+       "indication": "ROS1-positive NSCLC - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2024,
+       "modality": "small_molecule",
+       "name": "AUGTYRO (repotrectinib) - Greater China",
+       "nct_ids": [],
+       "orphan": true,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2031E",
+        "quote": "瑞普替尼销售收入（亿美元） 0.21 0.48 0.79 1.00 1.15 1.35 1.48 1.69 1.80",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 148
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "瑞普替尼于2024年5月在国内获批上市，并已顺利通过医保谈判纳入医保",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 1.0
+       },
+       "ptrs_basis": "NMPA approved May 2024, NRDL listed. GF Securities (2024-12-27) table 11 runs 2025E-2033E; 2031E = 1.48亿美元 = USD 148 mn used because launch 2024 + 7y orphan = 2031 and no patent expiry could be verified. GF's headline 2033E figure is 'about 1.80亿美元' (USD 180 mn)."
+      },
+      {
+       "aliases": [
+        "XACDURO",
+        "sulbactam-durlobactam",
+        "鼎优乐",
+        "舒巴坦钠-度洛巴坦钠",
+        "SUL-DUR",
+        "ETX2514"
+       ],
+       "indication": "Acinetobacter baumannii-calcoaceticus complex infections (HABP/VABP) - China",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2024,
+       "modality": "small_molecule",
+       "name": "XACDURO (sulbactam-durlobactam) - Greater China",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2029E",
+        "quote": "舒巴坦钠-度洛巴坦钠调整销售收入（亿美元） 0.13 0.50 1.01 1.34 1.72 2.00 2.36 2.59 2.59",
+        "scale": "mn",
+        "source_url": "https://pdf.dfcfw.com/pdf/H3_AP202412291641462190_1.pdf",
+        "value": 172
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "XACDURO...was $22.9 million in full-year 2025, an increase of 593% y-o-y from $3.3 million.",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1704292/000170429226000014/zlab-20260226x8kex991.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "NMPA approved May 2024; Pfizer commercialises in mainland China under a Nov 2024 agreement. GF Securities (2024-12-27) table 12, 2025E-2033E; 2029E = 1.72亿美元 = USD 172 mn used because China launch 2024 + 5y small-molecule = 2029 (QIDP/GAIN extension not modelled, no patent verified). GF headline 2033E = 2.59亿美元 (USD 259 mn). The row label 调整 is FX conversion of the CNY row, not risk adjustment."
+      },
+      {
+       "aliases": [
+        "ZL-1310",
+        "zoci",
+        "zocilurtatug pelitecan",
+        "DLLEVATE",
+        "DLL3 ADC",
+        "YL212"
+       ],
+       "indication": "Relapsed (2L+) extensive-stage small cell lung cancer; also 1L ES-SCLC and extrapulmonary NECs",
+       "interim_readout": "2027-06",
+       "interim_source_url": "https://www.fool.com/earnings/call-transcripts/2026/08/13/zai-lab-zlab-q2-2026-earnings-call-transcript/",
+       "launch_year": 2029,
+       "modality": "biologic",
+       "name": "Zocilurtatug pelitecan (ZL-1310, DLL3 ADC) - global",
+       "nct_ids": [
+        "NCT07218146",
+        "NCT07796100"
+       ],
+       "orphan": true,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "currently model zoci's peak sales potential at around $500 million",
+        "scale": "mn",
+        "source_url": "https://www.fiercebiotech.com/biotech/aacr-endeavoring-go-global-zai-lab-offers-reality-check-chinas-biotech-ascent",
+        "value": 500
+       },
+       "phase": "phase_3",
+       "primary_completion": "2028-06-30",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 base rate Phase 3->approval ~0.49-0.58; oncology runs below the all-TA rate, offset by Phase 1 cORR ~68% in 2L+ SCLC, FDA Fast Track and Orphan designations",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.5
+       },
+       "ptrs_basis": "Global registrational Phase 3 DLLEVATE (NCT07218146, PC 2028-06-30) in 2L+ ES-SCLC. Company (Q2 2026 call, R&D president): enrollment completes 1H 2027, 'U.S. accelerated approval submission expected to follow later that year and approval anticipated in 2028'. Interim (ORR) readout set at 2027-06; floor 2027-06 + 22m = 2029-04, so launch 2029 rather than company's 2028. 1L ES-SCLC Phase 3 (NCT07796100, PC 2030-06-30, not yet recruiting) and epNEC registrational study are label expansions under this asset. Peak = Citi note of 2026-04-20 as reported by FierceBiotech; no year given. Biologic + orphan: 2029 + 12y = 2041."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "QINLOCK (ripretinib) - Greater China",
+       "reason": "no sourced peak sales (a CICC peak of USD 236 mn appeared only in a search snippet whose source page could not be opened or dated)"
+      },
+      {
+       "name": "NUZYRA (omadacycline) - Greater China",
+       "reason": "no sourced peak sales (a CICC risk-adjusted USD 209 mn appeared only in a search snippet whose source page could not be opened or dated); FY2025 sales $60.8m, +41% y-o-y"
+      },
+      {
+       "name": "TIVDAK (tisotumab vedotin) - Greater China",
+       "reason": "no sourced peak sales; NMPA approved June 2026 for recurrent/metastatic cervical cancer"
+      },
+      {
+       "name": "ZL-1109 (VRDN-003) / elegrobart - thyroid eye disease, Greater China (NCT07211776)",
+       "reason": "no sourced peak sales; China Phase 3 bridging study, PC 2027-03-14, topline 2027 (partner Viridian reported positive global REVEAL-1/REVEAL-2 Phase 3)"
+      },
+      {
+       "name": "Povetacicept (pove, APRIL/BAFF) - IgAN, Greater China (RAINIER, partner Vertex)",
+       "reason": "no sourced peak sales for Greater China; Zai participated in global Phase 3 RAINIER; US PDUFA 2026-11-30 (Vertex); OLYMPUS Phase 2/3 pMN ongoing"
+      },
+      {
+       "name": "Efgartigimod - myositis (ALKIVIA Phase 2/3, partner argenx) and other efgartigimod indications",
+       "reason": "label expansion of VYVGART"
+      },
+      {
+       "name": "KarXT - Alzheimer's disease psychosis (ADEPT program, partner BMS)",
+       "reason": "label expansion of KarXT; excluded from the KarXT peak by management guidance"
+      },
+      {
+       "name": "Bemarituzumab (FGFR2b, partner Amgen)",
+       "reason": "discontinued: Amgen stopped FORTITUDE-102 for inadequate efficacy (Nov 2025) after attenuated OS in FORTITUDE-101; no China filing"
+      },
+      {
+       "name": "TTFields - 2L+ NSCLC (LUNAR), Greater China",
+       "reason": "label expansion of Optune/TTFields; absent from 2026 Zai disclosures, no confirmed NMPA filing"
+      },
+      {
+       "name": "ZL-1102 (IL-17 humanized VHH)",
+       "reason": "Phase 2; absent from 2026 pipeline disclosures, status unconfirmed; no sourced peak sales"
+      },
+      {
+       "name": "ZL-6201 (LRRC15 ADC)",
+       "reason": "Phase 1"
+      },
+      {
+       "name": "ZL-1503 (IL-13/IL-31Ra bispecific)",
+       "reason": "Phase 1"
+      },
+      {
+       "name": "ZL-1222 (PD-1/IL-12)",
+       "reason": "Phase 1 (pre-IND)"
+      },
+      {
+       "name": "ZL-1311 (MUC17/CD3)",
+       "reason": "Phase 1 (pre-IND)"
+      }
+     ],
+     "notes": "Last 6 months (2026-04 to 2026-10): KarXT launched in mainland China June 2026 (NMPA approval Dec 2025); TIVDAK NMPA approval June 2026; zoci got FDA Fast Track (May 2026), EMA ODD (June 2026) and FDA ODD for NECs (July 2026), with DLLEVATE enrollment completing 1H 2027, BLA late 2027, company-expected approval 2028; povetacicept US BLA accepted (PDUFA 2026-11-30); elegrobart China Phase 3 enrollment completing Q3 2026; ALKIVIA myositis topline due Q3 2026. Commercial weakness: Q1 2026 product revenue $95.6m (-10% y-o-y), ZEJULA $30.0m vs $49.5m, VYVGART $17.6m vs $18.1m after the NRDL renewal price cut; Q2 2026 $105.8m vs $109.1m. FY2025 VYVGART was flat at $94.2m vs $93.6m, so GF's USD 619 mn 2031E VYVGART peak (Dec 2024) predates the price reset and looks high. The earlier USD 2bn-by-2028 revenue target does not appear in 2026 releases. Bemarituzumab discontinued Nov 2025. Units: Chinese sources print 亿美元 (100 mn); values are given in mn with the digits unchanged (6.19亿 -> 619 mn), no FX conversion. Single-asset quotes taken from PDF table rows (GF Securities, 2024-12-27, text-extracted) for TTFields GBM, TTFields pancreatic, AUGTYRO and XACDURO; for AUGTYRO (2031E) and XACDURO (2029E) a pre-exclusivity-end year was used instead of GF's 2033E headline. The TTFields pancreatic figure is GF's risk-adjusted value (x0.85). Taken from a search snippet rather than the page: zoci Citi ~$500m peak (FierceBiotech page returned 403; Citi note dated 2026-04-20). The KarXT USD 1bn management guidance was read directly in the Haitong International PDF (2025-03-10). Neither ir.zailaboratory.com (timed out) nor drugs.com (403) could be read, so the in-licensed products' patent expiries are unverified and left null except TTFields (Novocure 10-K)."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "Generalized myasthenia gravis (AChR+), CIDP - China",
+       "launch_year": 2023,
+       "name": "VYVGART / VYVGART Hytrulo (efgartigimod alfa) - Greater China",
+       "patent_expiry": null,
+       "peak_sales_period": "2031E",
+       "peak_sales_usd": 619000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Marketed in China since Sept 2023 (gMG, NRDL from 2024; CIDP approved Nov 2024). Peak is GF Securities (2024-12-27) China gMG+CIDP model; printed as 6.19亿美元 = USD 619 mn (亿 = 100 mn, unit relabelled only). Biologic: 2023+12y = 2035 covers the 2031E peak.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Schizophrenia in adults - China",
+       "launch_year": 2026,
+       "name": "KarXT / Cobenfy (xanomeline-trospium) - Greater China",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 1000000000.0,
+       "phase": "approved",
+       "ptrs_basis": "NMPA approved Dec 2025; commercial launch in mainland China June 2026; NRDL application planned 2027. Peak = Zai Lab management guidance quoted by Haitong International (2025-03-10), China schizophrenia only, excludes Alzheimer's psychosis. Alternative cited range: analysts CNY 3-5bn (Sina, 2025-12-26). Small molecule: China launch 2026 + 5y = 2031; no peak year stated by source.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Ovarian cancer maintenance - China",
+       "launch_year": 2020,
+       "name": "ZEJULA (niraparib) - Greater China",
+       "patent_expiry": null,
+       "peak_sales_period": "2025A",
+       "peak_sales_usd": 189000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Mature marketed product (China approval Dec 2019). No forward peak forecast found; FY2025 actual (company-reported) used as the realised peak: Q1 2026 sales fell to $30.0m from $49.5m (PARPi competition + NRDL price cut), so 2025 is at or past peak. Period 2025 = 2020 launch + 5y, within the small-molecule window.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Glioblastoma (newly diagnosed and recurrent) - China",
+       "launch_year": 2020,
+       "name": "Optune / Tumor Treating Fields (TTFields) - GBM, Greater China",
+       "patent_expiry": 2041,
+       "peak_sales_period": "2033E",
+       "peak_sales_usd": 83000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Marketed medical device in China since 2020 (GBM). Peak = GF Securities (2024-12-27) table 10, GBM row, 2024E-2033E, last column 2033E = 0.83亿美元 = USD 83 mn (unit relabelled only). Device: no modality class fits, set small_molecule (shortest exclusivity) and patent_expiry 2041 from Novocure FY2025 10-K: 'In the U.S., our patents have expected expiration dates between 2025 and 2041.' (https://www.sec.gov/Archives/edgar/data/1645113/000164511326000017/nvcr-20251231.htm).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "First-line unresectable locally advanced pancreatic adenocarcinoma with gemcitabine + nab-paclitaxel - China",
+       "launch_year": 2027,
+       "name": "Tumor Treating Fields - locally advanced pancreatic cancer (PANOVA-3), Greater China",
+       "patent_expiry": 2041,
+       "peak_sales_period": "2033E",
+       "peak_sales_usd": 316000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "peak already risk-adjusted at source; PANOVA-3 (Novocure, Zai participated) met its OS primary endpoint (mOS 16.2 vs 14.2 mo, HR 0.819); NMPA granted Innovative Medical Device Designation Aug 2025; Zai Q2 2026 release lists it under 'Upcoming Potential NMPA Acceptance' (submission not yet accepted), so classed phase_3 (completed) rather than filed. Launch 2027 >= PC 2024-10 + 22m. CAUTION: GF's 2033E 3.16亿美元 (USD 316 mn) is RISK-ADJUSTED at an 85% approval probability (GF text); unadjusted ~USD 372 mn. Do not double-discount, or gross up by 1/0.85. Device: modality set small_molecule; patent 2041 (Novocure FY2025 10-K).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "ROS1-positive NSCLC - China",
+       "launch_year": 2024,
+       "name": "AUGTYRO (repotrectinib) - Greater China",
+       "patent_expiry": null,
+       "peak_sales_period": "2031E",
+       "peak_sales_usd": 148000000.0,
+       "phase": "approved",
+       "ptrs_basis": "NMPA approved May 2024, NRDL listed. GF Securities (2024-12-27) table 11 runs 2025E-2033E; 2031E = 1.48亿美元 = USD 148 mn used because launch 2024 + 7y orphan = 2031 and no patent expiry could be verified. GF's headline 2033E figure is 'about 1.80亿美元' (USD 180 mn).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Acinetobacter baumannii-calcoaceticus complex infections (HABP/VABP) - China",
+       "launch_year": 2024,
+       "name": "XACDURO (sulbactam-durlobactam) - Greater China",
+       "patent_expiry": null,
+       "peak_sales_period": "2029E",
+       "peak_sales_usd": 172000000.0,
+       "phase": "approved",
+       "ptrs_basis": "NMPA approved May 2024; Pfizer commercialises in mainland China under a Nov 2024 agreement. GF Securities (2024-12-27) table 12, 2025E-2033E; 2029E = 1.72亿美元 = USD 172 mn used because China launch 2024 + 5y small-molecule = 2029 (QIDP/GAIN extension not modelled, no patent verified). GF headline 2033E = 2.59亿美元 (USD 259 mn). The row label 调整 is FX conversion of the CNY row, not risk adjustment.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Relapsed (2L+) extensive-stage small cell lung cancer; also 1L ES-SCLC and extrapulmonary NECs",
+       "launch_year": 2029,
+       "name": "Zocilurtatug pelitecan (ZL-1310, DLL3 ADC) - global",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 500000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Global registrational Phase 3 DLLEVATE (NCT07218146, PC 2028-06-30) in 2L+ ES-SCLC. Company (Q2 2026 call, R&D president): enrollment completes 1H 2027, 'U.S. accelerated approval submission expected to follow later that year and approval anticipated in 2028'. Interim (ORR) readout set at 2027-06; floor 2027-06 + 22m = 2029-04, so launch 2029 rather than company's 2028. 1L ES-SCLC Phase 3 (NCT07796100, PC 2030-06-30, not yet recruiting) and epNEC registrational study are label expansions under this asset. Peak = Citi note of 2026-04-20 as reported by FierceBiotech; no year given. Biologic + orphan: 2029 + 12y = 2041.",
+       "ptrs_override": 0.42115,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD mn",
+       "USD bn",
+       "USD mn",
+       "USD mn",
+       "USD mn",
+       "USD mn",
+       "USD mn",
+       "USD mn"
+      ],
+      "dropped_assets": [],
+      "ptrs_banded": [
+       "Zocilurtatug pelitecan (ZL-1310, DLL3 ADC) - global: 0.50 -> 0.42 (held at table 0.27 + 0.15)"
+      ],
+      "ptrs_ignored": [],
+      "risk_adjusted_peaks": [
+       "Tumor Treating Fields - locally advanced pancreatic cancer (PANOVA-3), Greater China"
+      ]
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Zai Lab Limited",
+     "depreciation_and_amortization": 15010000.0,
+     "market_cap": 2740017699.47952,
+     "net_ppe": 66532243.0,
+     "operating_cash_flow": -151012060.0,
+     "period": "2025-12-31",
+     "revenue": 460836703.0,
+     "shares": 1129225459.9789917
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": 3027000000.0
+   }
+  },
   "09926.HK": {
    "pipeline": {
     "anchors": {
@@ -2996,6 +4153,26 @@
      {
       "check": "sources resolve to canonical URLs",
       "detail": "5 of 5 grounding wrapper(s) resolved",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "Ivonescimab (AK112, Overseas Royalties): no primary completion date",
+      "ok": false
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "23 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
       "ok": true
      }
     ],
@@ -3287,7 +4464,7 @@
     },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
-    "ok": true,
+    "ok": false,
     "secs": 53.9,
     "value_usd": 3071073720.0
    }
@@ -3903,6 +5080,26 @@
       "check": "sources resolve to canonical URLs",
       "detail": "no grounding wrappers",
       "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Olpasiran (AMG 890)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "MariTide (maridebart cafraglutide / AMG 133): no primary completion date; Dazodalibep (VIB4920): no primary completion date; Olpasiran (AMG 890): no primary completion date",
+      "ok": false
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "missing (add or exclude with a reason): NCT05972551 (Romosozumab, Bisphosphonate); NCT06430866 (ABP 234, Pembrolizumab); NCT06054555 (ABP 206, Nivolumab); NCT07223190 (Blinatumomab, Blinatumomab); NCT05920356 (Sotorasib, Pembrolizumab); NCT03633708 (Etelcalcetide, Standard of Care); NCT06252649 (FOLFIRI Regimen, Sotorasib); NCT06700343 (Ocrelizumab (US), Ocrelizumab (EU)); NCT06691984 (Xaluritamig, Abiraterone); NCT07366086 (Vitamin D, Calcium); NCT07700238 (Romiplostim, Predniso(lo)ne); NCT06321601 (Avacopan, AMG 569)",
+      "ok": false
      }
     ],
     "company": "Amgen Inc.",
@@ -4109,7 +5306,7 @@
     },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
-    "ok": true,
+    "ok": false,
     "secs": 33.8,
     "value_usd": 15750000000.0
    }
@@ -4864,6 +6061,182 @@
     "ok": true,
     "secs": 70.8,
     "value_usd": 20000000000.0
+   }
+  },
+  "BEAM": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.14
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:45:52+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "13.60x (plausible 0.02x to 8.0x)",
+      "ok": false,
+      "ratio": 13.5964
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_2",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2031",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "1 of 1 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "1 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): BEAM-302 (in vivo LNP adenine base editor, PiZ correction)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "0 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Beam Therapeutics Inc.",
+    "data": {
+     "approved_portfolio": [],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "BEAM-302",
+        "BEAM302"
+       ],
+       "indication": "Alpha-1 antitrypsin deficiency (AATD), PiZZ, lung disease with or without liver disease",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2031,
+       "modality": "cell_gene",
+       "name": "BEAM-302 (in vivo LNP adenine base editor, PiZ correction)",
+       "nct_ids": [
+        "NCT06389877"
+       ],
+       "orphan": false,
+       "patent_expiry": 2039,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2036E",
+        "quote": "adjusted peak sales to $1.9B in 2036",
+        "scale": "bn",
+        "source_url": "https://www.tipranks.com/news/the-fly/jonesresearch-upgrades-beam-therapeutics-to-buy-on-de-risking-data",
+        "value": 1.9
+       },
+       "phase": "phase_2",
+       "primary_completion": "2028-05",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 base rate Phase 2->approval ~0.15; Beam (2026-09-08) plans accelerated approval on 'a primary endpoint of AAT biomarkers evaluated over 12 months, with 60 mg as the selected dose'",
+        "source_url": "https://www.globenewswire.com/news-release/2026/09/08/3357432/0/en/beam-therapeutics-presents-updated-clinical-data-from-the-phase-1-2-trial-of-beam-302-in-alpha-1-antitrypsin-deficiency-aatd-at-the-european-respiratory-society-ers-congress-2026.html",
+        "value": 0.25
+       },
+       "ptrs_basis": "Phase 2 base rate 0.15 (BIO/Informa 2011-2020), raised +10pp: monogenic rare disease with a direct mechanistic biomarker (serum total/functional AAT, Z-AAT reduction ~84% at ERS 2026), FDA alignment on an accelerated-approval biomarker endpoint, and the pivotal cohort (~50 patients, first dosed July 2026) is an expansion of the same Phase 1/2 trial at the selected dose. Kept at 0.25 (not higher) because it is first-in-class in vivo base editing with no regulatory precedent, accelerated approval requires a confirmatory outcome study, and infusion reactions (41%) and transient liver-enzyme elevations are the open safety questions. Launch year 2031 = registered primary completion 2028-05 + 34 months (Phase 2 rule); Beam has not published a BLA date for BEAM-302. Peak sales: JonesResearch (2025-03-10) 'adjusted' peak $1.9B in 2036 is used because it carries an explicit year; Jefferies (2025-10-09) has a higher undated $2.5B. patent_expiry 2039 = low end of the 2039-2046 window the 10-K gives for Beam's owned base-editing patents (no product-specific date disclosed); peak year 2036 is inside launch + 12y cell/gene exclusivity (2043) either way. Orphan set false: no FDA orphan designation for BEAM-302 found in company disclosures (AATD prevalence ~100k US would qualify, but none is claimed)."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "Risto-cel / ristoglogene autogetemcel (BEAM-101), ex vivo base-edited HSC, severe sickle cell disease (BEACON, NCT05456880, Phase 1/2 pivotal, primary completion 2028-02)",
+       "reason": "no sourced peak sales -- the only dollar figure found is JonesTrading (2025-12-08) 'estimated probability-adjusted peak sales of $730 million by 2040', which is already risk-adjusted and would double-count PTRS; company calls it blockbuster potential without a number. Programme is the most advanced: dosing complete in all adult/adolescent BEACON patients, updated data by YE2026, BLA 'as early as year-end 2026' (Q2 2026 release, 2026-08-04); orphan + RMAT designations. Add it as an asset once an unadjusted peak is sourced."
+      },
+      {
+       "name": "BEAM-301 (in vivo base editor, GSDIa R83C; NCT06735755)",
+       "reason": "Phase 1 (Phase 1/2 single-ascending-dose, dose-exploration; initial clinical data expected 2026; registered primary completion 2027-12-30)"
+      },
+      {
+       "name": "BEAM-304 (phenylketonuria)",
+       "reason": "Phase 1 (IND cleared 2026; Phase 1/2 start-up activities only, not yet dosing)"
+      },
+      {
+       "name": "BEAM-103 (anti-CD117 mAb, ESCAPE conditioning) / BEAM-104 (ESCAPE edited cells)",
+       "reason": "Phase 1 (BEAM-103 healthy-volunteer trial NCT07304791, dosing completed 2026, well tolerated)"
+      },
+      {
+       "name": "BEAM-201 (multiplex-edited allogeneic CD7 CAR-T, T-ALL/T-LL; NCT05885464)",
+       "reason": "Phase 1 (Phase 1/2, active not recruiting; deprioritised since the Oct-2023 restructuring, partnering sought)"
+      },
+      {
+       "name": "Partnered programmes (Lilly/Verve VERVE-102 PCSK9 and other cardiovascular targets, Pfizer liver target, Apellis complement, Orbital/BMS)",
+       "reason": "Phase 1 or preclinical; Beam holds royalties/milestones only, no sourced peak sales"
+      },
+      {
+       "name": "Anti-CD7 CAR-T investigator study (NCT06934382)",
+       "reason": "Phase 1"
+      }
+     ],
+     "notes": "Registry file BEAM_registry.txt was empty: Beam sponsors no Phase 3 studies on ClinicalTrials.gov; its pivotal programmes run as expansions of Phase 1/2 trials (BEAM-302 NCT06389877 pivotal cohort, BEACON NCT05456880 for risto-cel), so both are treated as phase_2 under the brief's rules. Primary completion dates read from the ClinicalTrials.gov API v2 on 2026-10-05 (BEAM-302 2028-05, last updated 2026-03-20; BEACON 2028-02, last updated 2025-12-16). Changes in the last 6 months: (1) July 2026 first patient dosed in the BEAM-302 global pivotal cohort (~50 patients), FDA-aligned accelerated-approval path on 12-month AAT biomarkers, 60 mg dose (Q2 release 2026-08-04; ERS late-breaker 2026-09-08 reported ~84% Z-AAT reduction, IRRs in 41%, one Grade 3 transient ALT/AST elevation); (2) risto-cel BEACON dosing completed in adults/adolescents, BLA guided 'as early as year-end 2026' (unchanged; press reports flag possible slip into early 2027); (3) BEAM-304 PKU IND cleared; (4) BEAM-103 Phase 1 dosing completed; (5) cash $1.2bn at 2026-06-30, runway into mid-2029. No clinical holds or failed readouts found. Patent expiry window 2039-2046 for owned base-editing patents is from a search snippet of the 10-K (fetched FY2025 10-K text did not state product-specific expiries). Jefferies $2.5B BEAM-302 peak (2025-10-09) and an unverified search-summary claim that Beam itself projects ~$4bn for BEAM-302 were not used (undated period / not found on a primary page). Peak total in assets: USD 1.9bn (BEAM-302 only)."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "Alpha-1 antitrypsin deficiency (AATD), PiZZ, lung disease with or without liver disease",
+       "launch_year": 2031,
+       "name": "BEAM-302 (in vivo LNP adenine base editor, PiZ correction)",
+       "patent_expiry": 2039,
+       "peak_sales_period": "2036E",
+       "peak_sales_usd": 1900000000.0,
+       "phase": "phase_2",
+       "ptrs_basis": "Phase 2 base rate 0.15 (BIO/Informa 2011-2020), raised +10pp: monogenic rare disease with a direct mechanistic biomarker (serum total/functional AAT, Z-AAT reduction ~84% at ERS 2026), FDA alignment on an accelerated-approval biomarker endpoint, and the pivotal cohort (~50 patients, first dosed July 2026) is an expansion of the same Phase 1/2 trial at the selected dose. Kept at 0.25 (not higher) because it is first-in-class in vivo base editing with no regulatory precedent, accelerated approval requires a confirmatory outcome study, and infusion reactions (41%) and transient liver-enzyme elevations are the open safety questions. Launch year 2031 = registered primary completion 2028-05 + 34 months (Phase 2 rule); Beam has not published a BLA date for BEAM-302. Peak sales: JonesResearch (2025-03-10) 'adjusted' peak $1.9B in 2036 is used because it carries an explicit year; Jefferies (2025-10-09) has a higher undated $2.5B. patent_expiry 2039 = low end of the 2039-2046 window the 10-K gives for Beam's owned base-editing patents (no product-specific date disclosed); peak year 2036 is inside launch + 12y cell/gene exclusivity (2043) either way. Orphan set false: no FDA orphan designation for BEAM-302 found in company disclosures (AATD prevalence ~100k US would qualify, but none is claimed).",
+       "ptrs_override": 0.25,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Beam Therapeutics Inc.",
+     "depreciation_and_amortization": 22294000.0,
+     "market_cap": 2520535500.0,
+     "net_ppe": 205179000.0,
+     "operating_cash_flow": -345102000.0,
+     "period": "2025-12-31",
+     "revenue": 139743000.0,
+     "shares": 102879000.0
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": false,
+    "secs": null,
+    "value_usd": 1900000000.0
    }
   },
   "BEPC": {
@@ -5801,6 +7174,211 @@
     "source": "sec_10k",
     "value_usd": 55962000000.0,
     "verified_at": "2026-09-20T02:52:51+00:00"
+   }
+  },
+  "CRSP": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.0
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:45:58+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "not meaningful pre-revenue / with no valued asset (410.26x (plausible 0.02x to 8.0x))",
+      "ok": null,
+      "ratio": 410.2564
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2023 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "1 of 1 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "1 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "0 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "CRISPR Therapeutics AG",
+    "data": {
+     "approved_portfolio": [
+      "CASGEVY (exa-cel, CTX001)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "CTX001",
+        "exa-cel",
+        "exagamglogene autotemcel",
+        "Casgevy",
+        "CASGEVY"
+       ],
+       "economic_share": 0.4,
+       "indication": "Severe sickle cell disease (SCD) and transfusion-dependent beta thalassemia (TDT); US label extended to children 2 years and older in 2026",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2023,
+       "modality": "cell_gene",
+       "name": "CASGEVY (exagamglogene autotemcel; CTX001)",
+       "nct_ids": [
+        "NCT03745287",
+        "NCT03655678",
+        "NCT05329649",
+        "NCT05356195",
+        "NCT04208529"
+       ],
+       "orphan": true,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2030E",
+        "quote": "William Blair has clocked peak sales at $3.6 billion.",
+        "scale": "bn",
+        "source_url": "https://www.biospace.com/business/vertex-crisprs-casgevy-faces-complex-path-to-profitability",
+        "value": 3.6
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "The U.S. FDA recently approved CASGEVY in children 2 years of age and older",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0001674416/000119312526330644/crsp-ex99_1.htm",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved and marketed (FDA Dec 2023 SCD / Jan 2024 TDT; approved in 39 countries per CRSP Q2 2026 release dated 2026-08-03), so PTRS = 1.0. PEAK SALES ARE 100% (worldwide product sales, booked by Vertex). CRSP SHARE = 40% of programme economics (Vertex 60% / CRSP 40% under the amended 2021 collaboration), i.e. CRSP-attributable peak = 0.40 x 3.6 = USD 1.44bn -- NOT applied in peak_sales.value; to be applied in review. Peak figure is William Blair (analyst Myles Minter) as reported by BioSpace on 2024-09-11; the article gives no peak year -- the period '2030E' is an assumption placed inside exclusivity (launch 2023 + 12y cell/gene = 2035), not a sourced year."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "CTX611 / SRSD107 (Factor XI siRNA, with Sirius Therapeutics)",
+       "reason": "no sourced peak sales -- Phase 2 (NCT07140523 TKA vs enoxaparin, primary completion 2026-06-30; NCT07318155 chronic CAD/PAD, primary completion 2027-12; both Sirius-sponsored). Company only calls the FXI field a 'multi-billion-dollar market opportunity' (market, not asset). Update expected 2H26."
+      },
+      {
+       "name": "zugocabtagene geleucel (zugo-cel; formerly CTX112), allogeneic CD19 CAR-T -- oncology",
+       "reason": "Phase 1 (Phase 1/2 NCT05643742 in R/R B-cell malignancies; company says data support advancing into the Phase 2 portion, not yet a pivotal Phase 2; also no sourced peak sales). Pirtobrutinib combination study initiated 2026."
+      },
+      {
+       "name": "zugocabtagene geleucel (CTX112) -- autoimmune (SLE/SSc/myositis NCT06925542; ITP/wAIHA NCT07549698; neurologic NCT07804004)",
+       "reason": "Phase 1"
+      },
+      {
+       "name": "CTX310 (in vivo ANGPTL3 edit)",
+       "reason": "Phase 1 (Phase 1b NCT07491172 in refractory dyslipidemias; update 2H26)"
+      },
+      {
+       "name": "CTX320 (in vivo LPA edit)",
+       "reason": "Phase 1 (dose escalation; next-gen CTX321 preclinical, Lp(a) programme update expected 2026)"
+      },
+      {
+       "name": "CTX321 (next-gen Lp(a))",
+       "reason": "Phase 1 -- actually preclinical (IND/CTA-enabling)"
+      },
+      {
+       "name": "CTX340 (in vivo AGT, refractory hypertension)",
+       "reason": "Phase 1 (NCT07758634; IND cleared 2026)"
+      },
+      {
+       "name": "CTX460 (SyNTase, alpha-1 antitrypsin deficiency)",
+       "reason": "Phase 1 (NCT07850076, not yet recruiting)"
+      },
+      {
+       "name": "CTX131 (allogeneic CD70 CAR-T)",
+       "reason": "Phase 1 (Phase 1/2 trials NCT05795595 and NCT06492304 completed; not in 2026 pipeline disclosure)"
+      },
+      {
+       "name": "CTX110 / CTX120 / CTX130 / VCTX210A / VCTX211",
+       "reason": "discontinued (trials terminated/completed; not in pipeline)"
+      },
+      {
+       "name": "CTX213 (iPSC beta cells, T1D) / in vivo CAR-T platform",
+       "reason": "Phase 1 -- preclinical"
+      }
+     ],
+     "notes": "CRSP_registry.txt was empty (CASGEVY Phase 3 trials are Vertex-sponsored/co-sponsored; ClinicalTrials.gov lists CTX001 pediatric Phase 3 NCT05329649 (SCD, PC 2027-06-06) and NCT05356195 (TDT, PC 2027-11-14) and long-term follow-up NCT04208529 under CRISPR -- all covered by the CASGEVY asset via aliases CTX001/exa-cel). Last 6 months: US FDA approved CASGEVY for children 2+ (reported in Q2 2026 release, 2026-08-03); pediatric (5-11) submissions in Saudi Arabia and UK; German reimbursement for 12+; Q2 2026 CASGEVY revenue USD 76mn (+78% QoQ). zugo-cel third Phase 1 (neurologic autoimmune) started and pirtobrutinib combo initiated; CTX340 and CTX460 entered the clinic; CTX320 effectively superseded by CTX321. No asset other than CASGEVY is at Phase 2+ with a sourced peak, so the pipeline value beyond CASGEVY rests on excluded early assets. CASGEVY peak: 100% figure USD 3.6bn (William Blair, via BioSpace 2024-09-11) -- older than the preferred 2025/2026 window; no 2025/2026 named-broker single-asset peak found. Other figures seen only in search snippets/older pieces: USD 6.2bn by 2030 (Yahoo/Zacks-type article, 2023-12-14), Goldman Sachs USD 3.9bn and Bloomberg consensus ~USD 2.2bn (snippets, undated) -- not used. CRSP share of CASGEVY = 40% (state in review). patent_expiry left null (not sourced); regulatory exclusivity (cell_gene 12y from 2023) runs to 2035, after the assumed 2030E peak period."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": 0.4,
+       "indication": "Severe sickle cell disease (SCD) and transfusion-dependent beta thalassemia (TDT); US label extended to children 2 years and older in 2026",
+       "launch_year": 2023,
+       "name": "CASGEVY (exagamglogene autotemcel; CTX001)",
+       "patent_expiry": null,
+       "peak_sales_period": "2030E",
+       "peak_sales_usd": 1440000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved and marketed (FDA Dec 2023 SCD / Jan 2024 TDT; approved in 39 countries per CRSP Q2 2026 release dated 2026-08-03), so PTRS = 1.0. PEAK SALES ARE 100% (worldwide product sales, booked by Vertex). CRSP SHARE = 40% of programme economics (Vertex 60% / CRSP 40% under the amended 2021 collaboration), i.e. CRSP-attributable peak = 0.40 x 3.6 = USD 1.44bn -- NOT applied in peak_sales.value; to be applied in review. Peak figure is William Blair (analyst Myles Minter) as reported by BioSpace on 2024-09-11; the article gives no peak year -- the period '2030E' is an assumption placed inside exclusivity (launch 2023 + 12y cell/gene = 2035), not a sourced year.",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "economic_share": [
+       "CASGEVY (exagamglogene autotemcel; CTX001): 40% of the 100% peak"
+      ],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "CRISPR Therapeutics AG",
+     "depreciation_and_amortization": 19479000.0,
+     "market_cap": 5346156984.0,
+     "net_ppe": 247575000.0,
+     "operating_cash_flow": -345014000.0,
+     "period": "2025-12-31",
+     "revenue": 3510000.0,
+     "shares": 96448800.0
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": 1440000000.0
    }
   },
   "DLR": {
@@ -7536,6 +9114,183 @@
     "value_usd": 1572000000.0
    }
   },
+  "KYMR": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.04
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:46:06+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "not meaningful pre-revenue / with no valued asset (153.06x (plausible 0.02x to 8.0x))",
+      "ok": null,
+      "ratio": 153.0612
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_2",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2031",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "1 of 1 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "1 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): KT-621 (oral STAT6 degrader)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "0 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Kymera Therapeutics, Inc.",
+    "data": {
+     "approved_portfolio": [],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "KT-621",
+        "KT621",
+        "STAT6 degrader",
+        "BROADEN2",
+        "BroADen",
+        "BREADTH",
+        "BREADTH-EXT"
+       ],
+       "indication": "Moderate to severe atopic dermatitis (lead indication; asthma Phase 2b BREADTH in parallel)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2031,
+       "modality": "small_molecule",
+       "name": "KT-621 (oral STAT6 degrader)",
+       "nct_ids": [
+        "NCT07217015"
+       ],
+       "orphan": false,
+       "patent_expiry": 2040,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2038E",
+        "quote": "BofA models US$6b in nominal peak sales for KT-621 in atopic dermatitis.",
+        "scale": "bn",
+        "source_url": "https://finance.yahoo.com/markets/stocks/articles/kymera-therapeutics-kymr-stock-gets-061248951.html",
+        "value": 6
+       },
+       "phase": "phase_2",
+       "primary_completion": "2027-06",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa/QLS Clinical Development Success Rates 2011-2020: Phase II to approval likelihood ~15% across all indications; adjusted up for a clinically validated IL-4/IL-13 (Type 2) pathway",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.22
+       },
+       "ptrs_basis": "Phase 2b (BROADEN2 enrolled, data guided year-end 2026). Base rate Phase 2->approval ~0.15 raised to 0.22 because the target pathway (IL-4/IL-13 signalling) is validated by dupilumab in AD and asthma, BroADen Phase 1b showed a mean 63% EASI reduction, and FDA Fast Track is granted in both AD and asthma; held well below Phase 3 rates because Phase 2b efficacy/safety at scale is unproven for a first-in-class oral degrader."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "KT-621 asthma (BREADTH, NCT07323654; extension BREADTH-EXT NCT07677059)",
+       "reason": "Indication expansion of KT-621 (Phase 2b, primary completion 2027-12, data guided late 2027); no sourced single-indication peak sales -- BofA $6bn covers atopic dermatitis only"
+      },
+      {
+       "name": "KT-485 / SAR447971 (oral IRAK4 degrader, Sanofi)",
+       "reason": "Phase 1 (first participant dosed June 2026; healthy volunteers + hidradenitis suppurativa). Partnered: Sanofi leads; Kymera eligible for up to $975m clinical/regulatory/commercial milestones ($20m earned on Phase 1 first dosing), option to opt in to a 50/50 US cost/profit share before first Phase 3 plus double-digit tiered ex-US royalties; if no opt-in, worldwide tiered royalties high single digits to high teens (10-K FY2025)"
+      },
+      {
+       "name": "KT-579 (oral IRF5 degrader)",
+       "reason": "Phase 1 (healthy volunteer trial, data Q4 2026; Phase 1b lupus trial planned thereafter)"
+      },
+      {
+       "name": "KT-200 (CDK2 molecular glue degrader, Gilead)",
+       "reason": "Preclinical (IND targeted 2027). Partnered: Gilead exercised its option April 2026 ($45m option payment after $40m upfront); up to $665m milestones; tiered royalties high single-digit to mid-teens on Gilead net sales"
+      },
+      {
+       "name": "KT-621 oral formulation study (NCT07823205)",
+       "reason": "Phase 1 (formulation bridging study of KT-621)"
+      },
+      {
+       "name": "KT-474 / SAR444656 (first-generation IRAK4 degrader)",
+       "reason": "discontinued -- deprioritised by Sanofi in favour of second-generation KT-485"
+      }
+     ],
+     "notes": "Registry file was empty (no live Phase 3 studies on ClinicalTrials.gov). Only value-carrying Phase 2+ programme is KT-621; company plans Phase 3 start mid-2027 (Q2 2026 results, 5 Aug 2026, sec.gov 8-K ex99.1 000119312526333834). Changes in last 6 months: BROADEN2 (AD) enrolment completed ~6 months early (June 2026), AD Phase 2b data pulled forward to year-end 2026 from mid-2027 -- ClinicalTrials.gov still shows primary completion 2027-06; FDA Fast Track added for asthma; KT-485 entered Phase 1 June 2026 ($20m Sanofi milestone); Gilead exercised CDK2 option April 2026 ($45m); cash ~$1.5bn at 30 Jun 2026, runway into 2029. Launch year 2031 = Phase 3 start mid-2027 plus ~3 years (rule floor 2030 = 2027-06 + 34 months). Patent: 10-K FY2025 says STAT-specific patent families 'expected to expire between 2040 and 2044' (if granted); lower bound 2040 used. Peak-sales period: BofA's US$6bn is an undated 'nominal peak' (Yahoo/Simply Wall St, 3 Jul 2026); 2038E assigned as ~7 years post launch and before the 2040 patent floor -- the period year is our assumption, not the source's. The BofA figure was first seen in a search snippet and then confirmed on the cited page. No asthma-specific peak or asset-specific broker PTRS could be sourced. Partner economics for KT-485 differ slightly by source: the June 2026 press release says 50/50 US profit split + double-digit tiered ROW royalties; the FY2025 10-K gives royalties 'ranging from the high single digits to high teens, subject to low-single digits upward adjustments' if no opt-in."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "Moderate to severe atopic dermatitis (lead indication; asthma Phase 2b BREADTH in parallel)",
+       "launch_year": 2031,
+       "name": "KT-621 (oral STAT6 degrader)",
+       "patent_expiry": 2040,
+       "peak_sales_period": "2038E",
+       "peak_sales_usd": 6000000000.0,
+       "phase": "phase_2",
+       "ptrs_basis": "Phase 2b (BROADEN2 enrolled, data guided year-end 2026). Base rate Phase 2->approval ~0.15 raised to 0.22 because the target pathway (IL-4/IL-13 signalling) is validated by dupilumab in AD and asthma, BroADen Phase 1b showed a mean 63% EASI reduction, and FDA Fast Track is granted in both AD and asthma; held well below Phase 3 rates because Phase 2b efficacy/safety at scale is unproven for a first-in-class oral degrader.",
+       "ptrs_override": 0.22,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Kymera Therapeutics, Inc.",
+     "depreciation_and_amortization": 8313000.0,
+     "market_cap": 8833642375.0,
+     "net_ppe": 85526000.0,
+     "operating_cash_flow": -232891000.0,
+     "period": "2025-12-31",
+     "revenue": 39200000.0,
+     "shares": 82257587.9970202
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": 6000000000.0
+   }
+  },
   "LEU": {
    "backlog": {
     "basis": "actual",
@@ -7682,6 +9437,26 @@
       "check": "sources resolve to canonical URLs",
       "detail": "5 of 5 grounding wrapper(s) resolved",
       "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Orforglipron, Pirtobrutinib (Jaypirca)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "Retatrutide: no primary completion date; Orforglipron: no primary completion date",
+      "ok": false
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "missing (add or exclude with a reason): NCT05821959 (AAVAnc80-hOTOF via Akouos Delivery Device, AAVAnc80-hOTOF via Akouos Delivery Device and Precision Delivery Mechanism); NCT03155997 (Abemaciclib, Standard Adjuvant Endocrine Therapy); NCT03773965 (Baricitinib, LY3009104); NCT05288166 (Abemaciclib, Abiraterone); NCT05735483 (Lebrikizumab, Placebo); NCT06890598 (Olomorasib, Pembrolizumab); NCT02411448 (Ramucirumab, Placebo); NCT04616326 (Galcanezumab, Placebo); NCT07218380 (Vepugratinib, Placebo); NCT07412756 (Brenipatide, Placebo); NCT07282600 (Eloralintide, Placebo); NCT07222137 (Baricitinib, Placebo)",
+      "ok": false
      }
     ],
     "company": "Eli Lilly and Company",
@@ -7898,7 +9673,7 @@
     },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
-    "ok": true,
+    "ok": false,
     "secs": 27.2,
     "value_usd": 107890000000.0
    }
@@ -8044,6 +9819,366 @@
     "ok": false,
     "secs": 73.4,
     "value_usd": 0.0
+   }
+  },
+  "MRNA": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 1.94
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-05T02:45:14+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "2.30x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 2.3035
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: approved, approved, approved, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2022 (approved), 2024 (approved), 2026 (approved), 2028",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "4 of 4 carry a usable PTRS; banded: Intismeran autogene (mRNA-4157 / V940) -- adjuvant melanoma: 0.85 -> 0.64 (held at table 0.49 + 0.15)",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "4 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): mRESVIA (mRNA-1345)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "2 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     }
+    ],
+    "company": "Moderna, Inc.",
+    "data": {
+     "approved_portfolio": [
+      "Spikevax (mRNA-1273)",
+      "mNEXSPIKE (mRNA-1283)",
+      "mRESVIA (mRNA-1345)",
+      "mFLUSIVA (mRNA-1010)",
+      "mCOMBRIAX (mRNA-1083)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "Spikevax",
+        "mRNA-1273",
+        "mNEXSPIKE",
+        "mRNA-1283",
+        "elasomeran"
+       ],
+       "indication": "COVID-19 prevention (US label restricted to adults 65+ and at-risk 12-64 under the 2025 FDA framework; 2026-2027 XFG formula approved)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2022,
+       "modality": "biologic",
+       "name": "COVID-19 vaccine (Spikevax mRNA-1273 / mNEXSPIKE mRNA-1283)",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2025A",
+        "quote": "Net product sales by product, year ended December 31, 2025: COVID(1) $1,810 ... (1) Includes sales of Spikevax and mNEXSPIKE.",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1682852/000168285226000033/R30.htm",
+        "value": 1810
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "Moderna Receives U.S. FDA Approval for Updated 2026-2027 COVID-19 Vaccines",
+        "source_url": "https://www.biospace.com/press-releases/moderna-receives-u-s-fda-approval-for-updated-2026-2027-covid-19-vaccines",
+        "value": 1.0
+       },
+       "ptrs_basis": "Marketed (Spikevax BLA 2022; mNEXSPIKE approved May 2025; 2026-27 strain update approved). Peak figure is FY2025 ACTUAL net sales used as steady state (COVID market post-normalisation; FY2023 $6,671mn, FY2024 $3,084mn, FY2025 $1,810mn -- still declining). Moderna reports a single COVID line that combines the original (Spikevax) and next-generation (mNEXSPIKE) formulation of the same vaccine; there is no product-level split in any filing, so they are carried as ONE asset (mNEXSPIKE is cannibalising Spikevax in the US: 24% US retail share overall, 34% in 65+, per Q4 2025 call)."
+      },
+      {
+       "aliases": [
+        "mRESVIA",
+        "mRNA-1345",
+        "RSV vaccine"
+       ],
+       "indication": "RSV lower respiratory tract disease prevention, adults 60+ and at-risk 18-59",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2024,
+       "modality": "biologic",
+       "name": "mRESVIA (mRNA-1345)",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2025A",
+        "quote": "Net product sales by product, year ended December 31, 2025: RSV $8 (2024: $25)",
+        "scale": "mn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1682852/000168285226000033/R30.htm",
+        "value": 8
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "MRESVIA Respiratory Syncytial Virus Vaccine, mRNA (mRNA-1345) -- FDA licensed product page",
+        "source_url": "https://www.fda.gov/vaccines-blood-biologics/vaccines/mresvia",
+        "value": 1.0
+       },
+       "ptrs_basis": "Marketed since 2024. No sourced forward peak forecast could be verified (a William Blair $1.5bn/2033 figure appears only in an AI search summary and could not be found on any page -- NOT used). Peak = FY2025 ACTUAL ($8mn; FY2024 $25mn) as steady state. Upside not in the figure: EU joint-procurement contract for up to 24 million doses and Australia/Mexico approvals (Q2 2026 release); H1 2026 RSV sales $10mn (10-Q)."
+      },
+      {
+       "aliases": [
+        "mFLUSIVA",
+        "mRNA-1010",
+        "seasonal influenza vaccine"
+       ],
+       "indication": "Seasonal influenza prevention, adults 50+ (65+ under accelerated approval)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2026,
+       "modality": "biologic",
+       "name": "mFLUSIVA (mRNA-1010)",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": "2026-08-05",
+       "peak_sales": {
+        "currency": "USD",
+        "period": "peak (year not stated; William Blair, 2026-08)",
+        "quote": "The bank projects mFLUSIVA could achieve $1.16 billion in peak U.S. sales.",
+        "scale": "bn",
+        "source_url": "https://medcitynews.com/2026/08/moderna-flu-vaccine-fda-approval-mflusiva-acip-cdc-mrna/",
+        "value": 1.16
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "FDA approves Moderna's mRNA flu vaccine (August 2026)",
+        "source_url": "https://www.healthcaredive.com/news/moderna-fda-approve-mflusiva-seasonal-influenza/827180/",
+        "value": 1.0
+       },
+       "ptrs_basis": "FDA approved August 2026 (PDUFA 2026-08-05) for adults 50+; ages 65+ under accelerated approval contingent on a post-marketing safety study. Peak figure is William Blair's US-only peak (no year given; WB calls it conservative); ex-US (EU, Canada, Australia under review) not included. Moderna says no meaningful contribution in the 2026-27 season (missed contracting cycle; ACIP has not met in 2026)."
+      },
+      {
+       "aliases": [
+        "intismeran autogene",
+        "intismeran",
+        "mRNA-4157",
+        "V940",
+        "V940-001",
+        "INTerpath-001",
+        "individualized neoantigen therapy"
+       ],
+       "economic_share": 0.5,
+       "indication": "Adjuvant resected high-risk stage IIB-IV melanoma, with KEYTRUDA (pembrolizumab); Merck co-develops, 50/50 cost and profit share",
+       "interim_readout": "2026-08",
+       "interim_source_url": "https://finance.yahoo.com/healthcare/articles/merck-moderna-announce-phase-3-104500208.html",
+       "launch_year": 2028,
+       "modality": "biologic",
+       "name": "Intismeran autogene (mRNA-4157 / V940) -- adjuvant melanoma",
+       "nct_ids": [
+        "NCT05933577"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2035E",
+        "quote": "Barclays modeled intismeran generating approximately $3 billion in annual melanoma sales by 2035",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/analysis/modernas-valuation-now-hinges-on-the-hazard-ratio-investors-have-not-seen-200686138",
+        "value": 3
+       },
+       "phase": "phase_3",
+       "primary_completion": "2029-10-26",
+       "ptrs": {
+        "period": "2026",
+        "quote": "At a pre-specified interim analysis, intismeran in combination with KEYTRUDA as adjuvant therapy demonstrated statistically significant and clinically meaningful improvements in RFS and DMFS.",
+        "source_url": "https://finance.yahoo.com/healthcare/articles/merck-moderna-announce-phase-3-104500208.html",
+        "value": 0.85
+       },
+       "ptrs_basis": "Phase 3 INTerpath-001 met RFS and DMFS at a pre-specified interim (2026-08-19); not yet filed. Base rate filed->approval ~0.90 (BIO/Informa 2011-2020) applied because the pivotal is positive, trimmed to 0.85 for a first-in-class individualized mRNA neoantigen therapy (novel CMC/manufacturing review, hazard ratio not yet disclosed; full data at ESMO 2026). Morningstar raised its melanoma approval probability to 100% (from 60%) -- not used as too extreme. Launch year is the rule floor (interim 2026-08 + 22 months = 2028); Morningstar expects approval in 1H27 and GlobalData mid-2027, so 2028 is conservative. Peak is the 100% (total) melanoma-only figure; Moderna's economic share is 50% (50/50 profit split with Merck). Biologic 12y exclusivity from 2028 = 2040, after the 2035 peak."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "mCOMBRIAX (mRNA-1083) flu + COVID combination vaccine",
+       "reason": "no sourced peak sales -- EC marketing authorization 2026-04-22 (adults 50+, first approved flu/COVID combo); under review in Japan, Canada, Australia; US awaiting FDA guidance on refiling (withdrawn earlier pending mRNA-1010 efficacy data). Only combined flu+combo analyst figures exist (Jefferies $750mn US flu + combo by 2030), which violate the single-asset rule."
+      },
+      {
+       "name": "mRNA-1403 norovirus vaccine (NCT06592794)",
+       "reason": "no sourced peak sales -- Phase 3 (~38,000 adults) did NOT meet statistical criteria for early success at the 2026 interim (Q2 2026 release, 2026-07-31); slow case accrual from unusual strain circulation; additional cohort being enrolled, trial into another winter season; registered primary completion 2027-02-15"
+      },
+      {
+       "name": "mRNA-1018 H5 pandemic influenza vaccine (mRNA-1018-H5, NCT07496450)",
+       "reason": "no sourced peak sales -- pandemic-preparedness asset; HHS/BARDA terminated the ~$760mn award in May 2025; Phase 3 now funded by CEPI (up to $54.3mn) with 20% of capacity reserved for LMICs; registered primary completion 2027-01-28"
+      },
+      {
+       "name": "mRNA-3927 propionic acidemia",
+       "reason": "no sourced peak sales -- registrational study (Paramount Part 2, NCT04159103) reached target enrollment Feb 2026; data readout expected 2026; orphan"
+      },
+      {
+       "name": "mRNA-3705 methylmalonic acidemia",
+       "reason": "no sourced peak sales -- FDA START pilot; registrational study start deferred until mRNA-3927 PA data (Q2 2026 release)"
+      },
+      {
+       "name": "Intismeran autogene (V940/mRNA-4157) adjuvant NSCLC -- INTerpath-002 (NCT06077760, PC 2030-06), INTerpath-009 (NCT06623422, PC 2033-05), V940-014 stage I NSCLC (NCT07513376, PC 2034-08)",
+       "reason": "no sourced peak sales -- Phase 3, Merck-sponsored; no NSCLC-specific peak figure found. Morningstar's $16.8bn 2035 intismeran figure is an all-indication total (not single-indication); Morningstar assigns lung 60% approval probability"
+      },
+      {
+       "name": "Intismeran autogene Phase 2 programmes -- RCC V940-004 (NCT06307431), bladder V940-005 (NCT06305767) and V940-011 (NCT06833073), melanoma V940-012 (NCT06961006), metastatic squamous NSCLC V940-013 (NCT07221474)",
+       "reason": "no sourced peak sales (Phase 2, Merck-sponsored)"
+      },
+      {
+       "name": "Intismeran autogene cSCC -- INTerpath-007 (NCT06295809)",
+       "reason": "discontinued -- Phase 2/3 terminated for business reasons (primary completion 2026-03-05, 46 enrolled)"
+      },
+      {
+       "name": "mRNA-1647 CMV vaccine",
+       "reason": "discontinued -- congenital CMV Phase 3 failed primary endpoint (October 2025); cCMV programme discontinued; only a Phase 2 in bone-marrow-transplant patients continues (no sourced peak)"
+      },
+      {
+       "name": "mRNA-1608 HSV, mRNA-1468 VZV, mRNA-3745 GSD1a",
+       "reason": "discontinued (Analyst Day, November 2025)"
+      },
+      {
+       "name": "mRNA-4359 (checkpoint cancer antigen therapy)",
+       "reason": "Phase 1 (Phase 1/2 in melanoma and NSCLC)"
+      },
+      {
+       "name": "mRNA-1405 pentavalent norovirus and other early infectious-disease/rare-disease candidates",
+       "reason": "Phase 1"
+      }
+     ],
+     "notes": "Changes in the last ~6 months: (1) mFLUSIVA (mRNA-1010) FDA-approved August 2026 for adults 50+ (accelerated approval in 65+) after a February 2026 Refusal-to-File, resubmission and a 9-0 VRBPAC vote; no meaningful 2026-27 revenue (contracting missed; ACIP has not met in 2026 due to litigation over appointments, next meeting October). (2) Intismeran INTerpath-001 positive at a pre-specified interim (2026-08-19); hazard ratio undisclosed until ESMO 2026 (reported for October 24); filing plans not dated. Analyst figures: Barclays ~$3bn melanoma by 2035 (used); William Blair $5.4bn peak 'in melanoma alone from its 50-50 revenue split' (ambiguous whether 100% or Moderna share, NOT used); Morningstar $16.8bn 2035 all-indication (from $7.2bn); Leerink $1.4bn 2032; GlobalData >$1bn by 2031; Bloomberg Intelligence up to $12bn non-risk-adjusted peak by 2040 (~$5.4bn risk-adjusted) -- the BI and Leerink figures came from search snippets only (BI page 403). INTerpath-007 (cSCC) terminated for business reasons (March 2026). (3) mCOMBRIAX (mRNA-1083) EC-approved 2026-04-22; US still awaiting FDA guidance on refiling. (4) Norovirus mRNA-1403 missed its Phase 3 interim early-success bar (2026-07-31), adding a cohort. (5) mRNA-1018 H5: HHS cancelled the BARDA award (May 2025); CEPI funds the Phase 3. (6) FDA COVID policy: the 2025 framework limits US COVID vaccine approvals to 65+ and high-risk 12-64; 2026-2027 Spikevax/mNEXSPIKE XFG updates approved. (7) mRESVIA EU joint-procurement for up to 24 million doses; mNEXSPIKE approved in Japan and Taiwan; Moderna 2026 guidance: up to 10% revenue growth on FY2025 $1.9bn, year-end cash $4.7-5.2bn. (8) CMV (mRNA-1647) cCMV Phase 3 failed October 2025, programme discontinued. Patent expiries for Moderna's products are not disclosed by product in the 10-K, so patent_expiry is null throughout (biologic 12y regulatory exclusivity covers every peak period used). COVID and RSV figures are FY2025 ACTUALS (steady state), not forecasts, verified on the 10-K XBRL page R30. Registry check: both registry studies (NCT06592794 mRNA-1403, NCT07496450 mRNA-1018-H5) are covered in excluded_assets; Merck-sponsored intismeran trials covered from CT.gov intervention search for V940."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "COVID-19 prevention (US label restricted to adults 65+ and at-risk 12-64 under the 2025 FDA framework; 2026-2027 XFG formula approved)",
+       "launch_year": 2022,
+       "name": "COVID-19 vaccine (Spikevax mRNA-1273 / mNEXSPIKE mRNA-1283)",
+       "patent_expiry": null,
+       "peak_sales_period": "2025A",
+       "peak_sales_usd": 1810000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Marketed (Spikevax BLA 2022; mNEXSPIKE approved May 2025; 2026-27 strain update approved). Peak figure is FY2025 ACTUAL net sales used as steady state (COVID market post-normalisation; FY2023 $6,671mn, FY2024 $3,084mn, FY2025 $1,810mn -- still declining). Moderna reports a single COVID line that combines the original (Spikevax) and next-generation (mNEXSPIKE) formulation of the same vaccine; there is no product-level split in any filing, so they are carried as ONE asset (mNEXSPIKE is cannibalising Spikevax in the US: 24% US retail share overall, 34% in 65+, per Q4 2025 call).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "RSV lower respiratory tract disease prevention, adults 60+ and at-risk 18-59",
+       "launch_year": 2024,
+       "name": "mRESVIA (mRNA-1345)",
+       "patent_expiry": null,
+       "peak_sales_period": "2025A",
+       "peak_sales_usd": 8000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Marketed since 2024. No sourced forward peak forecast could be verified (a William Blair $1.5bn/2033 figure appears only in an AI search summary and could not be found on any page -- NOT used). Peak = FY2025 ACTUAL ($8mn; FY2024 $25mn) as steady state. Upside not in the figure: EU joint-procurement contract for up to 24 million doses and Australia/Mexico approvals (Q2 2026 release); H1 2026 RSV sales $10mn (10-Q).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Seasonal influenza prevention, adults 50+ (65+ under accelerated approval)",
+       "launch_year": 2026,
+       "name": "mFLUSIVA (mRNA-1010)",
+       "patent_expiry": null,
+       "peak_sales_period": "peak (year not stated; William Blair, 2026-08)",
+       "peak_sales_usd": 1160000000.0,
+       "phase": "approved",
+       "ptrs_basis": "FDA approved August 2026 (PDUFA 2026-08-05) for adults 50+; ages 65+ under accelerated approval contingent on a post-marketing safety study. Peak figure is William Blair's US-only peak (no year given; WB calls it conservative); ex-US (EU, Canada, Australia under review) not included. Moderna says no meaningful contribution in the 2026-27 season (missed contracting cycle; ACIP has not met in 2026).",
+       "ptrs_override": 1.0,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": 0.5,
+       "indication": "Adjuvant resected high-risk stage IIB-IV melanoma, with KEYTRUDA (pembrolizumab); Merck co-develops, 50/50 cost and profit share",
+       "launch_year": 2028,
+       "name": "Intismeran autogene (mRNA-4157 / V940) -- adjuvant melanoma",
+       "patent_expiry": null,
+       "peak_sales_period": "2035E",
+       "peak_sales_usd": 1500000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Phase 3 INTerpath-001 met RFS and DMFS at a pre-specified interim (2026-08-19); not yet filed. Base rate filed->approval ~0.90 (BIO/Informa 2011-2020) applied because the pivotal is positive, trimmed to 0.85 for a first-in-class individualized mRNA neoantigen therapy (novel CMC/manufacturing review, hazard ratio not yet disclosed; full data at ESMO 2026). Morningstar raised its melanoma approval probability to 100% (from 60%) -- not used as too extreme. Launch year is the rule floor (interim 2026-08 + 22 months = 2028); Morningstar expects approval in 1H27 and GlobalData mid-2027, so 2028 is conservative. Peak is the 100% (total) melanoma-only figure; Moderna's economic share is 50% (50/50 profit split with Merck). Biologic 12y exclusivity from 2028 = 2040, after the 2035 peak.",
+       "ptrs_override": 0.643,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD mn",
+       "USD mn",
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "economic_share": [
+       "Intismeran autogene (mRNA-4157 / V940) -- adjuvant melanoma: 50% of the 100% peak"
+      ],
+      "ptrs_banded": [
+       "Intismeran autogene (mRNA-4157 / V940) -- adjuvant melanoma: 0.85 -> 0.64 (held at table 0.49 + 0.15)"
+      ],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Moderna, Inc.",
+     "depreciation_and_amortization": 215000000.0,
+     "market_cap": 75393307860.0,
+     "net_ppe": 2853000000.0,
+     "operating_cash_flow": -1873000000.0,
+     "period": "2025-12-31",
+     "revenue": 1944000000.0,
+     "shares": 396786000.0
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "secs": null,
+    "value_usd": 4478000000.0
    }
   },
   "NEE": {
@@ -8644,243 +10779,450 @@
      "revenue_latest_usd_bn": 62.58
     },
     "basis": "estimate",
-    "built_at": "2026-09-26T14:42:52+00:00",
+    "built_at": "2026-10-05T02:47:22+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
-      "detail": "0.28x (plausible 0.02x to 8.0x)",
+      "detail": "0.23x (plausible 0.02x to 8.0x)",
       "ok": true,
-      "ratio": 0.278
+      "ratio": 0.2269
      },
      {
       "check": "late-stage only",
-      "detail": "phases: approved, phase_3, phase_3, phase_3, approved, approved, phase_3",
+      "detail": "phases: phase_3, phase_3, phase_3, phase_3, filed",
       "ok": true
      },
      {
       "check": "launch years plausible",
-      "detail": "2019 (approved), 2027, 2027, 2023 (approved), 2023 (approved), 2026",
+      "detail": "2028, 2030, 2029, 2031, 2028",
       "ok": true
      },
      {
       "check": "PTRS cited and in range",
-      "detail": "7 of 7 carry a usable PTRS",
+      "detail": "5 of 5 carry a usable PTRS; banded: Mevrometostat (PF-06821497): 0.75 -> 0.42 (held at table 0.27 + 0.15); Lyme disease vaccine (PF-07307405, LB6V, formerly VLA15): 0.80 -> 0.83 (held at table 0.98 - 0.15)",
       "ok": true
      },
      {
       "check": "assets with cited peak sales",
-      "detail": "7 usable; dropped none",
+      "detail": "5 usable; dropped none",
       "ok": true
      },
      {
       "check": "sources resolve to canonical URLs",
       "detail": "no grounding wrappers",
       "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): PF-08634404 (PF'4404, SSGJ-707)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "90 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
      }
     ],
     "company": "Pfizer Inc.",
     "data": {
-     "as_of": "2026-09-26",
+     "approved_portfolio": [
+      "Eliquis (apixaban)",
+      "Vyndaqel / Vyndamax (tafamidis)",
+      "Ibrance (palbociclib)",
+      "Xtandi (enzalutamide, MDV3100)",
+      "Padcev (enfortumab vedotin)",
+      "Prevnar 20 / Prevenar 20 (20-valent pneumococcal conjugate vaccine, 20vPnC)",
+      "Prevnar 13 (13vPnC)",
+      "Abrysvo (RSVpreF, bivalent RSV prefusion F vaccine)",
+      "Lorbrena / Lorviqua (lorlatinib, PF-06463922)",
+      "Xalkori (crizotinib)",
+      "Litfulo (ritlecitinib)",
+      "Talzenna (talazoparib)",
+      "Comirnaty (COVID-19 vaccine)",
+      "Paxlovid (nirmatrelvir; ritonavir)",
+      "Elrexfio (elranatamab)",
+      "Hympavzi (marstacimab, PF-06741086)",
+      "Velsipity (etrasimod, APD334)",
+      "Tukysa (tucatinib, ONT-380)",
+      "Adcetris (brentuximab vedotin)",
+      "Braftovi (encorafenib)",
+      "Mektovi (binimetinib)",
+      "Bavencio (avelumab)",
+      "Tivdak (tisotumab vedotin)",
+      "Xeljanz (tofacitinib)",
+      "Cibinqo (abrocitinib, PF-04965842)",
+      "Nurtec ODT / Vydura (rimegepant, BHV3000, PF-07899801)",
+      "Zavzpret (zavegepant)",
+      "Inlyta (axitinib)",
+      "Bosulif (bosutinib)"
+     ],
+     "as_of": "2026-10-05",
      "assets": [
       {
-       "indication": "Urothelial / Bladder cancer",
-       "launch_year": 2019,
-       "name": "Padcev (enfortumab vedotin)",
-       "patent_expiry": 2033,
+       "aliases": [
+        "PF-06821497",
+        "mevrometostat",
+        "MEVPRO-1",
+        "MEVPRO-2",
+        "MEVPRO-3"
+       ],
+       "indication": "Metastatic prostate cancer (mCRPC post-abiraterone, 1L mCRPC, mCSPC) with enzalutamide",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2028,
+       "modality": "small_molecule",
+       "name": "Mevrometostat (PF-06821497)",
+       "nct_ids": [
+        "NCT06551324",
+        "NCT06629779",
+        "NCT07028853"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "Padcev, a bladder cancer drug developed in partnership with Astellas, which Pfizer expects to achieve peak sales of over $3 billion",
+        "period": "peak, unadjusted (Guggenheim, est. dated 2026-03-24)",
+        "quote": "The firm's bottom-up model estimates approximately $4.6 billion in unadjusted peak revenue across mevrometostat's three indications, compared with Visible Alpha consensus of approximately $3.7 billion.",
         "scale": "bn",
-        "source_url": "https://synapse.patsnap.com/article/pfizer-anticipates-8-blockbuster-cancer-drugs-from-4-key-areas-exec",
-        "value": 3.0
+        "source_url": "https://www.investing.com/news/analyst-ratings/guggenheim-raises-pfizer-stock-price-target-on-drug-trial-outlook-93CH-4577245",
+        "value": 4.6
        },
-       "phase": "approved",
-       "ptrs": null,
-       "ptrs_basis": "Approved pre-peak asset with ongoing Phase 3 perioperative label expansion studies (oncology Phase 3 benchmark 50-60%)"
+       "phase": "phase_3",
+       "primary_completion": "2026-12-02",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Guggenheim assigns a 75% probability of success to MEVPRO-1, 55% to MEVPRO-2 in first-line metastatic castration-resistant prostate cancer, and 25% to MEVPRO-3 in metastatic castration-sensitive prostate cancer.",
+        "source_url": "https://www.investing.com/news/analyst-ratings/guggenheim-raises-pfizer-stock-price-target-on-drug-trial-outlook-93CH-4577245",
+        "value": 0.75
+       },
+       "ptrs_basis": "Asset-specific broker PoS for the lead study MEVPRO-1 (Phase 1b/2 HR ~0.5 vs enzalutamide alone); MEVPRO-2/3 carry 55%/25% in the same note. Above the engine's oncology Phase 3 table, so the engine holds it at the +15pp band edge. MEVPRO-1 readout guided Q4 2026 (event-driven, 302 PFS events; Q2 2026 call). Launch floor = earliest registered primary completion (MEVPRO-2 NCT06629779, 2026-12-02) + 22 months = 2028-10."
       },
       {
-       "indication": "HR-positive, HER2-negative metastatic breast cancer",
-       "launch_year": 2027,
-       "name": "Atirmociclib",
+       "aliases": [
+        "PF-07220060",
+        "atirmociclib",
+        "FourLight-3"
+       ],
+       "indication": "1L HR+/HER2- metastatic breast cancer (with letrozole)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2030,
+       "modality": "small_molecule",
+       "name": "Atirmociclib (PF-07220060)",
+       "nct_ids": [
+        "NCT06760637"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
+        "period": "peak (RBC estimate, reported 2026-03-17)",
         "quote": "He estimates peak sales of $2.6 billion for the medicine, with an expected launch in 2027.",
         "scale": "bn",
-        "source_url": "https://www.biopharmadive.com/news/pfizer-atirmociclib-breast-cancer-phase-2-fourlight/742686/",
+        "source_url": "https://www.biopharmadive.com/news/pfizer-breast-cancer-atirmociclib-cdk-results/814919/",
         "value": 2.6
        },
        "phase": "phase_3",
-       "ptrs": null,
-       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+       "primary_completion": "2029-01-02",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020, all indications); oncology below the all-indication average",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.4
+       },
+       "ptrs_basis": "BIO/Informa Phase III->approval base rate cut for oncology (~0.40); CDK4/6 class precedent in 1L HR+ mBC and the positive Phase 2 FourLight-1 (40% reduction in progression/death risk, March 2026) support the upper end of the oncology range. The 2027 launch in the quote is stale: FourLight-1 was downgraded to Phase 2 and the pivotal 1L FourLight-3 (NCT06760637) completes 2029-01-02, so the launch floor is 2030-11."
       },
       {
-       "indication": "Metastatic castration-resistant prostate cancer (mCRPC)",
-       "launch_year": null,
-       "name": "Mevrometostat",
+       "aliases": [
+        "berobenatide",
+        "MET-097i",
+        "MET097",
+        "MET-097",
+        "PF-08653944",
+        "VESPER-4",
+        "VESPER-5",
+        "VESPER-6"
+       ],
+       "indication": "Obesity / chronic weight management (monthly GLP-1 receptor agonist), incl. T2D and obstructive sleep apnea studies",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2029,
+       "modality": "biologic",
+       "name": "Berobenatide (MET-097i, PF-08653944)",
+       "nct_ids": [
+        "NCT07311850",
+        "NCT07400653",
+        "NCT07595549"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "The brokerage forecasts peak sales of about $1.2 billion and $2.7 billion, respectively, for the two programs.",
+        "period": "peak (analysts, reported 2026-09-02)",
+        "quote": "Pfizer is also developing a promising GLP-1 weight-loss candidate, berobenatide, that could generate $5 billion in peak sales, according to some analysts",
         "scale": "bn",
-        "source_url": "https://www.investing.com/news/stock-market-news/pfizer-upgraded-by-rbc-as-valuation-resets-ahead-of-key-pipeline-catalysts-3475960",
-        "value": 2.7
+        "source_url": "https://www.fool.com/investing/2026/09/02/should-you-buy-pfizer-stock-below-30/",
+        "value": 5.0
        },
        "phase": "phase_3",
+       "primary_completion": "2027-09-21",
        "ptrs": {
-        "period": "Phase 3 MEVPRO-1",
-        "quote": "Key opinion leaders assigned a 60% probability of success to MEVPRO-1.",
-        "source_url": "https://www.investing.com/news/stock-market-news/cantor-fitzgerald-reiterates-overweight-on-oric-pharmaceuticals-stock-93CH-3453303",
-        "value": 0.6
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020); metabolic/endocrine above average; GLP-1 mechanism validated",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.7
        },
-       "ptrs_basis": "Survey of key opinion leaders evaluating Phase 3 MEVPRO-1 study"
+       "ptrs_basis": "BIO Phase III->approval ~0.58 raised for a validated GLP-1 mechanism and positive Phase 2b VESPER-1/VESPER-3 data (up to 12.3% placebo-adjusted weight loss at week 28 on the medium monthly Phase 3 dose; Q2 2026 call). Pfizer targets a first approval in 2028, but the earliest registered Phase 3 primary completion (VESPER-4 NCT07311850, 2027-09-21) + 22 months gives a 2029 floor. Pfizer's pipeline classes it '(Biologic)'; if regulated as an NDA peptide, US exclusivity would be 5y rather than 12y."
       },
       {
-       "indication": "Lyme disease prevention",
-       "launch_year": 2027,
-       "name": "VLA15",
+       "aliases": [
+        "PF-08634404",
+        "SSGJ-707",
+        "PF'4404",
+        "Symbiotic-Lung-01",
+        "Symbiotic-GI-03"
+       ],
+       "indication": "1L NSCLC, 1L colorectal, SCLC, gastroesophageal and endometrial cancer (PD-1xVEGF bispecific)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2031,
+       "modality": "biologic",
+       "name": "PF-08634404 (PF'4404, SSGJ-707)",
+       "nct_ids": [
+        "NCT07222566",
+        "NCT07222800",
+        "NCT07578649"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "The CEO said the annual peak sales estimate is “certainly north of” $1 billion.",
+        "period": "eventual annual sales (reported 2026-09-02)",
+        "quote": "Oncology candidates such as PF'4404, which is being developed across several indications, could eventually generate well over $1 billion in annual sales.",
         "scale": "bn",
-        "source_url": "https://endpts.com/valneva-and-pfizer-eye-2027-launch-for-partnered-lyme-disease-vaccine/",
+        "source_url": "https://www.fool.com/investing/2026/09/02/should-you-buy-pfizer-stock-below-30/",
         "value": 1.0
        },
        "phase": "phase_3",
-       "ptrs": null,
-       "ptrs_basis": "Vaccines/infectious disease Phase 3 benchmark 65-75%"
+       "primary_completion": "2029-02-27",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020, all indications); oncology below the all-indication average",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.35
+       },
+       "ptrs_basis": "BIO Phase III->approval base cut for oncology; the PD-1xVEGF class has positive China Phase 3s (ivonescimab) but mixed Western survival data, and Symbiotic-Lung-01 is head-to-head vs pembrolizumab + chemotherapy. The peak is a floor ('well over $1 billion'); no named single-asset broker peak was found. Pfizer pays 3SBio tiered double-digit royalties. Launch floor = 2029-02-27 + 22 months = 2030-12; set 2031."
       },
       {
-       "indication": "Multiple myeloma",
-       "launch_year": 2023,
-       "name": "Elrexfio (elranatamab)",
+       "aliases": [
+        "PF-07307405",
+        "VLA15",
+        "LB6V",
+        "Lyme",
+        "VALOR"
+       ],
+       "indication": "Lyme disease prevention (vaccine), age 5+",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2028,
+       "modality": "biologic",
+       "name": "Lyme disease vaccine (PF-07307405, LB6V, formerly VLA15)",
+       "nct_ids": [
+        "NCT05477524"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": "2027-08-13",
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "The company estimates that elranatamab could generate $4 billion in peak sales.",
+        "period": "peak (analysts, reported 2026-04-01)",
+        "quote": "Although a Lyme disease vaccine won't reach the astronomical heights of Pfizer's COVID-19 shot, it could achieve $1 billion in annual sales at its peak, according to analysts.",
         "scale": "bn",
-        "source_url": "https://www.drugdiscoverytrends.com/pfizers-elranatamab-wins-priority-review-from-fda-for-multiple-myeloma/",
-        "value": 4.0
+        "source_url": "https://www.pharmavoice.com/news/pfizer-valneva-lyme-disease-tick-vaccine/816308/",
+        "value": 1.0
        },
-       "phase": "approved",
-       "ptrs": null,
-       "ptrs_basis": "Approved pre-peak therapy undergoing Phase 3 registrational studies for earlier lines of therapy (oncology Phase 3 benchmark 50-60%)"
-      },
-      {
-       "indication": "Ulcerative colitis",
-       "launch_year": 2023,
-       "name": "Velsipity (etrasimod)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "Peak",
-        "quote": "Analysts have estimated that peak sales for the drug, which is expected to compete with Bristol Myers Squibb's S1P receptor modulator Zeposia (ozanimod), could top $3 billion a year.",
-        "scale": "bn",
-        "source_url": "https://firstwordpharma.com/story/5790409",
-        "value": 3.0
+       "phase": "filed",
+       "primary_completion": "2026-01-07",
+       "ptrs": {
+        "period": "2026",
+        "quote": "the pre-determined statistical criterion (95% confidence interval lower bound >20) was not met in the first pre-specified analysis",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1836564/000162828026020495/lymephase3readoutpressrele.htm",
+        "value": 0.8
        },
-       "phase": "approved",
-       "ptrs": null,
-       "ptrs_basis": "Approved pre-peak drug with ongoing Phase 3 trials in Crohn's disease and other immuno-inflammatory indications"
-      },
-      {
-       "indication": "ER-positive, HER2-negative metastatic breast cancer",
-       "launch_year": 2026,
-       "name": "Vepdegestrant",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "FY2036E",
-        "quote": "The firm forecasts $1.1 billion in peak sales for the drug in 2036.",
-        "scale": "bn",
-        "source_url": "https://www.biospace.com/fda-clears-pfizer-arvinas-novel-breast-cancer-therapy-despite-mixed-data",
-        "value": 1.1
-       },
-       "phase": "phase_3",
-       "ptrs": null,
-       "ptrs_basis": "oncology Phase 3 benchmark 50-60%"
+       "ptrs_basis": "BIO/Informa filed->approval ~0.90 cut to 0.80 because VALOR (NCT05477524, completed; 73.2-74.8% efficacy) missed its pre-specified statistical criterion in the first analysis on low case accrual (Valneva H1 2026 report: criterion met in the second analysis). EMA validated the MAA on 2026-08-14; no US BLA acceptance found. pdufa_date is NOT a PDUFA: it is the end of Valneva's stated window ('Regulatory decisions expected in the next twelve months', H1 2026 report dated 2026-08-13, https://www.sec.gov/Archives/edgar/data/0001836564/000162828026056525/a2026_08x13xvlaxh1x2026xpr.htm). Launch 2028 = first tick season after a decision by mid/late 2027. Peak is gross product sales; Pfizer pays Valneva tiered 14-22% royalties plus up to $100m in sales milestones."
       }
      ],
-     "notes": "Pipeline includes late-stage and recently approved pre-peak assets with verifiable peak annual sales forecasts from sell-side equity analysts or company management guidance. Fixed financial anchors referenced: reported currency USD, latest annual revenue USD 62.58 bn."
+     "excluded_assets": [
+      {
+       "name": "Vepdegestrant (Veppanu, ARV-471, PF-07850327)",
+       "reason": "approved by FDA 2026-05-01 (ESR1m ER+/HER2- advanced breast cancer) and out-licensed by Arvinas/Pfizer to Rigel in May 2026 ($85m upfront/transition, up to $320m milestones, tiered royalties); Pfizer no longer commercializes it -- royalty/milestone stream only, not an rNPV asset (VERITAC-3 NCT05909397 continues)"
+      },
+      {
+       "name": "Sigvotatug vedotin (PF-08046047, SGN-B6A)",
+       "reason": "no sourced peak sales: Phase 3 Be6A Lung-01 / SigVie-002 (2L+ NSCLC) missed OS on 2026-06-22 and the intangible was impaired in Q2 2026; the 1L PD-L1-high Phase 3 with pembrolizumab (NCT06758401, PC 2028-09) continues; no post-failure single-asset peak published"
+      },
+      {
+       "name": "Sasanlimab (PF-06801591)",
+       "reason": "filings withdrawn (US Dec 2025, EU 2026-02-13) after regulator concerns about the CREST design and analysis; no resubmission timeline; no sourced peak sales"
+      },
+      {
+       "name": "Tilrekimig (PF-07275315)",
+       "reason": "no sourced peak sales (Phase 3 programme in atopic dermatitis incl. a head-to-head vs dupilumab, asthma and COPD starting H2 2026 after positive Phase 2)"
+      },
+      {
+       "name": "Dazukibart (PF-06823859)",
+       "reason": "no sourced peak sales (Phase 3 dermatomyositis/polymyositis, orphan)"
+      },
+      {
+       "name": "Osivelotor (PF-07940367, GBT021601, GBT601)",
+       "reason": "no sourced peak sales (Phase 2/3 sickle cell disease; only a pre-withdrawal Oxbryta + GBT601 combined figure exists)"
+      },
+      {
+       "name": "Ponsegromab (PF-06946860)",
+       "reason": "no sourced peak sales (Phase 2/3 cancer cachexia; analysts only say 'multi-billion-dollar blockbuster potential')"
+      },
+      {
+       "name": "Ibuzatrelvir (PF-07817883)",
+       "reason": "no sourced peak sales (Phase 3 COVID-19)"
+      },
+      {
+       "name": "Prifetrastat (PF-07248144)",
+       "reason": "no sourced peak sales (Phase 3 KATSIS-1, 2L/3L HR+/HER2- metastatic breast cancer)"
+      },
+      {
+       "name": "Fetrastobart vedotin (PF-08046054, SGN-PDL1V)",
+       "reason": "no sourced peak sales (Phase 3 PADL1NK-005, 2L+ NSCLC)"
+      },
+      {
+       "name": "Disitamab vedotin (PF-08046051, RC48)",
+       "reason": "no sourced peak sales (Phase 3 DV-001, 1L HER2-expressing urothelial cancer with pembrolizumab; co-developed with RemeGen; previously impaired $200m)"
+      },
+      {
+       "name": "MET-233i (PF-08653945) amylin analog, alone and with berobenatide",
+       "reason": "Phase 2; only a combined Metsera figure (MET-097i + MET-233i, 'more than $5 billion') exists"
+      },
+      {
+       "name": "PG4 multivalent pneumococcal conjugate vaccine (25vPnC, PF-07872412)",
+       "reason": "no sourced peak sales (pivotal pediatric Phase 3 started May 2026; successor to Prevnar 20)"
+      },
+      {
+       "name": "Multivalent Group B streptococcus maternal vaccine (GBS6, PF-06760805)",
+       "reason": "no sourced peak sales (Phase 3 BEATRIX)"
+      },
+      {
+       "name": "C. difficile vaccine, updated formulation (C.difficile vaccine, PF-07831694)",
+       "reason": "no sourced peak sales (Phase 3 BEETHOVEN, age 65+)"
+      },
+      {
+       "name": "Danuglipron (PF-06882961)",
+       "reason": "discontinued April 2025 (potential drug-induced liver injury)"
+      },
+      {
+       "name": "Beqvez (fidanacogene elaparvovec, PF-06838435)",
+       "reason": "approved hemophilia B gene therapy; Pfizer ended development and commercialization (Feb 2025); long-term follow-up only"
+      },
+      {
+       "name": "Giroctocogene fitelparovec (PF-07055480) hemophilia A gene therapy",
+       "reason": "discontinued by Pfizer (Sangamo collaboration ended); long-term follow-up only"
+      },
+      {
+       "name": "Fordadistrogene movaparvovec (PF-06939926) DMD gene therapy",
+       "reason": "discontinued (Phase 3 CIFFREO missed its primary endpoint, 2024); follow-up only"
+      },
+      {
+       "name": "Testing of hepatic AAV vector integration (NCT05568719)",
+       "reason": "long-term safety follow-up study of discontinued hemophilia gene therapies; not a product"
+      },
+      {
+       "name": "Ritlecitinib higher dose / lower dose arms; Ritlecitinib 50 mg and Ritlecitinib 100 mg arms",
+       "reason": "label expansion of Litfulo (ritlecitinib): alopecia areata and vitiligo dose-arm studies NCT07029711, NCT07029828, NCT06873945, NCT07733765"
+      },
+      {
+       "name": "Oxbryta (voxelotor)",
+       "reason": "withdrawn from all markets (Sept 2024); revenue projection removed in Q2 2026"
+      }
+     ],
+     "notes": "Rebuilt 2026-10-05 from PFE_current.json (as of 2026-09-26). Changes vs the stored entry: (1) Padcev, Elrexfio and Velsipity removed from assets -- marketed products whose sales are already in operating revenue; now in approved_portfolio. (2) Vepdegestrant moved to excluded: FDA-approved 2026-05-01 as Veppanu and out-licensed to Rigel in May 2026 (the stored entry still carried it as Phase 3, launch 2026, $1.1bn peak in 2036). (3) Mevrometostat: the stored $2.7bn quote (RBC: 'about $1.2 billion and $2.7 billion, respectively, for the two programs') did not name the asset, and the stored 60% PTRS was a KOL survey quoted in an ORIC Pharmaceuticals note; replaced with Guggenheim 2026-03-24 ($4.6bn unadjusted peak across its three indications; MEVPRO-1 PoS 75%). Launch 2028 from the Dec 2026 MEVPRO-2/MEVPRO-1 completions; MEVPRO-1 readout guided Q4 2026. (4) Atirmociclib: launch moved from 2027 (taken from the RBC quote) to 2030 -- the pivotal study is FourLight-3 1L (NCT06760637, PC 2029-01-02); FourLight-1 was downgraded to Phase 2. (5) Lyme vaccine (PF-07307405 / VLA15): VALOR read out 2026-03-23 at 73.2-74.8% efficacy but missed its pre-specified CI criterion in the first analysis; EMA validated the MAA 2026-08-14; phase now 'filed'. No exact EMA/FDA decision date has been published, so pdufa_date 2027-08-13 is the end of Valneva's 'next twelve months' window. The stored 'certainly north of $1 billion' quote (Valneva CEO, older Endpoints article) replaced by an April 2026 analyst figure. (6) New assets: berobenatide (Metsera, acquired Nov 2025; Pfizer targets a first approval in 2028, but the registry floor is 2029) and PF-08634404 (3SBio, licensed July 2025). Other changes in the last 6 months: sigvotatug vedotin missed OS in 2L+ NSCLC (2026-06-22; part of a $4.3bn Q2 impairment with the Oxbryta revenue removal); sasanlimab filings withdrawn (US Dec 2025, EU Feb 2026); Talzenna + Xtandi (TALAPRO-3, DDR-deficient mCSPC) PDUFA Q4 2026 and Tukysa HER2CLIMB-05 in registration (label expansions); Litfulo positive Phase 3 in vitiligo; Padcev MIBC label expanded; Hympavzi inhibitor label expanded; Ibrance + trastuzumab (PATINA) approved; tilrekimig Phase 3 starts H2 2026. Figures read through a summarising fetch or a search snippet rather than a full page: the Guggenheim quotes (investing.com), the Motley Fool quotes (berobenatide, PF'4404), and the atirmociclib quote (the page says 'He'; search results attribute the $2.6bn to RBC's Trung Huynh). Peak values are gross single-asset sales; the Lyme vaccine carries 14-22% royalties to Valneva and PF-08634404 double-digit royalties to 3SBio. No patent expiries were sourced (left null)."
     },
     "engine_preview": {
      "assets": [
       {
-       "indication": "Urothelial / Bladder cancer",
-       "launch_year": 2019,
-       "name": "Padcev (enfortumab vedotin)",
-       "patent_expiry": 2033,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 3000000000.0,
-       "phase": "approved",
+       "economic_share": null,
+       "indication": "Metastatic prostate cancer (mCRPC post-abiraterone, 1L mCRPC, mCSPC) with enzalutamide",
+       "launch_year": 2028,
+       "name": "Mevrometostat (PF-06821497)",
+       "patent_expiry": null,
+       "peak_sales_period": "peak, unadjusted (Guggenheim, est. dated 2026-03-24)",
+       "peak_sales_usd": 4600000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Asset-specific broker PoS for the lead study MEVPRO-1 (Phase 1b/2 HR ~0.5 vs enzalutamide alone); MEVPRO-2/3 carry 55%/25% in the same note. Above the engine's oncology Phase 3 table, so the engine holds it at the +15pp band edge. MEVPRO-1 readout guided Q4 2026 (event-driven, 302 PFS events; Q2 2026 call). Launch floor = earliest registered primary completion (MEVPRO-2 NCT06629779, 2026-12-02) + 22 months = 2028-10.",
+       "ptrs_override": 0.42115,
        "source": "gemini_accepted"
       },
       {
-       "indication": "HR-positive, HER2-negative metastatic breast cancer",
-       "launch_year": 2027,
-       "name": "Atirmociclib",
+       "economic_share": null,
+       "indication": "1L HR+/HER2- metastatic breast cancer (with letrozole)",
+       "launch_year": 2030,
+       "name": "Atirmociclib (PF-07220060)",
        "patent_expiry": null,
-       "peak_sales_period": "Peak",
+       "peak_sales_period": "peak (RBC estimate, reported 2026-03-17)",
        "peak_sales_usd": 2600000000.0,
        "phase": "phase_3",
+       "ptrs_basis": "BIO/Informa Phase III->approval base rate cut for oncology (~0.40); CDK4/6 class precedent in 1L HR+ mBC and the positive Phase 2 FourLight-1 (40% reduction in progression/death risk, March 2026) support the upper end of the oncology range. The 2027 launch in the quote is stale: FourLight-1 was downgraded to Phase 2 and the pivotal 1L FourLight-3 (NCT06760637) completes 2029-01-02, so the launch floor is 2030-11.",
+       "ptrs_override": 0.4,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Metastatic castration-resistant prostate cancer (mCRPC)",
-       "launch_year": null,
-       "name": "Mevrometostat",
+       "economic_share": null,
+       "indication": "Obesity / chronic weight management (monthly GLP-1 receptor agonist), incl. T2D and obstructive sleep apnea studies",
+       "launch_year": 2029,
+       "name": "Berobenatide (MET-097i, PF-08653944)",
        "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 2700000000.0,
+       "peak_sales_period": "peak (analysts, reported 2026-09-02)",
+       "peak_sales_usd": 5000000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Survey of key opinion leaders evaluating Phase 3 MEVPRO-1 study",
-       "ptrs_override": 0.6,
+       "ptrs_basis": "BIO Phase III->approval ~0.58 raised for a validated GLP-1 mechanism and positive Phase 2b VESPER-1/VESPER-3 data (up to 12.3% placebo-adjusted weight loss at week 28 on the medium monthly Phase 3 dose; Q2 2026 call). Pfizer targets a first approval in 2028, but the earliest registered Phase 3 primary completion (VESPER-4 NCT07311850, 2027-09-21) + 22 months gives a 2029 floor. Pfizer's pipeline classes it '(Biologic)'; if regulated as an NDA peptide, US exclusivity would be 5y rather than 12y.",
+       "ptrs_override": 0.7,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Lyme disease prevention",
-       "launch_year": 2027,
-       "name": "VLA15",
+       "economic_share": null,
+       "indication": "1L NSCLC, 1L colorectal, SCLC, gastroesophageal and endometrial cancer (PD-1xVEGF bispecific)",
+       "launch_year": 2031,
+       "name": "PF-08634404 (PF'4404, SSGJ-707)",
        "patent_expiry": null,
-       "peak_sales_period": "Peak",
+       "peak_sales_period": "eventual annual sales (reported 2026-09-02)",
        "peak_sales_usd": 1000000000.0,
        "phase": "phase_3",
+       "ptrs_basis": "BIO Phase III->approval base cut for oncology; the PD-1xVEGF class has positive China Phase 3s (ivonescimab) but mixed Western survival data, and Symbiotic-Lung-01 is head-to-head vs pembrolizumab + chemotherapy. The peak is a floor ('well over $1 billion'); no named single-asset broker peak was found. Pfizer pays 3SBio tiered double-digit royalties. Launch floor = 2029-02-27 + 22 months = 2030-12; set 2031.",
+       "ptrs_override": 0.35,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Multiple myeloma",
-       "launch_year": 2023,
-       "name": "Elrexfio (elranatamab)",
+       "economic_share": null,
+       "indication": "Lyme disease prevention (vaccine), age 5+",
+       "launch_year": 2028,
+       "name": "Lyme disease vaccine (PF-07307405, LB6V, formerly VLA15)",
        "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 4000000000.0,
-       "phase": "approved",
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Ulcerative colitis",
-       "launch_year": 2023,
-       "name": "Velsipity (etrasimod)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 3000000000.0,
-       "phase": "approved",
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "ER-positive, HER2-negative metastatic breast cancer",
-       "launch_year": 2026,
-       "name": "Vepdegestrant",
-       "patent_expiry": null,
-       "peak_sales_period": "FY2036E",
-       "peak_sales_usd": 1100000000.0,
-       "phase": "phase_3",
+       "peak_sales_period": "peak (analysts, reported 2026-04-01)",
+       "peak_sales_usd": 1000000000.0,
+       "phase": "filed",
+       "ptrs_basis": "BIO/Informa filed->approval ~0.90 cut to 0.80 because VALOR (NCT05477524, completed; 73.2-74.8% efficacy) missed its pre-specified statistical criterion in the first analysis on low case accrual (Valneva H1 2026 report: criterion met in the second analysis). EMA validated the MAA on 2026-08-14; no US BLA acceptance found. pdufa_date is NOT a PDUFA: it is the end of Valneva's stated window ('Regulatory decisions expected in the next twelve months', H1 2026 report dated 2026-08-13, https://www.sec.gov/Archives/edgar/data/0001836564/000162828026056525/a2026_08x13xvlaxh1x2026xpr.htm). Launch 2028 = first tick season after a decision by mid/late 2027. Peak is gross product sales; Pfizer pays Valneva tiered 14-22% royalties plus up to $100m in sales milestones.",
+       "ptrs_override": 0.8274999999999999,
        "source": "gemini_accepted"
       }
      ],
@@ -8891,28 +11233,87 @@
        "USD bn",
        "USD bn",
        "USD bn",
-       "USD bn",
-       "USD bn",
        "USD bn"
       ],
       "dropped_assets": [],
+      "ptrs_banded": [
+       "Mevrometostat (PF-06821497): 0.75 -> 0.42 (held at table 0.27 + 0.15)",
+       "Lyme disease vaccine (PF-07307405, LB6V, formerly VLA15): 0.80 -> 0.83 (held at table 0.98 - 0.15)"
+      ],
       "ptrs_ignored": []
      }
     },
     "fmp_context_usd": {
      "company": "Pfizer Inc.",
      "depreciation_and_amortization": 6592000000.0,
-     "market_cap": 163402944800.0,
+     "market_cap": 158444432000.0,
      "net_ppe": 21530000000.0,
      "operating_cash_flow": 11705000000.0,
      "period": "2025-12-31",
-     "revenue": 62579000000.0
+     "revenue": 62579000000.0,
+     "shares": 5699440000.0
     },
     "grounding_urls": [],
-    "model": "gemini-3.8-flash",
+    "model": "verified research (owner re-check, primary sources)",
     "ok": true,
-    "secs": 26.1,
-    "value_usd": 17400000000.0
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2019,
+       "name": "Padcev (enfortumab vedotin)",
+       "peak": 3.0,
+       "phase": "approved",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2027,
+       "name": "Atirmociclib",
+       "peak": 2.6,
+       "phase": "phase_3",
+       "ptrs": null
+      },
+      {
+       "launch_year": null,
+       "name": "Mevrometostat",
+       "peak": 2.7,
+       "phase": "phase_3",
+       "ptrs": 0.6
+      },
+      {
+       "launch_year": 2027,
+       "name": "VLA15",
+       "peak": 1.0,
+       "phase": "phase_3",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2023,
+       "name": "Elrexfio (elranatamab)",
+       "peak": 4.0,
+       "phase": "approved",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2023,
+       "name": "Velsipity (etrasimod)",
+       "peak": 3.0,
+       "phase": "approved",
+       "ptrs": null
+      },
+      {
+       "launch_year": 2026,
+       "name": "Vepdegestrant",
+       "peak": 1.1,
+       "phase": "phase_3",
+       "ptrs": null
+      }
+     ],
+     "built_at": "2026-09-26T14:42:52+00:00",
+     "model": "gemini-3.8-flash",
+     "value_usd": 17400000000.0
+    },
+    "secs": null,
+    "value_usd": 14200000000.0
    }
   },
   "PLD": {
@@ -10049,7 +12450,7 @@
      "revenue_latest_usd_bn": 12.07
     },
     "basis": "estimate",
-    "built_at": "2026-10-05T01:01:37+00:00",
+    "built_at": "2026-10-05T02:45:22+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
@@ -10064,12 +12465,12 @@
      },
      {
       "check": "launch years plausible",
-      "detail": "2025 (approved), 2025 (approved), 2024 (approved), 2025 (approved), 2026, 2028, 2029, 2028",
+      "detail": "2025 (approved), 2025 (approved), 2024 (approved), 2025 (approved), 2026, 2028, 2029, 2029",
       "ok": true
      },
      {
       "check": "PTRS cited and in range",
-      "detail": "8 of 8 carry a usable PTRS",
+      "detail": "8 of 8 carry a usable PTRS; banded: Atumelnant (CRN04894): 0.65 -> 0.64 (held at table 0.49 + 0.15)",
       "ok": true
      },
      {
@@ -10079,19 +12480,64 @@
      },
      {
       "check": "sources resolve to canonical URLs",
-      "detail": "no grounding wrappers (owner re-check, direct URLs)",
+      "detail": "no grounding wrappers",
+      "ok": true
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Alyftrek (vanzacaftor/tezacaftor/deutivacaftor), Casgevy (exagamglogene autotemcel), Povetacicept (ALPN-303), Inaxaplin (VX-147), Zimislecel (VX-880)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "17 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
       "ok": true
      }
     ],
     "company": "Vertex Pharmaceuticals Incorporated",
     "data": {
+     "approved_portfolio": [
+      "Trikafta/Kaftrio (elexacaftor/tezacaftor/ivacaftor; ELX/TEZ/IVA; VX-445/VX-661/VX-770)",
+      "Kalydeco (ivacaftor; VX-770)",
+      "Symdeko/Symkevi (tezacaftor/ivacaftor; TEZ/IVA; VX-661/VX-770)",
+      "Orkambi (lumacaftor/ivacaftor; LUM/IVA; VX-809/VX-770)",
+      "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor; VX-121/VX-661/VX-561)",
+      "Journavx (suzetrigine; VX-548)",
+      "Casgevy (exagamglogene autotemcel; CTX001; exa-cel)",
+      "Palsonify (paltusotine)"
+     ],
      "as_of": "2026-10-05",
      "assets": [
       {
+       "aliases": [
+        "VX-121/VX-661/VX-561",
+        "VX-121/VX-661/CTP-656",
+        "VX-121/TEZ/D-IVA",
+        "VNZ/TEZ/D-IVA",
+        "vanzacaftor/tezacaftor/deutivacaftor",
+        "VX-121",
+        "Alyftrek"
+       ],
        "indication": "Cystic fibrosis",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2025,
+       "modality": "small_molecule",
        "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
-       "patent_expiry": 2043,
+       "nct_ids": [],
+       "orphan": true,
+       "patent_expiry": 2039,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "2030E",
@@ -10101,19 +12547,32 @@
         "value": 8.3
        },
        "phase": "approved",
+       "primary_completion": null,
        "ptrs": {
         "period": "2024",
         "quote": "Vertex won FDA approval for its newest cystic fibrosis treatment, Alyftrek, in late December 2024",
         "source_url": "https://www.fiercepharma.com/pharma/top-10-most-anticipated-drug-launches-2025",
         "value": 1.0
        },
-       "ptrs_basis": "Approved product; commercial launch underway"
+       "ptrs_basis": "Approved product; commercial launch underway. Patent expiry 2039 = basic product patent per Vertex FY2025 10-K (https://www.sec.gov/Archives/edgar/data/875320/000087532026000056/vrtx-20251231.htm). Registry CF Phase 3s NCT05444257, NCT05422222, NCT05844449 are studies of this product."
       },
       {
+       "aliases": [
+        "VX-548",
+        "suzetrigine",
+        "Journavx",
+        "SUZ"
+       ],
        "indication": "Moderate-to-severe acute pain",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2025,
+       "modality": "small_molecule",
        "name": "Suzetrigine (Journavx / VX-548)",
+       "nct_ids": [],
+       "orphan": false,
        "patent_expiry": 2040,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "2030E",
@@ -10123,19 +12582,32 @@
         "value": 3.0
        },
        "phase": "approved",
+       "primary_completion": null,
        "ptrs": {
         "period": "2025",
         "quote": "FDA approved Journavx in January 2025, making it the first approved drug in a new class of non-opioid pain medicine.",
         "source_url": "https://www.nextinsight.net/index.php/story-archive-mainmenu-60/948-2026/16010-ix-biopharma-why-investors-are-paying-s600m-for-future-value",
         "value": 1.0
        },
-       "ptrs_basis": "Approved product for acute pain; Phase 3 underway for diabetic peripheral neuropathy"
+       "ptrs_basis": "Approved product for acute pain. The three Phase 3 DPN studies (NCT06696443, NCT06628908, NCT07231419) are label expansions of this product (enrollment to complete by end-2026 per the Q2 2026 release); no separately sourced DPN peak. Patent 2040 per Vertex FY2025 10-K."
       },
       {
+       "aliases": [
+        "CTX001",
+        "exa-cel",
+        "exagamglogene autotemcel",
+        "Casgevy"
+       ],
        "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2024,
+       "modality": "cell_gene",
        "name": "Casgevy (exagamglogene autotemcel)",
-       "patent_expiry": null,
+       "nct_ids": [],
+       "orphan": true,
+       "patent_expiry": 2035,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "Peak",
@@ -10145,41 +12617,66 @@
         "value": 2.2
        },
        "phase": "approved",
+       "primary_completion": null,
        "ptrs": {
         "period": "2024",
         "quote": "CASGEVY is the first approved therapy in the U.S. that uses CRISPR",
         "source_url": "https://www.nanalyze.com/2024/07/gene-editing-stocks/",
         "value": 1.0
        },
-       "ptrs_basis": "Approved product; commercial ramp underway"
+       "ptrs_basis": "Approved product; commercial ramp underway. Registry Phase 3s NCT05356195, NCT05477563, NCT05329649, NCT04208529 are pediatric / long-term studies of this product. 2035 = US expiry reflecting regulatory exclusivity per Vertex FY2025 10-K."
       },
       {
+       "aliases": [
+        "paltusotine",
+        "CRN00808",
+        "Palsonify"
+       ],
        "indication": "Acromegaly",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2025,
+       "modality": "small_molecule",
        "name": "Palsonify (paltusotine)",
-       "patent_expiry": null,
+       "nct_ids": [],
+       "orphan": true,
+       "patent_expiry": 2037,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "Peak",
-        "quote": "Jefferies: CAH $2 billion to $3 billion, Cushing's another $1 billion to $2 billion, Palsonify the remaining $1 billion",
+        "quote": "with the remaining $1 billion to be generated by Palsonify in acromegaly.",
         "scale": "bn",
         "source_url": "https://www.genengnews.com/topics/translational-medicine/vertex-eyes-expansion-beyond-cystic-fibrosis-with-planned-10b-crinetics-buyout/",
         "value": 1.0
        },
        "phase": "approved",
+       "primary_completion": null,
        "ptrs": {
         "period": "2025",
         "quote": "Palsonify approved by the FDA (September 2025) and in the EU",
         "source_url": "https://www.sec.gov/Archives/edgar/data/0000875320/000087532026000256/ex-991_q22026.htm",
         "value": 1.0
        },
-       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01)"
+       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01). Patent 2037 = composition of matter per Crinetics FY2025 10-K (https://www.sec.gov/Archives/edgar/data/1658247/000165824726000012/crnx-20251231.htm)."
       },
       {
+       "aliases": [
+        "ALPN-303",
+        "povetacicept"
+       ],
        "indication": "IgA nephropathy (IgAN)",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2026,
+       "modality": "biologic",
        "name": "Povetacicept (ALPN-303)",
-       "patent_expiry": 2038,
+       "nct_ids": [
+        "NCT06564142"
+       ],
+       "orphan": false,
+       "patent_expiry": 2041,
+       "pdufa_date": "2026-11-30",
        "peak_sales": {
         "currency": "USD",
         "period": "2039E",
@@ -10189,98 +12686,180 @@
         "value": 4.3
        },
        "phase": "filed",
+       "primary_completion": "2028-01-30",
        "ptrs": {
         "period": "2026",
-        "quote": "NDA/BLA to approval 90.6% (BIO/Informa 2011-2020); BLA accepted 2026-06-01 with Breakthrough designation and priority review, PDUFA 2026-11-30",
-        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "quote": "U.S. FDA accepted the BLA submission for accelerated approval of povetacicept for adults with IgAN ... PDUFA target action date of November 30, 2026 (BIO/Informa 2011-2020 NDA/BLA-to-approval base rate 90.6%)",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0000875320/000087532026000256/ex-991_q22026.htm",
         "value": 0.9
        },
-       "ptrs_basis": "Filed BLA (accelerated approval), positive Phase 3 RAINIER interim; filing-to-approval base rate. Exclusivity: 12-year BPCIA from a Nov-2026 approval (~2038); patents 2036-2043 before extension. Low case: William Blair $2.1bn peak"
+       "ptrs_basis": "Filed BLA (accelerated approval on the RAINIER interim; RAINIER NCT06564142 full primary completion 2028-01-30), Breakthrough + priority review; filing-to-approval base rate ~0.90. Exclusivity: patent_expiry 2041 from the Alpine Immune Sciences FY2023 10-K, 'we have been issued composition of matter intellectual property that covers povetacicept through at least 2041' (https://www.sec.gov/Archives/edgar/data/1626199/000162619924000048/alpn-20231231.htm); this covers the 2039E peak (BPCIA 12y from 2026 = 2038 alone would not). Low case: William Blair $2.1bn peak. OLYMPUS pMN Phase 2/3 (NCT07204275) and the long-term IgAN extension (NCT07807995) are label-expansion / extension studies of this asset."
       },
       {
+       "aliases": [
+        "VX-147",
+        "inaxaplin"
+       ],
        "indication": "APOL1-mediated kidney disease (AMKD)",
+       "interim_readout": "2027-02",
+       "interim_source_url": "https://news.vrtx.com/news-releases/news-release-details/vertex-announces-positive-results-phase-2b-amplified-study",
        "launch_year": 2028,
+       "modality": "small_molecule",
        "name": "Inaxaplin (VX-147)",
-       "patent_expiry": null,
+       "nct_ids": [
+        "NCT05312879"
+       ],
+       "orphan": false,
+       "patent_expiry": 2040,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "2035E",
-        "quote": "Leerink: $1.2 billion in 2035",
+        "quote": "$1.2 billion in 2035",
         "scale": "bn",
         "source_url": "https://www.biospace.com/drug-development/vertex-opens-up-larger-kidney-disease-opportunity-with-mid-stage-readout",
         "value": 1.2
        },
        "phase": "phase_3",
+       "primary_completion": "2028-06-02",
        "ptrs": {
         "period": "2026",
-        "quote": "Phase III to approval ~58% (industry base rate); positive Phase 2 data September 2026",
-        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020 base rate); positive Phase 2b AMPLIFIED results and AMPLITUDE enrollment complete, September 2026",
+        "source_url": "https://news.vrtx.com/news-releases/news-release-details/vertex-announces-positive-results-phase-2b-amplified-study",
         "value": 0.6
        },
-       "ptrs_basis": "Ph2/3 AMPLITUDE fully enrolled; 48-week interim analysis early 2027 for US accelerated approval, so filing 2027 and launch 2028"
+       "ptrs_basis": "Phase 2/3 AMPLITUDE (NCT05312879) fully enrolled. Vertex: the Week-48 interim analysis is expected in early 2027 and, if positive, will serve as the basis to seek US accelerated approval. interim_readout 2027-02 = midpoint of 'early 2027' (Q1); a readout after Feb-2027 moves the floor to 2029. Breakthrough Therapy (US); EU orphan + PRIME only, no US orphan designation found, so orphan=false. patent_expiry 2040 = US11618746B2 (Vertex, 'Inhibitors of APOL1 and methods of using same', priority 2018-12-17, anticipated expiry 2040-01-01, https://patents.google.com/patent/US11618746B2/en). Inaxaplin is a 2-aryl indole APOL1 inhibitor of the scaffold this family claims, but the patent page read did not name inaxaplin, so compound-specific coverage is NOT confirmed; without it, 5y NCE from 2028 = 2033 would not cover the 2035E peak."
       },
       {
+       "aliases": [
+        "CRN04894",
+        "atumelnant",
+        "CALM-CAH"
+       ],
        "indication": "Congenital adrenal hyperplasia (CAH)",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2029,
+       "modality": "small_molecule",
        "name": "Atumelnant (CRN04894)",
-       "patent_expiry": 2036,
+       "nct_ids": [
+        "NCT07144163"
+       ],
+       "orphan": true,
+       "patent_expiry": 2039,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "Peak",
-        "quote": "Jefferies' Dennis Ding: CAH $2 billion to $3 billion (midpoint; Cushing's, Phase 1b/2, excluded)",
+        "quote": "atumelnant in CAH is expected to generate the largest share of the projected $5 billion, as in $2 billion to $3 billion",
         "scale": "bn",
         "source_url": "https://www.genengnews.com/topics/translational-medicine/vertex-eyes-expansion-beyond-cystic-fibrosis-with-planned-10b-crinetics-buyout/",
         "value": 2.5
        },
        "phase": "phase_3",
+       "primary_completion": "2027-05",
        "ptrs": {
         "period": "2026",
         "quote": "Phase III to approval ~58% base rate, raised for strong Phase 2 data, orphan designation and a pathway validated by crinecerfont",
         "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
         "value": 0.65
        },
-       "ptrs_basis": "Adult Phase 3 CALM-CAH primary completion May 2027 -> filing late 2027, launch 2029. Exclusivity ~2036 (5-year NCE + 7-year orphan). Vertex's >$5bn is Palsonify and atumelnant COMBINED (https://crinetics.com/press-releases/vertex-to-acquire-crinetics-pharmaceuticals/)"
+       "ptrs_basis": "Peak = midpoint of the Jefferies (Dennis Ding, GEN 2026-07-07) $2-3bn for CAH alone; the $5bn in the quote is the Palsonify + atumelnant CAH + Cushing's sum and is NOT used (Cushing's is Phase 1b/2, excluded). Adult Phase 3 CALM-CAH NCT07144163 (Crinetics-sponsored), primary completion 2027-05 -> floor 2029. US orphan designation for CAH (Crinetics, 2025-08-21). patent_expiry 2039 = issued composition-of-matter patents per Crinetics FY2025 10-K (pending method/polymorph applications 2042-2046)."
       },
       {
+       "aliases": [
+        "VX-880",
+        "zimislecel",
+        "STx-02"
+       ],
        "indication": "Type 1 diabetes with severe hypoglycemia",
-       "launch_year": 2028,
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2029,
+       "modality": "cell_gene",
        "name": "Zimislecel (VX-880)",
+       "nct_ids": [
+        "NCT04786262"
+       ],
+       "orphan": false,
        "patent_expiry": 2040,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
         "period": "2032E",
-        "quote": "BMO: $900 million by 2032",
-        "scale": "bn",
+        "quote": "BMO expects worldwide peak sales of $900 million by 2032",
+        "scale": "mn",
         "source_url": "https://www.biospace.com/drug-development/vertex-cuts-diabetes-asset-but-analysts-keen-on-phase-iii-option",
-        "value": 0.9
+        "value": 900
        },
        "phase": "phase_3",
+       "primary_completion": "2027-12-31",
        "ptrs": {
         "period": "2026",
-        "quote": "Dosing paused for a manufacturing analysis then resumed; 2026 filing timeline withdrawn, updated timelines expected later in 2026",
+        "quote": "Phase 1/2/3 study of zimislecel in people with T1D continues to enroll and dose patients ... provide updated timelines ... later this year",
         "source_url": "https://www.sec.gov/Archives/edgar/data/0000875320/000087532026000256/ex-991_q22026.htm",
         "value": 0.45
        },
-       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. The BMO peak predates 2026"
+       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. Dosing was paused for a manufacturing analysis then resumed; the 2026 filing timeline was withdrawn and no interim-based filing is stated, so launch is floored on NCT04786262 primary completion 2027-12-31 + 22 months = 2029 (was 2028). The kidney-transplant Phase 3 NCT06832410 (primary completion 2026-09-17) is a supporting study, not the pivotal basis. BMO peak dated 2025-03-31 (before the pause). patent_expiry 2040 carried from the prior verified entry (not re-sourced); 12y cell/gene exclusivity from 2029 = 2041 covers the peak regardless."
       }
      ],
-     "notes": "Owner re-check 2026-10-05 of the 2026-09-26 Gemini entry: atumelnant's $5.0bn was the combined Palsonify + atumelnant figure (CAH alone $2-3bn); inaxaplin launches 2028 (interim early 2027), not 2027; povetacicept exclusivity >=2038, not 2035; PTRS sourced to stage base rates; zimislecel added; suzetrigine DPN left out (label expansion, no sourced peak); Palsonify added as approved. Approved assets are excluded from the rNPV add-on (their sales are in the operating legs)."
+     "excluded_assets": [
+      {
+       "name": "Suzetrigine DPN (VX-548)",
+       "reason": "label expansion of Journavx; three Phase 3 DPN studies enrolling to end-2026; no sourced DPN-only peak sales"
+      },
+      {
+       "name": "Povetacicept pMN OLYMPUS / gMG ETNA",
+       "reason": "label expansions of povetacicept (pMN Phase 2/3 NCT07204275; gMG Phase 2 NCT07501702); no sourced indication-specific peak sales"
+      },
+      {
+       "name": "Atumelnant Cushing's syndrome (CRN04894)",
+       "reason": "Phase 1b/2 (NCT05804669)"
+      },
+      {
+       "name": "Atumelnant pediatric CAH BALANCE-CAH",
+       "reason": "label expansion of atumelnant (Phase 2/3 NCT07159841, primary completion 2030-03); covered by the adult CAH peak"
+      },
+      {
+       "name": "VX-017 (blood type O zimislecel)",
+       "reason": "Phase 1/2; IND cleared 2026 (listed as an intervention in NCT04786262)"
+      },
+      {
+       "name": "VX-828",
+       "reason": "next-generation CF modulator; results expected 2H 2026; no sourced peak sales (CF franchise sales sit in the operating legs)"
+      },
+      {
+       "name": "VX-670",
+       "reason": "Phase 1/2 (myotonic dystrophy type 1)"
+      },
+      {
+       "name": "VX-522",
+       "reason": "Phase 1/2 (CF mRNA)"
+      },
+      {
+       "name": "VX-407",
+       "reason": "Phase 1 (ADPKD)"
+      }
+     ],
+     "notes": "Owner re-check 2026-10-05, rebuilt for the mechanical rules. Changes vs VRTX_current.json: (1) zimislecel launch 2028 -> 2029 (pivotal NCT04786262 primary completion 2027-12-31; filing timeline withdrawn in 2026, no interim-based filing stated); zimislecel peak restated as printed ($900 million = 900 mn, same figure). (2) Povetacicept patent_expiry 2038 -> 2041 (Alpine FY2023 10-K composition-of-matter coverage through at least 2041), so the 2039E S&P peak sits within exclusivity; peak kept. (3) Atumelnant patent_expiry 2036 -> 2039 (Crinetics FY2025 10-K CoM); US orphan confirmed (FDA ODD 2025-08-21); pivotal CALM-CAH = NCT07144163, primary completion 2027-05; peak quote replaced with verbatim GEN text (the earlier paraphrase named Palsonify, which fails the single-asset rule). (4) Inaxaplin: interim_readout 2027-02 (Vertex: AMPLITUDE 48-week interim early 2027 as the accelerated-approval basis); patent_expiry 2040 from the US11618746B2 family -- inaxaplin-specific coverage NOT confirmed, owner should verify. (5) Palsonify patent 2037 added (Crinetics 10-K). Last 6 months: povetacicept BLA accepted (PDUFA 2026-11-30); Crinetics acquisition closed 2026-09-01; positive AMPLIFIED Phase 2b inaxaplin data and AMPLITUDE enrollment complete (Sept 2026); zimislecel dosing paused then resumed, 2026 filing withdrawn, updated timelines due later in 2026; VX-017 IND cleared. Leerink inaxaplin and BMO zimislecel quotes were read via page-fetch summaries; a Sept-2026 Benzinga piece on William Blair's inaxaplin view returned 403. Approved assets are excluded from the rNPV add-on (their sales are in the operating legs)."
     },
     "engine_preview": {
      "assets": [
       {
+       "economic_share": null,
        "indication": "Cystic fibrosis",
        "launch_year": 2025,
        "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
-       "patent_expiry": 2043,
+       "patent_expiry": 2039,
        "peak_sales_period": "2030E",
        "peak_sales_usd": 8300000000.000001,
        "phase": "approved",
-       "ptrs_basis": "Approved product; commercial launch underway",
+       "ptrs_basis": "Approved product; commercial launch underway. Patent expiry 2039 = basic product patent per Vertex FY2025 10-K (https://www.sec.gov/Archives/edgar/data/875320/000087532026000056/vrtx-20251231.htm). Registry CF Phase 3s NCT05444257, NCT05422222, NCT05844449 are studies of this product.",
        "ptrs_override": 1.0,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "Moderate-to-severe acute pain",
        "launch_year": 2025,
        "name": "Suzetrigine (Journavx / VX-548)",
@@ -10288,79 +12867,85 @@
        "peak_sales_period": "2030E",
        "peak_sales_usd": 3000000000.0,
        "phase": "approved",
-       "ptrs_basis": "Approved product for acute pain; Phase 3 underway for diabetic peripheral neuropathy",
+       "ptrs_basis": "Approved product for acute pain. The three Phase 3 DPN studies (NCT06696443, NCT06628908, NCT07231419) are label expansions of this product (enrollment to complete by end-2026 per the Q2 2026 release); no separately sourced DPN peak. Patent 2040 per Vertex FY2025 10-K.",
        "ptrs_override": 1.0,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "Sickle cell disease and transfusion-dependent beta-thalassemia",
        "launch_year": 2024,
        "name": "Casgevy (exagamglogene autotemcel)",
-       "patent_expiry": null,
+       "patent_expiry": 2035,
        "peak_sales_period": "Peak",
        "peak_sales_usd": 2200000000.0,
        "phase": "approved",
-       "ptrs_basis": "Approved product; commercial ramp underway",
+       "ptrs_basis": "Approved product; commercial ramp underway. Registry Phase 3s NCT05356195, NCT05477563, NCT05329649, NCT04208529 are pediatric / long-term studies of this product. 2035 = US expiry reflecting regulatory exclusivity per Vertex FY2025 10-K.",
        "ptrs_override": 1.0,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "Acromegaly",
        "launch_year": 2025,
        "name": "Palsonify (paltusotine)",
-       "patent_expiry": null,
+       "patent_expiry": 2037,
        "peak_sales_period": "Peak",
        "peak_sales_usd": 1000000000.0,
        "phase": "approved",
-       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01)",
+       "ptrs_basis": "Approved product (Crinetics acquisition closed 2026-09-01). Patent 2037 = composition of matter per Crinetics FY2025 10-K (https://www.sec.gov/Archives/edgar/data/1658247/000165824726000012/crnx-20251231.htm).",
        "ptrs_override": 1.0,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "IgA nephropathy (IgAN)",
        "launch_year": 2026,
        "name": "Povetacicept (ALPN-303)",
-       "patent_expiry": 2038,
+       "patent_expiry": 2041,
        "peak_sales_period": "2039E",
        "peak_sales_usd": 4300000000.0,
        "phase": "filed",
-       "ptrs_basis": "Filed BLA (accelerated approval), positive Phase 3 RAINIER interim; filing-to-approval base rate. Exclusivity: 12-year BPCIA from a Nov-2026 approval (~2038); patents 2036-2043 before extension. Low case: William Blair $2.1bn peak",
+       "ptrs_basis": "Filed BLA (accelerated approval on the RAINIER interim; RAINIER NCT06564142 full primary completion 2028-01-30), Breakthrough + priority review; filing-to-approval base rate ~0.90. Exclusivity: patent_expiry 2041 from the Alpine Immune Sciences FY2023 10-K, 'we have been issued composition of matter intellectual property that covers povetacicept through at least 2041' (https://www.sec.gov/Archives/edgar/data/1626199/000162619924000048/alpn-20231231.htm); this covers the 2039E peak (BPCIA 12y from 2026 = 2038 alone would not). Low case: William Blair $2.1bn peak. OLYMPUS pMN Phase 2/3 (NCT07204275) and the long-term IgAN extension (NCT07807995) are label-expansion / extension studies of this asset.",
        "ptrs_override": 0.9,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "APOL1-mediated kidney disease (AMKD)",
        "launch_year": 2028,
        "name": "Inaxaplin (VX-147)",
-       "patent_expiry": null,
+       "patent_expiry": 2040,
        "peak_sales_period": "2035E",
        "peak_sales_usd": 1200000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Ph2/3 AMPLITUDE fully enrolled; 48-week interim analysis early 2027 for US accelerated approval, so filing 2027 and launch 2028",
+       "ptrs_basis": "Phase 2/3 AMPLITUDE (NCT05312879) fully enrolled. Vertex: the Week-48 interim analysis is expected in early 2027 and, if positive, will serve as the basis to seek US accelerated approval. interim_readout 2027-02 = midpoint of 'early 2027' (Q1); a readout after Feb-2027 moves the floor to 2029. Breakthrough Therapy (US); EU orphan + PRIME only, no US orphan designation found, so orphan=false. patent_expiry 2040 = US11618746B2 (Vertex, 'Inhibitors of APOL1 and methods of using same', priority 2018-12-17, anticipated expiry 2040-01-01, https://patents.google.com/patent/US11618746B2/en). Inaxaplin is a 2-aryl indole APOL1 inhibitor of the scaffold this family claims, but the patent page read did not name inaxaplin, so compound-specific coverage is NOT confirmed; without it, 5y NCE from 2028 = 2033 would not cover the 2035E peak.",
        "ptrs_override": 0.6,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "Congenital adrenal hyperplasia (CAH)",
        "launch_year": 2029,
        "name": "Atumelnant (CRN04894)",
-       "patent_expiry": 2036,
+       "patent_expiry": 2039,
        "peak_sales_period": "Peak",
        "peak_sales_usd": 2500000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Adult Phase 3 CALM-CAH primary completion May 2027 -> filing late 2027, launch 2029. Exclusivity ~2036 (5-year NCE + 7-year orphan). Vertex's >$5bn is Palsonify and atumelnant COMBINED (https://crinetics.com/press-releases/vertex-to-acquire-crinetics-pharmaceuticals/)",
-       "ptrs_override": 0.65,
+       "ptrs_basis": "Peak = midpoint of the Jefferies (Dennis Ding, GEN 2026-07-07) $2-3bn for CAH alone; the $5bn in the quote is the Palsonify + atumelnant CAH + Cushing's sum and is NOT used (Cushing's is Phase 1b/2, excluded). Adult Phase 3 CALM-CAH NCT07144163 (Crinetics-sponsored), primary completion 2027-05 -> floor 2029. US orphan designation for CAH (Crinetics, 2025-08-21). patent_expiry 2039 = issued composition-of-matter patents per Crinetics FY2025 10-K (pending method/polymorph applications 2042-2046).",
+       "ptrs_override": 0.643,
        "source": "gemini_accepted"
       },
       {
+       "economic_share": null,
        "indication": "Type 1 diabetes with severe hypoglycemia",
-       "launch_year": 2028,
+       "launch_year": 2029,
        "name": "Zimislecel (VX-880)",
        "patent_expiry": 2040,
        "peak_sales_period": "2032E",
        "peak_sales_usd": 900000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. The BMO peak predates 2026",
+       "ptrs_basis": "Cell therapy with manufacturing risk and chronic immunosuppression; below the Phase 3 base rate. Dosing was paused for a manufacturing analysis then resumed; the 2026 filing timeline was withdrawn and no interim-based filing is stated, so launch is floored on NCT04786262 primary completion 2027-12-31 + 22 months = 2029 (was 2028). The kidney-transplant Phase 3 NCT06832410 (primary completion 2026-09-17) is a supporting study, not the pivotal basis. BMO peak dated 2025-03-31 (before the pause). patent_expiry 2040 carried from the prior verified entry (not re-sourced); 12y cell/gene exclusivity from 2029 = 2041 covers the peak regardless.",
        "ptrs_override": 0.45,
        "source": "gemini_accepted"
       }
@@ -10375,72 +12960,92 @@
        "USD bn",
        "USD bn",
        "USD bn",
-       "USD bn"
+       "USD mn"
       ],
       "dropped_assets": [],
+      "ptrs_banded": [
+       "Atumelnant (CRN04894): 0.65 -> 0.64 (held at table 0.49 + 0.15)"
+      ],
       "ptrs_ignored": []
      }
     },
     "fmp_context_usd": {
      "company": "Vertex Pharmaceuticals Incorporated",
      "depreciation_and_amortization": 209800000.0,
-     "market_cap": 133549652950.0,
+     "market_cap": 128102997650.0,
      "net_ppe": 3083000000.0,
      "operating_cash_flow": 3631400000.0,
      "period": "2025-12-31",
-     "revenue": 12074600000.0
+     "revenue": 12074600000.0,
+     "shares": 253805000.0
     },
-    "model": "owner re-check (research agent, primary sources)",
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
     "ok": true,
     "previous": {
      "assets": [
       {
        "launch_year": 2025,
        "name": "Alyftrek (vanzacaftor/tezacaftor/deutivacaftor)",
-       "peak_usd_bn": 8.3,
+       "peak": 8.3,
        "phase": "approved",
        "ptrs": 1.0
       },
       {
        "launch_year": 2025,
        "name": "Suzetrigine (Journavx / VX-548)",
-       "peak_usd_bn": 3.0,
+       "peak": 3.0,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2024,
+       "name": "Casgevy (exagamglogene autotemcel)",
+       "peak": 2.2,
+       "phase": "approved",
+       "ptrs": 1.0
+      },
+      {
+       "launch_year": 2025,
+       "name": "Palsonify (paltusotine)",
+       "peak": 1.0,
        "phase": "approved",
        "ptrs": 1.0
       },
       {
        "launch_year": 2026,
        "name": "Povetacicept (ALPN-303)",
-       "peak_usd_bn": 4.3,
+       "peak": 4.3,
        "phase": "filed",
-       "ptrs": 0.8
+       "ptrs": 0.9
       },
       {
-       "launch_year": 2027,
+       "launch_year": 2028,
        "name": "Inaxaplin (VX-147)",
-       "peak_usd_bn": 1.0,
+       "peak": 1.2,
+       "phase": "phase_3",
+       "ptrs": 0.6
+      },
+      {
+       "launch_year": 2029,
+       "name": "Atumelnant (CRN04894)",
+       "peak": 2.5,
        "phase": "phase_3",
        "ptrs": 0.65
       },
       {
-       "launch_year": 2024,
-       "name": "Casgevy (exagamglogene autotemcel)",
-       "peak_usd_bn": 2.2,
-       "phase": "approved",
-       "ptrs": 1.0
-      },
-      {
        "launch_year": 2028,
-       "name": "Atumelnant (CRN04894)",
-       "peak_usd_bn": 5.0,
+       "name": "Zimislecel (VX-880)",
+       "peak": 0.9,
        "phase": "phase_3",
-       "ptrs": 0.6
+       "ptrs": 0.45
       }
      ],
-     "built_at": "2026-09-26T14:43:46+00:00",
-     "model": "gemini-3.8-flash",
-     "value_usd": 23800000000.0
+     "built_at": "2026-10-05T01:01:37+00:00",
+     "model": "owner re-check (research agent, primary sources)",
+     "value_usd": 23400000000.0
     },
+    "secs": null,
     "value_usd": 23400000000.0
    }
   },

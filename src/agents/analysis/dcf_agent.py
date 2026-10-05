@@ -8588,7 +8588,7 @@ def _compute_method_value(
         # revenue name with nothing accepted has its pipeline leg QUARANTINED
         # -- None here, and the blend re-weights the rest to 1.0.
         assets = most_recent.get("pipeline_assets_accepted") or []
-        if not assets:
+        if not assets and not most_recent.get("pipeline_input_accepted"):
             if (profile_name or "") == "Pre-approval Biotech":
                 assets = most_recent.get("pipeline_assets") or []
             else:
@@ -12506,13 +12506,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             from src.agents.industry.gemini_params import pipeline_to_engine_assets as _pipe_bridge
             _pipe_e = _ii_p.accepted_entry(ticker, "pipeline")
             if _pipe_e:
+                # Owner, 2026-10-05: an accepted input is the owner's answer even when it values nothing
+                # (Clover: no programme with a sourced peak) -- the extractor's assets do not stand in.
+                most_recent["pipeline_input_accepted"] = True
                 _acc_assets, _acc_checks = _pipe_bridge(_ii_p.canonical_data(_pipe_e))
+                if not _acc_assets:
+                    ticker_forward_flags.append(
+                        "rNPV (Pipeline): the owner-accepted pipeline input values no asset (no programme with a "
+                        "sourced peak); the extractor's assets are not used in its place")
                 if _acc_assets:
                     most_recent["pipeline_assets_accepted"] = _acc_assets
                     ticker_forward_flags.append(
                         f"rNPV (Pipeline): {len(_acc_assets)} late-stage asset(s) from owner-accepted Gemini "
                         f"inputs (consensus peak sales, PTRS benchmarks); the extractor's "
                         f"{len(_ticker_pipeline)} asset(s) held as a cross-check")
+                    for _pb in (_acc_checks or {}).get("ptrs_banded") or []:
+                        ticker_forward_flags.append(f"rNPV (Pipeline) PTRS band (rule R4): {_pb}")
+                    # Owner, 2026-10-05 (pipeline rule R6): stale inputs are flagged, never quarantined.
+                    try:
+                        from src.data.pipeline_rules import freshness as _pfresh
+                        _pf = _pfresh(_pipe_e, _ii_p.review_for(ticker, "pipeline", _pipe_e).get("reviewed_at"))
+                        if _pf:
+                            ticker_forward_flags.append(_pf)
+                    except Exception:                      # noqa: BLE001
+                        pass
         except Exception:                                  # noqa: BLE001
             pass
         # Owner Wave 6 (2026-09-27): the life-insurance Embedded Value leg and the alt

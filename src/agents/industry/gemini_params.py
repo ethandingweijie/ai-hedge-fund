@@ -115,11 +115,36 @@ class PipelineAsset(BaseModel):
     ptrs: Optional[CitedRatio] = Field(default=None, description="Probability of technical and regulatory success from "
                                                                  "the source, or the therapeutic-area benchmark for the phase, cited")
     ptrs_basis: Optional[str] = Field(default=None, description="e.g. 'oncology Phase 3 benchmark 50-60%'")
+    # Owner, 2026-10-05 (src/data/pipeline_rules.py): the fields the deterministic rules check.
+    aliases: list[str] = Field(default_factory=list, description="Other names: code (e.g. VX-880), INN, brand")
+    modality: Optional[Literal["small_molecule", "biologic", "cell_gene"]] = Field(
+        default=None, description="Drives US regulatory exclusivity (5 / 12 / 12 years from approval)")
+    orphan: Optional[bool] = Field(default=None, description="US orphan designation for this indication")
+    nct_ids: list[str] = Field(default_factory=list, description="ClinicalTrials.gov ids of the pivotal trial(s)")
+    primary_completion: Optional[str] = Field(default=None, description="Pivotal trial primary completion, YYYY-MM[-DD]")
+    pdufa_date: Optional[str] = Field(default=None, description="FDA action date when filed, YYYY-MM-DD")
+    interim_readout: Optional[str] = Field(default=None, description="Interim analysis date an ACCELERATED filing rests on, YYYY-MM")
+    interim_source_url: Optional[str] = Field(default=None, description="Company source stating that interim-based filing plan")
+    peak_risk_adjusted: Optional[bool] = Field(
+        default=None, description="True when the cited peak already has the probability of success applied (a "
+                                  "broker's risk-adjusted peak); the engine then does not discount it again")
+    economic_share: Optional[float] = Field(
+        default=None, description="The company's share of the asset's economics when partnered (0-1; CRISPR 0.40 of "
+                                  "Casgevy, Moderna 0.50 of intismeran); peak_sales stays the 100% figure as printed")
+
+
+class ExcludedAsset(BaseModel):
+    name: str
+    reason: str = Field(description="e.g. 'Phase 1/2, not late-stage' or 'label expansion of an approved drug, no sourced peak'")
 
 
 class PipelineInputs(BaseModel):
     as_of: str = Field(description="Date the pipeline was read, e.g. '2026-09-26'")
     assets: list[PipelineAsset]
+    approved_portfolio: list[str] = Field(
+        default_factory=list, description="Marketed products (and codes) whose label-expansion trials are not new pipeline")
+    excluded_assets: list[ExcludedAsset] = Field(
+        default_factory=list, description="Live Phase 3 / disclosed late-stage programmes left out, each with a reason")
     notes: Optional[str] = None
 
 
@@ -135,6 +160,11 @@ def pipeline_prompt(company: str, ticker: str, anchors: dict) -> str:
         "year when disclosed, and the probability of technical and regulatory success -- the source's own "
         "figure, or the standard therapeutic-area benchmark for that phase (oncology Phase 3 about 50-60%, "
         "metabolic Phase 3 about 65-75%, CNS lower), stated as a decimal with its basis. Cite every number. "
+        "RULES (each is checked mechanically): the peak-sales quote must name THAT asset alone -- never a "
+        "combined, portfolio or deal-announcement total; give the pivotal trial's ClinicalTrials.gov id(s) and "
+        "primary completion date (Phase 3) or the PDUFA date (filed), and a launch year no earlier than they allow; "
+        "give the modality and orphan status; list every live Phase 3 programme -- include it or put it in "
+        "excluded_assets with a reason. "
         f"Do NOT value anything.\n{_AMOUNT_RULE}\n"
         f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
     )
@@ -154,16 +184,34 @@ def pipeline_to_engine_assets(pipe: dict, fx_to_usd: Optional[Callable[[str], Op
         if not ps or ps <= 0:
             checks["dropped_assets"].append(a.get("name")); continue
         checks["currencies"].append(f"{(ps_c or {}).get('currency')} {(ps_c or {}).get('scale')}")
+        # Owner, 2026-10-05: a partnered asset is valued at the company's share of its economics.
+        _sh = a.get("economic_share")
+        if isinstance(_sh, (int, float)) and 0.0 < _sh < 1.0:
+            ps = ps * float(_sh)
+            checks.setdefault("economic_share", []).append(f"{a.get('name')}: {float(_sh):.0%} of the 100% peak")
         asset = {"name": a.get("name"), "indication": a.get("indication"), "phase": a.get("phase"),
                  "peak_sales_usd": ps, "launch_year": a.get("launch_year"), "patent_expiry": a.get("patent_expiry"),
-                 "source": "gemini_accepted", "peak_sales_period": (ps_c or {}).get("period")}
+                 "source": "gemini_accepted", "peak_sales_period": (ps_c or {}).get("period"),
+                 "economic_share": _sh if isinstance(_sh, (int, float)) else None}
         pt = a.get("ptrs")
+        if a.get("peak_risk_adjusted") and a.get("phase") != "approved":
+            # Owner, 2026-10-05: a risk-adjusted peak (Innovent's SPDBI / CITIC China peaks) is not discounted twice.
+            asset["ptrs_override"] = 1.0
+            asset["ptrs_basis"] = "peak already risk-adjusted at source; " + str(a.get("ptrs_basis") or "")
+            checks.setdefault("risk_adjusted_peaks", []).append(str(a.get("name")))
+            pt = None
         if pt is not None:
             v = pt.get("value") if isinstance(pt, dict) else None
             if isinstance(v, (int, float)) and v > 1.0:
                 v = v / 100.0
             if isinstance(v, (int, float)) and 0.02 <= v <= 1.0 and _cited_ok(pt):
-                asset["ptrs_override"] = float(v); asset["ptrs_basis"] = a.get("ptrs_basis")
+                # Owner, 2026-10-05 (pipeline rule R4): held within +/-15pp of the phase x therapeutic-area
+                # table, and a source older than a year gives way to the table.
+                from src.data.pipeline_rules import band_ptrs
+                bv, why = band_ptrs(float(v), a.get("phase"), a.get("indication"), pt.get("period"), pipe.get("as_of"))
+                asset["ptrs_override"] = bv; asset["ptrs_basis"] = a.get("ptrs_basis")
+                if why not in ("cited", "approved"):
+                    checks.setdefault("ptrs_banded", []).append(f"{a.get('name')}: {float(v):.2f} -> {bv:.2f} ({why})")
             else:
                 checks["ptrs_ignored"].append(a.get("name"))
         out.append(asset)

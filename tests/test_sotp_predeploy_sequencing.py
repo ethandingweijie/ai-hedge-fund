@@ -189,7 +189,8 @@ def _entry(check_ok):
 
 
 def test_a_failed_reconciliation_cannot_be_accepted(store):
-    assert ii.HARD_CHECKS == ("segment revenue vs group revenue",)
+    # The SOTP hard check leads; the drug-pipeline rules (owner, 2026-10-05) follow it.
+    assert ii.HARD_CHECKS[0] == "segment revenue vs group revenue"
     with pytest.raises(ValueError, match="cannot accept: segment revenue vs group revenue failed"):
         ii.set_review("JD", "sotp", "accepted", "owner", doc=_entry(False))
     assert ii.accepted_entry("JD", "sotp", doc=_entry(False)) is None

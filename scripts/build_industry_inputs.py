@@ -17,11 +17,13 @@ Resumable: an existing ticker/kind is skipped unless --force.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -194,6 +196,55 @@ def resolve_store_urls(doc: dict) -> dict:
     return doc
 
 
+def pipeline_entry(ticker: str, ctx: dict, data: dict, urls: Optional[dict] = None, *, model: str,
+                   secs: Optional[float] = None, grounding_urls: Optional[list] = None) -> dict:
+    """A pipeline entry from structured data -- a Gemini build or a verified research file go through the
+    same path: registry dates, the engine conversion (R4 band), plausibility, then the rules (owner, 2026-10-05)."""
+    from src.data import pipeline_rules as _pr
+    anchors = {"reported_currency": (ctx.get("reported_currency") or "USD"),
+               "revenue_latest_usd_bn": round((ctx.get("revenue") or 0) / 1e9, 2)}
+    data, _date_notes = _pr.enrich_dates(data)
+    assets, conv_checks = gp.pipeline_to_engine_assets(data)
+    peak_sum = sum(a["peak_sales_usd"] for a in assets)
+    checks = ii.reconcile("pipeline", peak_sum or None, ctx)
+    if (ctx.get("revenue") or 0) < 100e6 or not assets:
+        # Pre-revenue (Beam, Kymera) or an input that values nothing (Clover): a pipeline / revenue ratio and a
+        # headline amount are not meaningful; reported, not failed.
+        for c in checks:
+            if c.get("ok") is False:
+                c["ok"] = None
+                c["detail"] = f"not meaningful pre-revenue / with no valued asset ({c.get('detail')})"
+    checks.extend(_pr.score(data, ticker, ctx.get("company")))
+    if _date_notes:
+        checks.append({"check": "registry dates applied", "ok": True, "detail": "; ".join(_date_notes)})
+    _phases = [a.get("phase") for a in data.get("assets") or []]
+    checks.append({"check": "late-stage only", "ok": all(p in ("phase_2", "phase_3", "filed", "approved") for p in _phases),
+                   "detail": f"phases: {', '.join(str(p) for p in _phases) or 'none'}"})
+    # An APPROVED product is on the market already and its launch year is in
+    # the past by construction (the spec asks for approved-but-pre-peak
+    # assets); the window applies to the unapproved ones.
+    _yrs = [(a.get("phase"), a.get("launch_year")) for a in data.get("assets") or [] if a.get("launch_year")]
+    _bad_y = [y for ph, y in _yrs if ph != "approved" and not (2024 <= int(y) <= 2040)]
+    checks.append({"check": "launch years plausible", "ok": (not _bad_y) if _yrs else None,
+                   "detail": (", ".join(f"{y}{' (approved)' if ph == 'approved' else ''}" for ph, y in _yrs) or "none stated")
+                             + (f"; out of window: {', '.join(str(y) for y in _bad_y)}" if _bad_y else "")})
+    checks.append({"check": "PTRS cited and in range", "ok": not conv_checks.get("ptrs_ignored"),
+                   "detail": (f"{len(assets) - len(conv_checks.get('ptrs_ignored') or [])} of {len(assets)} carry a usable PTRS"
+                              + (f"; ignored: {', '.join(conv_checks['ptrs_ignored'])}" if conv_checks.get("ptrs_ignored") else "")
+                              + (f"; banded: {'; '.join(conv_checks['ptrs_banded'])}" if conv_checks.get("ptrs_banded") else ""))})
+    checks.append({"check": "assets with cited peak sales", "ok": (len(assets) >= 1) if (data.get("assets") or not data.get("excluded_assets")) else None,
+                   "detail": f"{len(assets)} usable; dropped {conv_checks.get('dropped_assets') or 'none'}"
+                             + ("; every programme excluded with a reason" if not data.get("assets") and data.get("excluded_assets") else "")})
+    checks.append(_url_check(urls or {}))
+    return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
+            "anchors": anchors, "value_usd": peak_sum or None, "checks": checks,
+            "engine_preview": {"assets": assets, "checks": conv_checks},
+            "ok": all(c["ok"] is not False for c in checks),
+            "grounding_urls": grounding_urls or [],
+            "model": model, "secs": secs,
+            "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
@@ -335,33 +386,8 @@ def build_one(ticker: str, kind: str) -> dict:
         if not isinstance(data, dict):
             raise gp.GeminiParseError(f"{ticker}/pipeline: no structured answer")
         data, _urls = gp.canonicalize_citations(data)
-        assets, conv_checks = gp.pipeline_to_engine_assets(data)
-        peak_sum = sum(a["peak_sales_usd"] for a in assets)
-        checks = ii.reconcile("pipeline", peak_sum or None, ctx)
-        _phases = [a.get("phase") for a in data.get("assets") or []]
-        checks.append({"check": "late-stage only", "ok": all(p in ("phase_2", "phase_3", "filed", "approved") for p in _phases),
-                       "detail": f"phases: {', '.join(str(p) for p in _phases) or 'none'}"})
-        # An APPROVED product is on the market already and its launch year is in
-        # the past by construction (the spec asks for approved-but-pre-peak
-        # assets); the window applies to the unapproved ones.
-        _yrs = [(a.get("phase"), a.get("launch_year")) for a in data.get("assets") or [] if a.get("launch_year")]
-        _bad_y = [y for ph, y in _yrs if ph != "approved" and not (2024 <= int(y) <= 2040)]
-        checks.append({"check": "launch years plausible", "ok": (not _bad_y) if _yrs else None,
-                       "detail": (", ".join(f"{y}{' (approved)' if ph == 'approved' else ''}" for ph, y in _yrs) or "none stated")
-                                 + (f"; out of window: {', '.join(str(y) for y in _bad_y)}" if _bad_y else "")})
-        checks.append({"check": "PTRS cited and in range", "ok": not conv_checks.get("ptrs_ignored"),
-                       "detail": (f"{len(assets) - len(conv_checks.get('ptrs_ignored') or [])} of {len(assets)} carry a usable PTRS"
-                                  + (f"; ignored: {', '.join(conv_checks['ptrs_ignored'])}" if conv_checks.get("ptrs_ignored") else ""))})
-        checks.append({"check": "assets with cited peak sales", "ok": len(assets) >= 1,
-                       "detail": f"{len(assets)} usable; dropped {conv_checks.get('dropped_assets') or 'none'}"})
-        checks.append(_url_check(_urls))
-        return {"basis": "estimate", "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
-                "anchors": anchors, "value_usd": peak_sum or None, "checks": checks,
-                "engine_preview": {"assets": assets, "checks": conv_checks},
-                "ok": all(c["ok"] is not False for c in checks),
-                "grounding_urls": out.get("grounding_urls") or [],
-                "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
-                "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        return pipeline_entry(ticker, ctx, data, _urls, model=out.get("model") or gp.model_name(),
+                              secs=round(time.time() - t0, 1), grounding_urls=out.get("grounding_urls") or [])
     if kind == "sotp":
         # Owner, 2026-09-22: the SOTP-valued profiles take their segments and
         # the multiple range to adopt from Gemini, cited, then review-gated.
@@ -479,9 +505,52 @@ def main(argv=None) -> int:
     ap.add_argument("--resolve-urls", action="store_true",
                     help="resolve grounding redirect wrappers on EXISTING entries into canonical_urls "
                          "(reviewed data untouched, acceptances survive)")
+    ap.add_argument("--ingest", default="",
+                    help="pipeline only: store a verified research file (JSON in the pipeline schema) for the one "
+                         "ticker in --tickers as a PENDING entry; the old entry is kept under `previous`")
+    ap.add_argument("--rescore", action="store_true",
+                    help="re-run the pipeline rules on EXISTING pipeline entries (data untouched, acceptances survive)")
     ap.add_argument("--profile-sotp", action="store_true",
                     help="build the sotp kind for every pinned ticker whose profile declares SOTP (analyst)")
     a = ap.parse_args(argv)
+    if a.ingest:
+        t = a.tickers.strip()
+        data = json.loads(Path(a.ingest).read_text(encoding="utf-8"))
+        gp.PipelineInputs.model_validate(data)                  # the schema the Gemini build answers in
+        doc = ii.load() or {"version": 1, "tickers": {}}
+        key = ii._key(t)
+        old = (doc["tickers"].get(key) or {}).get("pipeline")
+        e = pipeline_entry(t, fmp_context(t), data, model="verified research (owner re-check, primary sources)")
+        if old:
+            e["previous"] = {"built_at": old.get("built_at"), "model": old.get("model"), "value_usd": old.get("value_usd"),
+                             "assets": [{"name": x.get("name"), "phase": x.get("phase"), "launch_year": x.get("launch_year"),
+                                         "peak": (x.get("peak_sales") or {}).get("value"),
+                                         "ptrs": (x.get("ptrs") or {}).get("value")} for x in (old.get("data") or {}).get("assets") or []]}
+        doc["tickers"].setdefault(key, {})["pipeline"] = e
+        ii.save(doc)
+        print(f"  {t:<10} pipeline ingested: ${(e['value_usd'] or 0) / 1e9:,.2f}bn peak, {'OK' if e['ok'] else 'CHECK FAILED'}")
+        for c in e["checks"]:
+            print(f"      {'PASS' if c['ok'] else ('n/a ' if c['ok'] is None else 'FAIL')} {c['check']}: {str(c['detail'])[:260]}")
+        return 0
+    if a.rescore:
+        from src.data import pipeline_rules as _pr
+        doc = ii.load() or {"version": 1, "tickers": {}}
+        want = {ii._key(t.strip()) for t in a.tickers.split(",") if t.strip()}
+        for key, kinds in sorted(doc["tickers"].items()):
+            e = kinds.get("pipeline")
+            if not e or (want and key not in want):
+                continue
+            new = _pr.score(e.get("data") or {}, key, e.get("company"))
+            names = {c["check"] for c in new}
+            e["checks"] = [c for c in (e.get("checks") or []) if c.get("check") not in names] + new
+            e["ok"] = all(c.get("ok") is not False for c in e["checks"])
+            print(f"  {key:<10} pipeline " + " | ".join(f"{c['check']}: {'PASS' if c['ok'] else ('n/a' if c['ok'] is None else 'FAIL')}"
+                                                     for c in new), flush=True)
+            for c in new:
+                if c["ok"] is False:
+                    print(f"      - {c['check']}: {c['detail'][:300]}")
+        ii.save(doc)
+        return 0
     if a.resolve_urls:
         ii.save(resolve_store_urls(ii.load() or {"version": 1, "tickers": {}}))
         return 0

@@ -63,7 +63,10 @@ NO_OVERLAY = ("pv10", "sotp", "pipeline", "embedded_value", "alt_manager", "nav"
 
 #: Checks whose failure blocks acceptance (owner, 2026-09-24, item 4): a
 #: pre-fill whose segments sum to more than the group can only be rebuilt.
-HARD_CHECKS = ("segment revenue vs group revenue",)
+HARD_CHECKS = ("segment revenue vs group revenue",
+               # Owner, 2026-10-05: the drug-pipeline rules (src/data/pipeline_rules.HARD).
+               "single-asset peak sales", "launch year vs trial dates", "exclusivity covers the peak",
+               "pipeline completeness")
 
 #: Plausibility bounds, each against a figure FMP reports for the same company.
 #: A figure outside them is kept for review with the failed check named -- a
