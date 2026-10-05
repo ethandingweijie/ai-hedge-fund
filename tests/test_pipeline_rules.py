@@ -133,3 +133,11 @@ def test_combination_strings_are_split_into_their_parts():
            {"nct_id": "NCT04316364", "interventions": ["SHR-1316、Paclitaxel"]}]
     data = {"assets": [_asset("Zocilurtatug pelitecan (ZL-1310)"), _asset("Adebrelimab (SHR-1316)", phase="approved")]}
     assert _by(pr.check(data, registry=reg), "pipeline completeness")["ok"] is True
+
+
+def test_the_pm_summary_print_survives_an_unrated_decision():
+    # CRSP 2026-10-05: price_target None crashed the pipeline after the valuation had finished.
+    import inspect
+    from src import pipeline
+    src = inspect.getsource(pipeline)
+    assert "(d.get('price_target') or 0):.2f" in src and "d.get('price_target', 0):.2f" not in src

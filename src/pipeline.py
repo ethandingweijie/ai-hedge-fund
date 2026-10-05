@@ -1437,10 +1437,12 @@ def run_advanced_pipeline(
             state["data"].update(pm_result.get("data", {}))
         decisions = pm_result.get("decisions", {})
         for ticker, d in decisions.items():
+            # An unrated name (CRSP, pre-revenue) carries price_target / stop_loss = None: the key is present,
+            # so .get's default never applies and a None format crashed the run after the valuation (2026-10-05).
             print(f"  {ticker}: {d.get('action')} | "
-                  f"size {d.get('position_size_pct', 0):.2%} | "
-                  f"target ${d.get('price_target', 0):.2f} | "
-                  f"stop ${d.get('stop_loss', 0):.2f}")
+                  f"size {(d.get('position_size_pct') or 0):.2%} | "
+                  f"target ${(d.get('price_target') or 0):.2f} | "
+                  f"stop ${(d.get('stop_loss') or 0):.2f}")
         progress.update_status("portfolio_manager", primary_ticker, "✓ Decision complete",
                                partial_data={"decisions": decisions})
 
