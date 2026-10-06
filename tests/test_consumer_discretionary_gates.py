@@ -1408,7 +1408,9 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # Phillips 66's FCF leg priced $64.31 against a $273.13 quote off a trough.
     # SEVEN since 2026-10-04 (plan 1E.2): normalised net income is re-taken with each year at today's
     # interest burden -- one more call site.
-    assert src.count("_normalized_earnings(") == 7   # def + six call sites
+    # TWELVE since 2026-10-06 (plan E1): the windfall-free variants of net income, EBITDA, EBIT and owner
+    # earnings (with its FCF fallback) -- five call sites, applied to non-cyclical profiles only.
+    assert src.count("_normalized_earnings(") == 12   # def + eleven call sites
     # 2026-10-04 (plan 1E.1): normalised on CORE earnings (a disposal gain is not cycle profit).
     assert '_norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src
