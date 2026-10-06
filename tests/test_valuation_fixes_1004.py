@@ -418,3 +418,20 @@ def test_e28_adjusted_eps_neither_sets_the_margin_nor_fails_the_share_check():
     import inspect
     src = inspect.getsource(gfm)
     assert 'block.get("_eps_adjusted")' in src and "n/a: guided EPS is on an adjusted (non-GAAP) basis" in src
+
+
+def test_e1_windfall_years_leave_normalised_earnings_for_non_cyclicals():
+    # Pfizer: 2021-22 COVID years at 27% / 31% net margin against ~12% otherwise.
+    rows = [{"period": f"{y}-12-31", "revenue": r, "net_income": n} for y, r, n in
+            ((2021, 81.3e9, 22.0e9), (2022, 100.3e9, 31.4e9), (2023, 58.5e9, 2.1e9), (2024, 63.6e9, 8.0e9), (2025, 62.6e9, 7.8e9))]
+    assert d._windfall_periods(rows, "net_income") == ["2021", "2022"]
+    full = d._normalized_earnings(rows, "net_income")
+    ex = d._normalized_earnings(rows, "net_income", exclude_windfalls=True)
+    assert ex < full and ex / 62.6e9 == pytest.approx((2.1 / 58.5 + 8.0 / 63.6 + 7.8 / 62.6) / 3, rel=1e-6)
+
+
+def test_ddm_low_yield_and_scale_cap_rules_are_wired():
+    import inspect
+    src = inspect.getsource(d)
+    assert d._DDM_MIN_YIELD == 0.02 and "if _yld < _DDM_MIN_YIELD:" in src
+    assert "_cons_near_ok = True" in src and "the capped rate governs year 3 onward" in src

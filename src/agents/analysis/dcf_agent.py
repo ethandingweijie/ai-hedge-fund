@@ -172,6 +172,8 @@ _INTEREST_IS_COST_FAMILIES = frozenset({"Banks", "Insurance", "Fee financials", 
 #: balances. A payment network carries no credit risk; its interest is a financing charge, so it
 #: takes the unlevered basis and the three-statement model like any asset-light compounder.
 _ASSET_LIGHT_FEE_PROFILES = frozenset({"Payment Networks"})
+#: Owner, 2026-10-06: below this trailing dividend yield the DDM leg's weight rolls into the DCF legs.
+_DDM_MIN_YIELD = 0.02
 #: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
 #: add-on to the operating value; for a Pre-approval Biotech the pipeline IS the company and stays a leg.
 _PIPELINE_ADDON_PROFILES = frozenset({"Commercial Biotech", "Large Cap Pharma"})
@@ -3682,10 +3684,35 @@ def _recovery_discounted(norm: Optional[float], path: list, rate: float,
                  "rate": rate, "recovery_discounted": out}
 
 
+#: Owner, 2026-10-06 (PFE review, E1): a windfall year -- margin above this multiple of the median of the
+#: other years in the window -- is not "normal" earnings (Pfizer's 2021-22 COVID vaccine and Paxlovid years).
+#: Excluded for NON-cyclical profiles only; a cyclical's peak is part of its cycle.
+_WINDFALL_MARGIN_MULTIPLE = 2.0
+
+
+def _windfall_periods(series: list[dict], field: str, window: int = 5) -> list[str]:
+    """Periods in the window whose `field` margin exceeds _WINDFALL_MARGIN_MULTIPLE x the median of the
+    other years' (positive margins only; at least three years needed)."""
+    tail = series[-window:]
+    pts = [(str(r.get("period") or "")[:4], r[field] / r["revenue"]) for r in tail
+           if r.get("revenue") and r["revenue"] > 0 and r.get(field) is not None]
+    if len(pts) < 3:
+        return []
+    out = []
+    for i, (per, m) in enumerate(pts):
+        others = [x for j, (_, x) in enumerate(pts) if j != i]
+        med = statistics.median(others)
+        if m > 0 and med > 0 and m > _WINDFALL_MARGIN_MULTIPLE * med:
+            out.append(per)
+    # Never exclude so many that fewer than two years remain.
+    return out if len(pts) - len(out) >= 2 else []
+
+
 def _normalized_earnings(
     series: list[dict],
     field: str,
     window: int = 5,
+    exclude_windfalls: bool = False,
 ) -> Optional[float]:
     """Cycle-normalized earnings figure for ``field`` (e.g. net_income, ebitda).
 
@@ -3705,11 +3732,12 @@ def _normalized_earnings(
     tail = series[-window:]
     if not tail:
         return None
+    _wf = set(_windfall_periods(series, field, window)) if exclude_windfalls else set()
     margins: list[float] = []
     for row in tail:
         rev = row.get("revenue")
         val = row.get(field)
-        if rev and rev > 0 and val is not None:
+        if rev and rev > 0 and val is not None and str(row.get("period") or "")[:4] not in _wf:
             margins.append(val / rev)
     if len(margins) < 2:
         return None
@@ -12361,6 +12389,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _norm_ni = _norm_ni_swapped
                 _norm_ni_basis = "net margin, 5y mean, each year at today's interest burden"
         most_recent["_normalized_net_income_basis"] = _norm_ni_basis
+        # Plan E1 (owner, 2026-10-06): the windfall-free variants, applied once the profile is known
+        # (non-cyclicals only). Same basis as the figures above (the interest swap included).
+        try:
+            _wf_ni_series = _swapped if ("today's interest burden" in _norm_ni_basis) else _norm_series
+        except NameError:
+            _wf_ni_series = _norm_series
+        most_recent["_normalized_ex_windfall"] = {
+            "periods": sorted(set(_windfall_periods(_wf_ni_series, "net_income")) | set(_windfall_periods(_norm_series, "ebitda"))),
+            "net_income": _normalized_earnings(_wf_ni_series, "net_income", window=5, exclude_windfalls=True),
+            "ebitda": _normalized_earnings(_norm_series, "ebitda", window=5, exclude_windfalls=True),
+            "ebit": _normalized_earnings(_norm_series, "ebit", window=5, exclude_windfalls=True),
+            "fcf_owner_earnings": (_normalized_earnings(series, "fcf_owner_earnings", window=5, exclude_windfalls=True)
+                                   or _normalized_earnings(series, "free_cash_flow", window=5, exclude_windfalls=True)),
+        }
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
@@ -13842,6 +13884,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception as _bpm_exc:                      # noqa: BLE001 -- routing must never block a run
             _log.warning("[dcf] %s: biopharma method selection failed (kept %s): %s", ticker, profile_name, _bpm_exc)
 
+        # ── Plan E1 (owner, 2026-10-06): windfall years out of normalised earnings, non-cyclicals only ──
+        try:
+            _wfx = most_recent.get("_normalized_ex_windfall") or {}
+            if _wfx.get("periods") and profile_name not in _CYCLICAL_PROFILES:
+                for _k_src in ("net_income", "ebitda", "ebit", "fcf_owner_earnings"):
+                    if _wfx.get(_k_src) is not None:
+                        most_recent["normalized_" + _k_src] = _wfx[_k_src]     # an overwrite, not a new reader
+                most_recent["_normalized_net_income_basis"] = (
+                    str(most_recent.get("_normalized_net_income_basis") or "") + f"; windfall year(s) {', '.join(_wfx['periods'])} excluded")
+                ticker_forward_flags.append(
+                    f"Normalised earnings exclude windfall year(s) {', '.join(_wfx['periods'])}: a margin above "
+                    f"{_WINDFALL_MARGIN_MULTIPLE:.0f}x the other years' median is not normal earnings for a non-cyclical "
+                    f"profile ({profile_name})")
+        except Exception:  # noqa: BLE001
+            pass
+
         # ── SOTP (analyst) blend promotion (task #25) ────────────────────
         # With extractor-built assumptions on this ticker, lift the shadow
         # method into the resolved profile (retired 2026-09-26: profiles declare it)
@@ -14772,22 +14830,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _growth_base_cap = 0.30
         else:
             _growth_base_cap = 1.0   # no additional cap for sub-$1B companies
-        # Owner, 2026-10-06 (LLY review, E25): the tier cap is a prior for companies whose growth would be
-        # extrapolated. A patent-protected drug franchise with NTM consensus above the tier (Lilly +32%, 5+
-        # analysts) is not that case -- the cap rises to consensus. Cyclicals keep the hard tier.
+        # Owner, 2026-10-06 (LLY review, E25; owner: non-cyclical profiles): the tier cap is a prior against
+        # EXTRAPOLATING growth, and it stays on the multi-year rate. What consensus covers -- years 1 and 2
+        # with 5+ analysts -- is not extrapolation: those two years of the DCF schedule take consensus growth
+        # when it is higher (applied where the schedule is built). Cyclicals keep the tier throughout.
+        _cons_near_ok = False
         try:
-            if sector == "Biopharma" and forward_consensus and revenue_base and revenue_base > 0:
-                _cons_rev = (forward_consensus.get("revenue") or {}).get("base")
-                _n_an = forward_consensus.get("analyst_count_revenue") or 0
-                if isinstance(_cons_rev, (int, float)) and _n_an >= 5:
-                    _cons_g = float(_cons_rev) / float(revenue_base) - 1.0
-                    if _cons_g > _growth_base_cap:
-                        ticker_forward_flags.append(
-                            f"Revenue-scale cap raised to NTM consensus growth {_cons_g:.0%} ({_n_an} analysts) from "
-                            f"the {_growth_base_cap:.0%} tier: a drug franchise's growth is covered, not extrapolated")
-                        _growth_base_cap = _cons_g
+            if (profile_name not in _CYCLICAL_PROFILES and forward_consensus
+                    and (forward_consensus.get("analyst_count_revenue") or 0) >= 5):
+                _cons_near_ok = True
         except Exception:                                  # noqa: BLE001
-            pass
+            _cons_near_ok = False
 
         growth_base_capped = min(growth_base, _growth_base_cap)
         if growth_base_capped < growth_base:
@@ -15357,6 +15410,37 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _h = _TWO_STAGE_HOLD_YEARS
                 _n_f = _PROJECTION_YEARS - _h
                 _growth_schedule = [g] * _h + [g + (tgr - g) * k / _n_f for k in range(1, _n_f + 1)]
+            # Plan E25 (owner, 2026-10-06): consensus sets years 1-2 where it covers them and runs above the
+            # schedule (Lilly +32% NTM against a 15% tier); the capped rate governs year 3 onward.
+            try:
+                if _cons_near_ok and _growth_schedule and revenue_base and revenue_base > 0:
+                    # FY+1 consensus over the last fiscal year, then FY+2 over FY+1 -- one year each. (The NTM
+                    # figure is already rolled 76% into FY+2: against FY0 it spans ~1.8 years -- MELI +73%.)
+                    _c12r = (((forward_consensus.get("_fy1_fy2") or {}).get("revenue") or {}).get(scenario)) or (None, None)
+                    _gy = []
+                    if isinstance(_c12r[0], (int, float)) and _c12r[0] > 0:
+                        _gy.append(float(_c12r[0]) / float(revenue_base) - 1.0)
+                        if isinstance(_c12r[1], (int, float)) and _c12r[1] > 0:
+                            _gy.append(float(_c12r[1]) / float(_c12r[0]) - 1.0)
+                    _sched_new = list(_growth_schedule)
+                    for _i, _gc_y in enumerate(_gy[:2]):
+                        # The owner's CAGR-divergence rule (Phase 1.1): consensus more than the threshold away
+                        # from the company's own revenue CAGR is not trusted to set the year (U96.SI: +39% on a
+                        # declining base -- a consensus-feed basis problem, not growth).
+                        if (isinstance(revenue_cagr, (int, float))
+                                and abs(_gc_y - float(revenue_cagr)) > _CAGR_DIVERGENCE_THRESHOLD):
+                            continue
+                        if _i < len(_sched_new) and _gc_y > _sched_new[_i]:
+                            _sched_new[_i] = _gc_y
+                    if _sched_new != list(_growth_schedule):
+                        if scenario == "base":
+                            ticker_forward_flags.append(
+                                "Consensus sets DCF years 1-2 above the revenue-scale tier: "
+                                + ", ".join(f"{x:+.1%}" for x in _sched_new[:2])
+                                + f" (from {_growth_schedule[0]:+.1%}); the capped rate governs year 3 onward")
+                        _growth_schedule = _sched_new
+            except Exception:                              # noqa: BLE001
+                pass
             if profile_name in _EARLY_STAGE_PROFILES:
                 _wacc_schedule = [
                     _staged_wacc_for_year(wacc, profile_name, y)
@@ -16607,6 +16691,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 f"({_pipe_ps:,.2f}/share, {len(_pipe_assets)} unapproved asset(s); {_n_approved} approved asset(s) "
                                 f"left out, their sales being in the operating legs' revenue) is added to each operating leg "
                                 f"({', '.join(_added)}); its weight (w={_rn_rec.get('dropped_weight', 0.0):.2f}) rolls pro rata into them")
+            # Owner, 2026-10-06 (LLY review): a dividend model prices the dividend. Below a 2% trailing yield
+            # (Lilly <1%, non-payers) the DDM weight rolls into the DCF legs (else the other legs).
+            try:
+                if any(isinstance(m, dict) and m.get("name") == "DDM" and float(m.get("weight") or 0) > 0 for m in _eff_profile_methods):
+                    _dps = most_recent.get("dividends_per_share")
+                    _px = (resolved_mcap / shares) if (resolved_mcap and shares) else None
+                    _yld = (float(_dps) / float(_px)) if (isinstance(_dps, (int, float)) and _px and _px > 0) else 0.0
+                    if _yld < _DDM_MIN_YIELD:
+                        _dcf_legs = [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") in _DCF_FAMILY_NAMES]
+                        _into = _dcf_legs or [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") != "DDM"]
+                        _eff_profile_methods, _ddm_rec = _roll_leg_weight(_eff_profile_methods, "DDM", _into)
+                        if scenario == "base" and _ddm_rec.get("dropped"):
+                            forward_flags.append(
+                                f"DDM: trailing dividend yield {_yld:.1%} is below {_DDM_MIN_YIELD:.0%}; its weight "
+                                f"(w={_ddm_rec.get('dropped_weight', 0.0):.2f}) rolls into "
+                                + ", ".join(f"{k} +{v:.3f}" for k, v in (_ddm_rec.get("rolled") or {}).items()))
+            except Exception:  # noqa: BLE001
+                pass
             for _lf_leg, _lf_into in (((profile_data or {}).get("leg_fallback") or {}).items()):
                 if (any(isinstance(m, dict) and m.get("name") == _lf_leg for m in _eff_profile_methods)
                         and method_values.get(_lf_leg) is None):
