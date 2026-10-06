@@ -1746,3 +1746,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner accepted Visa bridge_adjustments (2026-10-05): 1,880m as-converted shares (preferred inside the count), $363m uncovered litigation debt-like, FY2025 U.S. covered provision $2,210m added back (V base 327.31->336.94)
 
+## 2026-10-06T14:46:44+00:00
+
+- regenerated at HEAD: `aaeca05b`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Owner 2026-10-06 biopharma method selection: two new Biopharma profiles + Pre-approval Biotech legs (rNPV only); no golden fixture is a drug company -- param_version only, no value moved
+

@@ -103,7 +103,8 @@ REPORT_FAMILIES: dict[str, dict] = {
         "signals": ["pricing", "inventory"],
     },
     "Health care": {
-        "profiles": ["Pre-approval Biotech", "Commercial Biotech", "Large Cap Pharma", "Managed Care", "MedTech / Devices",
+        "profiles": ["Pre-approval Biotech", "Commercial Biotech", "Large Cap Pharma",
+                     "Big Pharma (Consolidated DCF)", "Biotech Platform (SOTP)", "Managed Care", "MedTech / Devices",
                      "Surgical Robotics / Capital Systems", "CDMO / Life Science Tools", "Healthcare Providers / Services",
                      "Pharma Distribution", "Healthcare Provider (SG)", "Specialty & Generic Pharma"],
         "rows": ["revenue", "ebit_m", "ni", "fcf", "net_debt"],

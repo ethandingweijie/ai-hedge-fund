@@ -2345,13 +2345,17 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     # ── BIOPHARMA ─────────────────────────────────────────────────────────────
     "Biopharma": {
         "Pre-approval Biotech": {
+            # Owner, 2026-10-06 (biopharma method selection, archetype "pipeline_rnpv"): the asset-by-asset
+            # rNPV is the valuation -- per-asset cash flows probability-adjusted, the asset's share of R&D and
+            # the unallocated G&A to launch deducted, net cash added. "Pipeline NAV" was P/BV at 5-6x a book
+            # that is mostly cash (49-62% of BEAM / Zai / MRNA blends) and is gone; EV/R&D and Cash Runway
+            # are cross-checks at zero weight (Cash Runway is net cash, a floor, not a valuation).
             "methods": [
-                {"name": "rNPV",         "weight": 0.45, "anchor": True,  "implementable": True},
-                {"name": "EV/R&D",       "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "Pipeline NAV", "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "Cash Runway",  "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "rNPV",         "weight": 1.00, "anchor": True,  "implementable": True},
+                {"name": "EV/R&D",       "weight": 0.00, "anchor": False, "implementable": True},
+                {"name": "Cash Runway",  "weight": 0.00, "anchor": False, "implementable": True},
             ],
-            "excluded": ["P/E", "EPV", "EV/EBITDA"],
+            "excluded": ["P/E", "EPV", "EV/EBITDA", "P/BV", "Pipeline NAV"],
             "rationale": (
                 "Pre-revenue biotech with negative earnings. rNPV anchors pipeline value "
                 "using per-asset phase PoS × therapeutic-area multiplier × bell-shaped "
@@ -2387,6 +2391,34 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "rationale": ("Commercial-stage biotech: high earnings expansion on a few franchises, "
                           "priced on forward earnings and forward revenue with a long DCF for "
                           "patent durability; the accepted pipeline carries the Phase 3 option value."),
+        },
+        # Owner, 2026-10-06 (archetype "consolidated_dcf", Pfizer): a fully integrated big pharma is valued
+        # on corporate cash flow -- a consolidated DCF with the patent cliff, forward P/E, EV/EBITDA and the
+        # dividend against big-pharma peers. The pipeline is the replacement pool for loss of exclusivity,
+        # not a separate leg.
+        "Big Pharma (Consolidated DCF)": {
+            "methods": [
+                {"name": "DCF",          "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "DDM",          "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["rNPV (Pipeline)", "rNPV", "EV/R&D", "Cash Runway", "P/BV"],
+            "rationale": ("Integrated big pharma: consolidated unlevered DCF (patent cliffs, post-COVID base), "
+                          "forward P/E, EV/EBITDA and dividend against big-pharma peers; the pipeline replaces "
+                          "lost exclusivity inside the corporate cash flow."),
+        },
+        # Owner, 2026-10-06 (archetype "platform_sotp": Schrodinger, Recursion, AbCellera): two pillars with
+        # different multiples and discount rates -- platform / service revenue on EV/Sales against platform
+        # peers, the drug pipeline (milestones, royalties, wholly owned candidates) on rNPV -- plus net cash.
+        "Biotech Platform (SOTP)": {
+            "methods": [
+                {"name": "Platform SOTP", "weight": 1.00, "anchor": True,  "implementable": True},
+                {"name": "EV/Revenue",    "weight": 0.00, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E", "EPV", "EV/EBITDA", "P/BV", "Cash Runway"],
+            "rationale": ("Platform biotech: Pillar A platform / service revenue x EV/Sales against platform "
+                          "peers; Pillar B rNPV of partnered milestones, royalties and owned candidates; net cash."),
         },
         "Large Cap Pharma": {
             "methods": [
@@ -3841,6 +3873,10 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Real Estate Services":                {"ev_ebitda": 14.9, "pe": 40.2, "ev_revenue": 1.3, "pb": 1.8, "fcf_yield": 0.05, "growth_avg": 0.073, "pe_ntm": 15.7, "ev_ebitda_ntm": 8.9},
     "CDMO / Life Science Tools": {"ev_ebitda": 17.0, "pe": 26.0, "ev_revenue": 5.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.07, "ev_rd": 6.0},
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
+    # Owner, 2026-10-06: the two biopharma method-selection profiles start from their nearest neighbours'
+    # static rows (a fallback only; each prices on its curated basket).
+    "Big Pharma (Consolidated DCF)": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08},
+    "Biotech Platform (SOTP)":       {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
     # Wave 5 (2026-09-26): read from the US Biotechnology basket that day (n13-17).
     "Commercial Biotech":   {"ev_ebitda": 16.9, "pe": 20.3, "ev_revenue": 6.2,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.15,
                              "pe_ntm": 17.2},

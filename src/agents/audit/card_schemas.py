@@ -114,7 +114,7 @@ def _is_biopharma_any(state: dict, ticker: str) -> bool:
 def _is_large_cap_pharma(state: dict, ticker: str) -> bool:
     profile = _profile(state, ticker)
     sector  = _sector(state, ticker)
-    return sector == "Biopharma" and "Large Cap Pharma" in profile
+    return sector == "Biopharma" and ("Large Cap Pharma" in profile or "Big Pharma" in profile)
 
 
 def _is_managed_care(state: dict, ticker: str) -> bool:

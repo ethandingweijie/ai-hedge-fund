@@ -1762,7 +1762,7 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles: -1 +7 profiles; Defense Primes carries EV/EBITDA (norm) and
     # Commercial Aerospace & Engines carries EV/EBIT (norm).
-    assert (total, with_norm) == (145, 46), (total, with_norm)   # Wave 10 (owner, 2026-09-27): +10 profiles, +3 with a normalised leg; 2026-09-27: 14 unrouted profiles removed (-2 with a normalised leg: EM Bank (Premium), Neo/Challenger); Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
+    assert (total, with_norm) == (147, 46), (total, with_norm)   # 2026-10-06: +2 biopharma method profiles (no normalised leg); Wave 10 (owner, 2026-09-27): +10 profiles, +3 with a normalised leg; 2026-09-27: 14 unrouted profiles removed (-2 with a normalised leg: EM Bank (Premium), Neo/Challenger); Wave 6 +3; Wave 7 +4; Wave 8 +4; Wave 8b step 3 +1; Wave 9 (2026-09-27) +19 profiles, +6 with a normalised leg (Airlines, Steel, Commodity Chemicals re-specified onto P/E (norm) among them)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2132,7 +2132,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (145, 26, 26, 7)   # plan IN1 (2026-10-04): Managed Care's anchor moved to Forward P/E;   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
+    assert (tot, trail, elig, anchored) == (147, 26, 26, 7)   # 2026-10-06: +2 biopharma method profiles; plan IN1 (2026-10-04): Managed Care's anchor moved to Forward P/E;   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.

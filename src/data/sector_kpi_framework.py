@@ -3573,6 +3573,11 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
 }
 
+# Owner, 2026-10-06 (biopharma method selection): the two new drug profiles take their nearest
+# neighbours' KPI frameworks (Commercial Biotech has none of its own and reads the default).
+SECTOR_KPI_FRAMEWORK.setdefault("Big Pharma (Consolidated DCF)", dict(SECTOR_KPI_FRAMEWORK["Large Cap Pharma"]))
+SECTOR_KPI_FRAMEWORK.setdefault("Biotech Platform (SOTP)", dict(SECTOR_KPI_FRAMEWORK["Pre-approval Biotech"]))
+
 
 # ════════════════════════════════════════════════════════════════════════════
 # V3.2 — 3-Layer Search Phrase Enrichment

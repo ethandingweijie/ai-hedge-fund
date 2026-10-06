@@ -2229,6 +2229,7 @@ _PROFILE_TIER_MAP: dict[str, str] = {
     "Luxury Goods":                              "premium",
     "Membership / Subscription Retail":          "premium",
     "Large Cap Pharma":                          "premium",
+    "Big Pharma (Consolidated DCF)":             "premium",
     "Managed Care":                              "premium",
     # Mid — transitioning franchises with moderate moats
     "Mature SaaS":                               "mid",
@@ -6910,7 +6911,10 @@ def _compute_rnpv(
         asset_pv = 0.0
         for ramp_idx, ramp_frac in enumerate(cf_profile):
             t_from_today = years_to_launch + ramp_idx + 1  # year 1 of sales = launch_year+1
-            after_tax_cf = peak_sales * ramp_frac * op_margin * (1 - tax)
+            # Owner, 2026-10-06 (in-licensing SOTP, Zai Lab): royalties payable to the licensor come off
+            # the asset's margin before tax.
+            _roy = asset.get("royalty_payable") if isinstance(asset.get("royalty_payable"), (int, float)) else 0.0
+            after_tax_cf = peak_sales * ramp_frac * max(op_margin - float(_roy), 0.0) * (1 - tax)
             pv = after_tax_cf / ((1 + effective_wacc) ** t_from_today)
             asset_pv += pv
 
@@ -6940,6 +6944,7 @@ def _compute_rnpv(
     debt = max((net_debt or 0.0), 0.0)
 
     future_rd_pv = 0.0
+    future_ga_pv = 0.0
     if profile_name == "Pre-approval Biotech":
         current_rd = most_recent.get("research_and_development") or 0.0
         avg_years_to_launch = (
@@ -6950,10 +6955,20 @@ def _compute_rnpv(
         if effective_wacc > 0 and avg_years_to_launch > 0 and current_rd > 0:
             annuity_factor = (1 - (1 + effective_wacc) ** (-avg_years_to_launch)) / effective_wacc
             future_rd_pv = current_rd * annuity_factor
+            # Owner, 2026-10-06 (archetype pipeline_rnpv): the valued assets bear THEIR share of R&D -- the
+            # programmes valued over all clinical programmes in the accepted input. Charging the whole budget
+            # to the one asset with a sourced peak priced BEAM's pipeline at zero.
+            _rd_share = (most_recent.get("_pipeline_meta") or {}).get("rd_share")
+            if isinstance(_rd_share, (int, float)) and 0.0 < _rd_share < 1.0:
+                future_rd_pv *= float(_rd_share)
+            # ... and the unallocated G&A until launch (operating expense less R&D), per the owner's mechanics.
+            _opex = most_recent.get("operating_expense")
+            _ga = (float(_opex) - float(current_rd)) if isinstance(_opex, (int, float)) and _opex > current_rd else 0.0
+            future_ga_pv = _ga * annuity_factor
 
     # Owner, 2026-10-04 (plan 1A.3): the same claims every other bridge deducts.
     other_claims = _minority_interest(most_recent) + _preferred_equity(most_recent)
-    equity_value = total_pipeline_pv + cash - debt - future_rd_pv - other_claims
+    equity_value = total_pipeline_pv + cash - debt - future_rd_pv - future_ga_pv - other_claims
     iv_per_share = max(equity_value / effective_shares, 0.0)
 
     audit = {
@@ -6961,6 +6976,8 @@ def _compute_rnpv(
         "cash":                     cash,
         "debt":                     debt,
         "future_rd_pv":             future_rd_pv,
+        "future_ga_pv":             future_ga_pv,
+        "rd_share":                 (most_recent.get("_pipeline_meta") or {}).get("rd_share"),
         "minority_and_preferred":   other_claims,
         "equity_value":             equity_value,
         "shares_reported":          shares,
@@ -8613,6 +8630,28 @@ def _compute_method_value(
             # retain their own audit trail.
             most_recent.setdefault("_rnpv_audit", {})[scenario] = audit
         return iv
+
+    # ── Platform SOTP (owner, 2026-10-06, archetype platform_sotp) ───────
+    # Pillar A: platform / service revenue (the segment map's platform lines, else the accepted input's
+    # platform_revenue) x the peer EV/Sales; Pillar B: the pipeline's risk-adjusted PV (milestones,
+    # royalties, owned candidates) from the accepted input -- pipeline only, the bridge is applied once.
+    if method_name == "Platform SOTP":
+        from src.data.biopharma_methods import classify_segments as _cls_seg
+        _meta = most_recent.get("_pipeline_meta") or {}
+        _plat = _cls_seg(most_recent.get("segment_breakdown"))["platform"] or (_meta.get("platform_revenue_val") or 0.0)
+        _evs = peer.get("ev_revenue")
+        _pa = float(_plat) * float(_evs) * sm if (_plat and _evs) else 0.0
+        _pb = 0.0
+        _assets_p = most_recent.get("pipeline_assets_accepted") or []
+        if _assets_p and shares and shares > 0:
+            _iv_p, _aud_p = _compute_rnpv(pipeline_assets=_assets_p, most_recent=most_recent, shares=shares,
+                                         net_debt=0.0, wacc=wacc, profile_name=profile_name, scenario=scenario)
+            _pb = float((_aud_p or {}).get("pipeline_pv") or 0.0)
+        if _pa <= 0 and _pb <= 0:
+            return None
+        most_recent.setdefault("_platform_sotp", {})[scenario] = {
+            "platform_revenue": _plat, "ev_sales": _evs, "pillar_a": _pa, "pillar_b": _pb}
+        return _ev_to_equity_ps(_pa + _pb, net_debt, most_recent, shares)
 
     # ── EV/R&D (for pre-revenue biotech) ─────────────────────────────────
     if method_name in {"EV/R&D", "EV/R&D Spend"}:
@@ -12510,6 +12549,31 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # (Clover: no programme with a sourced peak) -- the extractor's assets do not stand in.
                 most_recent["pipeline_input_accepted"] = True
                 _acc_assets, _acc_checks = _pipe_bridge(_ii_p.canonical_data(_pipe_e))
+                # Owner, 2026-10-06: what the method selection and the rNPV need from the input -- the
+                # clinical programmes valued and the clinical programmes excluded (the R&D the valued
+                # assets bear is their share of all of them), and any platform / service revenue.
+                try:
+                    import re as _re_pm
+                    _pd = _ii_p.canonical_data(_pipe_e) or {}
+                    _n_val = sum(1 for _a in (_pd.get("assets") or []) if _a.get("phase") != "approved")
+                    _n_exc = sum(1 for _x in (_pd.get("excluded_assets") or [])
+                                 if _re_pm.search(r"phase\s*(1|2|3|i)|ph\s*[123]|filed|pivotal|clinical", str(_x.get("reason") or ""), _re_pm.I)
+                                 and not _re_pm.search(r"discontinu|terminat|preclinical|biosimilar|label expansion|deprioriti|approved|marketed",
+                                                       str(_x.get("reason") or ""), _re_pm.I))
+                    _plat = None
+                    if isinstance(_pd.get("platform_revenue"), dict):
+                        from src.agents.industry.gemini_params import amount as _gp_amount, _default_fx as _gp_fx
+                        _plat = _gp_amount(_pd["platform_revenue"], _gp_fx)
+                    _plat_val = None
+                    if _plat:
+                        _r_usd = 1.0 if str(_target_ccy or "USD").upper() == "USD" else get_fx_rate("USD", str(_target_ccy).upper(), api_key)
+                        _plat_val = float(_plat) * float(_r_usd) if _r_usd else None
+                    most_recent["_pipeline_meta"] = {
+                        "n_valued": _n_val, "n_clinical": _n_val + _n_exc,
+                        "rd_share": (_n_val / (_n_val + _n_exc)) if (_n_val + _n_exc) > 0 else None,
+                        "platform_revenue_usd": _plat, "platform_revenue_val": _plat_val}
+                except Exception:                          # noqa: BLE001
+                    pass
                 if not _acc_assets:
                     ticker_forward_flags.append(
                         "rNPV (Pipeline): the owner-accepted pipeline input values no asset (no programme with a "
@@ -13592,6 +13656,51 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"Profile override {_lookup_profile!r} unresolved — "
                     f"keeping {profile_name!r}",
                 )
+
+        # ── Biopharma valuation-method selection (owner, 2026-10-06) ─────
+        # Popular tickers take the owner's table; every other innovator drug company walks the owner's four
+        # gates (commercial concentration, pipeline focus, platform revenue, hybrid default). The archetype
+        # picks the profile -- and so the methods -- and the trace of every gate goes into the payload.
+        _bio_sel = None
+        try:
+            from src.data import biopharma_methods as _bpm
+            from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+            if sector == "Biopharma" and (profile_name in _bpm.DRUG_PROFILES or ticker.upper() in _bpm.POPULAR):
+                _seg_c = _bpm.classify_segments(most_recent.get("segment_breakdown"))
+                _rev_usd = _ladder_revenue_usd(revenue_base, _target_ccy, api_key) or 0.0
+                _seg_tot = (_seg_c["product"] + _seg_c["platform"] + _seg_c["other"]) or 0.0
+                _meta = most_recent.get("_pipeline_meta") or {}
+                _ev_v = (float(_market_cap) + float(net_debt or 0.0)) if _market_cap else None
+                _feats = {
+                    "total_revenue": _rev_usd,
+                    "product_sales": (_rev_usd * _seg_c["product"] / _seg_tot) if _seg_tot > 0 else None,
+                    "platform_revenue": ((_rev_usd * _seg_c["platform"] / _seg_tot) if _seg_tot > 0 else 0.0)
+                                        or (_meta.get("platform_revenue_usd") or 0.0),
+                    "ev": _ladder_revenue_usd(_ev_v, _target_ccy, api_key) if _ev_v else None,
+                    "n_clinical": (_meta.get("n_clinical") if _meta.get("n_clinical") is not None else
+                                   (sum(1 for _a in (most_recent.get("pipeline_assets") or [])
+                                        if normalize_phase(_a.get("phase")) in ("phase_1", "phase_2", "phase_3", "filed"))
+                                    or None)),
+                    "late_stage_value": _bpm.late_stage_value(most_recent.get("pipeline_assets_accepted") or []),
+                    "has_approved": any(_a.get("phase") == "approved" for _a in (most_recent.get("pipeline_assets_accepted") or [])),
+                    "operating_profitable": ((most_recent.get("operating_income") or most_recent.get("ebit") or 0) > 0)
+                                            if (most_recent.get("operating_income") is not None or most_recent.get("ebit") is not None) else None,
+                }
+                _bio_sel = _bpm.select(ticker, _feats)
+                _bio_sel["features"] = {k: (round(v, 0) if isinstance(v, float) else v) for k, v in _feats.items()}
+                _bp_data = INDUSTRY_VALUATION_PROFILES.get("Biopharma", {}).get(_bio_sel["profile"])
+                if _bp_data and _bio_sel["profile"] != profile_name:
+                    _routing_trace["steps"].append({"layer": "biopharma_method", "sector": sector,
+                                                    "profile": _bio_sel["profile"], "from": profile_name})
+                    _routing_trace["winner"] = "biopharma_method"
+                    profile_name, profile_data = _bio_sel["profile"], _bp_data
+                _routing_trace["biopharma_method"] = _bio_sel
+                ticker_forward_flags.append(
+                    f"Valuation method ({_bio_sel['source']}): {_bio_sel['label']} -> profile {profile_name}"
+                    + (f". {_bio_sel.get('reason')}" if _bio_sel.get("reason") else "")
+                    + (f" Gates: {' | '.join(_bio_sel['trace'])}" if _bio_sel.get("trace") else ""))
+        except Exception as _bpm_exc:                      # noqa: BLE001 -- routing must never block a run
+            _log.warning("[dcf] %s: biopharma method selection failed (kept %s): %s", ticker, profile_name, _bpm_exc)
 
         # ── SOTP (analyst) blend promotion (task #25) ────────────────────
         # With extractor-built assumptions on this ticker, lift the shadow
@@ -16715,9 +16824,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"  pipeline_PV=${_rnpv_audit_base['pipeline_pv']/1e9:.2f}B + "
                 f"cash=${_rnpv_audit_base['cash']/1e9:.2f}B − "
                 f"debt=${_rnpv_audit_base['debt']/1e9:.2f}B − "
-                f"fut_R&D_PV=${_rnpv_audit_base['future_rd_pv']/1e9:.2f}B = "
+                f"fut_R&D_PV=${_rnpv_audit_base['future_rd_pv']/1e9:.2f}B"
+                + (f" (the valued assets' {_rnpv_audit_base['rd_share']:.0%} share)" if isinstance(_rnpv_audit_base.get("rd_share"), (int, float)) else "")
+                + f" − G&A_PV=${(_rnpv_audit_base.get('future_ga_pv') or 0.0)/1e9:.2f}B = "
                 f"equity=${_rnpv_audit_base['equity_value']/1e9:.2f}B"
             )
+            # Owner, 2026-10-06 (MRNA / BEAM / Zai reviews, E15): what the price assumes. Market cap less net
+            # cash is the pipeline value the market pays for; set beside the pipeline the model values.
+            try:
+                if _market_cap and _market_cap > 0:
+                    _mkt_pipe = float(_market_cap) + float(net_debt or 0.0)
+                    _rnpv_lines.append(
+                        f"  market-implied: EV ${_mkt_pipe/1e9:.2f}B (market cap ${float(_market_cap)/1e9:.2f}B "
+                        f"{'less net cash' if (net_debt or 0) < 0 else 'plus net debt'}) against the modelled pipeline "
+                        f"${_rnpv_audit_base['pipeline_pv']/1e9:.2f}B -- the price assumes "
+                        f"{(_mkt_pipe / _rnpv_audit_base['pipeline_pv']) if _rnpv_audit_base['pipeline_pv'] else float('nan'):.1f}x what is modelled")
+            except Exception:                              # noqa: BLE001
+                pass
             # Per-asset breakdown — top 5 by risk-adjusted PV
             _assets_sorted = sorted(
                 _rnpv_audit_base["assets"],

@@ -125,6 +125,9 @@ class PipelineAsset(BaseModel):
     pdufa_date: Optional[str] = Field(default=None, description="FDA action date when filed, YYYY-MM-DD")
     interim_readout: Optional[str] = Field(default=None, description="Interim analysis date an ACCELERATED filing rests on, YYYY-MM")
     interim_source_url: Optional[str] = Field(default=None, description="Company source stating that interim-based filing plan")
+    royalty_payable: Optional[float] = Field(
+        default=None, description="Royalty rate the company PAYS its licensor on the asset's sales (0-1; an "
+                                  "in-licensed asset, e.g. 0.15); taken off the asset's margin in the rNPV")
     peak_risk_adjusted: Optional[bool] = Field(
         default=None, description="True when the cited peak already has the probability of success applied (a "
                                   "broker's risk-adjusted peak); the engine then does not discount it again")
@@ -141,6 +144,9 @@ class ExcludedAsset(BaseModel):
 class PipelineInputs(BaseModel):
     as_of: str = Field(description="Date the pipeline was read, e.g. '2026-09-26'")
     assets: list[PipelineAsset]
+    platform_revenue: Optional[Cited] = Field(
+        default=None, description="Platform biotech only: recurring software / discovery-service revenue "
+                                  "(latest fiscal year), priced on EV/Sales as the SOTP's first pillar")
     approved_portfolio: list[str] = Field(
         default_factory=list, description="Marketed products (and codes) whose label-expansion trials are not new pipeline")
     excluded_assets: list[ExcludedAsset] = Field(
@@ -192,7 +198,8 @@ def pipeline_to_engine_assets(pipe: dict, fx_to_usd: Optional[Callable[[str], Op
         asset = {"name": a.get("name"), "indication": a.get("indication"), "phase": a.get("phase"),
                  "peak_sales_usd": ps, "launch_year": a.get("launch_year"), "patent_expiry": a.get("patent_expiry"),
                  "source": "gemini_accepted", "peak_sales_period": (ps_c or {}).get("period"),
-                 "economic_share": _sh if isinstance(_sh, (int, float)) else None}
+                 "economic_share": _sh if isinstance(_sh, (int, float)) else None,
+                 "royalty_payable": a.get("royalty_payable") if isinstance(a.get("royalty_payable"), (int, float)) else None}
         pt = a.get("ptrs")
         if a.get("peak_risk_adjusted") and a.get("phase") != "approved":
             # Owner, 2026-10-05: a risk-adjusted peak (Innovent's SPDBI / CITIC China peaks) is not discounted twice.

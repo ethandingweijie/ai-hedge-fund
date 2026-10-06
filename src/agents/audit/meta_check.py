@@ -59,6 +59,8 @@ _PROFILE_TO_EXPECTED_SECTORS: dict[str, set[str]] = {
     "Pharmacy Benefit Manager":   {"HealthcareServices"},
     # Biopharma family
     "Large Cap Pharma":           {"Biopharma"},
+    "Big Pharma (Consolidated DCF)": {"Biopharma"},
+    "Biotech Platform (SOTP)":    {"Biopharma"},
     "Pre-approval Biotech":       {"Biopharma"},
     "Clinical-Stage Biotech":     {"Biopharma"},
     "Generics":                   {"Biopharma"},

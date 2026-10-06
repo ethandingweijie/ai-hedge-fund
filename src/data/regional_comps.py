@@ -315,6 +315,9 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     # (lenders: COF, SYF, SOFI, AFRM) nor processors (PYPL, FI, FIS: an 8.8x EV/EBITDA median ex-V,
     # the defect). Live 2026-10-04 ex-V: EV/EBITDA 17.9x, P/E 23.5x. The subject is excluded.
     "Payment Networks":            {"US": ("V", "MA", "AXP", "SPGI", "MCO", "ICE", "CME", "MSCI")},
+    # Owner, 2026-10-06 (Pfizer, archetype consolidated_dcf): forward P/E, EV/EBITDA and dividend against
+    # the big-pharma peers the owner named (Merck, Bristol Myers Squibb, Eli Lilly, AbbVie) and Pfizer.
+    "Big Pharma (Consolidated DCF)": {"US": ("PFE", "MRK", "BMY", "LLY", "ABBV")},
     # Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform prices its relative
     # legs on China internet peers (the owner's pins plus the store's internet, gaming and travel
     # platforms) instead of FMP's Specialty Retail label (Amazon, O'Reilly; Meituan, MINISO).

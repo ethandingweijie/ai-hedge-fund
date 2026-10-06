@@ -21,7 +21,7 @@ def test_the_profiles_are_gone_and_managed_care_has_one_home():
     names = {p for ps in P.values() for p in ps}
     assert not set(REMOVED) & names
     assert "Managed Care" not in P["Biopharma"] and "Managed Care" in P["HealthcareServices"]
-    assert sum(len(v) for v in P.values()) == 145   # 135 after the removal; +10 with Wave 10 (owner, 2026-09-27)
+    assert sum(len(v) for v in P.values()) == 147   # 2026-10-06: +2 biopharma method profiles; 135 after the removal; +10 with Wave 10 (owner, 2026-09-27)
 
 
 def test_the_sector_defaults_point_at_real_profiles():
