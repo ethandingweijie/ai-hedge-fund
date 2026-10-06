@@ -74,7 +74,7 @@ _SGX_KNOWN_CODES: frozenset[str] = frozenset({
     "CMOU",  # CDL Hospitality Trusts
     # ── Mid Caps ────────────────────────────────────────────────────────
     "OYY",   # PropNex
-    "AGS",   # Sheng Siong Group
+    "OV8",   # Sheng Siong Group (SGX code OV8; "AGS" was wrong, owner 2026-10-07)
     "BVA",   # Top Glove Corporation
     "EB5",   # First Resources
     "S51",   # Seatrium (formerly Sembcorp Marine)

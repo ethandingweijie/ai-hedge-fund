@@ -41,7 +41,7 @@ ARCHIVE = [
     ("Propnex_Aug 26.pdf",                       {"OYY.SI"}),
     ("ST Engineering_Aug 2026.pdf",              {"S63.SI"}),
     ("Sembcorp Industries_2025.pdf",             {"U96.SI"}),
-    ("Sheng Siong_July 2026.pdf",                {"AGS.SI"}),
+    ("Sheng Siong_July 2026.pdf",                {"OV8.SI"}),   # 2026-10-07: the stale AGS.SI pin is gone; OV8.SI is the listing
     ("Tencent_Sep 2025.pdf",                     {"00700.HK"}),
 ]
 

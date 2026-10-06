@@ -71,7 +71,7 @@ SGX_UNIVERSE: list[dict] = [
     # Mid Caps & Others
     # ═══════════════════════════════════════════════════════════════════════
     {"code": "OYY",  "name": "PropNex",                         "sector": "Property",     "industry": "Real Estate Services"},
-    {"code": "AGS",  "name": "Sheng Siong Group",               "sector": "Consumer",     "industry": "Grocery Retail"},
+    {"code": "OV8",  "name": "Sheng Siong Group",               "sector": "Consumer",     "industry": "Grocery Retail"},
     {"code": "EB5",  "name": "First Resources",                 "sector": "Consumer",     "industry": "Palm Oil"},
     {"code": "S51",  "name": "Seatrium",                        "sector": "Industrials",  "industry": "Marine & Offshore"},
     {"code": "CC3",  "name": "StarHub",                         "sector": "Telco",        "industry": "Telecom Services"},
