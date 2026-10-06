@@ -351,3 +351,16 @@ def test_d8_scenario_wacc_shift_is_removed():
 def test_payment_networks_price_on_the_toll_road_basket():
     from src.data.regional_comps import PROFILE_PEER_BASKETS
     assert PROFILE_PEER_BASKETS["Payment Networks"]["US"] == ("V", "MA", "AXP", "SPGI", "MCO", "ICE", "CME", "MSCI")
+
+
+def test_guidance_eps_on_the_forward_legs_is_converted_into_the_valuation_currency():
+    # IHH (2026-10-06): RM0.26 / RM0.29 guided EPS sat unconverted in an SGD forward P/E (S$5.09 vs ~S$1.59).
+    est = {"confidence": "HIGH", "estimates": {"base": {"eps_fy1": 0.26, "eps_fy2": 0.29}}}
+    fwd = {"eps": {"base": 0.1}, "ebitda": {"base": 1.0}, "revenue": {"base": 1.0}, "ebit": {"base": 1.0}}
+    o = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, None, ntm_e=0.76,
+                                    fx_to_valuation=0.31288, valuation_currency="SGD")
+    assert o["eps"]["base"] == pytest.approx((0.24 * 0.26 + 0.76 * 0.29) * 0.31288)
+    est["guidance"] = {"eps": {"currency": "SGD"}}
+    o2 = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, None, fx_to_valuation=0.31288,
+                                     valuation_currency="SGD")
+    assert o2["eps"]["base"] == pytest.approx(0.26)

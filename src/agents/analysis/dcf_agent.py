@@ -3998,7 +3998,8 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
 
 
 def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario: str, gf: Optional[dict],
-                              revenue_base: Optional[float], ntm_e: float = 0.0) -> Optional[dict]:
+                              revenue_base: Optional[float], ntm_e: float = 0.0, fx_to_valuation: float = 1.0,
+                              valuation_currency: Optional[str] = None) -> Optional[dict]:
     """Owner, 2026-10-03: management guidance -> estimates price the forward legs too, not only the DCF.
 
     Per scenario, the forward legs' metric becomes the guidance-derived FY+1 estimate: EPS from the
@@ -4012,6 +4013,17 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
     if _GUIDANCE_CONFIDENCE_RANK.get(str(est.get("confidence") or "LOW").upper(), 0) < _GUIDANCE_CONFIDENCE_RANK.get(cfg["min_confidence"], 1):
         return fwd
     row = dict(((est.get("estimates") or {}).get(scenario)) or {})
+    # Owner, 2026-10-06 (IHH review): the research's EPS is in the filing's currency (IHH: RM0.26 / RM0.29)
+    # and the forward P/E leg multiplies it by a valuation-currency multiple -- convert it, as the forecast
+    # engine does (plan 1B.1), unless the guidance states its EPS in the valuation currency already.
+    _eps_ccy = str((((est.get("guidance") or {}).get("eps") or {}).get("currency")) or "").upper()
+    _fxe = float(fx_to_valuation) if isinstance(fx_to_valuation, (int, float)) and fx_to_valuation > 0 else 1.0
+    if _eps_ccy and valuation_currency and _eps_ccy == str(valuation_currency).upper():
+        _fxe = 1.0
+    if _fxe != 1.0:
+        for _k in ("eps_fy1", "eps_fy2"):
+            if isinstance(row.get(_k), (int, float)):
+                row[_k] = float(row[_k]) * _fxe
     rows = (gf or {}).get("rows") or []
     y1 = rows[0] if rows else {}
     g1 = row.get("revenue_growth_fy1")
@@ -15337,7 +15349,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _gf_for_legs = {"rows": [{"eps": _bmm.get("eps_fy1"), "revenue": (_bmm["rows"].get("total_income") or [None])[0], "ebit": None, "da": 0.0}]}
             _fwd_cons_sc = _guidance_forward_overlay((_guid_est or ({"confidence": "HIGH", "estimates": {}} if (_bank_models and _bank_models.get("base", {}).get("feeds_legs")) else None)) if _guidance_channel_enabled() else None,
                                                      forward_consensus, scenario, _gf_for_legs, revenue_base,
-                                                     ntm_e=_ntm_e_for_research)
+                                                     ntm_e=_ntm_e_for_research, fx_to_valuation=float(fx_rate or 1.0),
+                                                     valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
                 ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
