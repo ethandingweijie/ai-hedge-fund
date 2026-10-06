@@ -189,8 +189,13 @@ def listed_minority_at_market(ticker: str, end_date: str, to_ccy: str) -> Option
         for e in (((_vc.load().get("listed_subsidiaries") or {}).get("entries") or {}).get(ticker.upper()) or []):
             if str(e.get("status") or "").upper() != "ACCEPTED":   # owner-set: a PROPOSED stake prices nothing
                 continue
-            if e.get("listed") and isinstance(e.get("stake_pct"), (int, float)) and 0.5 <= float(e["stake_pct"]) < 1.0:
-                stakes.append((str(e["listed"]), float(e["stake_pct"])))
+            # Owner, 2026-10-07 (IHH review): a subsidiary consolidated on de facto control below 50% (IHH holds
+            # 31% of Fortis and 33% of Parkway Life REIT, both consolidated) carries an owner-set
+            # `consolidated: true` -- its outside holders' claim sits in the consolidated figures all the same.
+            _st = e.get("stake_pct")
+            _lo = 0.0 if e.get("consolidated") is True else 0.5
+            if e.get("listed") and isinstance(_st, (int, float)) and 0.0 < float(_st) < 1.0 and float(_st) >= _lo:
+                stakes.append((str(e["listed"]), float(_st)))
     except Exception:                                      # noqa: BLE001
         pass
     if not stakes:

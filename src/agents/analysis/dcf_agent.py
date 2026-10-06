@@ -12341,6 +12341,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"Minority interest: listed subsidiaries at market {_mi_mkt['value'] / 1e9:,.1f}bn vs book "
                 f"{_mi_book / 1e9:,.1f}bn ({_mi_parts}); the bridge deducts the larger")
 
+        # Owner, 2026-10-07 (BlackRock review): an owner-accepted minority interest replaces the feed's when
+        # the book figure is mostly not an outside claim on the operating business -- BlackRock's $6.9bn is
+        # $4.0bn consolidated-fund NCI (removed with the funds) and $2.8bn exchangeable Subco units (already
+        # in the diluted share count); the true minority is ~$0.1bn.
+        try:
+            _ba_mi = _bridge_adjustment(ticker).get("minority_interest")
+            if isinstance(_ba_mi, (int, float)) and _ba_mi >= 0:
+                _mi_feed = float(most_recent.get("minority_interest") or 0.0)
+                _mi_fx = (fx_rate if (reported_currency != _target_ccy and fx_rate) else 1.0)
+                most_recent["minority_interest_book"] = _mi_feed
+                most_recent["minority_interest"] = float(_ba_mi) * float(_mi_fx)
+                ticker_forward_flags.append(
+                    f"Minority interest: owner-accepted {float(_ba_mi) / 1e9:,.2f}bn replaces the feed's "
+                    f"{_mi_feed / 1e9:,.2f}bn (valuation_constants.bridge_adjustments)")
+        except Exception:                                  # noqa: BLE001
+            pass
+
         # Owner, 2026-10-04 (plan 1E.1): core earnings per year, so neither the trailing legs nor the
         # five-year normalisation capitalise a disposal gain (see _core_earnings).
         for _i, _row in enumerate(series):

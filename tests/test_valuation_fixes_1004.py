@@ -465,3 +465,36 @@ def test_i9_i10_i11_curated_baskets(monkeypatch):
     assert out["pe_ntm"]["value"] == pytest.approx(0.75 * 10 + 0.25 * 20)
     rc.profile_basket_multiples("SES", "Grocery & Discount Retail", exclude="OV8.SI")
     assert calls[-1] == ("XMKT", "Grocery & Discount Retail")
+
+
+def test_market_minority_reads_consolidated_stakes_below_half(monkeypatch):
+    # Owner, 2026-10-07 (IHH review): Fortis at 31% is consolidated -- a `consolidated: true` entry prices its
+    # outside holders at market; a sub-50% entry without the flag is an associate and prices nothing.
+    from src.agents.analysis import holdco_sotp as hs
+    from src.data import valuation_constants as vc
+    reg = {"listed_subsidiaries": {"entries": {
+        "IHHX": [{"listed": "FORTIS.NS", "stake_pct": 0.3117, "consolidated": True, "status": "ACCEPTED"},
+                 {"listed": "ASSOC.NS", "stake_pct": 0.30, "status": "ACCEPTED"}],
+        "PROP": [{"listed": "C2PU.SI", "stake_pct": 0.3294, "consolidated": True, "status": "PROPOSED"}]}}}
+    monkeypatch.setattr(vc, "load", lambda: reg)
+    monkeypatch.setattr(hs, "_market_value", lambda listed, end: 1000.0)
+    monkeypatch.setattr(hs, "_fx", lambda a, b: 0.05)
+    monkeypatch.setattr(hs, "template_for", lambda t: None)
+    out = hs.listed_minority_at_market("IHHX", "2026-10-07", "MYR")
+    assert [p["listed"] for p in out["parts"]] == ["FORTIS.NS"]
+    assert abs(out["value"] - (1 - 0.3117) * 1000.0 * 0.05) < 1e-9
+    assert hs.listed_minority_at_market("PROP", "2026-10-07", "MYR") is None   # PROPOSED prices nothing
+
+
+def test_blk_bridge_entry_and_minority_override_are_wired():
+    # Owner, 2026-10-07 (BlackRock review): the bridge entry prices only once ACCEPTED, and its
+    # minority_interest replaces the feed's (CIP NCI and Subco units are not outside claims).
+    import inspect
+    from src.agents.analysis import dcf_agent as d
+    from src.data import valuation_constants as vc
+    e = vc.load()["bridge_adjustments"]["entries"]["BLK"]
+    assert e["minority_interest"] < 1e9 and e["shares_as_converted"] == 164_600_000.0
+    if str(e.get("status")).upper() != "ACCEPTED":
+        assert d._bridge_adjustment("BLK") == {}
+    src = inspect.getsource(d)
+    assert '_bridge_adjustment(ticker).get("minority_interest")' in src
