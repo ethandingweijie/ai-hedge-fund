@@ -55,6 +55,26 @@ def _role_weight(title: str | None) -> float:
     return 1.0
 
 
+_ENTITY_WORDS = ("foundation", "endowment", "trust", "fund", " llc", " l.p", " lp", " inc", " ltd", "holdings",
+                 "capital", "partners", "management", "limited", "corporation", " corp", " plc", " ag", " sa")
+_OFFICER_WORDS = ("director", "officer", "ceo", "cfo", "coo", "cto", "president", "chair", "vp", "vice president",
+                  "general counsel", "secretary", "treasurer", "evp", "svp", "chief")
+
+
+def _is_reportable_insider(title: str | None, name: str | None) -> bool:
+    """Owner, 2026-10-06 (LLY review, E26): only officers and directors carry a management signal. A 10%
+    owner or an institution -- Lilly Endowment's ~$77.7bn of sales read as 7% of market cap of "insider
+    selling" and added +40bp to Lilly's WACC -- is a holder, not management."""
+    t = (title or "").lower()
+    n = (name or "").lower()
+    officer = any(w in t for w in _OFFICER_WORDS)
+    if any(w in n for w in _ENTITY_WORDS) and not officer:
+        return False
+    if ("10%" in t or "ten percent" in t or "beneficial owner" in t) and not officer:
+        return False
+    return True
+
+
 def _is_senior_executive(title: str | None) -> bool:
     if not title:
         return False
@@ -133,6 +153,13 @@ def run_insider_activity_agent(state: AgentState) -> AgentState:
             value  = t.transaction_value  or 0.0
             title  = t.title
             name   = t.name or "Unknown"
+            # NaN values from the feed (01801.HK: "Net 12m $+nan") count as nothing, not as a signal.
+            if isinstance(value, float) and value != value:
+                value = 0.0
+            if isinstance(shares, float) and shares != shares:
+                shares = 0.0
+            if not _is_reportable_insider(title, name):
+                continue
             rw     = _role_weight(title)
             is_buy = shares > 0
             signed = value if is_buy else -value   # transaction_value is always positive

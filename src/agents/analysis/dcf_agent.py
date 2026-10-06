@@ -4030,9 +4030,17 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
     rev1 = (float(revenue_base) * (1.0 + float(g1))) if (isinstance(g1, (int, float)) and revenue_base) else (y1.get("revenue") if y1 else None)
     # Plan EV6 (2026-10-04): the next twelve months -- FY+1 and FY+2 weighted by the elapsed share of
     # FY+1 (passed as `ntm_e`; 0 when the research's FY+1 is not the year in progress).
+    _eps_rolled = None
     if ntm_e and ntm_e > 0:
+        if isinstance(row.get("eps_fy1"), (int, float)) and not isinstance(row.get("eps_fy2"), (int, float)):
+            # Plan E24 (LLY, ALNY): no research FY+2 -- grow the research FY+1 at consensus FY+2/FY+1.
+            _c12 = (((fwd or {}).get("_fy1_fy2") or {}).get("eps") or {}).get(scenario) or (None, None)
+            if all(isinstance(x, (int, float)) and x > 0 for x in _c12):
+                row["eps_fy2"] = float(row["eps_fy1"]) * float(_c12[1]) / float(_c12[0])
+                _eps_rolled = "consensus FY+2/FY+1 growth"
         if isinstance(row.get("eps_fy1"), (int, float)) and isinstance(row.get("eps_fy2"), (int, float)):
             row["eps_fy1"] = (1.0 - ntm_e) * float(row["eps_fy1"]) + ntm_e * float(row["eps_fy2"])
+            _eps_rolled = _eps_rolled or "research FY+2"
         g2 = row.get("revenue_growth_fy2")
         if rev1 and isinstance(g2, (int, float)):
             rev2 = rev1 * (1.0 + float(g2))
@@ -4050,7 +4058,8 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
         "ebit": float(y1["ebit"]) if isinstance(y1.get("ebit"), (int, float)) and y1["ebit"] > 0 else None,
     }
     src_label = {
-        "eps": ((f"guidance-derived NTM EPS (FY+2 at {ntm_e:.0%})" if (ntm_e and ntm_e > 0) else "guidance-derived FY+1 EPS estimate")
+        "eps": ((f"guidance-derived NTM EPS (FY+2 at {ntm_e:.0%}, from {_eps_rolled})" if _eps_rolled
+                 else ("guidance-derived FY+1 EPS estimate (no FY+2 to roll)" if (ntm_e and ntm_e > 0) else "guidance-derived FY+1 EPS estimate"))
                 if isinstance(row.get("eps_fy1"), (int, float)) else "guidance forecast year-1 EPS"),
         "ebitda": ("guidance-derived FY+1 revenue x margin" if isinstance(row.get("ebitda_margin_fy1"), (int, float)) else "guidance forecast year-1 EBIT + D&A"),
         "revenue": "guidance-derived FY+1 revenue", "ebit": "guidance forecast year-1 EBIT",
@@ -13012,6 +13021,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _inv_contracted = _inv_backlog_cov is not None and _inv_backlog_cov >= 1.0
         if not _dcf_family_disabled and fcf_margin_base > 0:
             _inv_days = _inventory_stress_days(series[::-1])
+            # Owner, 2026-10-06 (LLY / REGN reviews, E25): a drug maker's inventory build is pre-launch or API
+            # stock (Lilly's GLP-1 build), not channel stock sold at a markdown -- the retail premise fails.
+            if sector == "Biopharma" and _inv_days is not None and _inv_days > _INVENTORY_STRESS_TRIGGER_DAYS:
+                ticker_forward_flags.append(
+                    f"Inventory days {_inv_days:+.1f} over the prior 3y median, NOT marked down: a drug maker's "
+                    "inventory build is launch / API stock, not channel stock sold at a discount")
+                _inv_days = None
             # The exemption is a PRECONDITION of the one gate below, not a second
             # gate: still one site that turns inventory into days, still one
             # record, and its `applied` stays the literal its comment insists on.
@@ -13285,6 +13301,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                        ("revenue", ("revenue_low", "revenue_avg", "revenue_high")), ("ebit", ("ebit_low", "ebit_avg", "ebit_high"))):
                         for _sc, _at in zip(("bear", "base", "bull"), _attrs):
                             _v1, _v2 = forward_consensus[_m].get(_sc), _fx(_safe(getattr(_e2f, _at, None)))
+                            # Plan E24: consensus FY+1 / FY+2 kept, so a research FY+1 without an FY+2 rolls on
+                            # consensus growth instead of claiming a roll it did not make.
+                            forward_consensus.setdefault("_fy1_fy2", {}).setdefault(_m, {})[_sc] = (_v1, _v2)
                             if _v1 is not None and _v2 is not None and _ntm_e > 0:
                                 forward_consensus[_m][_sc] = (1.0 - _ntm_e) * _v1 + _ntm_e * _v2
                     forward_consensus["ntm_elapsed_share"] = round(_ntm_e, 4)
@@ -14644,6 +14663,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _growth_base_cap = 0.30
         else:
             _growth_base_cap = 1.0   # no additional cap for sub-$1B companies
+        # Owner, 2026-10-06 (LLY review, E25): the tier cap is a prior for companies whose growth would be
+        # extrapolated. A patent-protected drug franchise with NTM consensus above the tier (Lilly +32%, 5+
+        # analysts) is not that case -- the cap rises to consensus. Cyclicals keep the hard tier.
+        try:
+            if sector == "Biopharma" and forward_consensus and revenue_base and revenue_base > 0:
+                _cons_rev = (forward_consensus.get("revenue") or {}).get("base")
+                _n_an = forward_consensus.get("analyst_count_revenue") or 0
+                if isinstance(_cons_rev, (int, float)) and _n_an >= 5:
+                    _cons_g = float(_cons_rev) / float(revenue_base) - 1.0
+                    if _cons_g > _growth_base_cap:
+                        ticker_forward_flags.append(
+                            f"Revenue-scale cap raised to NTM consensus growth {_cons_g:.0%} ({_n_an} analysts) from "
+                            f"the {_growth_base_cap:.0%} tier: a drug franchise's growth is covered, not extrapolated")
+                        _growth_base_cap = _cons_g
+        except Exception:                                  # noqa: BLE001
+            pass
 
         growth_base_capped = min(growth_base, _growth_base_cap)
         if growth_base_capped < growth_base:

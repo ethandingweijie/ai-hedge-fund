@@ -4241,10 +4241,16 @@ def _fmp_risk_kpis(ticker: str) -> dict:
         cash_st = bs.get("cashAndShortTermInvestments")
         fcf     = cfs.get("freeCashFlow")
         if cash_st is not None and fcf is not None:
+            # Owner, 2026-10-06 (E16): a biotech's treasury includes long-term marketable securities (the
+            # same cash the valuation bridge counts), and the runway is stated in quarters too. Computed,
+            # never read off the research: MRNA's extracted "1.7 quarters" was ~4 years of cash.
+            _treasury = float(cash_st) + float(bs.get("longTermInvestments") or 0.0)
             if fcf < 0:
-                out["cash_runway_years"] = round(cash_st / abs(fcf), 2)
+                out["cash_runway_years"] = round(_treasury / abs(fcf), 2)
+                out["cash_runway_qtrs"] = round(_treasury / (abs(fcf) / 4.0), 1)
             else:
                 out["cash_runway_years"] = 99.0
+                out["cash_runway_qtrs"] = 40.0
 
         # ── Quality fields (Hyperscaler/Tech Conglomerate, etc.) ───────────
         # Source: /stable/ratios-ttm (per user-confirmed schema). Field names
@@ -4305,9 +4311,13 @@ def _augment_metrics_with_fmp_risk(ticker: str, metrics: dict | None) -> dict:
     out = dict(metrics or {})
     fmp_risk = _fmp_risk_kpis(ticker)
     for k, v in fmp_risk.items():
-        if k not in out or out[k] is None:
+        if k not in out or out[k] is None or k in _COMPUTED_WINS:
             out[k] = v
     return out
+
+
+#: KPIs computed from the statements that override the research extractor (owner, 2026-10-06, E16).
+_COMPUTED_WINS = frozenset({"cash_runway_qtrs", "cash_runway_years"})
 
 
 # ── V3.1: FMP commodity-price augmentation ──────────────────────────────────

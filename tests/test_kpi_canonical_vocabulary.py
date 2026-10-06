@@ -45,7 +45,7 @@ from src.data.sector_kpi_framework import SECTOR_KPI_FRAMEWORK, _fmp_risk_kpis
 
 # Exactly what _fmp_risk_kpis() can emit — kept honest by the test below.
 CANONICAL_FMP_KEYS = {
-    "net_debt_to_ebitda", "debt_to_ebitda", "cash_runway_years",
+    "net_debt_to_ebitda", "debt_to_ebitda", "cash_runway_years", "cash_runway_qtrs",   # E16 (2026-10-06)
     "leverage_ratio", "operating_margin_pct", "revenue_growth_pct",
     "capex_intensity_pct", "gross_margin_pct", "fcf_margin_pct",
     "fcf_conversion_pct",

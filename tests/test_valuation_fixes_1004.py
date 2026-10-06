@@ -377,3 +377,29 @@ def test_the_subject_exclusion_and_frozen_members_reach_the_payload(monkeypatch)
     assert '"subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject"' in src
     tr = d._multiples_trace({"pe": 46.36, "_comp_basis": {"pe": row}})
     assert tr["fields"]["pe"]["subject_excluded"] is True and tr["fields"]["pe"]["members_used"]
+
+
+def test_e26_holders_and_institutions_are_not_insiders():
+    from src.agents.intelligence.insider_activity_agent import _is_reportable_insider as rep
+    assert rep("10% Owner", "LILLY ENDOWMENT INC") is False
+    assert rep(None, "Lilly Endowment Inc") is False
+    assert rep("Director, 10% Owner", "Jane Doe") is True
+    assert rep("EVP & CFO", "John Smith") is True
+
+
+def test_e16_cash_runway_is_computed_and_overrides_the_extractor(monkeypatch):
+    from src.data import sector_kpi_framework as k
+    monkeypatch.setattr(k, "_fmp_risk_kpis", lambda t: {"cash_runway_qtrs": 16.6, "cash_runway_years": 4.15})
+    out = k._augment_metrics_with_fmp_risk("MRNA", {"cash_runway_qtrs": 1.7})
+    assert out["cash_runway_qtrs"] == 16.6
+
+
+def test_e24_a_research_fy1_without_fy2_rolls_on_consensus_growth_and_says_so():
+    est = {"confidence": "HIGH", "estimates": {"base": {"eps_fy1": 36.0}}}
+    fwd = {"eps": {"base": 40.0}, "ebitda": {"base": 1.0}, "revenue": {"base": 1.0}, "ebit": {"base": 1.0},
+           "_fy1_fy2": {"eps": {"base": (34.0, 44.2)}}}
+    o = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, None, ntm_e=0.76)
+    assert o["eps"]["base"] == pytest.approx(0.24 * 36.0 + 0.76 * 36.0 * 44.2 / 34.0)
+    assert "consensus FY+2/FY+1 growth" in o["_source"]["eps"]["base"]
+    o2 = d._guidance_forward_overlay(est, {**copy.deepcopy(fwd), "_fy1_fy2": {}}, "base", None, None, ntm_e=0.76)
+    assert o2["eps"]["base"] == pytest.approx(36.0) and "no FY+2 to roll" in o2["_source"]["eps"]["base"]
