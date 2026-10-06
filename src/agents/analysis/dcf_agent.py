@@ -7349,6 +7349,15 @@ def _compute_method_value(
     scenario_mult = {"bear": 0.75, "base": 1.00, "bull": 1.25}
     sm = scenario_mult.get(scenario, 1.0)
 
+    # Plan E23 (owner, 2026-10-06; LLY / IHH / BLK / BSL reviews): a trailing EV/EBITDA leg is priced on the
+    # NTM basis -- consensus EBITDA (3+ analysts) against the peers' forward EV/EBITDA -- whenever both exist,
+    # so it stands on the same year as the forward P/E (trailing GAAP EBITDA carries deal costs and one-offs).
+    if (method_name == "EV/EBITDA" and _ntm_forward_enabled() and forward_consensus
+            and ((forward_consensus.get("ebitda") or {}).get(scenario) or 0) > 0
+            and (forward_consensus.get("analyst_count_revenue") or forward_consensus.get("analyst_count_eps") or 0) >= 3
+            and isinstance(peer.get("ev_ebitda_ntm"), (int, float)) and peer["ev_ebitda_ntm"] > 0):
+        method_name = "Forward EV/EBITDA"
+
     # ── Rev DCF (Target Margin) ────────────────────────────────────────────
     # Owner rule 1 (2026-09-23). Revenue on the run's growth path; the EBIT
     # margin ramped linearly from today's (negative is allowed: that is the
@@ -7965,7 +7974,32 @@ def _compute_method_value(
         # bear/bull ±20% band applied inside the helper.
         base_mult, _ev_rev_basis = _qualified_ev_revenue_multiple(
             sector, profile_name, scenario, peer, most_recent)
-        mult = base_mult * growth_premium
+        # Plan E23 (owner, 2026-10-06; ALNY / REGN reviews): NTM revenue against a FORWARD multiple -- the
+        # peers' measured EV / NTM revenue (scaling the qualified multiple by it), else the trailing one
+        # carried forward by the peers' revenue growth; the forward growth gap replaces the flat premium;
+        # outside Tech the multiple is scaled by the company's NTM EBITDA margin against the peers'.
+        _ttm_rev_m = peer.get("ev_revenue")
+        _ntm_rev_m = peer.get("ev_revenue_ntm")
+        if isinstance(_ntm_rev_m, (int, float)) and _ntm_rev_m > 0 and isinstance(_ttm_rev_m, (int, float)) and _ttm_rev_m > 0:
+            base_mult = base_mult * float(_ntm_rev_m) / float(_ttm_rev_m)
+            _ev_rev_basis = f"{_ev_rev_basis}; forward basis (peer EV/NTM revenue)"
+        elif isinstance(peer.get("growth_avg"), (int, float)) and peer["growth_avg"] > 0:
+            base_mult = base_mult / (1.0 + float(peer["growth_avg"]))
+            _ev_rev_basis = f"{_ev_rev_basis}; forward basis (trailing / (1 + peer growth {float(peer['growth_avg']):.1%}))"
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _gp_used = _fga if _fga is not None else growth_premium
+        _margin_adj, _margin_note = 1.0, None
+        try:
+            _fe = ((forward_consensus or {}).get("ebitda") or {}).get(scenario)
+            _peer_m = (float(peer["ev_revenue"]) / float(peer["ev_ebitda"])) if (peer.get("ev_revenue") and peer.get("ev_ebitda")) else None
+            if (not is_tech_sector(sector) and isinstance(_fe, (int, float)) and _fe > 0 and fwd_rev and _peer_m and _peer_m > 0):
+                _co_m = float(_fe) / float(fwd_rev)
+                _raw_m = _co_m / _peer_m
+                _margin_adj = max(_EV_REV_MARGIN_BOUNDS[0], min(_EV_REV_MARGIN_BOUNDS[1], _raw_m))
+                _margin_note = f"NTM EBITDA margin {_co_m:.0%} vs peers' implied {_peer_m:.0%} -> {_margin_adj:.2f}x"
+        except Exception:  # noqa: BLE001
+            pass
+        mult = base_mult * _gp_used * _margin_adj
         # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
         # revenue get a multiple haircut because SBC is shareholder
         # dilution disguised as non-cash expense. Resolves the "cheap on
@@ -7983,7 +8017,9 @@ def _compute_method_value(
                    metric_value=float(fwd_rev), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(base_mult),
                                    "peer_source": str(_ev_rev_basis),
-                                   "growth_premium": growth_premium,
+                                   "growth_premium": _gp_used,
+                                   "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
+                                   **({"margin_adjustment": _margin_adj, "margin_basis": _margin_note} if _margin_note else {}),
                                    "sbc_haircut": (0.93 if (_sbc_v and revenue_base and revenue_base > 0
                                                             and is_tech_sector(sector)
                                                             and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
@@ -8192,7 +8228,9 @@ def _compute_method_value(
         if eps_fwd is None or eps_fwd <= 0:
             return None
         _fwd_pe, _fwd_pe_src = _forward_peer_multiple(peer, "pe", 18.0)
-        mult = _fwd_pe * growth_premium * sbc_pe_discount * _own_disc
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _gp_used = _fga if _fga is not None else growth_premium
+        mult = _fwd_pe * _gp_used * sbc_pe_discount * _own_disc
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         _leg_trace(kind="equity_multiple", metric=_fwd_label(forward_consensus, "eps", scenario, f"EPS (NTM consensus, {scenario})"),
@@ -8200,7 +8238,8 @@ def _compute_method_value(
                    multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "eps", scenario),
                    multiple_parts={"peer_multiple": _fwd_pe,
                                    "peer_source": _fwd_pe_src,
-                                   "growth_premium": growth_premium,
+                                   "growth_premium": _gp_used,
+                                   "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
                                    "sbc_pe_discount": sbc_pe_discount,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0),
@@ -8217,7 +8256,9 @@ def _compute_method_value(
         if ebitda_fwd is None or ebitda_fwd <= 0 or shares <= 0:
             return None
         _fwd_ev, _fwd_ev_src = _forward_peer_multiple(peer, "ev_ebitda", 12.0)
-        mult = _fwd_ev * growth_premium
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _gp_used = _fga if _fga is not None else growth_premium
+        mult = _fwd_ev * _gp_used
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebitda_fwd * mult
@@ -8225,7 +8266,8 @@ def _compute_method_value(
                    metric_value=float(ebitda_fwd), multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "ebitda", scenario),
                    multiple_parts={"peer_multiple": _fwd_ev,
                                    "peer_source": _fwd_ev_src,
-                                   "growth_premium": growth_premium,
+                                   "growth_premium": _gp_used,
+                                   "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
@@ -9342,6 +9384,33 @@ def _ladder_revenue_usd(revenue_base, target_ccy, api_key=None):
         return float(revenue_base) * float(r) if r and r > 0 else revenue_base
     except Exception:                                      # noqa: BLE001
         return revenue_base
+
+
+#: Plan E23 (owner, 2026-10-06): the forward growth adjustment -- the excess of the company's forward
+#: revenue growth over its peers', compounded over this many years, bounded.
+_FWD_GROWTH_YEARS = 3
+_FWD_GROWTH_BOUNDS = (0.85, 1.30)   # the owner's growth-premium band (Wave 7), not a new one
+#: EV/Revenue is EV/EBITDA x the EBITDA margin: a revenue multiple borrowed from higher-margin peers is
+#: scaled by the company's NTM EBITDA margin over the peers' implied one, bounded (ALNY on Vertex's 9.8x).
+_EV_REV_MARGIN_BOUNDS = (0.25, 1.25)
+
+
+def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict) -> tuple[Optional[float], str]:
+    """Plan E23: ((1 + company forward revenue growth) / (1 + peer revenue growth)) ** _FWD_GROWTH_YEARS,
+    bounded -- a forward multiple already prices the peers' next year, so only the growth GAP over the
+    next years moves it. (None, reason) when either growth is missing."""
+    try:
+        v1, v2 = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {}).get("base") or (None, None)
+        pg = peer.get("growth_avg")
+        if not (isinstance(v1, (int, float)) and isinstance(v2, (int, float)) and v1 > 0 and isinstance(pg, (int, float))):
+            return None, "no consensus FY+2 revenue or peer growth"
+        cg = float(v2) / float(v1) - 1.0
+        raw = ((1.0 + cg) / (1.0 + float(pg))) ** _FWD_GROWTH_YEARS
+        f = max(_FWD_GROWTH_BOUNDS[0], min(_FWD_GROWTH_BOUNDS[1], raw))
+        return f, (f"forward revenue growth {cg:+.1%} vs peers {float(pg):+.1%} over {_FWD_GROWTH_YEARS}y "
+                   f"-> {raw:.2f}x" + (f", held at {f:.2f}x" if f != raw else ""))
+    except Exception:  # noqa: BLE001
+        return None, "growth adjustment unavailable"
 
 
 def _forward_peer_multiple(peer: dict, field: str, default: float) -> tuple[float, str]:
@@ -13419,6 +13488,43 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"Guided EBITDA margin {_gb:.0%} rejected: it is more than {_GUIDED_MARGIN_TOLERANCE:.0%} from both "
                     f"the company's own {_hist_m:.0%} and consensus {_cons_m:.0%} -- an extraction error, not guidance; "
                     f"the forecast takes consensus, each scenario keeping its offset")
+        except Exception:                                  # noqa: BLE001
+            pass
+        # ── Plan E28 (owner, 2026-10-06; PFE / LLY / REGN reviews): the basis of guided EPS ─────────
+        # Management and the street mostly guide ADJUSTED EPS (ex amortisation of acquired intangibles,
+        # deal and one-off costs); the model's net income is GAAP. Stated by the extractor when the research
+        # says so; else detected: guided EPS >= 1.15x the GAAP path and within 10% of street consensus.
+        # The forward legs keep the adjusted figure (peer NTM P/Es are street-adjusted too); the forecast
+        # engine does not let it set a GAAP margin or a share count.
+        try:
+            if _guid_est:
+                _g_eps = ((_guid_est.get("guidance") or {}).get("eps") or {})
+                _basis_s = str(_g_eps.get("eps_basis") or "").lower()
+                _eps_adj = None
+                if _basis_s:
+                    _eps_adj = any(w in _basis_s for w in ("adjust", "non-gaap", "non gaap", "core", "underlying"))
+                else:
+                    _ge = ((_guid_est.get("estimates") or {}).get("base") or {}).get("eps_fy1")
+                    _ge = _ge if isinstance(_ge, (int, float)) else _g_eps.get("mid")
+                    if isinstance(_ge, (int, float)) and _ge > 0:
+                        _same_ccy = str(_g_eps.get("currency") or "").upper() == str(_target_ccy or "").upper()
+                        _ge_v = float(_ge) * (1.0 if (_same_ccy or not fx_rate) else float(fx_rate))
+                        _ni_g = most_recent.get("net_income_core") if most_recent.get("net_income_core") is not None else most_recent.get("net_income")
+                        _g1_g = ((_guid_est.get("estimates") or {}).get("base") or {}).get("revenue_growth_fy1") or 0.0
+                        _gaap_eps = (float(_ni_g) / float(shares) * (1.0 + float(_g1_g))) if (_ni_g and shares) else None
+                        _c12_g = ((forward_consensus or {}).get("_fy1_fy2") or {}).get("eps", {}).get("base") or (None, None)
+                        _cons_g = _c12_g[0] if isinstance(_c12_g[0], (int, float)) else None
+                        if (_gaap_eps and _gaap_eps > 0 and _cons_g and _cons_g > 0
+                                and _ge_v >= 1.15 * _gaap_eps and abs(_ge_v / _cons_g - 1.0) <= 0.10):
+                            _eps_adj = True
+                if _eps_adj:
+                    _guid_est = dict(_guid_est)
+                    _guid_est["_eps_adjusted"] = True
+                    ticker_forward_flags.append(
+                        "Guided EPS is on an adjusted (non-GAAP) basis"
+                        + (" (stated)" if _basis_s else " (detected: above the GAAP path, in line with street consensus)")
+                        + ": the forward P/E prices it against street-adjusted peer multiples; it does not set the GAAP "
+                        "margin or the share count in the forecast")
         except Exception:                                  # noqa: BLE001
             pass
         # Plan EV6: the research's FY+1 takes the NTM roll only when it IS the year in progress.

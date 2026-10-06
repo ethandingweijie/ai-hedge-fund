@@ -1117,7 +1117,7 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     '  "as_of": "<date the guidance was given or reaffirmed, YYYY-MM-DD or null>",\n'
     '  "fiscal_year_1": "<FY+1 label, e.g. FY2026>", "fiscal_year_2": "<FY+2 label or null>",\n'
     '  "guidance": {"revenue_growth": {"low": n, "mid": n, "high": n}, "revenue": {"low": n, "mid": n, "high": n, "currency": "USD", "scale": "bn"},\n'
-    '               "ebitda_margin": {"low": n, "mid": n, "high": n}, "eps": {"low": n, "mid": n, "high": n, "currency": "USD"},\n'
+    '               "ebitda_margin": {"low": n, "mid": n, "high": n}, "eps": {"low": n, "mid": n, "high": n, "currency": "USD", "eps_basis": "<GAAP|adjusted>"},\n'
     '               "basis": "<reported|organic|constant-currency|null>", "status": "<new|raised|cut|reaffirmed|none>", "quote": "<=160 chars verbatim", "source": "<publisher, date>"},\n'
     '  "consensus": {"revenue_growth_fy1": n, "eps_fy1": n, "as_of": "<date or null>", "source": "<...>"},\n'
     '  "guidance_vs_consensus_pct": n,\n'
@@ -1232,7 +1232,7 @@ def _guidance_amount_range(d) -> Optional[dict]:
     out = {k: _guidance_num(d.get(k)) for k in ("low", "mid", "high")}
     if not any(x is not None for x in out.values()):
         return None
-    for k in ("currency", "scale"):
+    for k in ("currency", "scale", "eps_basis"):
         if d.get(k):
             out[k] = str(d.get(k))
     return out

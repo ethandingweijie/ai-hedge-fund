@@ -1754,3 +1754,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner 2026-10-06 biopharma method selection: two new Biopharma profiles + Pre-approval Biotech legs (rNPV only); no golden fixture is a drug company -- param_version only, no value moved
 
+## 2026-10-06T15:53:57+00:00
+
+- regenerated at HEAD: `95692214`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Plan E23/E28 (owner, 2026-10-06): forward legs on forward peer multiples (EV/NTM revenue carried forward), the forward growth gap over peers (owner band 0.85-1.30) replaces the flat premium, EV/Revenue scaled by relative NTM EBITDA margin outside Tech, trailing EV/EBITDA priced on NTM when consensus allows; adjusted (non-GAAP) guided EPS no longer sets the GAAP margin or the share count. AAPL +1.3%, COST +0.7%, MELI +3.6%, V +1.2%
+

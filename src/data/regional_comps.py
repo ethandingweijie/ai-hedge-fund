@@ -216,6 +216,9 @@ _BANDS: dict[str, tuple[float, float]] = {
     # their trailing counterparts. One extra FMP call per name (see `ntm_blend`).
     "pe_ntm":        (1.0, 200.0),
     "ev_ebitda_ntm": (0.5, 100.0),
+    # Owner, 2026-10-06 (plan E23): the forward revenue multiple, so EV / NTM revenue legs pair next year's
+    # revenue with a forward multiple (ALNY / REGN multiplied NTM revenue by a TRAILING peer EV/Revenue).
+    "ev_revenue_ntm": (0.05, 60.0),
     # EV / EBIT, for the EV/EBIT legs (Wave 3: Boeing on a normalised EV/EBIT).
     # Those legs used to multiply EBIT by the peer EV/EBITDA -- a lower
     # multiple on a smaller base, understating every EV/EBIT leg. Derived from
@@ -817,6 +820,9 @@ def ntm_multiples(km: dict, rt: dict, estimates: list[dict],
     ebitda = ntm_blend(estimates, "ebitdaAvg", today, analysts_key="numAnalystsEps")
     if ev and ev > 0 and ebitda:
         out["ev_ebitda_ntm"] = ev / ebitda
+    revenue = ntm_blend(estimates, "revenueAvg", today, analysts_key="numAnalystsRevenue")
+    if ev and ev > 0 and revenue and revenue > 0:
+        out["ev_revenue_ntm"] = ev / revenue
     return out
 
 

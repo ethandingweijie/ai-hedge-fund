@@ -441,16 +441,16 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 _PHASE1_MOVED = {
     "02888_HK": (294.91, 246.96, 346.94, (238.98, 262.96, 288.97)),
     "09988_HK": (104.97, 74.03, 233.53, (96.96, 107.78, 152.78)),
-    "AAPL": (180.62, 128.4, 243.22, (229.87, 255.98, 287.28)),
+    "AAPL": (182.97, 146.43, 236.45, (238.88, 257.15, 283.89)),
     "BABA": (106.51, 69.12, 227.75, (95.52, 108.61, 151.04)),
-    "COST": (494.24, 341.88, 678.37, (632.32, 708.5, 800.57)),
+    "COST": (497.48, 357.18, 668.96, (639.97, 710.12, 795.86)),
     "D05_SI": (46.75, 39.47, 55.2, (57.56, 61.2, 65.43)),
     "FCX": (67.36, 47.49, 101.89, (63.62, 70.57, 82.66)),
-    "MELI": (3772.32, 2873.05, 4466.75, (2194.38, 2509.12, 2752.17)),
+    "MELI": (3909.45, 3045.6, 4589.57, (2254.77, 2557.12, 2795.16)),
     "MU": (181.79, 135.16, 233.94, (531.38, 554.69, 580.77)),
     "SCHW": (72.14, 51.85, 96.05, (79.82, 89.97, 101.92)),
     "U96_SI": (5.72, 2.33, 9.12, (4.68, 5.87, 7.06)),
-    "V": (336.94, 243.53, 422.35, (329.39, 362.08, 391.98)),
+    "V": (340.84, 264.74, 408.98, (336.81, 363.45, 387.3)),
 }
 
 
@@ -1221,10 +1221,14 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
             # on the six-name hyperscaler basket (bear leg 151.55 -> 123.73 a share, decision 2), which
             # outweighs the +2% the bear deactivation added; the value is pinned instead.
             assert got == _current(name)[1], name
-            if name in ("AAPL", "V"):
+            if name == "V":
                 # V (2026-10-04): repriced on the toll-road Payment Networks basket (EV/EBITDA 18.3x,
                 # P/E 24.6x against the static 25x / 32x), which outweighs the bear deactivation.
                 assert got < before[name], name
+            elif name == "AAPL":
+                # Plan E23 (2026-10-06): the forward legs price on forward multiples with the forward growth
+                # gap, lifting the bear case back to its pre-basket level; the value is pinned above.
+                pass
             else:
                 assert got > before[name], name
             continue
@@ -1270,8 +1274,10 @@ def test_fourteen_of_sixteen_leg_multiples_carry_the_premium():
     # siblings; PEG is the FOURTH documented exception -- the growth is already
     # the multiplier, so a premium on top would count it twice.
     assert len(mults) == 20
-    with_gp = [m for m in mults if "growth_premium" in m]
-    without = [m for m in mults if "growth_premium" not in m]
+    # Plan E23 (2026-10-06): the three forward legs carry the FORWARD growth adjustment (`_gp_used`, the
+    # growth gap over peers, falling back to the trailing premium) -- still a growth adjustment, counted.
+    with_gp = [m for m in mults if "growth_premium" in m or "_gp_used" in m]
+    without = [m for m in mults if "growth_premium" not in m and "_gp_used" not in m]
     assert len(with_gp) == 16
     assert without == ['mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc',   # PEG, in file order
                        'mult = _mnav * sm', 'mult = _on_book * sm', 'mult = cfg["p_tbv"] * sm']

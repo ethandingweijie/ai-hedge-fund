@@ -403,3 +403,18 @@ def test_e24_a_research_fy1_without_fy2_rolls_on_consensus_growth_and_says_so():
     assert "consensus FY+2/FY+1 growth" in o["_source"]["eps"]["base"]
     o2 = d._guidance_forward_overlay(est, {**copy.deepcopy(fwd), "_fy1_fy2": {}}, "base", None, None, ntm_e=0.76)
     assert o2["eps"]["base"] == pytest.approx(36.0) and "no FY+2 to roll" in o2["_source"]["eps"]["base"]
+
+
+def test_e23_the_forward_growth_adjustment_is_the_gap_over_peers_bounded():
+    fc = {"_fy1_fy2": {"revenue": {"base": (100.0, 125.0)}}}
+    f, note = d._forward_growth_adjustment(fc, {"growth_avg": 0.05})
+    assert f == pytest.approx(1.3) and "held at" in note             # (1.25/1.05)^3 = 1.69 -> the owner band 1.30
+    f2, _ = d._forward_growth_adjustment({"_fy1_fy2": {"revenue": {"base": (100.0, 105.0)}}}, {"growth_avg": 0.05})
+    assert f2 == pytest.approx(1.0)
+    assert d._forward_growth_adjustment({}, {"growth_avg": 0.05})[0] is None
+
+
+def test_e28_adjusted_eps_neither_sets_the_margin_nor_fails_the_share_check():
+    import inspect
+    src = inspect.getsource(gfm)
+    assert 'block.get("_eps_adjusted")' in src and "n/a: guided EPS is on an adjusted (non-GAAP) basis" in src

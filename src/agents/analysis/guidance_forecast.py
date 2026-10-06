@@ -339,7 +339,12 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
     if ni_T_from_eps is not None and ebit_T is not None and ebit_T - interest > 0:
         implied_tax = 1.0 - ni_T_from_eps / (ebit_T - interest)
         out["implied_tax_rate"] = implied_tax
-        if not (0.0 <= implied_tax <= 0.45):
+        if not (0.0 <= implied_tax <= 0.45) and targets.get("eps_adjusted"):
+            # Owner, 2026-10-06 (plan E28, PFE / LLY): adjusted (non-GAAP) EPS excludes amortisation, deal and
+            # one-off costs, so it cannot set a GAAP margin -- the guided / history margin stands.
+            out["flags"].append(f"Guided EPS is on an adjusted (non-GAAP) basis: it implies a {implied_tax:.0%} tax-and-"
+                                f"non-operating take against a GAAP margin, so it does not set the margin ({mT:.1%} stands)")
+        elif not (0.0 <= implied_tax <= 0.45):
             # Owner, 2026-10-04 (plan EN3): flagged AND resolved. Guided EPS is the endpoint management and
             # the street both state, and it carries the share count; the margin that delivers it at the
             # history's tax and interest replaces the incompatible margin (Molina: the margin path put
@@ -398,6 +403,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     if not hist.get("revenue"):
         return None
     tg = targets_for(block, scenario, hist)
+    tg["eps_adjusted"] = bool((block or {}).get("_eps_adjusted"))     # plan E28
     if tg["g1"] is None:
         return None
     # Owner, 2026-10-04 (plan 1B.1): guided EPS is in the filing's currency; net income here is in
@@ -533,8 +539,13 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             # Owner, 2026-10-04 (plan EN3): implied shares ABOVE today's are not a pass -- beyond 15% they
             # are an endpoint conflict (Molina: 141m implied against 52m read PASS).
             ok = implied_shares <= float(shares) * 1.15
+        if block.get("_eps_adjusted"):
+            # Plan E28 (LLY): a non-GAAP EPS endpoint against GAAP net income implies a share count that is a
+            # basis artefact, not a buyback plan -- reported, neither failed nor used to re-base EPS.
+            ok = None
+            detail = ("n/a: guided EPS is on an adjusted (non-GAAP) basis, the model's net income on GAAP; " + detail)
         inv.append({"id": 3, "name": "Share-count integrity", "ok": ok, "detail": detail})
-        if ok is not False:                       # a failed check does not re-base EPS on an implausible count
+        if ok is not False and not block.get("_eps_adjusted"):   # a failed check does not re-base EPS on an implausible count
             for r in rows:
                 r["eps"] = (r["net_income"] / implied_shares) if (r["year"] >= T and implied_shares > 0) else r["eps"]
     # operating jaws
