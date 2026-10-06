@@ -451,3 +451,17 @@ def test_e27_the_risk_on_floor_only_undoes_the_cut_and_the_wacc_tab_shows_it():
     assert "_floor = round(min(_capm_wacc - _RISK_ON_CAPM_BAND, wacc - _ov), 4)" in src
     from src.utils import valuation_workbook as vw
     assert "CAPM band: risk-on floor (D5)" in inspect.getsource(vw)
+
+
+def test_i9_i10_i11_curated_baskets(monkeypatch):
+    from src.data import regional_comps as rc
+    assert "REGN" in rc.PROFILE_PEER_BASKETS["Commercial Biotech"]["US"]
+    assert rc.TICKER_BASKET_BLENDS["BLK"] == (("Asset Manager", 0.75), ("Alt Asset Manager", 0.25))
+    assert "SES" in rc.CROSS_MARKET_BASKETS["Grocery & Discount Retail"]["markets"]
+    calls = []
+    monkeypatch.setattr(rc, "basket_multiples", lambda ex, syms, key, **k: calls.append((ex, key)) or
+                        {"pe_ntm": {"value": 10.0 if key == "Asset Manager" else 20.0, "peer_count": 6, "members": []}})
+    out = rc.profile_basket_multiples("US", "Asset Manager", exclude="BLK")
+    assert out["pe_ntm"]["value"] == pytest.approx(0.75 * 10 + 0.25 * 20)
+    rc.profile_basket_multiples("SES", "Grocery & Discount Retail", exclude="OV8.SI")
+    assert calls[-1] == ("XMKT", "Grocery & Discount Retail")

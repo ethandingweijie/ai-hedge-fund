@@ -321,6 +321,13 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     # Owner, 2026-10-06 (Pfizer, archetype consolidated_dcf): forward P/E, EV/EBITDA and dividend against
     # the big-pharma peers the owner named (Merck, Bristol Myers Squibb, Eli Lilly, AbbVie) and Pfizer.
     "Big Pharma (Consolidated DCF)": {"US": ("PFE", "MRK", "BMY", "LLY", "ABBV")},
+    # Owner, 2026-10-07 (plan I9; REGN / ALNY reviews): commercial biotech prices on profitable large-cap
+    # biopharma, not FMP's "Biotechnology" label (NTM EV/EBITDA 11.3x, P/E 15.7x on 2026-10-07).
+    "Commercial Biotech":          {"US": ("AMGN", "GILD", "VRTX", "BIIB", "REGN", "ALNY", "INCY", "BMRN", "UTHR", "NBIX")},
+    # Owner, 2026-10-07 (plan I10; BlackRock review): traditional and alternative managers apart -- BLK's
+    # label basket held Brookfield notes and preferreds (NTM EV/EBITDA 7.4x vs 15.3x on 2026-10-07).
+    "Asset Manager":               {"US": ("TROW", "BEN", "IVZ", "AMG", "JHG", "SEIC", "BLK")},
+    "Alt Asset Manager":           {"US": ("BX", "KKR", "APO", "ARES", "CG", "OWL")},
     # Owner, 2026-09-28: Alibaba is not specialty retail. China Internet Platform prices its relative
     # legs on China internet peers (the owner's pins plus the store's internet, gaming and travel
     # platforms) instead of FMP's Specialty Retail label (Amazon, O'Reilly; Meituan, MINISO).
@@ -332,11 +339,73 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
 }
 
 
+#: Owner, 2026-10-07 (plan I10): a company whose revenue spans two curated baskets prices on their
+#: blend, weighted by revenue mix (BlackRock: ~75% traditional / iShares, ~25% private markets and Aladdin).
+TICKER_BASKET_BLENDS: dict[str, tuple[tuple[str, float], ...]] = {
+    "BLK": (("Asset Manager", 0.75), ("Alt Asset Manager", 0.25)),
+}
+
+#: Owner, 2026-10-07 (plan I11; Sheng Siong review): a curated basket whose members trade on markets the
+#: comps store does not cover. An owner-named exception to "no market borrows another's multiples": SGX
+#: has too few grocers. Members are refreshed weekly into the store under CROSS_MARKET_EXCHANGE.
+CROSS_MARKET_EXCHANGE = "XMKT"
+CROSS_MARKET_BASKETS: dict[str, dict] = {
+    "Grocery & Discount Retail": {"markets": ("SES",),
+                                  "symbols": ("D01.SI", "CPALL.BK", "CPAXT.BK", "BJC.BK", "PGOLD.PS", "8267.T",
+                                              "WOW.AX", "COL.AX", "OV8.SI")},
+}
+
+
+def refresh_cross_market_baskets(fetch=None) -> int:
+    """Fetch every cross-market basket member's multiples and store them as members of
+    CROSS_MARKET_EXCHANGE (same row format as a market's members). Returns rows written."""
+    fetch = fetch or fetch_name_multiples
+    rows: list[dict] = []
+    for profile, spec in CROSS_MARKET_BASKETS.items():
+        for sym in spec.get("symbols") or ():
+            try:
+                mm = fetch(sym) or {}
+            except Exception:                                  # noqa: BLE001
+                mm = {}
+            if not mm:
+                continue
+            vals = {}
+            for field in FIELDS:
+                v = mm.get(field)
+                try:
+                    f = float(v) if v is not None else None
+                except (TypeError, ValueError):
+                    f = None
+                lo, hi = _BANDS[field]
+                vals[field] = {"value": f, "in_band": f is not None and not math.isnan(f) and lo <= f <= hi}
+            rows.append({"level": "profile", "key": profile, "cohort": "all", "symbol": sym.upper(),
+                         "name": mm.get("name") or sym, "market_cap": mm.get("market_cap"), "metrics": vals})
+    return save_members(CROSS_MARKET_EXCHANGE, rows, datetime.now(timezone.utc).isoformat(timespec="seconds"))
+
+
 def profile_basket_multiples(exchange: str, profile: Optional[str],
                              max_age_days: float = MAX_AGE_DAYS, exclude: Optional[str] = None) -> dict[str, dict]:
     """{field: {value, basis: "profile", cohort, peer_count, key, exchange, members}}
     for a profile with a curated basket in this market, else {}. `exclude` (owner, 2026-10-04,
     plan 1F.3): the valued company, which is not its own peer."""
+    _blend = TICKER_BASKET_BLENDS.get(str(exclude or "").upper())
+    if _blend and exchange == "US":
+        parts = [(basket_multiples(exchange, tuple((PROFILE_PEER_BASKETS.get(p) or {}).get(exchange) or ()), p,
+                                   max_age_days=max_age_days, exclude=exclude), w) for p, w in _blend]
+        out: dict[str, dict] = {}
+        for field in FIELDS:
+            cells = [(m.get(field), w) for m, w in parts]
+            if all(c is not None and isinstance(c.get("value"), (int, float)) for c, _ in cells):
+                out[field] = {"value": round(sum(c["value"] * w for c, w in cells), 6), "basis": "profile", "cohort": "all",
+                              "peer_count": sum(int(c.get("peer_count") or 0) for c, _ in cells),
+                              "key": " + ".join(f"{p} {w:.0%}" for p, w in _blend), "exchange": exchange,
+                              "members": [s for c, _ in cells for s in (c.get("members") or [])]}
+        if out:
+            return out
+    _xm = CROSS_MARKET_BASKETS.get(profile or "")
+    if _xm and exchange in (_xm.get("markets") or ()):
+        return basket_multiples(CROSS_MARKET_EXCHANGE, tuple(_xm.get("symbols") or ()), profile or "",
+                                max_age_days=max_age_days, exclude=exclude)
     syms = (PROFILE_PEER_BASKETS.get(profile or "") or {}).get(exchange)
     if not syms:
         return {}
@@ -1733,6 +1802,11 @@ def run_weekly_refresh(force: bool = False) -> Optional[dict]:
         except Exception as exc:
             logger.exception("[regional_comps] %s refresh failed: %s", market, exc)
             results[market] = {"error": str(exc)[:200]}
+    try:   # plan I11 (2026-10-07): the owner-named cross-market baskets
+        results[CROSS_MARKET_EXCHANGE] = {"members": refresh_cross_market_baskets()}
+    except Exception as exc:                                   # noqa: BLE001
+        logger.exception("[regional_comps] cross-market refresh failed: %s", exc)
+        results[CROSS_MARKET_EXCHANGE] = {"error": str(exc)[:200]}
     return results
 
 

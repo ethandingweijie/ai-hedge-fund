@@ -6771,6 +6771,9 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "G13.SI":  ("Consumer", "Packaged Consumer & Lifestyle (SG)",     "Casinos & Gaming",       "Genting Singapore"),
     "E5H.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Agricultural Products",  "Golden Agri-Resources"),
     "AGS.SI":  ("Consumer", "Agribusiness & Food (SG)",     "Grocery Retail",         "Sheng Siong Group"),
+    # Owner, 2026-10-07 (plan I11; Sheng Siong review): OV8.SI is Sheng Siong's listing and ran as
+    # "Traditional Retail" on SGX's plantation-heavy Consumer Defensive label; it is a grocer.
+    "OV8.SI":  ("Consumer", "Grocery & Discount Retail",    "Grocery Retail",         "Sheng Siong Group"),
     "EB5.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Palm Oil",               "First Resources"),
     "P8Z.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Palm Oil",               "Bumitama Agri"),
     "T14.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Food & Agribusiness",    "Olam Group"),
