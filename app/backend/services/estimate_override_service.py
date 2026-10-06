@@ -351,8 +351,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
                                     valuation_currency=inputs.get("valuation_currency") or (dr.get("financials_used") or {}).get("currency"))
         except Exception:                                   # noqa: BLE001
             fc0 = None
-        user_m = _dcf_mod()._guidance_forward_overlay(block, None, sc, fc, _num(leg.get("revenue_base"))) or {}
-        agent_m = _dcf_mod()._guidance_forward_overlay(block0, None, sc, fc0, _num(leg.get("revenue_base"))) or {}
+        user_m = _dcf_mod()._guidance_forward_overlay(block, None, sc, fc, _num(leg.get("revenue_base")), eps_check=False) or {}
+        agent_m = _dcf_mod()._guidance_forward_overlay(block0, None, sc, fc0, _num(leg.get("revenue_base")), eps_check=False) or {}
         new_leg_values: dict = {}
         for name, tr in (scen.get("leg_inputs") or {}).items():
             if name == "DCF" or not isinstance(tr, dict) or tr.get("kind") not in ("equity_multiple", "ev_multiple"):

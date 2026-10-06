@@ -4030,7 +4030,7 @@ def _guidance_channel_schedule(est: Optional[dict], scenario: str, g_engine: flo
 
 def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario: str, gf: Optional[dict],
                               revenue_base: Optional[float], ntm_e: float = 0.0, fx_to_valuation: float = 1.0,
-                              valuation_currency: Optional[str] = None) -> Optional[dict]:
+                              valuation_currency: Optional[str] = None, eps_check: bool = True) -> Optional[dict]:
     """Owner, 2026-10-03: management guidance -> estimates price the forward legs too, not only the DCF.
 
     Per scenario, the forward legs' metric becomes the guidance-derived FY+1 estimate: EPS from the
@@ -4057,6 +4057,17 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
                 row[_k] = float(row[_k]) * _fxe
     rows = (gf or {}).get("rows") or []
     y1 = rows[0] if rows else {}
+    # Sample rerun 2026-10-07 (REGN): a FAILED share-count invariant means the research's EPS does not fit its
+    # own net income on any plausible share count (Regeneron: $35.5 guided vs $41.5 = forecast NI / 107m
+    # shares). The forward P/E prices the forecast's EPS (net income / modelled shares) instead.
+    # A user's own EPS (estimate overrides, eps_check=False) prices as entered.
+    _eps_inconsistent = eps_check and any(i.get("id") == 3 and i.get("ok") is False for i in ((gf or {}).get("invariants") or []))
+    if _eps_inconsistent and len(rows) >= 1 and isinstance(rows[0].get("eps"), (int, float)) and rows[0]["eps"] > 0:
+        row["eps_fy1"] = float(rows[0]["eps"])
+        row["eps_fy2"] = (float(rows[1]["eps"]) if len(rows) >= 2 and isinstance(rows[1].get("eps"), (int, float))
+                          and rows[1]["eps"] > 0 else None)
+        if row["eps_fy2"] is None:
+            row.pop("eps_fy2")
     g1 = row.get("revenue_growth_fy1")
     rev1 = (float(revenue_base) * (1.0 + float(g1))) if (isinstance(g1, (int, float)) and revenue_base) else (y1.get("revenue") if y1 else None)
     # Plan EV6 (2026-10-04): the next twelve months -- FY+1 and FY+2 weighted by the elapsed share of
@@ -4089,7 +4100,9 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
         "ebit": float(y1["ebit"]) if isinstance(y1.get("ebit"), (int, float)) and y1["ebit"] > 0 else None,
     }
     src_label = {
-        "eps": ((f"guidance-derived NTM EPS (FY+2 at {ntm_e:.0%}, from {_eps_rolled})" if _eps_rolled
+        "eps": (f"forecast EPS: net income / modelled shares{f' (FY+2 at {ntm_e:.0%})' if _eps_rolled else ''}; the research EPS failed the share-count check"
+                if _eps_inconsistent else
+                (f"guidance-derived NTM EPS (FY+2 at {ntm_e:.0%}, from {_eps_rolled})" if _eps_rolled
                  else ("guidance-derived FY+1 EPS estimate (no FY+2 to roll)" if (ntm_e and ntm_e > 0) else "guidance-derived FY+1 EPS estimate"))
                 if isinstance(row.get("eps_fy1"), (int, float)) else "guidance forecast year-1 EPS"),
         "ebitda": ("guidance-derived FY+1 revenue x margin" if isinstance(row.get("ebitda_margin_fy1"), (int, float)) else "guidance forecast year-1 EBIT + D&A"),
@@ -7998,8 +8011,11 @@ def _compute_method_value(
         if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
             return None
         # Plan E29 (owner, 2026-10-06; REGN review): a revenue multiple prices PRODUCT revenue. Collaboration,
-        # licence and royalty income (51% of Regeneron's) is a profit share the earnings legs already carry;
-        # above 30% of the segment map the leg prices the product share only.
+        # licence and royalty income (51% of Regeneron's) is a profit share with no revenue-multiple analogue.
+        # Sample rerun 2026-10-07: pricing the product share alone valued REGN without its Sanofi / Bayer profit
+        # share (every blended leg must value the whole company), and the margin scale then read collaboration
+        # profit over product revenue (63%, capped 1.25x). Above 30% of the segment map the leg stands down and
+        # the blend re-weights onto the earnings legs, which carry the profit share.
         _collab_share = None
         if is_biopharma_sector(sector) and most_recent.get("segment_breakdown"):
             try:
@@ -8008,9 +8024,13 @@ def _compute_method_value(
                 _tot29 = _sc29["product"] + _sc29["platform"] + _sc29["other"]
                 if _tot29 > 0 and _sc29["other"] / _tot29 > 0.30:
                     _collab_share = _sc29["other"] / _tot29
-                    fwd_rev = fwd_rev * (1.0 - _collab_share)
             except Exception:                              # noqa: BLE001
                 _collab_share = None
+        if _collab_share:
+            most_recent.setdefault("_ev_rev_collab_stood_down", (
+                f"{method_name}: stands down -- collaboration, licence and royalty income is {_collab_share:.0%} of revenue "
+                "(above 30%), a profit share no revenue multiple prices; the blend re-weights onto the earnings legs"))
+            return None
         # Forward method — sm NOT applied (scenario already mapped to
         # analyst low/avg/high); growth_premium + SBC haircut still apply.
         # Tech sub-type multiples override when applicable (Tier 2 Tech).
@@ -8068,7 +8088,6 @@ def _compute_method_value(
                                    "growth_premium": _gp_used,
                                    "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
                                    **({"margin_adjustment": _margin_adj, "margin_basis": _margin_note} if _margin_note else {}),
-                                   **({"collaboration_revenue_excluded": round(_collab_share, 4)} if _collab_share else {}),
                                    "sbc_haircut": (0.93 if (_sbc_v and revenue_base and revenue_base > 0
                                                             and is_tech_sector(sector)
                                                             and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
@@ -15603,6 +15622,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _gf_by_sc[scenario] = _gf
                 if scenario == "base":
                     _gf_base = _gf
+                    # Sample rerun 2026-10-07 (LLY / REGN): the guidance forecast replaces the whole schedule,
+                    # so the plan-E25 consensus years never reach the DCF -- their flag would describe a
+                    # schedule that was not used (LLY flag +35.8% / +15.4%, DCF ran +31.9% / +26.0%).
+                    ticker_forward_flags[:] = [f_ for f_ in ticker_forward_flags
+                                               if not str(f_).startswith("Consensus sets DCF years 1-2")]
                     _gc_applied = {"schedule": _gf["growth_schedule"], "explicit": _gf["growth_schedule"][:_gf["horizon_years"]],
                                    "explicit_years": _gf["horizon_years"], "fade_years": _gf["fade_years"], "engine_year1": round(float(g), 6),
                                    "confidence": _guid_est.get("confidence"), "source": f"guidance forecast ({_gf['archetype_name']})"}
@@ -18380,6 +18404,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 pass
             if most_recent.get("_pipeline_quarantine"):
                 _b_sr.setdefault("forward_flags", []).append(most_recent["_pipeline_quarantine"])
+            if most_recent.get("_ev_rev_collab_stood_down"):
+                _b_sr.setdefault("forward_flags", []).append(most_recent["_ev_rev_collab_stood_down"])
             if most_recent.get("_cyclical_peak_flag") and not _regime_flag:
                 _regime_flag = "Cyclical_Peak_Consensus"
                 _b_sr.setdefault("forward_flags", []).append(

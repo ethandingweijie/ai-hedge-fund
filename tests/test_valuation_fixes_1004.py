@@ -498,3 +498,28 @@ def test_blk_bridge_entry_and_minority_override_are_wired():
         assert d._bridge_adjustment("BLK") == {}
     src = inspect.getsource(d)
     assert '_bridge_adjustment(ticker).get("minority_interest")' in src
+
+
+def test_rerun_a_failed_share_count_check_prices_the_forecast_eps():
+    # Sample rerun 2026-10-07 (REGN): research EPS $35.5 against forecast NI that implies $41.5 on today's
+    # shares -- invariant 3 fails, and the forward P/E prices the forecast's EPS, labelled as such.
+    est = {"confidence": "HIGH", "estimates": {"base": {"eps_fy1": 32.0, "eps_fy2": 35.5}}}
+    fwd = {"eps": {"base": 60.0}, "ebitda": {"base": 1.0}, "revenue": {"base": 1.0}, "ebit": {"base": 1.0}}
+    gf = {"rows": [{"eps": 39.0, "ebit": 5.0}, {"eps": 41.5}], "invariants": [{"id": 3, "ok": False}]}
+    o = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", gf, None, ntm_e=0.76)
+    assert o["eps"]["base"] == pytest.approx(0.24 * 39.0 + 0.76 * 41.5)
+    assert "failed the share-count check" in o["_source"]["eps"]["base"]
+    gf_ok = {**gf, "invariants": [{"id": 3, "ok": True}]}
+    o2 = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", gf_ok, None, ntm_e=0.76)
+    assert o2["eps"]["base"] == pytest.approx(0.24 * 32.0 + 0.76 * 35.5)
+
+
+def test_rerun_e29_collaboration_heavy_revenue_stands_the_ev_revenue_leg_down():
+    # Sample rerun 2026-10-07 (REGN): a blended leg values the whole company, so the revenue leg stands down
+    # above 30% collaboration income instead of pricing the product share alone; the E25 flag leaves when
+    # the guidance forecast replaces the schedule.
+    import inspect
+    src = inspect.getsource(d)
+    assert "fwd_rev = fwd_rev * (1.0 - _collab_share)" not in src
+    assert '"_ev_rev_collab_stood_down"' in src and src.count("_ev_rev_collab_stood_down") >= 3
+    assert 'startswith("Consensus sets DCF years 1-2")' in src
