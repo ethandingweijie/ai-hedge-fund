@@ -7992,7 +7992,10 @@ def _compute_method_value(
         try:
             _fe = ((forward_consensus or {}).get("ebitda") or {}).get(scenario)
             _peer_m = (float(peer["ev_revenue"]) / float(peer["ev_ebitda"])) if (peer.get("ev_revenue") and peer.get("ev_ebitda")) else None
-            if (not is_tech_sector(sector) and isinstance(_fe, (int, float)) and _fe > 0 and fwd_rev and _peer_m and _peer_m > 0):
+            # Tech and Semiconductor price revenue by convention (pre-profit software, fabless royalty models);
+            # the margin scaling is for borrowed revenue multiples elsewhere (Commercial Biotech).
+            if (not is_tech_sector(sector) and sector != "Semiconductor"
+                    and isinstance(_fe, (int, float)) and _fe > 0 and fwd_rev and _peer_m and _peer_m > 0):
                 _co_m = float(_fe) / float(fwd_rev)
                 _raw_m = _co_m / _peer_m
                 _margin_adj = max(_EV_REV_MARGIN_BOUNDS[0], min(_EV_REV_MARGIN_BOUNDS[1], _raw_m))
