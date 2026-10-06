@@ -1428,7 +1428,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
-    "short_term_investments", "long_term_investments",
+    "short_term_investments", "long_term_investments", "dividends_and_distributions",
     "minority_interest", "preferred_equity", "lease_liabilities",
     "pretax_income", "income_tax_expense",
     "goodwill", "intangible_assets",
@@ -1502,6 +1502,9 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "long_term_investments": _safe(getattr(li, "long_term_investments", None)),
             "shares_outstanding_basic": _safe(getattr(li, "shares_outstanding_basic", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
+            # Plan E32 (2026-10-06, Sheng Siong): dividends paid, read at the payout ratio and the DPS fill but
+            # never copied -- DPS read n/a while S$96m a year was paid.
+            "dividends_and_distributions": _safe(getattr(li, "dividends_and_distributions", None)),
             "book_value_per_share":_safe(getattr(li, "book_value_per_share", None)),
             "capital_expenditure": _safe(getattr(li, "capital_expenditure", None)),
             "ebit":                _safe(getattr(li, "ebit", None)),
@@ -7994,6 +7997,20 @@ def _compute_method_value(
             fwd_rev = revenue_base * (1 + growth_base)
         if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
             return None
+        # Plan E29 (owner, 2026-10-06; REGN review): a revenue multiple prices PRODUCT revenue. Collaboration,
+        # licence and royalty income (51% of Regeneron's) is a profit share the earnings legs already carry;
+        # above 30% of the segment map the leg prices the product share only.
+        _collab_share = None
+        if is_biopharma_sector(sector) and most_recent.get("segment_breakdown"):
+            try:
+                from src.data.biopharma_methods import classify_segments as _cls_e29
+                _sc29 = _cls_e29(most_recent.get("segment_breakdown"))
+                _tot29 = _sc29["product"] + _sc29["platform"] + _sc29["other"]
+                if _tot29 > 0 and _sc29["other"] / _tot29 > 0.30:
+                    _collab_share = _sc29["other"] / _tot29
+                    fwd_rev = fwd_rev * (1.0 - _collab_share)
+            except Exception:                              # noqa: BLE001
+                _collab_share = None
         # Forward method — sm NOT applied (scenario already mapped to
         # analyst low/avg/high); growth_premium + SBC haircut still apply.
         # Tech sub-type multiples override when applicable (Tier 2 Tech).
@@ -8051,6 +8068,7 @@ def _compute_method_value(
                                    "growth_premium": _gp_used,
                                    "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
                                    **({"margin_adjustment": _margin_adj, "margin_basis": _margin_note} if _margin_note else {}),
+                                   **({"collaboration_revenue_excluded": round(_collab_share, 4)} if _collab_share else {}),
                                    "sbc_haircut": (0.93 if (_sbc_v and revenue_base and revenue_base > 0
                                                             and is_tech_sector(sector)
                                                             and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
@@ -11735,6 +11753,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      "preferred_equity", "lease_liabilities", "shares_outstanding_basic",
                      # Plan IV3: requested AND copied AND converted (both FX lists), or it is None.
                      "long_term_investments",
+                     # Plan E32: dividends paid (DPS fill, payout ratio).
+                     "dividends_and_distributions",
                      "book_value_per_share", "capital_expenditure", "ebit",
                      # Plan 1E.1 (2026-10-04): the operating line core earnings is read from. Copied by
                      # _extract_annual_series but never requested, so core earnings never fired in the
@@ -11830,6 +11850,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             continue
 
         series, reported_currency = _extract_annual_series(line_items)
+        # Plan E32 (owner, 2026-10-06; Sheng Siong): a feed with no dividends per share takes them from the
+        # dividends paid over the year's shares, so the dividend legs and the yield see a paying company.
+        for _r32 in series:
+            try:
+                _dps32 = _r32.get("dividends_per_share")
+                _paid32 = _r32.get("dividends_and_distributions")
+                _sh32 = _r32.get("shares_outstanding")
+                if (not _dps32) and isinstance(_paid32, (int, float)) and _paid32 != 0 and _sh32 and _sh32 > 0:
+                    _r32["dividends_per_share"] = abs(float(_paid32)) / float(_sh32)
+                    _r32["_dps_from_dividends_paid"] = True
+            except Exception:                              # noqa: BLE001
+                pass
         if len(series) < _MIN_HISTORY_YEARS:
             progress.update_status(agent_id, ticker,
                                    f"Insufficient history ({len(series)} yr) — skipping")
@@ -17569,6 +17601,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "scenarios": _pt_rows,
                     "cross_checks": _pt_cross,
                 }
+                # Plan E32 (owner, 2026-10-06; BSL / Sheng Siong reviews): the twelve-month return a holder earns
+                # includes the dividend -- price return to the target plus the trailing dividend yield.
+                try:
+                    _dps_r = most_recent.get("dividends_per_share")
+                    if isinstance(_dps_r, (int, float)) and _dps_r > 0 and _spot_for_cap and float(_spot_for_cap) > 0:
+                        _yld_r = float(_dps_r) / float(_spot_for_cap)
+                        _pt_bridge["dividend_yield"] = round(_yld_r, 6)
+                        for _sn_r, _row_r in (_pt_rows or {}).items():
+                            if isinstance(_row_r, dict) and isinstance(_row_r.get("target"), (int, float)):
+                                _row_r["total_return"] = round(float(_row_r["target"]) / float(_spot_for_cap) - 1.0 + _yld_r, 6)
+                except Exception:                          # noqa: BLE001
+                    pass
 
         # ── 12m PT vs DCF IV divergence guard ────────────────────────────────
         # Skipped when the unified rule set the target: it guarded a target

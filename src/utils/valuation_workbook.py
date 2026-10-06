@@ -816,7 +816,9 @@ class _Book:
         sh.label(r, 1, "Variance vs consensus revenue (%)"); sh.label(r, 2, "Formula")
         for k in range(n_fc):
             L = get_column_letter(last + 1 + k)
-            sh.put(r, last + 1 + k, f'=IF({L}{c_rev}="","",IFERROR({L}{dcf_rev}/{L}{c_rev}-1,""))', PCT)
+            # Plan E33 (2026-10-06; Sheng Siong / BLK): no DCF path (the DCF carries no weight) reads blank,
+            # not -100%.
+            sh.put(r, last + 1 + k, f'=IF(OR({L}{c_rev}="",{L}{dcf_rev}="",{L}{dcf_rev}=0),"",IFERROR({L}{dcf_rev}/{L}{c_rev}-1,""))', PCT)
         r += 1
         self._is_sheet, self._is_rev_row, self._is_g_row, self._is_last = sh, dcf_rev, None, last
         sh.widths({"A": 46, "B": 10, **{get_column_letter(c): 13 for c in range(c0, last + 1 + n_fc)}})
@@ -1261,7 +1263,7 @@ class _Book:
             ("PV of FCF (valuation date)", f"=B{out}*B{out + 4}", BIG),                                 # 5
             ("PV of terminal value (valuation date)", f"=B{out + 3}*B{out + 4}", BIG),                  # 6
             ("Enterprise value", f"=B{out + 5}+B{out + 6}", BIG),                                      # 7
-            ("Less: net debt", f"=-{nd}", BIG),                                                        # 8
+            ("Less: net debt (plus net cash when negative)", f"=-{nd}", BIG),                           # 8
             # Owner, 2026-10-03 (Alibaba review, section 1): the engine deducts minority interest and
             # preferred equity in the DCF bridge.
             ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0), BIG),             # 9
@@ -1317,7 +1319,7 @@ class _Book:
         for t in range(5):
             c = last + 1 + t
             src = get_column_letter(d["c0"] + t)
-            sh.put(rev, c, f"=IFERROR('DCF'!{src}{d['rev_row']}/{self.A['unit']}/{self.A['fx']},0)", MIL)
+            sh.put(rev, c, f"=IFERROR('DCF'!{src}{d['rev_row']}/{self.A['unit']}/{self.A['fx']},\"\")", MIL)
         sh.note(3, 1, "Forecast (E) columns: FMP consensus as published, and the DCF base-case "
                       "revenue path the valuation uses, with the variance between them.")
 
@@ -1626,7 +1628,14 @@ class _Book:
         sh.label(r, 1, "EPS"); sh.put(r, 2, _num(c.get("eps_fy1")), NUM); r += 1
         sh.label(r, 1, "Guidance vs consensus"); sh.put(r, 2, _num(ge.get("guidance_vs_consensus_pct")), PCT); r += 1
         if c.get("as_of"):
-            sh.label(r, 1, "Consensus as of"); sh.put(r, 2, str(c.get("as_of"))).font = Font(color=BLACK); r += 1
+            # Plan E33: a consensus "as of" later than the valuation date is a period-end or a model error,
+            # not a date the figures were read -- said so rather than shown as fact (BSL / Sheng Siong).
+            _val_d = str(((getattr(self, "run", None) or {}).get("run_at")
+                          or (getattr(self, "data", None) or {}).get("end_date") or "")[:10])
+            _asof = str(c.get("as_of"))
+            _late = bool(_val_d) and _asof[:10] > _val_d
+            sh.label(r, 1, "Consensus as of" + (" (AFTER the valuation date: unverified, likely a period end)" if _late else ""))
+            sh.put(r, 2, _asof).font = Font(color=BLACK); r += 1
         r += 1
         sh.section(r, "Model estimates", 6); r += 1
         sh.header(r, ["Estimate", "Bear", "Base", "Bull"])
@@ -1820,7 +1829,7 @@ class _Book:
         frow("tax", "Income tax", lambda L, P: f"=-MAX({L}{R['pretax']},0)*{L}{A['tax']}")
         frow("mino", "Minority interest", lambda L, P: f"=-({L}{R['pretax']}+{L}{R['tax']})*{L}{A['mi']}")
         frow("ni", "Net income to common", lambda L, P: f"={L}{R['pretax']}+{L}{R['tax']}+{L}{R['mino']}", bold=True, opening=(op.get("net_income") or 0) * M)
-        frow("shares", "Diluted shares (millions)", lambda L, P: f'=IF({L}{A["px"]}>0,{P}{R["shares"]}+{L}{{bbk}}/{L}{A["px"]},{P}{R["shares"]})', fmt=MIL, opening=(op.get("shares") or 0) * M)
+        frow("shares", "Diluted shares (millions)", lambda L, P: f'=IF({L}{A["px"]}>0,{P}{R["shares"]}+({L}{{bbk}}+{L}{{issue}})/{L}{A["px"]},{P}{R["shares"]})', fmt=MIL, opening=(op.get("shares") or 0) * M)
         frow("eps", "Diluted EPS", lambda L, P: f"=IFERROR({L}{R['ni']}/{L}{R['shares']},0)", fmt=NUM, bold=True)
         frow("dps", "Dividend per share", lambda L, P: f"=IFERROR(-{L}{{div}}/{L}{R['shares']},0)", fmt=NUM)
         r += 1
@@ -1858,8 +1867,11 @@ class _Book:
         frow("div", "Dividends paid", lambda L, P: f"=-MAX({L}{R['ni']},0)*{L}{A['po']}")
         frow("cashpre", "  Cash before buybacks and revolver", lambda L, P: f"={P}{{cash}}+{L}{R['cfo']}+{L}{R['cfi']}+{L}{R['div']}", typ="Memo")
         frow("bbk", "Share repurchases", lambda L, P: f"=-MAX(0,MIN({L}{A['bb']},{L}{R['cashpre']}-{L}{A['mincash']}))")
-        frow("draw", "Revolver draw", lambda L, P: f"=MAX(0,{L}{A['mincash']}-({L}{R['cashpre']}+{L}{R['bbk']}))")
-        frow("cff", "Cash from financing", lambda L, P: f"={L}{R['div']}+{L}{R['bbk']}+{L}{R['draw']}", bold=True)
+        # Plan E34 (2026-10-06): a loss-making year funds its shortfall with equity at the spot price, a profitable
+        # year with the revolver -- the engine's rule, reproduced.
+        frow("issue", "Equity issued (loss-making year)", lambda L, P: f"=IF({L}{R['ni']}<0,MAX(0,{L}{A['mincash']}-({L}{R['cashpre']}+{L}{R['bbk']})),0)")
+        frow("draw", "Revolver draw", lambda L, P: f"=IF({L}{R['ni']}<0,0,MAX(0,{L}{A['mincash']}-({L}{R['cashpre']}+{L}{R['bbk']})))")
+        frow("cff", "Cash from financing", lambda L, P: f"={L}{R['div']}+{L}{R['bbk']}+{L}{R['draw']}+{L}{R['issue']}", bold=True)
         frow("dcash", "Net change in cash", lambda L, P: f"={L}{R['cfo']}+{L}{R['cfi']}+{L}{R['cff']}", bold=True)
         frow("fcf", "Free cash flow (CFO − capex)", lambda L, P: f"={L}{R['cfo']}+{L}{R['cf_capex']}", bold=True)
         r += 1
@@ -1883,7 +1895,7 @@ class _Book:
         frow("tl", "Total liabilities", lambda L, P: f"={L}{R['bs_ap']}+{L}{R['std']}+{L}{R['ocl']}+{L}{R['ltd']}+{L}{R['oncl']}", bold=True)
         _re0 = (op.get("retained_earnings") if op.get("retained_earnings") is not None else op.get("equity")) or 0
         frow("re", "Retained earnings (prior + net income − common dividends)", lambda L, P: f"={P}{R['re']}+{L}{R['ni']}+{L}{R['div']}", opening=_re0 * M)
-        frow("oeq", "Other equity: APIC, treasury, reserves (prior − buybacks + SBC)", lambda L, P: f"={P}{R['oeq']}+{L}{R['bbk']}+{L}{R['cf_sbc']}", opening=((op.get("equity") or 0) - _re0) * M)
+        frow("oeq", "Other equity: APIC, treasury, reserves (prior − buybacks + SBC + equity issued)", lambda L, P: f"={P}{R['oeq']}+{L}{R['bbk']}+{L}{R['cf_sbc']}+{L}{R['issue']}", opening=((op.get("equity") or 0) - _re0) * M)
         frow("eq", "Shareholders' equity", lambda L, P: f"={L}{R['re']}+{L}{R['oeq']}", bold=True, opening=(op.get("equity") or 0) * M)
         frow("mi", "Minority interest", lambda L, P: f"={P}{R['mi']}-{L}{R['mino']}", opening=(op.get("minority_interest") or 0) * M)
         frow("tle", "Total liabilities & equity", lambda L, P: f"={L}{R['tl']}+{L}{R['eq']}+{L}{R['mi']}", bold=True)

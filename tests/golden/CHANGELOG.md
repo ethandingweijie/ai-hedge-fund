@@ -1770,3 +1770,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Owner 2026-10-06: E1 windfall years out of normalised earnings (non-cyclicals), E25 consensus sets DCF years 1-2 above the revenue-scale tier for non-cyclicals (FY+1/FY0, FY+2/FY+1; CAGR-divergence rule applies), DDM rolls to DCF below a 2% yield. 09988_HK +1.4%, BABA +1.4%, MELI +17.6% (+44%/+28% consensus years)
 
+## 2026-10-06T16:48:08+00:00
+
+- regenerated at HEAD: `6b183b16`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Plan E32 (2026-10-06): pt_bridge carries the trailing dividend yield and each scenario's total return (price + yield); no value moved
+

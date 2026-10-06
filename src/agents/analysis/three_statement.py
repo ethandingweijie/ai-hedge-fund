@@ -200,6 +200,7 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
     IS, CF, BS, SCH, checks, notes = {}, {}, {}, {}, [], []
     L = lambda d, k, x: d.setdefault(k, []).append(x)                                                   # noqa: E731
     revolver = 0.0
+    issued_total = 0.0
     for i in range(min(years, len(rows))):
         r = rows[i]
         rev, ebit, da, capex, dnwc = float(r["revenue"]), float(r["ebit"]), float(r.get("da") or 0.0), float(r.get("capex") or 0.0), float(r.get("delta_nwc") or 0.0)
@@ -223,9 +224,17 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         cash_pre = o["cash"] + cfo + cfi - div
         bb = max(0.0, min(bb_target, cash_pre - min_cash)) if bb_target else 0.0
         cash_post = cash_pre - bb
-        draw = max(0.0, min_cash - cash_post)                     # revolver keeps cash at the minimum
+        shortfall = max(0.0, min_cash - cash_post)
+        # Owner, 2026-10-06 (plan E34; NTLA / Zai reviews): a LOSS-MAKING year funds its shortfall with new
+        # equity at the spot price -- a biotech burning cash sells shares, it does not draw a 0.5% revolver
+        # until equity turns negative. A profitable year keeps the revolver.
+        if ni < 0:
+            issue, draw = shortfall, 0.0
+        else:
+            issue, draw = 0.0, shortfall                           # revolver keeps cash at the minimum
         revolver += draw
-        cff = -div - bb + draw
+        issued_total += issue
+        cff = -div - bb + draw + issue
         cash = o["cash"] + cfo + cfi + cff
         # balance sheet
         ar = (rev * ar_d / 365.0) if ar_d is not None else o["receivables"]
@@ -237,13 +246,15 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         gi, onca = o["goodwill_intangibles"], o["other_noncurrent_assets"]
         std, ltd, ocl, oncl, mi = o["short_term_debt"] + draw, o["long_term_debt"], o["other_current_liabilities"], o["other_noncurrent_liabilities"], o["minority_interest"] + mi_share
         re_ = o["retained_earnings"] + ni - div                   # assertion 3: RE_end = RE_prior + NI - common dividends
-        oeq = o["other_equity"] - bb + sbc
+        oeq = o["other_equity"] - bb + sbc + issue
         eq = re_ + oeq
         ta = cash + o["sti"] + ar + inv + oca + ppe + gi + onca
         tl = ap + std + ocl + ltd + oncl
         tle = tl + eq + mi
         if bb and price:
             shares = max(shares - bb / price, 1.0)
+        if issue and price:
+            shares = shares + issue / price
         for k, x in (("revenue", rev), ("growth", rev / rev_prev - 1.0 if rev_prev else None), ("cogs", -cogs if cogs is not None else None), ("gross_profit", gp),
                      ("gross_margin", (gp / rev) if gp is not None and rev else None), ("opex_ex_da", -opex), ("ebitda", ebit + da), ("da", -da), ("ebit", ebit),
                      ("ebit_margin", ebit / rev if rev else None), ("interest_expense", -int_exp), ("interest_income", int_inc), ("pretax", pretax), ("tax", -tax),
@@ -251,7 +262,7 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
                      ("dividends_per_share", div / shares if shares else None), ("sbc_memo", sbc)):
             L(IS, k, x)
         for k, x in (("net_income", ni), ("da", da), ("sbc", sbc), ("change_nwc", -dnwc), ("minority", mi_share), ("cfo", cfo), ("capex", -capex), ("acquisitions", -val("acquisitions")), ("cfi", cfi),
-                     ("dividends", -div), ("buybacks", -bb), ("debt_change", draw), ("cff", cff), ("net_change_cash", cfo + cfi + cff), ("opening_cash", o["cash"]), ("closing_cash", cash),
+                     ("dividends", -div), ("buybacks", -bb), ("debt_change", draw), ("equity_issued", issue), ("cff", cff), ("net_change_cash", cfo + cfi + cff), ("opening_cash", o["cash"]), ("closing_cash", cash),
                      ("fcf", cfo - capex), ("fcf_after_sbc", cfo - capex - sbc)):
             L(CF, k, x)
         for k, x in (("cash", cash), ("sti", o["sti"]), ("receivables", ar), ("inventory", inv), ("other_current_assets", oca), ("current_assets", cash + o["sti"] + ar + inv + oca),
@@ -284,6 +295,9 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         rev_prev = rev
     if gm is None:
         notes.append("No gross profit in the filings: the income statement runs from revenue to EBIT without a COGS line.")
+    if issued_total > 0:
+        notes.append(f"Loss-making years are funded by new equity at the spot price ({issued_total / 1e6:,.0f}m in all"
+                     + ("; the share count rises with it" if price else "; no spot price, so the share count is held") + ").")
     if any(c["revolver_draw"] > 0 for c in checks):
         notes.append("Cash would fall below the opening level in " + ", ".join(c["year"] for c in checks if c["revolver_draw"] > 0) + "; a revolver draw keeps it there (shown in short-term debt).")
     if price is None and bb_target:
