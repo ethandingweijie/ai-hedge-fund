@@ -14,7 +14,8 @@ def test_the_five_focus_families_have_desk_rules_in_their_own_language():
         "Energy and resources": ("MID-CYCLE", "strip", "PV-10", "capital-returns"),
         "Industrials, materials and transport": ("BACKLOG VISIBILITY", "book-to-bill", "aftermarket", "programme"),
         "Consumer": ("VOLUME, PRICE and MIX", "gross margin", "payout", "staples basket"),
-        "Health care": ("risk-adjusted NPV", "PTRS", "medical loss ratio", "reimbursement"),
+        "Health care": ("risk-adjusted NPV", "PTRS", "loss of exclusivity", "reimbursement"),
+        "Healthcare services and devices": ("medical loss ratio", "revenue per bed", "procedure volumes", "reimbursement"),
         "Technology, telecom and media": ("FORWARD multiple", "net revenue retention", "stock-based compensation", "Growth_Inflection_Speculative"),
     }
     for fam, ws in words.items():

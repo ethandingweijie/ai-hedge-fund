@@ -13879,7 +13879,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         try:
             from src.data import biopharma_methods as _bpm
             from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
-            if sector == "Biopharma" and (profile_name in _bpm.DRUG_PROFILES or ticker.upper() in _bpm.POPULAR):
+            # The gate path runs only for a company whose own industry is a drug developer's: a device maker or
+            # a service provider that routing filed under Biopharma keeps its profile (plan I13, 2026-10-06).
+            try:
+                _ind_bp = str(_company_industry(ticker) or "").lower()
+            except Exception:                              # noqa: BLE001
+                _ind_bp = ""
+            _is_drug_co = (not _ind_bp) or any(w in _ind_bp for w in ("drug", "biotech", "pharma"))
+            if sector == "Biopharma" and (ticker.upper() in _bpm.POPULAR
+                                          or (profile_name in _bpm.DRUG_PROFILES and _is_drug_co)):
                 _seg_c = _bpm.classify_segments(most_recent.get("segment_breakdown"))
                 _rev_usd = _ladder_revenue_usd(revenue_base, _target_ccy, api_key) or 0.0
                 _seg_tot = (_seg_c["product"] + _seg_c["platform"] + _seg_c["other"]) or 0.0

@@ -71,7 +71,7 @@ def test_the_selection_is_biopharma_only():
     import inspect
     from src.agents.analysis import dcf_agent as d
     src = inspect.getsource(d)
-    assert 'if sector == "Biopharma" and (profile_name in _bpm.DRUG_PROFILES or ticker.upper() in _bpm.POPULAR):' in src
+    assert '(profile_name in _bpm.DRUG_PROFILES and _is_drug_co)' in src
     assert "Specialty & Generic Pharma" not in bm.DRUG_PROFILES and "MedTech / Devices" not in bm.DRUG_PROFILES
 
 

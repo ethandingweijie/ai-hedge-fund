@@ -81,7 +81,7 @@ _PROFILE_ARCHETYPE: dict[str, str] = {
 }
 _FAMILY_ARCHETYPE: dict[str, str] = {
     "Banks": "I", "Insurance": "I", "Fee financials": "IV", "Property, REITs and holdcos": "I",
-    "Energy and resources": "II", "Consumer": "III", "Health care": "G",
+    "Energy and resources": "II", "Consumer": "III", "Health care": "G", "Healthcare services and devices": "G",
     "Industrials, materials and transport": "II", "Technology, telecom and media": "IV", "Operating company": "G",
 }
 _SECTOR_ARCHETYPE: dict[str, str] = {"Tech": "IV", "Consumer": "III", "Industrials": "II", "Energy": "I",

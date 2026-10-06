@@ -70,16 +70,26 @@ FAMILY_ADDENDA: dict[str, str] = {
         "premium, not explained away.\n"
     ),
     "Health care": (
-        "HEALTH CARE DESK RULES (this name is a pharma, biotech, device, services or managed-care company):\n"
+        "DRUG DEVELOPER DESK RULES (this name is a pharma or biotech company):\n"
         "- State the valuation anchor and its basis in the desk's terms: risk-adjusted NPV of the "
         "pipeline (assets, phase, PTRS, peak sales, loss of exclusivity) and whether that leg is on an "
-        "owner-accepted input or quarantined; forward earnings for commercial names; EV/Revenue for "
-        "devices; medical loss ratio and operating EPS for managed care; same-facility volumes and "
-        "reimbursement for providers.\n"
+        "owner-accepted input or quarantined; forward earnings for commercial names; the valuation "
+        "method the biopharma selection chose and why.\n"
         "- Speak in the desk's units: franchise concentration, patent cliffs, readout calendar, pricing "
-        "and reimbursement exposure, gross-to-net, R&D intensity.\n"
-        "- When the Forward P/E sanity gate or a structural flag (for example the managed-care MLR "
-        "cycle) is in the inputs, cite it as the engine's own qualification of the number.\n"
+        "and reimbursement exposure (IRA, NRDL), gross-to-net, R&D intensity.\n"
+        "- When the Forward P/E sanity gate fires, cite it as the engine's own qualification of the number.\n"
+    ),
+    "Healthcare services and devices": (
+        "HEALTHCARE SERVICES & DEVICES DESK RULES (this name is a provider, hospital, managed-care, device, "
+        "CDMO or distribution company):\n"
+        "- State the valuation anchor and its basis: medical loss ratio and operating EPS for managed care; "
+        "occupancy, revenue per bed, case mix and payer mix for hospitals; procedure volumes and ASPs for "
+        "devices; capacity utilisation and backlog for CDMOs; same-facility volumes and reimbursement "
+        "for providers.\n"
+        "- Speak in the desk's units: segment and geography mix (a loss-making new hospital is a ramp, not "
+        "the business), reimbursement and tariff changes, labour cost, capex per bed.\n"
+        "- When a structural flag (the managed-care MLR cycle) is in the inputs, cite it as the engine's "
+        "own qualification of the number. Never cite trial readouts or rNPV for this desk.\n"
     ),
     "Technology, telecom and media": (
         "TECHNOLOGY, TELECOM & MEDIA DESK RULES (this name is a technology, semiconductor, telecom or media company):\n"
@@ -305,8 +315,16 @@ def family_checklist(family: Optional[str], dr: Optional[dict], scenario: Option
             lines.append(f"Growth base {_pct(dcf.get('growth_base'))}, FCF margin base {_pct(dcf.get('fcf_margin_base'))}")
         for f in _flags(dr, "Deep Value", "premium", "Normalized NI"):
             lines.append(f"Multiple context: {f[:200]}")
+    elif family == "Healthcare services and devices":
+        for name in ("Forward P/E", "P/E (Ops)", "P/E (ops)", "EV/EBITDA", "EV/Revenue", "DCF", "EV/EBITDA (norm)"):
+            li = _leg(dr, name)
+            if li and isinstance(li.get("value"), (int, float)):
+                mp = li.get("multiple_parts") or {}
+                lines.append(f"{name} leg {sym}{_f(li['value'])}" + (f" on {_f(li.get('multiple'))}x ({mp.get('peer_source') or 'engine'})" if li.get("multiple") else ""))
+        for f in _flags(dr, "Product segments", "MLR", "structural"):
+            lines.append(f"Mix and structure: {f[:200]}")
     elif family == "Health care":
-        for f in _flags(dr, "rNPV", "pipeline", "Pipeline"):
+        for f in _flags(dr, "rNPV", "pipeline", "Pipeline", "Valuation method"):
             lines.append(f"Pipeline leg: {f[:220]}")
         g = _gate(dr, "GATE_FORWARD_PE_SANITY")
         if g:

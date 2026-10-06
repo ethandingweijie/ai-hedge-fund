@@ -5396,7 +5396,9 @@ DAMODARAN_SECTOR_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("Health Care", "Healthcare Products"):                        ("Biopharma", ""),
     ("Health Care", "Healthcare Support Services"):                ("Biopharma", ""),
     ("Health Care", "Heathcare Information and Technology"):       ("Tech", ""),
-    ("Health Care", "Hospitals/Healthcare Facilities"):            ("Biopharma", ""),
+    # Owner, 2026-10-06 (plan I13): hospitals are care delivery, not drug developers -- routed with the pinned
+    # hospital operators (HCA, THC, UHS) instead of into Biopharma's Large Cap Pharma default.
+    ("Health Care", "Hospitals/Healthcare Facilities"):            ("HealthcareServices", "Healthcare Providers / Services"),
 
     # ── Industrials ───────────────────────────────────────────────────────────
     ("Industrials", "Aerospace/Defense"):                          ("Industrials", ""),

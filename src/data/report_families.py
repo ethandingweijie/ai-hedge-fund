@@ -102,16 +102,25 @@ REPORT_FAMILIES: dict[str, dict] = {
         "skeleton": ["rating", "forward multiple against the basket", "volume/price and margin", "payout", "risk"],
         "signals": ["pricing", "inventory"],
     },
+    # Owner, 2026-10-06 (plan I13; BSL / IHH / NTLA reviews): drug developers and care delivery are different
+    # desks -- a hospital operator was handed trial readouts and rNPV, a biotech the managed-care MLR check.
     "Health care": {
         "profiles": ["Pre-approval Biotech", "Commercial Biotech", "Large Cap Pharma",
-                     "Big Pharma (Consolidated DCF)", "Biotech Platform (SOTP)", "Managed Care", "MedTech / Devices",
-                     "Surgical Robotics / Capital Systems", "CDMO / Life Science Tools", "Healthcare Providers / Services",
-                     "Pharma Distribution", "Healthcare Provider (SG)", "Specialty & Generic Pharma"],
+                     "Big Pharma (Consolidated DCF)", "Biotech Platform (SOTP)", "Specialty & Generic Pharma"],
         "rows": ["revenue", "ebit_m", "ni", "fcf", "net_debt"],
         "exposition": ["rNPV state (accepted or quarantined, and what it covers)", "the Forward P/E sanity gate when it fires",
-                       "the structural flag on managed care"],
-        "skeleton": ["rating", "the anchor and its basis", "pipeline or utilisation", "pricing and reimbursement", "risk"],
-        "signals": ["trial readouts", "MLR trend"],
+                       "the valuation method the biopharma selection chose and why"],
+        "skeleton": ["rating", "the anchor and its basis", "pipeline and franchise durability", "pricing and reimbursement", "risk"],
+        "signals": ["trial readouts", "approvals and label", "loss of exclusivity", "drug-price negotiation"],
+    },
+    "Healthcare services and devices": {
+        "profiles": ["Managed Care", "MedTech / Devices", "Surgical Robotics / Capital Systems", "CDMO / Life Science Tools",
+                     "Healthcare Providers / Services", "Pharma Distribution", "Healthcare Provider (SG)"],
+        "rows": ["revenue", "ebit_m", "ni", "fcf", "net_debt"],
+        "exposition": ["the anchor and its basis", "the structural flag on managed care", "segment / geography mix"],
+        "skeleton": ["rating", "the anchor and its basis", "utilisation and mix", "pricing and reimbursement", "risk"],
+        "signals": ["MLR trend (managed care)", "occupancy and revenue per bed (hospitals)", "procedure volumes and ASPs (devices)",
+                    "capacity utilisation (CDMO)", "payer mix"],
     },
     "Industrials, materials and transport": {
         "profiles": ["Aerospace & Engineering (SG)", "Aviation & Marine (SG)", "Defense Primes", "Commercial Aerospace & Engines",
