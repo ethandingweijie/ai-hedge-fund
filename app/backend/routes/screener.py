@@ -52,7 +52,9 @@ async def get_hk_screener_stocks(
 ):
     """Return ~118 well-known HKEX stocks with VGPM scores computed within the HK peer universe."""
     try:
-        return await asyncio.to_thread(screener_service.get_hk_screener_stocks, force_refresh=refresh)
+        result = await asyncio.to_thread(screener_service.get_hk_screener_stocks, force_refresh=refresh)
+        # Live price + day change on every row (one FMP call per exchange).
+        return await asyncio.to_thread(screener_service.overlay_exchange_quotes, result, "HKSE")
     except Exception as exc:
         tb = traceback.format_exc()
         logger.error("get_hk_screener_stocks failed: %s\n%s", exc, tb)
@@ -65,7 +67,9 @@ async def get_sg_screener_stocks(
 ):
     """Return ~80 SGX stocks with VGPM scores computed within the SG peer universe."""
     try:
-        return await asyncio.to_thread(screener_service.get_sg_screener_stocks, force_refresh=refresh)
+        result = await asyncio.to_thread(screener_service.get_sg_screener_stocks, force_refresh=refresh)
+        # Live price + day change on every row (one FMP call per exchange).
+        return await asyncio.to_thread(screener_service.overlay_exchange_quotes, result, "SES")
     except Exception as exc:
         tb = traceback.format_exc()
         logger.error("get_sg_screener_stocks failed: %s\n%s", exc, tb)

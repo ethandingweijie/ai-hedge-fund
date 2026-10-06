@@ -220,11 +220,18 @@ export interface HoldingRow {
   opened_at: string | null;
   notes: string | null;
   added_at: string | null;
-  /** Dashboard-enriched fields (GET /portfolio only): */
+  /** Dashboard-enriched fields (GET /portfolio only).
+   *  price / avg_cost / market_value / cost_basis / unrealized_pnl are in the
+   *  line's listing `currency` (HKD, SGD, USD…); the *_usd fields are FX'd. */
+  currency?: string;
+  fx_to_usd?: number;
   price?: number | null;
   market_value?: number | null;
   cost_basis?: number | null;
   unrealized_pnl?: number | null;
+  market_value_usd?: number | null;
+  cost_basis_usd?: number | null;
+  unrealized_pnl_usd?: number | null;
   pnl_pct?: number | null;
   weight_pct?: number | null;
   iv_upside_pct?: number | null;
@@ -250,7 +257,10 @@ export interface HoldingRow {
 
 export interface PortfolioDashboard {
   holdings: HoldingRow[];
+  /** Totals and weights are in base_currency (USD). */
   summary: {
+    base_currency?: string;
+    currencies?: string[];
     total_market_value: number | null;
     total_cost_basis: number | null;
     total_unrealized_pnl: number | null;

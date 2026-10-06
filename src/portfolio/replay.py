@@ -10,9 +10,11 @@ Design
     event_library.EVENTS), an injectable price_fetcher (default
     src.tools.api.get_prices — HK/SG routing + superset cache included),
     and today's regime dict (regime_state.json's `regime` block).
-  • Weights for the replay are cost-basis weights (qty × avg_cost) — the
-    deterministic "what did I own" basis; live-price weighting belongs to
-    the P1 dashboard, not a historical replay.
+  • Weights for the replay are cost-basis weights (qty × avg_cost ×
+    fx_to_usd) — the deterministic "what did I own" basis, in USD so HKD
+    and SGD lines weigh what they are worth; live-price weighting belongs
+    to the P1 dashboard, not a historical replay. A holding without
+    `fx_to_usd` is taken as USD.
   • Coverage guard: a holding that wasn't listed yet (first available
     price after window start + grace) or has too few in-window points is
     flagged covered=False and EXCLUDED from the portfolio aggregates —
@@ -372,6 +374,7 @@ def replay_portfolio(holdings: list[dict],
 
     evs = list(events) if events else list(EVENTS)
     basis = {h["ticker"].upper(): float(h.get("quantity") or 0) * float(h.get("avg_cost") or 0)
+             * float(h.get("fx_to_usd") or 1.0)
              for h in holdings}
     total = sum(basis.values())
     weights = {t: (v / total if total else 0.0) for t, v in basis.items()}
@@ -389,6 +392,6 @@ def replay_portfolio(holdings: list[dict],
             "tickers": sorted(basis.keys()),
             "position_count": len(basis),
             "snapshot_hash": snapshot_hash(holdings),
-            "weight_basis": "cost_basis_qty_x_avg_cost",
+            "weight_basis": "cost_basis_qty_x_avg_cost_usd",
         },
     }

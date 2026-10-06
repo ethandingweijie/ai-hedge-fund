@@ -36,7 +36,9 @@ from dataclasses import dataclass, field
 
 # Bumped when curated event content changes (new events, re-calibrated
 # numbers) so cached replays keyed on snapshot_hash miss and recompute.
-LIBRARY_VERSION = 3
+# v4: cost-basis weights converted to USD (fx_to_usd) -- an HKD or SGD
+#     position was weighted one-for-one against USD ones (2026-10-07).
+LIBRARY_VERSION = 4
 
 
 # Regime vocabulary — must stay aligned with macro_regime.py outputs so

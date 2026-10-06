@@ -75,6 +75,8 @@ async def add_holding(body: HoldingRequest,
             portfolio_service.upsert_holding, db, user_id, body.ticker,
             body.quantity, body.avg_cost, body.opened_at, body.notes)
         return portfolio_service._holding_dict(row)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.error("add_holding failed: %s\n%s", exc, traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))

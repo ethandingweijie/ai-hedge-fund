@@ -179,3 +179,77 @@ class TestVgpmComposite:
 
     def test_empty(self):
         assert ps._vgpm_composite({}) is None
+
+
+# ── HK / SG holdings: canonical tickers + USD roll-up ───────────────────────
+
+class TestAsiaHoldings:
+    def test_hk_and_sg_input_is_canonicalised(self, db):
+        assert ps.upsert_holding(db, None, "9988", 100, 80.0).ticker == "09988.HK"
+        assert ps.upsert_holding(db, None, "d05", 10, 40.0).ticker == "D05.SI"
+        # same position typed another way replaces, never duplicates
+        ps.upsert_holding(db, None, "9988.HK", 200, 90.0)
+        tickers = sorted(h.ticker for h in ps.list_holdings(db, None))
+        assert tickers == ["09988.HK", "D05.SI"]
+
+    def test_legacy_raw_rows_renamed_on_read(self, db):
+        db.add(UserHolding(user_id=None, ticker="9988", quantity=1, avg_cost=1))
+        db.commit()
+        assert [h.ticker for h in ps.list_holdings(db, None)] == ["09988.HK"]
+
+    def test_legacy_raw_row_with_canonical_twin_left_alone(self, db):
+        db.add(UserHolding(user_id=None, ticker="9988", quantity=1, avg_cost=1))
+        db.add(UserHolding(user_id=None, ticker="09988.HK", quantity=2, avg_cost=1))
+        db.commit()
+        assert sorted(h.ticker for h in ps.list_holdings(db, None)) == ["09988.HK", "9988"]
+
+    def test_totals_and_weights_in_usd(self):
+        holdings = [
+            {"id": 1, "ticker": "AAPL", "quantity": 10, "avg_cost": 100.0},
+            {"id": 2, "ticker": "09988.HK", "quantity": 100, "avg_cost": 100.0},
+        ]
+        prices = {"AAPL": 100.0, "09988.HK": 110.0}
+        fx = {"AAPL": {"currency": "USD", "fx_to_usd": 1.0},
+              "09988.HK": {"currency": "HKD", "fx_to_usd": 0.128}}
+        d = ps.build_dashboard(holdings, prices, {}, fx)
+        aapl, baba = d["holdings"]
+        # per-row figures stay in the listing currency
+        assert baba["currency"] == "HKD"
+        assert baba["market_value"] == pytest.approx(11000.0)
+        assert baba["unrealized_pnl"] == pytest.approx(1000.0)
+        assert baba["market_value_usd"] == pytest.approx(1408.0)
+        # HK$11,000 is US$1,408 — it must not outweigh US$1,000 of AAPL 11:1
+        total = 1000.0 + 1408.0
+        assert baba["weight_pct"] == pytest.approx(1408.0 / total * 100)
+        s = d["summary"]
+        assert s["total_market_value"] == pytest.approx(total)
+        assert s["total_cost_basis"] == pytest.approx(1000.0 + 1280.0)
+        assert s["total_unrealized_pnl"] == pytest.approx(128.0)
+        assert s["currencies"] == ["HKD", "USD"]
+
+    def test_unpriced_line_cost_is_not_a_loss(self):
+        holdings = [
+            {"id": 1, "ticker": "AAPL", "quantity": 10, "avg_cost": 100.0},
+            {"id": 2, "ticker": "D05.SI", "quantity": 10, "avg_cost": 40.0},
+        ]
+        d = ps.build_dashboard(holdings, {"AAPL": 110.0}, {})
+        assert d["summary"]["total_unrealized_pnl"] == pytest.approx(100.0)
+        assert d["summary"]["total_pnl_pct"] == pytest.approx(10.0)
+
+    def test_replay_weights_use_fx(self, monkeypatch):
+        from src.portfolio import replay as rp
+        seen = {}
+
+        def _capture(ev, holdings, weights, fetcher, regime):
+            seen.update(weights)
+            return {"key": ev.key, "regime_similarity": {"matches": 0}}
+        monkeypatch.setattr(rp, "_replay_event", _capture)
+        holdings = [
+            {"ticker": "AAPL", "quantity": 10, "avg_cost": 100.0, "fx_to_usd": 1.0},
+            {"ticker": "09988.HK", "quantity": 100, "avg_cost": 100.0, "fx_to_usd": 0.125},
+        ]
+        out = rp.replay_portfolio(holdings, price_fetcher=lambda *a: [])
+        # US$1,000 vs HK$10,000 = US$1,250 → 1000/2250, not 1000/11000
+        assert seen["AAPL"] == pytest.approx(1000.0 / 2250.0)
+        assert seen["09988.HK"] == pytest.approx(1250.0 / 2250.0)
+        assert out["holdings_snapshot"]["weight_basis"] == "cost_basis_qty_x_avg_cost_usd"

@@ -26,7 +26,7 @@ Division of labor (hard rule — the LLM never does arithmetic):
     holding-level commentary, recommendations, and whether the search
     evidence was actually used.
 
-Cost basis: same as replay — qty × avg_cost weights.
+Cost basis: same as replay — qty × avg_cost × fx_to_usd weights.
 
 Determinism: identical inputs (holdings, scenario, reference event,
 injected dependencies) give byte-identical output; the only wall clock
@@ -82,7 +82,9 @@ _TRADING_DAYS_PER_YEAR = 252
 #     which is badly wrong when the markets diverge: through the 2021-22
 #     China crackdown the Hang Seng fell 52.8% while the S&P fell 1.6%
 #     (2026-08-27).
-SCENARIO_VERSION = 8
+# v9: cost-basis weights converted to USD via the holding's fx_to_usd, so
+#     HKD/SGD lines no longer outweigh USD ones 7.8x / 1.3x (2026-10-07).
+SCENARIO_VERSION = 9
 
 # Annualized vol (%) by volatility_regime label — fallback when realized vol
 # cannot be computed from the reference window. Bands match macro_regime.py's
@@ -442,7 +444,8 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
             "sector": None, "gics": None,
             "est_impact_pct": None, "anchor_pct": None,
             "weight_basis": round(float(h.get("quantity") or 0)
-                                  * float(h.get("avg_cost") or 0), 2),
+                                  * float(h.get("avg_cost") or 0)
+                                  * float(h.get("fx_to_usd") or 1.0), 2),
         }
 
         cls = classify_product(tkr, h.get("notes"))

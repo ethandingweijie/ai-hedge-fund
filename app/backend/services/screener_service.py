@@ -121,11 +121,88 @@ def update_cached_prices(quotes: dict[str, dict]) -> None:
 import logging as _logging
 _sqlog = _logging.getLogger(__name__)
 
+
+# ── Whole-exchange quotes (HK / SG screener day change) ─────────────────────
+# The HK and SG screener builds are weekly and carry no day change, and the
+# frontend's 15 s tick only re-quotes the top 50 rows — so most HK/SG rows
+# showed no % change where every US row has one. FMP quotes a whole
+# exchange in one call (HKSE ~3,200 lines, SES ~360, ~1.5 s), so the read
+# path overlays it on every row. Cached briefly per exchange.
+_EXCHANGE_QUOTE_TTL_S = 60
+_EXCHANGE_QUOTES: dict[str, tuple[float, dict[str, dict]]] = {}
+_EXCHANGE_QUOTES_LOCK = threading.Lock()
+
+
+def get_exchange_quotes(exchange: str) -> dict[str, dict]:
+    """{canonical symbol: {price, change_pct, volume}} for every line on an
+    FMP exchange ("HKSE" or "SES"). HK symbols are keyed in the repo's
+    5-digit canonical form (0700.HK -> 00700.HK). {} on failure."""
+    import time as _time
+    now = _time.time()
+    with _EXCHANGE_QUOTES_LOCK:
+        hit = _EXCHANGE_QUOTES.get(exchange)
+        if hit and now - hit[0] < _EXCHANGE_QUOTE_TTL_S:
+            return hit[1]
+    api_key = _get_fmp_key()
+    if not api_key:
+        return {}
+    try:
+        from src.tools.api import acquire_fmp_token
+        acquire_fmp_token()
+        r = requests.get(f"{_STABLE}/batch-exchange-quote",
+                         params={"exchange": exchange, "short": "false",
+                                 "apikey": api_key},
+                         timeout=30)
+        rows = r.json() if r.ok else []
+    except Exception as exc:
+        _sqlog.warning("batch-exchange-quote %s failed: %s", exchange, exc)
+        return {}
+    if not isinstance(rows, list):
+        return {}
+    to_canon = None
+    if exchange == "HKSE":
+        from src.tools.hk.ticker import to_canonical as to_canon
+    out: dict[str, dict] = {}
+    for row in rows:
+        sym = (row or {}).get("symbol")
+        if not sym or row.get("price") is None:
+            continue
+        if to_canon is not None:
+            try:
+                sym = to_canon(sym)
+            except Exception:
+                continue
+        q = {"price": row.get("price"), "volume": row.get("volume")}
+        if row.get("changePercentage") is not None:
+            q["change_pct"] = row["changePercentage"]
+        out[sym] = q
+    if out:
+        with _EXCHANGE_QUOTES_LOCK:
+            _EXCHANGE_QUOTES[exchange] = (now, out)
+    return out
+
+
+def overlay_exchange_quotes(result: dict, exchange: str) -> dict:
+    """Overlay live price / day change from get_exchange_quotes onto a
+    screener response's items, in place. Never raises."""
+    try:
+        quotes = get_exchange_quotes(exchange)
+        for item in (result or {}).get("items") or []:
+            q = quotes.get(item.get("symbol", ""))
+            if q:
+                _overlay_live(item, q)
+    except Exception as exc:
+        _sqlog.warning("exchange quote overlay %s failed: %s", exchange, exc)
+    return result
+
+
 def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -> dict[str, dict]:
     """Fetch live price + volume + day % change for a set of tickers.
 
-    US tickers: FMP batch-exchange-quote (NASDAQ/NYSE/AMEX in parallel).
-    HK tickers: yfinance fast_info (previous_close → change_pct computed).
+    US + SG tickers: FMP /stable/quote, one call per symbol in parallel.
+    HK tickers: the same FMP path on the 4-digit symbol FMP accepts
+    (09988.HK -> 9988.HK), keyed back to the caller's ticker; yfinance
+    fast_info only for HK names FMP did not return.
     Returns {symbol: {price, volume, change_pct}}, {} on failure.
     """
     if not tickers:
@@ -133,7 +210,8 @@ def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -
 
     # ── Split HK vs US ───────────────────────────────────────────────────────
     try:
-        from src.tools.hk.ticker import is_hk_ticker, to_yfinance_code as _hk_yf
+        from src.tools.hk.ticker import (
+            is_hk_ticker, to_fmp_code as _hk_fmp, to_yfinance_code as _hk_yf)
         hk_tickers = [t for t in tickers if is_hk_ticker(t)]
         us_tickers  = [t for t in tickers if not is_hk_ticker(t)]
     except Exception:
@@ -141,17 +219,28 @@ def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -
 
     result: dict[str, dict] = {}
 
+    # (result key, FMP symbol). HK goes through FMP too -- yfinance's HK
+    # fast_info started returning nothing, which left every HK holding and
+    # watchlist row without a price. FMP rejects the 5-digit canonical form.
+    fmp_jobs: list[tuple[str, str]] = [(t, t) for t in us_tickers]
+    for t in hk_tickers:
+        try:
+            fmp_jobs.append((t, _hk_fmp(t)))
+        except Exception:
+            pass
+
     # ── US: FMP /stable/quote — one call per symbol in parallel ─────────────────
     # /stable/quote only accepts a single symbol per request (batch returns []).
     # v3 is deprecated (403) for current API keys. Use per-symbol parallel calls.
-    if us_tickers:
+    if fmp_jobs:
         api_key = _get_fmp_key()
         if not api_key:
             _sqlog.warning("get_live_quotes: no FMP API key found")
         else:
             _FMP_STABLE = "https://financialmodelingprep.com/stable/quote"
 
-            def _fetch_one(sym: str) -> tuple[str, dict] | None:
+            def _fetch_one(job: tuple[str, str]) -> tuple[str, dict] | None:
+                key, sym = job
                 try:
                     from src.tools.api import acquire_fmp_token
                     acquire_fmp_token()
@@ -176,23 +265,24 @@ def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -
                     pct = item.get("changePercentage")
                     if pct is not None:
                         q["change_pct"] = pct
-                    return (sym, q)
+                    return (key, q)
                 except Exception as exc:
                     _sqlog.debug("FMP quote %s exception: %s", sym, exc)
                     return None
 
             # Cap at 10 workers to stay within FMP free-tier rate limits (~300 req/min)
             with ThreadPoolExecutor(max_workers=10) as pool:
-                for pair in pool.map(_fetch_one, us_tickers):
+                for pair in pool.map(_fetch_one, fmp_jobs):
                     if pair:
                         result[pair[0]] = pair[1]
 
-            _sqlog.info("FMP /stable/quote: fetched %d/%d symbols", len(result), len(us_tickers))
+            _sqlog.info("FMP /stable/quote: fetched %d/%d symbols", len(result), len(fmp_jobs))
             if result:
                 sample = next(iter(result.values()))
                 _sqlog.info("Sample: price=%s change_pct=%s", sample.get("price"), sample.get("change_pct", "MISSING"))
 
-    # ── HK: yfinance fast_info (change_pct from previous_close) ─────────────
+    # ── HK fallback: yfinance fast_info for names FMP did not return ────────
+    hk_tickers = [t for t in hk_tickers if t not in result]
     if hk_tickers:
         def _fetch_hk(ticker: str) -> tuple[str, dict] | None:
             try:
@@ -2431,6 +2521,9 @@ def _build_hk_screener(cache_key: str) -> dict:
     # Sort: highest composite score first (HK peers ranked within HK universe)
     items.sort(key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0)))
 
+    # Day change from FMP's whole-exchange quote (the metrics pipeline
+    # carries none) so even the cached rows have one.
+    overlay_exchange_quotes({"items": items}, "HKSE")
     _set_cached(cache_key, items, ttl_hours=_WEEKLY_TTL_HOURS)
     return {"items": items, "total": len(items), "cached": False}
 
@@ -2600,6 +2693,9 @@ def _build_sg_screener(cache_key: str) -> dict:
 
     items.sort(key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0)))
 
+    # Day change from FMP's whole-exchange quote (the metrics pipeline
+    # carries none) so even the cached rows have one.
+    overlay_exchange_quotes({"items": items}, "SES")
     _set_cached(cache_key, items, ttl_hours=_WEEKLY_TTL_HOURS)
     return {"items": items, "total": len(items), "cached": False}
 

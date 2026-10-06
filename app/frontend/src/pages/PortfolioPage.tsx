@@ -35,18 +35,31 @@ function fmtNum(v: number | null | undefined, dp = 2): string {
   return v.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
-function fmtMoney(v: number | null | undefined): string {
-  if (v == null || Number.isNaN(v)) return '—';
-  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Symbol per listing currency. US$ only when the portfolio mixes markets,
+// so a pure-US book still reads "$".
+const CCY_SYMBOL: Record<string, string> = {
+  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'CN¥', EUR: '€', GBP: '£', JPY: 'JP¥',
+  USD_MIXED: 'US$',
+};
+
+function ccySymbol(ccy?: string | null): string {
+  if (!ccy) return '$';
+  return CCY_SYMBOL[ccy] ?? `${ccy} `;
 }
 
-function PnlText({ value, pct }: { value: number | null | undefined; pct?: number | null }) {
+function fmtMoney(v: number | null | undefined, ccy?: string | null): string {
+  if (v == null || Number.isNaN(v)) return '—';
+  const sign = v < 0 ? '-' : '';
+  return `${sign}${ccySymbol(ccy)}${Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function PnlText({ value, pct, ccy }: { value: number | null | undefined; pct?: number | null; ccy?: string | null }) {
   if (value == null) return <span className="text-muted-foreground">—</span>;
   const cls = value > 0 ? 'text-gain'
     : value < 0 ? 'text-loss' : 'text-muted-foreground';
   return (
     <span className={`${cls} font-medium tabular-nums`}>
-      {value > 0 ? '+' : ''}{fmtMoney(value)}
+      {value > 0 ? '+' : ''}{fmtMoney(value, ccy)}
       {pct != null && <span className="text-xs ml-1">({pct > 0 ? '+' : ''}{fmtNum(pct, 1)}%)</span>}
     </span>
   );
@@ -253,9 +266,11 @@ export function PortfolioPage() {
     }
     setAdding(true);
     try {
-      await addHolding({ ticker: t, quantity: q, avg_cost: c, notes: notes.trim() || null });
+      // The backend canonicalises HK/SG codes (9988 → 09988.HK, D05 → D05.SI);
+      // confirm with the stored form so the user sees what it resolved to.
+      const saved = await addHolding({ ticker: t, quantity: q, avg_cost: c, notes: notes.trim() || null });
       setTicker(''); setQty(''); setCost(''); setNotes('');
-      toast.success(`${t} position saved`);
+      toast.success(`${saved?.ticker ?? t} position saved`);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to add holding');
@@ -279,6 +294,10 @@ export function PortfolioPage() {
 
   const s = dash?.summary;
   const positionCount = s?.position_count ?? 0;
+  // Mixed-currency book → label totals US$ so they don't read as local.
+  const multiCcy = (s?.currencies ?? []).some(c => c !== 'USD');
+  const totalCcy = multiCcy ? 'USD_MIXED' : 'USD';
+  const fmtTotal = (v: number | null | undefined) => fmtMoney(v, totalCcy);
 
   return (
     <PageContainer size="wide">
@@ -316,15 +335,15 @@ export function PortfolioPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
               <Card className="p-4">
                 <div className="text-xs text-muted-foreground">Market value</div>
-                <div className="text-xl font-semibold tabular-nums">{fmtMoney(s?.total_market_value)}</div>
+                <div className="text-xl font-semibold tabular-nums">{fmtTotal(s?.total_market_value)}</div>
               </Card>
               <Card className="p-4">
                 <div className="text-xs text-muted-foreground">Cost basis</div>
-                <div className="text-xl font-semibold tabular-nums">{fmtMoney(s?.total_cost_basis)}</div>
+                <div className="text-xl font-semibold tabular-nums">{fmtTotal(s?.total_cost_basis)}</div>
               </Card>
               <Card className="p-4">
                 <div className="text-xs text-muted-foreground">Unrealized P&L</div>
-                <div className="text-xl font-semibold"><PnlText value={s?.total_unrealized_pnl} pct={s?.total_pnl_pct} /></div>
+                <div className="text-xl font-semibold"><PnlText value={s?.total_unrealized_pnl} pct={s?.total_pnl_pct} ccy={totalCcy} /></div>
               </Card>
               <Card className="p-4">
                 <div className="text-xs text-muted-foreground">Positions</div>
@@ -345,8 +364,9 @@ export function PortfolioPage() {
                 <label className="text-xs text-muted-foreground block mb-1">Ticker</label>
                 <input
                   value={ticker} onChange={e => setTicker(e.target.value)}
-                  placeholder="e.g. BABA"
-                  className="w-28 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm uppercase"
+                  placeholder="AAPL · 9988 · D05"
+                  title="US tickers, HK codes (9988 or 9988.HK) and SGX codes (D05 or D05.SI). Enter avg cost in the stock's trading currency."
+                  className="w-36 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm uppercase"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
@@ -360,7 +380,7 @@ export function PortfolioPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Avg cost</label>
+                <label className="text-xs text-muted-foreground block mb-1" title="In the stock's trading currency (HK$ for HK, S$ for most SGX lines)">Avg cost (local ccy)</label>
                 <input
                   value={cost} onChange={e => setCost(e.target.value)}
                   placeholder="150.00" inputMode="decimal"
@@ -427,11 +447,16 @@ export function PortfolioPage() {
                         {h.notes && <div className="text-[11px] font-normal text-muted-foreground max-w-40 truncate" title={h.notes}>{h.notes}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtNum(h.quantity, 0)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmtNum(h.avg_cost)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmtNum(h.price ?? null)}</TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">{fmtMoney(h.market_value)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtMoney(h.avg_cost, h.currency)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtMoney(h.price ?? null, h.currency)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {fmtMoney(h.market_value, h.currency)}
+                        {h.currency && h.currency !== 'USD' && h.market_value_usd != null && (
+                          <div className="text-[11px] font-normal text-muted-foreground">≈ {fmtMoney(h.market_value_usd, 'USD_MIXED')}</div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtNum(h.weight_pct ?? null, 1)}%</TableCell>
-                      <TableCell className="text-right"><PnlText value={h.unrealized_pnl} pct={h.pnl_pct} /></TableCell>
+                      <TableCell className="text-right"><PnlText value={h.unrealized_pnl} pct={h.pnl_pct} ccy={h.currency} /></TableCell>
                       <TableCell className="text-center">
                         {decision
                           ? <span className={`text-xs font-bold ${actionTone(decision, 'text')}`}>{decision.replace('_', ' ')}</span>
@@ -484,7 +509,9 @@ export function PortfolioPage() {
 
           {dash && (
             <p className="text-[11px] text-muted-foreground mt-3">
-              Prices: one batched FMP quote ({new Date(dash.prices_at).toLocaleTimeString()}).
+              Prices: FMP live quotes for US, HK and SGX lines ({new Date(dash.prices_at).toLocaleTimeString()}).
+              Price, cost, value and P&L per line are in its trading currency; IVs are in the same
+              currency as the price. {multiCcy ? 'Totals and weights are converted to US$ at live FX. ' : ''}
               Signals: latest archived analysis run per ticker — decision, DCF intrinsic
               values (bear/base/bull) and sector are read-only joins, not new valuations.
             </p>

@@ -19,6 +19,11 @@ computes — no new LLM / valuation work:
                          _get_pipeline_vgpm
   • portfolio math     — market value, weights, unrealized P&L, sector
                          exposure, IV-vs-price (pure, deterministic)
+
+Markets: US, HK and SG. Tickers are stored canonical (9988 -> 09988.HK,
+d05 -> D05.SI) so they join the archive the pipeline writes. Price, cost
+and IV stay in the line's LISTING currency (HKD, SGD, or USD for the
+USD-quoted SGX counters); totals, weights and P&L roll up in USD.
 """
 from __future__ import annotations
 
@@ -50,12 +55,32 @@ def _scope_filter(user_id: Optional[int]):
 
 
 def list_holdings(db: Session, user_id: Optional[int]) -> list[UserHolding]:
-    return (
+    rows = (
         db.query(UserHolding)
         .filter(_scope_filter(user_id))
         .order_by(UserHolding.created_at.desc(), UserHolding.id.desc())
         .all()
     )
+    _canonicalise_rows(db, rows)
+    return rows
+
+
+def _canonicalise_rows(db: Session, rows: list[UserHolding]) -> None:
+    """Rename rows saved before tickers were canonicalised ("9988" ->
+    "09988.HK"). A raw row whose canonical twin already exists is left
+    alone -- merging two positions is the owner's call, not ours."""
+    from src.tools.ticker_canonical import canonical_ticker
+    taken = {r.ticker for r in rows}
+    changed = False
+    for r in rows:
+        canon = canonical_ticker(r.ticker)
+        if canon and canon != r.ticker and canon not in taken:
+            taken.discard(r.ticker)
+            r.ticker = canon
+            taken.add(canon)
+            changed = True
+    if changed:
+        db.commit()
 
 
 def upsert_holding(db: Session, user_id: Optional[int], ticker: str,
@@ -64,8 +89,11 @@ def upsert_holding(db: Session, user_id: Optional[int], ticker: str,
                    notes: Optional[str] = None) -> UserHolding:
     """Add a position, or replace the quantity/cost when the (user, ticker)
     row already exists (idempotent — the composite unique constraint is the
-    backstop)."""
-    ticker = ticker.strip().upper()
+    backstop). HK/SG input is canonicalised ("9988" -> "09988.HK")."""
+    from src.tools.ticker_canonical import canonical_ticker
+    ticker = canonical_ticker(ticker)
+    if not ticker:
+        raise ValueError("ticker is required")
     row = (
         db.query(UserHolding)
         .filter(_scope_filter(user_id), UserHolding.ticker == ticker)
@@ -183,6 +211,7 @@ def _latest_signals(tickers: list[str]) -> dict[str, dict]:
 
     out: dict[str, dict] = {}
     for row in rows:
+        row = dict(row)   # sqlite3.Row has no .get (PG rows are dicts already)
         tkr = row.get("ticker")
         if not tkr:
             continue
@@ -222,19 +251,64 @@ def _vgpm_composite(vgpm: dict) -> Optional[int]:
     return round(sum(scores) / len(scores)) if scores else None
 
 
+# ── Currency (listing currency + FX to USD) ─────────────────────────────────
+
+def currency_info(tickers: list[str]) -> dict[str, dict]:
+    """{ticker: {currency, fx_to_usd}} — the currency each line is QUOTED
+    in (FMP profile, venue default fallback) and the rate to USD.
+
+    Never raises: a line whose currency cannot be resolved is reported in
+    USD at 1.0, which is right for US names.
+    """
+    from src.tools.api import get_fx_rate, get_listing_currency
+    out: dict[str, dict] = {}
+    rates: dict[str, float] = {"USD": 1.0}
+    for t in tickers:
+        try:
+            ccy = (get_listing_currency(t) or "USD").upper()
+        except Exception:
+            ccy = "USD"
+        if ccy not in rates:
+            try:
+                rates[ccy] = float(get_fx_rate(ccy, "USD"))
+            except Exception:
+                rates[ccy] = 1.0
+        out[t] = {"currency": ccy, "fx_to_usd": rates[ccy]}
+    return out
+
+
+def with_fx(holdings: list[dict]) -> list[dict]:
+    """Holdings with `currency` + `fx_to_usd` attached, so the replay and
+    what-if engines weight an HKD or SGD position in USD rather than adding
+    HK$ to US$ one-for-one."""
+    info = currency_info([h["ticker"] for h in holdings])
+    return [{**h, **info.get(h["ticker"], {"currency": "USD", "fx_to_usd": 1.0})}
+            for h in holdings]
+
+
 # ── Dashboard assembly (pure math — unit-testable) ──────────────────────────
 
 def build_dashboard(holdings: list[dict],
                     prices: dict[str, Optional[float]],
-                    signals: dict[str, dict]) -> dict:
+                    signals: dict[str, dict],
+                    fx: Optional[dict[str, dict]] = None) -> dict:
     """Assemble the enriched portfolio view. All inputs are plain dicts —
-    no DB/network access here."""
+    no DB/network access here.
+
+    Per-row price / cost / value / P&L are in the line's own `currency`;
+    the `*_usd` fields and every total and weight are in USD via `fx`
+    ({ticker: {currency, fx_to_usd}}; a ticker absent from it is USD)."""
+    fx = fx or {}
     rows = []
     total_mv = 0.0
     total_cost = 0.0
+    total_cost_priced = 0.0
     for h in holdings:
         price = prices.get(h["ticker"])
         sig = signals.get(h["ticker"], {})
+        cinfo = fx.get(h["ticker"]) or {}
+        ccy = cinfo.get("currency") or "USD"
+        rate = float(cinfo.get("fx_to_usd") or 1.0)
         qty = h["quantity"] or 0.0
         cost = h["avg_cost"] or 0.0
         mv = qty * price if price is not None else None
@@ -242,22 +316,28 @@ def build_dashboard(holdings: list[dict],
         pnl = (mv - cost_basis) if mv is not None else None
         rows.append({
             **h,
+            "currency":       ccy,
+            "fx_to_usd":      rate,
             "price":          price,
             "market_value":   mv,
             "cost_basis":     cost_basis,
             "unrealized_pnl": pnl,
+            "market_value_usd":   mv * rate if mv is not None else None,
+            "cost_basis_usd":     cost_basis * rate,
+            "unrealized_pnl_usd": pnl * rate if pnl is not None else None,
             "pnl_pct":        (pnl / cost_basis * 100) if (pnl is not None and cost_basis) else None,
             "iv_upside_pct":  ((sig.get("dcf_base_iv") / price - 1) * 100)
                               if (sig.get("dcf_base_iv") and price) else None,
             "signals":        sig or None,
         })
         if mv is not None:
-            total_mv += mv
-        total_cost += cost_basis
+            total_mv += mv * rate
+            total_cost_priced += cost_basis * rate
+        total_cost += cost_basis * rate
 
-    # Portfolio weight per row (None market value → weight None)
+    # Portfolio weight per row on USD value (None market value → weight None)
     for r in rows:
-        r["weight_pct"] = (r["market_value"] / total_mv * 100) if (r["market_value"] is not None and total_mv) else None
+        r["weight_pct"] = (r["market_value_usd"] / total_mv * 100) if (r["market_value_usd"] is not None and total_mv) else None
 
     # Sector exposure (weight-attributed; holdings without price/sector drop out)
     sector_exposure: dict[str, float] = {}
@@ -268,15 +348,18 @@ def build_dashboard(holdings: list[dict],
     sector_exposure = {k: round(v, 2) for k, v in
                        sorted(sector_exposure.items(), key=lambda kv: -kv[1])}
 
-    total_pnl = (total_mv - total_cost) if total_mv else None
+    # P&L over priced lines only — an unpriced line's cost is not a loss.
+    total_pnl = (total_mv - total_cost_priced) if total_mv else None
     return {
         "holdings": rows,
         "summary": {
+            "base_currency":      "USD",
+            "currencies":         sorted({r["currency"] for r in rows}),
             "total_market_value": round(total_mv, 2) if total_mv else None,
             "total_cost_basis":   round(total_cost, 2) if total_cost else None,
             "total_unrealized_pnl": round(total_pnl, 2) if total_pnl is not None else None,
-            "total_pnl_pct":      round(total_pnl / total_cost * 100, 2)
-                                  if (total_pnl is not None and total_cost) else None,
+            "total_pnl_pct":      round(total_pnl / total_cost_priced * 100, 2)
+                                  if (total_pnl is not None and total_cost_priced) else None,
             "position_count":     len(rows),
             "top_weight_pct":     max((r["weight_pct"] for r in rows
                                        if r["weight_pct"] is not None), default=None),
@@ -308,7 +391,12 @@ def get_dashboard(db: Session, user_id: Optional[int]) -> dict:
         prices = {}
 
     signals = _latest_signals(tickers)
-    return build_dashboard(holdings, prices, signals)
+    try:
+        fx = currency_info(tickers)
+    except Exception as exc:
+        logger.warning("portfolio currency lookup failed: %s", exc)
+        fx = {}
+    return build_dashboard(holdings, prices, signals, fx)
 
 
 # ── P2: crisis replay (portfolio_replays cache + job orchestration) ─────────
@@ -397,6 +485,7 @@ def start_replay(db: Session, user_id: Optional[int]) -> dict:
     holdings = [_holding_dict(r) for r in list_holdings(db, user_id)]
     if not holdings:
         return {"error": "no_holdings"}
+    holdings = with_fx(holdings)
     snap = _replay.snapshot_hash(holdings)
 
     cached = get_cached_replay(user_id, snap)
@@ -618,6 +707,7 @@ def start_what_if(db: Session, user_id: Optional[int], category: str,
     holdings = [_holding_dict(r) for r in list_holdings(db, user_id)]
     if not holdings:
         return {"error": "no_holdings"}
+    holdings = with_fx(holdings)
 
     user_name = _user_display_name(db, user_id)
 
@@ -1134,6 +1224,7 @@ def compare_what_if_to_holdings(db: Session, user_id: Optional[int],
     holdings = [_holding_dict(r) for r in list_holdings(db, user_id)]
     if not holdings:
         return {"error": "no_holdings"}
+    holdings = with_fx(holdings)
 
     from src.portfolio.event_library import get_event
     from src.tools.api import get_prices
