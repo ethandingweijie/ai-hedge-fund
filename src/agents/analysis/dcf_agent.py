@@ -14624,10 +14624,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _capm.update(cost_of_equity=round(_coe, 6), wacc=round(_capm_wacc, 6), status="used")
             _ov = float((_wacc_build.get("base_breakdown") or {}).get("macro_overlay") or 0.0)
             if _ov < 0 and wacc < _capm_wacc - _RISK_ON_CAPM_BAND:
-                _floor = round(_capm_wacc - _RISK_ON_CAPM_BAND, 4)
+                # Owner D5 bands the risk-on CUT: the overlay may not take WACC more than the band below CAPM.
+                # At most the cut is undone (plan E27, 2026-10-06) -- the floor is not a CAPM re-pricing
+                # (BEAM: 8.75% was lifted to 12.88%, +4.13pt, against a -0.50pt overlay).
+                _floor = round(min(_capm_wacc - _RISK_ON_CAPM_BAND, wacc - _ov), 4)
                 ticker_forward_flags.append(
                     f"Risk-on band: WACC {wacc:.2%} (after the {_ov:+.2%} regime overlay) sat more than "
-                    f"{_RISK_ON_CAPM_BAND:.0%} below the CAPM rate {_capm_wacc:.2%} (beta {_beta:.2f}); held at {_floor:.2%}")
+                    f"{_RISK_ON_CAPM_BAND:.0%} below the CAPM rate {_capm_wacc:.2%} (beta {_beta:.2f}); the cut is "
+                    f"undone up to the band: held at {_floor:.2%}")
                 _capm["risk_on_band"] = {"before": round(wacc, 6), "after": _floor}
                 wacc = _floor
             _band_capm, _band_beta = _capm_wacc, _beta
@@ -15260,6 +15264,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _peer_for_gf = None
         if _eo_rates.get("wacc") is not None:
             ticker_forward_flags.append(f"WACC {wacc:.2%} replaced by the user's {float(_eo_rates['wacc']):.2%} (carried estimate override)")
+            _wacc_build["owner_override_delta"] = float(_eo_rates["wacc"]) - float(wacc)   # plan E27: shown on the WACC tab
             wacc = float(_eo_rates["wacc"])
         if _eo_rates.get("tgr") is not None:
             tgr_table = {k: float(_eo_rates["tgr"]) for k in ("bear", "base", "bull")}

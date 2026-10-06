@@ -1060,6 +1060,16 @@ class _Book:
             ("Country risk premium", _num(b.get("country_risk_premium")) or 0.0),
             ("Contracted-revenue discount", _num(b.get("contracted_revenue_discount")) or 0.0),
         ]
+        # Plan E27 (owner, 2026-10-06; BEAM / NTLA / BLK reviews): the CAPM band (D5 risk-on floor, EV2 risk-off
+        # ceiling) moved the rate after the overlays -- BEAM 8.75% held at CAPM 13.88% less 1pp = 12.88% -- and
+        # sat inside an unexplained "rounding residual" (+4.13pt). Each is its own line.
+        _cp = b.get("capm") or {}
+        for _lab, _key in (("CAPM band: risk-on floor (D5)", "risk_on_band"), ("CAPM band: risk-off ceiling (EV2)", "risk_off_band")):
+            _bd = _cp.get(_key) or {}
+            if isinstance(_bd.get("before"), (int, float)) and isinstance(_bd.get("after"), (int, float)):
+                comps.append((_lab + f" -- {_bd['before']:.2%} held at {_bd['after']:.2%}", float(_bd["after"]) - float(_bd["before"])))
+        if isinstance(b.get("owner_override_delta"), (int, float)):
+            comps.append(("Owner rate override", float(b["owner_override_delta"])))
         first = r
         for lab, v in comps:
             sh.label(r, 1, lab, indent=1)
@@ -1070,7 +1080,7 @@ class _Book:
         # as its own input line rather than hidden inside a formula.
         known = sum((_num(bb.get("wacc")) if isinstance(v, str) else v) or 0.0
                     for _, v in comps if v is not None)
-        sh.label(r, 1, "Engine rounding (residual)", indent=1)
+        sh.label(r, 1, "Engine rounding (residual; should be ~0)", indent=1)
         sh.put(r, 3, (engine - known) if engine is not None else 0.0, PCT2)
         r += 1
         sh.label(r, 1, "WACC used", bold=True)

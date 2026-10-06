@@ -597,6 +597,26 @@ _RECEIPT_RE = re.compile(
 )
 
 
+# Owner, 2026-10-06 (BlackRock review, plan E30): the screener lists preferreds, baby bonds and
+# subordinated notes as "companies" -- BLK's peers held Brookfield Finance notes (BNH, BNJ), an Apollo
+# junior subordinated note (APOS) and a Strive perpetual preferred (SATA). Their "multiples" are a coupon
+# over a par price, not a valuation.
+_NON_COMMON_RE = re.compile(
+    r"\bpreferred\b|\bpfd\b|\bpref\b|\bnotes?\b|\bdebentures?\b|\bsubordinated\b|\bperpetual\b"
+    r"|\bfixed[- ]to[- ]floating\b|\bfixed[- ]rate\b|\bresettable\b|\bbaby bond\b|\bdepositary shares\b"
+    r"|\d+(?:\.\d+)?\s*%|\bseries [a-z]\b.*\b(?:share|stock)s?\b",
+    re.IGNORECASE,
+)
+
+
+def is_non_common_security(name: Optional[str], symbol: Optional[str] = None) -> bool:
+    """True for preferreds, notes, debentures and other fixed-income lines listed as equities."""
+    if _NON_COMMON_RE.search(name or ""):
+        return True
+    sym = str(symbol or "")
+    return bool(re.search(r"(-P[A-Z]?|\^|\.PR[A-Z]?|-PR[A-Z]?)$", sym))
+
+
 def is_depositary_receipt(name: Optional[str]) -> bool:
     """True when a listing is a receipt over a security listed elsewhere."""
     return bool(_RECEIPT_RE.search(name or ""))
@@ -647,6 +667,8 @@ def fetch_universe(market: str) -> list[dict]:
         if r.get("isEtf") or r.get("isFund"):
             continue
         if is_depositary_receipt(r.get("companyName")):
+            continue
+        if is_non_common_security(r.get("companyName"), r.get("symbol")):
             continue
         mcap = _safe_float(r.get("marketCap")) or 0.0
         if mcap < MIN_MARKET_CAP:

@@ -435,3 +435,19 @@ def test_ddm_low_yield_and_scale_cap_rules_are_wired():
     src = inspect.getsource(d)
     assert d._DDM_MIN_YIELD == 0.02 and "if _yld < _DDM_MIN_YIELD:" in src
     assert "_cons_near_ok = True" in src and "the capped rate governs year 3 onward" in src
+
+
+def test_e30_preferreds_and_notes_are_not_comps():
+    from src.data.regional_comps import is_non_common_security as f
+    assert f("Brookfield Finance Inc. 4.625% Subordinated Notes due 2080", "BNH")
+    assert f("Strive, Inc. Variable Rate Series A Perpetual Preferred Stock", "SATA")
+    assert f("Wells Fargo & Company", "WFC-PL")
+    assert not f("Brookfield Corporation", "BN") and not f("Noteworthy AI", "NOTE")
+
+
+def test_e27_the_risk_on_floor_only_undoes_the_cut_and_the_wacc_tab_shows_it():
+    import inspect
+    src = inspect.getsource(d)
+    assert "_floor = round(min(_capm_wacc - _RISK_ON_CAPM_BAND, wacc - _ov), 4)" in src
+    from src.utils import valuation_workbook as vw
+    assert "CAPM band: risk-on floor (D5)" in inspect.getsource(vw)
