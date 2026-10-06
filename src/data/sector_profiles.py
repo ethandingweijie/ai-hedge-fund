@@ -4462,6 +4462,12 @@ def get_sector_peer_multiples(
                             # Which basket, so the named peers can be listed.
                             "key": row.get("key"),
                             "exchange": row.get("exchange")}
+            # Owner, 2026-10-06 (PFE / Innovent / MRNA / Sheng Siong reviews): the subject exclusion and the
+            # frozen members (plan 1F.3 / EN8) were computed and then dropped here, so no run recorded them
+            # and the workbook re-read the live basket WITH the valued company (Innovent P/E 52.9 vs 46.4).
+            for _k in ("subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject"):
+                if row.get(_k) is not None:
+                    basis[field][_k] = row.get(_k)
         # Non-numeric, underscore-prefixed so the numeric consumers that read
         # peer["pe"] / peer.get("ev_ebitda") are unaffected. Lets the report
         # and the LLM write-up state what a multiple was actually derived

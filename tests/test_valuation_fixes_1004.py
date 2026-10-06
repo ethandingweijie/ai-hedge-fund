@@ -364,3 +364,16 @@ def test_guidance_eps_on_the_forward_legs_is_converted_into_the_valuation_curren
     o2 = d._guidance_forward_overlay(est, copy.deepcopy(fwd), "base", None, None, fx_to_valuation=0.31288,
                                      valuation_currency="SGD")
     assert o2["eps"]["base"] == pytest.approx(0.26)
+
+
+def test_the_subject_exclusion_and_frozen_members_reach_the_payload(monkeypatch):
+    # 2026-10-06: computed in get_regional_multiples, dropped in get_sector_peer_multiples' basis copy.
+    from src.data import sector_profiles as sp
+    row = {"value": 46.36, "basis": "industry", "cohort": "large", "peer_count": 5, "key": "Biotechnology",
+           "exchange": "HKSE", "subject_excluded": True, "value_with_subject": 52.91,
+           "members_used": [{"symbol": "6160.HK", "value": 40.0}]}
+    import inspect
+    src = inspect.getsource(sp.get_sector_peer_multiples)
+    assert '"subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject"' in src
+    tr = d._multiples_trace({"pe": 46.36, "_comp_basis": {"pe": row}})
+    assert tr["fields"]["pe"]["subject_excluded"] is True and tr["fields"]["pe"]["members_used"]

@@ -7167,7 +7167,7 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
             fields[name]["exchange"] = b.get("exchange")
         if b.get("subject_excluded") is not None:              # plan 1F.3
             fields[name]["subject_excluded"] = b.get("subject_excluded")
-        for _k in ("members_used", "excluded_no_market_cap"):  # plan EN8: frozen into the run
+        for _k in ("members_used", "excluded_no_market_cap", "value_with_subject"):  # plan EN8: frozen into the run
             if b.get(_k):
                 fields[name][_k] = b.get(_k)
     age = peer.get("_comp_age_days")
