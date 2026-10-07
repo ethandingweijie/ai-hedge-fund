@@ -1698,6 +1698,11 @@ async def run_analysis_pipeline(
     can subscribe to progress:{run_id} before the job starts executing.
     """
     run_id = run_id or str(uuid.uuid4())
+    # A ticker-level cancel belongs to the run it was aimed at. clear_cancel was never called, so a cancel left
+    # the ticker flagged for the life of the process and every later run of it on that process stopped at its
+    # first checkpoint (found 2026-10-07 purging a REGN run killed by a redeploy). A cancel sent during THIS run
+    # is set after this line and still applies.
+    clear_cancel(ticker=ticker)
     loop = asyncio.get_event_loop()
     progress_queue: asyncio.Queue = asyncio.Queue()
     result_container: dict = {}

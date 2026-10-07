@@ -5041,6 +5041,268 @@
     "value_usd": 1762442960.0
    }
   },
+  "ALNY": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 3.71
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-06T17:37:18+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.46x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.4645
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "5 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_3, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2032, 2022 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Alnylam Pharmaceuticals, Inc.",
+    "data": {
+     "approved_portfolio": [
+      "Amvuttra (vutrisiran, ALN-TTRSC02)",
+      "Onpattro (patisiran, ALN-TTR02)",
+      "Givlaari (givosiran, ALN-AS1)",
+      "Oxlumo (lumasiran, ALN-GO1)",
+      "Qfitlia (fitusiran, ALN-AT3; Sanofi-marketed, Alnylam royalty)",
+      "Leqvio (inclisiran; Novartis-marketed, Alnylam royalty)"
+     ],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "ALN-AGT01",
+        "ALN-AGT",
+        "zilebesiran"
+       ],
+       "economic_share": 0.35,
+       "indication": "Hypertension (uncontrolled, high cardiovascular risk; ZENITH cardiovascular outcomes trial)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2032,
+       "modality": "small_molecule",
+       "name": "Zilebesiran (ALN-AGT01)",
+       "nct_ids": [
+        "NCT07181109"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2035E",
+        "quote": "Consensus estimates project approximately $3 billion in risk-unadjusted sales for Zilebesiran by 2035",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/analyst-ratings/bmo-capital-raises-alnylam-pharmaceuticals-stock-price-target-on-zilebesiran-potential-93CH-4229260",
+        "value": 3.0
+       },
+       "phase": "phase_3",
+       "primary_completion": "2030-09-23",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa/QLS 2011-2020 phase-transition base rates: Phase 3 -> approval ~0.49-0.58 across all indications; cardiovascular below average",
+        "source_url": "https://go.bio.org/rs/490-EHZ-999/images/ClinicalDevelopmentSuccessRates2011_2020.pdf",
+        "value": 0.5
+       },
+       "ptrs_basis": "Phase 3 (ZENITH, NCT07181109, first patient dosed Sept/Oct 2025, ~11,000 patients, event-driven CVOT; ClinicalTrials.gov estimated primary completion 2030-09-23). Base rate Phase 3->approval ~0.49-0.58 (BIO/Informa 2011-2020), set at the low end 0.50 (applied 2026) because cardiovascular outcome trials sit below the all-indication average and KARDIA-2/KARDIA-3 Phase 2 showed modest add-on systolic BP reductions; validated mechanism (angiotensinogen / RAAS) supports not going lower. Launch 2032 = rule floor (2030-09 + 22 months); no company-stated interim filing. siRNA is an NDA (new chemical entity) -> modality small_molecule, 5y US exclusivity from 2032 = 2037, after the 2035E figure; composition-of-matter patent year not found in a primary source (left null). Peak figure is BMO's citation of CONSENSUS 2035 risk-unadjusted global sales (article dated 2025-09-08); 2035 is ~year 3-4 post-launch on our floor, so it is likely below true peak -- a higher $4-5bn peak range appears in older (2023) press coverage that could not be opened (BioWorld paywall) and was not used. ECONOMIC SHARE: Roche collaboration (Alnylam 8-K, 2023-07-24): 'an equal profit share in the U.S.', Roche pays 'low double digit royalties on net sales of zilebesiran outside of the U.S.', development costs 'shared 40% by Alnylam and 60% by Roche'; Alnylam received $310m upfront, up to $2.8bn total deal value. economic_share 0.35 is a DERIVED blend, not a sourced figure: 50% of US economics x an assumed ~65% US share of sales + ~11% royalty x ~35% ex-US = ~0.36, rounded to 0.35 -- owner to confirm (0.50 if valued on US profit share alone). Japan rights sub-licensed by Roche to Chugai. Blackstone co-development funding (2020) also covers zilebesiran: Blackstone funded $26m of Phase 2 and opted in (Feb 2025) to fund up to $54m of Phase 3 in exchange for fixed success-based milestone payments (not a royalty), so royalty_payable is not set; that liability is in notes."
+      },
+      {
+       "aliases": [
+        "inclisiran",
+        "Leqvio",
+        "ALN-PCSsc",
+        "KJX839"
+       ],
+       "economic_share": 0.15,
+       "indication": "Hypercholesterolemia / ASCVD LDL-C lowering (Novartis-marketed; Alnylam receives royalties)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2022,
+       "modality": "small_molecule",
+       "name": "Leqvio (inclisiran) -- royalty from Novartis",
+       "nct_ids": [],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "Peak",
+        "quote": "$4 billion to $5 billion for LEQVIO",
+        "scale": "bn",
+        "source_url": "https://www.fool.com/earnings/call-transcripts/2026/07/21/novartis-nvs-q2-2026-earnings-call-transcript/",
+        "value": 4.5
+       },
+       "phase": "approved",
+       "primary_completion": null,
+       "ptrs": {
+        "period": "2026",
+        "quote": "Leqvio (USD 480 million, +59% cc)",
+        "source_url": "https://www.novartis.com/news/media-releases/novartis-delivered-sales-growth-q2-and-further-advanced-pipeline-full-year-guidance-reaffirmed",
+        "value": 1.0
+       },
+       "ptrs_basis": "Approved and marketed by Novartis (FDA Dec 2021). Peak = MIDPOINT (4.5) of Novartis's reaffirmed '$4 billion to $5 billion' Leqvio peak-sales goal (Q2 2026 call, 2026-07-21; CEO called it a '$4 billion-$5 billion-plus product'); this is NOVARTIS's 100% product sales, not Alnylam revenue. ECONOMIC SHARE = Alnylam's gross royalty rate: Alnylam is 'eligible to receive tiered royalties between 10 % - 20% on global sales' (Yahoo Finance/Zacks on FDA approval, https://finance.yahoo.com/news/fda-approves-alnylam-novartis-leqvio-132008200.html). 0.15 is the observed effective rate: Alnylam Q2 2026 royalty revenue $71.7m (Alnylam Q2 2026 release, https://www.sec.gov/Archives/edgar/data/1178670/000117867026000060/alny2026q2earningsrelease.htm) / Leqvio Q2 2026 sales $480m = 14.9%; the tiering can lift it toward 20% at peak. GROSS, before Blackstone: 50% of these royalties were sold to Blackstone (2020) and are carried as a debt-like 'liability related to the sale of future Leqvio royalties' -- if the SOTP deducts that liability, keep 0.15; if it does not, use 0.075 (see notes; do NOT do both). A royalty stream carries ~no COGS/opex, so an operating-margin haircut on peak x share understates it. Patent expiry not sourced (null)."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "Nucresiran / ALN-TTRSC04 / ALN-TTRsc04 (TRITON-CM NCT07052903, TRITON-PN NCT07223203)",
+       "reason": "no sourced peak sales: next-generation successor to Amvuttra (vutrisiran) in ATTR-CM and hATTR-PN; consensus models it inside the TTR franchise -- Royalty Pharma (Nov 2025) notes only 2 Visible Alpha analysts forecast nucresiran separately and 'All other analysts on Visible Alpha combine sales of Amvuttra and nucresiran'. Phase 3 TRITON-CM (primary completion 2030-05-28, enrollment raised 1,250 -> ~1,750 in Apr 2026; company targets ATTR-CM launch by 2030) and TRITON-PN (primary completion 2027-12-27; company targets PN launch by 2028; TRITON-PN compares against vutrisiran/AMVUTTRA). Bernstein (2026-08-25) puts a 71% probability on TRITON-CM showing benefit on top of a stabilizer. Value via the TTR franchise / Amvuttra, not as a separate rNPV leg."
+      },
+      {
+       "name": "Vutrisiran HELIOS-B NCT04153149 and NCT06679946 (ATTR-CM extension studies)",
+       "reason": "label expansion of Amvuttra (vutrisiran) -- ATTR-CM approved March 2025; open-label/extension studies of the marketed product"
+      },
+      {
+       "name": "Cemdisiran (ALN-CC5; Regeneron)",
+       "reason": "no sourced single-asset peak sales: Regeneron-run, NDA accepted with Priority Review for AChR+ generalized myasthenia gravis, FDA target decision November 2026 (EMA H2 2027). The only located forecast is GlobalData's 'pozelimab + cemdisiran combination' ~$1.9bn by 2034 in 7MM (Clinical Trials Arena, 2026-06-30) -- a combination figure, barred by R1; the filing is cemdisiran MONOTHERAPY. Alnylam's economics: regulatory milestones plus tiered royalties up to 15% on monotherapy net sales. Add as a 'filed' royalty asset (economic_share ~0.15) once a monotherapy peak is published."
+      },
+      {
+       "name": "Elebsiran (VIR-2218 / ALN-HBV02; Vir Biotechnology, with tobevibart)",
+       "reason": "partner-run combination (tobevibart + elebsiran) in Vir's ECLIPSE registrational programme for chronic hepatitis delta (ECLIPSE 1 topline Q4 2026, ECLIPSE 2/3 Q1 2027); Vir 'remains solely responsible' (Alnylam 10-Q Q2 2026); Alnylam economics are sales milestones (up to $250m reported) -- no single-asset peak and no Alnylam-led trial"
+      },
+      {
+       "name": "Mivelsiran (ALN-APP; Regeneron collaboration)",
+       "reason": "Phase 2 (cAPPricorn-1 in cerebral amyloid angiopathy fully enrolled; Phase 2 in Down syndrome-associated Alzheimer's started 2026); no sourced peak sales"
+      },
+      {
+       "name": "ALN-6400 (plasminogen)",
+       "reason": "Phase 2 (HHT; heavy menstrual bleeding in von Willebrand disease started 2026); no sourced peak sales"
+      },
+      {
+       "name": "ALN-HTT02, ALN-5288, ALN-6222 and other early programmes",
+       "reason": "Phase 1 / preclinical"
+      }
+     ],
+     "notes": "ROYALTY / FUNDING LIABILITIES (Blackstone, 2020 $2bn package): Blackstone paid $1bn for 50% of Alnylam's Leqvio royalties and 75% of Leqvio commercial milestones; up to $150m co-development funding for vutrisiran and zilebesiran, repaid by fixed success-based milestone payments plus a 1% royalty on vutrisiran net sales for ten years (Alnylam FY2025 10-K Note 9 as summarised in search results); $750m term loan (separate). Balance sheet 2026-06-30: 'Liabilities related to the sale of future royalties and development funding' $258.6m current + $1,461.5m non-current = $1,720.1m; Q2 2026 interest: $53m on the Leqvio royalty-sale liability and $26m on the vutrisiran/zilebesiran development-funding liabilities (Q2 2026 release). The 1% Amvuttra royalty was SOLD BY BLACKSTONE TO ROYALTY PHARMA for $310m (Nov 2025; RP presentation: royalty from 2025-10-01, est. through March 2035; 'Nucresiran is not royalty bearing'). These liabilities are debt-like and must be deducted once in the SOTP; the Leqvio economic_share (0.15) is gross of Blackstone's 50% on that basis. ZILEBESIRAN economic_share 0.35 is a derived blend of the Roche terms (US 50/50 profit share; low-double-digit ex-US royalty; 40/60 cost share) with an ASSUMED ~65% US sales mix -- flagged for owner review. LAST 6 MONTHS: (1) 2026-07-30 Q2: FY2026 TTR revenue guidance cut from $4.4-4.7bn to $4.2-4.5bn (second-line normalisation); stock fell ~28% on the day and ~30% over the month; Amvuttra Q2 $1,011.8m (+106%). (2) 2026-07-09 AstraZeneca/Ionis CARDIO-TTRansform (eplontersen, ATTR-CM) missed its primary endpoint -- removes a silencer competitor but raises the add-on-to-stabilizer risk read-through to nucresiran TRITON-CM; many investors removed nucresiran from models (Bernstein 2026-08-25 disagrees, 71% PoS). (3) April 2026: TRITON-CM enrollment expanded ~1,250 -> ~1,750; ATTR-CM launch target still 2030. (4) Cemdisiran (Regeneron) NDA accepted, priority review, PDUFA November 2026. (5) Mivelsiran CAA Phase 2 fully enrolled; Down syndrome AD Phase 2 started; ALN-6400 Phase 2 in VWD started. (6) ESC 2026 TTR data (late Aug) read as supportive by Oppenheimer. FIGURES FROM SNIPPETS / SECONDARY: Leqvio 10-20% tiered royalty is from Yahoo Finance/Zacks (BusinessWire original 403); Blackstone deal terms and the zilebesiran development-funding repayment terms come from search snippets of the Blackstone press release and the FY2025 10-K (both pages blocked/truncated for direct reading); BMO consensus $3bn 2035 read from the Investing.com article page. Registry check: all 5 live Alnylam Phase 3 studies covered (ZENITH -> zilebesiran asset; TRITON-CM/PN -> nucresiran exclusion; two vutrisiran studies -> Amvuttra portfolio/exclusion). No Phase 3 programme was discontinued or put on hold in the last 6 months."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": 0.35,
+       "indication": "Hypertension (uncontrolled, high cardiovascular risk; ZENITH cardiovascular outcomes trial)",
+       "launch_year": 2032,
+       "name": "Zilebesiran (ALN-AGT01)",
+       "patent_expiry": null,
+       "peak_sales_period": "2035E",
+       "peak_sales_usd": 1049999999.9999999,
+       "phase": "phase_3",
+       "ptrs_basis": "Phase 3 (ZENITH, NCT07181109, first patient dosed Sept/Oct 2025, ~11,000 patients, event-driven CVOT; ClinicalTrials.gov estimated primary completion 2030-09-23). Base rate Phase 3->approval ~0.49-0.58 (BIO/Informa 2011-2020), set at the low end 0.50 (applied 2026) because cardiovascular outcome trials sit below the all-indication average and KARDIA-2/KARDIA-3 Phase 2 showed modest add-on systolic BP reductions; validated mechanism (angiotensinogen / RAAS) supports not going lower. Launch 2032 = rule floor (2030-09 + 22 months); no company-stated interim filing. siRNA is an NDA (new chemical entity) -> modality small_molecule, 5y US exclusivity from 2032 = 2037, after the 2035E figure; composition-of-matter patent year not found in a primary source (left null). Peak figure is BMO's citation of CONSENSUS 2035 risk-unadjusted global sales (article dated 2025-09-08); 2035 is ~year 3-4 post-launch on our floor, so it is likely below true peak -- a higher $4-5bn peak range appears in older (2023) press coverage that could not be opened (BioWorld paywall) and was not used. ECONOMIC SHARE: Roche collaboration (Alnylam 8-K, 2023-07-24): 'an equal profit share in the U.S.', Roche pays 'low double digit royalties on net sales of zilebesiran outside of the U.S.', development costs 'shared 40% by Alnylam and 60% by Roche'; Alnylam received $310m upfront, up to $2.8bn total deal value. economic_share 0.35 is a DERIVED blend, not a sourced figure: 50% of US economics x an assumed ~65% US share of sales + ~11% royalty x ~35% ex-US = ~0.36, rounded to 0.35 -- owner to confirm (0.50 if valued on US profit share alone). Japan rights sub-licensed by Roche to Chugai. Blackstone co-development funding (2020) also covers zilebesiran: Blackstone funded $26m of Phase 2 and opted in (Feb 2025) to fund up to $54m of Phase 3 in exchange for fixed success-based milestone payments (not a royalty), so royalty_payable is not set; that liability is in notes.",
+       "ptrs_override": 0.5,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": 0.15,
+       "indication": "Hypercholesterolemia / ASCVD LDL-C lowering (Novartis-marketed; Alnylam receives royalties)",
+       "launch_year": 2022,
+       "name": "Leqvio (inclisiran) -- royalty from Novartis",
+       "patent_expiry": null,
+       "peak_sales_period": "Peak",
+       "peak_sales_usd": 675000000.0,
+       "phase": "approved",
+       "ptrs_basis": "Approved and marketed by Novartis (FDA Dec 2021). Peak = MIDPOINT (4.5) of Novartis's reaffirmed '$4 billion to $5 billion' Leqvio peak-sales goal (Q2 2026 call, 2026-07-21; CEO called it a '$4 billion-$5 billion-plus product'); this is NOVARTIS's 100% product sales, not Alnylam revenue. ECONOMIC SHARE = Alnylam's gross royalty rate: Alnylam is 'eligible to receive tiered royalties between 10 % - 20% on global sales' (Yahoo Finance/Zacks on FDA approval, https://finance.yahoo.com/news/fda-approves-alnylam-novartis-leqvio-132008200.html). 0.15 is the observed effective rate: Alnylam Q2 2026 royalty revenue $71.7m (Alnylam Q2 2026 release, https://www.sec.gov/Archives/edgar/data/1178670/000117867026000060/alny2026q2earningsrelease.htm) / Leqvio Q2 2026 sales $480m = 14.9%; the tiering can lift it toward 20% at peak. GROSS, before Blackstone: 50% of these royalties were sold to Blackstone (2020) and are carried as a debt-like 'liability related to the sale of future Leqvio royalties' -- if the SOTP deducts that liability, keep 0.15; if it does not, use 0.075 (see notes; do NOT do both). A royalty stream carries ~no COGS/opex, so an operating-margin haircut on peak x share understates it. Patent expiry not sourced (null).",
+       "ptrs_override": 1.0,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "economic_share": [
+       "Zilebesiran (ALN-AGT01): 35% of the 100% peak",
+       "Leqvio (inclisiran) -- royalty from Novartis: 15% of the 100% peak"
+      ],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Alnylam Pharmaceuticals, Inc.",
+     "depreciation_and_amortization": 55658000.0,
+     "market_cap": 30092975055.0,
+     "net_ppe": 708063000.0,
+     "operating_cash_flow": 524080000.0,
+     "period": "2025-12-31",
+     "revenue": 3713937000.0,
+     "shares": 133809000.0
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2032,
+       "name": "Zilebesiran (ALN-AGT01)",
+       "peak": 3.0,
+       "phase": "phase_3",
+       "ptrs": 0.5
+      },
+      {
+       "launch_year": 2022,
+       "name": "Leqvio (inclisiran) -- royalty from Novartis",
+       "peak": 4.5,
+       "phase": "approved",
+       "ptrs": 1.0
+      }
+     ],
+     "built_at": "2026-10-06T17:33:35+00:00",
+     "model": "verified research (owner re-check, primary sources)",
+     "value_usd": 1725000000.0
+    },
+    "secs": null,
+    "value_usd": 1725000000.0
+   }
+  },
   "AMGN": {
    "pipeline": {
     "anchors": {
@@ -9405,48 +9667,23 @@
      "revenue_latest_usd_bn": 65.18
     },
     "basis": "estimate",
-    "built_at": "2026-09-26T14:41:44+00:00",
+    "built_at": "2026-10-07T03:02:46+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
-      "detail": "1.66x (plausible 0.02x to 8.0x)",
+      "detail": "0.53x (plausible 0.02x to 8.0x)",
       "ok": true,
-      "ratio": 1.6553
-     },
-     {
-      "check": "late-stage only",
-      "detail": "phases: phase_3, phase_3, approved, approved, approved",
-      "ok": true
-     },
-     {
-      "check": "launch years plausible",
-      "detail": "2027, 2026, 2024 (approved), 2022 (approved), 2023 (approved)",
-      "ok": true
-     },
-     {
-      "check": "PTRS cited and in range",
-      "detail": "5 of 5 carry a usable PTRS",
-      "ok": true
-     },
-     {
-      "check": "assets with cited peak sales",
-      "detail": "5 usable; dropped none",
-      "ok": true
-     },
-     {
-      "check": "sources resolve to canonical URLs",
-      "detail": "5 of 5 grounding wrapper(s) resolved",
-      "ok": true
+      "ratio": 0.5293
      },
      {
       "check": "single-asset peak sales",
-      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Orforglipron, Pirtobrutinib (Jaypirca)",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Remternetug (LY3372993)",
       "ok": true
      },
      {
       "check": "launch year vs trial dates",
-      "detail": "Retatrutide: no primary completion date; Orforglipron: no primary completion date",
-      "ok": false
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
      },
      {
       "check": "exclusivity covers the peak",
@@ -9455,197 +9692,301 @@
      },
      {
       "check": "pipeline completeness",
-      "detail": "missing (add or exclude with a reason): NCT05821959 (AAVAnc80-hOTOF via Akouos Delivery Device, AAVAnc80-hOTOF via Akouos Delivery Device and Precision Delivery Mechanism); NCT03155997 (Abemaciclib, Standard Adjuvant Endocrine Therapy); NCT03773965 (Baricitinib, LY3009104); NCT05288166 (Abemaciclib, Abiraterone); NCT05735483 (Lebrikizumab, Placebo); NCT06890598 (Olomorasib, Pembrolizumab); NCT02411448 (Ramucirumab, Placebo); NCT04616326 (Galcanezumab, Placebo); NCT07218380 (Vepugratinib, Placebo); NCT07412756 (Brenipatide, Placebo); NCT07282600 (Eloralintide, Placebo); NCT07222137 (Baricitinib, Placebo)",
-      "ok": false
+      "detail": "93 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_3, phase_3, approved",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2028, 2031, 2026 (approved)",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "3 of 3 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "3 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
      }
     ],
     "company": "Eli Lilly and Company",
     "data": {
-     "as_of": "2026-09-26",
+     "approved_portfolio": [
+      "Mounjaro / Zepbound (tirzepatide, LY3298176)",
+      "Trulicity (dulaglutide, LY2189265)",
+      "Verzenio (abemaciclib, LY2835219)",
+      "Taltz (ixekizumab, LY2439821)",
+      "Jardiance (empagliflozin, with Boehringer Ingelheim)",
+      "Tradjenta (linagliptin, with Boehringer Ingelheim)",
+      "Kisunla (donanemab, LY3002813)",
+      "Ebglyss (lebrikizumab, LY3650150)",
+      "Omvoh (mirikizumab, LY3074828)",
+      "Jaypirca (pirtobrutinib, LOXO-305, LY3527727)",
+      "Inluriyo (imlunestrant, LY3484356)",
+      "Olumiant (baricitinib, LY3009104)",
+      "Emgality (galcanezumab, LY2951742)",
+      "Retevmo (selpercatinib, LOXO-292, LY3527723)",
+      "Cyramza (ramucirumab)",
+      "Onswik (insulin efsitora alfa)",
+      "Humalog (insulin lispro)",
+      "Basaglar (insulin glargine)"
+     ],
+     "as_of": "2026-10-05",
      "assets": [
       {
-       "indication": "Obesity and type 2 diabetes",
-       "launch_year": 2027,
-       "name": "Retatrutide",
+       "aliases": [
+        "LY3437943",
+        "retatrutide",
+        "TRIUMPH-1",
+        "TRIUMPH-2",
+        "TRIUMPH-3",
+        "TRIUMPH-4",
+        "TRIUMPH-5",
+        "TRIUMPH-6",
+        "TRIUMPH-7",
+        "TRIUMPH-8",
+        "TRIUMPH-9",
+        "TRANSCEND-T2D"
+       ],
+       "indication": "Obesity / chronic weight management incl. obstructive sleep apnea and knee osteoarthritis pain (metabolic; GIP/GLP-1/glucagon triple agonist); T2D and CV/renal outcomes studies ongoing",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2028,
+       "modality": "biologic",
+       "name": "Retatrutide (LY3437943)",
+       "nct_ids": [
+        "NCT05931367",
+        "NCT05929066",
+        "NCT05929079",
+        "NCT05882045"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEYXC6Igo8-wZFBJCNpP1Iayo7Xg1f2lrJJLdXfwWVqWX_Abf1udf-cr5EPeQcxf44RefiJSoLOYKDZImecrwcTwGXkswkouJtceKTK40nhXs_u1Ana-0xVjesdaDJkNvK9wHdkqFfxNSvkEc4a3LhzshlLqpxA_lldgW9ioKe6EUT9qoE1X2iw62QZmt4t1MYyOU9ehcwVTcTq8tSwawJZ6g==",
-        "period": "peak",
-        "quote": "with retatrutide's $6.6 billion peak consensus sales estimate considered large by most measures",
+        "period": "2031E (GlobalData forecast, published 2025-12-12)",
+        "quote": "GlobalData predicts a 2027 approval for retatrutide, with a 2031 sales forecast of $15.6bn",
         "scale": "bn",
-        "source_url": "https://www.fiercebiotech.com/biotech/eli-lillys-triple-g-drug-drives-deep-weight-loss-phase-3-obesity-trial",
-        "value": 6.6
+        "source_url": "https://www.clinicaltrialsarena.com/news/lilly-retatrutide-data-phase-iii-trial/",
+        "value": 15.6
        },
        "phase": "phase_3",
+       "primary_completion": "2025-11-14",
        "ptrs": {
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEYXC6Igo8-wZFBJCNpP1Iayo7Xg1f2lrJJLdXfwWVqWX_Abf1udf-cr5EPeQcxf44RefiJSoLOYKDZImecrwcTwGXkswkouJtceKTK40nhXs_u1Ana-0xVjesdaDJkNvK9wHdkqFfxNSvkEc4a3LhzshlLqpxA_lldgW9ioKe6EUT9qoE1X2iw62QZmt4t1MYyOU9ehcwVTcTq8tSwawJZ6g==",
-        "period": "Phase 3",
-        "quote": "retatrutide, has met the primary endpoint for weight loss in another pivotal study",
-        "source_url": "https://www.fiercebiotech.com/biotech/eli-lillys-triple-g-drug-drives-deep-weight-loss-phase-3-obesity-trial",
-        "value": 0.7
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020, all indications); metabolic/endocrine above average; pivotal package complete and positive",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.74
        },
-       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%"
+       "ptrs_basis": "BIO/Informa Phase III->approval ~0.58 raised because the registration package is complete: TRIUMPH-4 (knee OA, PC 2025-11-14; up to 28.7% weight loss) plus TRIUMPH-1/-2/-3 (completed Jan-Jun 2026) all positive; Lilly's Q2 2026 release (2026-08-05) says the data package supports global registrations for obesity, OSA and knee OA pain with a US BLA planned for Q1 2027. Held below filed-stage (~0.90) because it is not yet submitted and a new dysesthesia signal (8.8% at 9 mg, 20.9% at 12 mg vs 0.7% placebo in TRIUMPH-4) plus GI discontinuations could shape the label. 0.74 = the engine's metabolic Phase 3 table (0.59) + 15pp band edge. Launch: rule floor = 2025-11-14 + 22 months = 2027; set 2028 (BLA Q1 2027 + standard review). Lilly calls the filing a Biologics License Application, hence modality biologic (12y); if regulated as an NDA peptide the 5y floor (2033) still covers the 2031 figure."
       },
       {
-       "indication": "Obesity and type 2 diabetes",
+       "aliases": [
+        "LY3372993",
+        "remternetug",
+        "TRAILRUNNER-ALZ 3",
+        "TRAILRUNNER-ALZ 1"
+       ],
+       "indication": "Early Alzheimer's disease in participants at risk of cognitive and functional decline (anti-amyloid N3pG antibody, subcutaneous/IV; successor to Kisunla)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2031,
+       "modality": "biologic",
+       "name": "Remternetug (LY3372993)",
+       "nct_ids": [
+        "NCT06653153"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2033E peak (GlobalData, published 2025-09-29)",
+        "quote": "GlobalData forecasts it as one of the most promising pipeline products with patient-based forecasts estimating potential peak sales of $901.2m in 2033.",
+        "scale": "mn",
+        "source_url": "https://www.clinicaltrialsarena.com/features/trials-to-watch-three-major-catalysts-in-alzheimers-disease/",
+        "value": 901.2
+       },
+       "phase": "phase_3",
+       "primary_completion": "2029-04",
+       "ptrs": {
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020, all indications); neurology well below the all-indication average",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.35
+       },
+       "ptrs_basis": "BIO/Informa Phase III->approval cut for neurology/Alzheimer's; raised above the engine's CNS table (0.22) because the N3pG anti-amyloid mechanism is validated by Kisunla (donanemab) and remternetug cleared amyloid in TRAILRUNNER-ALZ 1 (Phase 3 amyloid-clearance study, completed, PC 2024-04-24), but the efficacy pivotal TRAILRUNNER-ALZ 3 is a clinical-decline (time-to-event) study in an at-risk early population, an unproven endpoint. Launch floor = 2029-04 + 22 months = 2031. The quote ('it') refers to remternetug in the article's Lilly section."
+      },
+      {
+       "aliases": [
+        "LY3502970",
+        "orforglipron",
+        "Foundayo",
+        "ATTAIN-1",
+        "ATTAIN-2",
+        "ATTAIN-MAINTAIN",
+        "ATTAIN-OSA",
+        "ATTAIN-OA PAIN",
+        "ATTAIN-PAD",
+        "ATTAIN-NOW",
+        "ATTAIN-CN",
+        "ACHIEVE-1",
+        "ACHIEVE-2",
+        "ACHIEVE-3",
+        "ACHIEVE-4",
+        "ACHIEVE-PEDS",
+        "ACHIEVE-RAM",
+        "RESTRAIN-SUI"
+       ],
+       "indication": "Obesity / overweight with weight-related comorbidity (METABOLIC, oral small-molecule GLP-1 RA; approved US 2026-04-01); type 2 diabetes submitted US/EU/Japan Q2 2026; hypertension, OSA, OA pain, PAD, SUI, CV outcomes and pediatric studies ongoing",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2026,
-       "name": "Orforglipron",
+       "modality": "small_molecule",
+       "name": "Orforglipron (Foundayo, LY3502970)",
+       "nct_ids": [
+        "NCT05869903",
+        "NCT05872620",
+        "NCT05971940",
+        "NCT06045221"
+       ],
+       "orphan": false,
        "patent_expiry": null,
+       "pdufa_date": null,
        "peak_sales": {
         "currency": "USD",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFnKRBzs0MV_bLH_F0e5hCfgg6vn2Sl5ybgid7qq52ABaj8AYxVmyV7F-eYNjbzcGy0grXPOPYdOFInoJ3I_kAQYci8hVoAWs1FZVfJYDf7LplV4tq3qssXK15cdlkdOmwprMblUT9uUa52Ro6rMUDdxPOS6tImDdKTS7bWMkF_p7pCGGYf1aG9PYnl03prIyljGk4ndRR8JWNLPQ0rsJ2XsFc3oCn9T6h1-mNcwJtOP-IicE-OXDl3ems=",
-        "period": "peak",
-        "quote": "above the roughly $26 billion consensus estimate",
+        "period": "2030E (Bloomberg News analyst consensus, reported 2026-04-05)",
+        "quote": "At the low end, a consensus of analysts surveyed by Bloomberg News expects Foundayo peak sales to reach $18 billion by 2030.",
         "scale": "bn",
-        "source_url": "https://www.investing.com/news/stock-market-news/wolfe-bumps-eli-lilly-target-on-oral-obesity-drug-cardiometabolic-portfolio-4554766",
-        "value": 26.0
-       },
-       "phase": "phase_3",
-       "ptrs": {
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFnKRBzs0MV_bLH_F0e5hCfgg6vn2Sl5ybgid7qq52ABaj8AYxVmyV7F-eYNjbzcGy0grXPOPYdOFInoJ3I_kAQYci8hVoAWs1FZVfJYDf7LplV4tq3qssXK15cdlkdOmwprMblUT9uUa52Ro6rMUDdxPOS6tImDdKTS7bWMkF_p7pCGGYf1aG9PYnl03prIyljGk4ndRR8JWNLPQ0rsJ2XsFc3oCn9T6h1-mNcwJtOP-IicE-OXDl3ems=",
-        "period": "Phase 3",
-        "quote": "experimental oral obesity drug orforglipron",
-        "source_url": "https://www.investing.com/news/stock-market-news/wolfe-bumps-eli-lilly-target-on-oral-obesity-drug-cardiometabolic-portfolio-4554766",
-        "value": 0.7
-       },
-       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%"
-      },
-      {
-       "indication": "Early symptomatic Alzheimer's disease",
-       "launch_year": 2024,
-       "name": "Donanemab (Kisunla)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHpNta0WKvWSx0Boti3dqI7eGd0da67t4KbW9QNH9KmYzstQJe5BnLeuBt8o150CaYv2_szm31pUQqAWLJBvdYTYI79imbqGjX4s-UcBVIUD2kNyggPI2gr_t0gfEPbbHaHyI7MRG2P6V8Q6PU-sre4sG0WQvJvscl79plkUJ_pbGc6Tq3f4Z0ScUMyQBbX81RnXyyP",
-        "period": "peak",
-        "quote": "Consensus among Wall Street analysts is that Kisunla will generate close to $5 billion in annual sales at its peak, according to the investment firm Jefferies.",
-        "scale": "bn",
-        "source_url": "https://www.biopharmadive.com/news/lilly-alzheimers-drug-fda-approval-kisunla-donanemab/720497/",
-        "value": 5.0
+        "source_url": "https://www.genengnews.com/topics/translational-medicine/stockwatch-price-war-dampens-lilly-surge-after-oral-glp-1-wins-fda-nod/",
+        "value": 18
        },
        "phase": "approved",
+       "primary_completion": "2025-07-25",
        "ptrs": {
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHpNta0WKvWSx0Boti3dqI7eGd0da67t4KbW9QNH9KmYzstQJe5BnLeuBt8o150CaYv2_szm31pUQqAWLJBvdYTYI79imbqGjX4s-UcBVIUD2kNyggPI2gr_t0gfEPbbHaHyI7MRG2P6V8Q6PU-sre4sG0WQvJvscl79plkUJ_pbGc6Tq3f4Z0ScUMyQBbX81RnXyyP",
-        "period": "approved",
-        "quote": "Lilly drug for Alzheimer's approved by FDA",
-        "source_url": "https://www.biopharmadive.com/news/lilly-alzheimers-drug-fda-approval-kisunla-donanemab/720497/",
+        "period": "2026",
+        "quote": "FDA approves Lilly's Foundayo (orforglipron), the only GLP-1 pill for weight loss that can be taken any time of day without food or water restrictions",
+        "source_url": "https://investor.lilly.com/news-releases/news-release-details/fda-approves-lillys-foundayotm-orforglipron-only-glp-1-pill",
         "value": 1.0
        },
-       "ptrs_basis": "FDA approved; technical and regulatory success achieved"
-      },
-      {
-       "indication": "Type 2 diabetes and obesity",
-       "launch_year": 2022,
-       "name": "Tirzepatide (Mounjaro / Zepbound)",
-       "patent_expiry": 2036,
-       "peak_sales": {
-        "currency": "USD",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF1mYiUTIebL209GbP5zpbKw84clOkkb5VFGzveXlK0lfj7BL69FcUwivnT0pgPLcti4XaAdox0LcNmUXNryDplUItt8mZs9DVJ7LBe2b0n1NLesJVm2exUj8socZaE5iyNbHHrfl0ZQAZYTgAhgRV1xcXhnUimGqQrtgZ9jc8cc_5DZ92K_Inw",
-        "period": "peak",
-        "quote": "In August, BMO Capital analyst Evan Seigerman projected Mounjaro would generate peak sales of $68.7 billion.",
-        "scale": "bn",
-        "source_url": "https://www.drugdiscoverytrends.com/eli-lilly-mounjaro-sales-growth-pharma-market/",
-        "value": 68.7
-       },
-       "phase": "approved",
-       "ptrs": {
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF1mYiUTIebL209GbP5zpbKw84clOkkb5VFGzveXlK0lfj7BL69FcUwivnT0pgPLcti4XaAdox0LcNmUXNryDplUItt8mZs9DVJ7LBe2b0n1NLesJVm2exUj8socZaE5iyNbHHrfl0ZQAZYTgAhgRV1xcXhnUimGqQrtgZ9jc8cc_5DZ92K_Inw",
-        "period": "approved",
-        "quote": "The FDA approved the drug with a brand name of Mounjaro (tirzepatide) to treat type 2 diabetes in May 2022.",
-        "source_url": "https://www.drugdiscoverytrends.com/eli-lilly-mounjaro-sales-growth-pharma-market/",
-        "value": 1.0
-       },
-       "ptrs_basis": "approved product pre-peak across core metabolic indications"
-      },
-      {
-       "indication": "Relapsed or refractory mantle cell lymphoma and chronic lymphocytic leukemia",
-       "launch_year": 2023,
-       "name": "Pirtobrutinib (Jaypirca)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEMe9pZ2OcAh2qLQpX9tNU4RsFbuq10lNPVDTRfOs-J-huqLe-zDb9njPa5_9T16dwpw_NW1TKFvMeIsQ6gthvhQxR-7Z3YRj9E1pI_bBrn80UHqlNDpZF1oZKdUDu-Tu_-keutMnBogvwLNi7O4pQR7fZMMmHj35L2bySPn2YuVBJdrtI9TJxC22CutNQYOg==",
-        "period": "peak",
-        "quote": "Peak sales estimate: $1.59 billion – Bloomberg analyst consensus",
-        "scale": "bn",
-        "source_url": "https://endpoints.news/every-fda-drug-approval-from-2023-full-list-of-approved-new-drugs/",
-        "value": 1.59
-       },
-       "phase": "approved",
-       "ptrs": {
-        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEMe9pZ2OcAh2qLQpX9tNU4RsFbuq10lNPVDTRfOs-J-huqLe-zDb9njPa5_9T16dwpw_NW1TKFvMeIsQ6gthvhQxR-7Z3YRj9E1pI_bBrn80UHqlNDpZF1oZKdUDu-Tu_-keutMnBogvwLNi7O4pQR7fZMMmHj35L2bySPn2YuVBJdrtI9TJxC22CutNQYOg==",
-        "period": "approved",
-        "quote": "Eli Lilly received two accelerated approvals for its BTK inhibitor Jaypirca to bookend the year.",
-        "source_url": "https://endpoints.news/every-fda-drug-approval-from-2023-full-list-of-approved-new-drugs/",
-        "value": 1.0
-       },
-       "ptrs_basis": "accelerated approval received; confirmatory Phase 3 ongoing"
+       "ptrs_basis": "Recently approved (US obesity, 2026-04-01), listed as phase 'approved' per the brief. The T2D indication is filed (US, EU, Japan; Q2 2026) on positive ACHIEVE-1/-2/-3/-5 data; no PDUFA date published. Peak is the Bloomberg consensus (the lowest of the published figures; RBC $36bn peak-year, Citi >$40bn in the same article). Launch has been slow: Q2 2026 sales $98m; 2026 consensus cut from ~$4bn to <$2bn after Novo's oral Wegovy price war."
       }
      ],
-     "notes": "Fixed anchors respected: reported currency USD, latest USD revenue 65.18 bn. Consensus peak sales and benchmarks reflect sell-side consensus estimates and standard therapeutic benchmarks."
+     "excluded_assets": [
+      {
+       "name": "Eloralintide (LY3841136, ENLIGHTEN-1/2/3/4/6) and EloraTZP (eloralintide + tirzepatide)",
+       "reason": "no single-asset peak sales: the only figure (Leerink, $23.2bn annual sales by end-2035) covers the eloralintide franchise including the tirzepatide combination; Evaluate's World Preview 2026 gives only a retatrutide + eloralintide combined ~$10bn 2032 figure. Phase 3 ENLIGHTEN programme started late 2025/early 2026 (primary completions 2028-01 to 2028-06)"
+      },
+      {
+       "name": "Olomorasib (LY3537982, SUNRAY-01, SUNRAY-02)",
+       "reason": "no sourced peak sales (KRAS G12C; Phase 3 1L NSCLC with pembrolizumab, PC 2027-11, and SUNRAY-02 PC 2029-05; Breakthrough Therapy for 1L NSCLC 2025 and previously treated pancreatic cancer Q2 2026)"
+      },
+      {
+       "name": "Muvalaplin (LY3473329, MOVE-Lp(a))",
+       "reason": "no usable sourced peak sales: the only figure (GlobalData, Nov 2024, '$17.82 billion by 2032') is dated before the earliest possible launch (CVOT primary completion 2031-03 + 22 months = 2033); Lp(a) class risk raised by Novartis pelacarsen's outcomes failure (Sept 2026)"
+      },
+      {
+       "name": "Lepodisiran (LY3819469, ACCLAIM-Lp(a), ACCLAIM-CTA)",
+       "reason": "no attributable peak sales (only an unattributed '$1.5 billion in revenue by 2037' in an April 2025 newsletter column); CVOT primary completion 2029-03; Lp(a) class risk after pelacarsen's HORIZON failure (Sept 2026)"
+      },
+      {
+       "name": "Brenipatide (LY3537031, RENEW-ALC-1, RENEW-ALC-2, RENEW-MDD-1, RENEW-MDD-2)",
+       "reason": "no sourced peak sales (monthly GIP/GLP-1 agonist; Phase 3 alcohol use disorder PC 2028-04 and major depressive disorder PC 2028-02/2028-12)"
+      },
+      {
+       "name": "Sofetabart mipitecan (FRalpha ADC, FRAmework-01)",
+       "reason": "no sourced peak sales (Phase 3 platinum-resistant ovarian cancer, PC 2028-11; Breakthrough Therapy Jan 2026)"
+      },
+      {
+       "name": "Vepugratinib (LY3866288, LOXO-435, FORAGER-2)",
+       "reason": "no sourced peak sales (FGFR3 inhibitor, Phase 3 urothelial cancer with enfortumab vedotin + pembrolizumab, PC 2029-10)"
+      },
+      {
+       "name": "Tersolisib (LY4064809, STX-478)",
+       "reason": "no sourced peak sales (mutant-selective PI3Kalpha inhibitor from Scorpion, Phase 3 HR+/HER2- metastatic breast cancer with CDK4/6, PC 2029-05)"
+      },
+      {
+       "name": "AK-OTOF (AAVAnc80-hOTOF, Akouos)",
+       "reason": "no sourced peak sales (orphan otoferlin gene therapy, Phase 1/2/3 CHORD, PC 2028-10)"
+      },
+      {
+       "name": "Lu-177 PNT2002 ([177Lu]-PSMA-I&T, SPLASH, POINT Biopharma)",
+       "reason": "no sourced peak sales; SPLASH (mCRPC) primary completion 2023-11 with no US filing or launch guidance from Lilly"
+      },
+      {
+       "name": "P-tau217 Test (blood diagnostic)",
+       "reason": "diagnostic, not a drug"
+      },
+      {
+       "name": "Cleminorexton (ORX750, Centessa)",
+       "reason": "no sourced single-asset peak sales (OX2R agonist; registrational Phase 2/3 in narcolepsy type 1/2 opened 2026-05-29, Centessa-sponsored; acquisition closed 2026-06-24)"
+      },
+      {
+       "name": "Bimagrumab (BYM338, from Versanis)",
+       "reason": "Phase 2; no sourced peak sales"
+      },
+      {
+       "name": "Tocilizumab, Adalimumab, Semaglutide, Pembrolizumab, Durvalumab, Tamoxifen, Anastrozole, Letrozole, Exemestane, Fulvestrant, Ribociclib, Palbociclib, Erlotinib, Gefitinib, Abiraterone, Enzalutamide, Dexamethasone, Paclitaxel, Topotecan, Gemcitabine, Cisplatin, Carboplatin, Pemetrexed",
+       "reason": "comparator or background-therapy arms in Lilly-sponsored studies, not Lilly assets"
+      }
+     ],
+     "notes": "Rebuilt 2026-10-05 from LLY_current.json (as of 2026-09-26). Changes vs the stored entry: (1) Kisunla (donanemab), Mounjaro/Zepbound (tirzepatide) and Jaypirca (pirtobrutinib) moved from assets to approved_portfolio -- marketed products whose sales are in operating revenue; their label-expansion studies (donanemab prevention TRAILBLAZER-ALZ 3/5/6, tirzepatide adolescent/T1D/MMO/MASLD, Jaypirca CLL) are covered there. The stored Mounjaro $68.7bn BMO peak and Kisunla $5bn Jefferies peak are dropped with them. (2) Orforglipron: stored as phase_3 with launch 2026 and a '$26 billion consensus' quote that did not name the drug (Wolfe, investing.com); it is now approved (Foundayo, US obesity 2026-04-01) and carried as an approved asset with the Bloomberg consensus $18bn by 2030; T2D submitted US/EU/Japan in Q2 2026 after ACHIEVE-1/-2/-3/-5 (and ACHIEVE-4 CV safety, Q1 2026). Indication is metabolic (obesity/T2D), not CNS. (3) Retatrutide: the stored $6.6bn 'peak consensus' (older FierceBiotech article) and 0.70 PTRS quote (not a probability) replaced: GlobalData $15.6bn 2031 sales (Dec 2025); higher published figures exist (Evaluate World Preview 2026, June 2026: ~$23bn peak, read from a search snippet of FierceBiotech, not the page; Truist $12-19bn worldwide peak range, snippet only). Launch moved 2027 -> 2028: TRIUMPH-1/-2/-3 completed Jan-Jun 2026, Lilly's 2026-07-23 announcement and Q2 2026 release (2026-08-05) put the US BLA in Q1 2027 (obesity, OSA, knee OA pain). New safety signal: dysesthesia (up to 20.9% at 12 mg in TRIUMPH-4). (4) New asset: remternetug (TRAILRUNNER-ALZ 3, PC 2029-04). (5) Unapproved late-stage programmes without a usable single-asset peak are excluded with reasons (eloralintide, olomorasib, muvalaplin, lepodisiran, brenipatide, sofetabart mipitecan, vepugratinib, tersolisib, AK-OTOF, cleminorexton). Other changes in the last 6 months: Inluriyo (imlunestrant) monotherapy approved Sept 2025 and in combination with Verzenio 2026-09-18 (ESR1m advanced breast cancer); adjuvant EMBER-4 (NCT05514054, >8,000 patients) reads out 2027 -- the larger opportunity, covered as an Inluriyo label expansion (TD Securities: Inluriyo $1.05bn by 2032, all indications). Onswik (insulin efsitora alfa, once-weekly) FDA-approved 2026-09-24 for T2D. Ebglyss Q8W maintenance dosing approved (Q2 2026); Jaypirca EC approval in CLL all lines and positive BRUIN CLL-322 (+venetoclax/rituximab); Retevmo adjuvant RET+ NSCLC (LIBRETTO-432) positive (83% recurrence/death risk reduction); olomorasib Breakthrough Therapy in previously treated KRAS G12C pancreatic cancer; Novartis pelacarsen (Lp(a)) failed its outcomes trial (Sept 2026), raising class risk for lepodisiran and muvalaplin. Business development 2026: Ventyx (VTX3232, closed 2026-03-04), Centessa (cleminorexton/ORX750, $6.3bn upfront + CVR, closed 2026-06-24), Kelonia (KLN-1010 in vivo CAR-T), Orna (ORN-252), Ajax (AJ-11095), three infectious-disease companies (July 2026, up to $3.9bn), AtaiBeckley (BPL-003, treatment-resistant depression) pending; Verve (VERVE-102 PCSK9 base editing, Phase 2) acquired 2025. All are Phase 1/2 except cleminorexton (registrational Phase 2/3). TIRZEPATIDE (Mounjaro/Zepbound) LOE AND PRICING: the main compound patent expires January 2036 (formulation/method-of-use patents run later, reported to ~2041; drugs.com / GreyB, not Lilly-confirmed); NCE data protection May 2027 -- in July 2026 Lilly received Paragraph IV notices from multiple generic companies on Mounjaro and/or Zepbound Orange Book patents and intends to sue (Q2 2026 10-Q), so a 30-month stay and litigation run from 2026. IRA: Mounjaro/Zepbound not selected through IPAY 2028; as an NDA small-molecule-pathway peptide it becomes eligible 7 years after the May 2022 approval, i.e. earliest selection for IPAY 2031-2032 (own calculation, not sourced). Lilly IRA exposure already crystallised: Jardiance (IPAY 2026), Trulicity and Verzenio selected for IPAY 2028 (CMS, 2026-01-27), Tradjenta renegotiated. MFN: Lilly's 2025-11-06 agreement with the US administration prices tirzepatide and orforglipron to Medicare/Medicaid at $245/month (Medicare copay $50 from April 2026) and lowers TrumpRx cash prices (average ~$346/month for Zepbound; Foundayo self-pay from $149) -- price erosion is built into US obesity net pricing from 2026. Figures read through a summarising fetch rather than the raw page: the GlobalData retatrutide and remternetug quotes (clinicaltrialsarena.com) and the Foundayo quote (GEN; the summariser was asked for the exact sentence). No asset patent expiries were sourced (null). Peaks are gross single-asset sales; Jardiance/Tradjenta are shared with Boehringer Ingelheim."
     },
     "engine_preview": {
      "assets": [
       {
-       "indication": "Obesity and type 2 diabetes",
-       "launch_year": 2027,
-       "name": "Retatrutide",
+       "economic_share": null,
+       "indication": "Obesity / chronic weight management incl. obstructive sleep apnea and knee osteoarthritis pain (metabolic; GIP/GLP-1/glucagon triple agonist); T2D and CV/renal outcomes studies ongoing",
+       "launch_year": 2028,
+       "name": "Retatrutide (LY3437943)",
        "patent_expiry": null,
-       "peak_sales_period": "peak",
-       "peak_sales_usd": 6600000000.0,
+       "peak_sales_period": "2031E (GlobalData forecast, published 2025-12-12)",
+       "peak_sales_usd": 15600000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%",
-       "ptrs_override": 0.7,
+       "ptrs_basis": "BIO/Informa Phase III->approval ~0.58 raised because the registration package is complete: TRIUMPH-4 (knee OA, PC 2025-11-14; up to 28.7% weight loss) plus TRIUMPH-1/-2/-3 (completed Jan-Jun 2026) all positive; Lilly's Q2 2026 release (2026-08-05) says the data package supports global registrations for obesity, OSA and knee OA pain with a US BLA planned for Q1 2027. Held below filed-stage (~0.90) because it is not yet submitted and a new dysesthesia signal (8.8% at 9 mg, 20.9% at 12 mg vs 0.7% placebo in TRIUMPH-4) plus GI discontinuations could shape the label. 0.74 = the engine's metabolic Phase 3 table (0.59) + 15pp band edge. Launch: rule floor = 2025-11-14 + 22 months = 2027; set 2028 (BLA Q1 2027 + standard review). Lilly calls the filing a Biologics License Application, hence modality biologic (12y); if regulated as an NDA peptide the 5y floor (2033) still covers the 2031 figure.",
+       "ptrs_override": 0.74,
+       "royalty_payable": null,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Obesity and type 2 diabetes",
+       "economic_share": null,
+       "indication": "Early Alzheimer's disease in participants at risk of cognitive and functional decline (anti-amyloid N3pG antibody, subcutaneous/IV; successor to Kisunla)",
+       "launch_year": 2031,
+       "name": "Remternetug (LY3372993)",
+       "patent_expiry": null,
+       "peak_sales_period": "2033E peak (GlobalData, published 2025-09-29)",
+       "peak_sales_usd": 901200000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "BIO/Informa Phase III->approval cut for neurology/Alzheimer's; raised above the engine's CNS table (0.22) because the N3pG anti-amyloid mechanism is validated by Kisunla (donanemab) and remternetug cleared amyloid in TRAILRUNNER-ALZ 1 (Phase 3 amyloid-clearance study, completed, PC 2024-04-24), but the efficacy pivotal TRAILRUNNER-ALZ 3 is a clinical-decline (time-to-event) study in an at-risk early population, an unproven endpoint. Launch floor = 2029-04 + 22 months = 2031. The quote ('it') refers to remternetug in the article's Lilly section.",
+       "ptrs_override": 0.35,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Obesity / overweight with weight-related comorbidity (METABOLIC, oral small-molecule GLP-1 RA; approved US 2026-04-01); type 2 diabetes submitted US/EU/Japan Q2 2026; hypertension, OSA, OA pain, PAD, SUI, CV outcomes and pediatric studies ongoing",
        "launch_year": 2026,
-       "name": "Orforglipron",
+       "name": "Orforglipron (Foundayo, LY3502970)",
        "patent_expiry": null,
-       "peak_sales_period": "peak",
-       "peak_sales_usd": 26000000000.0,
-       "phase": "phase_3",
-       "ptrs_basis": "metabolic Phase 3 benchmark 65-75%",
-       "ptrs_override": 0.7,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Early symptomatic Alzheimer's disease",
-       "launch_year": 2024,
-       "name": "Donanemab (Kisunla)",
-       "patent_expiry": null,
-       "peak_sales_period": "peak",
-       "peak_sales_usd": 5000000000.0,
+       "peak_sales_period": "2030E (Bloomberg News analyst consensus, reported 2026-04-05)",
+       "peak_sales_usd": 18000000000.0,
        "phase": "approved",
-       "ptrs_basis": "FDA approved; technical and regulatory success achieved",
+       "ptrs_basis": "Recently approved (US obesity, 2026-04-01), listed as phase 'approved' per the brief. The T2D indication is filed (US, EU, Japan; Q2 2026) on positive ACHIEVE-1/-2/-3/-5 data; no PDUFA date published. Peak is the Bloomberg consensus (the lowest of the published figures; RBC $36bn peak-year, Citi >$40bn in the same article). Launch has been slow: Q2 2026 sales $98m; 2026 consensus cut from ~$4bn to <$2bn after Novo's oral Wegovy price war.",
        "ptrs_override": 1.0,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Type 2 diabetes and obesity",
-       "launch_year": 2022,
-       "name": "Tirzepatide (Mounjaro / Zepbound)",
-       "patent_expiry": 2036,
-       "peak_sales_period": "peak",
-       "peak_sales_usd": 68700000000.0,
-       "phase": "approved",
-       "ptrs_basis": "approved product pre-peak across core metabolic indications",
-       "ptrs_override": 1.0,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Relapsed or refractory mantle cell lymphoma and chronic lymphocytic leukemia",
-       "launch_year": 2023,
-       "name": "Pirtobrutinib (Jaypirca)",
-       "patent_expiry": null,
-       "peak_sales_period": "peak",
-       "peak_sales_usd": 1590000000.0,
-       "phase": "approved",
-       "ptrs_basis": "accelerated approval received; confirmatory Phase 3 ongoing",
-       "ptrs_override": 1.0,
+       "royalty_payable": null,
        "source": "gemini_accepted"
       }
      ],
@@ -9653,9 +9994,7 @@
       "citation_coverage": 1.0,
       "currencies": [
        "USD bn",
-       "USD bn",
-       "USD bn",
-       "USD bn",
+       "USD mn",
        "USD bn"
       ],
       "dropped_assets": [],
@@ -9665,17 +10004,107 @@
     "fmp_context_usd": {
      "company": "Eli Lilly and Company",
      "depreciation_and_amortization": 1997000000.0,
-     "market_cap": 1114757656520.0,
+     "market_cap": 1090055790090.0,
      "net_ppe": 24675000000.0,
      "operating_cash_flow": 16813000000.0,
      "period": "2025-12-31",
-     "revenue": 65179000000.0
+     "revenue": 65179000000.0,
+     "shares": 941741000.0
     },
     "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 27.2,
-    "value_usd": 107890000000.0
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2028,
+       "name": "Retatrutide (LY3437943)",
+       "peak": 15.6,
+       "phase": "phase_3",
+       "ptrs": 0.74
+      },
+      {
+       "launch_year": 2031,
+       "name": "Remternetug (LY3372993)",
+       "peak": 901.2,
+       "phase": "phase_3",
+       "ptrs": 0.35
+      },
+      {
+       "launch_year": 2026,
+       "name": "Orforglipron (Foundayo, LY3502970)",
+       "peak": 18,
+       "phase": "approved",
+       "ptrs": 1.0
+      }
+     ],
+     "built_at": "2026-10-06T17:37:36+00:00",
+     "model": "verified research (owner re-check, primary sources)",
+     "value_usd": 34501200000.0
+    },
+    "primary_sources": {
+     "assets": [
+      {
+       "dates": {},
+       "name": "Retatrutide (LY3437943)",
+       "phase": "phase_3",
+       "stages": {
+        "10-K": "phase_3",
+        "8-K": "phase_3",
+        "transcript": "phase_3"
+       },
+       "verdict": "corroborated"
+      },
+      {
+       "dates": {},
+       "name": "Remternetug (LY3372993)",
+       "phase": "phase_3",
+       "stages": {
+        "10-K": "phase_3"
+       },
+       "verdict": "corroborated"
+      },
+      {
+       "dates": {},
+       "name": "Orforglipron (Foundayo, LY3502970)",
+       "phase": "approved",
+       "stages": {
+        "10-K": null,
+        "8-K": "phase_3",
+        "transcript": "approved"
+       },
+       "verdict": "corroborated"
+      }
+     ],
+     "sources": {
+      "10-K": {
+       "chars": 419255,
+       "date": "2026-02-12",
+       "url": "https://www.sec.gov/Archives/edgar/data/59478/000005947826000013/lly-20251231.htm"
+      },
+      "8-K": {
+       "chars": 27528,
+       "date": "2026-08-05",
+       "url": "https://www.sec.gov/Archives/edgar/data/59478/000005947826000077/q226lillysalesandearningsp.htm"
+      },
+      "transcript": {
+       "chars": 55050,
+       "date": "2026-08-05",
+       "url": "FMP earnings call 2026 Q2"
+      }
+     },
+     "uncovered_late_stage": [
+      {
+       "identifier": "CLL-322",
+       "sources": [
+        "transcript"
+       ],
+       "stage": "phase_3"
+      }
+     ]
+    },
+    "secs": null,
+    "value_usd": 34501200000.0
    }
   },
   "LMT": {
@@ -10297,6 +10726,251 @@
     "ok": true,
     "secs": 73.7,
     "value_usd": 105000000000.0
+   }
+  },
+  "NTLA": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 0.07
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-06T17:37:12+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "not meaningful pre-revenue / with no valued asset (51.72x (plausible 0.02x to 8.0x))",
+      "ok": null,
+      "ratio": 51.7208
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "3 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: filed, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2027, 2030",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Intellia Therapeutics, Inc.",
+    "data": {
+     "approved_portfolio": [],
+     "as_of": "2026-10-05",
+     "assets": [
+      {
+       "aliases": [
+        "lonvo-z",
+        "NTLA-2002",
+        "lonvoguran ziclumeran",
+        "HAELO"
+       ],
+       "indication": "Hereditary angioedema (HAE), prevention of attacks, one-time in vivo CRISPR KLKB1 knockout",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2027,
+       "modality": "cell_gene",
+       "name": "Lonvoguran ziclumeran (lonvo-z, NTLA-2002)",
+       "nct_ids": [
+        "NCT06634420"
+       ],
+       "orphan": true,
+       "patent_expiry": 2037,
+       "pdufa_date": "2027-03-10",
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2033E",
+        "quote": "peak annual sales will top out at $500 million",
+        "scale": "mn",
+        "source_url": "https://www.biopharmadive.com/news/intellia-gene-editing-hereditary-angioedema-lonvo-z-results/818503/",
+        "value": 500
+       },
+       "phase": "filed",
+       "primary_completion": "2026-02-10",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 base rate filed->approval ~0.90; Intellia 8-K 2026-09-08: FDA accepted the BLA with Priority Review, PDUFA March 10, 2027, and 'is not currently planning to hold an advisory committee'",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0001652130/000119312526385194/ntla-ex99_1.htm",
+        "value": 0.9
+       },
+       "ptrs_basis": "Filed (BLA accepted, Priority Review, PDUFA 2027-03-10, no AdCom planned; 8-K 2026-09-08). BIO/Informa filed->approval base rate ~0.90 kept unadjusted: Phase 3 HAELO met primary (87% attack reduction vs placebo, p<0.0001) and all key secondaries, all TEAEs Grade 1-2, no SAEs in the lonvo-z arm (Q2 2026 release 2026-08-06), orphan (US/EU) + RMAT + PRIME designations; not raised further because it would be the first in vivo CRISPR approval (no regulatory precedent, CMC/LNP review risk). WHOLLY OWNED (FY2025 10-K: 'Lonvo-z is a wholly owned ... candidate'; IR pipeline page). Peak: Evercore ISI (Jonathan Miller) as quoted by BioPharma Dive 2026-04-27 -- the article gives NO peak year; period 2033E is an assumption (launch 1H 2027 + ~6 years for a one-time therapy whose treated pool is ~7,000 US patients), inside launch + 12y cell/gene exclusivity (2039). Launch 2027 = PDUFA year; company plans US launch 1H 2027 if approved. patent_expiry 2037 = 10-K statement that wholly owned patents covering product candidates expire 'no earlier than 2037' (a floor, no product-specific date)."
+      },
+      {
+       "aliases": [
+        "nex-z",
+        "NTLA-2001",
+        "nexiguran ziclumeran",
+        "MAGNITUDE",
+        "ATTR-CM program"
+       ],
+       "economic_share": 0.75,
+       "indication": "Transthyretin (ATTR) amyloidosis with cardiomyopathy (ATTR-CM), wild-type and hereditary; one-time in vivo CRISPR TTR knockout",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2030,
+       "modality": "cell_gene",
+       "name": "Nexiguran ziclumeran (nex-z, NTLA-2001)",
+       "nct_ids": [
+        "NCT06128629"
+       ],
+       "orphan": false,
+       "patent_expiry": 2037,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2035E",
+        "quote": "peak sales for the ATTR-CM program at approximately $4 billion, albeit now anticipated in 2035",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/analyst-ratings/canaccord-genuity-lowers-intellia-stock-price-target-to-54-93CH-4077812",
+        "value": 4
+       },
+       "phase": "phase_3",
+       "primary_completion": "2027-12",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 base rate Phase 3->approval ~0.49-0.58; Intellia Q2 2026 (2026-08-06): 'the highest observed liver transaminase elevations were in patients carrying one specific human leukocyte antigen (HLA) allele'",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/0001652130/000119312526336772/ntla-ex99_1.htm",
+        "value": 0.45
+       },
+       "ptrs_basis": "Phase 3 base rate 0.49-0.58 (BIO/Informa 2011-2020), cut to 0.45: (a) cardiovascular-outcomes trial (MAGNITUDE, ~1,200 pts, CV death + CV events) against an entrenched standard of care (tafamidis, acoramidis, vutrisiran), and (b) an unresolved liver-safety signal -- FDA clinical hold 2025-10-29 after a Grade 4 transaminase/bilirubin event in a MAGNITUDE patient who died 2025-11-05 (septic shock, course included acute liver injury); hold lifted for MAGNITUDE in March 2026; highest ALT/AST elevations traced to carriers of one HLA allele (reported as HLA-C*05:01), HLA genotyping now in screening. Engine table is 0.42; 0.45 sits inside the +/-15pp band. Strong biomarker (~90% serum TTR knockdown in Phase 1) keeps it near base. ECONOMIC SHARE 0.75: Regeneron 'shares in approximately 25% of worldwide development costs and commercial profits' (FY2025 10-K, https://www.sec.gov/Archives/edgar/data/1652130/000119312526076550/ntla-20251231.htm; IR pipeline page https://www.intelliatx.com/pipeline/: 'Regeneron shares 25% of worldwide development costs and commercial profits for the ATTR program'); peak_sales is the 100% programme figure as printed. Peak: Canaccord Genuity (2025-06-03, Investing.com), ATTR-CM programme only, ~$4bn in 2035, with Canaccord's US/EU launch moved to 2030/2031 -- predates the Oct-2025 hold, so likely optimistic on timing. Launch 2030 >= floor 2029 (primary completion 2027-12 + 22 months); peak 2035 inside launch + 12y (2042). Orphan set false: ATTR-CM (incl. wild-type) not treated as orphan here; exclusivity unaffected (cell_gene 12y dominates). MAGNITUDE-2 (ATTRv-PN, NCT06672237, primary completion 2027-07) is the same molecule; no separate PN peak sourced, so PN upside is not in this figure."
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "nex-z / NTLA-2001 in ATTRv-PN (MAGNITUDE-2, NCT06672237, nexiguran ziclumeran)",
+       "reason": "no sourced peak sales for the polyneuropathy indication alone; same asset as nex-z ATTR-CM (covered by that entry, which carries the CM-only Canaccord peak). Hold lifted Jan 2026; enrollment completion guided 2H 2026; registered primary completion 2027-07."
+      },
+      {
+       "name": "REGV131-LNP1265 (Factor IX gene insertion, hemophilia B)",
+       "reason": "Phase 1 (early-stage clinical; Regeneron leads, Intellia eligible for milestones/royalties only)"
+      },
+      {
+       "name": "AVC-201 / AVC-203 (AvenCell allogeneic universal CAR-T, AML and B-cell malignancies)",
+       "reason": "Phase 1 (early-stage clinical, AvenCell-owned)"
+      },
+      {
+       "name": "KYV-201 (Kyverna collaboration, autoimmune) and other research programmes",
+       "reason": "Phase 1 or preclinical; no sourced peak sales"
+      }
+     ],
+     "notes": "Registry NTLA_registry.txt (3 studies) fully covered: NCT06634420 HAELO = lonvo-z (primary completion 2026-02-10 actual); NCT06128629 MAGNITUDE = nex-z ATTR-CM (2027-12 est.); NCT06672237 MAGNITUDE-2 = nex-z ATTRv-PN (2027-07 est.) -- dates read from the ClinicalTrials.gov API v2 on 2026-10-05. Company pipeline page (intelliatx.com/pipeline) lists no other late-stage programme. Changes in the last 12 months: (1) 2025-10-29 FDA clinical hold on both nex-z Phase 3 INDs after a Grade 4 liver transaminase + bilirubin event in a MAGNITUDE patient, who died 2025-11-05 (investigator: septic shock from perforated duodenal ulcer; course included acute liver injury) -- by then >650 enrolled / >450 dosed in MAGNITUDE; (2) hold lifted on MAGNITUDE-2 in January 2026 and on MAGNITUDE in March 2026, enrollment reinitiated; (3) genomic analysis (Q2 2026 release, 2026-08-06) traced the highest transaminase elevations to carriers of one HLA allele (reported in press as HLA-C*05:01 -- allele name from a search snippet); HLA genotyping added to screening (not automatically exclusionary); Intellia also weighing caps on advanced-stage/NT-proBNP subgroups in MAGNITUDE; (4) lonvo-z Phase 3 HAELO positive (2026-04-27: 87% attack reduction, 62% attack-free), rolling BLA started 2026-04-27, BLA ACCEPTED with Priority Review 2026-09-08, PDUFA 2027-03-10, no AdCom planned, US launch planned 1H 2027 if approved; (5) April 2026 underwritten public offering: 16,744,187 shares at $10.75 plus a 30-day option on 2,511,628 shares (underwriting agreement 2026-04-28, closed 2026-04-30, Jefferies/Goldman/Citi; StockTitan/TradingView), net proceeds ~$194.6-195mn (the net figure implies the option was exercised, ~19.26mn shares total -- inferred, not confirmed on a primary page); shares outstanding 118,133,546 at 2026-02-13 (FY2025 10-K cover) and Q2 2026 weighted average 133.48mn basic/diluted; (6) cash $628.4mn at 2026-06-30, plus a reported $300mn debt facility (earnings-call coverage, Yahoo Finance), runway into 2028 without lonvo-z revenue. Peak-sales caveats: lonvo-z has only low independent figures (Evercore $500mn; Motley Fool 2026-06-17 'may never get to $1 billion'); search snippets attributing '$5 billion by 2028' (lonvo-z) and '$12 billion by 2028' (nex-z) to Intellia look like market-size statements and were NOT used; a '$21.7 billion' nex-z figure from a community narrative was NOT used. The Canaccord nex-z figure is dated 2025-06-03 and predates the hold; the Evercore figure is quoted in a 2026-04-27 article as a prior projection. PTRS for both assets cites base rates rather than broker figures. Regeneron 25% share text from the FY2025 10-K was read through a page summariser (WebFetch), consistent with the IR pipeline page wording. Peak total in assets (100% figures, before economic share): USD 0.5bn lonvo-z + USD 4bn nex-z = USD 4.5bn."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "Hereditary angioedema (HAE), prevention of attacks, one-time in vivo CRISPR KLKB1 knockout",
+       "launch_year": 2027,
+       "name": "Lonvoguran ziclumeran (lonvo-z, NTLA-2002)",
+       "patent_expiry": 2037,
+       "peak_sales_period": "2033E",
+       "peak_sales_usd": 500000000.0,
+       "phase": "filed",
+       "ptrs_basis": "Filed (BLA accepted, Priority Review, PDUFA 2027-03-10, no AdCom planned; 8-K 2026-09-08). BIO/Informa filed->approval base rate ~0.90 kept unadjusted: Phase 3 HAELO met primary (87% attack reduction vs placebo, p<0.0001) and all key secondaries, all TEAEs Grade 1-2, no SAEs in the lonvo-z arm (Q2 2026 release 2026-08-06), orphan (US/EU) + RMAT + PRIME designations; not raised further because it would be the first in vivo CRISPR approval (no regulatory precedent, CMC/LNP review risk). WHOLLY OWNED (FY2025 10-K: 'Lonvo-z is a wholly owned ... candidate'; IR pipeline page). Peak: Evercore ISI (Jonathan Miller) as quoted by BioPharma Dive 2026-04-27 -- the article gives NO peak year; period 2033E is an assumption (launch 1H 2027 + ~6 years for a one-time therapy whose treated pool is ~7,000 US patients), inside launch + 12y cell/gene exclusivity (2039). Launch 2027 = PDUFA year; company plans US launch 1H 2027 if approved. patent_expiry 2037 = 10-K statement that wholly owned patents covering product candidates expire 'no earlier than 2037' (a floor, no product-specific date).",
+       "ptrs_override": 0.9,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": 0.75,
+       "indication": "Transthyretin (ATTR) amyloidosis with cardiomyopathy (ATTR-CM), wild-type and hereditary; one-time in vivo CRISPR TTR knockout",
+       "launch_year": 2030,
+       "name": "Nexiguran ziclumeran (nex-z, NTLA-2001)",
+       "patent_expiry": 2037,
+       "peak_sales_period": "2035E",
+       "peak_sales_usd": 3000000000.0,
+       "phase": "phase_3",
+       "ptrs_basis": "Phase 3 base rate 0.49-0.58 (BIO/Informa 2011-2020), cut to 0.45: (a) cardiovascular-outcomes trial (MAGNITUDE, ~1,200 pts, CV death + CV events) against an entrenched standard of care (tafamidis, acoramidis, vutrisiran), and (b) an unresolved liver-safety signal -- FDA clinical hold 2025-10-29 after a Grade 4 transaminase/bilirubin event in a MAGNITUDE patient who died 2025-11-05 (septic shock, course included acute liver injury); hold lifted for MAGNITUDE in March 2026; highest ALT/AST elevations traced to carriers of one HLA allele (reported as HLA-C*05:01), HLA genotyping now in screening. Engine table is 0.42; 0.45 sits inside the +/-15pp band. Strong biomarker (~90% serum TTR knockdown in Phase 1) keeps it near base. ECONOMIC SHARE 0.75: Regeneron 'shares in approximately 25% of worldwide development costs and commercial profits' (FY2025 10-K, https://www.sec.gov/Archives/edgar/data/1652130/000119312526076550/ntla-20251231.htm; IR pipeline page https://www.intelliatx.com/pipeline/: 'Regeneron shares 25% of worldwide development costs and commercial profits for the ATTR program'); peak_sales is the 100% programme figure as printed. Peak: Canaccord Genuity (2025-06-03, Investing.com), ATTR-CM programme only, ~$4bn in 2035, with Canaccord's US/EU launch moved to 2030/2031 -- predates the Oct-2025 hold, so likely optimistic on timing. Launch 2030 >= floor 2029 (primary completion 2027-12 + 22 months); peak 2035 inside launch + 12y (2042). Orphan set false: ATTR-CM (incl. wild-type) not treated as orphan here; exclusivity unaffected (cell_gene 12y dominates). MAGNITUDE-2 (ATTRv-PN, NCT06672237, primary completion 2027-07) is the same molecule; no separate PN peak sourced, so PN upside is not in this figure.",
+       "ptrs_override": 0.45,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD mn",
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "economic_share": [
+       "Nexiguran ziclumeran (nex-z, NTLA-2001): 75% of the 100% peak"
+      ],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Intellia Therapeutics, Inc.",
+     "depreciation_and_amortization": 10285000.0,
+     "market_cap": 1708803362.0,
+     "net_ppe": 123626000.0,
+     "operating_cash_flow": -348880000.0,
+     "period": "2025-12-31",
+     "revenue": 67671000.0,
+     "shares": 139722269.99182338
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2027,
+       "name": "Lonvoguran ziclumeran (lonvo-z, NTLA-2002)",
+       "peak": 500,
+       "phase": "filed",
+       "ptrs": 0.9
+      },
+      {
+       "launch_year": 2030,
+       "name": "Nexiguran ziclumeran (nex-z, NTLA-2001)",
+       "peak": 4,
+       "phase": "phase_3",
+       "ptrs": 0.45
+      }
+     ],
+     "built_at": "2026-10-06T17:31:38+00:00",
+     "model": "verified research (owner re-check, primary sources)",
+     "value_usd": 3500000000.0
+    },
+    "secs": null,
+    "value_usd": 3500000000.0
    }
   },
   "O": {
@@ -11482,6 +12156,409 @@
     "ok": true,
     "secs": 56.2,
     "value_usd": 52772707999.99999
+   }
+  },
+  "REGN": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 14.34
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-07T03:21:56+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.16x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.1593
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Cemdisiran (C5 siRNA, ALN-CC5), Olatorepatide (HS-20094, GLP-1/GIP receptor agonist)",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "37 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: filed, phase_2",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2027, 2030",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Regeneron Pharmaceuticals, Inc.",
+    "data": {
+     "approved_portfolio": [
+      "Eylea HD (aflibercept 8 mg, BAY86-5321)",
+      "Eylea (aflibercept, VEGF Trap-Eye)",
+      "Dupixent (dupilumab, REGN668, SAR231893)",
+      "Libtayo (cemiplimab, REGN2810)",
+      "Kevzara (sarilumab, REGN88)",
+      "Praluent (alirocumab, REGN727)",
+      "Evkeeza (evinacumab, REGN1500)",
+      "Lynozyfic (linvoseltamab, REGN5458)",
+      "Ordspono (odronextamab, REGN1979)",
+      "Pasatru (garetosmab, REGN2477)",
+      "Otarmeni (lunsotogene parvec, DB-OTO)",
+      "Veopoz (pozelimab, REGN3918)",
+      "Inmazeb (atoltivimab, maftivimab, odesivimab, REGN-EB3)",
+      "Arcalyst (rilonacept)",
+      "Zaltrap (ziv-aflibercept)"
+     ],
+     "as_of": "2026-10-07",
+     "assets": [
+      {
+       "aliases": [
+        "cemdisiran",
+        "ALN-CC5",
+        "NIMBLE",
+        "cemdisiran monotherapy gMG"
+       ],
+       "indication": "Generalized myasthenia gravis (adult AChR antibody-positive), monotherapy every 12 weeks",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2027,
+       "modality": "small_molecule",
+       "name": "Cemdisiran (C5 siRNA, ALN-CC5)",
+       "nct_ids": [
+        "NCT05070858"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": "2026-11-30",
+       "peak_sales": {
+        "currency": "USD",
+        "period": "peak, no year stated (Argus, published 2026-10-01); midpoint of USD 1.5-2.5bn range",
+        "quote": "peak annual sales potential of $1.5 billion to $2.5 billion if approved",
+        "scale": "bn",
+        "source_url": "https://www.investing.com/news/analyst-ratings/argus-upgrades-regeneron-stock-rating-to-buy-on-dupixent-growth-93CH-4927250",
+        "value": 2.0
+       },
+       "phase": "filed",
+       "primary_completion": "2025-07-08",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 phase-transition base rate: NDA/BLA filing to approval ~90%",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.9
+       },
+       "ptrs_basis": "Filed-stage base rate (~0.90). NDA accepted by FDA under Priority Review (priority review voucher) with a target action date in November 2026 -- Q2 2026 8-K exhibit 99.1 (https://www.sec.gov/Archives/edgar/data/872589/000087258926000023/exhibit991q22026.htm): 'target action date in November 2026'; re-confirmed as 'November 2026' at the Wells Fargo conference 2026-09-09; the exact day is not public (company, FDA and press checked 2026-10-07), so pdufa_date stays the month-end placeholder 2026-11-30; no FDA decision has occurred as of 2026-10-07; EMA MAA also accepted, EC decision H2 2027. Phase 3 NIMBLE (NCT05070858) met its primary endpoint for cemdisiran monotherapy (Aug 2025); C5 inhibition is a validated mechanism in AChR+ gMG (Soliris/Ultomiris/Zilbrysq). Peak is the midpoint of Argus's $1.5-2.5bn range (quote does not name the drug in the sentence; the article attributes it to cemdisiran with the November 2026 target date). Jefferies earlier estimated ~USD 1bn (search snippet only). Modality: siRNA filed as an NDA, so 5-year NCE exclusivity (small_molecule); the FDA orphan designation (2023-08-28) is for cemdisiran in combination with pozelimab, not monotherapy, so orphan=false. Partner economics: wholly owned by Regeneron since the June 2024 amended Alnylam C5 licence; Regeneron pays Alnylam 'low double-digit royalties' on monotherapy sales -- royalty_payable 0.12 is an estimate of that undisclosed rate.",
+       "royalty_payable": 0.12
+      },
+      {
+       "aliases": [
+        "olatorepatide",
+        "HS-20094",
+        "HS20094",
+        "ola"
+       ],
+       "indication": "Obesity / chronic weight management (incl. obesity with type 2 diabetes); combination with Praluent planned",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2030,
+       "modality": "small_molecule",
+       "name": "Olatorepatide (HS-20094, GLP-1/GIP receptor agonist)",
+       "nct_ids": [
+        "NCT07431086",
+        "NCT07685808"
+       ],
+       "orphan": false,
+       "patent_expiry": null,
+       "pdufa_date": null,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "consensus peak, no year stated (Jefferies note, 2026-03-10)",
+        "quote": "Consensus estimates attribute only approximately $285 million in peak revenues for the program.",
+        "scale": "mn",
+        "source_url": "https://www.investing.com/news/analyst-ratings/jefferies-raises-regeneron-stock-price-target-on-obesity-drug-data-93CH-4553228",
+        "value": 285
+       },
+       "phase": "phase_2",
+       "primary_completion": "2026-11-13",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 phase-transition base rate: Phase II to approval ~15% (all indications); metabolic/endocrine above average",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.33
+       },
+       "ptrs_basis": "Phase stays phase_2 for Regeneron's territory. The FY2025 10-K's 'Phase 3' is Hansoh's China programme ('currently in Phase 3 clinical development in China', https://www.sec.gov/Archives/edgar/data/872589/000087258926000008/regn-20251231.htm); the Q2 2026 call (2026-07-30) says 'We remain on track to commence Phase III studies later this year', and at the Wells Fargo conference (2026-09-09) pivotal obesity and obesity+T2D studies were 'expected to begin before the end of 2026'. ClinicalTrials.gov (queried 2026-10-07, terms olatorepatide / HS-20094) shows NO Regeneron Phase 3: Regeneron studies are Phase 2 only (NCT07431086 US obesity, PC 2026-11-13; NCT07685808 obesity without diabetes, started 2026-07-28, PC 2028-01-21; NCT07830329 hidradenitis suppurativa, not yet recruiting). Hansoh's China Phase 3s (NCT06839664 obesity, completed 2026-01-04, 19% weight loss at 48 weeks, data at EASD Oct 2026; NCT07156539 / NCT07156500 T2DM, not yet recruiting) do not cover Regeneron's ex-China rights. Launch 2030: Phase 2 floor 2026-11 + 34 months = 2029-09; a ~72-week global Phase 3 starting late 2026 plus review also lands 2030. PTRS: Phase 2 base rate (~0.15) raised for a validated incretin class (GLP-1/GIP, cf. tirzepatide) and a positive China Phase 3; held at the engine's +15pp band edge (table 0.18). Peak: no newer single-asset figure found (searched 2026-10-07: Motley Fool 2026-09-22, TIKR, Piper Sandler initiation, BioSpace, Wells Fargo transcript -- none give one); the sell-side CONSENSUS ~USD 285mn quoted by Jefferies (2026-03-10) is retained -- Jefferies argues it is too low but publishes no own figure in that article. A search-engine summary cited '$4-5bn' and 'Jefferies ~$1bn', but the pages (Synapse) attribute $4-5bn to other drugs and no Jefferies $1bn page was found, so neither is used. Rights: ex-mainland China/HK/Macau, in-licensed from Hansoh (effective July 2025; $80mn upfront, up to $1.93bn milestones); Regeneron's 10-Q (Q2 2025) discloses 'a low double-digit royalty on sales' -- royalty_payable 0.12 is an estimate of that undisclosed rate.",
+       "royalty_payable": 0.12
+      }
+     ],
+     "excluded_assets": [
+      {
+       "aliases": [
+        "cenvacibart",
+        "REGN7508",
+        "amrecibart",
+        "REGN9933",
+        "Factor XI"
+       ],
+       "name": "Cenvacibart (REGN7508) and amrecibart (REGN9933), Factor XI antibodies",
+       "reason": "no sourced peak sales (re-checked 2026-10-07; still no single-asset figure for either antibody): broad Phase 3 programme (VTE prophylaxis incl. vs apixaban/enoxaparin NCT07015905 PC 2027-02-20 and NCT07213778/NCT07493304/NCT07697599; AF stroke prevention NCT07626411/NCT07430956; cancer-associated thrombosis NCT07410117; PAD NCT07318610). Evercore ISI calls it 'a substantial blockbuster opportunity' against a ~$20bn anticoagulant market but no single-asset peak figure was found; first pivotal (total knee replacement VTE) results H1 2027; PAD Phase 3 NCT07318610 started 2026-07-10 (Q2 2026 8-K), AF NCT07626411 started 2026-08-10, CAT VTE treatment NCT07493304 started 2026-08-26, VTE prophylaxis NCT07697599 started 2026-09-07"
+      },
+      {
+       "name": "Pozelimab + cemdisiran (REGN3918 + ALN-CC5) combination, PNH and geographic atrophy",
+       "reason": "no sourced peak sales for PNH or GA: Phase 3 PNH NCT05744921 / NCT07154745 / NCT05133531 (vs ravulizumab/eculizumab; results Q4 2026/Q1 2027, company-guided US launch 2028 into a ~$2.5bn worldwide PNH market) and Phase 3 GA NCT06541704 (lead-in cohort read H2 2026). The only published figure (GlobalData ~$1.9bn by 2034, 7MM) is for the combination in myasthenia gravis, which Regeneron did not file, so it is not used"
+      },
+      {
+       "name": "Fianlimab (REGN3767, LAG-3) with cemiplimab",
+       "reason": "no sourced peak sales after the readout: Phase 3 1L melanoma vs pembrolizumab (NCT05352672) missed PFS on 2026-05-16 (HR 0.845, p=0.0627); head-to-head vs Opdualag (NCT06246916, PC 2027-03-22), adjuvant melanoma (NCT05608291) and 1L NSCLC Phase 2/3 (NCT05785767, NCT05800015) continue; no post-failure single-asset peak published"
+      },
+      {
+       "name": "Mibavademab (REGN4461, leptin receptor agonist antibody)",
+       "reason": "no sourced peak sales: Phase 3 generalized lipodystrophy (NCT07220785, PC 2028-05-19) and monogenic obesity (NCT07220772, PC 2027-06-18); orphan-sized markets, no analyst peak found"
+      },
+      {
+       "aliases": [
+        "REGN1908",
+        "REGN1909",
+        "REGN1908-1909",
+        "freneslerbart",
+        "mevonlerbart",
+        "REGN-2Cat",
+        "Fel d 1"
+       ],
+       "name": "REGN1908-1909 Fel d 1 cat-allergy antibodies (freneslerbart, mevonlerbart, REGN-2Cat)",
+       "reason": "no sourced peak sales: second Phase 3 (NCT07675811, allergic conjunctivitis, PC 2029-05-31) started 2026; BMO flags uncertain commercial potential in a generic-dominated allergy market"
+      },
+      {
+       "name": "ALN-CIDEB (CIDEB siRNA, with Alnylam)",
+       "reason": "no sourced peak sales: Phase 3 MASLD (NCT07854782, not yet recruiting, PC 2029-03-03)"
+      },
+      {
+       "name": "Itepekimab (REGN3500, SAR440340, anti-IL-33; Sanofi collaboration)",
+       "reason": "discontinued: Sanofi Q2 2026 release (2026-07-30) states Sanofi and Regeneron will not proceed in COPD after AERIFY-1/2 and all CRSwNP studies are discontinued (Sanofi-sponsored NCT06834347/NCT06834360/NCT07424144 not in the Regeneron registry). Would have been ~50% Regeneron economics under the Sanofi antibody collaboration"
+      },
+      {
+       "name": "Trevogrumab (REGN1033) +/- garetosmab with semaglutide, obesity muscle preservation",
+       "reason": "Phase 2 (COURAGE NCT06299098); no Phase 3 started, no sourced peak sales"
+      },
+      {
+       "name": "Linvoseltamab label expansions (LINKER-MM3 NCT05730036, NCT07222761 with carfilzomib, HR smoldering MM NCT07393282, AL amyloidosis)",
+       "reason": "label expansion of Lynozyfic (approved FDA July 2025)"
+      },
+      {
+       "name": "Odronextamab label expansions (OLYMPIA-1/2/3/4/5: NCT06091254, NCT06097364, NCT06091865, NCT06230224, NCT06149286)",
+       "reason": "label expansion of Ordspono (approved EU Aug 2024; US BLA in R/R FL received a second CRL in Aug 2025 over a third-party Catalent Indiana fill site, no US approval found as of 2026-10)"
+      },
+      {
+       "name": "Dupixent label expansions (EoE NCT07112378, atopic dermatitis OLE NCT02612454)",
+       "reason": "label expansion of Dupixent"
+      },
+      {
+       "name": "Libtayo label expansions (CSCC NCT03969004, NCT06585410)",
+       "reason": "label expansion of Libtayo (adjuvant CSCC approved 2025)"
+      },
+      {
+       "name": "Eylea HD (aflibercept 8 mg) NCT06491914 and pre-filled syringe",
+       "reason": "label expansion / presentation of Eylea HD"
+      },
+      {
+       "name": "Garetosmab FOP (NCT05394116, NCT07559513)",
+       "reason": "approved as Pasatru on 2026-08-19 (adult FOP); remaining studies are label expansion"
+      },
+      {
+       "aliases": [
+        "REGN5713",
+        "REGN5714",
+        "REGN5715",
+        "REGN5713-5715",
+        "Bet v 1"
+       ],
+       "name": "REGN5713-5714-5715 (REGN5713-5715), anti-Bet v 1 antibodies, birch pollen allergy",
+       "reason": "no sourced peak sales. Note: this is the BIRCH-allergy cocktail (Bet v 1), not part of the cat-allergy REGN1908-1909 (Fel d 1) entry. FY2025 10-K: 'Reported that Phase 3 trial in birch allergy met its primary and key secondary endpoints' (NCT06602739, completed 2025-04) and 'Initiated second Phase 3 trial'; that second Phase 3 (NCT07309432) was TERMINATED by 'Sponsor Decision' (started 2026-01-10, ended 2026-05-02, ClinicalTrials.gov); no live Phase 3 in the registry"
+      },
+      {
+       "aliases": [
+        "REGN7257",
+        "IL2Rg"
+       ],
+       "name": "REGN7257 (antibody to IL2Rg), aplastic anemia",
+       "reason": "discontinued: FY2025 10-K lists 'Discontinued study in aplastic anemia'; only trial NCT04409080 (Phase 1/2-type, registered PHASE1) TERMINATED 2024-10-17. Printed near the 10-K table's 'Phase 3' column header, not a Phase 3 programme"
+      },
+      {
+       "aliases": [
+        "REGN7544",
+        "NPR1"
+       ],
+       "name": "REGN7544 (NPR1 antagonist antibody), POTS and sepsis-induced hypotension",
+       "reason": "Phase 2: NCT06593600 (POTS, completed 2026-05-06) and NCT06608901 (sepsis-induced hypotension, completed 2026-02-01); no Phase 3 registered or announced; no sourced peak sales"
+      },
+      {
+       "aliases": [
+        "REGN7999",
+        "TMPRSS6"
+       ],
+       "name": "REGN7999 (antibody to TMPRSS6), iron overload in non-transfusion-dependent beta-thalassemia",
+       "reason": "Phase 2: NCT06421636 (active, not recruiting, PC 2026-12-03); FY2025 10-K lists it in the Phase 2 column for 'Iron overload in beta-thalassemia'; no Phase 3; no sourced peak sales"
+      },
+      {
+       "aliases": [
+        "NTLA-2001",
+        "nex-z",
+        "nexiguran ziclumeran",
+        "MAGNITUDE"
+       ],
+       "name": "Nexiguran ziclumeran (nex-z, NTLA-2001), CRISPR TTR knockout, with Intellia",
+       "reason": "no sourced worldwide single-asset peak sales; partner-led (Intellia is lead party; Regeneron shares ~25% of worldwide development costs and profits). Phase 3 MAGNITUDE ATTR-CM (NCT06128629, PC 2027-12) and MAGNITUDE-2 ATTRv-PN (NCT06672237, PC 2027-07), sponsored by Intellia so not in the Regeneron registry. FDA clinical hold placed 2025-10-29 after a Grade 4 liver event (FY2025 10-K: 'Phase 3 ATTR-CM trial enrollment on FDA clinical hold'); holds lifted in 2026 (MAGNITUDE 2026-03-02). Only figure found: GlobalData ~USD 130mn US-only revenue by 2040 (search snippet, US-only model, not used)"
+      }
+     ],
+     "notes": "Built 2026-10-07; revised 2026-10-07 (v2) after a primary-source check against the FY2025 10-K, Q2 2026 8-K and Q2 2026 call. Regeneron is a Commercial Biotech: marketed products are in approved_portfolio (names only); only unapproved late-stage assets with a sourced single-asset peak are assets. Partner economics: Dupixent (and formerly itepekimab) sit in the Sanofi antibody collaboration -- Regeneron shares global profits (US 50/50, ex-US sliding scale), reported as collaboration revenue; Dupixent is marketed so no economic_share is applied here. Sanofi expanded the alliance on 2026-09-24 with long-acting immunology antibodies (early stage, not late-stage). Libtayo is wholly owned; Kevzara is Sanofi-held (Regeneron royalty). Neither pipeline asset is partnered on profit share (economic_share omitted = 1.0); both carry a licensor royalty (Alnylam on cemdisiran, Hansoh on olatorepatide), each disclosed only as 'low double-digit' and estimated at 0.12. Material changes in the last 6 months: (1) Otarmeni (DB-OTO, lunsotogene parvec) FDA accelerated approval 2026-04-23, provided free in the US; EMA accelerated assessment from May 2026. (2) Fianlimab + cemiplimab missed the PFS primary endpoint vs pembrolizumab in 1L melanoma (2026-05-16). (3) Cemdisiran NDA (gMG) accepted with Priority Review June 2026, FDA action November 2026 (exact day undisclosed). (4) Itepekimab COPD and CRSwNP development discontinued (Sanofi, 2026-07-30). (5) Garetosmab approved as Pasatru for FOP (FDA 2026-08-19). (6) Factor XI Phase 3 programme broadened (AF, PAD, CAT, VTE). (7) Pozelimab + cemdisiran PNH Phase 3 readout Q4 2026/Q1 2027. Odronextamab: US still not approved (second CRL Aug 2025, site inspection); EU-approved as Ordspono, so treated as marketed. Lynozyfic (linvoseltamab) FDA accelerated approval July 2025. Not sourced: single-asset peaks for the Factor XI antibodies, the pozelimab+cemdisiran combination in PNH/GA, fianlimab post-failure, mibavademab, the cat-allergy antibodies and ALN-CIDEB. Figures from search snippets rather than the page: Jefferies ~USD 1bn cemdisiran estimate (not used); Evercore 'blockbuster' Factor XI comment (not used). v2 changes: olatorepatide kept at phase_2 -- Regeneron's own Phase 3 has NOT started (no Regeneron Phase 3 on ClinicalTrials.gov as of 2026-10-07; company guides start before end-2026); the 10-K/call 'Phase 3' wording refers to Hansoh's China trial or the planned programme. Late-stage 10-K codes resolved: REGN7257 discontinued, REGN7544 and REGN7999 Phase 2, REGN5713-5715 is the birch (Bet v 1) cocktail whose second Phase 3 was terminated 2026-05, NTLA-2001 (nex-z) is Intellia-led with clinical holds lifted in 2026. Cemdisiran PDUFA still 'November 2026' with no public day; no decision yet. Factor XI: still no single-asset peak; four more Phase 3s started Jul-Sep 2026."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": null,
+       "indication": "Generalized myasthenia gravis (adult AChR antibody-positive), monotherapy every 12 weeks",
+       "launch_year": 2027,
+       "name": "Cemdisiran (C5 siRNA, ALN-CC5)",
+       "patent_expiry": null,
+       "peak_sales_period": "peak, no year stated (Argus, published 2026-10-01); midpoint of USD 1.5-2.5bn range",
+       "peak_sales_usd": 2000000000.0,
+       "phase": "filed",
+       "ptrs_basis": "Filed-stage base rate (~0.90). NDA accepted by FDA under Priority Review (priority review voucher) with a target action date in November 2026 -- Q2 2026 8-K exhibit 99.1 (https://www.sec.gov/Archives/edgar/data/872589/000087258926000023/exhibit991q22026.htm): 'target action date in November 2026'; re-confirmed as 'November 2026' at the Wells Fargo conference 2026-09-09; the exact day is not public (company, FDA and press checked 2026-10-07), so pdufa_date stays the month-end placeholder 2026-11-30; no FDA decision has occurred as of 2026-10-07; EMA MAA also accepted, EC decision H2 2027. Phase 3 NIMBLE (NCT05070858) met its primary endpoint for cemdisiran monotherapy (Aug 2025); C5 inhibition is a validated mechanism in AChR+ gMG (Soliris/Ultomiris/Zilbrysq). Peak is the midpoint of Argus's $1.5-2.5bn range (quote does not name the drug in the sentence; the article attributes it to cemdisiran with the November 2026 target date). Jefferies earlier estimated ~USD 1bn (search snippet only). Modality: siRNA filed as an NDA, so 5-year NCE exclusivity (small_molecule); the FDA orphan designation (2023-08-28) is for cemdisiran in combination with pozelimab, not monotherapy, so orphan=false. Partner economics: wholly owned by Regeneron since the June 2024 amended Alnylam C5 licence; Regeneron pays Alnylam 'low double-digit royalties' on monotherapy sales -- royalty_payable 0.12 is an estimate of that undisclosed rate.",
+       "ptrs_override": 0.9,
+       "royalty_payable": 0.12,
+       "source": "gemini_accepted"
+      },
+      {
+       "economic_share": null,
+       "indication": "Obesity / chronic weight management (incl. obesity with type 2 diabetes); combination with Praluent planned",
+       "launch_year": 2030,
+       "name": "Olatorepatide (HS-20094, GLP-1/GIP receptor agonist)",
+       "patent_expiry": null,
+       "peak_sales_period": "consensus peak, no year stated (Jefferies note, 2026-03-10)",
+       "peak_sales_usd": 285000000.0,
+       "phase": "phase_2",
+       "ptrs_basis": "Phase stays phase_2 for Regeneron's territory. The FY2025 10-K's 'Phase 3' is Hansoh's China programme ('currently in Phase 3 clinical development in China', https://www.sec.gov/Archives/edgar/data/872589/000087258926000008/regn-20251231.htm); the Q2 2026 call (2026-07-30) says 'We remain on track to commence Phase III studies later this year', and at the Wells Fargo conference (2026-09-09) pivotal obesity and obesity+T2D studies were 'expected to begin before the end of 2026'. ClinicalTrials.gov (queried 2026-10-07, terms olatorepatide / HS-20094) shows NO Regeneron Phase 3: Regeneron studies are Phase 2 only (NCT07431086 US obesity, PC 2026-11-13; NCT07685808 obesity without diabetes, started 2026-07-28, PC 2028-01-21; NCT07830329 hidradenitis suppurativa, not yet recruiting). Hansoh's China Phase 3s (NCT06839664 obesity, completed 2026-01-04, 19% weight loss at 48 weeks, data at EASD Oct 2026; NCT07156539 / NCT07156500 T2DM, not yet recruiting) do not cover Regeneron's ex-China rights. Launch 2030: Phase 2 floor 2026-11 + 34 months = 2029-09; a ~72-week global Phase 3 starting late 2026 plus review also lands 2030. PTRS: Phase 2 base rate (~0.15) raised for a validated incretin class (GLP-1/GIP, cf. tirzepatide) and a positive China Phase 3; held at the engine's +15pp band edge (table 0.18). Peak: no newer single-asset figure found (searched 2026-10-07: Motley Fool 2026-09-22, TIKR, Piper Sandler initiation, BioSpace, Wells Fargo transcript -- none give one); the sell-side CONSENSUS ~USD 285mn quoted by Jefferies (2026-03-10) is retained -- Jefferies argues it is too low but publishes no own figure in that article. A search-engine summary cited '$4-5bn' and 'Jefferies ~$1bn', but the pages (Synapse) attribute $4-5bn to other drugs and no Jefferies $1bn page was found, so neither is used. Rights: ex-mainland China/HK/Macau, in-licensed from Hansoh (effective July 2025; $80mn upfront, up to $1.93bn milestones); Regeneron's 10-Q (Q2 2025) discloses 'a low double-digit royalty on sales' -- royalty_payable 0.12 is an estimate of that undisclosed rate.",
+       "ptrs_override": 0.33,
+       "royalty_payable": 0.12,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn",
+       "USD mn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Regeneron Pharmaceuticals, Inc.",
+     "depreciation_and_amortization": 543700000.0,
+     "market_cap": 76104411840.0,
+     "net_ppe": 5120400000.0,
+     "operating_cash_flow": 4978900000.0,
+     "period": "2025-12-31",
+     "revenue": 14342900000.0,
+     "shares": 103022000.0
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2027,
+       "name": "Cemdisiran (C5 siRNA, ALN-CC5)",
+       "peak": 2.0,
+       "phase": "filed",
+       "ptrs": 0.9
+      },
+      {
+       "launch_year": 2030,
+       "name": "Olatorepatide (HS-20094, GLP-1/GIP receptor agonist)",
+       "peak": 285,
+       "phase": "phase_2",
+       "ptrs": 0.33
+      }
+     ],
+     "built_at": "2026-10-06T17:37:26+00:00",
+     "model": "verified research (owner re-check, primary sources)",
+     "value_usd": 2285000000.0
+    },
+    "primary_sources": {
+     "assets": [
+      {
+       "dates": {},
+       "name": "Cemdisiran (C5 siRNA, ALN-CC5)",
+       "phase": "filed",
+       "stages": {
+        "10-K": "phase_3",
+        "8-K": "filed",
+        "transcript": "phase_3"
+       },
+       "verdict": "corroborated"
+      },
+      {
+       "dates": {},
+       "name": "Olatorepatide (HS-20094, GLP-1/GIP receptor agonist)",
+       "phase": "phase_2",
+       "stages": {
+        "10-K": "phase_3",
+        "transcript": "phase_3"
+       },
+       "verdict": "CHECK: the latest source (transcript) calls it phase_3"
+      }
+     ],
+     "sources": {
+      "10-K": {
+       "chars": 610941,
+       "date": "2026-02-04",
+       "url": "https://www.sec.gov/Archives/edgar/data/872589/000087258926000008/regn-20251231.htm"
+      },
+      "8-K": {
+       "chars": 34577,
+       "date": "2026-07-30",
+       "url": "https://www.sec.gov/Archives/edgar/data/872589/000087258926000023/exhibit991q22026.htm"
+      },
+      "transcript": {
+       "chars": 54216,
+       "date": "2026-07-30",
+       "url": "FMP earnings call 2026 Q2"
+      }
+     },
+     "uncovered_late_stage": []
+    },
+    "secs": null,
+    "value_usd": 2285000000.0
    }
   },
   "RIG": {
