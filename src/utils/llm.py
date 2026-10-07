@@ -128,7 +128,10 @@ def call_llm(
     _bind_kwargs = {}
     if max_tokens is not None:
         _bind_kwargs["max_tokens"] = max_tokens
-    if temperature is not None:
+    # Gemini 3.x: Google asks callers to omit temperature / top_p / top_k and
+    # use the model's own sampling defaults (migration notice, 2026-10).
+    _sampling_ok = model_provider != ModelProvider.GOOGLE
+    if temperature is not None and _sampling_ok:
         _bind_kwargs["temperature"] = temperature
 
     # Sampling controls for prose generation. Only the stylist pass sets
@@ -138,7 +141,7 @@ def call_llm(
     # presence/frequency penalties are an OpenAI-API concept. Anthropic
     # rejects them outright, so passing them through unconditionally would
     # turn a style tweak into a hard failure on the default provider.
-    if top_p is not None:
+    if top_p is not None and _sampling_ok:
         _bind_kwargs["top_p"] = top_p
     _penalty_ok = model_provider in {
         ModelProvider.OPENAI, ModelProvider.AZURE_OPENAI, ModelProvider.DEEPSEEK,

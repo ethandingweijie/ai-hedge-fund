@@ -14,7 +14,12 @@ the reconciliation to FMP revenue caught it.
 Transport is plain REST through `requests`. The google-genai SDK would force
 anyio>=4.8 / httpx>=0.28, and the locked fastapi 0.104.1 pins anyio<4: adding
 it broke Starlette's TestClient locally. The REST endpoint takes the same
-tools / responseSchema / temperature.
+tools / responseSchema / thinkingConfig.
+
+Sampling: no temperature / topP / topK. Google's Gemini 3.x migration notice
+(2026-10) asks callers to drop them so the model uses its own sampling
+defaults; reasoning effort is set with thinkingConfig.thinkingLevel
+("minimal" / "low" / "medium" / "high"), never thinkingBudget.
 
 Not wired into the pipeline: Part E evaluates it first
 (scripts/eval_gemini_valuation.py). Every failure raises a typed error so the
@@ -406,7 +411,7 @@ class GeminiParseError(ValueError):
 
 
 def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded: bool = True,
-             model: Optional[str] = None, temperature: float = 0.1,
+             model: Optional[str] = None,
              thinking: Optional[dict] = None,
              timeout: float = TIMEOUT_S, session=None) -> dict:
     """One Gemini call. With both grounding and a schema it tries a single call;
@@ -414,11 +419,14 @@ def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded:
     schema-only extraction over that text ("two_step").
 
     `thinking` is passed through as generationConfig.thinkingConfig, e.g.
-    {"thinkingLevel": "low"} -- reasoning tokens dominate a grounded call."""
+    {"thinkingLevel": "low"} -- reasoning tokens dominate a grounded call.
+    Omitted, the model default applies. No sampling fields are sent."""
     model = model or model_name()
     started = time.monotonic()
-    gen_cfg: dict = {"temperature": temperature}
+    gen_cfg: dict = {}
     if thinking:
+        if "thinkingBudget" in thinking:
+            raise ValueError("thinkingBudget is retired for Gemini 3.x; pass {'thinkingLevel': ...}")
         gen_cfg["thinkingConfig"] = dict(thinking)
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": gen_cfg}

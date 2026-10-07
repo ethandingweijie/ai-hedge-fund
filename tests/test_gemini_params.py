@@ -221,6 +221,20 @@ def test_thinking_config_is_passed_through_to_both_steps():
                for b in session.bodies)
 
 
+def test_no_sampling_fields_reach_gemini():
+    # Gemini 3.x migration (2026-10): temperature / topP / topK are omitted on every step.
+    refusal = _Resp(400, {"error": {"message": "unsupported combination"}})
+    session = _Session(refusal, _ok("text"), _ok(json.dumps(_sotp())))
+    gp.generate("p", schema=gp.SotpInputs, session=session)
+    assert all(not ({"temperature", "topP", "topK"} & set(b.get("generationConfig") or {}))
+               for b in session.bodies)
+
+
+def test_thinking_budget_is_refused():
+    with pytest.raises(ValueError):
+        gp.generate("p", thinking={"thinkingBudget": 4096}, session=_Session())
+
+
 def test_fenced_json_is_tolerated():
     out = gp.generate("p", schema=gp.SotpInputs, session=_Session(_ok("```json\n" + json.dumps(_sotp()) + "\n```")))
     assert len(out["json"]["segments"]) == 2
