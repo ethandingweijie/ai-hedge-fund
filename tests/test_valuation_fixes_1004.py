@@ -765,3 +765,50 @@ def test_an_adjusted_eps_block_with_its_ratio_builds_the_same_forecast_as_the_re
     assert d._guidance_forecast_payload(b)["share_count_status"] in ("PASS", "n/a")
     bad = {**b, "invariants": [{"id": 3, "ok": False}]}
     assert d._guidance_forecast_payload(bad)["share_count_status"] == "UNRESOLVED"
+
+
+def test_pipeline_tab_lists_assets_phase_peak_pos_and_ties_out():
+    # Owner, 2026-10-07: every drug-developer workbook carries a Pipeline tab; the risk-adjusted PV is a formula
+    # (unrisked PV x PoS) and the totals tie to the engine.
+    formulas = pytest.importorskip("formulas")
+    run = _wbt._run()
+    dr = run["data"]["dcf_range"]["TEST"]
+    assets = [{"name": "Cemdisiran", "indication": "gMG", "phase": "filed", "launch_year": 2027, "peak_sales_usd": 2.0e9,
+               "economic_share": None, "royalty_payable": 0.12, "base_phase_pos": 0.85, "ta_multiplier": 1.0,
+               "effective_pos": 0.85, "years_to_launch": 0.5, "unrisked_pv": 3.0e9, "risk_adjusted_pv": 2.55e9,
+               "ptrs_basis": "filed base rate"},
+              {"name": "Approved X", "indication": "y", "phase": "approved", "launch_year": 2024, "peak_sales_usd": 1.0e9,
+               "base_phase_pos": 1.0, "ta_multiplier": 1.0, "effective_pos": 1.0, "years_to_launch": 0.0,
+               "unrisked_pv": 1.0e9, "risk_adjusted_pv": 1.0e9}]
+    for s_, mult in (("bear", 0.75), ("base", 1.0), ("bull", 1.25)):
+        dr[s_]["rnpv_audit"] = {"assets": assets, "pipeline_pv": 3.55e9, "shares_diluted": 100e6, "n_assets": 2,
+                                "peak_scenario_multiplier": mult}
+        dr[s_]["pipeline_addon"] = {"per_share": 25.5, "legs": ["DCF"]}
+    dr["pipeline_input"] = {"status": "accepted", "as_of": "2026-10-07",
+                            "excluded_assets": [{"name": "Factor XI (REGN7508)", "reason": "no single-asset peak"}],
+                            "approved_portfolio": ["Dupixent"], "assets": [{"name": "Cemdisiran", "phase": "filed", "peak_period": "2031E", "peak_source": "Argus"}],
+                            "primary_sources": [{"name": "Cemdisiran", "verdict": "corroborated"}]}
+    blob = build_workbook(run, "TEST")
+    wb = load_workbook(io.BytesIO(blob))
+    assert "Pipeline" in wb.sheetnames
+    ws = wb["Pipeline"]
+    col_a = [str(c.value) for c in ws["A"] if c.value]
+    assert "Cemdisiran" in col_a and any("REGN7508" in v for v in col_a)
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "pipe.xlsx")
+        Path(p).write_bytes(blob)
+        sol = {k.upper(): v for k, v in formulas.ExcelModel().loads(p).finish().calculate().items()}
+    checks = [c.row for c in ws["L"] if c.value == "Check"]
+    assert len(checks) == 2                                   # pipeline PV and the add-on per share
+    for r in checks:
+        v = sol[f"'[PIPE.XLSX]PIPELINE'!M{r}".upper()]
+        assert abs(getattr(v, "value", v)[0][0]) < 1e-6, r
+
+
+def test_share_count_failure_on_the_streets_adjusted_basis_converts_instead_of_discarding():
+    # BLK (2026-10-07): the research's as-adjusted EPS matches the street; it is a basis, not an error.
+    fwd = {"analyst_count_eps": 18, "_fy1_fy2": {"eps": {"base": (34.0, 36.0)}, "revenue": {"base": (25e9, 27e9)}}}
+    gfx = {**_failing_gf(), "deconstruction": {"eps_T_guided": 35.0}}
+    blk = d._share_count_intervention(_research_block(), gfx, fwd, {}, 22e9, 161e6, 1.16, "last four quarters", "USD")
+    assert blk["_share_count_intervention"]["action"] == "converted_to_reported"
+    assert blk["_eps_basis_ratio"] == 1.16 and blk["estimates"]["base"]["eps_fy2"] == 35.5   # research estimates kept

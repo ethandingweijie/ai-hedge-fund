@@ -4386,7 +4386,18 @@ def _share_count_intervention(block: dict, gf: dict, forward_consensus: Optional
                  and abs(guided / street_T - 1.0) > _SCI_STREET_DIVERGENCE
                  and all(isinstance(x, (int, float)) and x > 0 for x in ((rev12.get("base") or (None, None)) + (eps12.get("base") or (None, None))))
                  and isinstance(revenue_base, (int, float)) and revenue_base > 0)
-    if street_ok:
+    # Case 2 (BLK): the research EPS sits ON the street's figure -- it is the adjusted basis, not an error. It is kept
+    # for the forward legs, and the margin and the check run on its reported equivalent at the measured ratio.
+    adjusted_basis = (n_an >= _SCI_MIN_ANALYSTS and isinstance(street_T, (int, float)) and street_T > 0
+                      and isinstance(guided, (int, float)) and guided > 0
+                      and abs(guided / street_T - 1.0) <= 0.15 and abs(float(ratio) - 1.0) > 0.02)
+    if adjusted_basis:
+        blk["_eps_basis_ratio"] = ratio
+        blk["_eps_adjusted"] = False
+        action = "converted_to_reported"
+        note = (f"the research EPS is on the street's ADJUSTED basis (within 15% of the {n_an}-analyst consensus): kept for "
+                f"the forward legs, its reported equivalent (/{ratio:.2f}, {ratio_basis}) setting the margin and the share count")
+    elif street_ok:
         est = blk.setdefault("estimates", {})
         for sc in ("bear", "base", "bull"):
             r1, r2 = rev12.get(sc) or rev12.get("base")
@@ -7314,6 +7325,15 @@ def _compute_rnpv(
             "years_to_launch":   years_to_launch,
             "undiscounted_cf":   asset_pv / pos if pos > 0 else 0.0,
             "risk_adjusted_pv":  asset_rnpv,
+            # Owner, 2026-10-07: what the workbook's Pipeline tab shows beside the valuation figures.
+            "unrisked_pv":       asset_pv,
+            "launch_year":       asset.get("launch_year"),
+            "patent_expiry":     asset.get("patent_expiry"),
+            "economic_share":    asset.get("economic_share"),
+            "royalty_payable":   asset.get("royalty_payable"),
+            "ptrs_override":     asset.get("ptrs_override"),
+            "ptrs_basis":        asset.get("ptrs_basis"),
+            "source":            asset.get("source"),
         })
 
     if not asset_breakdown:
@@ -13067,6 +13087,25 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             from src.data import industry_inputs as _ii_p
             from src.agents.industry.gemini_params import pipeline_to_engine_assets as _pipe_bridge
             _pipe_e = _ii_p.accepted_entry(ticker, "pipeline")
+            try:
+                _pe_any = _ii_p.entry(ticker, "pipeline")
+                if _pe_any:
+                    _pdx = _pe_any.get("data") or {}
+                    most_recent["_pipeline_input_summary"] = {
+                        "status": "accepted" if _pipe_e else (_ii_p.review_for(ticker, "pipeline", _pe_any) or {}).get("status"),
+                        "as_of": _pdx.get("as_of"), "built_at": _pe_any.get("built_at"), "model": _pe_any.get("model"),
+                        "excluded_assets": [{"name": x.get("name"), "reason": x.get("reason")} for x in (_pdx.get("excluded_assets") or [])
+                                            if isinstance(x, dict)],
+                        "approved_portfolio": [(x.get("name") if isinstance(x, dict) else str(x)) for x in (_pdx.get("approved_portfolio") or [])],
+                        "assets": [{"name": a.get("name"), "phase": a.get("phase"), "indication": a.get("indication"),
+                                    "peak_source": ((a.get("peak_sales") or {}).get("source") or (a.get("peak_sales") or {}).get("url")),
+                                    "peak_period": (a.get("peak_sales") or {}).get("period")}
+                                   for a in (_pdx.get("assets") or []) if isinstance(a, dict)],
+                        "primary_sources": [{"name": x.get("name"), "verdict": x.get("verdict")}
+                                            for x in ((_pe_any.get("primary_sources") or {}).get("assets") or [])],
+                    }
+            except Exception:                              # noqa: BLE001
+                pass
             if _pipe_e:
                 # Owner, 2026-10-05: an accepted input is the owner's answer even when it values nothing
                 # (Clover: no programme with a sourced peak) -- the extractor's assets do not stand in.
@@ -17476,6 +17515,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "effective_weights": blend_breakdown.get("effective_weights"),
                 # Plan IV2: the pipeline rNPV added to each operating leg (per share), when it is an add-on.
                 "pipeline_addon":    (most_recent.get("_pipeline_addon") or {}).get(scenario),
+                # Owner, 2026-10-07: the priced pipeline, asset by asset, for the workbook's Pipeline tab.
+                "rnpv_audit":        (lambda _a: ({k: v for k, v in _a.items()} if _a else None))(
+                                         (most_recent.get("_rnpv_audit") or {}).get(scenario)),
                 # Legs in `method_iv_table` that carry no weight: published as
                 # cross-checks, never as part of the blend.
                 "cross_check_methods": _cross_check_methods(
@@ -19178,6 +19220,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                       "final_profile": profile_name},
             "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
             "street_consensus":      most_recent.get("_street_consensus"),
+            "pipeline_input":        most_recent.get("_pipeline_input_summary"),
             # Trailing dividend per share, in the listing currency (the FX
             # block above converts per-share fields in place). The research
             # rating's 12-month total shareholder return adds it to the target.

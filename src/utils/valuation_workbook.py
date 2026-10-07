@@ -359,6 +359,10 @@ class _Book:
         self.dcf_tab()
         self.multiples_tab()
         self.comps_tab()
+        # Owner, 2026-10-07: every drug-developer valuation carries a Pipeline tab -- the assets, phase, peak sales
+        # and probability of success the rNPV priced (the frontend's pipeline card, in the workbook).
+        if self._has_pipeline():
+            self.pipeline_tab()
         # Owner, 2026-10-03 (SBUX review, A10): a SOTP tab only when a SOTP leg carries weight;
         # an unweighted SOTP (segments) trace used to create the tab and then empty it.
         if any(tr.get("kind") == "sotp" and self.in_blend(name) for sc in SCENARIOS
@@ -387,6 +391,154 @@ class _Book:
         buf = io.BytesIO()
         self.wb.save(buf)
         return buf.getvalue()
+
+    def _has_pipeline(self) -> bool:
+        return bool(any(((self.scen(s).get("rnpv_audit") or {}).get("assets")) for s in SCENARIOS)
+                    or (self.dr or {}).get("pipeline_input")
+                    or ((self.data.get("pipeline_assets") or {}).get(self.ticker)))
+
+    def pipeline_tab(self) -> None:
+        """Pipeline assets as priced: per asset the phase, launch, peak sales (company share), probability of
+        success and risk-adjusted PV (= unrisked PV x PoS, a formula), the totals checked against the engine;
+        then the input's status, its peak-sales sources, exclusions and the primary-source check."""
+        sh = self.sheet("Pipeline", "Drug pipeline: assets, phase, peak sales, probability of success, risk-adjusted value")
+        pin = (self.dr or {}).get("pipeline_input") or {}
+        base = self.scen("base")
+        aud = base.get("rnpv_audit") or {}
+        addon = base.get("pipeline_addon") or {}
+        _leg = ((base.get("leg_inputs") or {}).get("rNPV (Pipeline)") or {})
+        status = pin.get("status") or ("extractor (no owner input on record)" if not aud else "priced")
+        role = ("priced as an add-on to every operating leg" if addon.get("per_share") else
+                "priced as the rNPV leg" if _leg.get("value") is not None else
+                "NOT priced on this run (quarantined until an input is accepted, or not used by this profile)")
+        sh.title("Pipeline assets (rNPV)", f"Input status: {status}" + (f"; as of {pin.get('as_of')}" if pin.get("as_of") else "")
+                 + f"; {role}")
+        r = 4
+        assets = aud.get("assets") or []
+        if assets:
+            sh.section(r, "Priced assets (base scenario, company share)", 14); r += 1
+            sh.header(r, ["Asset", "Indication", "Phase", "Launch", "Peak sales (m)", "Economic share", "Royalty payable",
+                          "Phase PoS", "Area multiplier", "PoS used", "Years to launch", "Unrisked PV (m)",
+                          "Risk-adjusted PV (m)", "PoS basis"]); r += 1
+            first = r
+            for a in assets:
+                sh.put(r, 1, a.get("name")).font = Font(color=BLACK)
+                sh.put(r, 2, a.get("indication") or "").font = Font(color=BLACK)
+                sh.put(r, 3, a.get("phase") or "").font = Font(color=BLACK)
+                sh.put(r, 4, _num(a.get("launch_year")), "0")
+                sh.put(r, 5, (_num(a.get("peak_sales_usd")) or 0.0) / 1e6, MIL)
+                sh.put(r, 6, _num(a.get("economic_share")), PCT)
+                sh.put(r, 7, _num(a.get("royalty_payable")), PCT)
+                sh.put(r, 8, _num(a.get("base_phase_pos")), PCT)
+                sh.put(r, 9, _num(a.get("ta_multiplier")), "0.00")
+                sh.put(r, 10, _num(a.get("effective_pos")), PCT)
+                sh.put(r, 11, _num(a.get("years_to_launch")), "0.0")
+                _upv = _num(a.get("unrisked_pv"))
+                if _upv is None:
+                    _upv = _num(a.get("undiscounted_cf"))
+                sh.put(r, 12, (_upv or 0.0) / 1e6, MIL)
+                sh.put(r, 13, f"=L{r}*J{r}", MIL)
+                _pb = a.get("ptrs_basis") or ("cited PTRS" if a.get("ptrs_override") else "phase x therapeutic-area table")
+                sh.put(r, 14, str(_pb)[:120]).font = Font(color=BLACK)
+                r += 1
+            last = r - 1
+            sh.label(r, 12, "Pipeline PV", bold=True)
+            sh.put(r, 13, f"=SUM(M{first}:M{last})", MIL, bold=True); _tot = r; r += 1
+            sh.label(r, 12, "Engine pipeline PV")
+            sh.put(r, 13, (_num(aud.get("pipeline_pv")) or 0.0) / 1e6, MIL); _eng = r; r += 1
+            sh.label(r, 12, "Check")
+            sh.put(r, 13, f"=M{_tot}-M{_eng}", MIL); r += 1
+            _shs = _num(aud.get("shares_diluted"))
+            if addon.get("per_share") is not None and _shs:
+                # the add-on prices the UNAPPROVED assets only: an approved product's sales are in the operating legs
+                _unap = [i for i, a in enumerate(assets) if a.get("phase") != "approved"]
+                _cells = "+".join(f"M{first + i}" for i in _unap) or "0"
+                r += 1
+                sh.label(r, 1, "Add-on per diluted share (unapproved assets / diluted shares)", bold=True)
+                sh.label(r, 4, "Diluted shares (m)")
+                sh.put(r, 5, _shs / 1e6, MIL)
+                sh.put(r, 13, f"=({_cells})/E{r}", NUM, bold=True); _ps = r; r += 1
+                sh.label(r, 12, "Engine add-on")
+                sh.put(r, 13, _num(addon.get("per_share")), NUM); r += 1
+                sh.label(r, 12, "Check")
+                sh.put(r, 13, f"=M{_ps}-M{r - 1}", NUM); r += 1
+                sh.note(r, 1, "The add-on is added to each operating leg (" + ", ".join(addon.get("legs") or [])
+                        + "); approved assets are listed but not added, their sales being in the revenue the operating "
+                          "legs price."); r += 1
+            elif _leg.get("value") is not None and _shs:
+                r += 1
+                sh.section(r, "rNPV leg: equity bridge (millions)", 6); r += 1
+                _b0 = r
+                for lab, v in (("Pipeline PV", f"=M{_tot}"), ("Add: cash", (_num(aud.get("cash")) or 0.0) / 1e6),
+                               ("Less: debt", -(_num(aud.get("debt")) or 0.0) / 1e6),
+                               ("Less: PV of future R&D (the valued assets' share)", -(_num(aud.get("future_rd_pv")) or 0.0) / 1e6),
+                               ("Less: PV of G&A to launch", -(_num(aud.get("future_ga_pv")) or 0.0) / 1e6),
+                               ("Less: minority and preferred", -(_num(aud.get("minority_and_preferred")) or 0.0) / 1e6)):
+                    sh.label(r, 1, lab, indent=1)
+                    sh.put(r, 2, v, MIL); r += 1
+                sh.label(r, 1, "Equity value", bold=True)
+                sh.put(r, 2, f"=SUM(B{_b0}:B{r - 1})", MIL, bold=True); _eq = r; r += 1
+                sh.label(r, 1, "Diluted shares (m)")
+                sh.put(r, 2, _shs / 1e6, MIL); r += 1
+                sh.label(r, 1, "rNPV per share", bold=True)
+                sh.put(r, 2, f"=MAX(B{_eq}/B{r - 1},0)", NUM, bold=True); _iv = r; r += 1
+                sh.label(r, 1, "Engine rNPV leg")
+                sh.put(r, 2, _num(_leg.get("value")), NUM); r += 1
+                sh.label(r, 1, "Check")
+                sh.put(r, 2, f"=B{_iv}-B{r - 1}", NUM); r += 1
+            r += 1
+            sh.section(r, "Pipeline PV by scenario (peak sales scaled per scenario)", 4); r += 1
+            sh.header(r, ["Scenario", "Peak multiplier", "Assets", "Pipeline PV (m)"]); r += 1
+            for sc in SCENARIOS:
+                a_ = self.scen(sc).get("rnpv_audit") or {}
+                if not a_:
+                    continue
+                sh.label(r, 1, sc)
+                sh.put(r, 2, _num(a_.get("peak_scenario_multiplier")), "0.00")
+                sh.put(r, 3, _num(a_.get("n_assets")), "0")
+                sh.put(r, 4, (_num(a_.get("pipeline_pv")) or 0.0) / 1e6, MIL)
+                r += 1
+        else:
+            ext = (self.data.get("pipeline_assets") or {}).get(self.ticker) or []
+            sh.note(r, 1, "No asset was priced on this run. The research's pipeline, for reference (not valued):"); r += 1
+            sh.header(r, ["Asset", "Indication", "Phase", "Launch", "Peak sales (m)", "Evidence"]); r += 1
+            for a in ext:
+                sh.put(r, 1, a.get("name")).font = Font(color=BLACK)
+                sh.put(r, 2, a.get("indication") or "").font = Font(color=BLACK)
+                sh.put(r, 3, a.get("phase") or "").font = Font(color=BLACK)
+                sh.put(r, 4, _num(a.get("launch_year")), "0")
+                sh.put(r, 5, (_num(a.get("peak_sales_usd")) or 0.0) / 1e6, MIL)
+                sh.put(r, 6, str(a.get("evidence") or "")[:140]).font = Font(color=BLACK)
+                r += 1
+        if pin.get("assets"):
+            r += 1
+            sh.section(r, "Peak-sales sources (owner-reviewed input)", 4); r += 1
+            sh.header(r, ["Asset", "Phase", "Peak period", "Source"]); r += 1
+            for a in pin["assets"]:
+                sh.put(r, 1, a.get("name")).font = Font(color=BLACK)
+                sh.put(r, 2, a.get("phase") or "").font = Font(color=BLACK)
+                sh.put(r, 3, str(a.get("peak_period") or "")).font = Font(color=BLACK)
+                sh.put(r, 4, str(a.get("peak_source") or "")[:160]).font = Font(color=BLACK)
+                r += 1
+        if pin.get("excluded_assets"):
+            r += 1
+            sh.section(r, "Excluded programmes (not valued) and why", 2); r += 1
+            for x in pin["excluded_assets"]:
+                sh.put(r, 1, x.get("name")).font = Font(color=BLACK)
+                sh.put(r, 2, str(x.get("reason") or "")[:200]).font = Font(color=BLACK)
+                r += 1
+        if pin.get("approved_portfolio"):
+            r += 1
+            sh.label(r, 1, ("Marketed products (in the operating legs' revenue): "
+                            + ", ".join(str(x) for x in pin["approved_portfolio"]))[:900])
+            r += 1
+        if pin.get("primary_sources"):
+            r += 1
+            sh.section(r, "Primary-source check (10-K, earnings 8-K, earnings call)", 2); r += 1
+            for x in pin["primary_sources"]:
+                sh.put(r, 1, x.get("name")).font = Font(color=BLACK)
+                sh.put(r, 2, str(x.get("verdict") or "")).font = Font(color=BLACK)
+                r += 1
 
     def _has_bank(self) -> bool:
         return any(tr.get("kind") == "ggm" for s in SCENARIOS
