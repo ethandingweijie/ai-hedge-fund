@@ -1902,6 +1902,9 @@ class _Book:
             r += 1
             sh.label(r, 1, f"“{g.get('quote')}”" + (f" — {g.get('source')}" if g.get("source") else ""), indent=1)
         r += 2
+        # Plan E9 (owner, 2026-10-07): guidance that is not company-level, said beside it.
+        for _chk in (ge.get("scope_checks") or []):
+            sh.note(r, 1, f"SCOPE CHECK ({_chk.get('check')}): {_chk.get('detail')}"); r += 1
         sh.section(r, f"Consensus quoted by the research ({fy1})", 6); r += 1
         sh.label(r, 1, "Revenue growth"); sh.put(r, 2, _num(c.get("revenue_growth_fy1")), PCT); r += 1
         sh.label(r, 1, "EPS"); sh.put(r, 2, _num(c.get("eps_fy1")), NUM); r += 1
@@ -2923,6 +2926,15 @@ class _Book:
                           "long-term marketable securities; regulated or float cash), by leases, and by currency; only the "
                           "first prices the valuation. The Model tab's net debt is a PROJECTION (cash builds over the "
                           "forecast years), and the Summary metrics row is the feed's FY-end figure, shown for reference."); r += 2
+        # Plan E10 (owner, 2026-10-07): what the price implies.
+        _rd = (self.dr or {}).get("reverse_dcf") or {}
+        if _rd.get("solved"):
+            sh.section(r, "Reverse DCF (what the price implies)", 6); r += 1
+            for lab, v, fmt in (("Price", _rd.get("spot"), NUM), ("Implied 10-year revenue CAGR", _rd.get("implied_cagr10"), PCT),
+                                ("Model's 10-year revenue CAGR", _rd.get("model_cagr10"), PCT),
+                                ("Growth shift on every year (margins and discount rate held)", _rd.get("growth_shift"), PCT)):
+                sh.label(r, 1, lab, indent=1); sh.put(r, 2, _num(v), fmt); r += 1
+            r += 1
         sh.section(r, "Comps (peer multiples used)", 6); r += 1
         _mu = ((self.dr.get("multiples_used") or {}).get("fields") or {})
         _mu_key = {"EV/EBITDA": "ev_ebitda", "P/E": "pe", "EV/Revenue": "ev_revenue", "P/B": "pb",

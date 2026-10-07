@@ -177,6 +177,73 @@ _DDM_MIN_YIELD = 0.02
 #: Plan E3 (owner, 2026-10-07; GILD / AMGN reviews): a dividend model prices only the dividend. When buybacks are at
 #: least this share of the cash returned, it prices a fraction of the payout -- its weight rolls into the DCF legs.
 _DDM_MAX_BUYBACK_SHARE = 0.30
+#: Plan E5 (owner, 2026-10-07): weighted legs further apart than this factor are flagged as disagreeing.
+_LEG_DISPERSION_MAX = 2.5
+
+
+def _reverse_dcf(dcf_kwargs: dict, spot: Optional[float], lo: float = -0.30, hi: float = 0.60) -> Optional[dict]:
+    """Plan E10 (owner, 2026-10-07; GILD review): the uniform shift to every year's revenue growth that makes the DCF
+    equal the price, by bisection on _project_dcf with the run's own inputs. Returns the shift and the implied 10-year
+    revenue CAGR beside the model's; None when the price is out of the searchable range or inputs are missing."""
+    try:
+        if not spot or spot <= 0:
+            return None
+        base = list(dcf_kwargs.get("growth_schedule") or [dcf_kwargs.get("growth_rate", 0.0)] * _PROJECTION_YEARS)
+
+        def iv_at(shift):
+            kw = dict(dcf_kwargs)
+            kw["growth_schedule"] = [float(x) + shift for x in base]
+            return _project_dcf(**kw)[0]
+
+        f_lo, f_hi = iv_at(lo) - spot, iv_at(hi) - spot
+        if f_lo * f_hi > 0:
+            return {"spot": spot, "solved": False, "note": "the price is outside a -30pp .. +60pp growth shift"}
+        a, b = lo, hi
+        for _ in range(60):
+            m = (a + b) / 2.0
+            fm = iv_at(m) - spot
+            if abs(fm) < 1e-6 * spot:
+                break
+            if (fm < 0) == (f_lo < 0):
+                a, f_lo = m, fm
+            else:
+                b = m
+
+        def cagr(sched):
+            c = 1.0
+            for x in sched:
+                c *= (1.0 + float(x))
+            return c ** (1.0 / len(sched)) - 1.0
+        return {"spot": spot, "solved": True, "growth_shift": round(m, 5),
+                "implied_cagr10": round(cagr([float(x) + m for x in base]), 5), "model_cagr10": round(cagr(base), 5)}
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _peer_fwd_ev_ebitda(peer) -> Optional[float]:
+    """Plan E6 (owner, 2026-10-07; GILD review): the forecast's terminal-multiple check compares against the peers'
+    FORWARD (NTM) EV/EBITDA median where there is one -- trailing medians carry one-off charges (MRK, ABBV)."""
+    if not isinstance(peer, dict):
+        return None
+    v = peer.get("ev_ebitda_ntm")
+    return v if isinstance(v, (int, float)) and v > 0 else peer.get("ev_ebitda")
+
+
+def _leg_dispersion(effective_weights, method_iv_table) -> Optional[dict]:
+    """Highest / lowest positive value among the legs that carry weight, with their names; None if fewer than two."""
+    try:
+        vals = []
+        for w in effective_weights or []:
+            name = w.get("value_key") or w.get("method")
+            v = (method_iv_table or {}).get(name)
+            if isinstance(v, (int, float)) and v > 0 and float(w.get("weight") or 0) > 0:
+                vals.append((float(v), name))
+        if len(vals) < 2:
+            return None
+        lo, hi = min(vals), max(vals)
+        return {"ratio": round(hi[0] / lo[0], 3), "hi": hi[0], "hi_leg": hi[1], "lo": lo[0], "lo_leg": lo[1]}
+    except Exception:                                      # noqa: BLE001
+        return None
 
 #: Plan I14 (REGN review, 2026-10-07): a drug's revenue after loss of exclusivity, as the CUMULATIVE share of its
 #: pre-LOE revenue lost by year k (k = 1 is the LOE year, partial). Small molecules: generics take 80-90% within
@@ -339,13 +406,24 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
         if further > 0:
             lost_after += (p_["share"] * further * (1.0 - _repl)
                            * ((1.0 + tgr) / (1.0 + w)) ** max(1, p_["loe_year"] - end_yr))
-    # Owner, 2026-10-07 (product build): each drug's path as a share of the un-eroded company revenue.
+    # Owner, 2026-10-07 (product build): each drug's path as a share of the un-eroded company revenue. Plan I4 (AMGN
+    # review): a drug ALREADY eroding (Prolia / Xgeva, LOE 2025; EYLEA 2 mg) is shown eroding from the base year, frozen
+    # at its FY0 revenue -- not growing through the guided years; the remainder line absorbs the difference, so the
+    # total (and the DCF) are unchanged.
+    def _display_path(p_):
+        if p_["loe_year"] <= fy0_year + covered_years:
+            k0 = fy0_year - p_["loe_year"] + 1
+            s0 = max(1e-9, 1.0 - _loe_cum_loss(p_["modality"], k0))
+            return [p_["share"] / _U[t - 1] * (1.0 - _loe_cum_loss(p_["modality"], fy0_year + t - p_["loe_year"] + 1)) / s0
+                    for t in range(1, n + 1)]
+        return [p_["share"] if t <= covered_years else path(p_, t) for t in range(1, n + 1)]
+
     try:
         from src.agents.analysis.product_build import revenue_type as _rt
         _src = {str(d.get("name")): d for d in drugs}
         drug_paths = [{"name": p_["name"], "loe_year": p_["loe_year"], "share": p_["share"],
                        "type": _rt(_src.get(str(p_["name"])) or {}),
-                       "path": [p_["share"] if t <= covered_years else path(p_, t) for t in range(1, n + 1)]} for p_ in parts]
+                       "path": _display_path(p_)} for p_ in parts]
     except Exception:                                      # noqa: BLE001
         drug_paths = []
     return {"growth_schedule": sched, "index": [round(x, 6) for x in index], "terminal_replacement": _repl,
@@ -4562,11 +4640,57 @@ _SECONDARY_SOURCE_MARKERS = ("tikr", "mordor", "simply wall", "simplywall", "mar
                              "marketscreener", "gurufocus", "wallstreetzen")
 
 
-def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict]) -> Optional[dict]:
+_GUIDANCE_SCALE = {"bn": 1e9, "billion": 1e9, "b": 1e9, "m": 1e6, "mn": 1e6, "million": 1e6, "k": 1e3, "thousand": 1e3}
+
+
+def _guidance_scope_checks(est: Optional[dict], revenue_last: Optional[float], forward_consensus: Optional[dict],
+                           revenue_base: Optional[float]) -> list[dict]:
+    """Plan E9 (owner, 2026-10-07; GILD review): guidance that is not company-level, said so.
+
+    * a guided REVENUE level below 30% or above 3x the company's last revenue is a segment / product figure (GILD: a
+      "$1bn" Yeztugo target read as company revenue "1 / 1 / 1 USD bn");
+    * a research FY+1 revenue growth more than 8 points from the street's (5+ analysts) may be a segment's growth
+      labelled as the company's (GILD: HIV-only 9-10% as total-company guidance)."""
+    out: list[dict] = []
+    if not isinstance(est, dict):
+        return out
+    try:
+        rng = ((est.get("guidance") or {}).get("revenue") or {})
+        mid = rng.get("mid") if isinstance(rng.get("mid"), (int, float)) else (
+            ((rng.get("low") or 0) + (rng.get("high") or 0)) / 2.0 if isinstance(rng.get("low"), (int, float)) and isinstance(rng.get("high"), (int, float)) else None)
+        sc = _GUIDANCE_SCALE.get(str(rng.get("scale") or "").strip().lower(), 1.0)
+        if isinstance(mid, (int, float)) and mid > 0 and isinstance(revenue_last, (int, float)) and revenue_last > 0:
+            lvl = float(mid) * sc
+            ratio = lvl / float(revenue_last)
+            if ratio < 0.30 or ratio > 3.0:
+                out.append({"check": "guided revenue level", "ok": False,
+                            "detail": f"guided revenue {lvl / 1e9:,.2f}bn is {ratio:.0%} of the last reported {float(revenue_last) / 1e9:,.2f}bn: "
+                                      "a segment or product figure (or a unit error), not company revenue -- shown, not used"})
+    except Exception:                                      # noqa: BLE001
+        pass
+    try:
+        g_res = (((est.get("estimates") or {}).get("base") or {}).get("revenue_growth_fy1"))
+        v1 = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {}).get("base", (None, None))[0]
+        n_an = (forward_consensus or {}).get("analyst_count_revenue") or 0
+        if (isinstance(g_res, (int, float)) and isinstance(v1, (int, float)) and isinstance(revenue_base, (int, float))
+                and revenue_base > 0 and n_an >= 5):
+            g_st = float(v1) / float(revenue_base) - 1.0
+            if abs(float(g_res) - g_st) > 0.08:
+                out.append({"check": "research growth vs street", "ok": False,
+                            "detail": f"research FY+1 revenue growth {float(g_res):+.1%} vs street {g_st:+.1%} ({n_an} analysts): "
+                                      "check whether the research quoted a segment's growth as the company's"})
+    except Exception:                                      # noqa: BLE001
+        pass
+    return out
+
+
+def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict],
+                                scope_checks: Optional[list] = None) -> Optional[dict]:
     """What the report shows: the research block plus how (or why not) the DCF used it."""
     if not est or not isinstance(est, dict):
         return None
     out = {k: v for k, v in est.items() if not k.startswith("_")}
+    out["scope_checks"] = list(scope_checks or [])
     out["model"] = est.get("_model")
     # Owner, 2026-10-04 (plan 1F.5): grade the guidance's sources. A filing, results release or the
     # company's own IR is primary; a data aggregator or market-research vendor (TIKR, Mordor) is
@@ -8451,7 +8575,7 @@ def _compute_method_value(
         elif isinstance(peer.get("growth_avg"), (int, float)) and peer["growth_avg"] > 0:
             base_mult = base_mult / (1.0 + float(peer["growth_avg"]))
             _ev_rev_basis = f"{_ev_rev_basis}; forward basis (trailing / (1 + peer growth {float(peer['growth_avg']):.1%}))"
-        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer, most_recent.get("_forecast_cagr5"))
         _gp_used = _fga if _fga is not None else growth_premium
         _margin_adj, _margin_note = 1.0, None
         try:
@@ -8696,7 +8820,7 @@ def _compute_method_value(
         if eps_fwd is None or eps_fwd <= 0:
             return None
         _fwd_pe, _fwd_pe_src = _forward_peer_multiple(peer, "pe", 18.0)
-        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer, most_recent.get("_forecast_cagr5"))
         _gp_used = _fga if _fga is not None else growth_premium
         mult = _fwd_pe * _gp_used * sbc_pe_discount * _own_disc
         if reported_currency == "CNY":
@@ -8724,7 +8848,7 @@ def _compute_method_value(
         if ebitda_fwd is None or ebitda_fwd <= 0 or shares <= 0:
             return None
         _fwd_ev, _fwd_ev_src = _forward_peer_multiple(peer, "ev_ebitda", 12.0)
-        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer)
+        _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer, most_recent.get("_forecast_cagr5"))
         _gp_used = _fga if _fga is not None else growth_premium
         mult = _fwd_ev * _gp_used
         if reported_currency == "CNY":
@@ -9868,10 +9992,28 @@ _FWD_GROWTH_BOUNDS = (0.85, 1.30)   # the owner's growth-premium band (Wave 7), 
 _EV_REV_MARGIN_BOUNDS = (0.25, 1.25)
 
 
-def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict) -> tuple[Optional[float], str]:
+def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict,
+                               forecast_cagr: Optional[float] = None) -> tuple[Optional[float], str]:
     """Plan E23: ((1 + company forward revenue growth) / (1 + peer revenue growth)) ** _FWD_GROWTH_YEARS,
     bounded -- a forward multiple already prices the peers' next year, so only the growth GAP over the
-    next years moves it. (None, reason) when either growth is missing."""
+    next years moves it. (None, reason) when either growth is missing.
+
+    Plan E7 (owner, 2026-10-07; GILD review): a PREMIUM is capped at 1.0 when the model's own five-year revenue path
+    grows no faster than the peers -- a multiple must not pay for growth the DCF says does not come (GILD: x1.14 on
+    the P/E while the forecast falls in years 6-9)."""
+    f, note = _forward_growth_adjustment_raw(forward_consensus, peer)
+    try:
+        pg = peer.get("growth_avg")
+        if (f is not None and f > 1.0 and isinstance(forecast_cagr, (int, float)) and isinstance(pg, (int, float))
+                and forecast_cagr <= float(pg)):
+            return 1.0, (note + f"; premium capped at 1.00x: the model's own 5-year revenue CAGR {forecast_cagr:+.1%} "
+                                f"does not exceed the peers' {float(pg):+.1%}")
+    except Exception:  # noqa: BLE001
+        pass
+    return f, note
+
+
+def _forward_growth_adjustment_raw(forward_consensus: Optional[dict], peer: dict) -> tuple[Optional[float], str]:
     try:
         v1, v2 = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {}).get("base") or (None, None)
         pg = peer.get("growth_avg")
@@ -12736,6 +12878,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"{most_recent.get('_balance_sheet_period')} "
                 f"({_bs_step['delta_ratio']:+.0%}, source ccy pre-FX) — "
                 f"quarterly override APPLIED, disclosure only, no gate fired")
+            # Plan E8 (owner, 2026-10-07; GILD review): net debt that jumps since the year end usually funded an
+            # acquisition. The debt is deducted; what it bought is not in the year-end statements the operating
+            # legs price -- say so, so the owner can add the acquired assets (pipeline input, bridge item).
+            try:
+                _drop = float(_bs_step["annual_net_cash"]) - float(_bs_step["quarterly_net_cash"])
+                _rev_src = float(most_recent.get("revenue") or 0.0)
+                if _drop > 0 and _rev_src > 0 and _drop >= 0.15 * _rev_src:
+                    ticker_forward_flags.append(
+                        f"UNVALUED ACQUISITION? Net debt rose {_drop / 1e9:,.1f}bn ({_drop / _rev_src:.0%} of revenue) since "
+                        f"the {most_recent.get('period')} year end. The debt is deducted, but anything it bought (an acquired "
+                        "pipeline, an in-process R&D write-off, a new business) is not in the statements the operating legs "
+                        "price: add it as a pipeline input or bridge item, or treat the debt as unexplained.")
+            except Exception:                              # noqa: BLE001
+                pass
 
         # ── Normalized (cycle-adjusted) earnings for P/E (norm), EV/EBITDA (norm) ──
         # Damodaran-style: mean(field / revenue) over last 5 yrs × current revenue.
@@ -16024,7 +16180,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         "history": _gfm.history_ratios(series, _gfm.load_cfg()),
                         "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0),
                                    "spot": ((resolved_mcap / shares) if (resolved_mcap and shares) else None),
-                                   "peer_ev_ebitda": _peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                                   "peer_ev_ebitda": _peer_fwd_ev_ebitda(_peer_for_gf),
                                    "market_growth": _peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                                    "profile_name": profile_name, "sector": sector, "fcf_margin_base": fcf_margin_base,
                                    "fx_to_valuation": float(fx_rate or 1.0),
@@ -16051,6 +16207,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         pass
                 except Exception:                          # noqa: BLE001
                     _fc_ctx = None
+            if scenario == "base" and _guid_est and "_guidance_scope" not in most_recent:
+                try:
+                    most_recent["_guidance_scope"] = _guidance_scope_checks(
+                        _guid_est, (series[-1].get("revenue") if series else None), forward_consensus, revenue_base)
+                    for _sc_chk in most_recent["_guidance_scope"]:
+                        ticker_forward_flags.append(f"Guidance scope ({_sc_chk['check']}): {_sc_chk['detail']}")
+                except Exception:                          # noqa: BLE001
+                    most_recent["_guidance_scope"] = []
             if _guid_est and _guidance_channel_enabled() and not _bank_models:
                 try:
                     from src.agents.analysis import guidance_forecast as _gfm
@@ -16058,7 +16222,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _guid_est, scenario=scenario, series=series, profile_name=profile_name, sector=sector,
                         wacc=wacc, tgr=tgr, shares=shares, net_debt=net_debt,
                         spot=((resolved_mcap / shares) if (resolved_mcap and shares) else None),   # `market_cap` was never a name here: NameError on every build (2026-10-03)
-                        peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                        peer_ev_ebitda=_peer_fwd_ev_ebitda(_peer_for_gf),
                         market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                         engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
                         overrides=_eo_engine_ov or None,
@@ -16085,7 +16249,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 _sci_blk, scenario=scenario, series=series, profile_name=profile_name, sector=sector,
                                 wacc=wacc, tgr=tgr, shares=shares, net_debt=net_debt,
                                 spot=((resolved_mcap / shares) if (resolved_mcap and shares) else None),
-                                peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                                peer_ev_ebitda=_peer_fwd_ev_ebitda(_peer_for_gf),
                                 market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
                                 engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
                                 overrides=_eo_engine_ov or None,
@@ -16115,6 +16279,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 f"{_sci['note']}. Check after: {_sci.get('check_after', 'not rebuilt')}")
                 except Exception as _sci_exc:              # noqa: BLE001
                     ticker_forward_flags.append(f"Share-count intervention did not run ({type(_sci_exc).__name__}: {str(_sci_exc)[:120]})")
+                # Plan E5 (owner, 2026-10-07): a forecast whose share-count check is still failing after the
+                # intervention is not published as a clean valuation -- the run says so on the front page.
+                try:
+                    if _gf and scenario == "base":
+                        _i3f = next((i for i in _gf.get("invariants") or [] if i.get("id") == 3), None)
+                        if _i3f and _i3f.get("ok") is False:
+                            ticker_forward_flags.append("DEGRADED: the forecast's share-count check is unresolved ("
+                                                        + str(_i3f.get("detail"))[:160] + "); the Forward P/E prices the "
+                                                        "forecast's own EPS and the valuation should be read with that caveat")
+                except Exception:                          # noqa: BLE001
+                    pass
             if _gf:
                 _growth_schedule = _gf["growth_schedule"]
                 _gf_margin_sched = _gf["fcf_margin_schedule"]
@@ -16483,6 +16658,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 + (f". CAVEAT: {_loe_e['caveat']}" if _loe_e.get("caveat") else ""))
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
+            if scenario == "base" and _growth_schedule:
+                try:
+                    # Like for like with the peers' growth: the forecast's own five-year CAGR, not the ten-year
+                    # path that fades to the terminal rate by construction (that capped every fast grower: MELI -9%).
+                    _cg, _h5 = 1.0, _growth_schedule[:5]
+                    for _gx in _h5:
+                        _cg *= (1.0 + float(_gx))
+                    most_recent["_forecast_cagr5"] = _cg ** (1.0 / len(_h5)) - 1.0
+                except Exception:                          # noqa: BLE001
+                    pass
             # Owner, 2026-10-07: product-level revenue (partnership lines tagged) and a line-by-line cost build for
             # every drug developer -- a decomposition of the forecast the DCF runs on, tying to it.
             if scenario == "base" and is_biopharma_sector(sector) and _gf and _gf.get("rows"):
@@ -16537,6 +16722,25 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "guidance_channel": _gc,          # None when guidance did not set years 1–E
                 "guidance_forecast": ({k: v for k, v in _gf.items() if k not in ("rows", "curve")} if _gf else None),
             }
+            # Plan E10 (owner, 2026-10-07): what the price implies -- the growth the DCF needs to reach spot.
+            if scenario == "base":
+                try:
+                    _rdcf = _reverse_dcf(dict(
+                        revenue_base=revenue_base, fcf_margin_base=fcf_margin_base, growth_rate=g, margin_delta_per_year=0.0,
+                        wacc=wacc, tgr=tgr, fcf_floor=fcf_floor, net_debt=net_debt, shares=shares,
+                        minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
+                        growth_schedule=_growth_schedule, wacc_schedule=_wacc_schedule, margin_delta_absolute=md_abs,
+                        margin_schedule=_gf_margin_sched, timing=_dcf_timing_ctx, terminal_multiplier=_loe_tv_mult),
+                        (resolved_mcap / shares) if (resolved_mcap and shares) else None)
+                    if _rdcf:
+                        most_recent["_reverse_dcf"] = _rdcf
+                        if _rdcf.get("solved"):
+                            ticker_forward_flags.append(
+                                f"Reverse DCF: the price {_rdcf['spot']:,.2f} implies a 10-year revenue CAGR of "
+                                f"{_rdcf['implied_cagr10']:+.1%} against the model's {_rdcf['model_cagr10']:+.1%} "
+                                f"({_rdcf['growth_shift'] * 1e4:+,.0f}bp a year on every year, margins and discount rate held)")
+                except Exception:                          # noqa: BLE001
+                    pass
 
             # ── Reinvestment disclosure, OBSERVATION-ONLY ─────────────────
             # Computed from the SAME helper the projector would have used, on
@@ -17589,6 +17793,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _eps_margin = _ni_margin if (_ni_margin and 0 < _ni_margin < 0.80) else fcf_margin_base
             yr1_eps_est = (yr1_revenue * _eps_margin / shares) if shares and shares > 0 else None
 
+            # Plan E5 (owner, 2026-10-07; AMGN review): weighted legs that disagree by more than this factor are averaged
+            # into a number neither supports (AMGN DCF $121 vs Forward P/E $386) -- flagged on the run, and the blend is
+            # marked DEGRADED when the forecast's share-count check is also unresolved.
+            _disp = _leg_dispersion(blend_breakdown.get("effective_weights"), method_iv_table)
+            if scenario == "base" and _disp and _disp["ratio"] > _LEG_DISPERSION_MAX:
+                forward_flags.append(
+                    f"Legs disagree: {_disp['hi_leg']} {_disp['hi']:,.2f} is {_disp['ratio']:.1f}x {_disp['lo_leg']} {_disp['lo']:,.2f} "
+                    f"(threshold {_LEG_DISPERSION_MAX:.1f}x) -- the blend averages values on different premises; read the "
+                    "legs, not the average")
             scenario_results[scenario] = {
                 "intrinsic_value":   round(final_iv, 2),
                 "growth_rate":       round(g, 4),
@@ -17629,6 +17842,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_dcf":        blend_breakdown.get("weight_dcf"),
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
+                "leg_dispersion":    _disp,
                 # Plan IV2: the pipeline rNPV added to each operating leg (per share), when it is an add-on.
                 "pipeline_addon":    (most_recent.get("_pipeline_addon") or {}).get(scenario),
                 # Owner, 2026-10-07: the priced pipeline, asset by asset, for the workbook's Pipeline tab.
@@ -19286,7 +19500,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03: management guidance → the model's bear / base / bull
             # estimates (deep research 2G) and whether the DCF's years 1–2 ran on them.
             # Frontend: GuidanceEstimatesPanel reads `dcfRange?.guidance_estimates`.
-            "guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied),
+            "guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied, most_recent.get("_guidance_scope")),
             # Owner, 2026-10-03 (five principles): the guidance-to-forecast table the DCF ran on --
             # archetype, deconstruction, the intermediate years, the fade, the invariants.
             "guidance_forecast": _guidance_forecast_payload(_gf_base),
@@ -19338,6 +19552,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "street_consensus":      most_recent.get("_street_consensus"),
             "pipeline_input":        most_recent.get("_pipeline_input_summary"),
             "product_build":         most_recent.get("_product_build"),
+            "reverse_dcf":           most_recent.get("_reverse_dcf"),
             # Trailing dividend per share, in the listing currency (the FX
             # block above converts per-share fields in place). The research
             # rating's 12-month total shareholder return adds it to the target.

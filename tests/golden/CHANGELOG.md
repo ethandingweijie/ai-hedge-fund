@@ -1794,3 +1794,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Plan I2: Big Pharma profile prices the rNPV add-on (constants hash only, IVs unchanged)
 
+## 2026-10-07T16:07:00+00:00
+
+- regenerated at HEAD: `de03cdb8`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Local comps store refreshed 2026-10-07 23:30 by another process (data drift: AAPL, V, BABA, 09988 peer baskets; confirmed identical on pushed code de03cdb8) + additive batch-3 fields (reverse_dcf, leg_dispersion, guidance scope checks); no batch-3 IV change
+

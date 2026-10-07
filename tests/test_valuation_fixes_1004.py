@@ -918,3 +918,67 @@ def test_e4_agency_rating_replaces_the_synthetic_one_and_research_risk_is_waived
     src = inspect.getsource(d)
     assert 'agency_rating=_agency_rating(ticker)' in src and 'is_biopharma_sector(sector)' in src and '(_prof3 or _pipe_priced)' in src
     assert d._agency_rating("GILD") is None or isinstance(d._agency_rating("GILD"), str)
+
+
+def test_i4_an_already_eroding_product_is_shown_eroding_from_the_base_year():
+    entry = {"total_revenue": 100.0, "drugs": [{"name": "Prolia", "revenue_fy": 12.0, "loe_year": 2025, "modality": "biologic"}]}
+    o = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025)
+    U = [1.05 ** t for t in range(1, 11)]
+    vals = [U[t] * o["drug_paths"][0]["path"][t] * 100.0 for t in range(10)]
+    assert vals[0] < 12.0 and vals[1] < vals[0]                    # eroding in the guided years too
+
+
+def test_e5_leg_dispersion_is_measured_on_the_weighted_legs():
+    w = [{"method": "DCF", "value_key": "DCF", "weight": 0.5}, {"method": "Forward P/E", "value_key": "Forward P/E", "weight": 0.3},
+         {"method": "SOTP", "value_key": "SOTP", "weight": 0.0}]
+    disp = d._leg_dispersion(w, {"DCF": 121.0, "Forward P/E": 386.0, "SOTP": 10.0})
+    assert disp["ratio"] == pytest.approx(386.0 / 121.0, abs=1e-3) and disp["lo_leg"] == "DCF"   # the unweighted leg ignored
+    assert disp["ratio"] > d._LEG_DISPERSION_MAX
+    assert d._leg_dispersion(w[:1], {"DCF": 1.0}) is None
+    import inspect
+    assert 'DEGRADED: the forecast\'s share-count check is unresolved' in inspect.getsource(d) or "share-count check is unresolved" in inspect.getsource(d)
+
+
+def test_e6_terminal_check_uses_the_forward_peer_median():
+    assert d._peer_fwd_ev_ebitda({"ev_ebitda": 24.9, "ev_ebitda_ntm": 12.4}) == 12.4
+    assert d._peer_fwd_ev_ebitda({"ev_ebitda": 15.0}) == 15.0 and d._peer_fwd_ev_ebitda(None) is None
+
+
+def test_e7_growth_premium_is_capped_when_the_forecast_does_not_outgrow_peers():
+    fwd = {"_fy1_fy2": {"revenue": {"base": (100.0, 110.0)}}}
+    peer = {"growth_avg": 0.04}
+    f_raw, _ = d._forward_growth_adjustment(fwd, peer)
+    f_cap, note = d._forward_growth_adjustment(fwd, peer, forecast_cagr=0.01)
+    assert f_raw > 1.0 and f_cap == 1.0 and "capped" in note
+    assert d._forward_growth_adjustment(fwd, peer, forecast_cagr=0.06)[0] == f_raw
+
+
+def test_e8_a_net_debt_jump_since_the_year_end_is_flagged_as_a_possibly_unvalued_acquisition():
+    import inspect
+    src = inspect.getsource(d)
+    assert "UNVALUED ACQUISITION?" in src and "_drop >= 0.15 * _rev_src" in src
+
+
+def test_e9_guidance_that_is_not_company_level_is_flagged():
+    est = {"guidance": {"revenue": {"low": 1, "mid": 1, "high": 1, "scale": "bn", "currency": "USD"}},
+           "estimates": {"base": {"revenue_growth_fy1": 0.095}}}
+    fwd = {"analyst_count_revenue": 20, "_fy1_fy2": {"revenue": {"base": (29.6e9, 31.0e9)}}}
+    chk = d._guidance_scope_checks(est, 29.4e9, fwd, 29.4e9)
+    names = [c["check"] for c in chk]
+    assert "guided revenue level" in names and "research growth vs street" in names
+    ok = d._guidance_scope_checks({"guidance": {"revenue": {"mid": 29.5, "scale": "bn"}},
+                                   "estimates": {"base": {"revenue_growth_fy1": 0.02}}}, 29.4e9, fwd, 29.4e9)
+    assert ok == []
+    p = d._guidance_estimates_payload(est, None, chk)
+    assert p["scope_checks"] == chk
+
+
+def test_e10_reverse_dcf_solves_the_growth_shift_that_meets_the_price():
+    kw = dict(revenue_base=1000.0, fcf_margin_base=0.2, growth_rate=0.05, margin_delta_per_year=0.0, wacc=0.09, tgr=0.025,
+              fcf_floor=-0.05, net_debt=100.0, shares=10.0, growth_schedule=[0.05] * 10)
+    iv = d._project_dcf(**kw)[0]
+    rd = d._reverse_dcf(kw, iv * 1.3)
+    assert rd["solved"] and rd["growth_shift"] > 0 and rd["implied_cagr10"] > rd["model_cagr10"]
+    shifted = dict(kw, growth_schedule=[0.05 + rd["growth_shift"]] * 10)
+    assert d._project_dcf(**shifted)[0] == pytest.approx(iv * 1.3, rel=1e-4)
+    assert d._reverse_dcf(kw, iv)["growth_shift"] == pytest.approx(0.0, abs=1e-4)
