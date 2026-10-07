@@ -1293,6 +1293,14 @@ class _Book:
         if s == "base" and getattr(self, "_is_sheet", None) is not None:
             self._link_is_forecast(s)
         r = out + len(lines) + 1
+        # REGN review (2026-10-07): why the perpetuity grows after years of decline.
+        _tlm = _num(tr.get("terminal_loe_multiplier"))
+        if _tlm is not None and _tlm < 0.9999:
+            sh.note(r, 1, f"Loss of exclusivity: the projection erodes each named drug after its LOE (the negative growth "
+                          f"years); erosion still to come after the final year is taken off the terminal value "
+                          f"(x{_tlm:.3f}, Assumptions), so the perpetuity grows at the terminal rate from a post-cliff "
+                          "base rather than from the declining trend.")
+            r += 2
         # Sensitivity: FCF is independent of the discount rate, so a flat WACC re-discounts the same
         # stream exactly -- at the same discount points, with the same carry and the same bridge
         # (owner, 2026-10-04, plan 1A.3: the grid used to leave out minorities and preferreds,
@@ -1440,8 +1448,11 @@ class _Book:
         mu = self.dr.get("multiples_used") or {}
         sh.title("Comparable companies", f"Comps market {mu.get('comp_market')}; medians over in-band members "
                                          "(plausibility band). Engine median shown for the check.")
-        labels = {"ev_ebitda": "EV/EBITDA", "pe": "P/E", "ev_revenue": "EV/Revenue", "pb": "P/B",
-                  "fcf_yield": "FCF yield"}
+        # REGN review (2026-10-07): the forward (NTM) fields the forward legs actually use sit beside the trailing
+        # ones -- the Forward P/E leg prices the peers' NTM P/E (16.7x), not the trailing P/E (24.8x).
+        labels = {"ev_ebitda": "EV/EBITDA (trailing)", "pe": "P/E (trailing)", "ev_revenue": "EV/Revenue (trailing)",
+                  "pb": "P/B", "fcf_yield": "FCF yield", "pe_ntm": "P/E (NTM) -- Forward P/E leg",
+                  "ev_ebitda_ntm": "EV/EBITDA (NTM) -- Forward EV/EBITDA leg", "ev_revenue_ntm": "EV/Revenue (NTM)"}
         r = 4
         self.comps_summary: list[tuple[str, Any, str]] = []
         for field, info in (mu.get("fields") or {}).items():
@@ -1627,9 +1638,31 @@ class _Book:
             r += 1
             sh.label(r, 1, f"“{g.get('quote')}”" + (f" — {g.get('source')}" if g.get("source") else ""), indent=1)
         r += 2
-        sh.section(r, f"Consensus ({fy1})", 6); r += 1
+        sh.section(r, f"Consensus quoted by the research ({fy1})", 6); r += 1
         sh.label(r, 1, "Revenue growth"); sh.put(r, 2, _num(c.get("revenue_growth_fy1")), PCT); r += 1
         sh.label(r, 1, "EPS"); sh.put(r, 2, _num(c.get("eps_fy1")), NUM); r += 1
+        # REGN review (2026-10-07): the street consensus the forward legs price, beside the research's quote, and the
+        # disagreement named -- the research quoted FactSet $32.50 for FY2026 while 15 analysts on FMP sit at $55.94.
+        _sc = self.dr.get("street_consensus") or {}
+        _se = _sc.get("eps") or {}
+        if _se.get("fy1") is not None or _se.get("ntm") is not None:
+            r += 1
+            sh.section(r, f"Street consensus the forward legs price ({_sc.get('source') or 'FMP'}, "
+                          f"{_sc.get('analyst_count_eps') or '?'} analysts on EPS)", 6); r += 1
+            sh.header(r, ["Metric", f"FY+1 ({_sc.get('fy1_period') or ''})", f"FY+2 ({_sc.get('fy2_period') or ''})", "NTM"]); r += 1
+            for lab, key, fmt in (("EPS", "eps", NUM), ("Revenue", "revenue", BIG)):
+                d_ = _sc.get(key) or {}
+                sh.label(r, 1, lab)
+                for col, k in ((2, "fy1"), (3, "fy2"), (4, "ntm")):
+                    if d_.get(k) is not None:
+                        sh.put(r, col, _num(d_.get(k)), fmt)
+                r += 1
+            _q, _s1 = _num(c.get("eps_fy1")), _num(_se.get("fy1"))
+            if _q and _s1 and abs(_q / _s1 - 1.0) > 0.25:
+                sh.note(r, 1, f"The research's quoted consensus EPS ({_q:,.2f}) is {(_q / _s1 - 1.0):+.0%} from the street FY+1 "
+                              f"({_s1:,.2f}): a different basis (GAAP vs adjusted) or a stale or mistaken quote. The Forward P/E "
+                              "prices the street figure, the basis of the peers' NTM P/E; the research's quote is shown, not used.")
+                r += 1
         sh.label(r, 1, "Guidance vs consensus"); sh.put(r, 2, _num(ge.get("guidance_vs_consensus_pct")), PCT); r += 1
         if c.get("as_of"):
             # Plan E33: a consensus "as of" later than the valuation date is a period-end or a model error,
@@ -2598,8 +2631,30 @@ class _Book:
                 sh.put(r, 2, _v / 1e6, MIL).font = Font(color=BLUE)
                 sh.put(r, 4, _c).font = Font(color=BLACK)
                 r += 1
-            sh.note(r, 1, "They differ by date (annual vs latest quarter), by what counts as cash (short-term investments; "
-                          "regulated or float cash), by leases, and by currency; only the first prices the valuation."); r += 2
+            # REGN review (2026-10-07): the bridge from the data feed's net debt to the valuation's, as formulas.
+            _cmp = ((_fu.get("net_debt_basis") or {}).get("components") or {})
+            if isinstance(_cmp.get("feed_net_debt"), (int, float)) and not _cmp.get("regulated_cash_rule"):
+                _src_ccy = _fu.get("source_currency") or self.ccy
+                sh.label(r, 1, f"Bridge, {_src_ccy} millions, balance-sheet date "
+                               f"{(_fu.get('net_debt_basis') or {}).get('balance_sheet_date') or ''}", bold=True); r += 1
+                _b0 = r
+                for _lab, _v in (("Feed net debt (total debt incl. leases − cash and equivalents)", _cmp.get("feed_net_debt")),
+                                 ("Less: short-term investments (counted as cash)", -(_cmp.get("short_term_investments") or 0.0)),
+                                 ("Less: long-term marketable securities (a biotech treasury)", -(_cmp.get("long_term_investments") or 0.0)),
+                                 ("Less: lease liabilities (US GAAP: rent is inside EBITDA)", -(_cmp.get("leases_removed") or 0.0)),
+                                 ("Add: owner-accepted debt-like items", (_cmp.get("debt_like") or 0.0))):
+                    sh.label(r, 1, _lab, indent=1); sh.put(r, 2, float(_v) / 1e6, MIL).font = Font(color=BLUE); r += 1
+                sh.label(r, 1, "Valuation net debt (filing currency)", indent=1, bold=True)
+                sh.put(r, 2, f"=SUM(B{_b0}:B{r - 1})", MIL, bold=True); _bs = r; r += 1
+                _fxv = _num(_fu.get("fx_rate")) or 1.0
+                sh.label(r, 1, f"× FX to {self.ccy}", indent=1); sh.put(r, 2, _fxv, "0.0000"); _bf = r; r += 1
+                if _v_nd is not None:
+                    sh.label(r, 1, "Check: bridge × FX − net debt used (should be ~0)", indent=1)
+                    sh.put(r, 2, f"=B{_bs}*B{_bf}-{_v_nd / 1e6}", MIL); r += 1
+            sh.note(r, 1, "They differ by date (annual vs latest quarter), by what counts as cash (short-term and, for a biotech, "
+                          "long-term marketable securities; regulated or float cash), by leases, and by currency; only the "
+                          "first prices the valuation. The Model tab's net debt is a PROJECTION (cash builds over the "
+                          "forecast years), and the Summary metrics row is the feed's FY-end figure, shown for reference."); r += 2
         sh.section(r, "Comps (peer multiples used)", 6); r += 1
         _mu = ((self.dr.get("multiples_used") or {}).get("fields") or {})
         _mu_key = {"EV/EBITDA": "ev_ebitda", "P/E": "pe", "EV/Revenue": "ev_revenue", "P/B": "pb",

@@ -1778,3 +1778,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Plan E32 (2026-10-06): pt_bridge carries the trailing dividend yield and each scenario's total return (price + yield); no value moved
 
+## 2026-10-07T04:39:45+00:00
+
+- regenerated at HEAD: `82422cb1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: REGN review 3: curated baskets record named members_used (provenance only, IVs unchanged)
+

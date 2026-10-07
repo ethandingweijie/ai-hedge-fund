@@ -301,7 +301,7 @@ def test_the_workbook_gets_a_guidance_tab_when_the_research_produced_estimates()
     book.guidance_tab()
     ws = book.wb["Guidance"]
     col_a = [str(c.value) for c in ws["A"] if c.value is not None]
-    assert any(v.startswith("Revenue growth FY2026") for v in col_a) and any(v.startswith("Consensus (FY2026)") for v in col_a)
+    assert any(v.startswith("Revenue growth FY2026") for v in col_a) and any(v.startswith("Consensus quoted by the research (FY2026)") for v in col_a)
     assert any("Base DCF growth path" in v for v in col_a)
     pct_cells = [c for row in ws.iter_rows() for c in row if c.number_format == vw.PCT and isinstance(c.value, float)]
     assert any(abs(c.value - 0.065) < 1e-9 for c in pct_cells)                  # the base FY+1 estimate, as a number

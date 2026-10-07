@@ -639,3 +639,54 @@ def test_i14_tiered_replacement_and_the_pipeline_double_count_guard():
                                                {"phase": "filed", "peak_sales_usd": 10.0}]) == pytest.approx(58.5)
     for t in ("600276.SS", "01276.HK", "01801.HK", "09688.HK"):
         assert reg[t]["caveat"] and reg[t]["status"] == "ACCEPTED"
+
+
+# ── REGN review 3 (2026-10-07): named peers, street consensus, net-debt bridge, one revenue path ───────
+
+def test_regn3_a_curated_basket_records_its_named_members_and_values(monkeypatch):
+    from src.data import regional_comps as rc
+    rows = [{"symbol": s_, "name": n_, "market_cap": mc, "computed_at": "2026-10-07T00:00:00",
+             "metrics_json": __import__("json").dumps({"pe_ntm": {"value": v, "in_band": True}})}
+            for s_, n_, mc, v in (("AMGN", "Amgen", 1.8e11, 14.0), ("GILD", "Gilead", 1.4e11, 15.0),
+                                  ("VRTX", "Vertex", 1.2e11, 22.0), ("BIIB", "Biogen", 2.5e10, 9.0),
+                                  ("ALNY", "Alnylam", 3.0e10, 40.0), ("REGN", "Regeneron", 8.0e10, 16.0))]
+    monkeypatch.setattr(rc, "_ensure_table", lambda: None)
+    monkeypatch.setattr(rc._db, "query", lambda sql, args: [r_ for r_ in rows if r_["symbol"] in args[1:]])
+    monkeypatch.setattr(rc, "_age_days", lambda s_: 0.0)
+    out = rc.basket_multiples("US", ("AMGN", "GILD", "VRTX", "BIIB", "ALNY", "REGN"), "Commercial Biotech", exclude="REGN")
+    cell = out["pe_ntm"]
+    assert cell["value"] == pytest.approx(15.0) and cell.get("subject_excluded") is True
+    named = {m["symbol"]: (m["name"], m["value"]) for m in cell["members_used"]}
+    assert named == {"AMGN": ("Amgen", 14.0), "GILD": ("Gilead", 15.0), "VRTX": ("Vertex", 22.0),
+                     "BIIB": ("Biogen", 9.0), "ALNY": ("Alnylam", 40.0)}
+
+
+def test_regn3_workbook_shows_ntm_peers_street_consensus_and_the_net_debt_bridge():
+    formulas = pytest.importorskip("formulas")
+    run = _wbt._run()
+    dr = run["data"]["dcf_range"]["TEST"]
+    mem = [{"symbol": s_, "name": s_, "market_cap": 1e10, "value": v} for s_, v in (("A", 14.0), ("B", 15.0), ("C", 22.0))]
+    dr["multiples_used"] = {"comp_market": "US", "fields": {"pe_ntm": {"value": 15.0, "basis": "profile", "cohort": "all",
+                                                                       "key": "Commercial Biotech", "exchange": "US", "members_used": mem}}}
+    dr["street_consensus"] = {"source": "FMP analyst estimates", "fy1_period": "2026-12-31", "fy2_period": "2027-12-31",
+                              "eps": {"fy1": 55.94, "fy2": 61.85, "ntm": 60.47}, "revenue": {"fy1": 1.7e10, "fy2": 1.86e10, "ntm": 1.83e10},
+                              "analyst_count_eps": 15}
+    nd_used = (dr["base"]["leg_inputs"].get("DCF") or {}).get("net_debt") or 100.0
+    dr["financials_used"] = {**dr.get("financials_used", {}), "fx_rate": 1.0, "source_currency": "USD",
+                             "net_debt_basis": {"balance_sheet_date": "2026-06-30", "components": {
+                                 "feed_net_debt": nd_used + 50.0, "short_term_investments": 30.0, "long_term_investments": 20.0,
+                                 "leases_removed": 0.0, "debt_like": 0.0, "result": nd_used}}}
+    blob = build_workbook(run, "TEST")
+    wb = load_workbook(io.BytesIO(blob))
+    comps = [str(c.value) for c in wb["Comps"]["A"] if c.value]
+    assert any("P/E (NTM) -- Forward P/E leg" in v for v in comps)
+    summ = [str(c.value) for c in wb["Summary"]["A"] if c.value]
+    assert any(v.startswith("Check: bridge") for v in summ)
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "r3.xlsx")
+        Path(p).write_bytes(blob)
+        sol = {k.upper(): v for k, v in formulas.ExcelModel().loads(p).finish().calculate().items()}
+        ws = wb["Summary"]
+        r = next(c.row for c in ws["A"] if str(c.value or "").startswith("Check: bridge"))
+        v = sol[f"'[R3.XLSX]SUMMARY'!B{r}".upper()]
+        assert abs(getattr(v, "value", v)[0][0]) < 1e-6

@@ -595,12 +595,13 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
     try:
         marks = ",".join("?" for _ in syms)
         rows = _db.query(
-            f"SELECT symbol, metrics_json, computed_at FROM regional_comps_members "
+            f"SELECT symbol, name, market_cap, metrics_json, computed_at FROM regional_comps_members "
             f"WHERE exchange = ? AND symbol IN ({marks})", [exchange, *syms]) or []
     except Exception as exc:                                   # noqa: BLE001
         logger.warning("regional_comps profile basket %r failed: %s", profile, exc)
         return {}
     metrics: dict[str, dict] = {}
+    ident: dict[str, dict] = {}
     for r in rows:
         r = dict(r)
         age = _age_days(r.get("computed_at") or "")
@@ -608,6 +609,7 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
             continue
         try:
             metrics[_canon.get(r["symbol"], r["symbol"])] = json.loads(r["metrics_json"] or "{}")
+            ident[_canon.get(r["symbol"], r["symbol"])] = {"name": r.get("name"), "market_cap": r.get("market_cap")}
         except (TypeError, ValueError):
             continue
     excluded: list[str] = []
@@ -636,6 +638,12 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
             continue
         out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all",
                       "peer_count": len(vals), "key": key, "exchange": exchange, "members": used,
+                      # REGN review (2026-10-07): the named members and values the median was taken over, so a
+                      # curated basket is as auditable as an industry one ("no named peers" on every multiple).
+                      "members_used": [{"symbol": sym, "name": (ident.get(sym) or {}).get("name") or sym,
+                                        "market_cap": (ident.get(sym) or {}).get("market_cap"), "value": v_}
+                                       for sym, v_ in zip(used, vals)],
+                      **({"subject_excluded": True} if _self_removed else {}),
                       **({"excluded_loss_makers": excluded} if exclude_loss_makers else {})}
     return out
 

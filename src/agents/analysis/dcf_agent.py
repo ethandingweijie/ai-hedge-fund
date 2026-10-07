@@ -1324,6 +1324,17 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
         "leases": ("excluded (US GAAP: rent is inside EBITDA and cash flow)" if lease_out
                    else "included (IFRS 16: lease cost is below EBITDA)" if not us_gaap
                    else "none reported"),
+        # REGN review (2026-10-07): the bridge from the feed's figure to this one, component by component, so the
+        # workbook reconciles every net-debt figure a reader meets (REGN: feed -$0.4bn vs valuation -$15.8bn).
+        "components": {
+            "feed_net_debt": float(_raw_nd) if isinstance(_raw_nd, (int, float)) else None,
+            "short_term_investments": float(sti) if (netted and isinstance(sti, (int, float))) else 0.0,
+            "long_term_investments": lti_netted,
+            "leases_removed": lease_out,
+            "debt_like": debt_like,
+            "regulated_cash_rule": bool(regulated_cash),
+            "result": float(nd),
+        },
     }
     return float(nd), basis
 
@@ -13683,6 +13694,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             except Exception:                              # noqa: BLE001
                 _ntm_e = 0.0
             most_recent["_ntm_elapsed_share"] = _ntm_e
+            # REGN review (2026-10-07): the street consensus the forward legs price, recorded on the run so the
+            # workbook can show it beside the research's quoted consensus (REGN: FactSet "$32.50" quoted by the
+            # research vs FMP $55.94 FY2026 / $61.85 FY2027 from 15 analysts).
+            try:
+                _f12 = forward_consensus.get("_fy1_fy2") or {}
+                most_recent["_street_consensus"] = {
+                    "source": "FMP analyst estimates",
+                    "fy1_period": str(getattr(estimates[0], "period_end", "") or "")[:10] if estimates else None,
+                    "fy2_period": str(getattr(estimates[1], "period_end", "") or "")[:10] if len(estimates) >= 2 else None,
+                    "eps": {"fy1": ((_f12.get("eps") or {}).get("base") or (None, None))[0],
+                            "fy2": ((_f12.get("eps") or {}).get("base") or (None, None))[1],
+                            "ntm": (forward_consensus.get("eps") or {}).get("base")},
+                    "revenue": {"fy1": ((_f12.get("revenue") or {}).get("base") or (None, None))[0],
+                                "fy2": ((_f12.get("revenue") or {}).get("base") or (None, None))[1],
+                                "ntm": (forward_consensus.get("revenue") or {}).get("base")},
+                    "analyst_count_eps": forward_consensus.get("analyst_count_eps"),
+                    "analyst_count_revenue": forward_consensus.get("analyst_count_revenue"),
+                    "ntm_elapsed_share": round(_ntm_e, 4)}
+            except Exception:                              # noqa: BLE001
+                pass
             # Consensus EPS growth into the second forward year, for the PEG
             # leg. estimates are sorted ascending by period_end.
             if len(estimates) >= 2:
@@ -16105,6 +16136,29 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     if _loe:
                         _growth_schedule = _loe["growth_schedule"]
                         _loe_tv_mult = _loe["terminal_multiplier"]
+                        # REGN review (2026-10-07): one revenue path on every tab -- the guidance forecast (Guidance
+                        # and Model tabs, three statements) carries the same erosion as the DCF, margins held.
+                        try:
+                            if _gf and _gf.get("rows"):
+                                _prev_rev = None
+                                for _row in _gf["rows"]:
+                                    _yi = int(_row.get("year") or 0)
+                                    if 1 <= _yi <= len(_loe["index"]):
+                                        _f = float(_loe["index"][_yi - 1])
+                                        for _k in ("revenue", "ebit", "net_income", "eps", "ufcf", "capex", "capex_growth", "delta_nwc"):
+                                            if isinstance(_row.get(_k), (int, float)):
+                                                _row[_k] = float(_row[_k]) * _f
+                                        if _prev_rev:
+                                            _row["growth"] = float(_row["revenue"]) / _prev_rev - 1.0
+                                    _prev_rev = float(_row.get("revenue") or 0.0) or None
+                                _gf["growth_schedule"] = list(_loe["growth_schedule"])
+                                _gf["loe_index"] = list(_loe["index"])
+                                _gf.setdefault("flags", []).append(
+                                    f"Loss of exclusivity applied to this forecast (revenue index year {len(_loe['index'])} "
+                                    f"{_loe['index'][-1]:.2f}x, margins held); the remaining post-horizon erosion is in the "
+                                    f"terminal value (x{_loe['terminal_multiplier']:.3f}), which then grows at the terminal rate")
+                        except Exception:                  # noqa: BLE001
+                            pass
                         if scenario == "base":
                             ticker_forward_flags.append(
                                 "Loss of exclusivity (owner-accepted franchise input): "
@@ -18950,6 +19004,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                       "final_sector": sector,
                                       "final_profile": profile_name},
             "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
+            "street_consensus":      most_recent.get("_street_consensus"),
             # Trailing dividend per share, in the listing currency (the FX
             # block above converts per-share fields in place). The research
             # rating's 12-month total shareholder return adds it to the target.
