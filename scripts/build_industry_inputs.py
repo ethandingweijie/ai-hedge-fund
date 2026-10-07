@@ -508,6 +508,8 @@ def main(argv=None) -> int:
     ap.add_argument("--ingest", default="",
                     help="pipeline only: store a verified research file (JSON in the pipeline schema) for the one "
                          "ticker in --tickers as a PENDING entry; the old entry is kept under `previous`")
+    ap.add_argument("--no-sources", action="store_true",
+                    help="--ingest: skip the primary-source check (10-K, earnings 8-K, transcript)")
     ap.add_argument("--rescore", action="store_true",
                     help="re-run the pipeline rules on EXISTING pipeline entries (data untouched, acceptances survive)")
     ap.add_argument("--profile-sotp", action="store_true",
@@ -526,11 +528,33 @@ def main(argv=None) -> int:
                              "assets": [{"name": x.get("name"), "phase": x.get("phase"), "launch_year": x.get("launch_year"),
                                          "peak": (x.get("peak_sales") or {}).get("value"),
                                          "ptrs": (x.get("ptrs") or {}).get("value")} for x in (old.get("data") or {}).get("assets") or []]}
+        # Owner, 2026-10-07: the company's own documents (10-K, earnings 8-K, transcript) read against the input --
+        # advisory, stored beside the rules for the reviewer.
+        if not a.no_sources:
+            try:
+                from src.data import pipeline_sources as _ps
+                _r = _ps.check(data, _ps.source_texts(t))
+                e["primary_sources"] = {
+                    "sources": _r["sources"],
+                    "assets": [{"name": x["name"], "phase": x["phase"], "verdict": x["verdict"],
+                                "stages": {k: v.get("stage") for k, v in x["sources"].items()},
+                                "dates": {k: v.get("date") for k, v in x["sources"].items() if v.get("date")}}
+                               for x in _r["assets"]],
+                    "uncovered_late_stage": [{k: m[k] for k in ("identifier", "stage", "sources")} for m in _r["uncovered_late_stage"]]}
+            except Exception as _ex:                       # noqa: BLE001
+                e["primary_sources"] = {"error": str(_ex)[:200]}
         doc["tickers"].setdefault(key, {})["pipeline"] = e
         ii.save(doc)
         print(f"  {t:<10} pipeline ingested: ${(e['value_usd'] or 0) / 1e9:,.2f}bn peak, {'OK' if e['ok'] else 'CHECK FAILED'}")
         for c in e["checks"]:
             print(f"      {'PASS' if c['ok'] else ('n/a ' if c['ok'] is None else 'FAIL')} {c['check']}: {str(c['detail'])[:260]}")
+        _psrc = e.get("primary_sources") or {}
+        for _k, _v in (_psrc.get("sources") or {}).items():
+            print(f"      source {_k:10} " + (f"{_v['date']} {_v['url']}" if _v else "not available"))
+        for _x in _psrc.get("assets") or []:
+            print(f"      source check {_x['name'][:44]:44} input {_x['phase']:9} -> {_x['verdict']}")
+        for _m in (_psrc.get("uncovered_late_stage") or [])[:12]:
+            print(f"      uncovered in the documents: {_m['identifier']} ({_m['stage']}, {', '.join(_m['sources'])})")
         return 0
     if a.rescore:
         from src.data import pipeline_rules as _pr
