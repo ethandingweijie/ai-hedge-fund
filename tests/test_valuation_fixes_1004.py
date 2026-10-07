@@ -552,8 +552,9 @@ def test_i14_loe_overlay_erodes_named_drugs_and_haircuts_the_terminal_value():
     assert (1 + o["growth_schedule"][5]) == pytest.approx(1.05 * idx[5] / idx[4])
     # after the horizon: Dupi is fully eroded by 2035; Late loses 90% from 2040, five years past 2035, discounted
     disc = 1.025 / 1.08
-    lost = 0.2 * 0.90 * disc ** 5
-    assert o["terminal_multiplier"] == pytest.approx(1.0 - lost / idx[9])
+    lost = 0.2 * 0.90 * disc ** 5 * (1 - 0.5)          # multi-franchise (40% + 20%): half credited to the pipeline
+    assert o["terminal_replacement"] == 0.5
+    assert o["terminal_multiplier"] == pytest.approx(1.0 - lost / idx[9], abs=1e-5)
     # a drug already eroding loses only what is left of its curve
     e2 = {"total_revenue": 100.0, "drugs": [{"name": "Eylea", "revenue_fy": 30.0, "loe_year": 2024, "modality": "biologic"}]}
     o2 = d._franchise_loe_overlay(e2, 2025, [0.0] * 10, 0.08, 0.025)
@@ -608,9 +609,33 @@ def test_i14_big_pharma_terminal_credits_half_the_post_horizon_loss_to_the_pipel
     entry = {"total_revenue": 100.0, "drugs": [{"name": "Tirz", "revenue_fy": 56.0, "loe_year": 2036, "modality": "small_molecule"}]}
     full = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025, profile_name="Commercial Biotech")
     half = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025, profile_name="Big Pharma (Consolidated DCF)")
-    assert half["terminal_replacement"] == 0.5 and full["terminal_replacement"] == 0.0
-    assert (1 - half["terminal_multiplier"]) == pytest.approx(0.5 * (1 - full["terminal_multiplier"]), abs=1e-5)
+    assert half["terminal_replacement"] == 0.5 and full["terminal_replacement"] == 0.30   # single franchise: 30% tier
+    assert (1 - half["terminal_multiplier"]) == pytest.approx((0.5 / 0.7) * (1 - full["terminal_multiplier"]), abs=1e-5)
     from src.data import valuation_constants as vc
     assert vc.load()["franchise_loe"]["entries"]["REGN"]["status"] == "ACCEPTED"
     assert d._franchise_loe_entry("REGN")["total_revenue"] == 14342900000.0
-    assert d._franchise_loe_entry("LLY") == {}
+    assert d._franchise_loe_entry("LLY")["status"] == "ACCEPTED"
+
+
+def test_i14_tiered_replacement_and_the_pipeline_double_count_guard():
+    # Owner, 2026-10-07: big pharma 50%; other drug developers 30% single-mechanism, 50% with multi-franchise
+    # proof (largest franchise <= 50%, two at 10%+, drugs grouped by INN); an accepted pipeline's risk-adjusted
+    # peak replaces part of the loss explicitly, and the terminal credit covers only the rest.
+    from src.data import valuation_constants as vc
+    reg = vc.load()["franchise_loe"]["entries"]
+    assert d._loe_replacement_tier(reg["VRTX"], "Commercial Biotech")[0] == 0.30
+    assert d._loe_replacement_tier(reg["ALNY"], "Commercial Biotech")[0] == 0.30
+    assert d._loe_replacement_tier(reg["REGN"], "Commercial Biotech")[0] == 0.50       # aflibercept rows grouped
+    assert d._loe_replacement_tier(reg["LLY"], "Big Pharma (Consolidated DCF)")[0] == 0.50
+    entry = {"total_revenue": 100.0, "drugs": [{"name": "CF", "inn": "x", "revenue_fy": 90.0, "loe_year": 2038, "modality": "small_molecule"}]}
+    base = d._franchise_loe_overlay(entry, 2025, [0.0] * 10, 0.08, 0.025, profile_name="Commercial Biotech")
+    lost = 0.9 * 0.9 * 100.0                                                         # nominal, flat growth
+    g = d._franchise_loe_overlay(entry, 2025, [0.0] * 10, 0.08, 0.025, profile_name="Commercial Biotech",
+                                 pipeline_ra_peak=0.1 * lost)
+    assert base["terminal_replacement"] == pytest.approx(0.30) and g["terminal_replacement"] == pytest.approx(0.20)
+    assert "already priced by the accepted pipeline" in g["terminal_replacement_basis"]
+    assert d._pipeline_risk_adjusted_peak_usd([{"phase": "phase_3", "peak_sales_usd": 100.0, "ptrs_override": 0.5},
+                                               {"phase": "approved", "peak_sales_usd": 999.0},
+                                               {"phase": "filed", "peak_sales_usd": 10.0}]) == pytest.approx(58.5)
+    for t in ("600276.SS", "01276.HK", "01801.HK", "09688.HK"):
+        assert reg[t]["caveat"] and reg[t]["status"] == "ACCEPTED"

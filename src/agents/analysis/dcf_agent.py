@@ -211,13 +211,58 @@ def _franchise_loe_entry(ticker: str) -> dict:
 _LOE_COVERED_YEARS = 2
 #: Share of the post-horizon LOE loss the terminal value assumes the pipeline replaces. Owner, 2026-10-07: 50% for
 #: big pharma -- a diversified pipeline replaces part of a cliff past the horizon (Lilly: tirzepatide 56% of
-#: revenue, LOE 2036; with no credit the terminal value kept x0.41); every other profile takes the whole loss.
+#: revenue, LOE 2036; with no credit the terminal value kept x0.41).
 _LOE_TERMINAL_REPLACEMENT = {"Big Pharma (Consolidated DCF)": 0.5, "Large Cap Pharma": 0.5}
+#: Owner, 2026-10-07 (tiered replacement): any other drug developer earns 30% as a single-mechanism franchise and
+#: 50% once it has multi-franchise proof -- no franchise (drugs grouped by INN) above 50% of revenue and at least
+#: two at 10%+. Vertex (CF 93%) and Alnylam (Amvuttra 62%) take 30%; Regeneron (aflibercept 40%, Dupixent 35%) 50%.
+_LOE_REPLACEMENT_SINGLE = 0.30
+_LOE_REPLACEMENT_MULTI = 0.50
+_LOE_MULTI_MAX_TOP = 0.50
+_LOE_MULTI_MIN_FRANCHISES = 2
+_LOE_MULTI_FRANCHISE_FLOOR = 0.10
+#: Fallback probability of success by phase for the double-count guard when an asset carries no cited PTRS.
+_LOE_GUARD_PHASE_POS = {"filed": 0.85, "phase_3": 0.55, "phase_2": 0.30, "phase_1": 0.10}
+
+
+def _loe_replacement_tier(entry: dict, profile_name: Optional[str]) -> tuple[float, str]:
+    """(replacement share, basis). Big pharma: the owner's 50%. Otherwise tiered on franchise concentration."""
+    if (profile_name or "") in _LOE_TERMINAL_REPLACEMENT:
+        return float(_LOE_TERMINAL_REPLACEMENT[profile_name]), f"owner rule for {profile_name}"
+    total = entry.get("total_revenue")
+    fr: dict[str, float] = {}
+    for d in entry.get("drugs") or []:
+        if isinstance(d, dict) and isinstance(d.get("revenue_fy"), (int, float)) and isinstance(total, (int, float)) and total > 0:
+            key = str(d.get("inn") or d.get("name") or "").lower().split(" (")[0].strip()
+            fr[key] = fr.get(key, 0.0) + float(d["revenue_fy"]) / float(total)
+    if not fr:
+        return _LOE_REPLACEMENT_SINGLE, "single-mechanism (no franchise map)"
+    top = max(fr.values())
+    n_big = sum(1 for v in fr.values() if v >= _LOE_MULTI_FRANCHISE_FLOOR)
+    if top <= _LOE_MULTI_MAX_TOP and n_big >= _LOE_MULTI_MIN_FRANCHISES:
+        return _LOE_REPLACEMENT_MULTI, f"multi-franchise (largest {top:.0%}, {n_big} franchises at 10%+)"
+    return _LOE_REPLACEMENT_SINGLE, f"single-mechanism (largest franchise {top:.0%} of revenue)"
+
+
+def _pipeline_risk_adjusted_peak_usd(assets: Optional[list]) -> float:
+    """Sum of unapproved accepted assets' peak sales x probability of success (company share, USD)."""
+    tot = 0.0
+    for a in assets or []:
+        if not isinstance(a, dict) or a.get("phase") == "approved":
+            continue
+        pk = a.get("peak_sales_usd")
+        if not isinstance(pk, (int, float)) or pk <= 0:
+            continue
+        pt = a.get("ptrs_override")
+        pt = float(pt) if isinstance(pt, (int, float)) and 0 < pt <= 1 else _LOE_GUARD_PHASE_POS.get(str(a.get("phase") or ""), 0.3)
+        tot += float(pk) * pt
+    return tot
 
 
 def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wacc: float,
                            tgr: float, covered_years: int = _LOE_COVERED_YEARS,
-                           profile_name: Optional[str] = None) -> Optional[dict]:
+                           profile_name: Optional[str] = None,
+                           pipeline_ra_peak: Optional[float] = None) -> Optional[dict]:
     """Plan I14 (REGN review, 2026-10-07): each named drug loses revenue after its LOE year on its modality's
     curve, measured from the end of the covered years (a drug already eroding loses only what is left). Returns the
     re-shaped growth schedule, the revenue index per year, and the terminal multiplier for erosion still to
@@ -249,13 +294,28 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
     end_yr = fy0_year + n
     w = max(float(wacc), float(tgr) + 0.005)
     lost_after = 0.0
-    _repl = float(_LOE_TERMINAL_REPLACEMENT.get(profile_name or "", 0.0))
+    _repl, _repl_basis = _loe_replacement_tier(entry, profile_name)
+    # Double-count guard (owner, 2026-10-07): the accepted pipeline's risk-adjusted peak sales are already priced
+    # (the rNPV add-on rides on every operating leg, the DCF included); they replace that much of the loss
+    # explicitly, and the terminal credit covers only the rest. `pipeline_ra_peak` is in the entry's currency.
+    _lost_nominal = 0.0
+    _grow = 1.0
+    for _g in growth_schedule:
+        _grow *= (1.0 + float(_g))
+    for p_ in parts:
+        _lost_nominal += p_["share"] * (rel(p_, end_yr + 50) - rel(p_, end_yr)) * float(total) * _grow
+    _explicit = 0.0
+    if isinstance(pipeline_ra_peak, (int, float)) and pipeline_ra_peak > 0 and _lost_nominal > 0:
+        _explicit = min(_repl, float(pipeline_ra_peak) / _lost_nominal)
+        _repl = max(0.0, _repl - _explicit)
+        _repl_basis += f"; less {_explicit:.0%} already priced by the accepted pipeline"
     for p_ in parts:
         further = rel(p_, end_yr + 50) - rel(p_, end_yr)
         if further > 0:
             lost_after += (p_["share"] * further * (1.0 - _repl)
                            * ((1.0 + tgr) / (1.0 + w)) ** max(1, p_["loe_year"] - end_yr))
     return {"growth_schedule": sched, "index": [round(x, 6) for x in index], "terminal_replacement": _repl,
+            "terminal_replacement_basis": _repl_basis,
             "terminal_multiplier": round(max(0.0, 1.0 - lost_after / index[-1]), 6),
             "drugs": [{k: v for k, v in p_.items() if not k.startswith("_")} for p_ in parts]}
 #: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
@@ -16035,8 +16095,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _p4 = str(most_recent.get("period") or "")[:4]
                 if _loe_e and _p4.isdigit():
                     _loe_base = list(_growth_schedule) if _growth_schedule else [float(g)] * _PROJECTION_YEARS
+                    _ra_usd = _pipeline_risk_adjusted_peak_usd(most_recent.get("pipeline_assets_accepted"))
+                    _ra_ccy = None
+                    if _ra_usd > 0:
+                        _e_ccy = str(_loe_e.get("currency") or "USD").upper()
+                        _ra_ccy = _ra_usd if _e_ccy == "USD" else (_ra_usd * float(get_fx_rate("USD", _e_ccy) or 0.0) or None)
                     _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr),
-                                                  profile_name=profile_name)
+                                                  profile_name=profile_name, pipeline_ra_peak=_ra_ccy)
                     if _loe:
                         _growth_schedule = _loe["growth_schedule"]
                         _loe_tv_mult = _loe["terminal_multiplier"]
@@ -16047,9 +16112,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                             for d_ in _loe["drugs"])
                                 + f"; revenue index in year {len(_loe['index'])} {_loe['index'][-1]:.2f}x of the un-eroded path; "
                                 f"terminal value x{_loe_tv_mult:.3f} for erosion after the horizon"
-                                + (f" ({_loe['terminal_replacement']:.0%} of it replaced by the pipeline, owner rule for {profile_name})"
-                                   if _loe.get("terminal_replacement") else "")
-                                + " (margins held, so the lost profit is if anything understated)")
+                                + f" ({_loe['terminal_replacement']:.0%} of the post-horizon loss credited to future pipeline: "
+                                  f"{_loe.get('terminal_replacement_basis')})"
+                                + " (margins held, so the lost profit is if anything understated)"
+                                + (f". CAVEAT: {_loe_e['caveat']}" if _loe_e.get("caveat") else ""))
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
             _dcf_projection = {
