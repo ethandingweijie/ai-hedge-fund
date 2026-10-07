@@ -548,8 +548,9 @@ def test_i14_loe_overlay_erodes_named_drugs_and_haircuts_the_terminal_value():
     idx = o["index"]
     assert idx[4] == pytest.approx(1.0)                                         # 2030: before any LOE
     # 2031 (LOE year): Dupi frozen at its 2030 level (no company growth after LOE) and down 15% on the curve
-    assert idx[5] == pytest.approx(1.0 - 0.4 + 0.4 * 0.85 / 1.05)
-    assert idx[9] == pytest.approx(1.0 - 0.4 + 0.4 * 0.35 / 1.05 ** 5)          # 2035: fifth year, 65% lost, frozen since 2030
+    # owner 2026-10-07: the multi-franchise 50% replacement offsets the in-horizon erosion too
+    assert idx[5] == pytest.approx(1.0 - 0.5 * (0.4 - 0.4 * 0.85 / 1.05), abs=1e-5)
+    assert idx[9] == pytest.approx(1.0 - 0.5 * (0.4 - 0.4 * 0.35 / 1.05 ** 5), abs=1e-5)  # 2035: 65% lost, frozen since 2030
     assert (1 + o["growth_schedule"][5]) == pytest.approx(1.05 * idx[5] / idx[4])
     # after the horizon: Dupi is fully eroded by 2035; Late loses 90% from 2040, five years past 2035, discounted
     disc = 1.025 / 1.08
@@ -561,7 +562,7 @@ def test_i14_loe_overlay_erodes_named_drugs_and_haircuts_the_terminal_value():
     o2 = d._franchise_loe_overlay(e2, 2025, [0.0] * 10, 0.08, 0.025)
     # years 1-2 (2026-27) are guidance / consensus and already price it; 2028 = year 5 vs year 4 at end-2027
     assert o2["index"][:2] == [1.0, 1.0]
-    assert o2["index"][2] == pytest.approx(1.0 - 0.3 * (0.65 - 0.60) / (1 - 0.60))
+    assert o2["index"][2] == pytest.approx(1.0 - 0.7 * 0.3 * (0.65 - 0.60) / (1 - 0.60), abs=1e-5)   # single franchise: 30% replaced
     assert d._franchise_loe_entry("REGN") == {} or d._franchise_loe_entry("REGN").get("status") == "ACCEPTED"
 
 

@@ -300,20 +300,17 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
             return p_["share"] if t <= a else p_["share"] * (1.0 - rel(p_, fy0_year + t))
         return p_["share"] * (_U[a - 1] / _U[t - 1]) * (1.0 - rel(p_, fy0_year + t))
 
-    index = [1.0 if t <= covered_years else
-             max(0.05, 1.0 - sum(p_["share"] for p_ in parts) + sum(path(p_, t) for p_ in parts))
-             for t in range(1, n + 1)]
-    sched, prev = [], 1.0
-    for t in range(n):
-        sched.append(round((1.0 + float(growth_schedule[t])) * index[t] / prev - 1.0, 6))
-        prev = index[t]
+    # The replacement share (owner tiers) and the double-count guard, decided first: the SAME effective rate offsets
+    # the erosion inside the horizon and after it (owner, 2026-10-07: "same rate in-horizon" -- the explicit years took
+    # the whole loss while only the terminal value credited the pipeline, a double hit on big pharma: AMGN -44%,
+    # GILD -39% against the market).
     end_yr = fy0_year + n
     w = max(float(wacc), float(tgr) + 0.005)
     lost_after = 0.0
     _repl, _repl_basis = _loe_replacement_tier(entry, profile_name)
     # Double-count guard (owner, 2026-10-07): the accepted pipeline's risk-adjusted peak sales are already priced
     # (the rNPV add-on rides on every operating leg, the DCF included); they replace that much of the loss
-    # explicitly, and the terminal credit covers only the rest. `pipeline_ra_peak` is in the entry's currency.
+    # explicitly, and the credit covers only the rest. `pipeline_ra_peak` is in the entry's currency.
     _lost_nominal = 0.0
     _grow = 1.0
     for _g in growth_schedule:
@@ -325,6 +322,15 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
         _explicit = min(_repl, float(pipeline_ra_peak) / _lost_nominal)
         _repl = max(0.0, _repl - _explicit)
         _repl_basis += f"; less {_explicit:.0%} already priced by the accepted pipeline"
+    # Each named drug still erodes on its own path (the Products tab); the replaced share of the lost revenue is new
+    # launches, which sit in "other products and new launches".
+    index = [1.0 if t <= covered_years else
+             max(0.05, 1.0 - (1.0 - _repl) * sum(p_["share"] - path(p_, t) for p_ in parts))
+             for t in range(1, n + 1)]
+    sched, prev = [], 1.0
+    for t in range(n):
+        sched.append(round((1.0 + float(growth_schedule[t])) * index[t] / prev - 1.0, 6))
+        prev = index[t]
     for p_ in parts:
         further = rel(p_, end_yr + 50) - rel(p_, end_yr)
         if further > 0:
