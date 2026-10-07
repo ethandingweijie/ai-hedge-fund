@@ -269,7 +269,11 @@ def check(entry: dict, sources: dict[str, Optional[dict]]) -> dict:
                 found[src] = best
         rank = _RANK
         # The most recent document speaks last: the stage of the latest-dated source that names a stage.
-        dated = sorted((v.get("date") or "", k) for k, v in texts.items() if k in found and found[k].get("stage"))
+        # Same-day tie (the 8-K and the call on results day): the filed release outranks the spoken call, which
+        # also discusses partners' trials and plans (REGN: Hansoh's China Phase 3 for olatorepatide).
+        _pri = {"transcript": 0, "10-K": 1, "8-K": 2}
+        dated = sorted((v.get("date") or "", _pri.get(k, 0), k) for k, v in texts.items() if k in found and found[k].get("stage"))
+        dated = [(d_, k) for d_, _, k in dated]
         latest_src = dated[-1][1] if dated else None
         top = found[latest_src]["stage"] if latest_src else None
         inp = str(a.get("phase") or "")

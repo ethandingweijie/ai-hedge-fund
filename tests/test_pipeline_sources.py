@@ -52,3 +52,10 @@ def test_excluded_asset_codes_in_free_text_count_as_covered():
 def test_no_backspace_bytes_in_the_module():
     import inspect
     assert chr(8) not in inspect.getsource(ps)
+
+
+def test_on_results_day_the_filed_release_outranks_the_call():
+    src = dict(SOURCES)
+    src["transcript"] = {"url": "u3", "date": "2026-07-30", "text": "Cemdisiran was studied in a Phase 3 trial in gMG."}
+    a = {x["name"].split(" (")[0]: x for x in ps.check(_entry(), src)["assets"]}
+    assert a["Cemdisiran"]["verdict"] == "corroborated"           # the 8-K (filed) speaks, not the same-day call
