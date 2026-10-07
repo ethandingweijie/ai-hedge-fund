@@ -183,6 +183,9 @@ def _driver(tr: dict, key: str) -> Any:
         return 0.5 if (tr.get("timing") or {}).get("flow_fractions") else 1.0
     if key == "roll_forward_years":
         return (tr.get("timing") or {}).get("roll_forward_years") or 0.0
+    if key == "terminal_loe_multiplier":                   # plan I14: 1 when no LOE input priced
+        v = tr.get(key)
+        return float(v) if isinstance(v, (int, float)) else (1.0 if tr else None)
     v = tr.get(key)
     if key == "margin_delta_absolute" and v is None and tr:
         return 0.0
@@ -461,7 +464,8 @@ class _Book:
                        ("net_debt", "Net debt (valuation currency)", BIG),
                        ("shares", "Shares outstanding", BIG),
                        ("disc_point", "Discount point within each year's cash-flow window (0.5 = mid-year; 1 = year end)", "0.00"),
-                       ("roll_forward_years", "Years from the balance-sheet date to the valuation date (value carried at the year-1 rate)", "0.0000")]
+                       ("roll_forward_years", "Years from the balance-sheet date to the valuation date (value carried at the year-1 rate)", "0.0000"),
+                       ("terminal_loe_multiplier", "Terminal value kept after loss of exclusivity beyond the horizon (1 = no LOE input)", "0.0000")]
             for key, lab, fmt in drivers:
                 sh.label(r, 1, lab, indent=1)
                 for j, s in enumerate(SCENARIOS):
@@ -1257,7 +1261,7 @@ class _Book:
         lines = [
             ("Sum of PV of FCF (balance-sheet date)", f"=SUM({F}{pvr}:{Lc}{pvr})", BIG),                 # 0
             ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),  # 1
-            ("Terminal value (final full year × (1 + g))", f"=IFERROR({Lc}{rv}*{Lc}{mr}*(1+{tg})/(B{out + 1}-{tg}),0)", BIG),  # 2
+            ("Terminal value (final full year × (1 + g) × LOE multiplier)", f"=IFERROR({Lc}{rv}*{Lc}{mr}*(1+{tg})/(B{out + 1}-{tg}),0)*{A[f'terminal_loe_multiplier:{s}{sfx}']}", BIG),  # 2
             ("PV of terminal value (balance-sheet date)", f"=B{out + 2}*{Lc}{der}", BIG),                 # 3
             ("Carry to the valuation date: (1 + year-1 rate) ^ years", f"=(1+{F}{wr})^{roll}", "0.0000"),  # 4
             ("PV of FCF (valuation date)", f"=B{out}*B{out + 4}", BIG),                                 # 5

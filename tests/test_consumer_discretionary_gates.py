@@ -1087,6 +1087,9 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         # 2026-10-04 (owner, decision D2): the projection is dated -- flows after the balance-sheet
         # date, discounted mid-window, carried to the valuation date. None keeps whole years at year end.
         "timing",
+        # 2026-10-07 (plan I14, REGN review): one scalar on the terminal value for loss of exclusivity
+        # after the horizon. Still margin-only; 1.0 reproduces the old path exactly.
+        "terminal_multiplier",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
                    "depreciation", "ebit",

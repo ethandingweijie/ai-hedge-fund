@@ -523,3 +523,81 @@ def test_rerun_e29_collaboration_heavy_revenue_stands_the_ev_revenue_leg_down():
     assert "fwd_rev = fwd_rev * (1.0 - _collab_share)" not in src
     assert '"_ev_rev_collab_stood_down"' in src and src.count("_ev_rev_collab_stood_down") >= 3
     assert 'startswith("Consensus sets DCF years 1-2")' in src
+
+
+# ── REGN review (2026-10-07): EPS basis, LOE, the effective method ────────────
+
+def test_regn_forward_pe_reverts_to_street_eps_in_every_scenario_when_guidance_diverges():
+    def sc(s, cur, cons):
+        return {"eps": {s: cur}, "_consensus": {"eps": {s: cons}}, "_source": {"eps": {s: "forecast EPS"}}}
+    out, dec, flag = d._eps_street_basis_guard(sc("base", 42.1, 60.4), "base", None, 15)
+    assert dec is True and out["eps"]["base"] == 60.4 and "street EPS" in flag
+    out_b, dec_b, flag_b = d._eps_street_basis_guard(sc("bear", 29.9, 45.7), "bear", dec, 15)
+    assert out_b["eps"]["bear"] == 45.7 and flag_b is None                       # one basis for all scenarios
+    _, dec2, _ = d._eps_street_basis_guard(sc("base", 43.7, 44.5), "base", None, 15)   # LLY: in line, kept
+    assert dec2 is False
+    _, dec3, _ = d._eps_street_basis_guard(sc("base", 42.1, 60.4), "base", None, 3)    # thin coverage, kept
+    assert dec3 is False
+
+
+def test_i14_loe_overlay_erodes_named_drugs_and_haircuts_the_terminal_value():
+    entry = {"total_revenue": 100.0, "drugs": [
+        {"name": "Dupi", "revenue_fy": 40.0, "loe_year": 2031, "modality": "biologic"},
+        {"name": "Late", "revenue_fy": 20.0, "loe_year": 2040, "modality": "small_molecule"}]}
+    o = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025)
+    idx = o["index"]
+    assert idx[4] == pytest.approx(1.0)                                         # 2030: before any LOE
+    assert idx[5] == pytest.approx(1.0 - 0.4 * 0.15)                            # 2031: LOE year, biologic 15%
+    assert idx[9] == pytest.approx(1.0 - 0.4 * 0.65)                            # 2035: fifth year, 65% (curve end)
+    assert (1 + o["growth_schedule"][5]) == pytest.approx(1.05 * idx[5] / idx[4])
+    # after the horizon: Dupi is fully eroded by 2035; Late loses 90% from 2040, five years past 2035, discounted
+    disc = 1.025 / 1.08
+    lost = 0.2 * 0.90 * disc ** 5
+    assert o["terminal_multiplier"] == pytest.approx(1.0 - lost / idx[9])
+    # a drug already eroding loses only what is left of its curve
+    e2 = {"total_revenue": 100.0, "drugs": [{"name": "Eylea", "revenue_fy": 30.0, "loe_year": 2024, "modality": "biologic"}]}
+    o2 = d._franchise_loe_overlay(e2, 2025, [0.0] * 10, 0.08, 0.025)
+    # years 1-2 (2026-27) are guidance / consensus and already price it; 2028 = year 5 vs year 4 at end-2027
+    assert o2["index"][:2] == [1.0, 1.0]
+    assert o2["index"][2] == pytest.approx(1.0 - 0.3 * (0.65 - 0.60) / (1 - 0.60))
+    assert d._franchise_loe_entry("REGN") == {} or d._franchise_loe_entry("REGN").get("status") == "ACCEPTED"
+
+
+def test_i14_terminal_multiplier_scales_the_terminal_value_and_the_workbook_reproduces_it():
+    a = d._project_dcf(1000.0, 0.2, 0.05, 0.0, 0.09, 0.03, -0.05, 100.0, 10.0)
+    b = d._project_dcf(1000.0, 0.2, 0.05, 0.0, 0.09, 0.03, -0.05, 100.0, 10.0, terminal_multiplier=0.8)
+    assert b[2] == pytest.approx(0.8 * a[2]) and b[1] == pytest.approx(a[1])
+    formulas = pytest.importorskip("formulas")
+    tm = d._dcf_timing("2025-09-30", "2026-06-30", "2026-10-04")
+    sched = [0.18, 0.19, 0.2, 0.2, 0.21, 0.21, 0.21, 0.21, 0.21, 0.21]
+    iv, pv_f, pv_t, rows = d._project_dcf(1000.0, 0.2, 0.08, 0.0, 0.09, 0.03, -0.05, 100.0, 10.0,
+                                          margin_schedule=sched, minority_interest=40.0, preferred_equity=5.0,
+                                          timing=tm, terminal_multiplier=0.8)
+    run = _wbt._run()
+    dr = run["data"]["dcf_range"]["TEST"]
+    for s in ("bear", "base", "bull"):
+        legs = copy.deepcopy(dr[s]["leg_inputs"])
+        legs["DCF"].update(value=iv, pv_fcf_per_share=pv_f, pv_tv_per_share=pv_t, projection_rows=rows,
+                           growth_schedule=None, growth_base=0.08, timing=tm, minority_interest=40.0,
+                           preferred_equity=5.0, terminal_loe_multiplier=0.8)
+        dr[s]["leg_inputs"] = legs
+        dr[s]["method_iv_table"]["DCF"] = iv
+        dr[s]["intrinsic_value"] = round(0.4 * iv + 0.4 * 230.0 + 0.2 * 180.0, 2)
+    iv_b = dr["base"]["intrinsic_value"]
+    dr["12m_targets"] = {s: round(150.0 + 0.35 * (iv_b - 150.0), 2) for s in ("bear", "base", "bull")}
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "loe.xlsx")
+        Path(p).write_bytes(build_workbook(run, "TEST"))
+        sol = {k.upper(): v for k, v in formulas.ExcelModel().loads(p).finish().calculate().items()}
+        ws = load_workbook(p)["DCF"]
+        checks = [c.row for c in ws["A"] if c.value == "Check"]
+        assert checks
+        for r in checks:
+            v = sol[f"'[LOE.XLSX]DCF'!B{r}".upper()]
+            v = getattr(v, "value", v)[0][0]
+            assert abs(v) < 1e-6, (r, v)
+
+
+def test_regn_a_quarantined_pipeline_says_the_valuation_is_the_commercial_business_alone():
+    import inspect
+    assert "not the hybrid SOTP the method selection chose" in inspect.getsource(d)

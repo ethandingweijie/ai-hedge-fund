@@ -174,6 +174,85 @@ _INTEREST_IS_COST_FAMILIES = frozenset({"Banks", "Insurance", "Fee financials", 
 _ASSET_LIGHT_FEE_PROFILES = frozenset({"Payment Networks"})
 #: Owner, 2026-10-06: below this trailing dividend yield the DDM leg's weight rolls into the DCF legs.
 _DDM_MIN_YIELD = 0.02
+
+#: Plan I14 (REGN review, 2026-10-07): a drug's revenue after loss of exclusivity, as the CUMULATIVE share of its
+#: pre-LOE revenue lost by year k (k = 1 is the LOE year, partial). Small molecules: generics take 80-90% within
+#: a year or two of entry; biologics: biosimilars erode more slowly and less deeply (IQVIA biosimilar uptake,
+#: ~50-65% after four to five years). Proposed defaults -- the owner may restate them.
+_LOE_EROSION_CURVES = {
+    "small_molecule": (0.50, 0.80, 0.88, 0.90),
+    "biologic":       (0.15, 0.35, 0.50, 0.60, 0.65),
+}
+
+
+def _loe_cum_loss(modality: str, years_since_loe: int) -> float:
+    """Cumulative share of the drug's pre-LOE revenue lost `years_since_loe` years in (1 = the LOE year)."""
+    if years_since_loe <= 0:
+        return 0.0
+    curve = _LOE_EROSION_CURVES.get(str(modality or "").lower(), _LOE_EROSION_CURVES["biologic"])
+    return float(curve[min(years_since_loe, len(curve)) - 1])
+
+
+def _franchise_loe_entry(ticker: str) -> dict:
+    """The owner-accepted franchise LOE input for a ticker (valuation_constants.franchise_loe), else {}."""
+    try:
+        from src.data import valuation_constants as _vc
+        e = ((_vc.load().get("franchise_loe") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        return e if str(e.get("status") or "").upper() == "ACCEPTED" else {}
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
+#: Years 1-2 of the DCF are guidance / consensus, which already price the erosion they can see (Eylea
+#: biosimilars, Trulicity); the LOE curves take over from the end of year 2, never counting it twice.
+_LOE_COVERED_YEARS = 2
+#: Share of the post-horizon LOE loss the terminal value assumes the pipeline replaces (owner decision pending,
+#: 2026-10-07): 0 haircuts the perpetuity for the whole loss (Lilly: tirzepatide 56% of revenue, LOE 2036 ->
+#: terminal value x0.41); sell-side pharma DCFs credit next-generation products against the cliff.
+_LOE_TERMINAL_REPLACEMENT = 0.0
+
+
+def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wacc: float,
+                           tgr: float, covered_years: int = _LOE_COVERED_YEARS) -> Optional[dict]:
+    """Plan I14 (REGN review, 2026-10-07): each named drug loses revenue after its LOE year on its modality's
+    curve, measured from the end of the covered years (a drug already eroding loses only what is left). Returns the
+    re-shaped growth schedule, the revenue index per year, and the terminal multiplier for erosion still to
+    come after the horizon (each drug's further loss, discounted from its timing at (1 + g) / (1 + WACC)).
+    None when the entry names no drug with a share of revenue."""
+    total = entry.get("total_revenue")
+    drugs = [d for d in (entry.get("drugs") or []) if isinstance(d, dict)
+             and isinstance(d.get("revenue_fy"), (int, float)) and isinstance(d.get("loe_year"), (int, float))]
+    if not drugs or not isinstance(total, (int, float)) or total <= 0 or not growth_schedule:
+        return None
+    n = len(growth_schedule)
+    parts = []
+    for d in drugs:
+        mod = str(d.get("modality") or "biologic").lower()
+        loe = int(d["loe_year"])
+        base_loss = _loe_cum_loss(mod, fy0_year + covered_years - loe + 1)   # lost by the end of the covered years
+        parts.append({"name": d.get("name"), "share": float(d["revenue_fy"]) / float(total), "loe_year": loe,
+                      "modality": mod, "_base": base_loss, "_rem": max(1e-9, 1.0 - base_loss)})
+
+    def rel(p_, yr):
+        return max(0.0, (_loe_cum_loss(p_["modality"], yr - p_["loe_year"] + 1) - p_["_base"]) / p_["_rem"])
+
+    index = [1.0 if t <= covered_years else max(0.05, 1.0 - sum(p_["share"] * rel(p_, fy0_year + t) for p_ in parts))
+             for t in range(1, n + 1)]
+    sched, prev = [], 1.0
+    for t in range(n):
+        sched.append(round((1.0 + float(growth_schedule[t])) * index[t] / prev - 1.0, 6))
+        prev = index[t]
+    end_yr = fy0_year + n
+    w = max(float(wacc), float(tgr) + 0.005)
+    lost_after = 0.0
+    for p_ in parts:
+        further = rel(p_, end_yr + 50) - rel(p_, end_yr)
+        if further > 0:
+            lost_after += (p_["share"] * further * (1.0 - _LOE_TERMINAL_REPLACEMENT)
+                           * ((1.0 + tgr) / (1.0 + w)) ** max(1, p_["loe_year"] - end_yr))
+    return {"growth_schedule": sched, "index": [round(x, 6) for x in index],
+            "terminal_multiplier": round(max(0.0, 1.0 - lost_after / index[-1]), 6),
+            "drugs": [{k: v for k, v in p_.items() if not k.startswith("_")} for p_ in parts]}
 #: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
 #: add-on to the operating value; for a Pre-approval Biotech the pipeline IS the company and stays a leg.
 _PIPELINE_ADDON_PROFILES = frozenset({"Commercial Biotech", "Large Cap Pharma"})
@@ -4124,6 +4203,42 @@ def _guidance_forward_overlay(est: Optional[dict], fwd: Optional[dict], scenario
     return out
 
 
+#: Owner rule (REGN review, 2026-10-07): the forward P/E multiplies the peers' NTM P/E, which is measured on street
+#: (consensus, adjusted) EPS. When the guidance-derived EPS sits further than this from consensus (5+ analysts),
+#: it is on another basis, and the leg prices consensus EPS -- in every scenario, so bear / base / bull share one
+#: definition. Regeneron: forecast $42.1 (GAAP net income / shares) vs consensus $60.4 NTM (adjusted).
+_EPS_BASIS_DIVERGENCE = 0.15
+_EPS_BASIS_MIN_ANALYSTS = 5
+
+
+def _eps_street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Optional[bool],
+                            analyst_count: Optional[float]) -> tuple[Optional[dict], Optional[bool], Optional[str]]:
+    """(fwd_sc, decision, flag). The decision is taken on the base scenario (passed back in for bear and bull):
+    True when base guidance EPS diverges from consensus by more than _EPS_BASIS_DIVERGENCE with enough analysts.
+    When True, this scenario's EPS reverts to consensus and is labelled as such."""
+    if not isinstance(fwd_sc, dict):
+        return fwd_sc, decided, None
+    eps_src = ((fwd_sc.get("_source") or {}).get("eps") or {}).get(scenario)
+    cons = ((fwd_sc.get("_consensus") or {}).get("eps") or {}).get(scenario)
+    cur = (fwd_sc.get("eps") or {}).get(scenario)
+    flag = None
+    if decided is None and scenario == "base":
+        decided = bool(eps_src and isinstance(cons, (int, float)) and cons > 0 and isinstance(cur, (int, float))
+                       and (analyst_count or 0) >= _EPS_BASIS_MIN_ANALYSTS
+                       and abs(float(cur) / float(cons) - 1.0) > _EPS_BASIS_DIVERGENCE)
+        if decided:
+            flag = (f"Forward P/E on consensus EPS {float(cons):,.2f} ({int(analyst_count)} analysts), not the {eps_src} "
+                    f"{float(cur):,.2f} ({float(cur) / float(cons) - 1.0:+.0%}): the peers' NTM P/E is measured on street EPS, "
+                    f"and a figure more than {_EPS_BASIS_DIVERGENCE:.0%} away is on another basis; all scenarios use consensus")
+    if decided and eps_src and isinstance(cons, (int, float)) and cons > 0:
+        out = {k: dict(v) if isinstance(v, dict) else v for k, v in fwd_sc.items()}
+        out["eps"][scenario] = float(cons)
+        out["_source"]["eps"] = dict(out["_source"].get("eps") or {})
+        out["_source"]["eps"][scenario] = "consensus EPS, street basis (guidance-derived EPS on another basis)"
+        return out, decided, flag
+    return fwd_sc, decided, flag
+
+
 def _fwd_label(fwd: Optional[dict], metric: str, scenario: str, default: str) -> str:
     src = (((fwd or {}).get("_source") or {}).get(metric) or {}).get(scenario)
     return f"{default.split(' (')[0]} ({src}, {scenario})" if src else default
@@ -4734,6 +4849,7 @@ def _project_dcf(
     minority_interest: float = 0.0,
     preferred_equity: float = 0.0,
     timing: Optional[dict] = None,
+    terminal_multiplier: float = 1.0,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -4945,7 +5061,8 @@ def _project_dcf(
         if wacc_T <= tgr:
             wacc_T = tgr + 0.005
         fcf_terminal = fcf_T * (1 + tgr)
-        tv           = fcf_terminal / (wacc_T - tgr)
+        # Plan I14: the share of the terminal franchise still to lose exclusivity after the horizon.
+        tv           = fcf_terminal / (wacc_T - tgr) * float(terminal_multiplier if terminal_multiplier is not None else 1.0)
         pv_tv        = tv * disc_cum
 
     # Owner, 2026-09-26: the same bridge as the multiples legs (minority
@@ -8743,7 +8860,12 @@ def _compute_method_value(
                 _n_ex = len(most_recent.get("pipeline_assets_extractor") or [])
                 most_recent.setdefault("_pipeline_quarantine", (
                     f"rNPV (Pipeline): quarantined -- no owner-accepted pipeline input for {profile_name}; "
-                    f"{_n_ex} extractor asset(s) held, not priced; the blend re-weights without the leg"))
+                    f"{_n_ex} extractor asset(s) held, not priced; the blend re-weights without the leg"
+                    # REGN review (2026-10-07): say what the valuation IS while the input is pending -- a hybrid
+                    # SOTP without its pipeline leg is the commercial business alone, pipeline at zero.
+                    + ("; until a pipeline input is accepted the valuation is the commercial business alone "
+                       "(pipeline at zero), not the hybrid SOTP the method selection chose"
+                       if (profile_name or "") in ("Commercial Biotech", "Biotech Platform (SOTP)") else "")))
         if not assets:
             return None
         iv, audit = _compute_rnpv(
@@ -15407,6 +15529,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _hist_lo, _hist_hi = (min(_hist_m), max(_hist_m)) if _hist_m else (None, None)
         except Exception:                                  # noqa: BLE001
             _margin_sigma, _hist_lo, _hist_hi = 0.0, None, None
+        _eps_street_basis: Optional[bool] = None     # REGN review: one EPS basis for all three scenarios
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -15665,6 +15788,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                                      forward_consensus, scenario, _gf_for_legs, revenue_base,
                                                      ntm_e=_ntm_e_for_research, fx_to_valuation=float(fx_rate or 1.0),
                                                      valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
+            if _bank_models.get(scenario) and _bank_models[scenario].get("feeds_legs"):
+                _eps_street_basis = False                  # the bank model's EPS is the leg's basis by design
+            _fwd_cons_sc, _eps_street_basis, _esb_flag = _eps_street_basis_guard(
+                _fwd_cons_sc, scenario, _eps_street_basis, (forward_consensus or {}).get("analyst_count_eps"))
+            if _esb_flag:
+                ticker_forward_flags.append(_esb_flag)
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
                 ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
@@ -15892,6 +16021,29 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # The same context every DCF-family leg projects with below.
             _dcf_timing_ctx = _dcf_timing(most_recent.get("period"),
                                           most_recent.get("_balance_sheet_period"), end_date)
+            # Plan I14 (REGN review, 2026-10-07): a drug franchise loses exclusivity -- the owner-accepted LOE
+            # input erodes each named drug inside the horizon and haircuts the terminal value for what is
+            # still to come. Without it a Dupixent cliff inside ten years runs into a perpetuity.
+            _loe_tv_mult = 1.0
+            try:
+                _loe_e = _franchise_loe_entry(ticker) if is_biopharma_sector(sector) else {}
+                _p4 = str(most_recent.get("period") or "")[:4]
+                if _loe_e and _p4.isdigit():
+                    _loe_base = list(_growth_schedule) if _growth_schedule else [float(g)] * _PROJECTION_YEARS
+                    _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr))
+                    if _loe:
+                        _growth_schedule = _loe["growth_schedule"]
+                        _loe_tv_mult = _loe["terminal_multiplier"]
+                        if scenario == "base":
+                            ticker_forward_flags.append(
+                                "Loss of exclusivity (owner-accepted franchise input): "
+                                + ", ".join(f"{d_['name']} {d_['share']:.0%} of revenue, LOE {d_['loe_year']} ({d_['modality']})"
+                                            for d_ in _loe["drugs"])
+                                + f"; revenue index in year {len(_loe['index'])} {_loe['index'][-1]:.2f}x of the un-eroded path; "
+                                f"terminal value x{_loe_tv_mult:.3f} for erosion after the horizon (margins held, so the lost "
+                                "profit is if anything understated)")
+            except Exception:                              # noqa: BLE001
+                _loe_tv_mult = 1.0
             _dcf_projection = {
                 "growth_schedule": _growth_schedule,
                 "wacc_schedule": _wacc_schedule,
@@ -15916,11 +16068,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 margin_delta_absolute=md_abs,
                 margin_schedule=_gf_margin_sched,
                 timing=_dcf_timing_ctx,
+                terminal_multiplier=_loe_tv_mult,
             )
             leg_inputs["DCF"] = {
                 "kind": "dcf", "value": iv_dcf,
                 "revenue_base": revenue_base, "fcf_margin_base": fcf_margin_base,
                 "growth_base": g, "growth_schedule": _growth_schedule,
+                "terminal_loe_multiplier": _loe_tv_mult,
                 "margin_delta_absolute": md_abs, "wacc": wacc,
                 "wacc_schedule": _wacc_schedule, "tgr": tgr, "fcf_floor": fcf_floor,
                 "net_debt": float(net_debt or 0.0), "shares": shares,
