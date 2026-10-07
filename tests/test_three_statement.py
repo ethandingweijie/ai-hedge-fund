@@ -259,3 +259,30 @@ def test_the_pdf_statements_page_carries_the_forecast_years_and_the_suite_beneat
     dr3 = {**dr, "three_statements": {"skipped": "RECONCILIATION FAILED: x", "fy_labels": None}}
     out3 = pr._financial_statements_page(fs, styles, 500.0, dr3)
     assert any("Forecast columns withheld: RECONCILIATION FAILED" in getattr(f, "text", "") for f in out3)
+
+
+def test_e1_amortisation_heavy_capex_follows_its_intensity_and_amortisation_runs_off_intangibles():
+    # GILD / AMGN (2026-10-07): D&A carries acquired-intangible amortisation; capex = D&A charged it as cash every year.
+    import copy as _cp
+    series = _cp.deepcopy(_gft._SERIES)
+    for r in series:
+        r["depreciation_and_amortization"] = 0.10 * r["revenue"]      # D&A 10% of revenue
+        r["capital_expenditure"] = -0.02 * r["revenue"]               # capex 2% (5x below D&A)
+    fc = gf.build_forecast(_gft._BLOCK, scenario="base", series=series, profile_name="Managed Care", sector="Healthcare",
+                           wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+    rows = fc["rows"]
+    assert rows[0]["capex"] == pytest.approx(0.02 * rows[0]["revenue"])                 # capex at its intensity
+    assert rows[0]["amortisation"] > rows[4]["amortisation"] > 0                         # amortisation runs off
+    assert rows[0]["ufcf"] > rows[0]["nopat"]                                            # the non-cash add-back is kept
+    raw = _cp.deepcopy(RAW)
+    raw["FY2025"]["goodwill"], raw["FY2025"]["intangible_assets"] = 6.0e9, 3.0e9
+    raw["FY2025"]["total_assets"] = 14.5e9 + 7.15e9
+    raw["FY2025"]["shareholders_equity"] = 4.4e9 + 7.15e9
+    out = ts.build(fc, ts.opening_from_raw(raw), ts.assumptions_from_history(raw, spot=190.0))
+    assert not out.get("skipped"), out.get("skipped")
+    sch = out["schedules"]
+    assert all(x < 0 for x in sch["gi_amort"]) and all(rc["ok"] for rc in out["reconciliation"]["assertions"]) \
+        if isinstance(out.get("reconciliation"), dict) and out["reconciliation"].get("assertions") else True
+    gi = out["balance"]["goodwill_intangibles"]
+    assert gi[1] < gi[0]                                                                  # intangibles amortise
+    assert all(abs(x) < 1.0 for x in out["balance"]["balance_check"])

@@ -204,6 +204,9 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
     for i in range(min(years, len(rows))):
         r = rows[i]
         rev, ebit, da, capex, dnwc = float(r["revenue"]), float(r["ebit"]), float(r.get("da") or 0.0), float(r.get("capex") or 0.0), float(r.get("delta_nwc") or 0.0)
+        # Plan E1 (owner, 2026-10-07): acquired-intangible amortisation runs off goodwill & intangibles, not PP&E.
+        amort = max(0.0, min(float(r.get("amortisation") or 0.0), da))
+        dep = da - amort
         cogs = rev * (1.0 - gm) if gm is not None else None
         gp = rev - cogs if cogs is not None else None
         opex = (gp - ebit - da) if gp is not None else (rev - ebit - da)
@@ -242,8 +245,8 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         ap = ((cogs if cogs is not None else rev) * ap_d / 365.0) if ap_d is not None else o["payables"]
         named_dnwc = (ar - o["receivables"]) + (inv - o["inventory"]) - (ap - o["payables"])
         oca = o["other_current_assets"] + (dnwc - named_dnwc)   # the forecast's working-capital change beyond the named lines
-        ppe = o["ppe"] + capex - da
-        gi, onca = o["goodwill_intangibles"], o["other_noncurrent_assets"]
+        ppe = o["ppe"] + capex - dep
+        gi, onca = o["goodwill_intangibles"] - amort, o["other_noncurrent_assets"]
         std, ltd, ocl, oncl, mi = o["short_term_debt"] + draw, o["long_term_debt"], o["other_current_liabilities"], o["other_noncurrent_liabilities"], o["minority_interest"] + mi_share
         re_ = o["retained_earnings"] + ni - div                   # assertion 3: RE_end = RE_prior + NI - common dividends
         oeq = o["other_equity"] - bb + sbc + issue
@@ -273,7 +276,7 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
             L(BS, k, x)
         for k, x in (("wc_receivables", ar), ("wc_inventory", inv), ("wc_payables", ap), ("wc_other", oca), ("wc_net", ar + inv + oca - ap),
                      ("wc_change", dnwc), ("wc_named_change", named_dnwc),
-                     ("ppe_open", o["ppe"]), ("ppe_capex", capex), ("ppe_da", -da), ("ppe_close", ppe),
+                     ("ppe_open", o["ppe"]), ("ppe_capex", capex), ("ppe_da", -dep), ("ppe_close", ppe), ("gi_amort", -amort),
                      ("debt_open", debt_open), ("debt_draw", draw), ("debt_close", debt_open + draw), ("debt_interest", int_exp), ("debt_rate", ir),
                      ("cash_open", o["cash"]), ("cash_interest_income", int_inc)):
             L(SCH, k, x)
@@ -284,13 +287,14 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
                 (1, "Total assets = total liabilities + equity", ta, tle),
                 (2, "Cash ending = cash beginning + net change in cash (CFS)", cash, o["cash"] + (cfo + cfi + cff)),
                 (3, "Retained earnings ending = prior + net income - common dividends", re_, o["retained_earnings"] + ni - div),
-                (4, "Net PP&E = prior + capex (CFS) - depreciation (IS)", ppe, o["ppe"] + capex - da),
+                (4, "Net PP&E = prior + capex (CFS) - depreciation (IS)", ppe, o["ppe"] + capex - dep),
                 (5, "NWC change (CFS) = -(delta current assets ex cash - delta current liabilities ex short debt)", -dnwc, -(d_ca_ex_cash - d_cl_ex_std))):
             recon.append({"id": aid, "name": name, "year": labels[i], "lhs": lhs, "rhs": rhs, "diff": lhs - rhs, "ok": abs(lhs - rhs) < 0.01})
         checks.append({"year": labels[i], "balance_gap": ta - tle, "cash_at_minimum": draw > 0, "revolver_draw": draw,
                        "net_debt_to_ebitda": ((std + ltd - cash - o["sti"]) / (ebit + da)) if (ebit + da) else None,
                        "interest_cover": (ebit / int_exp) if int_exp else None})
-        o.update({"cash": cash, "receivables": ar, "inventory": inv, "other_current_assets": oca, "ppe": ppe, "payables": ap, "short_term_debt": std,
+        o.update({"cash": cash, "receivables": ar, "inventory": inv, "other_current_assets": oca, "ppe": ppe, "goodwill_intangibles": gi,
+                  "payables": ap, "short_term_debt": std,
                   "equity": eq, "retained_earnings": re_, "other_equity": oeq, "minority_interest": mi})
         rev_prev = rev
     if gm is None:

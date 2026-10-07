@@ -44,6 +44,11 @@ DEFAULTS: dict = {
     # litigation escrow and settlement flows) set half of every new revenue dollar as absorbed.
     "nwc_intensity_bounds": [-0.10, 0.30],
     "da_useful_life_years": 10,
+    # Owner, 2026-10-07 (GILD / AMGN reviews, plan E1): D&A this far above capex is acquired-intangible amortisation
+    # (Horizon, Immunomedics, Kite), not PP&E wearing out -- capex then follows its own intensity and the
+    # amortisation runs off as a non-cash charge.
+    "amortisation_heavy_ratio": 2.0,
+    "amortisation_runoff_years": 10,
     "tax_rate_default": 0.21,
     "tax_rate_bounds": [0.10, 0.35],
     "jaws_margin_step": 0.005,
@@ -199,7 +204,7 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
     ni0 = _f(last.get("net_income"))
     int0 = abs(_f(last.get("interest_expense")) or 0.0)
     shares0 = _f(last.get("shares_outstanding"))
-    taxes, alphas, nwcs, buybacks, roics = [], [], [], [], []
+    taxes, alphas, nwcs, buybacks, roics, cx_int = [], [], [], [], [], []
     for i, r in enumerate(rows):
         e, n, it = _f(r.get("ebit")) or _f(r.get("operating_income")), _f(r.get("net_income")), abs(_f(r.get("interest_expense")) or 0.0)
         if e is not None and n is not None and (e - it) > 0:
@@ -207,6 +212,9 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         ic = _f(r.get("invested_capital"))
         if e is not None and ic and ic > 0:
             roics.append(e * (1.0 - cfg["tax_rate_default"]) / ic)
+        _rv, _cx = _f(r.get("revenue")), _f(r.get("capital_expenditure"))
+        if _rv and _rv > 0 and _cx is not None:
+            cx_int.append(abs(_cx) / _rv)
         bb = _f(r.get("share_buyback")) or _f(r.get("common_stock_repurchased"))
         if bb is not None:
             buybacks.append(abs(bb))
@@ -224,6 +232,7 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
     return {
         "revenue": rev0, "ebit": ebit0, "ebit_margin": (ebit0 / rev0) if (ebit0 is not None and rev0) else None,
         "da": da0, "da_pct_revenue": (da0 / rev0) if rev0 else 0.0, "capex": capex0, "net_income": ni0,
+        "capex_intensity": _median(cx_int, 0.0, 1.0, (capex0 / rev0) if rev0 else 0.0) if cx_int else ((capex0 / rev0) if rev0 else 0.0),
         "interest": int0, "shares": shares0,
         "tax_rate": _median(taxes, tb[0], tb[1], cfg["tax_rate_default"]), "tax_rate_source": "history" if taxes else "default",
         "capex_alpha": _median(alphas, cfg["capex_alpha_bounds"][0], cfg["capex_alpha_bounds"][1], 0.0), "capex_alpha_n": len(alphas),
@@ -511,6 +520,16 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     # three statements
     da_prev, life = hist["da"], float(cfg["da_useful_life_years"])
     alpha, nwc_i = hist["capex_alpha"], hist["nwc_intensity"]
+    # Plan E1 (owner, 2026-10-07; GILD / AMGN): when D&A runs well above capex the gap is acquired-intangible
+    # amortisation. Setting capex = D&A then charged that non-cash amortisation as cash every year (AMGN capex 13.4% of
+    # revenue vs 5.1% actual, ~$3bn a year; GILD FCF margin 34% -> 21-23%). In that case capex follows its historical
+    # intensity, depreciation rolls with it, and amortisation runs off over amortisation_runoff_years.
+    _cx0, _da0 = float(hist.get("capex") or 0.0), float(hist.get("da") or 0.0)
+    amort_mode = bool(_cx0 > 0 and _da0 > float(cfg.get("amortisation_heavy_ratio", 2.0)) * _cx0)
+    dep_prev = min(_da0, _cx0) if amort_mode else None
+    amort0 = (_da0 - dep_prev) if amort_mode else 0.0
+    cx_int = float(hist.get("capex_intensity") or 0.0)
+    amort_n = float(cfg.get("amortisation_runoff_years", 10))
     shares_path = [float(shares)]
     epsT = dec.get("eps_T_guided")
     rows: list[dict] = []
@@ -518,18 +537,30 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         rev, rev_prev = rev_all[t], rev_all[t - 1]
         ebit = rev * margins[t - 1]
         nopat = ebit * (1.0 - tax)
-        da = da_prev
-        capex = da + alpha * max(rev - rev_prev, 0.0)
+        if amort_mode:
+            capex = cx_int * rev
+            dep = dep_prev
+            amort = amort0 * max(0.0, 1.0 - t / amort_n)
+            da = dep + amort
+        else:
+            da = da_prev
+            capex = da + alpha * max(rev - rev_prev, 0.0)
+            amort = 0.0
         dnwc = nwc_i * (rev - rev_prev)
         ufcf = nopat + da - capex - dnwc
         ni = (ebit - interest) * (1.0 - tax)
         sh = shares_path[-1]
         rows.append({"year": t, "revenue": rev, "growth": growth_sched[t - 1], "ebit_margin": margins[t - 1], "ebit": ebit,
                      "tax": (ebit - interest) * tax if ebit > interest else 0.0, "nopat": nopat, "da": da, "capex": capex,
-                     "capex_maintenance": da, "capex_growth": capex - da, "delta_nwc": dnwc, "ufcf": ufcf,
+                     "capex_maintenance": (min(capex, da - amort) if amort_mode else da),
+                     "capex_growth": (capex - min(capex, da - amort)) if amort_mode else capex - da,
+                     "amortisation": amort, "delta_nwc": dnwc, "ufcf": ufcf,
                      "net_income": ni, "shares": sh, "eps": (ni / sh) if sh else None, "fcf_margin": (ufcf / rev) if rev else 0.0,
                      "phase": ("engine path" if t <= len(lead) else "guided") if t <= T else ("fade" if t <= T + F else "steady")})
-        da_prev = da + (capex - da) / life
+        if amort_mode:
+            dep_prev = dep + (capex - dep) / life
+        else:
+            da_prev = da + (capex - da) / life
         shares_path.append(sh)
     # share-count integrity: the EPS endpoint implies a share count; the buyback that gets there
     inv: list[dict] = []

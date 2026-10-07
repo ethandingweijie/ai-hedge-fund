@@ -531,7 +531,7 @@ def test_regn_forward_pe_reverts_to_street_eps_in_every_scenario_when_guidance_d
     def sc(s, cur, cons):
         return {"eps": {s: cur}, "_consensus": {"eps": {s: cons}}, "_source": {"eps": {s: "forecast EPS"}}}
     out, dec, flag = d._eps_street_basis_guard(sc("base", 42.1, 60.4), "base", None, 15)
-    assert dec is True and out["eps"]["base"] == 60.4 and "street EPS" in flag
+    assert dec is True and out["eps"]["base"] == 60.4 and "street (adjusted) EPS" in flag
     out_b, dec_b, flag_b = d._eps_street_basis_guard(sc("bear", 29.9, 45.7), "bear", dec, 15)
     assert out_b["eps"]["bear"] == 45.7 and flag_b is None                       # one basis for all scenarios
     _, dec2, _ = d._eps_street_basis_guard(sc("base", 43.7, 44.5), "base", None, 15)   # LLY: in line, kept
@@ -883,3 +883,15 @@ def test_a_drug_past_its_loe_never_grows_with_the_company():
         vals = [U[t] * dp["path"][t] for t in range(10)]          # the drug's revenue relative to FY0 revenue
         start = 2 if dp["name"] == "Eylea 2mg" else 4            # after the covered years / from the year before LOE
         assert all(vals[t + 1] <= vals[t] + 1e-12 for t in range(start, 9)), dp["name"]
+
+
+def test_e2_ev_ebitda_reverts_to_street_ebitda_when_the_model_is_on_another_basis():
+    # AMGN (2026-10-07): reported EBITDA $16.3bn against $21.7bn consensus under an adjusted peer multiple.
+    def sc(s_, cur, cons):
+        return {"ebitda": {s_: cur}, "_consensus": {"ebitda": {s_: cons}}, "_source": {"ebitda": {s_: "guidance-derived FY+1 revenue x margin"}}}
+    out, dec, flag = d._street_basis_guard(sc("base", 16.3e9, 21.7e9), "base", None, 20, "ebitda")
+    assert dec is True and out["ebitda"]["base"] == 21.7e9 and "Forward EV/EBITDA" in flag and "21.70bn" in flag
+    out_b, _, _ = d._street_basis_guard(sc("bull", 18e9, 23e9), "bull", dec, 20, "ebitda")
+    assert out_b["ebitda"]["bull"] == 23e9
+    _, dec2, _ = d._street_basis_guard(sc("base", 20.9e9, 21.7e9), "base", None, 20, "ebitda")
+    assert dec2 is False

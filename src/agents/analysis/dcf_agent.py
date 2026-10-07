@@ -4319,32 +4319,44 @@ _EPS_BASIS_DIVERGENCE = 0.15
 _EPS_BASIS_MIN_ANALYSTS = 5
 
 
-def _eps_street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Optional[bool],
-                            analyst_count: Optional[float]) -> tuple[Optional[dict], Optional[bool], Optional[str]]:
-    """(fwd_sc, decision, flag). The decision is taken on the base scenario (passed back in for bear and bull):
-    True when base guidance EPS diverges from consensus by more than _EPS_BASIS_DIVERGENCE with enough analysts.
-    When True, this scenario's EPS reverts to consensus and is labelled as such."""
+def _street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Optional[bool],
+                        analyst_count: Optional[float], metric: str = "eps") -> tuple[Optional[dict], Optional[bool], Optional[str]]:
+    """(fwd_sc, decision, flag) for one forward metric (`eps` -> Forward P/E, `ebitda` -> Forward EV/EBITDA). The
+    decision is taken on the base scenario (passed back in for bear and bull): True when the base guidance-derived
+    figure diverges from consensus by more than _EPS_BASIS_DIVERGENCE with enough analysts. When True, this
+    scenario's metric reverts to consensus and is labelled as such -- the peers' NTM multiple is measured on the
+    street's (adjusted) figures."""
     if not isinstance(fwd_sc, dict):
         return fwd_sc, decided, None
-    eps_src = ((fwd_sc.get("_source") or {}).get("eps") or {}).get(scenario)
-    cons = ((fwd_sc.get("_consensus") or {}).get("eps") or {}).get(scenario)
-    cur = (fwd_sc.get("eps") or {}).get(scenario)
+    m_src = ((fwd_sc.get("_source") or {}).get(metric) or {}).get(scenario)
+    cons = ((fwd_sc.get("_consensus") or {}).get(metric) or {}).get(scenario)
+    cur = (fwd_sc.get(metric) or {}).get(scenario)
+    leg = {"eps": "Forward P/E", "ebitda": "Forward EV/EBITDA"}.get(metric, metric)
+    lab = {"eps": "EPS", "ebitda": "EBITDA"}.get(metric, metric)
     flag = None
     if decided is None and scenario == "base":
-        decided = bool(eps_src and isinstance(cons, (int, float)) and cons > 0 and isinstance(cur, (int, float))
+        decided = bool(m_src and isinstance(cons, (int, float)) and cons > 0 and isinstance(cur, (int, float))
                        and (analyst_count or 0) >= _EPS_BASIS_MIN_ANALYSTS
                        and abs(float(cur) / float(cons) - 1.0) > _EPS_BASIS_DIVERGENCE)
         if decided:
-            flag = (f"Forward P/E on consensus EPS {float(cons):,.2f} ({int(analyst_count)} analysts), not the {eps_src} "
-                    f"{float(cur):,.2f} ({float(cur) / float(cons) - 1.0:+.0%}): the peers' NTM P/E is measured on street EPS, "
-                    f"and a figure more than {_EPS_BASIS_DIVERGENCE:.0%} away is on another basis; all scenarios use consensus")
-    if decided and eps_src and isinstance(cons, (int, float)) and cons > 0:
+            _fmt = (lambda x: f"{x:,.2f}") if metric == "eps" else (lambda x: f"{x / 1e9:,.2f}bn")
+            flag = (f"{leg} on consensus {lab} {_fmt(float(cons))} ({int(analyst_count)} analysts), not the {m_src} "
+                    f"{_fmt(float(cur))} ({float(cur) / float(cons) - 1.0:+.0%}): the peers' NTM multiple is measured on street "
+                    f"(adjusted) {lab}, and a figure more than {_EPS_BASIS_DIVERGENCE:.0%} away is on another basis; all "
+                    "scenarios use consensus")
+    if decided and m_src and isinstance(cons, (int, float)) and cons > 0:
         out = {k: dict(v) if isinstance(v, dict) else v for k, v in fwd_sc.items()}
-        out["eps"][scenario] = float(cons)
-        out["_source"]["eps"] = dict(out["_source"].get("eps") or {})
-        out["_source"]["eps"][scenario] = "consensus EPS, street basis (guidance-derived EPS on another basis)"
+        out[metric][scenario] = float(cons)
+        out["_source"][metric] = dict(out["_source"].get(metric) or {})
+        out["_source"][metric][scenario] = f"consensus {lab}, street basis (guidance-derived {lab} on another basis)"
         return out, decided, flag
     return fwd_sc, decided, flag
+
+
+def _eps_street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Optional[bool],
+                            analyst_count: Optional[float]) -> tuple[Optional[dict], Optional[bool], Optional[str]]:
+    """The EPS case of _street_basis_guard (REGN review, 2026-10-07)."""
+    return _street_basis_guard(fwd_sc, scenario, decided, analyst_count, "eps")
 
 
 #: Owner, 2026-10-07 (share-count intervention, REGN): the research EPS is unusable as the forecast's endpoint when
@@ -15827,6 +15839,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except Exception:                                  # noqa: BLE001
             _margin_sigma, _hist_lo, _hist_hi = 0.0, None, None
         _eps_street_basis: Optional[bool] = None     # REGN review: one EPS basis for all three scenarios
+        _ebitda_street_basis: Optional[bool] = None  # AMGN / GILD review (plan E2): one EBITDA basis too
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -16138,6 +16151,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _fwd_cons_sc, scenario, _eps_street_basis, (forward_consensus or {}).get("analyst_count_eps"))
             if _esb_flag:
                 ticker_forward_flags.append(_esb_flag)
+            # Plan E2 (owner, 2026-10-07; AMGN / GILD): the EV/EBITDA leg applied the peers' multiple, quoted on ADJUSTED
+            # EBITDA, to the model's reported EBITDA (AMGN $16.3bn vs $21.7bn consensus) -- the same street-basis rule.
+            if _bank_models.get(scenario) and _bank_models[scenario].get("feeds_legs"):
+                _ebitda_street_basis = False
+            _fwd_cons_sc, _ebitda_street_basis, _ebb_flag = _street_basis_guard(
+                _fwd_cons_sc, scenario, _ebitda_street_basis,
+                (forward_consensus or {}).get("analyst_count_revenue"), "ebitda")
+            if _ebb_flag:
+                ticker_forward_flags.append(_ebb_flag)
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
                 ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "

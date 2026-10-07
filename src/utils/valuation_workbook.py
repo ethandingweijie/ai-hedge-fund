@@ -2081,6 +2081,10 @@ class _Book:
         arow("gm", "Gross margin (blank = no COGS line filed)", IS.get("gross_margin") or [None] * n, PCT)
         arow("em", "EBIT margin", IS["ebit_margin"], PCT)
         arow("da", "Depreciation & amortisation", [-x for x in IS["da"]], MIL, 1e-6)
+        # Plan E1 (owner, 2026-10-07): of which amortisation of acquired intangibles -- it runs off goodwill &
+        # intangibles, not PP&E (0 when the forecast is not amortisation-heavy).
+        _am = list(((th.get("schedules") or {}).get("gi_amort")) or [0.0] * n)
+        arow("amort", "  of which amortisation of acquired intangibles", [-float(x or 0.0) for x in _am][:n] + [0.0] * max(0, n - len(_am)), MIL, 1e-6)
         arow("capex", "Capital expenditure", [-x for x in CF["capex"]], MIL, 1e-6)
         arow("nwc", "Working capital absorbed (+ = cash out)", [-x for x in CF["change_nwc"]], MIL, 1e-6)
         arow("sbc", "Stock-based compensation, % of revenue", av("sbc_pct"), PCT)
@@ -2146,7 +2150,7 @@ class _Book:
         sh.label(r, 1, "Capex & D&A (PP&E roll-forward)", bold=True); r += 1
         frow("ppe_o", "PP&E, opening", lambda L, P: f"={P}{{ppe}}", typ="Link")
         frow("ppe_cx", "+ Capital expenditure", lambda L, P: f"={L}{A['capex']}", typ="Link")
-        frow("ppe_da", "− Depreciation & amortisation", lambda L, P: f"=-{L}{A['da']}", typ="Link")
+        frow("ppe_da", "− Depreciation (D&A less acquired-intangible amortisation)", lambda L, P: f"=-({L}{A['da']}-{L}{A['amort']})", typ="Link")
         frow("ppe", "PP&E, closing", lambda L, P: f"={L}{R['ppe_o']}+{L}{R['ppe_cx']}+{L}{R['ppe_da']}", bold=True, opening=(op.get("ppe") or 0) * M)
         sh.label(r, 1, "Debt schedule (gross debt held; a revolver draw only to hold the minimum cash)", bold=True); r += 1
         frow("d_open", "Debt, opening (short + long term)", lambda L, P: f"={P}{{std}}+{P}{{ltd}}")
@@ -2185,7 +2189,7 @@ class _Book:
         frow("bs_oca", "Other current assets (schedule)", lambda L, P: f"={L}{R['oca']}", typ="Link", opening=(op.get("other_current_assets") or 0) * M)
         frow("tca", "Total current assets", lambda L, P: f"={L}{R['cash']}+{L}{R['sti']}+{L}{R['bs_ar']}+{L}{R['bs_inv']}+{L}{R['bs_oca']}", bold=True)
         frow("bs_ppe", "Property, plant & equipment (schedule)", lambda L, P: f"={L}{R['ppe']}", typ="Link", opening=(op.get("ppe") or 0) * M)
-        frow("gi", "Goodwill & intangibles (held)", lambda L, P: f"={P}{R['gi']}", opening=(op.get("goodwill_intangibles") or 0) * M)
+        frow("gi", "Goodwill & intangibles (less amortisation of acquired intangibles)", lambda L, P: f"={P}{R['gi']}-{L}{A['amort']}", opening=(op.get("goodwill_intangibles") or 0) * M)
         frow("onca", "Other non-current assets (held)", lambda L, P: f"={P}{R['onca']}", opening=(op.get("other_noncurrent_assets") or 0) * M)
         frow("ta", "Total assets", lambda L, P: f"={L}{R['tca']}+{L}{R['bs_ppe']}+{L}{R['gi']}+{L}{R['onca']}", bold=True)
         frow("bs_ap", "Accounts payable (schedule)", lambda L, P: f"={L}{R['ap']}", typ="Link", opening=(op.get("payables") or 0) * M)
