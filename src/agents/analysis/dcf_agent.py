@@ -182,6 +182,9 @@ _DDM_MIN_YIELD = 0.02
 _LOE_EROSION_CURVES = {
     "small_molecule": (0.50, 0.80, 0.88, 0.90),
     "biologic":       (0.15, 0.35, 0.50, 0.60, 0.65),
+    # Animal health: generics erode slowly and brand loyalty persists (Zoetis: US Draxxin -66%, Rimadyl -39%,
+    # over several years after generic entry).
+    "animal_health":  (0.10, 0.25, 0.40, 0.50, 0.60, 0.65),
 }
 
 
