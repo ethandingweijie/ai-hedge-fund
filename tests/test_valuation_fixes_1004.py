@@ -601,3 +601,16 @@ def test_i14_terminal_multiplier_scales_the_terminal_value_and_the_workbook_repr
 def test_regn_a_quarantined_pipeline_says_the_valuation_is_the_commercial_business_alone():
     import inspect
     assert "not the hybrid SOTP the method selection chose" in inspect.getsource(d)
+
+
+def test_i14_big_pharma_terminal_credits_half_the_post_horizon_loss_to_the_pipeline():
+    # Owner, 2026-10-07: 50% replacement for big pharma; every other profile takes the whole loss.
+    entry = {"total_revenue": 100.0, "drugs": [{"name": "Tirz", "revenue_fy": 56.0, "loe_year": 2036, "modality": "small_molecule"}]}
+    full = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025, profile_name="Commercial Biotech")
+    half = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025, profile_name="Big Pharma (Consolidated DCF)")
+    assert half["terminal_replacement"] == 0.5 and full["terminal_replacement"] == 0.0
+    assert (1 - half["terminal_multiplier"]) == pytest.approx(0.5 * (1 - full["terminal_multiplier"]), abs=1e-5)
+    from src.data import valuation_constants as vc
+    assert vc.load()["franchise_loe"]["entries"]["REGN"]["status"] == "ACCEPTED"
+    assert d._franchise_loe_entry("REGN")["total_revenue"] == 14342900000.0
+    assert d._franchise_loe_entry("LLY") == {}

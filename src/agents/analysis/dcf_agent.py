@@ -206,14 +206,15 @@ def _franchise_loe_entry(ticker: str) -> dict:
 #: Years 1-2 of the DCF are guidance / consensus, which already price the erosion they can see (Eylea
 #: biosimilars, Trulicity); the LOE curves take over from the end of year 2, never counting it twice.
 _LOE_COVERED_YEARS = 2
-#: Share of the post-horizon LOE loss the terminal value assumes the pipeline replaces (owner decision pending,
-#: 2026-10-07): 0 haircuts the perpetuity for the whole loss (Lilly: tirzepatide 56% of revenue, LOE 2036 ->
-#: terminal value x0.41); sell-side pharma DCFs credit next-generation products against the cliff.
-_LOE_TERMINAL_REPLACEMENT = 0.0
+#: Share of the post-horizon LOE loss the terminal value assumes the pipeline replaces. Owner, 2026-10-07: 50% for
+#: big pharma -- a diversified pipeline replaces part of a cliff past the horizon (Lilly: tirzepatide 56% of
+#: revenue, LOE 2036; with no credit the terminal value kept x0.41); every other profile takes the whole loss.
+_LOE_TERMINAL_REPLACEMENT = {"Big Pharma (Consolidated DCF)": 0.5, "Large Cap Pharma": 0.5}
 
 
 def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wacc: float,
-                           tgr: float, covered_years: int = _LOE_COVERED_YEARS) -> Optional[dict]:
+                           tgr: float, covered_years: int = _LOE_COVERED_YEARS,
+                           profile_name: Optional[str] = None) -> Optional[dict]:
     """Plan I14 (REGN review, 2026-10-07): each named drug loses revenue after its LOE year on its modality's
     curve, measured from the end of the covered years (a drug already eroding loses only what is left). Returns the
     re-shaped growth schedule, the revenue index per year, and the terminal multiplier for erosion still to
@@ -245,12 +246,13 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
     end_yr = fy0_year + n
     w = max(float(wacc), float(tgr) + 0.005)
     lost_after = 0.0
+    _repl = float(_LOE_TERMINAL_REPLACEMENT.get(profile_name or "", 0.0))
     for p_ in parts:
         further = rel(p_, end_yr + 50) - rel(p_, end_yr)
         if further > 0:
-            lost_after += (p_["share"] * further * (1.0 - _LOE_TERMINAL_REPLACEMENT)
+            lost_after += (p_["share"] * further * (1.0 - _repl)
                            * ((1.0 + tgr) / (1.0 + w)) ** max(1, p_["loe_year"] - end_yr))
-    return {"growth_schedule": sched, "index": [round(x, 6) for x in index],
+    return {"growth_schedule": sched, "index": [round(x, 6) for x in index], "terminal_replacement": _repl,
             "terminal_multiplier": round(max(0.0, 1.0 - lost_after / index[-1]), 6),
             "drugs": [{k: v for k, v in p_.items() if not k.startswith("_")} for p_ in parts]}
 #: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
@@ -16030,7 +16032,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _p4 = str(most_recent.get("period") or "")[:4]
                 if _loe_e and _p4.isdigit():
                     _loe_base = list(_growth_schedule) if _growth_schedule else [float(g)] * _PROJECTION_YEARS
-                    _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr))
+                    _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr),
+                                                  profile_name=profile_name)
                     if _loe:
                         _growth_schedule = _loe["growth_schedule"]
                         _loe_tv_mult = _loe["terminal_multiplier"]
@@ -16040,8 +16043,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 + ", ".join(f"{d_['name']} {d_['share']:.0%} of revenue, LOE {d_['loe_year']} ({d_['modality']})"
                                             for d_ in _loe["drugs"])
                                 + f"; revenue index in year {len(_loe['index'])} {_loe['index'][-1]:.2f}x of the un-eroded path; "
-                                f"terminal value x{_loe_tv_mult:.3f} for erosion after the horizon (margins held, so the lost "
-                                "profit is if anything understated)")
+                                f"terminal value x{_loe_tv_mult:.3f} for erosion after the horizon"
+                                + (f" ({_loe['terminal_replacement']:.0%} of it replaced by the pipeline, owner rule for {profile_name})"
+                                   if _loe.get("terminal_replacement") else "")
+                                + " (margins held, so the lost profit is if anything understated)")
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
             _dcf_projection = {
