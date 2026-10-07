@@ -4332,7 +4332,8 @@ def _adjusted_reported_ratio(ticker: str, end_date: str, shares: Optional[float]
         return 1.0, "ratio not measured (EPS and statements in different currencies): 1.0"
     try:
         from src.tools.api import get_earnings_surprises, search_line_items
-        q = get_earnings_surprises(ticker, end_date, limit=4) or []
+        # 8 rows: the newest is often the next, unreported quarter (no actual), which the feed drops.
+        q = [r for r in (get_earnings_surprises(ticker, end_date, limit=8) or []) if isinstance(r.get("eps_actual"), (int, float))]
         adj = sum(float(r["eps_actual"]) for r in q[:4]) if len(q) >= 4 else None
         rows = search_line_items(ticker, ["net_income"], end_date, period="quarterly", limit=4) or []
         ni = sum(float(getattr(r, "net_income", 0.0) or 0.0) for r in rows[:4]) if len(rows) >= 4 else None
