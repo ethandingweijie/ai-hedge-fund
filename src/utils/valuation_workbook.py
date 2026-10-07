@@ -1384,7 +1384,10 @@ class _Book:
         r += 1
         sh.section(r, "Cost of debt detail (hybrid model)", 4); r += 1
         for lab, key, fmt in (("Live cost of debt", "rd_live", PCT2), ("Baseline cost of debt", "rd_baseline", PCT2),
-                              ("Debt / (debt + equity)", "dv_ratio", PCT), ("Synthetic rating (from interest cover; sets only the live-spread overlay, not an agency rating)", "rating", None),
+                              ("Debt / (debt + equity)", "dv_ratio", PCT),
+                              (("Rating priced (agency)" if b.get("agency_rating_note") and "Cost of debt on the agency rating" in str(b.get("agency_rating_note"))
+                                else "Synthetic rating (from interest cover; sets only the live-spread overlay, not an agency rating)"), "rating", None),
+                              ("Agency rating", "agency_rating_note", None),
                               ("Credit spread source", "source", None), ("Leverage (net debt / equity)", "leverage", "0.00"),
                               ("Macro regime", "macro_regime", None)):
             if b.get(key) is None:

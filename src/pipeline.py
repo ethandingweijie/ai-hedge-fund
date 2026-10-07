@@ -393,6 +393,14 @@ def run_advanced_pipeline(
     Returns a result dict compatible with print_trading_output().
     """
     progress.start()
+    # Owner, 2026-10-08: agency credit ratings for US tickers are researched in the background from the start of
+    # the run; the DCF's cost of debt waits for them (src.data.credit_ratings).
+    try:
+        from src.data import credit_ratings as _crm
+        for _t in tickers:
+            _crm.prefetch(_t)
+    except Exception:                                      # noqa: BLE001
+        pass
 
     # B2 background executor (peer comparison + price history shadow run).
     # Initialised here so the finally-block cleanup is safe even if the

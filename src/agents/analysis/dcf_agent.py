@@ -1373,11 +1373,20 @@ def _parent_cash(ticker: str) -> Optional[float]:
 
 
 def _agency_rating(ticker: str) -> Optional[str]:
-    """Owner-accepted agency credit rating (valuation_constants.credit_ratings), else None (plan E4)."""
+    """The agency credit rating the cost of debt prices on (plan E4; owner, 2026-10-08 default for US tickers): the
+    owner registry (valuation_constants.credit_ratings) when ACCEPTED, else a researched rating VERIFIED by two
+    agencies within a notch or ACCEPTED by the owner (src.data.credit_ratings); None -> the rating implied by cover."""
     try:
-        from src.data import valuation_constants as _vc
-        e = ((_vc.load().get("credit_ratings") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
-        return e.get("rating") if str(e.get("status") or "").upper() == "ACCEPTED" else None
+        from src.data import credit_ratings as _crm
+        return _crm.lookup(ticker).get("rating")
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _agency_rating_note(ticker: str) -> Optional[str]:
+    try:
+        from src.data import credit_ratings as _crm
+        return _crm.describe(_crm.lookup(ticker))
     except Exception:                                      # noqa: BLE001
         return None
 
@@ -15155,9 +15164,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 agency_rating=_agency_rating(ticker),
             )
             wacc = _wacc_info["wacc"]
-            if _agency_rating(ticker):
-                ticker_forward_flags.append(f"Cost of debt on the owner-accepted agency rating {_agency_rating(ticker)} "
-                                            "(valuation_constants.credit_ratings), not the rating implied by interest cover")
+            _ar_note = _agency_rating_note(ticker)
+            if _ar_note:
+                ticker_forward_flags.append(_ar_note)
+                _wacc_info = {**_wacc_info, "agency_rating_note": _ar_note}
             ticker_forward_flags.append(_wacc_info["audit"])
             # The components, for the Excel export's discount-rate build.
             _wacc_build = {k: v for k, v in _wacc_info.items() if k != "audit"}
