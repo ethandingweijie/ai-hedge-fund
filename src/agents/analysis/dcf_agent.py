@@ -16126,7 +16126,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _p4 = str(most_recent.get("period") or "")[:4]
                 if _loe_e and _p4.isdigit():
                     _loe_base = list(_growth_schedule) if _growth_schedule else [float(g)] * _PROJECTION_YEARS
-                    _ra_usd = _pipeline_risk_adjusted_peak_usd(most_recent.get("pipeline_assets_accepted"))
+                    # The double-count guard applies only where the pipeline IS priced on top of the operating
+                    # legs (the rNPV add-on profiles). VRTX on the consolidated-DCF profile prices no add-on, so its
+                    # accepted pipeline must not eat the replacement credit (TV x0.355 for value never added back).
+                    _ra_usd = (_pipeline_risk_adjusted_peak_usd(most_recent.get("pipeline_assets_accepted"))
+                               if (profile_name or "") in _PIPELINE_ADDON_PROFILES else 0.0)
                     _ra_ccy = None
                     if _ra_usd > 0:
                         _e_ccy = str(_loe_e.get("currency") or "USD").upper()

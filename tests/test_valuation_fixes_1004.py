@@ -690,3 +690,12 @@ def test_regn3_workbook_shows_ntm_peers_street_consensus_and_the_net_debt_bridge
         r = next(c.row for c in ws["A"] if str(c.value or "").startswith("Check: bridge"))
         v = sol[f"'[R3.XLSX]SUMMARY'!B{r}".upper()]
         assert abs(getattr(v, "value", v)[0][0]) < 1e-6
+
+
+def test_i14_the_double_count_guard_only_nets_a_pipeline_that_is_priced():
+    # VRTX (2026-10-07): on the consolidated-DCF profile no rNPV add-on is priced, so the accepted pipeline must
+    # not reduce the terminal replacement credit.
+    import inspect
+    src = inspect.getsource(d)
+    assert 'if (profile_name or "") in _PIPELINE_ADDON_PROFILES else 0.0)' in src
+    assert "Big Pharma (Consolidated DCF)" not in d._PIPELINE_ADDON_PROFILES
