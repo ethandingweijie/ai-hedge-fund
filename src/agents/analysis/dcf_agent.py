@@ -285,7 +285,23 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
     def rel(p_, yr):
         return max(0.0, (_loe_cum_loss(p_["modality"], yr - p_["loe_year"] + 1) - p_["_base"]) / p_["_rem"])
 
-    index = [1.0 if t <= covered_years else max(0.05, 1.0 - sum(p_["share"] * rel(p_, fy0_year + t) for p_ in parts))
+    # Owner, 2026-10-07 (product build): a drug past its LOE does not grow with the company -- its revenue is frozen
+    # at the level of the year before erosion and only declines on its curve after (REGN's EYLEA 2 mg grew 3.3 ->
+    # 4.2bn on the company path once the curve ran out). Each drug's path is its share of the un-eroded company
+    # revenue U_t: `share` until its anchor year a, then share x U_a / U_t x (1 - rel(t)).
+    _U, _u = [], 1.0
+    for _g in growth_schedule:
+        _u *= (1.0 + float(_g))
+        _U.append(_u)
+
+    def path(p_, t):
+        a = max(covered_years, p_["loe_year"] - fy0_year - 1)
+        if t <= a or a < 1:
+            return p_["share"] if t <= a else p_["share"] * (1.0 - rel(p_, fy0_year + t))
+        return p_["share"] * (_U[a - 1] / _U[t - 1]) * (1.0 - rel(p_, fy0_year + t))
+
+    index = [1.0 if t <= covered_years else
+             max(0.05, 1.0 - sum(p_["share"] for p_ in parts) + sum(path(p_, t) for p_ in parts))
              for t in range(1, n + 1)]
     sched, prev = [], 1.0
     for t in range(n):
@@ -320,7 +336,7 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
         _src = {str(d.get("name")): d for d in drugs}
         drug_paths = [{"name": p_["name"], "loe_year": p_["loe_year"], "share": p_["share"],
                        "type": _rt(_src.get(str(p_["name"])) or {}),
-                       "path": [p_["share"] * (1.0 - rel(p_, fy0_year + t)) for t in range(1, n + 1)]} for p_ in parts]
+                       "path": [p_["share"] if t <= covered_years else path(p_, t) for t in range(1, n + 1)]} for p_ in parts]
     except Exception:                                      # noqa: BLE001
         drug_paths = []
     return {"growth_schedule": sched, "index": [round(x, 6) for x in index], "terminal_replacement": _repl,

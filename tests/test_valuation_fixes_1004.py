@@ -547,8 +547,9 @@ def test_i14_loe_overlay_erodes_named_drugs_and_haircuts_the_terminal_value():
     o = d._franchise_loe_overlay(entry, 2025, [0.05] * 10, 0.08, 0.025)
     idx = o["index"]
     assert idx[4] == pytest.approx(1.0)                                         # 2030: before any LOE
-    assert idx[5] == pytest.approx(1.0 - 0.4 * 0.15)                            # 2031: LOE year, biologic 15%
-    assert idx[9] == pytest.approx(1.0 - 0.4 * 0.65)                            # 2035: fifth year, 65% (curve end)
+    # 2031 (LOE year): Dupi frozen at its 2030 level (no company growth after LOE) and down 15% on the curve
+    assert idx[5] == pytest.approx(1.0 - 0.4 + 0.4 * 0.85 / 1.05)
+    assert idx[9] == pytest.approx(1.0 - 0.4 + 0.4 * 0.35 / 1.05 ** 5)          # 2035: fifth year, 65% lost, frozen since 2030
     assert (1 + o["growth_schedule"][5]) == pytest.approx(1.05 * idx[5] / idx[4])
     # after the horizon: Dupi is fully eroded by 2035; Late loses 90% from 2040, five years past 2035, discounted
     disc = 1.025 / 1.08
@@ -869,3 +870,15 @@ def test_product_build_decomposes_the_forecast_by_product_and_costs_and_the_tab_
         for col in ("D", "H", "M"):
             v = sol[f"'[PROD.XLSX]PRODUCTS'!{col}{r}".upper()]
             assert abs(getattr(v, "value", v)[0][0]) < 1e-6, (r, col)
+
+
+def test_a_drug_past_its_loe_never_grows_with_the_company():
+    # REGN EYLEA 2 mg (2026-10-07): already eroding, it rose 3.3 -> 4.2bn on the company path once the curve ran out.
+    entry = {"total_revenue": 100.0, "drugs": [{"name": "Eylea 2mg", "revenue_fy": 20.0, "loe_year": 2024, "modality": "biologic"},
+                                               {"name": "Future", "revenue_fy": 30.0, "loe_year": 2030, "modality": "biologic"}]}
+    o = d._franchise_loe_overlay(entry, 2025, [0.06] * 10, 0.08, 0.025)
+    U = [1.06 ** t for t in range(1, 11)]
+    for dp in o["drug_paths"]:
+        vals = [U[t] * dp["path"][t] for t in range(10)]          # the drug's revenue relative to FY0 revenue
+        start = 2 if dp["name"] == "Eylea 2mg" else 4            # after the covered years / from the year before LOE
+        assert all(vals[t + 1] <= vals[t] + 1e-12 for t in range(start, 9)), dp["name"]
