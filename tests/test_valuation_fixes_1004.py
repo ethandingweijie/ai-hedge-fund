@@ -433,7 +433,7 @@ def test_e1_windfall_years_leave_normalised_earnings_for_non_cyclicals():
 def test_ddm_low_yield_and_scale_cap_rules_are_wired():
     import inspect
     src = inspect.getsource(d)
-    assert d._DDM_MIN_YIELD == 0.02 and "if _yld < _DDM_MIN_YIELD:" in src
+    assert d._DDM_MIN_YIELD == 0.02 and "if _yld < _DDM_MIN_YIELD or _bb_share >= _DDM_MAX_BUYBACK_SHARE:" in src
     assert "_cons_near_ok = True" in src and "the capped rate governs year 3 onward" in src
 
 
@@ -899,3 +899,22 @@ def test_e2_ev_ebitda_reverts_to_street_ebitda_when_the_model_is_on_another_basi
     assert out_b["ebitda"]["bull"] == 23e9
     _, dec2, _ = d._street_basis_guard(sc("base", 20.9e9, 21.7e9), "base", None, 20, "ebitda")
     assert dec2 is False
+
+
+def test_e3_ddm_rolls_when_buybacks_are_a_material_share_of_the_cash_returned():
+    import inspect
+    src = inspect.getsource(d)
+    assert d._DDM_MAX_BUYBACK_SHARE == 0.30
+    assert "_bb_share >= _DDM_MAX_BUYBACK_SHARE" in src and "a dividend model prices only part of the payout" in src
+
+
+def test_e4_agency_rating_replaces_the_synthetic_one_and_research_risk_is_waived_for_steady_earners():
+    from src.data import sector_profiles as sp_
+    assert sp_.agency_rating_bucket("BBB+") == "BBB" and sp_.agency_rating_bucket("A3") == "A"
+    syn = sp_.get_cost_of_debt(interest_coverage=30.0, sector="Biopharma")
+    agy = sp_.get_cost_of_debt(interest_coverage=30.0, sector="Biopharma", rating_override="BBB+")
+    assert syn["rating"] == "AAA" and agy["rating"] == "BBB" and agy["cost_of_debt"] > syn["cost_of_debt"]
+    import inspect
+    src = inspect.getsource(d)
+    assert 'agency_rating=_agency_rating(ticker)' in src and 'is_biopharma_sector(sector)' in src and '(_prof3 or _pipe_priced)' in src
+    assert d._agency_rating("GILD") is None or isinstance(d._agency_rating("GILD"), str)

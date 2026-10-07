@@ -678,12 +678,29 @@ def synthetic_rating(interest_coverage: float | None,
     return "CCC"
 
 
+def agency_rating_bucket(rating: str | None) -> str | None:
+    """An agency rating (S&P / Fitch 'BBB+', Moody's 'Baa1') mapped to the seven FRED buckets, else None."""
+    if not rating:
+        return None
+    r = str(rating).strip().upper().replace(" ", "")
+    moodys = {"AAA": "AAA", "AA": "AA", "A": "A", "BAA": "BBB", "BA": "BB", "B": "B", "CAA": "CCC", "CA": "CCC", "C": "CCC"}
+    import re as _re
+    m = _re.match(r"^(AAA|AA|A|BAA|BA|B|CAA|CA|C)[123]?$", r)
+    if m and (r.startswith("BAA") or r.startswith("BA") or r.startswith("CAA") or r[-1:] in "123"):
+        return moodys[m.group(1)]
+    m = _re.match(r"^(AAA|AA|A|BBB|BB|B|CCC|CC|C|D)[+-]?$", r)
+    if m:
+        return {"CC": "CCC", "C": "CCC", "D": "CCC"}.get(m.group(1), m.group(1))
+    return None
+
+
 def get_cost_of_debt(
     interest_coverage: float | None,
     sector: str,
     profile: str = "",
     risk_free_rate: float = 0.0395,
     as_of: str | None = None,
+    rating_override: str | None = None,
 ) -> dict:
     """Compute live cost of debt using FRED aggregate spread × sector multiplier.
 
@@ -705,7 +722,9 @@ def get_cost_of_debt(
     from src.tools.fred import get_fred_spread  # local import: avoid cycle
 
     bucket  = resolve_credit_bucket(sector, profile)
-    rating  = synthetic_rating(interest_coverage, is_financial=(bucket == "Financial"))
+    # Plan E4 (owner, 2026-10-07; GILD review): an owner-accepted AGENCY rating replaces the synthetic one from
+    # interest cover (GILD read "AAA" from cover against BBB+ / A3 at the agencies).
+    rating  = agency_rating_bucket(rating_override) or synthetic_rating(interest_coverage, is_financial=(bucket == "Financial"))
     mult    = SECTOR_CREDIT_MULTIPLIERS.get(bucket, 1.00)
     series  = FRED_RATING_SERIES.get(rating, "BAMLC0A4CBBB")
 
@@ -4691,6 +4710,7 @@ def compute_wacc_hybrid(
     interest_coverage: float | None = None,
     net_debt: float | None = None,
     market_cap: float | None = None,
+    agency_rating: str | None = None,
     tax_rate: float = _DEFAULT_TAX_RATE,
     risk_free_rate: float = _DEFAULT_RISK_FREE,
 ) -> dict:
@@ -4757,6 +4777,7 @@ def compute_wacc_hybrid(
         sector=sector,
         profile=profile,
         risk_free_rate=risk_free_rate,
+        rating_override=agency_rating,
     )
     rd_live     = cod["cost_of_debt"]
     rating      = cod["rating"]

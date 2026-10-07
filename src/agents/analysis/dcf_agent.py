@@ -174,6 +174,9 @@ _INTEREST_IS_COST_FAMILIES = frozenset({"Banks", "Insurance", "Fee financials", 
 _ASSET_LIGHT_FEE_PROFILES = frozenset({"Payment Networks"})
 #: Owner, 2026-10-06: below this trailing dividend yield the DDM leg's weight rolls into the DCF legs.
 _DDM_MIN_YIELD = 0.02
+#: Plan E3 (owner, 2026-10-07; GILD / AMGN reviews): a dividend model prices only the dividend. When buybacks are at
+#: least this share of the cash returned, it prices a fraction of the payout -- its weight rolls into the DCF legs.
+_DDM_MAX_BUYBACK_SHARE = 0.30
 
 #: Plan I14 (REGN review, 2026-10-07): a drug's revenue after loss of exclusivity, as the CUMULATIVE share of its
 #: pre-LOE revenue lost by year k (k = 1 is the LOE year, partial). Small molecules: generics take 80-90% within
@@ -1263,6 +1266,16 @@ def _parent_cash(ticker: str) -> Optional[float]:
             return None
         v = e.get("value")
         return float(v) if isinstance(v, (int, float)) else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _agency_rating(ticker: str) -> Optional[str]:
+    """Owner-accepted agency credit rating (valuation_constants.credit_ratings), else None (plan E4)."""
+    try:
+        from src.data import valuation_constants as _vc
+        e = ((_vc.load().get("credit_ratings") or {}).get("entries") or {}).get(str(ticker or "").upper()) or {}
+        return e.get("rating") if str(e.get("status") or "").upper() == "ACCEPTED" else None
     except Exception:                                      # noqa: BLE001
         return None
 
@@ -14954,8 +14967,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 interest_coverage=_coverage,
                 net_debt=net_debt,
                 market_cap=_market_cap,
+                agency_rating=_agency_rating(ticker),
             )
             wacc = _wacc_info["wacc"]
+            if _agency_rating(ticker):
+                ticker_forward_flags.append(f"Cost of debt on the owner-accepted agency rating {_agency_rating(ticker)} "
+                                            "(valuation_constants.credit_ratings), not the rating implied by interest cover")
             ticker_forward_flags.append(_wacc_info["audit"])
             # The components, for the Excel export's discount-rate build.
             _wacc_build = {k: v for k, v in _wacc_info.items() if k != "audit"}
@@ -15004,6 +15021,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
         _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")
         _wacc_loading = {"HIGH": 0.0050, "MEDIUM": 0.0025, "LOW": 0.0}.get(_risk_flag, 0.0025)
+        # Plan E4 (owner, 2026-10-07; GILD / AMGN reviews): for a DRUG DEVELOPER a MEDIUM research-risk loading is waived
+        # when it was profitable in each of its last three years or its pipeline is priced explicitly -- the rNPV
+        # (PTRS) and the LOE model already carry the clinical risk; the charge double-penalised GILD and AMGN. HIGH stays.
+        try:
+            _ni3 = [r.get("net_income") for r in (series or [])[-3:]]
+            _prof3 = len(_ni3) == 3 and all(isinstance(x, (int, float)) and x > 0 for x in _ni3)
+            _pipe_priced = bool(most_recent.get("pipeline_input_accepted")) and (profile_name or "") in _PIPELINE_ADDON_PROFILES
+            # Scoped to drug developers: the flag there is clinical risk, which the rNPV (PTRS) and the LOE model price;
+            # elsewhere the research-risk flag stands (it is the research's own concern, not a size penalty).
+            if (_risk_flag != "HIGH" and _wacc_loading and is_biopharma_sector(sector)
+                    and (_prof3 or _pipe_priced)):
+                _wacc_build["research_risk_waived"] = ("profitable in each of the last three years" if _prof3
+                                                       else "pipeline priced explicitly (rNPV carries its risk)")
+                ticker_forward_flags.append(f"Research-risk WACC loading (+{_wacc_loading * 1e4:.0f}bp, flag {_risk_flag}) waived: "
+                                            + _wacc_build["research_risk_waived"])
+                _wacc_loading = 0.0
+        except Exception:                                  # noqa: BLE001
+            pass
         _wacc_build["research_risk_loading"] = _wacc_loading
         _wacc_build["research_risk_flag"] = _risk_flag
         if _wacc_loading:
@@ -17353,14 +17388,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _dps = most_recent.get("dividends_per_share")
                     _px = (resolved_mcap / shares) if (resolved_mcap and shares) else None
                     _yld = (float(_dps) / float(_px)) if (isinstance(_dps, (int, float)) and _px and _px > 0) else 0.0
-                    if _yld < _DDM_MIN_YIELD:
+                    _bb = abs(float(most_recent.get("common_stock_repurchased") or most_recent.get("share_buyback") or 0.0))
+                    _dv = abs(float(most_recent.get("dividends_and_distributions") or 0.0))
+                    _bb_share = (_bb / (_bb + _dv)) if (_bb + _dv) > 0 else 0.0
+                    if _yld < _DDM_MIN_YIELD or _bb_share >= _DDM_MAX_BUYBACK_SHARE:
                         _dcf_legs = [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") in _DCF_FAMILY_NAMES]
                         _into = _dcf_legs or [m["name"] for m in _eff_profile_methods if isinstance(m, dict) and m.get("name") != "DDM"]
                         _eff_profile_methods, _ddm_rec = _roll_leg_weight(_eff_profile_methods, "DDM", _into)
                         if scenario == "base" and _ddm_rec.get("dropped"):
                             forward_flags.append(
-                                f"DDM: trailing dividend yield {_yld:.1%} is below {_DDM_MIN_YIELD:.0%}; its weight "
-                                f"(w={_ddm_rec.get('dropped_weight', 0.0):.2f}) rolls into "
+                                (f"DDM: trailing dividend yield {_yld:.1%} is below {_DDM_MIN_YIELD:.0%}; its weight "
+                                 if _yld < _DDM_MIN_YIELD else
+                                 f"DDM: buybacks are {_bb_share:.0%} of the cash returned (dividends {_dv / 1e9:,.1f}bn, buybacks "
+                                 f"{_bb / 1e9:,.1f}bn) -- a dividend model prices only part of the payout; its weight ")
+                                + f"(w={_ddm_rec.get('dropped_weight', 0.0):.2f}) rolls into "
                                 + ", ".join(f"{k} +{v:.3f}" for k, v in (_ddm_rec.get("rolled") or {}).items()))
             except Exception:  # noqa: BLE001
                 pass
