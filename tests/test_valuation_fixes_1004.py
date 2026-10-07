@@ -699,3 +699,69 @@ def test_i14_the_double_count_guard_only_nets_a_pipeline_that_is_priced():
     src = inspect.getsource(d)
     assert 'if (profile_name or "") in _PIPELINE_ADDON_PROFILES else 0.0)' in src
     assert "Big Pharma (Consolidated DCF)" not in d._PIPELINE_ADDON_PROFILES
+
+
+# ── Share-count intervention (owner, 2026-10-07, REGN) ─────────────────────────────────────────────────
+
+def _failing_gf():
+    rows = [{"year": 1, "net_income": 4.67e9}, {"year": 2, "net_income": 4.44e9}]
+    return {"horizon_years": 2, "rows": rows, "deconstruction": {"eps_T_guided": 35.5},
+            "invariants": [{"id": 3, "name": "Share-count integrity", "ok": False,
+                            "detail": "guided EPS implies 125m shares in the target year vs 107m today"}]}
+
+
+def _research_block():
+    return {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+            "estimates": {"base": {"revenue_growth_fy1": 0.15, "revenue_growth_fy2": 0.12, "ebitda_margin_fy1": 0.31,
+                                   "ebitda_margin_fy2": 0.31, "eps_fy1": 32.0, "eps_fy2": 35.5}},
+            "medium_term_target": {"metric": "eps", "target_year": "FY2029", "mid": 50}}
+
+
+def test_share_count_failure_with_street_coverage_rebuilds_the_forecast_on_the_street():
+    fwd = {"analyst_count_eps": 15, "_fy1_fy2": {
+        "eps": {"bear": (45.7, 47.9), "base": (55.94, 61.85), "bull": (61.4, 69.6)},
+        "revenue": {"bear": (16.5e9, 17.4e9), "base": (17.17e9, 18.6e9), "bull": (17.8e9, 19.8e9)}}}
+    blk = d._share_count_intervention(_research_block(), _failing_gf(), fwd,
+                                      {"fy1_period": "2026-12-31", "fy2_period": "2027-12-31"},
+                                      14.34e9, 107e6, 1.09, "last four quarters", "USD")
+    sci = blk["_share_count_intervention"]
+    assert sci["action"] == "rebuilt_on_street"
+    assert sci["eps_model_reported"] == pytest.approx(4.44e9 / 107e6)
+    b = blk["estimates"]["base"]
+    assert b["eps_fy2"] == pytest.approx(61.85) and "ebitda_margin_fy2" not in b
+    assert b["revenue_growth_fy1"] == pytest.approx(17.17e9 / 14.34e9 - 1)
+    assert blk["_eps_basis_ratio"] == 1.09 and blk["medium_term_target"] == {}
+    assert blk["estimates"]["bear"]["eps_fy2"] == pytest.approx(47.9)
+
+
+def test_share_count_failure_without_street_coverage_rebases_to_the_model():
+    fwd = {"analyst_count_eps": 2, "_fy1_fy2": {"eps": {"base": (55.94, 61.85)}, "revenue": {"base": (17.17e9, 18.6e9)}}}
+    blk = d._share_count_intervention(_research_block(), _failing_gf(), fwd, {}, 14.34e9, 107e6, 1.0, "n/a", "USD")
+    assert blk["_share_count_intervention"]["action"] == "rebased_to_model"
+    assert "eps_fy2" not in blk["estimates"]["base"] and blk["medium_term_target"] == {}
+    assert d._share_count_intervention(_research_block(), {**_failing_gf(), "invariants": [{"id": 3, "ok": True}]},
+                                       fwd, {}, 14.34e9, 107e6, 1.0, "n/a", "USD") is None
+
+
+def test_an_adjusted_eps_block_with_its_ratio_builds_the_same_forecast_as_the_reported_block():
+    from src.agents.analysis import guidance_forecast as gfm
+    series = [{"revenue": 34e9, "ebit": 1.6e9, "net_income": 1.1e9, "interest_expense": 110e6, "depreciation_and_amortization": 180e6,
+               "capital_expenditure": -120e6, "change_in_working_capital": -200e6, "shares_outstanding": 58e6, "invested_capital": 7e9, "share_buyback": -500e6},
+              {"revenue": 38e9, "ebit": 1.9e9, "net_income": 1.3e9, "interest_expense": 110e6, "depreciation_and_amortization": 190e6,
+               "capital_expenditure": -140e6, "change_in_working_capital": -250e6, "shares_outstanding": 56e6, "invested_capital": 7.5e9, "share_buyback": -600e6}]
+    rep = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+           "estimates": {"base": {"revenue_growth_fy1": 0.05, "revenue_growth_fy2": 0.06, "eps_fy1": 25.0, "eps_fy2": 27.0}}}
+    adj = {**rep, "estimates": {"base": {"revenue_growth_fy1": 0.05, "revenue_growth_fy2": 0.06, "eps_fy1": 30.0, "eps_fy2": 32.4}},
+           "_eps_basis_ratio": 1.2}
+    kw = dict(scenario="base", series=series, profile_name="Commercial Biotech", sector="Biopharma", wacc=0.08, tgr=0.025,
+              shares=56e6, net_debt=0.0, spot=400.0)
+    a, b = gfm.build_forecast(rep, **kw), gfm.build_forecast(adj, **kw)
+    assert [round(r["net_income"]) for r in a["rows"]] == [round(r["net_income"]) for r in b["rows"]]
+    i3 = next(i for i in b["invariants"] if i["id"] == 3)
+    assert i3["ok"] is not False
+    # the final payload states the share-count status
+    p = d._guidance_forecast_payload({**b, "share_count_intervention": {"action": "rebuilt_on_street"}})
+    assert p["share_count_status"] == "CORRECTED" and p["share_count_intervention"]["action"] == "rebuilt_on_street"
+    assert d._guidance_forecast_payload(b)["share_count_status"] in ("PASS", "n/a")
+    bad = {**b, "invariants": [{"id": 3, "ok": False}]}
+    assert d._guidance_forecast_payload(bad)["share_count_status"] == "UNRESOLVED"

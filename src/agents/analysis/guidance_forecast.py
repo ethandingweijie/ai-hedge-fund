@@ -418,6 +418,15 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                 tg[_k] = tg[_k] * _fxe
         if tg.get("target") and tg["target"].get("metric") == "eps":
             tg["target"]["value"] = float(tg["target"]["value"]) * _fxe
+    # Owner, 2026-10-07 (share-count intervention): a block rebuilt on STREET EPS carries the street's adjusted
+    # figures for the forward legs (the peers' P/E basis) and the company's adjusted / reported ratio; the margin
+    # and the share-count check run on the REPORTED equivalent, the basis of the model's net income.
+    _r_basis = _num((block or {}).get("_eps_basis_ratio"))
+    if _r_basis and _r_basis > 0 and abs(_r_basis - 1.0) > 1e-9:
+        for _k in ("eps1", "eps2"):
+            if tg.get(_k) is not None:
+                tg[_k] = tg[_k] / _r_basis
+        tg["eps_basis_ratio"] = _r_basis
     # Owner, 2026-10-04 (plan 1B.4): place the research's FY+1 on the right projection year. Year 1
     # is the fiscal year after the last audited one; research that labels a LATER year as its FY+1
     # (09618.HK: FY2027 against an FY2025 last actual) had its growth applied a year early. The

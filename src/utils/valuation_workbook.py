@@ -299,6 +299,16 @@ class _Book:
         for inv in ((self.dr.get("guidance_forecast") or {}).get("invariants") or []):
             if inv.get("ok") is False:
                 out.append(f"FORECAST CHECK FAILED — {inv.get('name')}: {inv.get('detail')}")
+        # Owner, 2026-10-07: a share-count failure is corrected, not only reported -- the banner says what failed,
+        # the three EPS figures, what was done and what the check reads after.
+        _sci = (self.dr.get("guidance_forecast") or {}).get("share_count_intervention") or {}
+        if _sci:
+            _f = lambda x: f"{x:,.2f}" if isinstance(x, (int, float)) else "n/a"   # noqa: E731
+            out.append(f"FORECAST CHECK CORRECTED — Share-count integrity failed on the research EPS ({_sci.get('check_failed')}). "
+                       f"Research EPS {_f(_sci.get('eps_research'))}; model net income / diluted shares {_f(_sci.get('eps_model_reported'))} "
+                       f"(reported); street {_f(_sci.get('eps_street_adjusted'))} ({_sci.get('street_analysts')} analysts, adjusted; "
+                       f"adjusted / reported {_num(_sci.get('adjusted_reported_ratio')) or 1.0:.2f}). Action: {_sci.get('note')}. "
+                       f"Check after: {_sci.get('check_after')}.")
         return out
 
     def _net_debt_label(self) -> str:

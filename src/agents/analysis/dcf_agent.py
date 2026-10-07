@@ -4315,6 +4315,117 @@ def _eps_street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Opti
     return fwd_sc, decided, flag
 
 
+#: Owner, 2026-10-07 (share-count intervention, REGN): the research EPS is unusable as the forecast's endpoint when
+#: it is further than this from street consensus (5+ analysts) -- the forecast is then rebuilt on the street.
+_SCI_STREET_DIVERGENCE = 0.25
+_SCI_MIN_ANALYSTS = 5
+#: The company's adjusted / reported EPS ratio is trusted inside this band (else 1.0 and said so).
+_SCI_RATIO_BOUNDS = (0.85, 1.60)
+
+
+def _adjusted_reported_ratio(ticker: str, end_date: str, shares: Optional[float],
+                             same_currency: bool) -> tuple[float, str]:
+    """(adjusted / reported EPS over the last four quarters, basis). Street EPS (FMP) is on the companies' adjusted
+    basis; the model's net income is reported. 1.0 when the data is missing, the currencies differ, or the ratio
+    falls outside _SCI_RATIO_BOUNDS -- with the reason."""
+    if not same_currency:
+        return 1.0, "ratio not measured (EPS and statements in different currencies): 1.0"
+    try:
+        from src.tools.api import get_earnings_surprises, search_line_items
+        q = get_earnings_surprises(ticker, end_date, limit=4) or []
+        adj = sum(float(r["eps_actual"]) for r in q[:4]) if len(q) >= 4 else None
+        rows = search_line_items(ticker, ["net_income"], end_date, period="quarterly", limit=4) or []
+        ni = sum(float(getattr(r, "net_income", 0.0) or 0.0) for r in rows[:4]) if len(rows) >= 4 else None
+        if not adj or not ni or not shares or ni <= 0:
+            return 1.0, "ratio not measured (fewer than four quarters of adjusted EPS or net income): 1.0"
+        rep_eps = ni / float(shares)
+        r = adj / rep_eps
+        if not (_SCI_RATIO_BOUNDS[0] <= r <= _SCI_RATIO_BOUNDS[1]):
+            return 1.0, f"measured {r:.2f} (adjusted {adj:,.2f} / reported {rep_eps:,.2f}) is outside the band: 1.0"
+        return round(r, 4), f"last four quarters: adjusted EPS {adj:,.2f} / reported {rep_eps:,.2f} = {r:.2f}"
+    except Exception as _e:                                # noqa: BLE001
+        return 1.0, f"ratio not measured ({type(_e).__name__}): 1.0"
+
+
+def _share_count_intervention(block: dict, gf: dict, forward_consensus: Optional[dict], street_meta: Optional[dict],
+                              revenue_base: Optional[float], shares: Optional[float], ratio: float,
+                              ratio_basis: str, valuation_currency: Optional[str]) -> Optional[dict]:
+    """Owner, 2026-10-07 (REGN): the forecast's share-count check is an audit that ACTS. On a failure the research
+    EPS is diagnosed against the model's own (net income / shares, reported) and the street's (adjusted; converted
+    at the company's adjusted / reported ratio) and a corrected research block is returned:
+
+      * street coverage (5+ analysts) and the research EPS more than 25% from it -> REBUILT ON STREET: revenue and
+        EPS for FY+1 / FY+2 from consensus per scenario (low / mean / high), the EPS carried on the street's
+        adjusted basis with `_eps_basis_ratio` so the margin and the check run on the reported equivalent; the
+        research's own margins and EPS target are dropped (they are what failed);
+      * otherwise -> REBASED TO THE MODEL: the research EPS endpoint is dropped, so EPS is the model's net income
+        over its shares.
+
+    The caller rebuilds the forecast on the returned block and re-runs the check. None when the check did not fail."""
+    import copy as _cp
+    inv3 = next((i for i in (gf or {}).get("invariants") or [] if i.get("id") == 3), None)
+    if not inv3 or inv3.get("ok") is not False:
+        return None
+    rows = gf.get("rows") or []
+    T = int(gf.get("horizon_years") or 2)
+    T = max(1, min(T, len(rows)))
+    guided = ((gf.get("deconstruction") or {}).get("eps_T_guided"))
+    model = (rows[T - 1]["net_income"] / float(shares)) if (rows and shares) else None
+    f12 = ((forward_consensus or {}).get("_fy1_fy2") or {})
+    n_an = (forward_consensus or {}).get("analyst_count_eps") or 0
+    st = ((f12.get("eps") or {}).get("base") or (None, None))
+    street_T = st[1] if T >= 2 else st[0]
+    diag = {"check_failed": inv3.get("detail"), "eps_research": guided, "eps_model_reported": model,
+            "eps_street_adjusted": street_T, "street_analysts": n_an, "adjusted_reported_ratio": ratio,
+            "ratio_basis": ratio_basis, "target_year_index": T}
+    blk = _cp.deepcopy(block)
+    rev12 = (f12.get("revenue") or {})
+    eps12 = (f12.get("eps") or {})
+    street_ok = (n_an >= _SCI_MIN_ANALYSTS and isinstance(street_T, (int, float)) and street_T > 0
+                 and isinstance(guided, (int, float)) and guided > 0
+                 and abs(guided / street_T - 1.0) > _SCI_STREET_DIVERGENCE
+                 and all(isinstance(x, (int, float)) and x > 0 for x in ((rev12.get("base") or (None, None)) + (eps12.get("base") or (None, None))))
+                 and isinstance(revenue_base, (int, float)) and revenue_base > 0)
+    if street_ok:
+        est = blk.setdefault("estimates", {})
+        for sc in ("bear", "base", "bull"):
+            r1, r2 = rev12.get(sc) or rev12.get("base")
+            e1, e2 = eps12.get(sc) or eps12.get("base")
+            if not all(isinstance(x, (int, float)) and x > 0 for x in (r1, r2, e1, e2)):
+                r1, r2 = rev12["base"]; e1, e2 = eps12["base"]
+            est[sc] = {"revenue_growth_fy1": float(r1) / float(revenue_base) - 1.0, "revenue_growth_fy2": float(r2) / float(r1) - 1.0,
+                       "eps_fy1": float(e1), "eps_fy2": float(e2)}
+        fy = (street_meta or {})
+        if fy.get("fy1_period"):
+            blk["fiscal_year_1"] = "FY" + str(fy["fy1_period"])[:4]
+        if fy.get("fy2_period"):
+            blk["fiscal_year_2"] = "FY" + str(fy["fy2_period"])[:4]
+        mt = blk.get("medium_term_target") or {}
+        if str(mt.get("metric") or "").lower() == "eps":
+            blk["medium_term_target"] = {}
+        blk.setdefault("guidance", {}).setdefault("eps", {})["currency"] = valuation_currency
+        blk["_eps_basis_ratio"] = ratio
+        blk["_eps_adjusted"] = False
+        action = "rebuilt_on_street"
+        note = (f"forecast REBUILT on street consensus ({n_an} analysts): FY+1/FY+2 revenue and EPS per scenario; EPS on the "
+                f"street's adjusted basis for the forward legs (the peers' P/E basis), the reported equivalent "
+                f"(/{ratio:.2f}, {ratio_basis}) setting the margin and the share count; the research's margins and EPS "
+                "target dropped")
+    else:
+        est = blk.setdefault("estimates", {})
+        for sc, e in list(est.items()):
+            if isinstance(e, dict):
+                e.pop("eps_fy1", None); e.pop("eps_fy2", None)
+        mt = blk.get("medium_term_target") or {}
+        if str(mt.get("metric") or "").lower() == "eps":
+            blk["medium_term_target"] = {}
+        action = "rebased_to_model"
+        note = ("EPS REBASED to the model's own net income / diluted shares (the research EPS endpoint dropped"
+                + ("" if n_an >= _SCI_MIN_ANALYSTS else f"; street coverage {n_an} analysts is below {_SCI_MIN_ANALYSTS}") + ")")
+    blk["_share_count_intervention"] = {**diag, "action": action, "note": note}
+    return blk
+
+
 def _fwd_label(fwd: Optional[dict], metric: str, scenario: str, default: str) -> str:
     src = (((fwd or {}).get("_source") or {}).get(metric) or {}).get(scenario)
     return f"{default.split(' (')[0]} ({src}, {scenario})" if src else default
@@ -4352,7 +4463,18 @@ def _guidance_forecast_payload(fc: Optional[dict]) -> Optional[dict]:
     """The report's forecast block (base scenario): what the DCF ran on, with the per-year table."""
     try:
         from src.agents.analysis import guidance_forecast as _gfm
-        return _gfm.summary(fc)
+        out = _gfm.summary(fc)
+        if isinstance(out, dict) and fc:
+            # Owner, 2026-10-07: the final valuation states its share-count status -- PASS, CORRECTED (with what
+            # was done) or UNRESOLVED (the Forward P/E then prices the forecast's own EPS, see the overlay).
+            _sci = fc.get("share_count_intervention")
+            _i3 = next((i for i in fc.get("invariants") or [] if i.get("id") == 3), None)
+            out["share_count_intervention"] = _sci
+            out["share_count_status"] = ("UNRESOLVED" if (_i3 and _i3.get("ok") is False) else
+                                         "CORRECTED" if _sci else
+                                         "PASS" if (_i3 and _i3.get("ok")) else
+                                         "n/a" if _i3 else "no EPS endpoint")
+        return out
     except Exception:  # noqa: BLE001
         return None
 
@@ -15819,6 +15941,53 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _gf = None
                     if scenario == "base":
                         ticker_forward_flags.append(f"Guidance forecast did not build ({type(_gf_exc).__name__}: {str(_gf_exc)[:120]}); the FY+1/FY+2 channel ran instead")
+                # Owner, 2026-10-07 (share-count intervention): a FAILED share-count check is acted on, not just
+                # reported -- the block is corrected (rebuilt on street / rebased to the model), the forecast rebuilt
+                # and the check re-run; the base scenario decides and bear / bull build on the corrected block.
+                try:
+                    if _gf and scenario == "base" and not (_guid_est or {}).get("_share_count_intervention"):
+                        _sci_cur = (_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency)
+                        _sci_r, _sci_rb = _adjusted_reported_ratio(
+                            ticker, end_date, shares,
+                            same_currency=(str(reported_currency or "").upper() == str(_sci_cur or "").upper()))
+                        _sci_blk = _share_count_intervention(
+                            _guid_est, _gf, forward_consensus, most_recent.get("_street_consensus"), revenue_base,
+                            shares, _sci_r, _sci_rb, _sci_cur)
+                        if _sci_blk:
+                            _gf2 = _gfm.build_forecast(
+                                _sci_blk, scenario=scenario, series=series, profile_name=profile_name, sector=sector,
+                                wacc=wacc, tgr=tgr, shares=shares, net_debt=net_debt,
+                                spot=((resolved_mcap / shares) if (resolved_mcap and shares) else None),
+                                peer_ev_ebitda=_peer_for_gf.get("ev_ebitda") if isinstance(_peer_for_gf, dict) else None,
+                                market_growth=_peer_for_gf.get("growth_avg") if isinstance(_peer_for_gf, dict) else None,
+                                engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
+                                overrides=_eo_engine_ov or None,
+                                fx_to_valuation=float(fx_rate or 1.0),
+                                valuation_currency=_sci_cur)
+                            _sci = _sci_blk["_share_count_intervention"]
+                            if _gf2:
+                                _inv3b = next((i for i in _gf2.get("invariants") or [] if i.get("id") == 3), None)
+                                _sci["check_after"] = (("PASS" if _inv3b.get("ok") else "n/a" if _inv3b.get("ok") is None else "FAIL")
+                                                       + f": {_inv3b.get('detail')}") if _inv3b else "PASS: no EPS endpoint; EPS = net income / shares"
+                                if _inv3b is None:
+                                    _gf2.setdefault("invariants", []).append(
+                                        {"id": 3, "name": "Share-count integrity", "ok": True,
+                                         "detail": "corrected: EPS is the model's net income / diluted shares (rebased)"})
+                                _gf2["share_count_intervention"] = _sci
+                                _gf2.setdefault("flags", []).append(
+                                    "Share-count check FAILED on the research EPS and was CORRECTED: " + _sci["note"])
+                                _gf = _gf2
+                                _guid_est = _sci_blk
+                            def _e(x):
+                                return f"{x:,.2f}" if isinstance(x, (int, float)) else "n/a"
+                            ticker_forward_flags.append(
+                                f"Share-count intervention ({_sci['action']}): the research EPS {_e(_sci['eps_research'])} failed the "
+                                f"share-count check ({_sci['check_failed']}); model EPS (net income / shares, reported) "
+                                f"{_e(_sci['eps_model_reported'])}, street {_e(_sci['eps_street_adjusted'])} (adjusted, "
+                                f"{_sci['street_analysts']} analysts; adjusted / reported {_sci['adjusted_reported_ratio']:.2f}). "
+                                f"{_sci['note']}. Check after: {_sci.get('check_after', 'not rebuilt')}")
+                except Exception as _sci_exc:              # noqa: BLE001
+                    ticker_forward_flags.append(f"Share-count intervention did not run ({type(_sci_exc).__name__}: {str(_sci_exc)[:120]})")
             if _gf:
                 _growth_schedule = _gf["growth_schedule"]
                 _gf_margin_sched = _gf["fcf_margin_schedule"]
