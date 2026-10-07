@@ -558,21 +558,27 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     for t in range(1, PROJECTION_YEARS + 1):
         rev, rev_prev = rev_all[t], rev_all[t - 1]
         ebit = rev * margins[t - 1]
-        nopat = ebit * (1.0 - tax)
+        # Owner, 2026-10-08 (AMGN): in amortisation mode the guided path is an EBITDA margin (EBIT margin + the
+        # history's D&A intensity, which carries the acquired-intangible amortisation). As the amortisation runs off,
+        # EBIT rises -- holding the EBIT margin silently shrank EBITDA by the run-off (AMGN ~5pt of margin by year 5).
+        _ebitda_m = margins[t - 1] + float(hist.get("da_pct_revenue") or 0.0) if amort_mode else None
         if amort_mode:
             capex = cx_int * rev
             dep = dep_prev
             amort = amort0 * max(0.0, 1.0 - t / amort_n)
             da = dep + amort
+            ebit = rev * _ebitda_m - da
         else:
             da = da_prev
             capex = da + alpha * max(rev - rev_prev, 0.0)
             amort = 0.0
+        nopat = ebit * (1.0 - tax)
         dnwc = nwc_i * (rev - rev_prev)
         ufcf = nopat + da - capex - dnwc
         ni = (ebit - interest) * (1.0 - tax)
         sh = shares_path[-1]
-        rows.append({"year": t, "revenue": rev, "growth": growth_sched[t - 1], "ebit_margin": margins[t - 1], "ebit": ebit,
+        rows.append({"year": t, "revenue": rev, "growth": growth_sched[t - 1],
+                     "ebit_margin": (ebit / rev if (amort_mode and rev) else margins[t - 1]), "ebit": ebit,
                      "tax": (ebit - interest) * tax if ebit > interest else 0.0, "nopat": nopat, "da": da, "capex": capex,
                      "capex_maintenance": (min(capex, da - amort) if amort_mode else da),
                      "capex_growth": (capex - min(capex, da - amort)) if amort_mode else capex - da,

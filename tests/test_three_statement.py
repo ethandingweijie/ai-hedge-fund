@@ -311,3 +311,21 @@ def test_fix1_a_street_growth_path_extends_the_guided_years_before_the_fade():
                            wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
     assert fc["street_years"] == 2
     assert fc["growth_schedule"][2] == pytest.approx(0.05) and fc["growth_schedule"][3] == pytest.approx(0.04)
+
+
+def test_amortisation_mode_holds_the_ebitda_margin_so_ebit_rises_as_amortisation_runs_off():
+    import copy as _cp
+    series = _cp.deepcopy(_gft._SERIES)
+    for r in series:
+        r["ebit"] = 0.30 * r["revenue"]
+        r["depreciation_and_amortization"] = 0.14 * r["revenue"]
+        r["capital_expenditure"] = -0.04 * r["revenue"]
+    blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+           "estimates": {"base": {"revenue_growth_fy1": 0.03, "revenue_growth_fy2": 0.03}}}
+    fc = gf.build_forecast(blk, scenario="base", series=series, profile_name="Large Cap Pharma", sector="Biopharma",
+                           wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=12.0, market_growth=0.04)
+    rows = fc["rows"]
+    ebitda = [(r["ebit"] + r["da"]) / r["revenue"] for r in rows]
+    assert max(ebitda) - min(ebitda) < 1e-9                       # EBITDA margin held at 44%
+    assert rows[8]["ebit_margin"] > rows[0]["ebit_margin"]          # EBIT rises as the amortisation runs off
+    assert rows[0]["nopat"] == pytest.approx(rows[0]["ebit"] * (1 - fc["history"]["tax_rate"]))
