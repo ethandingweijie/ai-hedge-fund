@@ -185,6 +185,26 @@ _PHARMA_CAPM_PROFILES = frozenset({"Big Pharma (Consolidated DCF)", "Large Cap P
 _LEG_DISPERSION_MAX = 2.5
 
 
+def _loe_scale_forecast(gf: Optional[dict], loe: dict) -> None:
+    """REGN review (2026-10-07): the guidance forecast's rows carry the same LOE erosion as the DCF, margins held.
+    Shared by the agent and the estimate-override recompute so both price one path."""
+    if not gf or not gf.get("rows"):
+        return
+    _prev_rev = None
+    for _row in gf["rows"]:
+        _yi = int(_row.get("year") or 0)
+        if 1 <= _yi <= len(loe["index"]):
+            _f = float(loe["index"][_yi - 1])
+            for _k in ("revenue", "ebit", "net_income", "eps", "ufcf", "capex", "capex_growth", "delta_nwc"):
+                if isinstance(_row.get(_k), (int, float)):
+                    _row[_k] = float(_row[_k]) * _f
+            if _prev_rev:
+                _row["growth"] = float(_row["revenue"]) / _prev_rev - 1.0
+        _prev_rev = float(_row.get("revenue") or 0.0) or None
+    gf["growth_schedule"] = list(loe["growth_schedule"])
+    gf["loe_index"] = list(loe["index"])
+
+
 def _reverse_dcf(dcf_kwargs: dict, spot: Optional[float], lo: float = -0.30, hi: float = 0.60) -> Optional[dict]:
     """Plan E10 (owner, 2026-10-07; GILD review): the uniform shift to every year's revenue growth that makes the DCF
     equal the price, by bisection on _project_dcf with the run's own inputs. Returns the shift and the implied 10-year
@@ -16682,19 +16702,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         # and Model tabs, three statements) carries the same erosion as the DCF, margins held.
                         try:
                             if _gf and _gf.get("rows"):
-                                _prev_rev = None
-                                for _row in _gf["rows"]:
-                                    _yi = int(_row.get("year") or 0)
-                                    if 1 <= _yi <= len(_loe["index"]):
-                                        _f = float(_loe["index"][_yi - 1])
-                                        for _k in ("revenue", "ebit", "net_income", "eps", "ufcf", "capex", "capex_growth", "delta_nwc"):
-                                            if isinstance(_row.get(_k), (int, float)):
-                                                _row[_k] = float(_row[_k]) * _f
-                                        if _prev_rev:
-                                            _row["growth"] = float(_row["revenue"]) / _prev_rev - 1.0
-                                    _prev_rev = float(_row.get("revenue") or 0.0) or None
-                                _gf["growth_schedule"] = list(_loe["growth_schedule"])
-                                _gf["loe_index"] = list(_loe["index"])
+                                _loe_scale_forecast(_gf, _loe)
                                 if scenario == "base":
                                     most_recent["_product_build_loe"] = (_loe, _loe_e)
                                 _gf.setdefault("flags", []).append(
@@ -16714,8 +16722,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                   f"{_loe.get('terminal_replacement_basis')})"
                                 + " (margins held, so the lost profit is if anything understated)"
                                 + (f". CAVEAT: {_loe_e['caveat']}" if _loe_e.get("caveat") else ""))
+                    # Owner, 2026-10-08: an estimate override re-prices through the same LOE overlay (it priced
+                    # LLY's DCF at 965 against the run's 581 without it).
+                    if scenario == "base" and isinstance(_fc_ctx, dict):
+                        _fc_ctx["loe"] = {"entry": _loe_e, "fy0_year": int(_p4), "profile_name": profile_name,
+                                          "pipeline_ra_peak": _ra_ccy}
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
+            if scenario == "base" and isinstance(_fc_ctx, dict) and isinstance(_guid_est, dict):
+                # The research block's engine fields (street growth path, street FY+1 EBITDA margin, EPS basis),
+                # so an override rebuilds the forecast on the same reconciliation rules.
+                _fc_ctx["block_extras"] = {k: v for k, v in _guid_est.items()
+                                           if k.startswith("_") and isinstance(v, (int, float, str, bool, list))}
             if scenario == "base" and _growth_schedule:
                 try:
                     # Like for like with the peers' growth: the forecast's own five-year CAGR, not the ten-year

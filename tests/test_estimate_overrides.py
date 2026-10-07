@@ -417,3 +417,26 @@ def test_the_dcf_leg_builds_the_base_forecast_and_publishes_the_context_on_a_gol
     fwd = [(n, t) for n, t in dr["base"]["leg_inputs"].items() if isinstance(t, dict) and "guidance" in str(t.get("metric") or "")]
     assert fwd and all(t.get("consensus_value") is not None or t.get("metric_value") for _, t in fwd)
     assert dr["guidance_forecast_scenarios"] and set(dr["guidance_forecast_scenarios"]) == {"bear", "bull"}
+
+
+def test_an_override_on_an_loe_name_reprices_through_the_runs_loe_overlay():
+    """Owner, 2026-10-08: the override recompute ignored the accepted LOE input -- it priced LLY's DCF at 965 against
+    the run's 581. The run records the overlay's inputs and the block's engine fields; the recompute re-applies both."""
+    from src.agents.analysis.dcf_agent import _franchise_loe_overlay, _LOE_COVERED_YEARS
+    entry = {"currency": "USD", "total_revenue": 42e9, "drugs": [{"name": "Drug A", "modality": "small_molecule", "revenue_fy": 21e9,
+                                                       "loe_year": 2030, "already_eroding": False}]}
+    p = _payload()
+    ov = {"scenarios": {"base": {"revenue_growth_fy2": 0.06}}}
+    plain = eo.recompute(copy.deepcopy(p), "MOH", ov)["scenarios"]["base"]
+    ctx = p["data"]["dcf_range"]["MOH"]["forecast_context"]
+    ctx["loe"] = {"entry": entry, "fy0_year": 2025, "profile_name": "Big Pharma (Consolidated DCF)", "pipeline_ra_peak": None}
+    ctx["block_extras"] = {"_street_ebitda_margin_fy1": 0.10}
+    b = eo.recompute(p, "MOH", ov)["scenarios"]["base"]
+    assert b["dcf"]["value"] < plain["dcf"]["value"]                                    # the cliff is priced
+    loe = _franchise_loe_overlay(entry, 2025, list(plain["dcf"]["growth_schedule"]), 0.08, 0.025,
+                                 covered_years=_LOE_COVERED_YEARS + int(plain["forecast"].get("street_years") or 0),
+                                 profile_name="Big Pharma (Consolidated DCF)")
+    assert b["dcf"]["growth_schedule"] == pytest.approx(loe["growth_schedule"])
+    # the forecast rows carry the same erosion as the DCF (one path on every tab)
+    assert b["forecast"]["rows"][-1]["revenue"] < plain["forecast"]["rows"][-1]["revenue"]
+    assert eo._block_for(p["data"]["dcf_range"]["MOH"], ctx, eo.normalize_overrides(ov))["_street_ebitda_margin_fy1"] == 0.10

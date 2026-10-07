@@ -254,13 +254,26 @@ def _block_for(dr: dict, ctx: dict, ov: dict) -> dict:
             block["estimates"][sc] = {**base, **block["estimates"][sc]}
     if ov.get("medium_term_target") is not None:
         block["medium_term_target"] = ov["medium_term_target"] or None
+    # Owner, 2026-10-08: the run's engine fields (street growth path, street FY+1 EBITDA margin, EPS basis).
+    block.update(deepcopy(ctx.get("block_extras") or {}))
     return block
+
+
+def _loe_for(ctx: dict, fc: dict, wacc: float, tgr: float) -> Optional[dict]:
+    """The run's LOE overlay re-applied on the override's forecast and discount rate (None when the run had none)."""
+    from src.agents.analysis.dcf_agent import _franchise_loe_overlay, _LOE_COVERED_YEARS
+    lo = ctx.get("loe") or {}
+    if not lo.get("entry") or not fc or not fc.get("growth_schedule"):
+        return None
+    return _franchise_loe_overlay(lo["entry"], int(lo["fy0_year"]), list(fc["growth_schedule"]), float(wacc), float(tgr),
+                                  covered_years=_LOE_COVERED_YEARS + int(fc.get("street_years") or 0),
+                                  profile_name=lo.get("profile_name"), pipeline_ra_peak=lo.get("pipeline_ra_peak"))
 
 
 def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
     """The deterministic chain on the stored run. Pure: `payload` is not modified."""
     from src.agents.analysis import guidance_forecast as gfm
-    from src.agents.analysis.dcf_agent import _project_dcf
+    from src.agents.analysis.dcf_agent import _project_dcf, _loe_scale_forecast
 
     ov = normalize_overrides(overrides)
     data = payload.get("data") or {}
@@ -319,6 +332,14 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
         if not fc:
             rec["skipped"] = "no FY+1 revenue growth for this scenario (enter one to price it)"
             continue
+        _tv_mult = 1.0
+        try:
+            _loe = _loe_for(ctx, fc, float(wacc), float(tgr))
+            if _loe:
+                _loe_scale_forecast(fc, _loe)
+                _tv_mult = float(_loe["terminal_multiplier"])
+        except Exception:                                   # noqa: BLE001
+            _tv_mult = 1.0
         iv_dcf, pv_fcf, pv_tv, rows = _project_dcf(
             revenue_base=float(leg["revenue_base"]), fcf_margin_base=float(leg.get("fcf_margin_base") or 0.0),
             growth_rate=float(leg.get("growth_base") or 0.0), margin_delta_per_year=0.0, wacc=float(wacc), tgr=float(tgr),
@@ -326,7 +347,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
             growth_schedule=fc["growth_schedule"], wacc_schedule=leg.get("wacc_schedule") if not shared.get("wacc") else None,
             margin_delta_absolute=_num(leg.get("margin_delta_absolute")), margin_schedule=fc["fcf_margin_schedule"],
             minority_interest=float(leg.get("minority_interest") or 0.0), preferred_equity=float(leg.get("preferred_equity") or 0.0),
-            timing=leg.get("timing"))                       # D2: the run's dating, so an override re-prices like-for-like
+            timing=leg.get("timing"),                       # D2: the run's dating, so an override re-prices like-for-like
+            terminal_multiplier=_tv_mult)
         iv_dcf = _num(iv_dcf)
         rec["forecast"] = gfm.summary(fc)
         if sc == "base":
