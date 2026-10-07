@@ -825,3 +825,47 @@ def test_share_count_intervention_survives_null_fields_in_the_research_block():
     blk = d._share_count_intervention({**_research_block(), "estimates": None, "medium_term_target": None},
                                       _failing_gf(), {"analyst_count_eps": 1}, {}, 14.34e9, 107e6, 1.0, "x", "USD")
     assert blk["_share_count_intervention"]["action"] == "rebased_to_model"
+
+
+def test_product_build_decomposes_the_forecast_by_product_and_costs_and_the_tab_ties():
+    # Owner, 2026-10-07: biotech revenue by product (partnership revenue tagged) and a line-by-line cost build,
+    # both a decomposition of the forecast the DCF runs on.
+    formulas = pytest.importorskip("formulas")
+    from src.agents.analysis import product_build as pbm
+    from src.data import valuation_constants as vc
+    entry = vc.load()["franchise_loe"]["entries"]["REGN"]
+    sched = [0.20, 0.08, 0.04, 0.04, 0.03, 0.025, 0.025, 0.025, 0.025, 0.025]
+    loe = d._franchise_loe_overlay(entry, 2025, sched, 0.0825, 0.025, profile_name="Commercial Biotech")
+    rev, rows = 14.34e9, []
+    for t, g in enumerate(loe["growth_schedule"], start=1):
+        rev *= (1 + g)
+        rows.append({"year": t, "revenue": rev, "ebit": rev * 0.33})
+    series = [{"period": f"{y}-12-31", "revenue": r_, "cost_of_revenue": r_ * 0.15, "research_and_development": r_ * 0.38,
+               "operating_expense": r_ * 0.58} for y, r_ in ((2023, 13.1e9), (2024, 14.2e9), (2025, 14.34e9))]
+    pb = pbm.build(rows, series, 2025, loe=loe, entry=entry)
+    names = {ln["name"]: ln for ln in pb["products"]}
+    assert any("Dupixent" in k for k in names) and any("EYLEA HD" in k for k in names) and any("Libtayo" in k for k in names)
+    dup = next(v for k, v in names.items() if "Dupixent" in k)
+    assert dup["type"] == "partnership"                                   # Sanofi profit share
+    for t in range(10):
+        assert sum(ln["values"][t] for ln in pb["products"]) + pb["other"][t] == pytest.approx(rows[t]["revenue"])
+    assert dup["values"][9] < dup["values"][4]                            # Dupixent erodes after its 2031 LOE
+    cs = pb["costs"]
+    assert cs["ratios"]["cost_of_revenue"] == pytest.approx(0.15) and cs["ratios"]["sga_and_other"] == pytest.approx(0.20)
+    assert cs["ebit_build"][0] + cs["margin_path"][0] == pytest.approx(rows[0]["ebit"])
+    run = _wbt._run()
+    run["data"]["dcf_range"]["TEST"]["product_build"] = pb
+    blob = build_workbook(run, "TEST")
+    wb = load_workbook(io.BytesIO(blob))
+    assert "Products" in wb.sheetnames
+    ws = wb["Products"]
+    with tempfile.TemporaryDirectory() as td:
+        p = os.path.join(td, "prod.xlsx")
+        Path(p).write_bytes(blob)
+        sol = {k.upper(): v for k, v in formulas.ExcelModel().loads(p).finish().calculate().items()}
+    checks = [c.row for c in ws["A"] if c.value == "Check"]
+    assert len(checks) == 2
+    for r in checks:
+        for col in ("D", "H", "M"):
+            v = sol[f"'[PROD.XLSX]PRODUCTS'!{col}{r}".upper()]
+            assert abs(getattr(v, "value", v)[0][0]) < 1e-6, (r, col)

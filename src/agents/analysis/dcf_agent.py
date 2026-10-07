@@ -314,7 +314,17 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
         if further > 0:
             lost_after += (p_["share"] * further * (1.0 - _repl)
                            * ((1.0 + tgr) / (1.0 + w)) ** max(1, p_["loe_year"] - end_yr))
+    # Owner, 2026-10-07 (product build): each drug's path as a share of the un-eroded company revenue.
+    try:
+        from src.agents.analysis.product_build import revenue_type as _rt
+        _src = {str(d.get("name")): d for d in drugs}
+        drug_paths = [{"name": p_["name"], "loe_year": p_["loe_year"], "share": p_["share"],
+                       "type": _rt(_src.get(str(p_["name"])) or {}),
+                       "path": [p_["share"] * (1.0 - rel(p_, fy0_year + t)) for t in range(1, n + 1)]} for p_ in parts]
+    except Exception:                                      # noqa: BLE001
+        drug_paths = []
     return {"growth_schedule": sched, "index": [round(x, 6) for x in index], "terminal_replacement": _repl,
+            "drug_paths": drug_paths,
             "terminal_replacement_basis": _repl_basis,
             "terminal_multiplier": round(max(0.0, 1.0 - lost_after / index[-1]), 6),
             "drugs": [{k: v for k, v in p_.items() if not k.startswith("_")} for p_ in parts]}
@@ -16373,6 +16383,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                     _prev_rev = float(_row.get("revenue") or 0.0) or None
                                 _gf["growth_schedule"] = list(_loe["growth_schedule"])
                                 _gf["loe_index"] = list(_loe["index"])
+                                if scenario == "base":
+                                    most_recent["_product_build_loe"] = (_loe, _loe_e)
                                 _gf.setdefault("flags", []).append(
                                     f"Loss of exclusivity applied to this forecast (revenue index year {len(_loe['index'])} "
                                     f"{_loe['index'][-1]:.2f}x, margins held); the remaining post-horizon erosion is in the "
@@ -16392,6 +16404,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 + (f". CAVEAT: {_loe_e['caveat']}" if _loe_e.get("caveat") else ""))
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
+            # Owner, 2026-10-07: product-level revenue (partnership lines tagged) and a line-by-line cost build for
+            # every drug developer -- a decomposition of the forecast the DCF runs on, tying to it.
+            if scenario == "base" and is_biopharma_sector(sector) and _gf and _gf.get("rows"):
+                try:
+                    from src.agents.analysis import product_build as _pbm
+                    _pl, _pe = most_recent.get("_product_build_loe") or (None, None)
+                    _p4b = str(most_recent.get("period") or "")[:4]
+                    most_recent["_product_build"] = _pbm.build(_gf["rows"], series, int(_p4b) if _p4b.isdigit() else None,
+                                                               loe=_pl, entry=_pe)
+                except Exception as _pb_exc:               # noqa: BLE001
+                    ticker_forward_flags.append(f"Product build did not run ({type(_pb_exc).__name__}: {str(_pb_exc)[:100]})")
             _dcf_projection = {
                 "growth_schedule": _growth_schedule,
                 "wacc_schedule": _wacc_schedule,
@@ -19229,6 +19252,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
             "street_consensus":      most_recent.get("_street_consensus"),
             "pipeline_input":        most_recent.get("_pipeline_input_summary"),
+            "product_build":         most_recent.get("_product_build"),
             # Trailing dividend per share, in the listing currency (the FX
             # block above converts per-share fields in place). The research
             # rating's 12-month total shareholder return adds it to the target.

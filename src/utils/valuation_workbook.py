@@ -363,6 +363,9 @@ class _Book:
         # and probability of success the rNPV priced (the frontend's pipeline card, in the workbook).
         if self._has_pipeline():
             self.pipeline_tab()
+        # Owner, 2026-10-07: drug developers -- revenue by product (partnership revenue tagged) and the cost build.
+        if (self.dr or {}).get("product_build"):
+            self.products_tab()
         # Owner, 2026-10-03 (SBUX review, A10): a SOTP tab only when a SOTP leg carries weight;
         # an unweighted SOTP (segments) trace used to create the tab and then empty it.
         if any(tr.get("kind") == "sotp" and self.in_blend(name) for sc in SCENARIOS
@@ -540,6 +543,104 @@ class _Book:
                 sh.put(r, 1, x.get("name")).font = Font(color=BLACK)
                 sh.put(r, 2, str(x.get("verdict") or "")).font = Font(color=BLACK)
                 r += 1
+
+    def products_tab(self) -> None:
+        """Revenue by product and a line-by-line cost build, both tying to the forecast the DCF runs on."""
+        pb = (self.dr or {}).get("product_build") or {}
+        years = pb.get("years") or []
+        n = len(years)
+        if not n:
+            return
+        sh = self.sheet("Products", "Revenue by product (partnership revenue tagged) and the line-by-line cost build")
+        sh.title("Revenue by product and cost build (base scenario, millions)",
+                 pb.get("basis") or "No product input on record for this company: the company total and the cost build only")
+        c0 = 4
+        r = 4
+        sh.header(r, ["Line", "Type", "LOE"] + years); r += 1
+        first = r
+        for ln in pb.get("products") or []:
+            sh.put(r, 1, ln.get("name")).font = Font(color=BLACK)
+            sh.put(r, 2, ln.get("type") or "").font = Font(color=BLACK)
+            sh.put(r, 3, _num(ln.get("loe_year")), "0")
+            for t, v in enumerate((ln.get("values") or [])[:n]):
+                sh.put(r, c0 + t, (_num(v) or 0.0) / 1e6, MIL)
+            r += 1
+        if pb.get("other") is not None:
+            sh.put(r, 1, "Other products and new launches (remainder)").font = Font(color=BLACK)
+            sh.put(r, 2, "remainder").font = Font(color=BLACK)
+            for t, v in enumerate(pb["other"][:n]):
+                sh.put(r, c0 + t, (_num(v) or 0.0) / 1e6, MIL)
+            r += 1
+        last = r - 1
+        has_lines = last >= first
+        L = get_column_letter
+        sh.label(r, 1, "Total revenue", bold=True); _tr = r
+        for t in range(n):
+            if has_lines:
+                sh.put(r, c0 + t, f"=SUM({L(c0 + t)}{first}:{L(c0 + t)}{last})", MIL, bold=True)
+            else:
+                sh.put(r, c0 + t, (_num(pb["revenue_total"][t]) or 0.0) / 1e6, MIL, bold=True)
+        r += 1
+        sh.label(r, 1, "Forecast revenue (Model / Guidance, the DCF's path)"); _fr = r
+        for t in range(n):
+            sh.put(r, c0 + t, (_num(pb["revenue_total"][t]) or 0.0) / 1e6, MIL)
+        r += 1
+        if has_lines:
+            sh.label(r, 1, "Check")
+            for t in range(n):
+                sh.put(r, c0 + t, f"={L(c0 + t)}{_tr}-{L(c0 + t)}{_fr}", MIL)
+            r += 1
+            _part = [i for i, ln in enumerate(pb.get("products") or []) if ln.get("type") == "partnership"]
+            if _part:
+                sh.label(r, 1, "Partnership revenue (collaboration / royalty lines)")
+                for t in range(n):
+                    sh.put(r, c0 + t, "=" + "+".join(f"{L(c0 + t)}{first + i}" for i in _part), MIL)
+                r += 1
+                sh.label(r, 1, "Partnership share of revenue")
+                for t in range(n):
+                    sh.put(r, c0 + t, f"=IFERROR({L(c0 + t)}{r - 1}/{L(c0 + t)}{_tr},0)", PCT)
+                r += 1
+        cs = pb.get("costs")
+        if cs:
+            r += 1
+            ra = cs.get("ratios") or {}
+            sh.section(r, "Cost build: historical ratios to revenue (" + ", ".join(ra.get("years") or []) + " average)", 6); r += 1
+            sh.header(r, ["Line", "Ratio", ""] + years); r += 1
+            _cost_rows = []
+            for key, lab in (("cost_of_revenue", "Cost of revenue"), ("research_and_development", "Research and development"),
+                             ("sga_and_other", "SG&A and other operating expense")):
+                sh.label(r, 1, lab)
+                sh.put(r, 2, _num(ra.get(key)), PCT)
+                for t in range(n):
+                    sh.put(r, c0 + t, f"=$B{r}*{L(c0 + t)}{_fr}", MIL)
+                _cost_rows.append(r); r += 1
+            sh.label(r, 1, "EBIT at historical cost ratios", bold=True); _eb = r
+            for t in range(n):
+                sh.put(r, c0 + t, f"={L(c0 + t)}{_fr}-" + "-".join(f"{L(c0 + t)}{x}" for x in _cost_rows), MIL, bold=True)
+            r += 1
+            sh.label(r, 1, "Operating leverage / margin path (the forecast's margin vs the historical cost ratios)"); _mp = r
+            for t, v in enumerate((cs.get("margin_path") or [])[:n]):
+                sh.put(r, c0 + t, (_num(v) or 0.0) / 1e6, MIL)
+            r += 1
+            sh.label(r, 1, "EBIT (forecast)", bold=True); _ef = r
+            for t in range(n):
+                sh.put(r, c0 + t, f"={L(c0 + t)}{_eb}+{L(c0 + t)}{_mp}", MIL, bold=True)
+            r += 1
+            sh.label(r, 1, "Engine forecast EBIT"); _ee = r
+            for t, v in enumerate((cs.get("ebit_forecast") or [])[:n]):
+                sh.put(r, c0 + t, (_num(v) or 0.0) / 1e6, MIL)
+            r += 1
+            sh.label(r, 1, "Check")
+            for t in range(n):
+                sh.put(r, c0 + t, f"={L(c0 + t)}{_ef}-{L(c0 + t)}{_ee}", MIL)
+            r += 1
+            sh.label(r, 1, "EBIT margin")
+            for t in range(n):
+                sh.put(r, c0 + t, f"=IFERROR({L(c0 + t)}{_ef}/{L(c0 + t)}{_fr},0)", PCT)
+            r += 2
+            sh.note(r, 1, "The cost lines hold each ratio at its historical average; the margin-path line is how far the "
+                          "forecast's margin (guidance, consensus or the archetype curve) departs from that -- read it as the "
+                          "operating leverage or cost discipline the forecast assumes.")
 
     def _has_bank(self) -> bool:
         return any(tr.get("kind") == "ggm" for s in SCENARIOS
