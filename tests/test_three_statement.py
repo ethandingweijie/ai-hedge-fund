@@ -329,3 +329,29 @@ def test_amortisation_mode_holds_the_ebitda_margin_so_ebit_rises_as_amortisation
     assert max(ebitda) - min(ebitda) < 1e-9                       # EBITDA margin held at 44%
     assert rows[8]["ebit_margin"] > rows[0]["ebit_margin"]          # EBIT rises as the amortisation runs off
     assert rows[0]["nopat"] == pytest.approx(rows[0]["ebit"] * (1 - fc["history"]["tax_rate"]))
+
+
+def test_margin_reconciliation_rebases_a_3_to_5_point_gap_only_when_the_street_does_not_share_it():
+    import copy as _cp
+    series = _cp.deepcopy(_gft._SERIES)
+    for r in series:
+        r["ebit"] = 0.32 * r["revenue"]
+        r["depreciation_and_amortization"] = 0.08 * r["revenue"]          # actual EBITDA 40%
+        r["capital_expenditure"] = -0.05 * r["revenue"]
+    def build(street_m1):
+        blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+               "estimates": {"base": {"revenue_growth_fy1": 0.04, "revenue_growth_fy2": 0.04, "ebitda_margin_fy1": 0.36, "ebitda_margin_fy2": 0.36}},
+               "_street_ebitda_margin_fy1": street_m1}
+        return gf.build_forecast(blk, scenario="base", series=series, profile_name="Large Cap Pharma", sector="Biopharma",
+                                 wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=12.0, market_growth=0.04)
+    rebased = build(0.48)        # research -4pt, street +8pt: unexplained -> rebased to the actual
+    kept = build(0.37)           # street also -3pt: a shared compression -> the guided margin stands
+    assert rebased["margin_target"] == pytest.approx(0.40 - 0.08, abs=2e-3)
+    assert kept["margin_target"] == pytest.approx(0.36 - 0.08, abs=2e-3)
+
+
+def test_large_cap_pharma_discounts_at_capm_with_a_floor():
+    import inspect
+    from src.agents.analysis import dcf_agent as d_
+    assert d_._PHARMA_CAPM_FLOOR == 0.075 and "Big Pharma (Consolidated DCF)" in d_._PHARMA_CAPM_PROFILES
+    assert "max(float(_cr), _PHARMA_CAPM_FLOOR)" in inspect.getsource(d_)

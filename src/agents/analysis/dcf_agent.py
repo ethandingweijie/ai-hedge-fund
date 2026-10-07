@@ -177,6 +177,10 @@ _DDM_MIN_YIELD = 0.02
 #: Plan E3 (owner, 2026-10-07; GILD / AMGN reviews): a dividend model prices only the dividend. When buybacks are at
 #: least this share of the cash returned, it prices a fraction of the payout -- its weight rolls into the DCF legs.
 _DDM_MAX_BUYBACK_SHARE = 0.30
+#: Owner, 2026-10-08 (GILD / AMGN reviews): large-cap pharma discounts at its CAPM rate with this floor -- the
+#: sell-side convention (7.0-7.5%) -- instead of the sector table's ~8.5% (CAPM 5.4-5.8% on betas of 0.33-0.41).
+_PHARMA_CAPM_FLOOR = 0.075
+_PHARMA_CAPM_PROFILES = frozenset({"Big Pharma (Consolidated DCF)", "Large Cap Pharma"})
 #: Plan E5 (owner, 2026-10-07): weighted legs further apart than this factor are flagged as disagreeing.
 _LEG_DISPERSION_MAX = 2.5
 
@@ -15366,6 +15370,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _capm["risk_off_band"] = {"before": round(wacc, 6), "after": _new}
                 wacc = _new
         _wacc_build["capm"] = _capm
+        # Owner, 2026-10-08: large-cap pharma -- CAPM with a 7.5% floor replaces the table rate and its overlays
+        # (shown as its own line on the WACC tab). A beta outside the band prices on the clipped beta.
+        try:
+            if (profile_name or "") in _PHARMA_CAPM_PROFILES:
+                _cr = _capm.get("wacc") if _capm.get("status") == "used" else _capm.get("band_wacc_on_clipped_beta")
+                if isinstance(_cr, (int, float)) and _cr > 0:
+                    _new = round(max(float(_cr), _PHARMA_CAPM_FLOOR), 4)
+                    if abs(_new - wacc) > 1e-9:
+                        _wacc_build["pharma_capm_rule"] = {"before": round(wacc, 6), "after": _new, "capm": round(float(_cr), 6),
+                                                           "floor": _PHARMA_CAPM_FLOOR}
+                        ticker_forward_flags.append(
+                            f"Large-cap pharma rate: CAPM {float(_cr):.2%} with a {_PHARMA_CAPM_FLOOR:.1%} floor -> {_new:.2%} "
+                            f"(replaces the table rate and overlays {wacc:.2%}; owner rule, sell-side convention)")
+                        wacc = _new
+        except Exception:                                  # noqa: BLE001
+            pass
 
         # P1.1 — extract anchor method and rationale for PDF display (§6 Step 4)
         _anchor_method = "DCF"  # fallback
@@ -16220,6 +16240,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         ticker_forward_flags.append(f"Guidance scope ({_sc_chk['check']}): {_sc_chk['detail']}")
                 except Exception:                          # noqa: BLE001
                     most_recent["_guidance_scope"] = []
+            # Owner, 2026-10-08 (margin reconciliation): the street's FY+1 EBITDA margin (5+ analysts) beside the research's.
+            if scenario == "base" and isinstance(_guid_est, dict) and "_street_ebitda_margin_fy1" not in _guid_est:
+                try:
+                    _f12e = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("ebitda") or {}).get("base") or (None, None)
+                    _f12r = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {}).get("base") or (None, None)
+                    if ((forward_consensus or {}).get("analyst_count_revenue") or 0) >= 5 and all(
+                            isinstance(x, (int, float)) and x > 0 for x in (_f12e[0], _f12r[0])):
+                        _guid_est = {**_guid_est, "_street_ebitda_margin_fy1": float(_f12e[0]) / float(_f12r[0])}
+                except Exception:                          # noqa: BLE001
+                    pass
             # Fix 1 (owner, 2026-10-08; GILD / AMGN): on a name with an accepted LOE input, the forecast follows the
             # street's revenue growth for FY+3.. while 3+ analysts cover the year; the LOE curves start after them.
             if (scenario == "base" and _guid_est and isinstance(_guid_est, dict) and "_street_growth_path" not in _guid_est

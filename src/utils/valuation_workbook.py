@@ -1338,6 +1338,10 @@ class _Book:
             _bd = _cp.get(_key) or {}
             if isinstance(_bd.get("before"), (int, float)) and isinstance(_bd.get("after"), (int, float)):
                 comps.append((_lab + f" -- {_bd['before']:.2%} held at {_bd['after']:.2%}", float(_bd["after"]) - float(_bd["before"])))
+        _pr = b.get("pharma_capm_rule") or {}
+        if isinstance(_pr.get("before"), (int, float)) and isinstance(_pr.get("after"), (int, float)):
+            comps.append((f"Large-cap pharma rule: CAPM {_pr.get('capm', 0):.2%} with a {_pr.get('floor', 0):.1%} floor -- "
+                          f"{_pr['before']:.2%} replaced by {_pr['after']:.2%}", float(_pr["after"]) - float(_pr["before"])))
         if isinstance(b.get("owner_override_delta"), (int, float)):
             comps.append(("Owner rate override", float(b["owner_override_delta"])))
         first = r

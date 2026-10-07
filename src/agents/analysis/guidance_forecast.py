@@ -338,9 +338,16 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
     # cut EBIT from 36.8% to 29.6% as guidance rose. Only the research's guided CHANGE is taken, from the actual.
     _m1 = targets.get("m1")
     _h_ebitda = ((hist.get("ebit_margin") or 0.0) + float(hist.get("da_pct_revenue") or 0.0)) if hist.get("ebit_margin") is not None else None
-    if (mT is not None and _ebitda_basis and isinstance(_m1, (int, float)) and _h_ebitda is not None
-            and not (tgt and tgt["year_index"] > T and tgt["metric"] in ("ebitda_margin",))
-            and abs(float(_m1) - _h_ebitda) > 0.05):
+    # Owner, 2026-10-08 (reconciliation rule): a gap over 3 points is also rebased unless the street's FY+1 EBITDA
+    # margin moves the same way by at least half the gap -- a guided compression the street shares stands (launch
+    # costs, IRA), an unexplained one (AMGN: research ~41% vs actual 46% while the street sits higher) does not.
+    _gap = (float(_m1) - _h_ebitda) if (isinstance(_m1, (int, float)) and _h_ebitda is not None) else None
+    _st = targets.get("street_m1")
+    _supported = (_gap is not None and isinstance(_st, (int, float)) and (_st - _h_ebitda) * _gap > 0
+                  and abs(_st - _h_ebitda) >= 0.5 * abs(_gap))
+    _off_basis = _gap is not None and (abs(_gap) > 0.05 or (abs(_gap) > 0.03 and isinstance(_st, (int, float)) and not _supported))
+    if (mT is not None and _ebitda_basis and _off_basis
+            and not (tgt and tgt["year_index"] > T and tgt["metric"] in ("ebitda_margin",))):
         _delta = float(mT) - float(_m1)
         out["flags"].append(f"Research EBITDA margin {float(_m1):.1%} (FY+1) is {float(_m1) - _h_ebitda:+.1%} from the company's own "
                             f"{_h_ebitda:.1%}: another basis or an error -- the forecast takes only the guided change "
@@ -427,6 +434,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         return None
     tg = targets_for(block, scenario, hist)
     tg["eps_adjusted"] = bool((block or {}).get("_eps_adjusted"))     # plan E28
+    tg["street_m1"] = _num((block or {}).get("_street_ebitda_margin_fy1"))
     if tg["g1"] is None:
         return None
     # Owner, 2026-10-04 (plan 1B.1): guided EPS is in the filing's currency; net income here is in
