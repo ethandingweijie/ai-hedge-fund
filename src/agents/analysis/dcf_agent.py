@@ -4398,7 +4398,9 @@ def _share_count_intervention(block: dict, gf: dict, forward_consensus: Optional
         note = (f"the research EPS is on the street's ADJUSTED basis (within 15% of the {n_an}-analyst consensus): kept for "
                 f"the forward legs, its reported equivalent (/{ratio:.2f}, {ratio_basis}) setting the margin and the share count")
     elif street_ok:
-        est = blk.setdefault("estimates", {})
+        if not isinstance(blk.get("estimates"), dict):
+            blk["estimates"] = {}
+        est = blk["estimates"]
         for sc in ("bear", "base", "bull"):
             r1, r2 = rev12.get(sc) or rev12.get("base")
             e1, e2 = eps12.get(sc) or eps12.get("base")
@@ -4411,10 +4413,14 @@ def _share_count_intervention(block: dict, gf: dict, forward_consensus: Optional
             blk["fiscal_year_1"] = "FY" + str(fy["fy1_period"])[:4]
         if fy.get("fy2_period"):
             blk["fiscal_year_2"] = "FY" + str(fy["fy2_period"])[:4]
-        mt = blk.get("medium_term_target") or {}
+        mt = blk.get("medium_term_target") if isinstance(blk.get("medium_term_target"), dict) else {}
         if str(mt.get("metric") or "").lower() == "eps":
             blk["medium_term_target"] = {}
-        blk.setdefault("guidance", {}).setdefault("eps", {})["currency"] = valuation_currency
+        _g = blk.get("guidance") if isinstance(blk.get("guidance"), dict) else {}
+        _ge = _g.get("eps") if isinstance(_g.get("eps"), dict) else {}
+        _ge["currency"] = valuation_currency
+        _g["eps"] = _ge
+        blk["guidance"] = _g
         blk["_eps_basis_ratio"] = ratio
         blk["_eps_adjusted"] = False
         action = "rebuilt_on_street"
@@ -4423,11 +4429,12 @@ def _share_count_intervention(block: dict, gf: dict, forward_consensus: Optional
                 f"(/{ratio:.2f}, {ratio_basis}) setting the margin and the share count; the research's margins and EPS "
                 "target dropped")
     else:
-        est = blk.setdefault("estimates", {})
+        est = blk.get("estimates") if isinstance(blk.get("estimates"), dict) else {}
+        blk["estimates"] = est
         for sc, e in list(est.items()):
             if isinstance(e, dict):
                 e.pop("eps_fy1", None); e.pop("eps_fy2", None)
-        mt = blk.get("medium_term_target") or {}
+        mt = blk.get("medium_term_target") if isinstance(blk.get("medium_term_target"), dict) else {}
         if str(mt.get("metric") or "").lower() == "eps":
             blk["medium_term_target"] = {}
         action = "rebased_to_model"

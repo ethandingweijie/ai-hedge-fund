@@ -406,7 +406,8 @@ class _Book:
         base = self.scen("base")
         aud = base.get("rnpv_audit") or {}
         addon = base.get("pipeline_addon") or {}
-        _leg = ((base.get("leg_inputs") or {}).get("rNPV (Pipeline)") or {})
+        _li_p = base.get("leg_inputs") or {}
+        _leg = (_li_p.get("rNPV (Pipeline)") or _li_p.get("rNPV") or {})
         status = pin.get("status") or ("extractor (no owner input on record)" if not aud else "priced")
         role = ("priced as an add-on to every operating leg" if addon.get("per_share") else
                 "priced as the rNPV leg" if _leg.get("value") is not None else

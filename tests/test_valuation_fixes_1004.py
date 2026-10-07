@@ -812,3 +812,16 @@ def test_share_count_failure_on_the_streets_adjusted_basis_converts_instead_of_d
     blk = d._share_count_intervention(_research_block(), gfx, fwd, {}, 22e9, 161e6, 1.16, "last four quarters", "USD")
     assert blk["_share_count_intervention"]["action"] == "converted_to_reported"
     assert blk["_eps_basis_ratio"] == 1.16 and blk["estimates"]["base"]["eps_fy2"] == 35.5   # research estimates kept
+
+
+def test_share_count_intervention_survives_null_fields_in_the_research_block():
+    # REGN prod 2026-10-07: guidance / eps / estimates present but null -> TypeError on item assignment.
+    fwd = {"analyst_count_eps": 15, "_fy1_fy2": {"eps": {"base": (55.94, 61.85)}, "revenue": {"base": (17.17e9, 18.6e9)}}}
+    for blk0 in ({**_research_block(), "guidance": None}, {**_research_block(), "guidance": {"eps": None}},
+                 {**_research_block(), "medium_term_target": None}):
+        blk = d._share_count_intervention(blk0, _failing_gf(), fwd, {}, 14.34e9, 107e6, 1.09, "x", "USD")
+        assert blk["_share_count_intervention"]["action"] == "rebuilt_on_street"
+        assert blk["guidance"]["eps"]["currency"] == "USD"
+    blk = d._share_count_intervention({**_research_block(), "estimates": None, "medium_term_target": None},
+                                      _failing_gf(), {"analyst_count_eps": 1}, {}, 14.34e9, 107e6, 1.0, "x", "USD")
+    assert blk["_share_count_intervention"]["action"] == "rebased_to_model"
