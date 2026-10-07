@@ -286,3 +286,28 @@ def test_e1_amortisation_heavy_capex_follows_its_intensity_and_amortisation_runs
     gi = out["balance"]["goodwill_intangibles"]
     assert gi[1] < gi[0]                                                                  # intangibles amortise
     assert all(abs(x) < 1.0 for x in out["balance"]["balance_check"])
+
+
+def test_fix2_a_research_margin_off_the_company_basis_moves_only_by_its_guided_change():
+    # GILD (2026-10-08): research EBITDA ~39% against an actual ~46% cut EBIT from 36.8% to 29.6%.
+    import copy as _cp
+    series = _cp.deepcopy(_gft._SERIES)
+    for r in series:
+        r["ebit"] = 0.368 * r["revenue"]
+        r["depreciation_and_amortization"] = 0.094 * r["revenue"]
+        r["capital_expenditure"] = -0.02 * r["revenue"]
+    blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+           "estimates": {"base": {"revenue_growth_fy1": 0.06, "revenue_growth_fy2": 0.07, "ebitda_margin_fy1": 0.37, "ebitda_margin_fy2": 0.39}}}
+    fc = gf.build_forecast(blk, scenario="base", series=series, profile_name="Large Cap Pharma", sector="Biopharma",
+                           wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=12.0, market_growth=0.04)
+    assert fc["margin_target"] == pytest.approx(0.368 + 0.094 + 0.02 - 0.094, abs=2e-3)       # actual + guided change, as EBIT
+    assert any("another basis or an error" in f for f in (fc.get("deconstruction") or {}).get("flags", []) + fc.get("flags", []))
+
+
+def test_fix1_a_street_growth_path_extends_the_guided_years_before_the_fade():
+    blk = {**_gft._BLOCK, "_street_growth_path": [0.05, 0.04]}
+    blk = {k: v for k, v in blk.items() if k != "medium_term_target"}
+    fc = gf.build_forecast(blk, scenario="base", series=_gft._SERIES, profile_name="Managed Care", sector="Healthcare",
+                           wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+    assert fc["street_years"] == 2
+    assert fc["growth_schedule"][2] == pytest.approx(0.05) and fc["growth_schedule"][3] == pytest.approx(0.04)

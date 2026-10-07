@@ -14069,6 +14069,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             if _v1 is not None and _v2 is not None and _ntm_e > 0:
                                 forward_consensus[_m][_sc] = (1.0 - _ntm_e) * _v1 + _ntm_e * _v2
                     forward_consensus["ntm_elapsed_share"] = round(_ntm_e, 4)
+                    # Fix 1 (owner, 2026-10-08): the street's later years, for names whose forecast runs on them.
+                    forward_consensus["_fy_path"] = [
+                        {"period_end": str(getattr(e_, "period_end", "") or "")[:10],
+                         "revenue": _fx(_safe(getattr(e_, "revenue_avg", None))),
+                         "analysts": getattr(e_, "analyst_count_revenue", None)} for e_ in estimates]
                     if _ntm_e > 0.05:
                         ticker_forward_flags.append(
                             f"Forward legs on the next twelve months: {_ntm_e:.0%} of FY+1 ({str(_p1)}) has elapsed, so "
@@ -16215,6 +16220,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         ticker_forward_flags.append(f"Guidance scope ({_sc_chk['check']}): {_sc_chk['detail']}")
                 except Exception:                          # noqa: BLE001
                     most_recent["_guidance_scope"] = []
+            # Fix 1 (owner, 2026-10-08; GILD / AMGN): on a name with an accepted LOE input, the forecast follows the
+            # street's revenue growth for FY+3.. while 3+ analysts cover the year; the LOE curves start after them.
+            if (scenario == "base" and _guid_est and isinstance(_guid_est, dict) and "_street_growth_path" not in _guid_est
+                    and is_biopharma_sector(sector) and _franchise_loe_entry(ticker)):
+                try:
+                    _fp = (forward_consensus or {}).get("_fy_path") or []
+                    _sgp = []
+                    for _i in range(2, min(len(_fp), 5)):
+                        _a, _b = _fp[_i - 1], _fp[_i]
+                        if ((_b.get("analysts") or 0) >= 3 and isinstance(_a.get("revenue"), (int, float))
+                                and isinstance(_b.get("revenue"), (int, float)) and _a["revenue"] > 0):
+                            _sgp.append(float(_b["revenue"]) / float(_a["revenue"]) - 1.0)
+                        else:
+                            break
+                    if _sgp:
+                        _guid_est = {**_guid_est, "_street_growth_path": _sgp}
+                        ticker_forward_flags.append(
+                            "Forecast revenue follows the street past the guided years: "
+                            + ", ".join(f"{x:+.1%}" for x in _sgp)
+                            + f" ({len(_sgp)} year(s) with 3+ analysts); the LOE curves start after them")
+                except Exception:                          # noqa: BLE001
+                    pass
             if _guid_est and _guidance_channel_enabled() and not _bank_models:
                 try:
                     from src.agents.analysis import guidance_forecast as _gfm
@@ -16616,6 +16643,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _e_ccy = str(_loe_e.get("currency") or "USD").upper()
                         _ra_ccy = _ra_usd if _e_ccy == "USD" else (_ra_usd * float(get_fx_rate("USD", _e_ccy) or 0.0) or None)
                     _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr),
+                                                  covered_years=_LOE_COVERED_YEARS + int((_gf or {}).get("street_years") or 0),
                                                   profile_name=profile_name, pipeline_ra_peak=_ra_ccy)
                     if _loe:
                         _growth_schedule = _loe["growth_schedule"]

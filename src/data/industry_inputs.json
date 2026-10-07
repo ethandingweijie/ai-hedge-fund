@@ -5310,48 +5310,23 @@
      "revenue_latest_usd_bn": 36.74
     },
     "basis": "estimate",
-    "built_at": "2026-09-26T14:42:22+00:00",
+    "built_at": "2026-10-07T16:42:53+00:00",
     "checks": [
      {
       "check": "pipeline / revenue",
-      "detail": "0.43x (plausible 0.02x to 8.0x)",
+      "detail": "0.45x (plausible 0.02x to 8.0x)",
       "ok": true,
-      "ratio": 0.4287
-     },
-     {
-      "check": "late-stage only",
-      "detail": "phases: phase_3, phase_3, approved, phase_3, approved",
-      "ok": true
-     },
-     {
-      "check": "launch years plausible",
-      "detail": "2028, 2028, 2024 (approved), 2027, 2020 (approved)",
-      "ok": true
-     },
-     {
-      "check": "PTRS cited and in range",
-      "detail": "5 of 5 carry a usable PTRS",
-      "ok": true
-     },
-     {
-      "check": "assets with cited peak sales",
-      "detail": "5 usable; dropped none",
-      "ok": true
-     },
-     {
-      "check": "sources resolve to canonical URLs",
-      "detail": "no grounding wrappers",
-      "ok": true
+      "ratio": 0.4491
      },
      {
       "check": "single-asset peak sales",
-      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure; quote does not name the asset (check the source): Olpasiran (AMG 890)",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
       "ok": true
      },
      {
       "check": "launch year vs trial dates",
-      "detail": "MariTide (maridebart cafraglutide / AMG 133): no primary completion date; Dazodalibep (VIB4920): no primary completion date; Olpasiran (AMG 890): no primary completion date",
-      "ok": false
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
      },
      {
       "check": "exclusivity covers the peak",
@@ -5360,187 +5335,264 @@
      },
      {
       "check": "pipeline completeness",
-      "detail": "missing (add or exclude with a reason): NCT05972551 (Romosozumab, Bisphosphonate); NCT06430866 (ABP 234, Pembrolizumab); NCT06054555 (ABP 206, Nivolumab); NCT07223190 (Blinatumomab, Blinatumomab); NCT05920356 (Sotorasib, Pembrolizumab); NCT03633708 (Etelcalcetide, Standard of Care); NCT06252649 (FOLFIRI Regimen, Sotorasib); NCT06700343 (Ocrelizumab (US), Ocrelizumab (EU)); NCT06691984 (Xaluritamig, Abiraterone); NCT07366086 (Vitamin D, Calcium); NCT07700238 (Romiplostim, Predniso(lo)ne); NCT06321601 (Avacopan, AMG 569)",
-      "ok": false
+      "detail": "48 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: phase_3, phase_3",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2028, 2028",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "2 of 2 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "2 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
      }
     ],
     "company": "Amgen Inc.",
     "data": {
-     "as_of": "2026-09-26",
+     "approved_portfolio": [
+      "Prolia (denosumab)",
+      "Xgeva (denosumab)",
+      "Repatha (evolocumab, AMG 145)",
+      "Enbrel (etanercept)",
+      "Otezla (apremilast, AMG 407, CC-10004)",
+      "Evenity (romosozumab, EVENITY)",
+      "Tepezza (teprotumumab)",
+      "Krystexxa (pegloticase, KRYSTEXXA)",
+      "Uplizna (inebilizumab, AMG 335, MEDI-551, VIB0551)",
+      "Tezspire (tezepelumab)",
+      "Imdelltra / Imdylltra (tarlatamab, AMG 757)",
+      "Blincyto (blinatumomab)",
+      "Kyprolis (carfilzomib)",
+      "Nplate (romiplostim, AMG 531)",
+      "Aranesp (darbepoetin alfa)",
+      "Vectibix (panitumumab)",
+      "Lumakras / Lumykras (sotorasib, AMG 510)",
+      "Tavneos (avacopan, AMG 569)",
+      "Parsabiv (etelcalcetide)",
+      "Aimovig (erenumab, AMG 334)",
+      "Neulasta (pegfilgrastim)",
+      "Epogen (epoetin alfa)",
+      "Sensipar (cinacalcet)",
+      "Imlygic (talimogene laherparepvec)",
+      "Corlanor (ivabradine)",
+      "Procysbi",
+      "Ravicti",
+      "Actimmune",
+      "Buphenyl",
+      "Quinsair",
+      "Rayos",
+      "Duexis",
+      "Pennsaid",
+      "Amjevita (adalimumab-atto)",
+      "Pavblu (aflibercept-ayyh)",
+      "Wezlana (ustekinumab-auub)",
+      "Mvasi (bevacizumab-awwb)",
+      "Kanjinti (trastuzumab-anns)",
+      "Avsola (infliximab-axxq)",
+      "Riabni (rituximab-arrx)",
+      "Bkemv (eculizumab-aeeb)"
+     ],
+     "as_of": "2026-10-05",
      "assets": [
       {
-       "indication": "Obesity and Type 2 Diabetes",
+       "aliases": [
+        "AMG 133",
+        "AMG133",
+        "maridebart cafraglutide",
+        "MariTide",
+        "MARITIME-1",
+        "MARITIME-2"
+       ],
+       "economic_share": null,
+       "indication": "Chronic weight management in obesity/overweight with and without type 2 diabetes (metabolic; GLP-1 agonist / GIPR antagonist antibody-peptide conjugate, monthly or less frequent dosing); CV outcomes, HFpEF, OSA, switch and extension Phase 3s ongoing",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2028,
-       "name": "MariTide (maridebart cafraglutide / AMG 133)",
-       "patent_expiry": null,
+       "modality": "biologic",
+       "name": "MariTide (maridebart cafraglutide, AMG 133)",
+       "nct_ids": [
+        "NCT06858839",
+        "NCT06858878"
+       ],
+       "orphan": false,
+       "patent_expiry": 2038,
+       "pdufa_date": null,
+       "peak_risk_adjusted": false,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "Goldman Sachs models $3.75 billion in risk-adjusted peak sales for MariTide and views the recent competitive MTSR acquisition process as evidence of market demand for a monthly dosing option",
+        "period": "2031E (Leerink Partners, unadjusted worldwide, note of 2024-11-27)",
+        "quote": "Leerink Partners has also revised its 2031 worldwide sales forecast for MariTide, lowering the unadjusted estimate from $15 billion to $12 billion",
         "scale": "bn",
-        "source_url": "https://www.investing.com/news/company-news/amgen-stock-holds-buy-rating-at-goldman-sachs-ahead-of-maritide-data-93CH-4384594",
-        "value": 3.75
+        "source_url": "https://www.investing.com/news/analyst-ratings/amgen-shares-remain-market-perform-rated-leerink-raises-target-on-positive-ph2-results-93CH-3744109",
+        "value": 12
        },
        "phase": "phase_3",
+       "primary_completion": "2027-01-21",
        "ptrs": {
-        "period": "Phase 3",
-        "quote": "Phase 3 to Approval ... Metabolic/endocrinology",
-        "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6015565/",
-        "value": 0.7
+        "period": "2026",
+        "quote": "Phase III to approval ~58% (BIO/Informa 2011-2020, all indications); metabolic/endocrine above average",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.65
        },
-       "ptrs_basis": "Metabolic Phase 3 benchmark (~65-75%)"
+       "ptrs_basis": "BIO/Informa 2011-2020 Phase 3->approval base rate (~0.58), raised modestly to 0.65 for metabolic/endocrine and a clinically validated incretin mechanism (Phase 2 ~20% weight loss); held below the 0.75 Leerink PoS because that figure dates from Nov 2024 and Phase 3 tolerability (titration) is untested. Engine table for obesity Phase 3 is 0.59; 0.65 is inside the +/-15pp band. Pivotal MARITIME-1/-2 primary completion 2027-01-21 (ClinicalTrials.gov); launch 2028 is the rule floor (2027-01 + 22 months = 2028-11); Amgen has not guided a filing or launch date.",
+       "royalty_payable": null
       },
       {
-       "indication": "Sjögren's Disease",
+       "aliases": [
+        "VIB4920",
+        "VIB 4920",
+        "MEDI4920",
+        "AMG 611",
+        "HZNP-DAZ-301",
+        "HZNP-DAZ-303",
+        "OASIZ 301",
+        "OASIZ 303",
+        "dazodalibep"
+       ],
+       "economic_share": null,
+       "indication": "Sjogren's disease: moderate-to-severe systemic disease activity (OASIZ 301, positive Sep 2026) and moderate-to-severe symptom state with low systemic activity (OASIZ 303, completes Q4 2026); CD40L-blocking fusion protein (immunology)",
+       "interim_readout": null,
+       "interim_source_url": null,
        "launch_year": 2028,
+       "modality": "biologic",
        "name": "Dazodalibep (VIB4920)",
-       "patent_expiry": null,
+       "nct_ids": [
+        "NCT06104124",
+        "NCT06245408"
+       ],
+       "orphan": false,
+       "patent_expiry": 2034,
+       "pdufa_date": null,
+       "peak_risk_adjusted": true,
        "peak_sales": {
         "currency": "USD",
-        "period": "Peak",
-        "quote": "The research firm increased its peak sales estimate for dazodalibep to $4.5 billion from $1 billion based on the current data.",
+        "period": "peak (year not stated; Jefferies note reported 24 Sep 2026, risk-adjusted at 60% PoS)",
+        "quote": "Jefferies increased its risk-adjusted peak sales estimate for dazodalibep to about $4.5 billion from $1 billion, including $2 billion for the systemic population and $2.5 billion for the symptomatic population at a 60% probability of success.",
         "scale": "bn",
-        "source_url": "https://www.investing.com/news/company-news/jefferies-raises-amgen-stock-price-target-on-drug-trial-success-93CH-4252636",
+        "source_url": "https://www.proactiveinvestors.com/companies/news/1099001/amgen-price-target-raised-by-jefferies-to-410-after-positive-sjoegren-s-data-1099001.html",
         "value": 4.5
        },
        "phase": "phase_3",
+       "primary_completion": "2026-07-23",
        "ptrs": {
-        "period": "Phase 3",
-        "quote": "The price target increase follows positive Phase 3 trial results for Amgen's dazodalibep, a CD40L antagonist, in moderate-to-severe systemic Sjögren's disease.",
-        "source_url": "https://www.investing.com/news/company-news/jefferies-raises-amgen-stock-price-target-on-drug-trial-success-93CH-4252636",
-        "value": 0.7
+        "period": "2026",
+        "quote": "at a 60% probability of success",
+        "source_url": "https://www.proactiveinvestors.com/companies/news/1099001/amgen-price-target-raised-by-jefferies-to-410-after-positive-sjoegren-s-data-1099001.html",
+        "value": 0.6
        },
-       "ptrs_basis": "Immunology/rheumatology Phase 3 benchmark (~65-75%) following positive topline results in pivotal OASIZ 301 Phase 3 study"
-      },
-      {
-       "indication": "Small Cell Lung Cancer (SCLC)",
-       "launch_year": 2024,
-       "name": "Imdelltra (tarlatamab-dlle / AMG 757)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "2026-2032 forecast period",
-        "quote": "Currently, GlobalData analysts forecast peak sales of more than $10bn and $3bn for Imfinzi and Imdelltra, respectively, within the 2026-2032 forecast period.",
-        "scale": "bn",
-        "source_url": "https://www.clinicaltrialsarena.com/news/imfinzi-imdelltra-combo-builds-frontline-sclc-case-on-phase-iii-win/",
-        "value": 3.0
-       },
-       "phase": "approved",
-       "ptrs": {
-        "period": "Approved / Phase 3 label expansion",
-        "quote": "Adding Imdelltra (tarlatamab) to Imfinzi in this setting led to statistically significant improvements in overall survival (OS), progression-free survival (PFS), and objective response rate (ORR)",
-        "source_url": "https://www.clinicaltrialsarena.com/news/imfinzi-imdelltra-combo-builds-frontline-sclc-case-on-phase-iii-win/",
-        "value": 0.85
-       },
-       "ptrs_basis": "Commercial-stage product pre-peak; high probability of label expansion into first-line maintenance supported by positive Phase 3 DeLLphi-305 overall survival data"
-      },
-      {
-       "indication": "Elevated Lipoprotein(a) / Cardiovascular Disease",
-       "launch_year": 2027,
-       "name": "Olpasiran (AMG 890)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "FY2030E",
-        "quote": "Jay Olson, an analyst at investment bank Oppenheimer, anticipates that the drug's annual sales could reach $1.5 billion in 2030 for Amgen.",
-        "scale": "bn",
-        "source_url": "https://www.fool.com/investing/2022/12/11/could-amgens-heart-disease-candidate-generate-bi/",
-        "value": 1.5
-       },
-       "phase": "phase_3",
-       "ptrs": {
-        "period": "Phase 3",
-        "quote": "Novartis trial failure for pelacarsen increased clinical uncertainty for Amgen's competing olpasiran... investors quickly reassessed the probability of success and future commercial viability for Amgen's candidate.",
-        "source_url": "https://www.investing.com/news/company-news/amgen-inc-stock-amgn-moved-down-by-833-on-sep-8-a-full-analysis-93CH-4239841",
-        "value": 0.5
-       },
-       "ptrs_basis": "Cardiovascular Phase 3 benchmark adjusted down (~50%) to account for class-wide outcome uncertainty after competitor pelacarsen missed primary cardiovascular endpoints"
-      },
-      {
-       "indication": "IgG4-Related Disease (IgG4-RD) and Generalized Myasthenia Gravis (gMG)",
-       "launch_year": 2020,
-       "name": "Uplizna (inebilizumab-cdon)",
-       "patent_expiry": null,
-       "peak_sales": {
-        "currency": "USD",
-        "period": "Peak",
-        "quote": "TD Cowen analysts anticipate “a solid launch” in IgG4-RD and gMG and see peak sales of $2 billion to $3 billion for the Uplizna franchise.",
-        "scale": "bn",
-        "source_url": "https://www.biospace.com/article/beyond-maritide-amgen-makes-portfolio-play-amid-scrutiny-of-obesity-prospect/",
-        "value": 3.0
-       },
-       "phase": "approved",
-       "ptrs": {
-        "period": "Post-approval expansion",
-        "quote": "The anti-CD19 antibody won FDA approval in the fibro-inflammatory condition IgG4-RD this year, adding to an earlier authorization in neuromyelitis optica spectrum disorder.",
-        "source_url": "https://www.biospace.com/article/beyond-maritide-amgen-makes-portfolio-play-amid-scrutiny-of-obesity-prospect/",
-        "value": 0.95
-       },
-       "ptrs_basis": "Approved biologic undergoing rapid label and geographic commercial expansion"
+       "ptrs_basis": "Asset-specific Jefferies PoS (Sep 2026) after OASIZ 301 met its ESSDAI primary endpoint at week 48 (Amgen release 2026-09-22); the symptomatic population (OASIZ 303, NCT06245408) has not read out. Engine table for immunology Phase 3 is 0.54; 0.60 is inside the band. The cited $4.5bn is already RISK-ADJUSTED at that 60% (peak_risk_adjusted=true, so the engine does not discount it again; implied unadjusted ~$7.5bn is NOT used). Launch floor: earliest pivotal primary completion 2026-07-23 + 22 months = 2028. Patent: US composition of matter 2034 (Amgen FY2025 10-K); exclusivity end 2040 (12y biologic from 2028).",
+       "royalty_payable": null
       }
      ],
-     "notes": "Amgen terminated its rocatinlimab development partnership with Kyowa Kirin and discontinued bemarituzumab in first-line gastric cancer following Phase 3 readouts, concentrating late-stage capital into MariTide, Dazodalibep, Olpasiran, and commercial rollouts of Imdelltra and Uplizna."
+     "excluded_assets": [
+      {
+       "name": "Olpasiran (AMG 890)",
+       "reason": "no sourced peak sales -- Phase 3 (OCEAN(a)-Outcomes NCT05581303 primary completion 2028-03-31; OCEAN(a)-PreEvent NCT07136012 2031-10-20; OCEAN(a)-CCTA NCT07293260 2028-06-15). Only single-asset figures found are Oppenheimer's risk-adjusted $1.5bn in 2030 (Dec 2022, 41% PoS; 2030 is the earliest launch year, so not a peak) and GlobalData $1.05bn by 2029; Evaluate's $5.6bn 2032 is a class-wide Lp(a) figure (fails R1). Novartis pelacarsen missed its Lp(a)HORIZON CV-outcomes primary endpoint (Sep 2026), a mechanism-level read-across; Amgen cites deeper (95-99%) Lp(a) lowering and a higher-risk (>=200 nmol/L) population. US patent 2036 (10-K)."
+      },
+      {
+       "name": "Xaluritamig (AMG 509)",
+       "reason": "no sourced peak sales -- Phase 3 XALute (NCT06691984, post-taxane mCRPC, enrolment complete, primary completion 2029-01-02) and XALience (NCT07213674, + abiraterone, 2030-01-07); developed under the Xencor research collaboration; US patent 2039 (10-K)"
+      },
+      {
+       "name": "Rocatinlimab (AMG 451 / KHK4083)",
+       "reason": "discontinued by Amgen -- collaboration terminated Jan 2026, HSR cleared Feb 2026, Kyowa Kirin assumed full worldwide responsibility in Q1 2026 (Amgen FY2025 10-K); no longer an Amgen economic asset"
+      },
+      {
+       "name": "Bemarituzumab (AMG 552)",
+       "reason": "discontinued -- Feb 2026 Amgen will not pursue approval in first-line gastric cancer after FORTITUDE-101/-102 Phase 3 (10-K)"
+      },
+      {
+       "name": "AMG 513",
+       "reason": "discontinued (Q2 2026 release); Phase 1 obesity study only follows enrolled participants"
+      },
+      {
+       "name": "ABP 938 (aflibercept 8 mg / EYLEA HD biosimilar)",
+       "reason": "biosimilar in development (comparative study NCT07614776); no sourced single-asset peak; Amgen's '>$4bn biosimilar sales by 2030' is a franchise figure"
+      },
+      {
+       "name": "ABP 234 (pembrolizumab / Keytruda biosimilar)",
+       "reason": "biosimilar in development (NCT06430866, NCT06311721); no sourced single-asset peak"
+      },
+      {
+       "name": "ABP 206 (nivolumab / Opdivo biosimilar)",
+       "reason": "biosimilar in development (NCT06054555); no sourced single-asset peak"
+      },
+      {
+       "name": "ABP 692 (ocrelizumab / Ocrevus biosimilar)",
+       "reason": "biosimilar in development (NCT06700343, enrolment complete); no sourced single-asset peak"
+      },
+      {
+       "name": "NCT07366086 Vitamin D / calcium (romosozumab OI safety follow-up)",
+       "reason": "label-expansion support of Evenity: Phase 3 safety follow-up of children with osteogenesis imperfecta previously given romosozumab (trial 20200105, NCT05972551); no investigational product dosed"
+      },
+      {
+       "name": "Sunakiment (AMG 104 / AZD8630)",
+       "reason": "Phase 2 complete (LEVANTE, asthma); Phase 3 planned with AstraZeneca, not started"
+      },
+      {
+       "name": "Daxdilimab",
+       "reason": "Phase 2 (dermatomyositis / anti-synthetase myositis, discoid lupus); Amgen 'taking steps' toward a registrational phase"
+      },
+      {
+       "name": "AMG 732",
+       "reason": "Phase 2 (thyroid eye disease)"
+      },
+      {
+       "name": "AMG 329",
+       "reason": "Phase 2 (Sjogren's disease)"
+      },
+      {
+       "name": "AMG 193",
+       "reason": "Phase 2 (NSCLC) / Phase 1"
+      }
+     ],
+     "notes": "Built 2026-10-05 from Amgen FY2025 10-K (filed 2026-02-13), Q2 2026 earnings release (8-K 2026-08-04) and Q2 call, Amgen press releases, ClinicalTrials.gov. Big Pharma add-on: only the two unapproved assets with cited single-asset peaks are valued; marketed products (incl. Imdelltra, Uplizna, Tezspire label expansions) sit in approved_portfolio because the add-on does not price approved assets. CHANGES vs the stored 2026-09-26 entry: (1) MariTide peak was Goldman's risk-adjusted $3.75bn 'Peak' -- that investing.com URL now resolves to an unrelated article and could not be re-verified; replaced by Leerink's unadjusted $12bn 2031E (Nov 2024, the latest dated single-asset figure found). The ~$17.5bn MariTide figure a reviewer quoted could NOT be found in any source (searched broker, Evaluate, GlobalData, press) and is not used. Other MariTide figures seen: BMO adjusted peak $2.14bn (Jul 2025, cut from $3.64bn), Evaluate consensus $3.7bn in 2030 (BioSpace, Sep 2025), Morgan Stanley ~$5.9bn 2033 (search snippet only, not verified). 2031E is not a stated lifetime peak and the range is very wide; MARITIME-1/-2 read out ~Q1 2027. (2) Dazodalibep: the Jefferies $4.5bn is RISK-ADJUSTED (60% PoS), now flagged peak_risk_adjusted=true; the old entry's investing.com URL also resolves to an unrelated article -- re-sourced to Proactive Investors (2026-09-24). OASIZ 301 positive topline 2026-09-22; OASIZ 303 (symptomatic) completes Q4 2026. A MedImmune/AstraZeneca royalty on dazodalibep (Viela 2018 asset purchase) may apply but no rate could be verified, so royalty_payable is left null. (3) Olpasiran removed from valued assets: no usable single-asset lifetime peak (old $1.5bn was Oppenheimer 2022 risk-adjusted 2030E, = first launch year) and pelacarsen's Lp(a)HORIZON outcomes miss (Sep 2026; AMGN fell ~10%) raises class risk; OCEAN(a)-Outcomes primary completion 2028-03-31. (4) Imdelltra and Uplizna moved from 'approved' assets to approved_portfolio (old Uplizna $3bn was the top of a $2-3bn FRANCHISE range; old Imdelltra $3bn was a GlobalData 2026-2032 window figure). LAST 6 MONTHS: Tezspire CROSSING Phase 3 in EoE positive (2026-08-27); Tezspire COPD Phase 3s enrolling; Tezspire CRSwNP approved FDA Oct 2025; Imdelltra EC approval and China NMPA full approval (May 2026); DeLLphi-305 (Imdelltra + durvalumab, 1L ES-SCLC maintenance) met OS at a pre-specified interim (Sep 2026); Repatha VESALIUS-CV positive, positive CHMP opinion for broader EU label; FDA CDER asked Amgen to voluntarily withdraw Tavneos (hearing requested 2026-06-01); FDA partial clinical hold on subcutaneous blinatumomab Phase 2 and Phase 1b/2 studies; AMG 513 discontinued; Uplizna MERCURY Phase 2/3 (autoimmune hepatitis, NCT07598825) started and a CIDP Phase 3 planned H2 2026-H1 2027; Nplate ROMISTER Phase 3 (ITP) started; ABP 938 biosimilar study started. Partnered economics: Tezspire is an AstraZeneca collaboration (profit share, approved -- not valued here); MariTide and dazodalibep are wholly owned (economic_share null = 100%). pipeline_source_check flags 'PD-L1' (a comparator class in the 8-K) and 'peptide' (from 'antibody-peptide conjugate' in the 10-K) as uncovered -- these are not Amgen programmes."
     },
     "engine_preview": {
      "assets": [
       {
-       "indication": "Obesity and Type 2 Diabetes",
+       "economic_share": null,
+       "indication": "Chronic weight management in obesity/overweight with and without type 2 diabetes (metabolic; GLP-1 agonist / GIPR antagonist antibody-peptide conjugate, monthly or less frequent dosing); CV outcomes, HFpEF, OSA, switch and extension Phase 3s ongoing",
        "launch_year": 2028,
-       "name": "MariTide (maridebart cafraglutide / AMG 133)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 3750000000.0,
+       "name": "MariTide (maridebart cafraglutide, AMG 133)",
+       "patent_expiry": 2038,
+       "peak_sales_period": "2031E (Leerink Partners, unadjusted worldwide, note of 2024-11-27)",
+       "peak_sales_usd": 12000000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Metabolic Phase 3 benchmark (~65-75%)",
-       "ptrs_override": 0.7,
+       "ptrs_basis": "BIO/Informa 2011-2020 Phase 3->approval base rate (~0.58), raised modestly to 0.65 for metabolic/endocrine and a clinically validated incretin mechanism (Phase 2 ~20% weight loss); held below the 0.75 Leerink PoS because that figure dates from Nov 2024 and Phase 3 tolerability (titration) is untested. Engine table for obesity Phase 3 is 0.59; 0.65 is inside the +/-15pp band. Pivotal MARITIME-1/-2 primary completion 2027-01-21 (ClinicalTrials.gov); launch 2028 is the rule floor (2027-01 + 22 months = 2028-11); Amgen has not guided a filing or launch date.",
+       "ptrs_override": 0.65,
+       "royalty_payable": null,
        "source": "gemini_accepted"
       },
       {
-       "indication": "Sjögren's Disease",
+       "economic_share": null,
+       "indication": "Sjogren's disease: moderate-to-severe systemic disease activity (OASIZ 301, positive Sep 2026) and moderate-to-severe symptom state with low systemic activity (OASIZ 303, completes Q4 2026); CD40L-blocking fusion protein (immunology)",
        "launch_year": 2028,
        "name": "Dazodalibep (VIB4920)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
+       "patent_expiry": 2034,
+       "peak_sales_period": "peak (year not stated; Jefferies note reported 24 Sep 2026, risk-adjusted at 60% PoS)",
        "peak_sales_usd": 4500000000.0,
        "phase": "phase_3",
-       "ptrs_basis": "Immunology/rheumatology Phase 3 benchmark (~65-75%) following positive topline results in pivotal OASIZ 301 Phase 3 study",
-       "ptrs_override": 0.7,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Small Cell Lung Cancer (SCLC)",
-       "launch_year": 2024,
-       "name": "Imdelltra (tarlatamab-dlle / AMG 757)",
-       "patent_expiry": null,
-       "peak_sales_period": "2026-2032 forecast period",
-       "peak_sales_usd": 3000000000.0,
-       "phase": "approved",
-       "ptrs_basis": "Commercial-stage product pre-peak; high probability of label expansion into first-line maintenance supported by positive Phase 3 DeLLphi-305 overall survival data",
-       "ptrs_override": 0.85,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "Elevated Lipoprotein(a) / Cardiovascular Disease",
-       "launch_year": 2027,
-       "name": "Olpasiran (AMG 890)",
-       "patent_expiry": null,
-       "peak_sales_period": "FY2030E",
-       "peak_sales_usd": 1500000000.0,
-       "phase": "phase_3",
-       "ptrs_basis": "Cardiovascular Phase 3 benchmark adjusted down (~50%) to account for class-wide outcome uncertainty after competitor pelacarsen missed primary cardiovascular endpoints",
-       "ptrs_override": 0.5,
-       "source": "gemini_accepted"
-      },
-      {
-       "indication": "IgG4-Related Disease (IgG4-RD) and Generalized Myasthenia Gravis (gMG)",
-       "launch_year": 2020,
-       "name": "Uplizna (inebilizumab-cdon)",
-       "patent_expiry": null,
-       "peak_sales_period": "Peak",
-       "peak_sales_usd": 3000000000.0,
-       "phase": "approved",
-       "ptrs_basis": "Approved biologic undergoing rapid label and geographic commercial expansion",
-       "ptrs_override": 0.95,
+       "ptrs_basis": "peak already risk-adjusted at source; Asset-specific Jefferies PoS (Sep 2026) after OASIZ 301 met its ESSDAI primary endpoint at week 48 (Amgen release 2026-09-22); the symptomatic population (OASIZ 303, NCT06245408) has not read out. Engine table for immunology Phase 3 is 0.54; 0.60 is inside the band. The cited $4.5bn is already RISK-ADJUSTED at that 60% (peak_risk_adjusted=true, so the engine does not discount it again; implied unadjusted ~$7.5bn is NOT used). Launch floor: earliest pivotal primary completion 2026-07-23 + 22 months = 2028. Patent: US composition of matter 2034 (Amgen FY2025 10-K); exclusivity end 2040 (12y biologic from 2028).",
+       "ptrs_override": 1.0,
+       "royalty_payable": null,
        "source": "gemini_accepted"
       }
      ],
@@ -5548,29 +5600,131 @@
       "citation_coverage": 1.0,
       "currencies": [
        "USD bn",
-       "USD bn",
-       "USD bn",
-       "USD bn",
        "USD bn"
       ],
       "dropped_assets": [],
-      "ptrs_ignored": []
+      "ptrs_ignored": [],
+      "risk_adjusted_peaks": [
+       "Dazodalibep (VIB4920)"
+      ]
      }
     },
     "fmp_context_usd": {
      "company": "Amgen Inc.",
      "depreciation_and_amortization": 5167000000.0,
-     "market_cap": 223768333880.0,
+     "market_cap": 222672726640.0,
      "net_ppe": 8515000000.0,
      "operating_cash_flow": 9958000000.0,
      "period": "2025-12-31",
-     "revenue": 36741000000.0
+     "revenue": 36741000000.0,
+     "shares": 539708000.0
     },
     "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 33.8,
-    "value_usd": 15750000000.0
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "previous": {
+     "assets": [
+      {
+       "launch_year": 2028,
+       "name": "MariTide (maridebart cafraglutide / AMG 133)",
+       "peak": 3.75,
+       "phase": "phase_3",
+       "ptrs": 0.7
+      },
+      {
+       "launch_year": 2028,
+       "name": "Dazodalibep (VIB4920)",
+       "peak": 4.5,
+       "phase": "phase_3",
+       "ptrs": 0.7
+      },
+      {
+       "launch_year": 2024,
+       "name": "Imdelltra (tarlatamab-dlle / AMG 757)",
+       "peak": 3.0,
+       "phase": "approved",
+       "ptrs": 0.85
+      },
+      {
+       "launch_year": 2027,
+       "name": "Olpasiran (AMG 890)",
+       "peak": 1.5,
+       "phase": "phase_3",
+       "ptrs": 0.5
+      },
+      {
+       "launch_year": 2020,
+       "name": "Uplizna (inebilizumab-cdon)",
+       "peak": 3.0,
+       "phase": "approved",
+       "ptrs": 0.95
+      }
+     ],
+     "built_at": "2026-09-26T14:42:22+00:00",
+     "model": "gemini-3.8-flash",
+     "value_usd": 15750000000.0
+    },
+    "primary_sources": {
+     "assets": [
+      {
+       "dates": {},
+       "name": "MariTide (maridebart cafraglutide, AMG 133)",
+       "phase": "phase_3",
+       "stages": {
+        "10-K": "phase_3",
+        "8-K": "phase_3",
+        "transcript": "phase_3"
+       },
+       "verdict": "corroborated"
+      },
+      {
+       "dates": {},
+       "name": "Dazodalibep (VIB4920)",
+       "phase": "phase_3",
+       "stages": {
+        "10-K": "phase_3",
+        "8-K": "phase_3",
+        "transcript": "phase_3"
+       },
+       "verdict": "corroborated"
+      }
+     ],
+     "sources": {
+      "10-K": {
+       "chars": 697250,
+       "date": "2026-02-13",
+       "url": "https://www.sec.gov/Archives/edgar/data/318154/000031815426000010/amgn-20251231.htm"
+      },
+      "8-K": {
+       "chars": 53446,
+       "date": "2026-08-04",
+       "url": "https://www.sec.gov/Archives/edgar/data/318154/000031815426000124/amgn-20260630earningsrelea.htm"
+      },
+      "transcript": {
+       "chars": 53441,
+       "date": "2026-08-04",
+       "url": "FMP earnings call 2026 Q2"
+      }
+     },
+     "uncovered_late_stage": [
+      {
+       "identifier": "PD-L1",
+       "sources": [
+        "8-K"
+       ],
+       "stage": "phase_3"
+      },
+      {
+       "identifier": "peptide",
+       "sources": [
+        "10-K"
+       ],
+       "stage": "phase_3"
+      }
+     ]
+    },
+    "secs": null,
+    "value_usd": 16500000000.0
    }
   },
   "AMT": {
@@ -8643,6 +8797,286 @@
     "ok": true,
     "secs": 16.8,
     "value_usd": 12000000000.0
+   }
+  },
+  "GILD": {
+   "pipeline": {
+    "anchors": {
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 29.44
+    },
+    "basis": "estimate",
+    "built_at": "2026-10-07T16:42:41+00:00",
+    "checks": [
+     {
+      "check": "pipeline / revenue",
+      "detail": "0.08x (plausible 0.02x to 8.0x)",
+      "ok": true,
+      "ratio": 0.0849
+     },
+     {
+      "check": "single-asset peak sales",
+      "detail": "no unapproved asset's peak is a combined, other-asset or deal figure",
+      "ok": true
+     },
+     {
+      "check": "launch year vs trial dates",
+      "detail": "every asset launches on or after its trial floor",
+      "ok": true
+     },
+     {
+      "check": "exclusivity covers the peak",
+      "detail": "no peak year falls after its asset's exclusivity",
+      "ok": true
+     },
+     {
+      "check": "pipeline completeness",
+      "detail": "27 registry Phase 3 stud(ies) and 0 disclosed name(s) covered",
+      "ok": true
+     },
+     {
+      "check": "late-stage only",
+      "detail": "phases: filed",
+      "ok": true
+     },
+     {
+      "check": "launch years plausible",
+      "detail": "2027",
+      "ok": true
+     },
+     {
+      "check": "PTRS cited and in range",
+      "detail": "1 of 1 carry a usable PTRS",
+      "ok": true
+     },
+     {
+      "check": "assets with cited peak sales",
+      "detail": "1 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Gilead Sciences, Inc.",
+    "data": {
+     "approved_portfolio": [
+      "Biktarvy (bictegravir/emtricitabine/tenofovir alafenamide, B/F/TAF, GS-9883/F/TAF)",
+      "Bixlenvo (bictegravir/lenacapavir, BIC/LEN FDC, GS-9883/GS-6207) -- FDA approved 2026-08-27",
+      "Descovy (emtricitabine/tenofovir alafenamide, F/TAF)",
+      "Truvada (emtricitabine/tenofovir disoproxil fumarate, F/TDF)",
+      "Genvoya (E/C/F/TAF)",
+      "Odefsey (emtricitabine/rilpivirine/tenofovir alafenamide)",
+      "Complera / Eviplera",
+      "Stribild",
+      "Atripla",
+      "Symtuza (Janssen-commercialised; Gilead share of revenue)",
+      "Viread (tenofovir disoproxil fumarate, TDF)",
+      "Vemlidy (tenofovir alafenamide)",
+      "Tybost (cobicistat, GS-9350)",
+      "Sunlenca (lenacapavir, GS-6207) -- treatment, heavily treatment-experienced",
+      "Yeztugo / Yeytuo (lenacapavir twice-yearly injection for PrEP, GS-6207) -- FDA approved 2025-06-18; once-weekly oral lenacapavir PrEP sNDA under review, PDUFA 2027-02-02",
+      "Veklury (remdesivir)",
+      "Epclusa (sofosbuvir/velpatasvir)",
+      "Harvoni (ledipasvir/sofosbuvir)",
+      "Sovaldi (sofosbuvir)",
+      "Vosevi (sofosbuvir/velpatasvir/voxilaprevir)",
+      "Hepcludex (bulevirtide, MYR301) -- FDA accelerated approval May 2026 (HDV) on Phase 3 MYR301",
+      "Livdelzi (seladelpar, MBX-8025)",
+      "Trodelvy (sacituzumab govitecan-hziy, IMMU-132, GS-0132)",
+      "Yescarta (axicabtagene ciloleucel)",
+      "Tecartus (brexucabtagene autoleucel)",
+      "AmBisome (amphotericin B liposome)",
+      "Letairis (ambrisentan)",
+      "Cayston (aztreonam)"
+     ],
+     "as_of": "2026-10-08",
+     "assets": [
+      {
+       "aliases": [
+        "anito-cel",
+        "anitocabtagene autoleucel",
+        "anitocabtagene",
+        "ddBCMA",
+        "CART-ddBCMA",
+        "iMMagine-1",
+        "iMMagine-3"
+       ],
+       "economic_share": 1.0,
+       "indication": "Relapsed/refractory multiple myeloma, fourth line and later (BLA); second line (iMMagine-3, filing as early as 2027)",
+       "interim_readout": null,
+       "interim_source_url": null,
+       "launch_year": 2027,
+       "modality": "cell_gene",
+       "name": "Anitocabtagene autoleucel (anito-cel)",
+       "nct_ids": [
+        "NCT05396885",
+        "NCT06413498"
+       ],
+       "orphan": true,
+       "patent_expiry": null,
+       "pdufa_date": "2026-12-23",
+       "peak_risk_adjusted": false,
+       "peak_sales": {
+        "currency": "USD",
+        "period": "2035E (sell-side consensus of 10 analysts, last modelled year; as quoted by Gilead 2026-02-23)",
+        "quote": "According to the 10 Gilead coverage analysts that model anito-cel, consensus revenue expectations ramp to approximately $2.5B in 2035 (the last year included in our consensus model).",
+        "scale": "bn",
+        "source_url": "https://www.sec.gov/Archives/edgar/data/1786205/000110465926018531/tm267075d1_ex99-1.htm",
+        "value": 2.5
+       },
+       "phase": "filed",
+       "primary_completion": "2026-12",
+       "ptrs": {
+        "period": "2026",
+        "quote": "BIO/Informa 2011-2020 phase-transition base rate: NDA/BLA filing to approval ~90%",
+        "source_url": "https://www.bio.org/clinical-development-success-rates-and-contributing-factors-2011-2020",
+        "value": 0.9
+       },
+       "ptrs_basis": "Filed-stage base rate (~0.90). BLA (4L+ RRMM, pivotal Phase 2 iMMagine-1, NCT05396885) accepted by FDA with PDUFA 2026-12-23 (Gilead release 2026-02-23 and Q2 2026 prepared remarks 2026-08-04: 'anito-cel's December 23rd PDUFA date'); no decision as of 2026-10-08. BCMA CAR-T is a validated class (Carvykti, Abecma); Fast Track, Orphan Drug and RMAT designations (Arcellx 10-K). Launch 2027 = first full year after a late-December 2026 PDUFA. Economics: Gilead closed the Arcellx acquisition on 2026-04-28 ($115/share cash + $5 CVR payable if cumulative anito-cel net sales reach $6.0bn from launch through 2029; ~$7.8bn equity value), so Gilead now owns 100% -- the former 50% US profit share and low- to mid-teens ex-US royalties to Arcellx are extinguished (economic_share 1.0, no royalty payable; the CVR is a contingent purchase-price liability, not a royalty). Peak: the 2035 consensus is the last modelled year, not necessarily the lifetime peak; Gilead says it 'considerably understates the opportunity'. S&P Global/Visible Alpha (Jan 2026, search snippet only, page 403) cite ~$1.5bn by 2030 rising to ~$3bn peak by 2034; GlobalData projects $658m in 2032 (8MM). The engine's 12-year biologic exclusivity (2027+12=2039) covers the 2035 figure.",
+       "royalty_payable": null
+      }
+     ],
+     "excluded_assets": [
+      {
+       "name": "ISL/LEN islatravir/lenacapavir once-weekly oral (ISLEND-1 NCT06630299 vs Antiretroviral Combinations; ISLEND-2 NCT06630286 vs Biktarvy) -- with Merck",
+       "reason": "no sourced peak sales. Phase 3 complete (primary completion 2026-04; both trials met non-inferiority, NEJM/AIDS 2026, July 2026); not yet filed as of 2026-10-08 (Gilead Q2 2026: 'work towards global regulatory filings as quickly as possible with potential for launch of the first weekly oral in 2027'). No single-asset broker/consensus peak found (searched Gilead/Merck transcripts, Fierce, BioSpace, GlobalData, Evaluate; only lenacapavir-wide or franchise figures exist, which rule 1 forbids). Economics if added later: Gilead/Merck share global development costs 60/40 and revenues 50/50, with Gilead's share stepping to 65% of oral-combination revenue above $2.0bn/yr (Merck/Gilead agreement, March 2021) -- economic_share ~0.5. Rule-2 floor if valued as phase_3: 2026-04 + 22 months = 2028 unless a PDUFA date is announced."
+      },
+      {
+       "name": "Once-yearly intramuscular lenacapavir for PrEP (PURPOSE 365, NCT07047716, Lenacapavir Injection / Lenacapavir Tablet)",
+       "reason": "lifecycle extension of Yeztugo (lenacapavir PrEP), no sourced single-asset peak sales; Phase 3 fully recruited, primary completion 2028-09; company targets an update in 2027 and launch 2028"
+      },
+      {
+       "name": "Once-weekly oral lenacapavir for PrEP (Yeztugo oral sNDA)",
+       "reason": "label/formulation expansion of Yeztugo; sNDA accepted June 2026, PDUFA 2027-02-02; no separate peak sales"
+      },
+      {
+       "name": "Lenacapavir + teropavimab + zinlirvimab (TAB/ZAB, GS-5423, GS-2872) twice-yearly (NCT07683000; NCT07682961 vs cabotegravir/rilpivirine)",
+       "reason": "no sourced peak sales; Phase 3 recruiting, primary completion 2029-03, company guides launch around 2030"
+      },
+      {
+       "name": "GS-3242 injection + lenacapavir (NCT07708727, Phase 2/3 vs Biktarvy, treatment-naive)",
+       "reason": "Phase 2/3 just started (primary completion 2030-10); no sourced peak sales"
+      },
+      {
+       "name": "Lepetegravir (GS-1720) / lenacapavir pacfosacil (GS-4182) once-weekly oral FDC (WONDERS-1 NCT06544733)",
+       "reason": "FDA clinical hold (June 2025) on CD4/lymphocyte-count decreases; WONDERS-2 terminated; GS-1720 since cleared to restart, being re-paired with oral weekly lenacapavir in a NEW Phase 2 from early 2027 (Q2 2026 call); the GS-1720/GS-4182 combination is not progressing; no peak"
+      },
+      {
+       "name": "Domvanalimab / zimberelimab (GS-0154 AB154 / GS-0122 AB122, with Arcus) STAR-121 NSCLC (NCT05502237)",
+       "reason": "discontinued: STAR-121 stopped for futility (announced 2026-04-21); STAR-221 upper-GI stopped for futility December 2025"
+      },
+      {
+       "name": "Seladelpar IDEAL / ASSURE / AFFIRM (NCT03301506, NCT06051617)",
+       "reason": "label expansion of Livdelzi (seladelpar); IDEAL positive topline Q2 2026"
+      },
+      {
+       "name": "Sacituzumab govitecan ASCENT-03/04/05/07, ASCENT-GYN-01 endometrial, ES-SCLC, EVOKE NSCLC (1L mTNBC across PD-L1 status)",
+       "reason": "label expansions of Trodelvy (1L mTNBC approved 2026 on ASCENT-03/-04)"
+      },
+      {
+       "name": "Bictegravir/lenacapavir ARTISTRY-1/2 and NCT06532656",
+       "reason": "label/lifecycle of Bixlenvo (BIC/LEN), FDA approved 2026-08-27"
+      },
+      {
+       "name": "GS-8824 (TUB-040, NaPi2b ADC, from Tubulis)",
+       "reason": "Phase 1/2 (platinum-resistant ovarian cancer); registrational development as early as 2027"
+      },
+      {
+       "name": "GS-8823 (TUB-030, 5T4 ADC, from Tubulis)",
+       "reason": "Phase 1"
+      },
+      {
+       "name": "Gamgertamig (from Ouro Medicines, T-cell engager, autoimmune)",
+       "reason": "Phase 1 / early clinical"
+      },
+      {
+       "name": "Emvistagrast (GS-1427, oral alpha4beta7)",
+       "reason": "Phase 2 (SWIFT)"
+      },
+      {
+       "name": "Edecesertib (GS-5718, IRAK4)",
+       "reason": "Phase 2a (COSMIC)"
+      }
+     ],
+     "notes": "WHAT THE 2026 DEBT BOUGHT: three acquisitions closed in H1 2026 -- (1) Arcellx, closed 2026-04-28: $115/share cash + $5/share CVR (on >=$6.0bn cumulative anito-cel net sales through 2029), ~$7.8bn equity value; bought 100% of anito-cel (filed, PDUFA 2026-12-23, valued above) and the D-domain binder platform; (2) Tubulis (Germany), closed May 2026: $3.15bn upfront + up to $1.85bn milestones (up to $5bn); bought the ADC platform, GS-8824/TUB-040 (Phase 1/2) and GS-8823/TUB-030 (Phase 1) -- not late-stage, not valued; (3) Ouro Medicines, closed June 2026: $1.675bn upfront + up to $500m milestones (10-Q: ~$1.9bn aggregate incl. contingent); bought gamgertamig and T-cell-engager bispecifics for autoimmune disease -- early-stage, not valued. Q2 2026 acquired IPR&D was $11.2bn (FY26 guide $11.5bn); H1 cash outflow on acquisitions net of cash acquired $11.3bn. Funding (Q2 2026 10-Q, read via fetch summary, not line-checked): proceeds from debt financing $4.085bn; cash + marketable securities fell from ~$10.6bn (2025-12-31) to ~$3.2bn (2026-06-30) and total debt rose from ~$24.9bn to ~$26.2bn -- i.e. the ~$7.7bn net-debt increase is mostly cash drawdown plus new notes, spent overwhelmingly on Arcellx (anito-cel). CHANGES IN THE LAST 6 MONTHS: Bixlenvo (BIC/LEN) FDA approved 2026-08-27 (moved to approved_portfolio); Trodelvy 1L mTNBC approvals (ASCENT-03/-04); Hepcludex US accelerated approval May 2026; ISL/LEN Phase 3 ISLEND-1/-2 positive (June/July 2026), filing pending; weekly oral Yeztugo sNDA accepted (PDUFA 2027-02-02); Livdelzi IDEAL positive; STAR-121 (dom/zim) discontinued for futility April 2026; GS-1720 cleared to restart but the GS-1720/GS-4182 combination is not progressing; Gilead says no further sizeable M&A in 2026. YEZTUGO (approved, not valued here): FY2026 guide ~$1bn is a launch-year figure, not its peak; lifetime-peak views from search snippets only (pages 403): consensus ~$4.5bn, BMO $6.6bn by 2035, Mizuho ~$8bn, Jefferies $9.5bn. Anito-cel S&P/Visible Alpha ~$3bn by 2034 is a search snippet; the valued $2.5bn 2035 consensus is from Gilead's own filed deal communication (page read). Registry codes with no word tokens (ISL/LEN, B/F/TAF, F/TAF, TAB, ZAB) are covered via their INN/brand names above."
+    },
+    "engine_preview": {
+     "assets": [
+      {
+       "economic_share": 1.0,
+       "indication": "Relapsed/refractory multiple myeloma, fourth line and later (BLA); second line (iMMagine-3, filing as early as 2027)",
+       "launch_year": 2027,
+       "name": "Anitocabtagene autoleucel (anito-cel)",
+       "patent_expiry": null,
+       "peak_sales_period": "2035E (sell-side consensus of 10 analysts, last modelled year; as quoted by Gilead 2026-02-23)",
+       "peak_sales_usd": 2500000000.0,
+       "phase": "filed",
+       "ptrs_basis": "Filed-stage base rate (~0.90). BLA (4L+ RRMM, pivotal Phase 2 iMMagine-1, NCT05396885) accepted by FDA with PDUFA 2026-12-23 (Gilead release 2026-02-23 and Q2 2026 prepared remarks 2026-08-04: 'anito-cel's December 23rd PDUFA date'); no decision as of 2026-10-08. BCMA CAR-T is a validated class (Carvykti, Abecma); Fast Track, Orphan Drug and RMAT designations (Arcellx 10-K). Launch 2027 = first full year after a late-December 2026 PDUFA. Economics: Gilead closed the Arcellx acquisition on 2026-04-28 ($115/share cash + $5 CVR payable if cumulative anito-cel net sales reach $6.0bn from launch through 2029; ~$7.8bn equity value), so Gilead now owns 100% -- the former 50% US profit share and low- to mid-teens ex-US royalties to Arcellx are extinguished (economic_share 1.0, no royalty payable; the CVR is a contingent purchase-price liability, not a royalty). Peak: the 2035 consensus is the last modelled year, not necessarily the lifetime peak; Gilead says it 'considerably understates the opportunity'. S&P Global/Visible Alpha (Jan 2026, search snippet only, page 403) cite ~$1.5bn by 2030 rising to ~$3bn peak by 2034; GlobalData projects $658m in 2032 (8MM). The engine's 12-year biologic exclusivity (2027+12=2039) covers the 2035 figure.",
+       "ptrs_override": 0.9,
+       "royalty_payable": null,
+       "source": "gemini_accepted"
+      }
+     ],
+     "checks": {
+      "citation_coverage": 1.0,
+      "currencies": [
+       "USD bn"
+      ],
+      "dropped_assets": [],
+      "ptrs_ignored": []
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Gilead Sciences, Inc.",
+     "depreciation_and_amortization": 2760000000.0,
+     "market_cap": 182918184466.0,
+     "net_ppe": 5606000000.0,
+     "operating_cash_flow": 10019000000.0,
+     "period": "2025-12-31",
+     "revenue": 29442000000.0,
+     "shares": 1239955155.0027113
+    },
+    "grounding_urls": [],
+    "model": "verified research (owner re-check, primary sources)",
+    "ok": true,
+    "primary_sources": {
+     "assets": [
+      {
+       "dates": {},
+       "name": "Anitocabtagene autoleucel (anito-cel)",
+       "phase": "filed",
+       "stages": {
+        "10-K": null,
+        "8-K": null,
+        "transcript": "filed"
+       },
+       "verdict": "corroborated"
+      }
+     ],
+     "sources": {
+      "10-K": {
+       "chars": 473314,
+       "date": "2026-02-24",
+       "url": "https://www.sec.gov/Archives/edgar/data/882095/000088209526000006/gild-20251231.htm"
+      },
+      "8-K": {
+       "chars": 42428,
+       "date": "2026-08-04",
+       "url": "https://www.sec.gov/Archives/edgar/data/882095/000088209526000028/exhibit991earningspressrel.htm"
+      },
+      "transcript": {
+       "chars": 55091,
+       "date": "2026-08-04",
+       "url": "FMP earnings call 2026 Q2"
+      }
+     },
+     "uncovered_late_stage": []
+    },
+    "secs": null,
+    "value_usd": 2500000000.0
    }
   },
   "H78.SI": {

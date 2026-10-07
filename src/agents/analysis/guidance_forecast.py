@@ -333,6 +333,20 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
     # used to be applied as EBIT, overstating EBIT by D&A / revenue every year. Converted at the
     # history's D&A intensity; an operating/EBIT-margin target is already on the right basis.
     _ebitda_basis = not (tgt and tgt["year_index"] > T and tgt["metric"] in ("operating_margin", "ebit_margin"))
+    # Owner, 2026-10-08 (GILD / AMGN reviews, fix 2): a research FY+1 EBITDA margin more than 5 points from the
+    # company's own last EBITDA margin (EBIT + D&A) is on another basis or wrong -- GILD's ~39% against an actual 46%
+    # cut EBIT from 36.8% to 29.6% as guidance rose. Only the research's guided CHANGE is taken, from the actual.
+    _m1 = targets.get("m1")
+    _h_ebitda = ((hist.get("ebit_margin") or 0.0) + float(hist.get("da_pct_revenue") or 0.0)) if hist.get("ebit_margin") is not None else None
+    if (mT is not None and _ebitda_basis and isinstance(_m1, (int, float)) and _h_ebitda is not None
+            and not (tgt and tgt["year_index"] > T and tgt["metric"] in ("ebitda_margin",))
+            and abs(float(_m1) - _h_ebitda) > 0.05):
+        _delta = float(mT) - float(_m1)
+        out["flags"].append(f"Research EBITDA margin {float(_m1):.1%} (FY+1) is {float(_m1) - _h_ebitda:+.1%} from the company's own "
+                            f"{_h_ebitda:.1%}: another basis or an error -- the forecast takes only the guided change "
+                            f"({_delta:+.1%}) from the actual margin")
+        out["margin_basis_rebased"] = {"research_m1": float(_m1), "history_ebitda": _h_ebitda, "delta": _delta}
+        mT = _h_ebitda + _delta
     if mT is not None and _ebitda_basis:
         out["margin_T_ebitda"] = mT
         mT = mT - float(hist.get("da_pct_revenue") or 0.0)
@@ -497,15 +511,23 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             step = (dec["revenue_T"] / revs[-1]) ** (1.0 / rem) if revs[-1] > 0 and dec["revenue_T"] > 0 else 1.0
             for _ in range(rem):
                 revs.append(revs[-1] * step)
+    # Owner, 2026-10-08 (GILD / AMGN reviews, fix 1): where the street covers later years (3+ analysts), revenue follows
+    # its year-on-year growth past the guided years before the fade -- set on blocks with an accepted LOE input, where
+    # the generic fade plus the LOE overlay shrank AMGN 2% a year against a growing consensus.
+    T_rev = T
+    for _sg in (block or {}).get("_street_growth_path") or []:
+        if T_rev < PROJECTION_YEARS and isinstance(_sg, (int, float)):
+            revs.append(revs[-1] * (1.0 + float(_sg)))
+            T_rev += 1
     # fade: growth decays linearly to tgr over fade_years, then tgr to year 10
     gT = revs[-1] / revs[-2] - 1.0 if len(revs) > 1 and revs[-2] > 0 else tg["g1"]
     F = int(cfg["fade_years"])
     growth_sched: list[float] = []
     for t in range(1, PROJECTION_YEARS + 1):
-        if t <= T:
+        if t <= T_rev:
             growth_sched.append(revs[t] / revs[t - 1] - 1.0)
-        elif t <= T + F:
-            growth_sched.append(gT + (float(tgr) - gT) * (t - T) / float(F + 1))
+        elif t <= T_rev + F:
+            growth_sched.append(gT + (float(tgr) - gT) * (t - T_rev) / float(F + 1))
         else:
             growth_sched.append(float(tgr))
     # extend revenue to year 10 on the faded growth
@@ -667,6 +689,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     return {
         "calibration_applied": calibration_applied,
         "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
+        "street_years": T_rev - T,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
         "history": {k: hist.get(k) for k in ("revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",
