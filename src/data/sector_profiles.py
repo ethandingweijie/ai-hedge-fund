@@ -2398,12 +2398,16 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # not a separate leg.
         "Big Pharma (Consolidated DCF)": {
             "methods": [
-                {"name": "DCF",          "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "Forward P/E",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",    "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "DDM",          "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.36, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",  "weight": 0.27, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.135, "anchor": False, "implementable": True},
+                {"name": "DDM",          "weight": 0.135, "anchor": False, "implementable": True},
+                # Plan I2 (owner, 2026-10-07; GILD / AMGN reviews): accepted late-stage assets (Yeztugo, MariTide) are
+                # priced as an rNPV ADD-ON to every operating leg -- the weight rolls back pro rata -- and the LOE
+                # double-count guard nets them against the 50% replacement credit, so nothing is counted twice.
+                {"name": "rNPV (Pipeline)", "weight": 0.10, "anchor": False, "implementable": True},
             ],
-            "excluded": ["rNPV (Pipeline)", "rNPV", "EV/R&D", "Cash Runway", "P/BV"],
+            "excluded": ["rNPV", "EV/R&D", "Cash Runway", "P/BV"],
             "rationale": ("Integrated big pharma: consolidated unlevered DCF (patent cliffs, post-COVID base), "
                           "forward P/E, EV/EBITDA and dividend against big-pharma peers; the pipeline replaces "
                           "lost exclusivity inside the corporate cash flow."),

@@ -700,7 +700,11 @@ def test_i14_the_double_count_guard_only_nets_a_pipeline_that_is_priced():
     import inspect
     src = inspect.getsource(d)
     assert 'if (profile_name or "") in _PIPELINE_ADDON_PROFILES else 0.0)' in src
-    assert "Big Pharma (Consolidated DCF)" not in d._PIPELINE_ADDON_PROFILES
+    # Plan I2 (2026-10-07): big pharma now prices the pipeline add-on, so the guard applies there too
+    assert "Big Pharma (Consolidated DCF)" in d._PIPELINE_ADDON_PROFILES
+    from src.data import sector_profiles as sp_
+    bp = sp_.INDUSTRY_VALUATION_PROFILES["Biopharma"]["Big Pharma (Consolidated DCF)"]["methods"]
+    assert "rNPV (Pipeline)" in [m["name"] for m in bp] and abs(sum(m["weight"] for m in bp) - 1.0) < 1e-9
 
 
 # ── Share-count intervention (owner, 2026-10-07, REGN) ─────────────────────────────────────────────────

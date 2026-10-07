@@ -352,7 +352,7 @@ def _franchise_loe_overlay(entry: dict, fy0_year: int, growth_schedule: list, wa
             "drugs": [{k: v for k, v in p_.items() if not k.startswith("_")} for p_ in parts]}
 #: Plan IV2 (owner, 2026-10-04, Vertex review): revenue-stage drug profiles whose pipeline rNPV is an
 #: add-on to the operating value; for a Pre-approval Biotech the pipeline IS the company and stays a leg.
-_PIPELINE_ADDON_PROFILES = frozenset({"Commercial Biotech", "Large Cap Pharma"})
+_PIPELINE_ADDON_PROFILES = frozenset({"Commercial Biotech", "Large Cap Pharma", "Big Pharma (Consolidated DCF)"})
 
 
 def _interest_is_cost_of_goods(profile_name, sector) -> bool:

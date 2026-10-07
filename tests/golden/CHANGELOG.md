@@ -1786,3 +1786,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: REGN review 3: curated baskets record named members_used (provenance only, IVs unchanged)
 
+## 2026-10-07T14:47:47+00:00
+
+- regenerated at HEAD: `9e8d9ce2`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Plan I2: Big Pharma profile prices the rNPV add-on (constants hash only, IVs unchanged)
+
