@@ -231,7 +231,9 @@ def test_the_engine_wires_the_channel_into_the_scenario_loop_and_the_payload():
     src = inspect.getsource(d.run_dcf_agent)
     assert ("_guidance_channel_schedule(" + chr(10) + "                _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS," + chr(10)
             + "                growth_adj=_guidance_growth_adj_for(ticker, sector))") in src
-    assert '"guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied, most_recent.get(\"_guidance_scope\")),' in src
+    # Cross-sector audit E19 (2026-10-10): a bank-model run reports the guidance as not applied (nothing weighted read it).
+    assert '"guidance_estimates": _guidance_estimates_payload(' in src
+    assert '_guid_est, (None if _bank_models else _gc_applied), most_recent.get("_guidance_scope"),' in src
     assert '"guidance_channel": _gc,' in src
     assert 'state["data"].get("guidance_estimates", {})' in src
     # the research hands the block to the state under the same key

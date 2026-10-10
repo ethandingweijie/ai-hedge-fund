@@ -715,6 +715,19 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                 _capped += 1
         inv[1]["acted"] = True
         inv[1]["detail"] += f"; ACTED: UFCF held to {hi:.2f}x net income in {_capped} year(s)"
+    # Owner, 2026-10-10 (cross-sector audit E20, selective gate): conversion BELOW the lower bound fades onto it -- the
+    # steady-state years move linearly from the forecast's own conversion to the bound, reaching it in the last year.
+    elif conv_med is not None and conv_med < lo:
+        _st = [r for r in rows if r["phase"] not in ("guided", "engine path") and r["net_income"] > 0]
+        _n = len(_st)
+        for i, r in enumerate(_st, start=1):
+            _own = r["ufcf"] / r["net_income"]
+            _tgt = _own + (lo - _own) * (i / _n)
+            if _tgt > _own:
+                r["ufcf"] = _tgt * r["net_income"]
+                r["fcf_margin"] = (r["ufcf"] / r["revenue"]) if r["revenue"] else 0.0
+        inv[1]["acted"] = True
+        inv[1]["detail"] += f"; ACTED: steady-state UFCF faded onto {lo:.2f}x net income over {_n} year(s)"
     # terminal: ROIC consistency and the implied exit multiple against the mid-cycle peer median
     last = rows[-1]
     roic_T = hist["roic_median"] if (hist["roic_median"] is not None and hist["roic_median"] == hist["roic_median"]) else None
@@ -746,8 +759,17 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                    + f"; band {_floor:.1f}x-{_ceil:.1f}x")
         if _ok is False:
             _detail += " -- BELOW the floor (run-off pricing)" if exit_mult < _floor else " -- ABOVE the ceiling"
+    # Owner, 2026-10-10 (cross-sector audit E20, selective gate): an implied exit multiple outside the band is CLAMPED
+    # to it -- the DCF scales its terminal value by bound / implied (terminal_clamp); the check stays FAILED and says so.
+    _clamp = None
+    if _ok is False and exit_mult:
+        _bound = _floor if (_floor is not None and exit_mult < _floor) else _ceil
+        if _bound:
+            _clamp = float(_bound) / float(exit_mult)
+            _detail += f"; ACTED: terminal value clamped to {_bound:.1f}x (x{_clamp:.3f})"
     inv.append({"id": 4, "name": "Terminal multiple bounds", "ok": _ok, "detail": _detail,
-                "justified_ev_ebitda": _just, "floor": _floor, "ceiling": _ceil})
+                "justified_ev_ebitda": _just, "floor": _floor, "ceiling": _ceil,
+                **({"acted": True, "terminal_clamp": _clamp} if _clamp else {})})
     inv.append({"id": 5, "name": "No engine residue", "ok": None, "detail": "held by the PM rationale prompt's voice and rounding rules"})
     fcf_sched = [r["fcf_margin"] for r in rows]
     steps = _trace_steps(scenario=scenario, block=block, tg=tg, code=code, arche=arche, arche_reason=arche_reason, dec=dec, T=T, F=F,
@@ -775,7 +797,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "steps": steps,
         "rows": rows, "growth_schedule": [round(g, 6) for g in growth_sched], "fcf_margin_schedule": [round(m, 6) for m in fcf_sched],
         "terminal": {"tgr": float(tgr), "wacc": float(wacc), "roic_terminal": roic_terminal, "reinvestment_rate": reinvest,
-                     "implied_exit_ev_ebitda": exit_mult, "peer_ev_ebitda_median": peer_ev_ebitda},
+                     "implied_exit_ev_ebitda": exit_mult, "peer_ev_ebitda_median": peer_ev_ebitda, "terminal_clamp": _clamp},
         "invariants": inv,
         "target": tg.get("target"),
     }

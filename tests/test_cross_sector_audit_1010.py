@@ -283,3 +283,76 @@ def test_f_anchor_fallback_is_the_profile_named_leg_and_an_operating_sotp_still_
     # the operating SOTP adds net cash back, so long-term investments are netted for AAPL
     nd, b, flag = d._apply_lti_netting(21.9e9, {"components": {}}, {"long_term_investments": 84e9}, "Tech", "AAPL", CTE)
     assert nd == pytest.approx(21.9e9 - 84e9) and flag
+
+
+# ══ Batch C -- one path and honest flags: E7, E8, E9, E11, E12, E19, E20 ══════════════════════════════════════
+
+def test_e20_terminal_bound_failure_clamps_and_reports_it():
+    from tests.test_guidance_forecast import _fc
+    fc = _fc(peer_ev_ebitda=2.0)                       # a peer median far below the implied exit -> ceiling breached
+    inv4 = next(i for i in fc["invariants"] if i["id"] == 4)
+    if inv4["ok"] is False:
+        assert inv4.get("acted") and fc["terminal"]["terminal_clamp"] == pytest.approx(inv4["ceiling"] / fc["terminal"]["implied_exit_ev_ebitda"])
+        assert "ACTED: terminal value clamped" in inv4["detail"]
+    else:
+        assert fc["terminal"]["terminal_clamp"] is None
+
+
+def test_e20_low_cash_conversion_fades_onto_the_lower_bound():
+    import copy
+    from tests import test_guidance_forecast as _g
+    series = copy.deepcopy(_g._SERIES)
+    for r in series:                                   # heavy capex: conversion far below 0.60x
+        r["capital_expenditure"] = -0.08 * r["revenue"]
+    fc = gf.build_forecast(_g._BLOCK, scenario="base", series=series, profile_name="Managed Care", sector="Healthcare",
+                           wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+    inv2 = next(i for i in fc["invariants"] if i["id"] == 2)
+    if inv2.get("acted") and "faded onto" in inv2["detail"]:
+        steady = [r for r in fc["rows"] if r["phase"] not in ("guided", "engine path") and r["net_income"] > 0]
+        assert steady[-1]["ufcf"] / steady[-1]["net_income"] == pytest.approx(0.60, rel=1e-6)
+
+
+def test_e11_loe_scaling_keeps_every_row_tie():
+    gfc = {"rows": [{"year": 1, "revenue": 100.0, "ebit": 30.0, "tax": 6.0, "nopat": 24.0, "da": 10.0, "amortisation": 4.0,
+                     "capex": 8.0, "capex_maintenance": 6.0, "capex_growth": 2.0, "delta_nwc": 1.0, "ufcf": 25.0,
+                     "net_income": 22.0, "eps": 2.2}],
+           "invariants": [{"id": 4, "detail": "x"}]}
+    d._loe_scale_forecast(gfc, {"index": [0.8], "growth_schedule": [0.0]})
+    r = gfc["rows"][0]
+    assert r["ufcf"] == pytest.approx(r["nopat"] + r["da"] - r["capex"] - r["delta_nwc"])
+    assert r["capex"] == pytest.approx(r["capex_maintenance"] + r["capex_growth"]) and r["tax"] == pytest.approx(4.8)
+    assert "before the LOE overlay" in gfc["invariants"][0]["detail"]
+
+
+def test_e11_covered_years_follow_the_guided_horizon_in_run_and_override():
+    import inspect
+    from app.backend.services import estimate_override_service as eos
+    assert 'max(_LOE_COVERED_YEARS, int((_gf or {}).get("horizon_years") or 0))' in inspect.getsource(d)
+    assert 'max(_LOE_COVERED_YEARS, int(fc.get("horizon_years") or 0))' in inspect.getsource(eos)
+
+
+def test_e12_and_e8_dcf_family_and_backlog_legs_take_the_projection_context(monkeypatch):
+    pj = {"growth_schedule": [0.05] * 10, "wacc_schedule": None, "margin_delta_absolute": 0.0,
+          "margin_schedule": [0.12] * 10, "timing": None, "terminal_multiplier": 0.5}
+    row = {"revenue": 10e9}
+    v_half, tr = _leg("DCF (FCF+)", row, {}, None, monkeypatch, projection=pj)
+    v_full, _ = _leg("DCF (FCF+)", row, {}, None, monkeypatch, projection={**pj, "terminal_multiplier": 1.0})
+    assert tr["terminal_loe_multiplier"] == 0.5 and v_half < v_full
+    # the backlog leg with no accepted backlog or FCF guidance is the same projection as the family leg
+    v_b, tr_b = _leg("Backlog-coverage DCF", row, {}, None, monkeypatch, projection=pj)
+    assert v_b == pytest.approx(v_half)
+
+
+def test_e9_superseded_flags_and_e19_bank_guidance_payload():
+    assert d._SUPERSEDED_BY_FORECAST[0] == "CAGR-divergence gate"
+    est = {"confidence": "HIGH", "estimates": {}}
+    out = d._guidance_estimates_payload(est, None, None, not_applied="a bank earnings-and-capital model prices this name")
+    assert out["applied"] is False and out["not_applied_reason"].startswith("a bank earnings")
+
+
+def test_e7_overlay_paths_reach_a_tab():
+    from src.utils import valuation_workbook as vw
+    import inspect
+    src = inspect.getsource(vw)
+    assert 'self.sheet("Valuation paths"' in src and '("ppa_dcf", "depleting_dcf")' in src
+    assert 'kind="depleting_dcf", rows=_rows_d' in inspect.getsource(d)

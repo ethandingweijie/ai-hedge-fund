@@ -266,7 +266,7 @@ def _loe_for(ctx: dict, fc: dict, wacc: float, tgr: float) -> Optional[dict]:
     if not lo.get("entry") or not fc or not fc.get("growth_schedule"):
         return None
     return _franchise_loe_overlay(lo["entry"], int(lo["fy0_year"]), list(fc["growth_schedule"]), float(wacc), float(tgr),
-                                  covered_years=_LOE_COVERED_YEARS + int(fc.get("street_years") or 0),
+                                  covered_years=max(_LOE_COVERED_YEARS, int(fc.get("horizon_years") or 0)) + int(fc.get("street_years") or 0),
                                   profile_name=lo.get("profile_name"), pipeline_ra_peak=lo.get("pipeline_ra_peak"))
 
 

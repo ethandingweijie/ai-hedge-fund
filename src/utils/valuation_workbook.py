@@ -373,6 +373,10 @@ class _Book:
             self.sotp_tab()
         if self._has_bank():
             self.banks_tab()
+        # Cross-sector audit E7 (2026-10-10): a weighted leg that values its own path (PPA project finance, depleting
+        # asset) shows that path -- one revenue / cash path per leg, on a tab, never only inside the trace.
+        if self._overlay_paths():
+            self.paths_tab()
         if (self.dr or {}).get("guidance_estimates"):
             self.guidance_tab()                 # owner, 2026-10-03: guidance → estimates, as the DCF used them
         self.family_tab()
@@ -394,6 +398,37 @@ class _Book:
         buf = io.BytesIO()
         self.wb.save(buf)
         return buf.getvalue()
+
+    def _overlay_paths(self) -> list:
+        out = []
+        for s_ in SCENARIOS:
+            for name, tr in (self.scen(s_).get("leg_inputs") or {}).items():
+                if (isinstance(tr, dict) and tr.get("kind") in ("ppa_dcf", "depleting_dcf") and tr.get("rows")
+                        and self.in_blend(name)):
+                    out.append((s_, name, tr))
+        return out
+
+    def paths_tab(self) -> None:
+        sh = self.sheet("Valuation paths", "The year-by-year path each overlay leg values (PPA project finance, depleting asset)")
+        r = 1
+        sh.label(r, 1, "Valuation paths: the cash path each overlay leg discounts", bold=True)
+        r += 2
+        for s_, name, tr in self._overlay_paths():
+            rows = [x for x in tr.get("rows") or [] if isinstance(x, dict)]
+            if not rows:
+                continue
+            cols = [k for k in rows[0].keys()]
+            sh.label(r, 1, f"{name} -- {s_}", bold=True)
+            r += 1
+            for j, k in enumerate(cols):
+                sh.label(r, 1 + j, k, bold=True)
+            r += 1
+            for row in rows:
+                for j, k in enumerate(cols):
+                    v = row.get(k)
+                    sh.put(r, 1 + j, v if isinstance(v, (int, float, str, bool)) or v is None else str(v))
+                r += 1
+            r += 1
 
     def _has_pipeline(self) -> bool:
         return bool(any(((self.scen(s).get("rnpv_audit") or {}).get("assets")) for s in SCENARIOS)

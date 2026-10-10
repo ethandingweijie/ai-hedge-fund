@@ -244,3 +244,32 @@ Each batch would be built as follows:
 | `0917d` / `0917e` / `0917f` | AAPL pins from the Hyperscaler profile (FCF Yield leg, bear TGR, bull premium, basket) | Restated; `_AUDIT_F_MOVED` |
 
 **Final backward run:** 6,494 passed, 1 skipped, 4 xfailed.
+
+### Batch C: one path & honest flags (E7, E8, E9, E11, E12, E19, E20), 2026-10-10
+
+**Implemented**
+
+| Item | Change |
+|---|---|
+| **E20** (owner: selective gate) | **Terminal-multiple bound** fails → `terminal_clamp = bound / implied exit multiple`, and the DCF multiplies its terminal value by it (on top of any LOE haircut). **Cash conversion** below 0.60× → the steady-state years fade linearly onto the bound; the existing hard cap above 1.20× is unchanged. **Operating jaws:** disclose only. **Share count:** the existing correct-and-recheck path |
+| **E11** | `_loe_scale_forecast` scales tax, nopat, da, amortisation and capex_maintenance too, so every row tie holds. Invariants are marked as measured before the overlay. LOE covered years = max(2, the forecast's guided horizon) + street years, in both the run and the estimate-override recompute |
+| **E12** | `_dcf_projection` carries the LOE `terminal_multiplier`; DCF-family and backlog legs apply it and trace it |
+| **E8** | With no accepted FCF-guidance fade, the backlog leg takes the projection's own margin schedule (guidance forecast, cascade or capex fade), so the unbounded leg really is the core DCF |
+| **E9** | `_SUPERSEDED_BY_FORECAST`: a scenario whose guidance forecast replaced the engine path drops the CAGR-gate, revenue-scale-cap, analyst-dispersion and bear-backlog-floor flags, and one line names them. The forward-multiples header (batch A) names the guard swaps |
+| **E19** | Guidance on a bank-model run is reported `applied: false` with the reason |
+| **E7** | The depleting-asset DCF traces its 15-year path (`kind: depleting_dcf`). A new workbook tab, **Valuation paths**, shows every weighted overlay leg's year-by-year path (PPA project finance, depleting asset) |
+
+**Forward tests:** 7 new (31 in the file); both E20 branches were confirmed to execute. Local E2E:
+- LMT, NKE, COP probes drop the superseded flags (analyst dispersion; COP also the CAGR gate).
+- JPM reports guidance not applied (bank model).
+- LMT's unbounded backlog leg equals the core DCF.
+- COP's workbook carries the Valuation paths tab, tie-out 26/26.
+
+**Backward-test failures and fixes**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| `test_backlog_coverage_dcf` ×3 | Byte-identical trace parity: the family leg now traces `terminal_loe_multiplier` and the backlog leg did not | Backlog trace carries it too |
+| `test_research_guidance_channel` | Source pin on the payload call | Restated to the E19 call |
+
+**Final backward run:** 6,501 passed, 1 skipped, 4 xfailed; no golden moved.

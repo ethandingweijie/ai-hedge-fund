@@ -204,7 +204,10 @@ def _loe_scale_forecast(gf: Optional[dict], loe: dict) -> None:
         _yi = int(_row.get("year") or 0)
         if 1 <= _yi <= len(loe["index"]):
             _f = float(loe["index"][_yi - 1])
-            for _k in ("revenue", "ebit", "net_income", "eps", "ufcf", "capex", "capex_growth", "delta_nwc"):
+            # Cross-sector audit E11 (2026-10-10): every flow line scales, so ufcf = nopat + da - capex - dnwc and
+            # capex = maintenance + growth still tie and EBITDA = EBIT + D&A on the three-statement tab.
+            for _k in ("revenue", "ebit", "net_income", "eps", "ufcf", "capex", "capex_growth", "delta_nwc",
+                       "tax", "nopat", "da", "amortisation", "capex_maintenance"):
                 if isinstance(_row.get(_k), (int, float)):
                     _row[_k] = float(_row[_k]) * _f
             if _prev_rev:
@@ -212,6 +215,10 @@ def _loe_scale_forecast(gf: Optional[dict], loe: dict) -> None:
         _prev_rev = float(_row.get("revenue") or 0.0) or None
     gf["growth_schedule"] = list(loe["growth_schedule"])
     gf["loe_index"] = list(loe["index"])
+    # the invariants and terminal were measured on the unscaled rows; say so rather than leave them looking current
+    for _inv in gf.get("invariants") or []:
+        if isinstance(_inv, dict) and "before the LOE overlay" not in str(_inv.get("detail")):
+            _inv["detail"] = f"{_inv.get('detail')} (measured before the LOE overlay scaled the rows)"
 
 
 def _reverse_dcf(dcf_kwargs: dict, spot: Optional[float], lo: float = -0.30, hi: float = 0.60) -> Optional[dict]:
@@ -312,6 +319,11 @@ def _franchise_loe_entry(ticker: str) -> dict:
 #: Years 1-2 of the DCF are guidance / consensus, which already price the erosion they can see (Eylea
 #: biosimilars, Trulicity); the LOE curves take over from the end of year 2, never counting it twice.
 _LOE_COVERED_YEARS = 2
+
+#: Cross-sector audit E9 (owner, 2026-10-10): flags about the engine's own growth path. A scenario whose guidance
+#: forecast replaced that path drops them -- the effect they describe was overridden.
+_SUPERSEDED_BY_FORECAST = ("CAGR-divergence gate", "Revenue-scale cap on analyst bands", "Analyst dispersion (",
+                           "Bear revenue decline bounded by contracted backlog")
 #: Share of the post-horizon LOE loss the terminal value assumes the pipeline replaces. Owner, 2026-10-07: 50% for
 #: big pharma -- a diversified pipeline replaces part of a cliff past the horizon (Lilly: tirzepatide 56% of
 #: revenue, LOE 2036; with no credit the terminal value kept x0.41).
@@ -4790,7 +4802,7 @@ def _guidance_scope_checks(est: Optional[dict], revenue_last: Optional[float], f
 
 
 def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict],
-                                scope_checks: Optional[list] = None) -> Optional[dict]:
+                                scope_checks: Optional[list] = None, not_applied: Optional[str] = None) -> Optional[dict]:
     """What the report shows: the research block plus how (or why not) the DCF used it."""
     if not est or not isinstance(est, dict):
         return None
@@ -4812,7 +4824,10 @@ def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict],
     out["applied"] = bool(applied)
     out["channel"] = ({k: applied.get(k) for k in ("explicit", "explicit_years", "fade_years", "engine_year1",
                                                  "schedule", "confidence", "source")} if applied else None)
-    if not applied:
+    if not applied and not_applied:
+        # Cross-sector audit E19 (2026-10-10): the reason the run gives (a bank model priced the name) wins.
+        out["not_applied_reason"] = not_applied
+    elif not applied:
         cfg = _guidance_channel_cfg()
         if not _guidance_channel_enabled():
             out["not_applied_reason"] = "GUIDANCE_CHANNEL is off"
@@ -8123,10 +8138,14 @@ def _compute_method_value(
             growth_schedule=_sched,
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
-            margin_schedule=_m_sched,
+            # Cross-sector audit E8 (2026-10-10): with no accepted FCF-guidance fade the leg takes the projection's own
+            # margin schedule (guidance forecast, cascade or capex fade) -- it used to drop it, so the "byte-identical"
+            # unbounded leg was a different projection from the core DCF (Defense Primes' 0.40 anchor).
+            margin_schedule=(_m_sched if _m_sched is not None else _pj.get("margin_schedule")),
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
+            terminal_multiplier=_pj.get("terminal_multiplier"),
         )
         if _fade:
             _bound = {**(_bound or {}), "fcf_guidance_fade": {
@@ -8135,7 +8154,7 @@ def _compute_method_value(
                 "source_url": _fg.get("source_url")}}
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
-                   growth_schedule=_sched,
+                   growth_schedule=_sched, terminal_loe_multiplier=_pj.get("terminal_multiplier"),
                    margin_delta_absolute=_pj.get("margin_delta_absolute"),
                    wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
                    tgr=float(tgr), fcf_floor=float(fcf_floor),
@@ -8168,10 +8187,11 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
+            terminal_multiplier=_pj.get("terminal_multiplier"),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
-                   growth_schedule=_pj.get("growth_schedule"),
+                   growth_schedule=_pj.get("growth_schedule"), terminal_loe_multiplier=_pj.get("terminal_multiplier"),
                    margin_delta_absolute=_pj.get("margin_delta_absolute"),
                    wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
                    tgr=float(tgr), fcf_floor=float(fcf_floor),
@@ -8217,7 +8237,7 @@ def _compute_method_value(
     # whoever turns the charge on for `_DCF_PROJECTION_FAMILY` must not reach
     # for this call at the same time.
     if method_name == _DEPLETING_DCF:
-        iv, _, _, _ = _project_dcf(
+        iv, _pv_f, _pv_t, _rows_d = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
             wacc, 0.0, fcf_floor, net_debt, shares,
             years=_DEPLETING_HORIZON_YEARS,
@@ -8225,6 +8245,11 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
         )
+        # Cross-sector audit E7 (2026-10-10): the path this leg values is traced, so the workbook shows it (it valued a
+        # 15-year run with no trace at all -- a path no tab displayed).
+        _leg_trace(kind="depleting_dcf", rows=_rows_d, years=_DEPLETING_HORIZON_YEARS, growth_base=float(growth_base),
+                   fcf_margin_base=float(fcf_margin_base), wacc=float(wacc), net_debt=float(net_debt or 0.0),
+                   shares=float(shares), pv_fcf_per_share=float(_pv_f), value=iv)
         return iv
 
     # ── EPV (Earnings Power Value) ─────────────────────────────────────────
@@ -16747,6 +16772,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             #   the defect hid behind an unmoved headline IV for as long as it
             #   did.
             forward_flags: list[str] = list(ticker_forward_flags)
+            # Cross-sector audit E9 (2026-10-10): when this scenario's guidance forecast replaced the engine's growth
+            # schedule, the flags describing that engine path no longer describe what ran -- they leave this
+            # scenario's list, and one line names them so the audit trail survives.
+            if _gf:
+                _superseded = [f_ for f_ in forward_flags if str(f_).startswith(_SUPERSEDED_BY_FORECAST)]
+                if _superseded:
+                    forward_flags = [f_ for f_ in forward_flags if f_ not in _superseded]
+                    forward_flags.append("Superseded by the guidance forecast (the engine path they adjusted did not run): "
+                                         + "; ".join(sorted({str(f_).split(":")[0] for f_ in _superseded})))
 
             # Projected Y10 ROIC — scales current invested capital with
             # projected revenue growth × asset turnover ratio, computes
@@ -16926,7 +16960,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _e_ccy = str(_loe_e.get("currency") or "USD").upper()
                         _ra_ccy = _ra_usd if _e_ccy == "USD" else (_ra_usd * float(get_fx_rate("USD", _e_ccy) or 0.0) or None)
                     _loe = _franchise_loe_overlay(_loe_e, int(_p4), _loe_base, float(wacc), float(tgr),
-                                                  covered_years=_LOE_COVERED_YEARS + int((_gf or {}).get("street_years") or 0),
+                                                  covered_years=max(_LOE_COVERED_YEARS, int((_gf or {}).get("horizon_years") or 0))
+                                                  + int((_gf or {}).get("street_years") or 0),
                                                   profile_name=profile_name, pipeline_ra_peak=_ra_ccy)
                     if _loe:
                         _growth_schedule = _loe["growth_schedule"]
@@ -16962,6 +16997,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                           "pipeline_ra_peak": _ra_ccy}
             except Exception:                              # noqa: BLE001
                 _loe_tv_mult = 1.0
+            # Cross-sector audit E20 (owner, 2026-10-10, selective gate): a forecast whose implied exit multiple left the
+            # band is clamped to it -- the terminal value scales by bound / implied, on top of any LOE haircut.
+            _tclamp = (((_gf or {}).get("terminal") or {}).get("terminal_clamp")) if _gf else None
+            if isinstance(_tclamp, (int, float)) and _tclamp > 0:
+                _loe_tv_mult = float(_loe_tv_mult) * float(_tclamp)
             if scenario == "base" and isinstance(_fc_ctx, dict) and isinstance(_guid_est, dict):
                 # The research block's engine fields (street growth path, street FY+1 EBITDA margin, EPS basis),
                 # so an override rebuilds the forecast on the same reconciliation rules.
@@ -16994,6 +17034,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "margin_delta_absolute": md_abs,
                 "margin_schedule": _gf_margin_sched,      # the guidance forecast's FCF margins, else None
                 "timing": _dcf_timing_ctx,                # D2: dated, mid-year (None = whole years)
+                "terminal_multiplier": _loe_tv_mult,      # audit E12: every DCF-family leg carries it, not only "DCF"
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
@@ -19809,7 +19850,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-10-03: management guidance → the model's bear / base / bull
             # estimates (deep research 2G) and whether the DCF's years 1–2 ran on them.
             # Frontend: GuidanceEstimatesPanel reads `dcfRange?.guidance_estimates`.
-            "guidance_estimates": _guidance_estimates_payload(_guid_est, _gc_applied, most_recent.get("_guidance_scope")),
+            # Cross-sector audit E19 (2026-10-10): on a bank-model run nothing weighted read the guidance -- it is reported
+            # as not applied (it used to read "applied" because the zero-weight DCF took its schedule).
+            "guidance_estimates": _guidance_estimates_payload(
+                _guid_est, (None if _bank_models else _gc_applied), most_recent.get("_guidance_scope"),
+                not_applied=("a bank earnings-and-capital model prices this name; the DCF that read the guidance "
+                             "carries no weight" if _bank_models else None)),
             # Owner, 2026-10-03 (five principles): the guidance-to-forecast table the DCF ran on --
             # archetype, deconstruction, the intermediate years, the fade, the invariants.
             "guidance_forecast": _guidance_forecast_payload(_gf_base),
