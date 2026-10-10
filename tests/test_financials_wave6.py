@@ -93,11 +93,14 @@ def test_alt_asset_manager_is_on_distributable_earnings_and_every_leg_is_impleme
 
 
 def test_life_insurance_dropped_the_combined_ratio_gate_and_holdco_declares_the_analyst_sotp():
-    assert _w("Insurance") == {"Embedded Value": 0.35, "P/BV": 0.40, "P/E (ops)": 0.20, "DDM": 0.05}
+    # audit I4 (owner, 2026-10-10): GAAP P/E never above 15% on a life / annuity balance sheet; the 0.05 goes to P/BV
+    assert _w("Insurance") == {"Embedded Value": 0.35, "P/BV": 0.45, "P/E (ops)": 0.15, "DDM": 0.05}
     assert "Combined Ratio Gate" in P["Insurance"]["excluded"]
     assert "proxy" not in P["Insurance"]["methods"][0]                    # EV is fed by the accepted input only
     assert P["Insurance (P&C)"]["leg_fallback"] == {"Combined Ratio Gate": ["P/E (ops)"]}
-    assert P["Holding Company"]["methods"][0] == {"name": "SOTP (analyst)", "weight": 0.70, "anchor": True, "implementable": True}
+    # audit I4 (owner, 2026-10-10): the anchor names its bridge (synthetic two-pillar), never Forward P/E
+    assert P["Holding Company"]["methods"][0] == {"name": "SOTP (analyst)", "weight": 0.70, "anchor": True, "implementable": True,
+                                                   "fallback": "Two-Pillar (synthetic)", "no_forward_pe_fallback": True}
     # decision 5: SGX benchmarked against the global exchange basket
     assert sp.SECTOR_PEER_MULTIPLES["Market Infrastructure (SG)"]["pe"] == 25.0
     assert "CME" in sp.SECTOR_PEER_BASKETS["Market Infrastructure (SG)"]

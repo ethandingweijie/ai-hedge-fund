@@ -1521,7 +1521,8 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # had, so the leg was uncomputable and P/E (norm) plus the DDM carried the blend (-72%).
             # Without an accepted input the weight rolls into the anchor (leg_fallback).
             "methods": [
-                {"name": "P/E (norm)",          "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "P/E (norm)",          "weight": 0.4, "anchor": True, "implementable": True,
+                 "fallback": "P/B (5y median)", "no_forward_pe_fallback": True},          # audit I4 (owner, 2026-10-10)
                 {"name": "SOTP (analyst)",      "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "DDM",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
@@ -1750,9 +1751,12 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # P/E (ops) and DDM. The Combined Ratio Gate is a P&C concept and was None on
             # every life insurer at Stage 0; removed here, its weight to P/BV and P/E (ops).
             "methods": [
-                {"name": "Embedded Value",      "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "P/BV",                "weight": 0.40, "anchor": False, "implementable": True},
-                {"name": "P/E (ops)",           "weight": 0.20, "anchor": False, "implementable": True},
+                # Audit I4 (owner, 2026-10-10): with no embedded value the anchor falls to book ex AOCI (P/BV the
+                # secondary); GAAP P/E never above 15% on a life / annuity balance sheet (0.20 -> 0.15, +0.05 to P/BV).
+                {"name": "Embedded Value",      "weight": 0.35, "anchor": True,  "implementable": True,
+                 "fallback": "P/B ex-AOCI", "cascade_secondary": "P/BV", "no_forward_pe_fallback": True},
+                {"name": "P/BV",                "weight": 0.45, "anchor": False, "implementable": True},
+                {"name": "P/E (ops)",           "weight": 0.15, "anchor": False, "implementable": True},
                 {"name": "DDM",                 "weight": 0.05, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF", "Combined Ratio Gate"],
@@ -1772,7 +1776,9 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # carry, and the CITED P/DE and P/FRE ranges the sell side applies); quarantined
             # until accepted, the blend then runs on Forward P/E and DDM.
             "methods": [
-                {"name": "P/DE (Forward)",     "weight": 0.40, "anchor": True,  "implementable": True},
+                # Audit I4 (owner, 2026-10-10): GAAP Forward P/E is never the anchor's fallback here; the bridge (synthetic
+                # DE from realised performance fees and carry) needs lines the feed does not carry -- accept the P/DE input.
+                {"name": "P/DE (Forward)",     "weight": 0.40, "anchor": True,  "implementable": True, "no_forward_pe_fallback": True},
                 {"name": "SOTP (FRE + carry)", "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "Forward P/E",        "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "DDM",                "weight": 0.10, "anchor": False, "implementable": True},
@@ -1791,7 +1797,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # the non-implementable "SOTP / NAV" row that proxied to P/BV. Until accepted the
             # blend runs on NAV Discount (P/BV proxy) and DDM.
             "methods": [
-                {"name": "SOTP (analyst)", "weight": 0.70, "anchor": True,  "implementable": True},
+                # Audit I4 (owner, 2026-10-10): with no accepted SOTP the anchor falls to a synthetic two-pillar
+                # value (cash and investments + operating pre-tax earnings x 12), never to Forward P/E.
+                {"name": "SOTP (analyst)", "weight": 0.70, "anchor": True,  "implementable": True,
+                 "fallback": "Two-Pillar (synthetic)", "no_forward_pe_fallback": True},
                 {"name": "NAV Discount",   "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
                 {"name": "DDM",            "weight": 0.10, "anchor": False, "implementable": True},
             ],
@@ -1915,12 +1924,15 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 # the profile and fell back to Mature SaaS. P/Rate Base is exact
                 # only for a ticker with an accepted rate base; P/E is computable
                 # for every utility. The weights are the owner's, unchanged.
-                {"name": "P/Rate Base",   "weight": 0.35, "anchor": False, "implementable": False, "proxy": "P/BV"},
+                # Cross-sector audit I5 (owner, 2026-10-10): the P/BV stand-in is retired -- book carries goodwill and
+                # is not the rate base. With no accepted rate base the leg's weight rolls into the operating legs.
+                {"name": "P/Rate Base",   "weight": 0.35, "anchor": False, "implementable": True, "scenario_invariant": True},
                 {"name": "P/E",           "weight": 0.30, "anchor": True,  "implementable": True},
                 {"name": "DDM",           "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "DCF",           "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
+            "leg_fallback": {"P/Rate Base": ["P/E", "DDM", "DCF"]},
             "rationale": "Returns are set by the regulator on the equity layer of the rate base; earnings and the dividend follow from it. Free cash flow is structurally negative while the rate base grows.",
         },
         "Merchant Power": {
@@ -2669,7 +2681,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 # Owner, 2026-09-26 (audit A5): named for what it computes. Lease
                 # liabilities enter through FMP net debt; no rent add-back is made.
                 {"name": "EV/EBITDA",        "weight": 0.35, "anchor": True,  "implementable": True,
-                 "note": "lease-heavy; leases in net debt, no EBITDAR add-back"},
+                 "note": "lease-heavy; US GAAP leases out of net debt and out of peer EV (plan 1C.2, audit E1), no EBITDAR add-back"},
                 {"name": "Forward P/E",      "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",        "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "DCF",              "weight": 0.20, "anchor": False, "implementable": True},
@@ -2724,12 +2736,12 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 # Wave 10 (owner, 2026-09-27, decision 5): EV/Revenue and ROIC vs WACC out -- a revenue
                 # multiple on a retailer rewards low margins; forward earnings and free cash in.
                 {"name": "Forward EV/EBITDA", "weight": 0.40, "anchor": True,  "implementable": True,
-                 "note": "leases in net debt, no rent add-back"},
+                 "note": "US GAAP leases out of net debt and peer EV (plan 1C.2, audit E1), no rent add-back"},
                 {"name": "Forward P/E",  "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",    "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Store-based retail on forward EBITDA (leases in net debt) and forward earnings, free cash as the check; off-price and auto-parts retail price on their own sub-cohorts.",
+            "rationale": "Store-based retail on forward EBITDA (lease-free on both sides for US GAAP filers: plan 1C.2, audit E1) and forward earnings, free cash as the check; off-price and auto-parts retail price on their own sub-cohorts.",
         },
         "Luxury Goods": {
             "methods": [
@@ -2756,12 +2768,14 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 {"name": "P/E",        "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "EV/EBITDA",  "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            "excluded": ["P/E"],  # P/E is unreliable at high-growth stage (PEG >3x)
+            # Audit I9 (2026-10-10): "excluded" listed P/E while the table weights it at 0.20 -- the engine priced it.
+            # The pricing is kept and the record now says so; whether to drop the leg is an owner decision.
+            "excluded": [],
             "rationale": (
                 "High-growth consumer brands (CAGR ≥ 15%) with strong FCF margins are "
-                "valued on a blend of DCF intrinsic value (50%) and revenue/EBITDA market comps. "
-                "EV/Revenue anchors vs. peer brands at similar growth stage; EV/EBITDA provides "
-                "a current-profitability floor. P/E excluded — inflated during hypergrowth phase."
+                "valued on a blend of DCF intrinsic value (40%) and revenue/EBITDA/earnings market comps. "
+                "EV/Revenue prices against peer brands at a similar growth stage; EV/EBITDA provides "
+                "a current-profitability floor; trailing P/E carries 20% (inflated in a hypergrowth phase)."
             ),
         },
         # ── Membership / Subscription Retail profile ──────────────────────
@@ -2916,11 +2930,14 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # The anchor flag sits on EV/EBITDA, not on the proxied NAV row: industry routing declines a profile
             # whose anchor resolves to a proxy (the Wave 2 P/Rate Base precedent). Weights are the owner's.
             "methods": [
-                {"name": "RNAV (published)", "weight": 0.5, "anchor": False, "implementable": False, "proxy": "P/BV", "note": "the published NAV once an input is accepted; book (P/BV) prices the weight until then"},
+                # Cross-sector audit I5 (owner, 2026-10-10): book (hotels at cost) no longer stands in for the NAV; with
+                # no accepted NAV input the leg's weight rolls into the operating legs.
+                {"name": "RNAV (published)", "weight": 0.5, "anchor": False, "implementable": True, "scenario_invariant": True, "note": "the published NAV once an input is accepted; until then its weight rolls into the operating legs"},
                 {"name": "EV/EBITDA", "weight": 0.3, "anchor": True, "implementable": True},
                 {"name": "DDM", "weight": 0.2, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF"],
+            "leg_fallback": {"RNAV (published)": ["EV/EBITDA", "DDM"]},
             "rationale": "Hong Kong hotel owners trade on their real estate (0.2-0.3x book): a published NAV when accepted, book until then, EBITDA and the dividend beside it.",
         },
         "Online Travel": {
@@ -3050,7 +3067,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # legs drop where its trailing figures are negative and the run says so.
         "Commercial Aerospace & Engines": {
             "methods": [
-                {"name": "EV/EBIT (norm)",       "weight": 0.30, "anchor": True,  "implementable": True},
+                # Audit I4 (owner, 2026-10-10): a turnaround whose normalised EBIT is negative falls to its cycle-median
+                # positive EBIT (up to seven years) on the peer EV/EBIT, not the 12-month forward multiple.
+                {"name": "EV/EBIT (norm)",       "weight": 0.30, "anchor": True,  "implementable": True,
+                 "fallback": "EV/EBIT (cycle median)", "no_forward_pe_fallback": True},
                 {"name": "SOTP (analyst)",       "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "EV/EBITDA",            "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "P/E",                  "weight": 0.20, "anchor": False, "implementable": True},
@@ -3148,7 +3168,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         #
         # NOT reachable by industry row, pin or classifier. A name arrives only
         # through dcf_agent's eligibility gate (valuation_constants
-        # `backlog_gated_long_cycle`): backlog > 3.0x forward sales, book-to-bill
+        # `backlog_gated_long_cycle` -- not yet in valuation_constants.json; audit I9, 2026-10-10): backlog > 3.0x forward sales, book-to-bill
         # > 1.5x, contract liabilities > 50% of receivables plus inventory -- all
         # on owner-ACCEPTED filing figures. Fail one and the name stays where it was.
         "Capital Goods": {
@@ -3381,7 +3401,8 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Property Developer (SG)": {
             "methods": [
-                {"name": "NAV",          "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "NAV",          "weight": 0.55, "anchor": True,  "implementable": True,
+                 "fallback": "P/B (5y median)", "no_forward_pe_fallback": True},          # audit I4 (owner, 2026-10-10)
                 {"name": "DDM",          "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "P/E (norm)",   "weight": 0.20, "anchor": False, "implementable": True},
             ],
@@ -3396,7 +3417,8 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # investment property, so P/B at the cohort's discount is the anchor and a published
             # RNAV (the `nav` kind) prices ahead of it when the owner has accepted one.
             "methods": [
-                {"name": "P/BV",             "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "P/BV",             "weight": 0.40, "anchor": True,  "implementable": True,
+                 "fallback": "P/B (5y median)", "no_forward_pe_fallback": True},          # audit I4 (owner, 2026-10-10)
                 {"name": "RNAV (published)", "weight": 0.25, "anchor": False, "implementable": True, "scenario_invariant": True},
                 {"name": "Forward P/E",      "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "DDM",              "weight": 0.15, "anchor": False, "implementable": True},
@@ -3410,7 +3432,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             # right here, on the HKSE Real Estate - Diversified cohort's implied yield (6.2% on
             # 2026-09-27), and the 0.30x book the market pays is the structural discount, shown.
             "methods": [
-                {"name": "NAV (Cap Rates)", "weight": 0.40, "anchor": True,  "implementable": True, "scenario_invariant": True},
+                # Audit I4 (owner, 2026-10-10): with no cap-rate NAV the anchor falls to book at the company's own
+                # five-year median P/B, never Forward P/E.
+                {"name": "NAV (Cap Rates)", "weight": 0.40, "anchor": True,  "implementable": True, "scenario_invariant": True,
+                 "fallback": "P/B (5y median)", "cascade_secondary": "P/BV", "no_forward_pe_fallback": True},
                 {"name": "P/BV",            "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "DDM",             "weight": 0.30, "anchor": False, "implementable": True},
             ],
@@ -4205,7 +4230,7 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Market Infrastructure": ["ICE", "CME", "NDAQ", "CBOE"],
     "Brokerage":            ["SCHW", "IBKR", "HOOD"],
     "Membership / Subscription Retail": ["COST", "BJ"],
-    "Consumer Durables":    ["WHR", "NWL", "SNBR", "NWL"],
+    "Consumer Durables":    ["WHR", "NWL", "SNBR"],      # NWL was listed twice (audit I7, 2026-10-10)
     "Automotive & EV":      ["TSLA", "GM", "F", "RIVN", "LCID"],
     "Travel & Dining":      ["MCD", "SBUX", "DIS", "ABNB", "BKNG"],
     "Industrials":          ["HON", "GE", "MMM", "CAT", "DE"],

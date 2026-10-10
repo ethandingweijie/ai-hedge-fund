@@ -299,3 +299,52 @@ Each batch would be built as follows:
 | `test_realestate_wave8b` | Asserted the developer sat in its own cluster | Restated: it does not (1F.3) |
 
 **Final backward run:** 6,509 passed, 1 skipped, 4 xfailed.
+
+### Batch E: industry models (I1, I2, I3, I4, I5, I7, I9), 2026-10-10
+
+**Implemented**
+
+| Item | Change |
+|---|---|
+| **I1 concession** | New owner registry `valuation_constants.concessions` (PROPOSED; entries price only when ACCEPTED): per asset, filed term, archetype, end value, spectrum auction capex. **Concession DCF:** engine growth to expiry; capex tapers to ~0 over the final 5 years; BOT residual 0; spectrum terminal less a periodic auction capex; REIT/midstream salvage. Multi-asset runs off asset by asset. An accepted entry takes the DDM/DCF (perpetuity) weight. **Without one,** `FLAG_UNBOUNDED_CONCESSION` sizes the overvaluation at the PROPOSED typical term (00177.HK: ~44% of the perpetuity value sits after a 15-year term) |
+| **I2 depletion** | New owner registry `valuation_constants.reserves` (PROPOSED). With an accepted entry, the depleting DCF runs 2P / production years (cap 30): a plateau, then Arps hyperbolic (b 0.5, Di 12%) or linear mining decline to exhaustion. **Price held at today's realised level** (no house deck), pending the owner's operational alternative. **Without one,** `FLAG_DEPLETION_UNANCHORED` (COP) |
+| **I3 backlog** | The coverage haircut no longer applies when the re-dispatched EV/EBITDA priced forward EBITDA (consensus already reflects the book). Backlog growth bounds start after the guidance forecast's guided years |
+| **I4 anchor bridges** | Anchors name their bridge, computed as a shadow cross-check (never a declared leg): Holding Co → **Two-Pillar (synthetic)**, cash and investments + operating pre-tax × 12 − debt, float adjustment not applied (no feed line). Life insurers → **P/B ex-AOCI** (AOCI newly plumbed from FMP); GAAP P/E 0.20 → 0.15, P/BV 0.40 → 0.45. Property (Landlord HK, Developer SG / HK-China, RE Asset Manager SG) → **P/B (own 5-year median)**. Commercial Aero → **EV/EBIT (cycle median)** of up to 7 years. Alt managers: no Forward P/E fallback; the synthetic-DE bridge needs lines the feed lacks, so **accept the P/DE input (ingestion priority 1)**. **Engine:** a generic receiver (Forward P/E) takes at most **40%** through a cascade; the DCF and a named bridge are uncapped. `FLAG_ANCHOR_COLLAPSE_CASCADE` fires when Forward P/E exceeds 50% after an anchor failure |
+| **I5 stand-ins** | Regulated Utility P/Rate Base and Hotel Owner-Operator RNAV no longer price on P/BV; without an accepted input their weight rolls into the operating legs (P/E, DDM, DCF / EV/EBITDA, DDM) |
+| **I7 / I9** | NWL de-duplicated in Consumer Durables. Consumer Growth: `excluded` no longer lists the P/E it weights; pricing unchanged, rationale corrected (**owner: confirm whether to drop the P/E leg**). Stale lease notes and the Capital Goods constant note corrected. The industry_profile_map v13 note is a historical changelog entry and is left as written |
+
+**Forward evidence (local):**
+
+| Name | Result |
+|---|---|
+| BRK-B | Two-pillar bridge 78%, IV $569.57 (was 78% on Forward P/E) |
+| MET, PRU | P/B ex-AOCI 37%, GAAP P/E ~16% |
+| 01113.HK / U14.SI / 9CI.SI | Own-median P/B bridge, IV $34.43 / $7.85 / $2.28; 9CI.SI had no IV before |
+| NEE | P/Rate Base rolls to P/E / DDM / DCF |
+| 00045.HK | RNAV rolls to EV/EBITDA |
+| 00177.HK | Concession flag 44% |
+| COP | Depletion flag |
+| BX | Collapse flag; **IV withheld** (30% of the intended weight survives) until the P/DE input is accepted |
+| BA | Cycle-median bridge declines (fewer than 3 positive EBIT years in the 5-year feed); weight pro rata, not Forward P/E |
+
+**Backward-test failures and fixes**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| 17 goldens | `param_version` (two new registries) | Rebased; no other field moved |
+| Profile censuses, Tier-1 strip, SGX availability, fixture `methods_unavailable` ×10 | First implementation declared the bridges as zero-weight profile legs | Redesigned: bridges are shadow cross-checks |
+| `test_consumer_discretionary_gates` (source absence of `capex_t`) | Constant name `capex_taper_years` | Renamed `taper_years_for_capex` |
+| D7 test | The cap first applied to the DCF receiver | DCF and named bridges exempt (owner: the excess goes *to* the DCF) |
+| Weight and proxy pins ×6 (life P/E, holdco, hotel, utility, Consumer Growth, mult census) | Owner decisions I4 / I5 / I9 | Restated |
+| E2E-found defects | Concession flag read a scenario-scoped `tgr` before the loop; FMP P/B lives on `/ratios` | Fixed before commit |
+
+**Final backward run:** 6,516 passed, 1 skipped, 4 xfailed.
+
+## 8. Still open for the owner
+
+- **I2 price deck:** the "operational alternative" was referenced but not specified. The engine holds the realised price flat until it is.
+- **Accept inputs to unlock the models:** concessions (toll roads HK, midstream, telecom spectrum), reserves (Upstream, Coal, Mining), P/DE (BX, APO, KKR; ingestion priority 1), embedded value or adjusted book (MET, PRU; priority 2), SOTP (BRK-B), NAV (01113.HK, U14.SI).
+- **Consumer Growth:** keep or drop the 20% trailing-P/E leg (pricing unchanged for now).
+- **Production comps refresh:** E1 lease-free peer EV, the AAPL cross-market basket and `ev_ebit_norm` take effect at the next weekly refresh and the history backfill / quarterly update.
+- **Finance vs operating leases (E18c):** the feed exposes one lease line, so both are stripped together.
+- **Golden fixtures** predate the HK/SG quote call (`HKSG_QUOTE_CROSSCHECK` is pinned off in replay). Re-record them to cover it.

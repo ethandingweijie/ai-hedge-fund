@@ -1156,7 +1156,7 @@ class TestTheOpsSpellingsAreInTheSwap:
                         carriers.append((sec, pn, m["name"], m["weight"],
                                          bool(m.get("anchor"))))
         assert sorted(carriers) == [
-            ("Financials", "Insurance", "P/E (ops)", 0.2, False),   # Wave 6 (2026-09-27): life profile re-weighted
+            ("Financials", "Insurance", "P/E (ops)", 0.15, False),  # Wave 6 (2026-09-27): life profile re-weighted; audit I4 (2026-10-10)
             ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
             ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
             ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.3, False),   # plan IN1 (2026-10-04)

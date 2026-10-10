@@ -428,3 +428,79 @@ def test_e17_hksg_quote_switch_and_replay_pin(monkeypatch):
     assert d._hksg_quote_enabled()
     monkeypatch.setenv("HKSG_QUOTE_CROSSCHECK", "off")
     assert not d._hksg_quote_enabled() and gc.PINNED_ENV["HKSG_QUOTE_CROSSCHECK"] == "off"
+
+
+# ══ Batch E -- industry models: I1 concession, I2 depletion, I3 backlog, I4 anchor bridges, I5 stand-ins, I7/I9 ══
+
+def test_i1_concession_runs_off_at_the_filed_term_with_capex_taper():
+    e = {"assets": [{"name": "Road A", "revenue_share": 1.0, "remaining_years": 10, "archetype": "bot"}]}
+    v = d._concession_value(e, revenue_base=1e9, growth=0.03, fcf_margin=0.5, capex_pct=0.1, wacc=0.08, tgr=0.02,
+                            net_debt=0.0, shares=1e8)
+    rows = v["assets"][0]["rows"]
+    assert len(rows) == 10 and v["assets"][0]["pv_end_value"] == 0.0                # BOT: nothing after the term
+    assert rows[-1]["capex_kept"] > rows[-6]["capex_kept"] == 0.0                     # capex tapers in the last years
+    perp = 1e9 * 1.03 * 0.5 / (0.08 - 0.03) / 1e8
+    assert v["value"] < perp                                                          # finite < perpetuity
+    spec = {"assets": [{"name": "Band", "revenue_share": 1.0, "remaining_years": 10, "archetype": "spectrum"}]}
+    vs = d._concession_value(spec, revenue_base=1e9, growth=0.03, fcf_margin=0.5, capex_pct=0.1, wacc=0.08, tgr=0.02,
+                             net_debt=0.0, shares=1e8)
+    assert vs["assets"][0]["pv_end_value"] > 0 and vs["value"] > v["value"]          # spectrum renews
+
+
+def test_i1_and_i2_registries_exist_and_price_only_when_accepted():
+    from src.data import valuation_constants as vc
+    c = vc.load()
+    assert c["concessions"]["constants"]["typical_term_years"]["Toll Road / Infrastructure (HK)"] == 15
+    assert c["reserves"]["constants"]["cap_years"] == 30
+    assert d._owner_registry("concessions", "00177.HK") == {} and d._owner_registry("reserves", "COP") == {}
+
+
+def test_i2_depletion_profile_plateau_then_decline_capped_at_30_years():
+    og = d._depletion_profile({"reserves_2p": 100.0, "annual_production": 5.0, "commodity": "oil_gas"})
+    assert og[:3] == [1.0, 1.0, 1.0] and og[3] < 1.0 and len(og) <= 20
+    mine = d._depletion_profile({"reserves_2p": 1000.0, "annual_production": 10.0, "commodity": "mining"})
+    assert len(mine) <= 30 and mine[:5] == [1.0] * 5 and mine[-1] < mine[10]
+
+
+def test_i3_backlog_haircut_skips_forward_ebitda_and_bounds_start_after_guided_years():
+    import inspect
+    src = inspect.getsource(d)
+    assert 'any(k in _bg_metric for k in ("NTM", "consensus", "guidance"))' in src
+    assert '_sched = list(_unbounded[:_gy]) + list(_sched[_gy:])' in src
+    assert '"guided_years": (int((_gf or {}).get("horizon_years") or 0) if _gf else 0)' in src
+
+
+def test_i4_profiles_name_sector_bridges_and_life_pe_is_capped():
+    P = sp.INDUSTRY_VALUATION_PROFILES
+    def m(sec, prof): return {x["name"]: x for x in P[sec][prof]["methods"]}
+    assert m("Financials", "Holding Company")["SOTP (analyst)"]["fallback"] == "Two-Pillar (synthetic)"
+    life = m("Financials", "Insurance")
+    assert life["Embedded Value"]["fallback"] == "P/B ex-AOCI" and life["P/E (ops)"]["weight"] <= 0.15
+    assert abs(sum(x["weight"] for x in life.values()) - 1.0) < 1e-9
+    assert m("Industrials", "Commercial Aerospace & Engines")["EV/EBIT (norm)"]["fallback"] == "EV/EBIT (cycle median)"
+    assert m("Financials", "Alt Asset Manager")["P/DE (Forward)"]["no_forward_pe_fallback"] is True
+    assert d._CASCADE_MAX_LEG_SHARE == 0.40
+
+
+def test_i4_bridge_legs_value(monkeypatch):
+    row = {"total_equity": 30e9, "aoci": -10e9}
+    v, tr = _leg("P/B ex-AOCI", row, {"pb": 1.0}, None, monkeypatch, shares=1e9)
+    assert v == pytest.approx(40.0) and tr["multiple_parts"]["aoci"] == -10e9
+    row2 = {"ebit_core": 40e9, "cash_and_equivalents": 50e9, "short_term_investments": 100e9,
+            "long_term_investments": 300e9, "total_debt": 100e9}
+    v2, tr2 = _leg("Two-Pillar (synthetic)", row2, {}, None, monkeypatch, shares=2e9)
+    assert v2 == pytest.approx((450e9 + 40e9 * 12 - 100e9) / 2e9) and "not applied" in tr2["float_adjustment"]
+    row3 = {"_ebit_history": [5e9, 6e9, -2e9, -4e9, 7e9, 3e9, -1e9]}
+    v3, tr3 = _leg("EV/EBIT (cycle median)", row3, {"ev_ebit": 15.0}, None, monkeypatch, net_debt=0.0, shares=1e9)
+    assert tr3["metric_value"] == pytest.approx(5.5e9) and v3 == pytest.approx(5.5e9 * 15.0 / 1e9)
+
+
+def test_i5_stand_ins_roll_into_operating_legs_and_i7_i9_hygiene():
+    P = sp.INDUSTRY_VALUATION_PROFILES
+    util = P["Energy"]["Regulated Utility"]
+    rb = next(x for x in util["methods"] if x["name"] == "P/Rate Base")
+    assert rb["implementable"] is True and "proxy" not in rb and util["leg_fallback"]["P/Rate Base"] == ["P/E", "DDM", "DCF"]
+    hotel = P["Consumer"]["Hotel Owner-Operator (HK)"]
+    assert hotel["leg_fallback"]["RNAV (published)"] == ["EV/EBITDA", "DDM"]
+    assert sp.SECTOR_PEER_BASKETS["Consumer Durables"] == ["WHR", "NWL", "SNBR"]
+    assert "P/E" not in P["Consumer"]["Consumer Growth"]["excluded"]

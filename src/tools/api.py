@@ -198,6 +198,9 @@ _BALANCE_MAP: dict[str, str] = {
     # lease basis and takes operating leases out for US GAAP filers, whose EBITDA and FCF already
     # carry the lease cost.
     "capitalLeaseObligations":           "lease_liabilities",
+    # Cross-sector audit I4 (owner, 2026-10-10): a life insurer's book ex AOCI (unrealised bond marks), the bridge
+    # its failed embedded-value anchor rolls onto.
+    "accumulatedOtherComprehensiveIncomeLoss": "aoci",
     "totalNonCurrentAssets":             "non_current_assets",
     "totalNonCurrentLiabilities":        "non_current_liabilities",
 }

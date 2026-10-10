@@ -85,9 +85,12 @@ def test_the_profiles_are_the_owner_spec(key, weights, anchor):
     assert next(m["name"] for m in P[key[0]][key[1]]["methods"] if m.get("anchor")) == anchor
 
 
-def test_the_hotel_owners_price_on_book_until_a_published_nav_is_accepted():
-    row = P["Consumer"]["Hotel Owner-Operator (HK)"]["methods"][0]
-    assert row["name"] == "RNAV (published)" and row["implementable"] is False and row["proxy"] == "P/BV"
+def test_the_hotel_owners_roll_the_nav_weight_into_the_operating_legs_until_a_published_nav_is_accepted():
+    # Cross-sector audit I5 (owner, 2026-10-10): book (hotels at cost) no longer stands in for the NAV.
+    prof = P["Consumer"]["Hotel Owner-Operator (HK)"]
+    row = prof["methods"][0]
+    assert row["name"] == "RNAV (published)" and row["implementable"] is True and "proxy" not in row
+    assert prof["leg_fallback"]["RNAV (published)"] == ["EV/EBITDA", "DDM"]
     assert "RNAV (published)" in d._PER_TICKER_METHODS          # the real leg is computed beside its proxy and wins
 
 

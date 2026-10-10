@@ -190,6 +190,24 @@ _DDM_MAX_BUYBACK_SHARE = 0.30
 #: sell-side convention (7.0-7.5%) -- instead of the sector table's ~8.5% (CAPM 5.4-5.8% on betas of 0.33-0.41).
 _PHARMA_CAPM_FLOOR = 0.075
 _PHARMA_CAPM_PROFILES = frozenset({"Big Pharma (Consolidated DCF)", "Large Cap Pharma"})
+#: Cross-sector audit I4 (owner, 2026-10-10): the most of the blend one leg may absorb through an anchor cascade.
+_CASCADE_MAX_LEG_SHARE = 0.40
+
+
+def _own_median_pb(ticker: str) -> Optional[float]:
+    """The company's own median P/B over its last five fiscal years (FMP key-metrics), or None."""
+    try:
+        from src.tools.api import _fmp_get as _fg, _STABLE as _st
+        rows = _fg(f"{_st}/ratios", {"symbol": _fmp_quote_symbol(ticker), "period": "annual", "limit": 5}, None)
+        vals = sorted(float(r.get("priceToBookRatio") or r.get("pbRatio") or 0) for r in (rows or []) if isinstance(r, dict)
+                      if float(r.get("priceToBookRatio") or r.get("pbRatio") or 0) > 0)
+        if len(vals) < 3:
+            return None
+        return vals[len(vals) // 2] if len(vals) % 2 else (vals[len(vals) // 2 - 1] + vals[len(vals) // 2]) / 2.0
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
 #: Plan E5 (owner, 2026-10-07): weighted legs further apart than this factor are flagged as disagreeing.
 _LEG_DISPERSION_MAX = 2.5
 
@@ -304,6 +322,83 @@ def _loe_cum_loss(modality: str, years_since_loe: int) -> float:
         return 0.0
     curve = _LOE_EROSION_CURVES.get(str(modality or "").lower(), _LOE_EROSION_CURVES["biologic"])
     return float(curve[min(years_since_loe, len(curve)) - 1])
+
+
+def _owner_registry(block: str, ticker: Optional[str] = None) -> dict:
+    """valuation_constants[block]: its constants, or a ticker's entry when ACCEPTED (else {})."""
+    try:
+        from src.data import valuation_constants as _vc
+        b = _vc.load().get(block) or {}
+        if ticker is None:
+            return b.get("constants") or {}
+        e = (b.get("entries") or {}).get(str(ticker or "").upper()) or {}
+        return e if str(e.get("status") or "").upper() == "ACCEPTED" else {}
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
+def _concession_value(entry: dict, *, revenue_base: float, growth: float, fcf_margin: float, capex_pct: float,
+                      wacc: float, tgr: float, net_debt: float, shares: float) -> Optional[dict]:
+    """Cross-sector audit I1 (owner, 2026-10-10): each asset runs off at its filed term -- revenue on the engine's growth
+    to expiry, capex tapering to ~0 over the final years, then BOT residual 0 / spectrum perpetuity less periodic
+    auction capex / REIT-midstream salvage. Sum of the assets' present values, less net debt, per share."""
+    k = _owner_registry("concessions")
+    taper_n = int(k.get("taper_years_for_capex") or 5)
+    spec = k.get("spectrum") or {}
+    pv_total, rows_out = 0.0, []
+    for a in entry.get("assets") or []:
+        share, term = float(a.get("revenue_share") or 0.0), int(a.get("remaining_years") or 0)
+        if share <= 0 or term <= 0:
+            continue
+        rev0, pv, rows = float(revenue_base) * share, 0.0, []
+        for t in range(1, term + 1):
+            rev = rev0 * (1.0 + growth) ** t
+            taper = max(0.0, min(1.0, (term - t) / float(taper_n))) if term - t < taper_n else 1.0
+            fcf = rev * (fcf_margin + capex_pct * (1.0 - taper))         # capex no longer spent is cash kept
+            pv += fcf / (1.0 + wacc) ** t
+            rows.append({"year": t, "revenue": rev, "capex_kept": rev * capex_pct * (1.0 - taper), "fcf": fcf})
+        arch = str(a.get("archetype") or "bot")
+        tv = 0.0
+        if arch == "spectrum" and wacc > tgr:
+            ac = float(a.get("auction_capex_pct_revenue") or spec.get("auction_capex_pct_revenue") or 0.10)
+            cyc = float(a.get("auction_cycle_years") or spec.get("auction_cycle_years") or 15)
+            last = rows[-1]["revenue"] * (1.0 + tgr)
+            tv = (last * fcf_margin - last * ac / cyc) / (wacc - tgr) / (1.0 + wacc) ** term
+        elif arch == "reit_midstream":
+            tv = float(a.get("end_value") or 0.0) / (1.0 + wacc) ** term
+        pv_total += pv + tv
+        rows_out.append({"asset": a.get("name"), "archetype": arch, "remaining_years": term, "pv_operations": pv,
+                         "pv_end_value": tv, "rows": rows})
+    if pv_total <= 0 or shares <= 0:
+        return None
+    return {"value": (pv_total - float(net_debt or 0.0)) / shares, "ev": pv_total, "assets": rows_out}
+
+
+def _depletion_profile(entry: dict, years_cap: Optional[int] = None) -> Optional[list[float]]:
+    """Cross-sector audit I2 (owner, 2026-10-10): the production index (year 0 = 1.0) over 2P / production years,
+    capped: a plateau, then Arps hyperbolic (oil and gas) or linear throughput decline (mining) to exhaustion."""
+    k = _owner_registry("reserves")
+    r2p, prod = float(entry.get("reserves_2p") or 0.0), float(entry.get("annual_production") or 0.0)
+    if r2p <= 0 or prod <= 0:
+        return None
+    life = min(int(years_cap or k.get("cap_years") or 30), max(1, int(round(r2p / prod))))
+    com = str(entry.get("commodity") or "oil_gas")
+    plateau = int(entry.get("plateau_years") or (k.get("plateau_years_default") or {}).get(com, 3))
+    out, remaining = [], r2p
+    arps = k.get("arps") or {"b": 0.5, "di": 0.12}
+    for t in range(1, life + 1):
+        if t <= plateau:
+            q = 1.0
+        elif com == "mining":
+            q = max(0.0, 1.0 - (t - plateau) / float(max(1, life - plateau)))
+        else:
+            q = 1.0 / (1.0 + float(arps["b"]) * float(arps["di"]) * (t - plateau)) ** (1.0 / float(arps["b"]))
+        q = min(q, remaining / prod) if prod > 0 else 0.0
+        remaining -= q * prod
+        out.append(max(q, 0.0))
+        if remaining <= 0:
+            break
+    return out
 
 
 def _franchise_loe_entry(ticker: str) -> dict:
@@ -1838,7 +1933,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
-    "short_term_investments", "long_term_investments", "dividends_and_distributions",
+    "short_term_investments", "long_term_investments", "dividends_and_distributions", "aoci",
     "minority_interest", "preferred_equity", "lease_liabilities",
     "pretax_income", "income_tax_expense",
     "goodwill", "intangible_assets",
@@ -1910,6 +2005,7 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "lease_liabilities":   _safe(getattr(li, "lease_liabilities", None)),
             # Plan IV3 (2026-10-04, Vertex review): a biotech's long-term marketable securities.
             "long_term_investments": _safe(getattr(li, "long_term_investments", None)),
+            "aoci": _safe(getattr(li, "aoci", None)),                       # audit I4: life book ex AOCI
             "shares_outstanding_basic": _safe(getattr(li, "shares_outstanding_basic", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
             # Plan E32 (2026-10-06, Sheng Siong): dividends paid, read at the payout ratio and the DPS fill but
@@ -8028,6 +8124,14 @@ def _compute_method_value(
         if _bg_base is None:
             return None
         _bg_scale, _bg_rec = _backlog_multiple_scale(ticker, revenue_base, reported_currency)
+        # Cross-sector audit I3 (owner, 2026-10-10): the coverage haircut is for TRAILING EBITDA. When the re-dispatch
+        # priced forward EBITDA (consensus NTM or guidance, plan E23), the street's figure already reflects the order
+        # book, so haircutting it again counted the thin backlog twice.
+        _bg_metric = str(((_LEG_TRACE.get() or {}).get("metric")) or "")
+        if _bg_scale != 1.0 and any(k in _bg_metric for k in ("NTM", "consensus", "guidance")):
+            _bg_rec = {**_bg_rec, "scale_not_applied": _bg_scale,
+                       "reason": "forward EBITDA already prices the backlog (no coverage haircut on a forward figure)"}
+            _bg_scale = 1.0
         most_recent["_backlog_multiple_gate"] = _bg_rec
         _leg_trace(kind="backlog_multiple", ev_ebitda_value=_bg_base, **_bg_rec)
         return _bg_base * _bg_scale
@@ -8169,8 +8273,15 @@ def _compute_method_value(
         if _bl and _bl > 0 and revenue_base and revenue_base > 0:
             _cov = float(_bl) / float(revenue_base)
             _b2b = None if method_name in _CONTRACTED_BACKLOG_METHODS else _bl_d.get("book_to_bill")
-            _sched, _moved = _bound_growth_schedule(
-                list(_sched or [growth_base] * _PROJECTION_YEARS), _backlog_growth_bounds(_cov, _b2b))
+            _unbounded = list(_sched or [growth_base] * _PROJECTION_YEARS)
+            _sched, _moved = _bound_growth_schedule(list(_unbounded), _backlog_growth_bounds(_cov, _b2b))
+            # Cross-sector audit I3 (owner, 2026-10-10): like the LOE overlay, the backlog bound starts AFTER the years
+            # guidance already prices -- it used to clamp guided years 1-2.
+            _gy = int(_pj.get("guided_years") or 0)
+            if _gy > 0:
+                _sched = list(_unbounded[:_gy]) + list(_sched[_gy:])
+                _moved = [m for m in (_moved or []) if not (isinstance(m, dict) and int(m.get("year") or 0) <= _gy)] \
+                    if isinstance(_moved, list) else _moved
             _bound = {"backlog": float(_bl), "backlog_kind": _bl_d.get("backlog_kind"),
                       "coverage_years": round(_cov, 4), "book_to_bill": _b2b,
                       "period": _bl_d.get("period"), "source_url": _bl_d.get("source_url"),
@@ -8292,6 +8403,20 @@ def _compute_method_value(
     # which projections the charge models, and it survives the charge's removal:
     # whoever turns the charge on for `_DCF_PROJECTION_FAMILY` must not reach
     # for this call at the same time.
+    if method_name == _DEPLETING_DCF and _owner_registry("reserves", ticker):
+        _idx = _depletion_profile(_owner_registry("reserves", ticker))
+        if _idx and shares > 0:
+            # price held at today's realised level (revenue / production): no house deck inside the engine
+            _rows_r, _pv = [], 0.0
+            for t, q in enumerate(_idx, start=1):
+                _fcf = float(revenue_base) * q * float(fcf_margin_base)
+                _pv += _fcf / (1.0 + float(wacc)) ** t
+                _rows_r.append({"year": t, "production_index": q, "revenue": float(revenue_base) * q, "fcf": _fcf})
+            _v = (_pv - float(net_debt or 0.0)) / shares
+            _leg_trace(kind="depleting_dcf", rows=_rows_r, years=len(_idx), reserves_basis="accepted 2P reserves",
+                       fcf_margin_base=float(fcf_margin_base), wacc=float(wacc), net_debt=float(net_debt or 0.0),
+                       shares=float(shares), value=_v)
+            return _v
     if method_name == _DEPLETING_DCF:
         iv, _pv_f, _pv_t, _rows_d = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
@@ -9327,6 +9452,78 @@ def _compute_method_value(
         return None
 
     # ── FCF Yield ─────────────────────────────────────────────────────────
+    if method_name == "Concession DCF":
+        _ce = _owner_registry("concessions", ticker)
+        if not _ce:
+            return None
+        _cx_pct = (abs(float(capex or 0.0)) / float(revenue_base)) if (capex and revenue_base) else 0.0
+        _cv = _concession_value(_ce, revenue_base=float(revenue_base), growth=float(growth_base),
+                                fcf_margin=float(fcf_margin_base), capex_pct=_cx_pct, wacc=float(wacc), tgr=float(tgr),
+                                net_debt=float(net_debt or 0.0), shares=float(shares))
+        if not _cv:
+            return None
+        _leg_trace(kind="concession_dcf", rows=[r for a in _cv["assets"] for r in a["rows"]], assets=[
+            {k_: v_ for k_, v_ in a.items() if k_ != "rows"} for a in _cv["assets"]], ev=_cv["ev"], value=_cv["value"])
+        return _cv["value"]
+
+    # ── Anchor-cascade bridges (cross-sector audit I4, owner 2026-10-10) ─────────────────────────────────
+    # A failed anchor's weight goes to a sector-appropriate bridge, not generic Forward P/E.
+    if method_name == "P/B (5y median)":
+        # property: book at the company's OWN five-year median P/B (the market's discount to its marks)
+        if not (bvps and bvps > 0):
+            return None
+        _med = _own_median_pb(ticker)
+        if not _med:
+            return None
+        _leg_trace(kind="equity_multiple", metric="Book value per share", metric_value=float(bvps),
+                   per_share_metric=float(bvps), multiple=float(_med) * sm,
+                   multiple_parts={"peer_multiple": float(_med), "peer_source": "own five-year median P/B", "scenario_band": sm})
+        return float(bvps) * float(_med) * sm
+
+    if method_name == "P/B ex-AOCI":
+        # life insurers: book without the unrealised bond marks, at the peer P/B
+        _aoci = most_recent.get("aoci")
+        if not (total_equity and total_equity > 0 and shares > 0 and isinstance(_aoci, (int, float))):
+            return None
+        _adj = float(total_equity) - float(_aoci)
+        _pb = peer.get("pb")
+        if not (_adj > 0 and isinstance(_pb, (int, float)) and _pb > 0):
+            return None
+        _leg_trace(kind="equity_multiple", metric="Book value ex AOCI", metric_value=_adj, shares=float(shares),
+                   per_share_metric=_adj / shares, multiple=float(_pb) * sm,
+                   multiple_parts={"peer_multiple": float(_pb), "peer_source": "peer median pb (reported book)", "scenario_band": sm,
+                                   "aoci": float(_aoci)})
+        return (_adj / shares) * float(_pb) * sm
+
+    if method_name == "Two-Pillar (synthetic)":
+        # holding company: balance-sheet cash and investments + operating pre-tax earnings x 12, less debt
+        _ebit_ops = most_recent.get("ebit_core") if most_recent.get("ebit_core") is not None else most_recent.get("operating_income")
+        _cash = sum(float(most_recent.get(k) or 0.0) for k in ("cash_and_equivalents", "short_term_investments", "long_term_investments"))
+        _debt = float(most_recent.get("total_debt") or 0.0)
+        if not (shares > 0 and isinstance(_ebit_ops, (int, float)) and _ebit_ops > 0 and _cash > 0):
+            return None
+        _mult = 12.0 * sm
+        _eq = _cash + float(_ebit_ops) * _mult - _debt - float(_minority_interest(most_recent) or 0.0)
+        _leg_trace(kind="sotp", metric="Cash and investments + operating pre-tax earnings x 12 - debt",
+                   metric_value=float(_ebit_ops), shares=float(shares), investments=_cash, debt=_debt, multiple=_mult,
+                   float_adjustment="not applied (the feed carries no insurance float split)",
+                   multiple_parts={"peer_source": "owner spec 2026-10-10 (two-pillar, 12x pre-tax)", "scenario_band": sm})
+        return _eq / shares if _eq > 0 else None
+
+    if method_name == "EV/EBIT (cycle median)":
+        # deep cyclical / turnaround: the median positive EBIT over up to seven years on the peer EV/EBIT
+        _hist_ebit = [float(x) for x in (most_recent.get("_ebit_history") or []) if isinstance(x, (int, float))]
+        _pos = sorted(x for x in _hist_ebit if x > 0)
+        _ev_ebit = peer.get("ev_ebit")
+        if len(_pos) < 3 or not (isinstance(_ev_ebit, (int, float)) and _ev_ebit > 0) or shares <= 0:
+            return None
+        _medE = _pos[len(_pos) // 2] if len(_pos) % 2 else (_pos[len(_pos) // 2 - 1] + _pos[len(_pos) // 2]) / 2.0
+        mult = float(_ev_ebit) * sm * growth_premium * _own_disc
+        _leg_trace(kind="ev_multiple", metric=f"EBIT (median of {len(_pos)} positive years, up to 7)", metric_value=_medE,
+                   multiple=mult, multiple_parts={"peer_multiple": float(_ev_ebit), "peer_source": "peer median ev_ebit",
+                                                  "scenario_band": sm, "growth_premium": growth_premium})
+        return _ev_to_equity_ps(_medE * mult, net_debt, most_recent, shares)
+
     # ── Consumer Technology Ecosystem legs (owner spec, 2026-10-10) ───────────────────────────────────
     if method_name == "SOTP (Hardware + Services)":
         segs = most_recent.get("segment_breakdown") or {}
@@ -11729,25 +11926,77 @@ def _blend_methods(
             # NTM P/FCF, never Forward P/E); it is used when it values, else the D7 / EN6 order below.
             _fb_name = _anchor_m.get("fallback")
             _fb_v = method_values.get(_fb_name) if _fb_name else None
+            _recv = None                                   # (label key, value, bucket)
             if isinstance(_fb_v, (int, float)) and _fb_v > 0 and _aw > 0:
-                multi_bucket.append((float(_fb_v), _aw))
-                parts.append((f"{_fb_name} (anchor fallback)", _fb_name, _aw, "multi"))
-                surviving_w += _aw
-                _to = _fb_name
+                _recv = (_fb_name, float(_fb_v), "dcf" if _fb_name in _DCF_FAMILY_NAMES else "multi")
             elif (_profile_has_dcf and _anchor_m["name"] not in _DCF_FAMILY_NAMES
                     and isinstance(_dcf_v, (int, float)) and _dcf_v > 0 and _aw > 0):
-                dcf_bucket.append((float(_dcf_v), _aw))
-                parts.append(("DCF (anchor fallback)", "DCF", _aw, "dcf"))
-                surviving_w += _aw
-                _to = "the DCF"
-            elif isinstance(_fpe_v, (int, float)) and _fpe_v > 0 and _aw > 0 and _anchor_m["name"] != "Forward P/E":
-                multi_bucket.append((float(_fpe_v), _aw))
-                parts.append(("Forward P/E (anchor fallback)", "Forward P/E", _aw, "multi"))
-                surviving_w += _aw
-                _to = "Forward P/E"
-            else:
+                _recv = ("DCF", float(_dcf_v), "dcf")
+            elif (isinstance(_fpe_v, (int, float)) and _fpe_v > 0 and _aw > 0 and _anchor_m["name"] != "Forward P/E"
+                    and not _anchor_m.get("no_forward_pe_fallback")):
+                _recv = ("Forward P/E", float(_fpe_v), "multi")
+            if _recv is None:
                 _to = "the remaining legs, pro rata (no positive DCF or Forward P/E)"
+            else:
+                # Cross-sector audit I4 (owner, 2026-10-10): no single leg absorbs more than 40% of the blend through an
+                # anchor cascade (BRK-B priced 78% on Forward P/E). The excess goes to the DCF, else the profile's
+                # designated secondary, else the surviving legs pro rata.
+                _rk, _rv, _rb = _recv
+                _total_after = surviving_w + _aw
+                _have = sum(float(w_ or 0.0) for (_n_, k_, w_, _b_) in parts if k_ == _rk)
+                # The DCF is D7's own receiver and the place the owner sends a cascade's excess: it is not capped.
+                # A profile's NAMED bridge is the anchor's sector-appropriate replacement, not a generic multiple: it
+                # takes the weight in full too. The cap binds on generic receivers (Forward P/E).
+                _take = (_aw if (_rk == "DCF" or _rk == _fb_name)
+                         else max(0.0, min(_aw, _CASCADE_MAX_LEG_SHARE * _total_after - _have)))
+                _spill = _aw - _take
+                if _take > 0:
+                    (dcf_bucket if _rb == "dcf" else multi_bucket).append((_rv, _take))
+                    parts.append((f"{_rk} (anchor fallback)", _rk, _take, _rb))
+                    surviving_w += _take
+                _to = "the DCF" if _rk == "DCF" else _rk
+                if _spill > 1e-9:
+                    _spilled = 0.0
+                    _sec = _anchor_m.get("cascade_secondary")
+                    _sv = method_values.get(_sec) if _sec else None
+                    if _rk != "DCF" and _profile_has_dcf and isinstance(_dcf_v, (int, float)) and _dcf_v > 0:
+                        dcf_bucket.append((float(_dcf_v), _spill))
+                        parts.append(("DCF (cascade spill)", "DCF", _spill, "dcf"))
+                        _spilled = _spill
+                        _to += f" (capped at {_CASCADE_MAX_LEG_SHARE:.0%}; {_spill:.0%} to the DCF)"
+                    elif isinstance(_sv, (int, float)) and _sv > 0 and _sec != _rk:
+                        (dcf_bucket if _sec in _DCF_FAMILY_NAMES else multi_bucket).append((float(_sv), _spill))
+                        parts.append((f"{_sec} (cascade spill)", _sec, _spill, "dcf" if _sec in _DCF_FAMILY_NAMES else "multi"))
+                        _spilled = _spill
+                        _to += f" (capped at {_CASCADE_MAX_LEG_SHARE:.0%}; {_spill:.0%} to {_sec})"
+                    else:
+                        _others = [(n_, k_, w_, b_) for (n_, k_, w_, b_) in parts if k_ != _rk and float(w_ or 0.0) > 0
+                                   and isinstance(method_values.get(k_), (int, float)) and method_values.get(k_) > 0]
+                        _ow = sum(float(w_) for (_, _, w_, _) in _others)
+                        for (n_, k_, w_, b_) in _others:
+                            _add = _spill * float(w_) / _ow if _ow > 0 else 0.0
+                            if _add > 0:
+                                (dcf_bucket if b_ == "dcf" else multi_bucket).append((float(method_values[k_]), _add))
+                                parts.append((f"{k_} (cascade spill)", k_, _add, b_))
+                                _spilled += _add
+                        _to += (f" (capped at {_CASCADE_MAX_LEG_SHARE:.0%}; {_spill:.0%} spread over the surviving legs)"
+                                if _ow > 0 else "")
+                    surviving_w += _spilled
+                    if _rk == "Forward P/E":
+                        _cf = ("FLAG_ANCHOR_COLLAPSE_CASCADE: core anchor failed; generic multiple weight over threshold -- "
+                               f"Forward P/E held to {_CASCADE_MAX_LEG_SHARE:.0%} of the blend, the excess moved on")
+                        if _cf not in forward_flags:
+                            forward_flags.append(_cf)
             anchor_degraded = {"method": _anchor_m["name"], "reason": _ad["reason"], "weight": _aw, "moved_to": _to}
+            # Owner, 2026-10-10 (audit I4): Forward P/E above half the blend because the anchor failed -- however it got
+            # there (cascade or the survivors' renormalisation) -- is a collapse, said on the front page.
+            _tw = sum(float(w_ or 0.0) for (_, _, w_, _) in parts)
+            _fpe_w = sum(float(w_ or 0.0) for (_, k_, w_, _) in parts if k_ == "Forward P/E")
+            if _tw > 0 and _fpe_w / _tw > 0.50:
+                _cf2 = (f"FLAG_ANCHOR_COLLAPSE_CASCADE: core anchor {_anchor_m['name']} failed and Forward P/E carries "
+                        f"{_fpe_w / _tw:.0%} of the blend -- a generic multiple over the 50% threshold; accept the anchor's input")
+                if _cf2 not in forward_flags:
+                    forward_flags.append(_cf2)
             _flag = (f"DEGRADED: anchor leg {_anchor_m['name']} did not compute ({_ad['reason']}); "
                      f"its {_aw:.0%} weight went to {_to}")
             if _flag not in forward_flags:
@@ -12616,7 +12865,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # the lease basis of net debt could not be stated.
                      "preferred_equity", "lease_liabilities", "shares_outstanding_basic",
                      # Plan IV3: requested AND copied AND converted (both FX lists), or it is None.
-                     "long_term_investments",
+                     "long_term_investments", "aoci",
                      # Plan E32: dividends paid (DPS fill, payout ratio).
                      "dividends_and_distributions",
                      "book_value_per_share", "capital_expenditure", "ebit",
@@ -13339,6 +13588,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
         # audit E13 / E15: the cyclical FCF Yield leg's normalised figure on the peers' basis (OCF less all capex)
         most_recent["normalized_free_cash_flow"] = _normalized_earnings(series, "free_cash_flow", window=5)
+        # Cross-sector audit I4 (2026-10-10): up to seven years of EBIT for the cycle-median bridge
+        most_recent["_ebit_history"] = [r.get("ebit") for r in series[-7:] if isinstance(r.get("ebit"), (int, float))]
         # Owner, 2026-10-10 (Shareholder Yield leg): the median annual decline in the share count, 0-5%
         try:
             _sh = [float(r["shares_outstanding"]) for r in series if isinstance(r.get("shares_outstanding"), (int, float))
@@ -16278,6 +16529,42 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _pv10_d = _backlog_d = None
         # Wave 10 renewables (owner methodology, 2026-10-03): the accepted ppa input rides on
         # `most_recent` to the PPA-backed DCF leg; without one the leg is the core DCF and says so.
+        # Cross-sector audit I1 (owner, 2026-10-10): a finite concession. With an ACCEPTED concessions entry the perpetuity
+        # legs (DDM, DCF) give their weight to the Concession DCF, which runs each asset off at its filed term; without
+        # one the perpetuity stays and the run says how much of it sits past a typical term.
+        try:
+            _conc_e = _owner_registry("concessions", ticker)
+            _perp = {"DDM", "DCF", "DCF (2-stage)"}
+            if _conc_e:
+                _w_c = sum(float(m.get("weight") or 0.0) for m in _pe_norm_methods if m.get("name") in _perp)
+                if _w_c > 0:
+                    _pe_norm_methods = ([m for m in _pe_norm_methods if m.get("name") not in _perp]
+                                        + [{"name": "Concession DCF", "weight": _w_c, "anchor": any(
+                                            m.get("anchor") for m in _pe_norm_methods if m.get("name") in _perp),
+                                            "implementable": True}])
+                    ticker_forward_flags.append(
+                        f"Concession DCF: {len(_conc_e.get('assets') or [])} asset(s) run off at their filed terms "
+                        f"({_conc_e.get('source') or 'owner-accepted'}); the perpetuity legs' weight ({_w_c:.0%}) moved to it")
+            else:
+                _term = ((_owner_registry("concessions").get("typical_term_years") or {}).get(profile_name or ""))
+                if _term and any(m.get("name") in _perp and (m.get("weight") or 0) > 0 for m in _pe_norm_methods):
+                    # the profile's base terminal growth (the scenario loop sets `tgr` later)
+                    _r_c = float(wacc)
+                    _g_c = float((_PROFILE_TGR.get(profile_name or "") or _DEFAULT_TGR).get("base") or 0.02)
+                    _beyond = ((1.0 + _g_c) / (1.0 + _r_c)) ** int(_term) if _r_c > _g_c else None
+                    if _beyond is not None:
+                        ticker_forward_flags.append(
+                            f"FLAG_UNBOUNDED_CONCESSION: infinite DDM / DCF applied to a finite-concession profile -- at a "
+                            f"typical {int(_term)}-year remaining term (PROPOSED), about {_beyond:.0%} of the perpetuity value "
+                            f"sits after expiry; accept a concessions entry with the filed terms")
+        except Exception:                                  # noqa: BLE001
+            pass
+        # Cross-sector audit I2 (owner, 2026-10-10): without accepted 2P reserves the depleting DCF is a flat 15-year run.
+        if (any(m.get("name") == _DEPLETING_DCF and (m.get("weight") or 0) > 0 for m in _pe_norm_methods)
+                and not _owner_registry("reserves", ticker)):
+            ticker_forward_flags.append(
+                "FLAG_DEPLETION_UNANCHORED: the depleting-asset DCF runs a flat 15 years with no decline curve -- accept a "
+                "reserves entry (2P reserves, production) for the reserve-life horizon and plateau / decline profile")
         try:
             if any(m.get("name") == "PPA-backed DCF" for m in _pe_norm_methods):
                 from src.data import industry_inputs as _ii_p
@@ -17115,6 +17402,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "margin_schedule": _gf_margin_sched,      # the guidance forecast's FCF margins, else None
                 "timing": _dcf_timing_ctx,                # D2: dated, mid-year (None = whole years)
                 "terminal_multiplier": _loe_tv_mult,      # audit E12: every DCF-family leg carries it, not only "DCF"
+                "guided_years": (int((_gf or {}).get("horizon_years") or 0) if _gf else 0),   # audit I3: overlays start after
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
@@ -17652,6 +17940,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _shadow_methods.append("SOTP 12m (probabilistic)")
                 if most_recent.get("sotp_assumptions"):
                     _shadow_methods.append("SOTP (analyst)")
+                # Cross-sector audit I4 (owner, 2026-10-10): an anchor's named bridge is computed beside it, so the D7
+                # cascade can route a failed anchor's weight there; it is a cross-check, never a declared profile leg.
+                for _pm in (_pe_norm_methods or []):
+                    if isinstance(_pm, dict) and _pm.get("anchor") and _pm.get("fallback") \
+                            and _pm["fallback"] not in _shadow_methods:
+                        _shadow_methods.append(_pm["fallback"])
                 for _shadow_name in _shadow_methods:
                     if _shadow_name not in method_values:
                         method_values[_shadow_name], leg_inputs[_shadow_name] = _traced_method_value(

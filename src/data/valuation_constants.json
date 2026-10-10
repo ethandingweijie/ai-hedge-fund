@@ -844,5 +844,38 @@
         "url": "https://www.sec.gov/Archives/edgar/data/2012383/000119312526337177/blk-20260630.htm"
       }
     }
+  },
+  "concessions": {
+    "status": "PROPOSED",
+    "note": "Cross-sector audit I1 (owner, 2026-10-10): finite concessions and licences. Entries are per ticker and price only when ACCEPTED: {status, as_of, source, assets: [{name, revenue_share, remaining_years (filed term, no default), archetype: 'bot' | 'spectrum' | 'reit_midstream', end_value (filing currency; reit_midstream salvage / land value), auction_capex_pct_revenue, auction_cycle_years (spectrum)}]}. BOT residual is 0; spectrum keeps its terminal cash flows less a periodic auction capex; maintenance and growth capex taper to ~0 over the final taper_years_for_capex. Without an accepted entry the perpetuity stays and FLAG_UNBOUNDED_CONCESSION sizes the overvaluation at the PROPOSED typical term.",
+    "constants": {
+      "taper_years_for_capex": 5,
+      "typical_term_years": {
+        "Toll Road / Infrastructure (HK)": 15,
+        "Midstream / Pipelines": 20,
+        "REIT": 25
+      },
+      "spectrum": {
+        "auction_cycle_years": 15,
+        "auction_capex_pct_revenue": 0.1
+      }
+    },
+    "entries": {}
+  },
+  "reserves": {
+    "status": "PROPOSED",
+    "note": "Cross-sector audit I2 (owner, 2026-10-10): the depleting-asset DCF on accepted 2P reserves. Entries per ticker, priced only when ACCEPTED: {status, as_of, source, reserves_2p, annual_production, unit, commodity: 'oil_gas' | 'mining', plateau_years (optional)}. Horizon = 2P / production, capped at cap_years; a plateau, then Arps hyperbolic (oil and gas) or linear throughput decline (mining) to exhaustion. PRICE: held at today's realised price per unit (revenue / production) -- no house price deck in the engine; the owner's operational alternative is still to be specified. Without an accepted entry the 15-year flat run stays with FLAG_DEPLETION_UNANCHORED.",
+    "constants": {
+      "cap_years": 30,
+      "plateau_years_default": {
+        "oil_gas": 3,
+        "mining": 5
+      },
+      "arps": {
+        "b": 0.5,
+        "di": 0.12
+      }
+    },
+    "entries": {}
   }
 }

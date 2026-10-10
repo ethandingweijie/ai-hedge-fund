@@ -1834,3 +1834,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: cross-sector audit batch D (2026-10-10): E10 SOTP segments with no type match are unpriced, so the generic-multiple SOTP (segments) and SOTP 12m cross-check rows are refused by the 85% priced-revenue gate on BABA, COST, FCX and V (methods_count -2, unweighted; no IV moved)
 
+## 2026-10-10T17:24:30+00:00
+
+- regenerated at HEAD: `9447f5a1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: cross-sector audit batch E (2026-10-10): valuation_constants gains the owner registries 'concessions' and 'reserves' (PROPOSED, no accepted entries), so every fixture moves only param_version; I3-I5 profile changes touch no golden's weighted legs
+

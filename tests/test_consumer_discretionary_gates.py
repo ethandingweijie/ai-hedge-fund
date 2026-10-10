@@ -2266,7 +2266,7 @@ def test_the_ops_spellings_are_now_in_the_swap():
                     carriers.append((sec, pn, m["name"], m["weight"],
                                      bool(m.get("anchor"))))
     assert sorted(carriers) == [
-        ("Financials", "Insurance", "P/E (ops)", 0.2, False),     # Wave 6 (2026-09-27): life profile re-weighted, CR gate removed
+        ("Financials", "Insurance", "P/E (ops)", 0.15, False),    # Wave 6 (2026-09-27): life profile re-weighted, CR gate removed; audit I4 (2026-10-10): GAAP P/E <= 15% on life
         ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
         ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
         ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.3, False),   # plan IN1 (2026-10-04): Forward P/E anchors managed care
@@ -3276,9 +3276,11 @@ def test_consumer_growth_declares_a_leg_it_always_strips():
     assert {m["name"]: m["weight"] for m in ms} == {
         "DCF": 0.40, "EV/Revenue": 0.25, "P/E": 0.20, "EV/EBITDA": 0.15}
     assert sum(m["weight"] for m in ms) == pytest.approx(1.0, abs=1e-9)
-    assert prof["excluded"] == ["P/E"]
-    assert "DCF intrinsic value (50%)" in prof["rationale"]
-    assert "P/E excluded" in prof["rationale"]
+    # Audit I9 (2026-10-10): "excluded" no longer lists the P/E the table weights (the engine always priced it), and the
+    # rationale states the weights the table carries.
+    assert prof["excluded"] == []
+    assert "DCF intrinsic value (40%)" in prof["rationale"]
+    assert "trailing P/E carries 20%" in prof["rationale"]
 
     flat = {"DCF": 100.0, "EV/Revenue": 100.0, "P/E": 100.0, "EV/EBITDA": 100.0}
     _, with_pe = _blend_methods(ms, dict(flat), 1.0, [], 0.5)

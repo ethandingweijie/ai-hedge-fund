@@ -1299,12 +1299,13 @@ def test_fourteen_of_sixteen_leg_multiples_carry_the_premium():
     # the multiplier, so a premium on top would count it twice.
     # +3 for cross-sector audit E6 (2026-10-10): Forward P/E, Forward EV/EBITDA and Fwd EV/EBIT each gain a
     # relabelled-trailing branch (no forward peer multiple), carrying the premium like their trailing siblings.
-    assert len(mults) == 23
+    # +1 for audit I4 (2026-10-10): the EV/EBIT (cycle median) bridge, carrying the premium like its EV siblings.
+    assert len(mults) == 24
     # Plan E23 (2026-10-06): the three forward legs carry the FORWARD growth adjustment (`_gp_used`, the
     # growth gap over peers, falling back to the trailing premium) -- still a growth adjustment, counted.
     with_gp = [m for m in mults if "growth_premium" in m or "_gp_used" in m]
     without = [m for m in mults if "growth_premium" not in m and "_gp_used" not in m]
-    assert len(with_gp) == 19
+    assert len(with_gp) == 20
     assert without == ['mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc',   # PEG, in file order
                        'mult = _mnav * sm', 'mult = _on_book * sm', 'mult = cfg["p_tbv"] * sm']
 

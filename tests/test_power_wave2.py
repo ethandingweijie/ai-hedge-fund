@@ -128,10 +128,12 @@ def test_the_cost_of_equity_is_owner_set_per_market_at_the_midpoint_of_its_band(
     assert [vc.market_key(t) for t in ("NEE", "00002.HK", "U96.SI", None)] == ["US", "HKSE", "SES", "US"]
 
 
-def test_the_profile_still_declares_the_proxy_so_no_weight_is_lost():
+def test_no_weight_is_lost_without_a_rate_base_it_rolls_into_the_operating_legs():
+    # Cross-sector audit I5 (owner, 2026-10-10): the P/BV stand-in is retired (book carries goodwill, not the rate base).
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
     leg = next(m for m in P["Energy"][PROFILE]["methods"] if m["name"] == "P/Rate Base")
-    assert leg["implementable"] is False and leg["proxy"] == "P/BV"
+    assert leg["implementable"] is True and "proxy" not in leg
+    assert P["Energy"][PROFILE]["leg_fallback"]["P/Rate Base"] == ["P/E", "DDM", "DCF"]
 
 
 # ── C3: a business model is never inferred from a ratio ──────────────────────
