@@ -315,10 +315,11 @@ def test_a_static_forward_multiple_never_outranks_a_live_trailing_basket(monkeyp
                                                         "pe_ntm": {"basis": "static", "cohort": "US"}}}
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: dict(peer))
     v, tr = dcf_agent._traced_method_value(
-        method_name="Forward P/E", most_recent={}, revenue_base=2.5e10, shares=2e9, net_debt=9e10, market_cap=1.5e11,
-        wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02, fcf_floor=0.0, sector="Energy", scenario="base",
-        profile_name=PROFILE, forward_consensus={"eps": {"base": 3.0}})
-    assert tr["multiple_parts"]["peer_multiple"] == 19.8
+        method_name="Forward P/E", most_recent={"net_income": 5e9}, revenue_base=2.5e10, shares=2e9, net_debt=9e10,
+        market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02, fcf_floor=0.0, sector="Energy",
+        scenario="base", profile_name=PROFILE, forward_consensus={"eps": {"base": 3.0}})
+    # the live trailing basket wins -- and since audit E6 the leg is relabelled trailing (TTM EPS 2.50 x 19.8)
+    assert tr["multiple_parts"]["peer_multiple"] == 19.8 and tr["basis"] == "trailing (relabelled)"
     # Both static: the forward one is on the same footing and is used.
     peer["_comp_basis"]["pe"] = {"basis": "static", "cohort": "US"}
     v, tr = dcf_agent._traced_method_value(

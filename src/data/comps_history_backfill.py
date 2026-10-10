@@ -108,6 +108,13 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
         eb_margin = None
     if ni_margin is not None and ni_margin <= 0:
         ni_margin = None
+    # Owner, 2026-10-10 (cross-sector audit E1): a US GAAP member's EV comes off its lease liabilities, year by
+    # year, so the through-cycle EV multiples sit on the same lease-free basis as the live ones and the subject.
+    bs_by_year: dict[str, dict] = {}
+    if rc._us_gaap_candidate(symbol):
+        bs = rc._fmp_get(f"{_S}/balance-sheet-statement",
+                         {"symbol": symbol, "period": "annual", "limit": 10}, api_key=None)
+        bs_by_year = {str(b.get("date") or "")[:4]: b for b in (bs if isinstance(bs, list) else [])}
     out: dict[str, dict[str, float]] = {}
     for r in rows if isinstance(rows, list) else []:
         yr = str(r.get("date") or "")[:4]
@@ -116,6 +123,12 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
         vals = {cf: rc._safe_float(r.get(kf)) for kf, cf in _KM_FIELDS.items()}
         rev_y = rev.get(yr)
         ev = rc._safe_float(r.get("enterpriseValue"))
+        _lf = rc.lease_ev_factor(symbol, ev, bs_by_year.get(yr))
+        if _lf is not None:
+            ev = ev * _lf
+            for _cf in ("ev_ebitda", "ev_ocf", "ev_revenue"):
+                if vals.get(_cf) is not None:
+                    vals[_cf] = vals[_cf] * _lf
         if ccy_ok and ev and ev > 0 and eb_margin and rev_y and rev_y > 0:
             vals["ev_ebitda_norm"] = ev / (eb_margin * rev_y)
         mc = rc._safe_float(r.get("marketCap"))

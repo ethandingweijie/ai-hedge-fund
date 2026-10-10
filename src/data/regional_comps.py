@@ -598,7 +598,7 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
             f"SELECT symbol, name, market_cap, metrics_json, computed_at FROM regional_comps_members "
             f"WHERE exchange = ? AND symbol IN ({marks})", [exchange, *syms]) or []
     except Exception as exc:                                   # noqa: BLE001
-        logger.warning("regional_comps profile basket %r failed: %s", profile, exc)
+        logger.warning("regional_comps profile basket %r failed: %s", key, exc)   # was `profile`: a NameError
         return {}
     metrics: dict[str, dict] = {}
     ident: dict[str, dict] = {}
@@ -961,6 +961,51 @@ def fetch_p_ffo(symbol: str, market_cap: Optional[float]) -> Optional[float]:
     return (float(market_cap) / ffo) if ffo > 0 else None
 
 
+#: Owner, 2026-10-10 (cross-sector audit E1): FMP's enterprise value is market cap + totalDebt - cash, and its
+#: totalDebt carries the lease liabilities (SBUX 126.9bn = 107.9 + 22.4 - 3.4, of which 9.2bn leases). The subject's
+#: net debt leaves leases out for a US GAAP filer, whose EBITDA is already after rent (plan 1C.2), so a peer multiple
+#: on lease-inclusive EV overstated every US EV leg (SBUX +7.8%, DAL +9.4%, WMT +2.6%). A US GAAP member's EV
+#: multiples are rescaled to EV ex leases here; an IFRS 16 member keeps its leases, as the subject does.
+_EV_KM_FIELDS = ("enterpriseValueTTM", "evToEBITDATTM", "evToSalesTTM", "evToOperatingCashFlowTTM")
+
+
+def _us_gaap_candidate(symbol: str) -> bool:
+    from src.data.filing_basis import US_GAAP_NON_USD_REPORTERS
+    s = str(symbol or "").upper()
+    return ("." not in s) or s in US_GAAP_NON_USD_REPORTERS
+
+
+def lease_ev_factor(symbol: str, enterprise_value: Optional[float], bs_row: Optional[dict]) -> Optional[float]:
+    """(EV - lease liabilities) / EV for a US GAAP filer whose feed debt includes its leases; None otherwise."""
+    from src.data.filing_basis import reports_us_gaap
+    if not (bs_row and enterprise_value and enterprise_value > 0):
+        return None
+    if not reports_us_gaap(symbol, bs_row.get("reportedCurrency")):
+        return None
+    lease, td = _safe_float(bs_row.get("capitalLeaseObligations")), _safe_float(bs_row.get("totalDebt"))
+    if not (lease and lease > 0 and td is not None and td >= lease and enterprise_value > lease):
+        return None
+    return (enterprise_value - lease) / enterprise_value
+
+
+def lease_free_key_metrics(symbol: str, km_row: dict) -> dict:
+    """The key-metrics-ttm row with its EV fields on a lease-free basis (audit E1); unchanged for IFRS filers."""
+    if not km_row or not _us_gaap_candidate(symbol):
+        return km_row
+    bs = _fmp_get(f"{_STABLE}/balance-sheet-statement", {"symbol": symbol, "period": "quarter", "limit": 1}, api_key=None)
+    f = lease_ev_factor(symbol, _safe_float(km_row.get("enterpriseValueTTM")),
+                        bs[0] if isinstance(bs, list) and bs else None)
+    if f is None:
+        return km_row
+    out = dict(km_row)
+    for k in _EV_KM_FIELDS:
+        v = _safe_float(out.get(k))
+        if v is not None:
+            out[k] = v * f
+    out["_lease_ev_factor"] = f
+    return out
+
+
 def fetch_name_multiples(symbol: str) -> Optional[dict]:
     """TTM multiples, mean revenue growth and NTM multiples for one name.
 
@@ -975,7 +1020,7 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
 
     km = _fmp_get(f"{_STABLE}/key-metrics-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(km, list) and km:
-        row = _km_row = km[0]
+        row = _km_row = lease_free_key_metrics(symbol, km[0])
         out["ev_ebitda"] = _safe_float(row.get("evToEBITDATTM"))
         out["ev_revenue"] = _safe_float(row.get("evToSalesTTM"))
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))

@@ -81,5 +81,8 @@
    "peer_count": 10,
    "value": 0.0509
   }
+ },
+ "store_calls": {
+  "profile_basket_multiples|[[\"SES\", \"Asian Holding Company (Look-Through)\"], {\"exclude\": \"BN4.SI\"}]": {}
  }
 }

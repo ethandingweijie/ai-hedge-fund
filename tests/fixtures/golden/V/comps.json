@@ -1,4 +1,1470 @@
 {
  "comp_age_days": null,
- "fields": {}
+ "fields": {},
+ "store_calls": {
+  "basket_multiples|[[\"US\", [\"V\", \"MA\", \"AXP\", \"SPGI\", \"MCO\", \"ICE\", \"CME\", \"MSCI\"], \"Payment Networks\"], {\"exclude\": \"V\", \"max_age_days\": 14}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 24.499827503465422
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 9.52083208717343
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 18.068517305227175
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 18.853125746063487
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 19.25802404731222
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 23.72665004935806
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 24.99222776149005
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 19.258024
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 23.176021486706457
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 8.799568598285068
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 15.42171893994651
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 18.275143118081182
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 14.984899960607361
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 20.79047710575
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 22.567697124236968
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 18.275143
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 20.273496291649835
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 11.183596869702184
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 13.66828553767686
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 15.951143331030634
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 14.025290847839024
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 18.58691327557652
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 20.931768209018575
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 15.951143
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 29.5083990328152
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 11.775942301705008
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 22.143316460115205
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 22.757197248317475
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 18.971633410409865
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 25.0563146800241
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 28.372086907947633
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 22.757197
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 14.609950437533849
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 2.5877574729580246
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 7.869180571924819
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 14.47904245681127
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 7.792728443459476
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 10.191410345955882
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 13.856634026685832
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 10.19141
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 12.54186324789926
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 2.562345861630242
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 8.206689478868286
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 13.431870222378253
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 9.04889314146665
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 9.5136872611391
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 12.317145756887534
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 9.513687
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.032948131112933994
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.07387320273435997
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.048354884068883455
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.04352827847080635
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.05693509730529476
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.044068684239795305
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.03994320055584584
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.044069
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.13836794633073285
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.1323124840136776
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.11133480668651669
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.09132346842558357
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.09663233166959108
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.12297356124415439
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.11716738590474689
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.117167
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO"
+    ],
+    "members_used": [
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 5.968100933488915
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 3.6527906756072874
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 3.6536155468997444
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 2.8948157422760654
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 25.828378512396693
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 3.653616
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 31.25672707303679
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 18.29896907216495
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 23.794887401095554
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 22.71308016877637
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 21.332630098452885
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 28.158760278304875
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 30.269526402640263
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 23.794887
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 25.76486932245341
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 15.800795844129082
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 20.15093291147501
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 21.07206583870373
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 17.574193620422378
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 24.320829130759748
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 25.79592246362482
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 21.072066
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.48133542992307343
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.13014483490362244
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.10225269935402885
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.09381447613570089
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.08416370166587614
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.23879904718237654
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.393655882227215
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.130145
+   }
+  },
+  "profile_basket_multiples|[[\"US\", \"Payment Networks\"], {\"exclude\": \"V\"}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 24.499827503465422
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 9.52083208717343
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 18.068517305227175
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 18.853125746063487
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 19.25802404731222
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 23.72665004935806
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 24.99222776149005
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 19.258024
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 23.176021486706457
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 8.799568598285068
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 15.42171893994651
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 18.275143118081182
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 14.984899960607361
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 20.79047710575
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 22.567697124236968
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 18.275143
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 20.273496291649835
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 11.183596869702184
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 13.66828553767686
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 15.951143331030634
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 14.025290847839024
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 18.58691327557652
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 20.931768209018575
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 15.951143
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 29.5083990328152
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 11.775942301705008
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 22.143316460115205
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 22.757197248317475
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 18.971633410409865
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 25.0563146800241
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 28.372086907947633
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 22.757197
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 14.609950437533849
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 2.5877574729580246
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 7.869180571924819
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 14.47904245681127
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 7.792728443459476
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 10.191410345955882
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 13.856634026685832
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 10.19141
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 12.54186324789926
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 2.562345861630242
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 8.206689478868286
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 13.431870222378253
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 9.04889314146665
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 9.5136872611391
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 12.317145756887534
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 9.513687
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.032948131112933994
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.07387320273435997
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.048354884068883455
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.04352827847080635
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.05693509730529476
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.044068684239795305
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.03994320055584584
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.044069
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.13836794633073285
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.1323124840136776
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.11133480668651669
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.09132346842558357
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.09663233166959108
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.12297356124415439
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.11716738590474689
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.117167
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO"
+    ],
+    "members_used": [
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 5.968100933488915
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 3.6527906756072874
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 3.6536155468997444
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 2.8948157422760654
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 25.828378512396693
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 3.653616
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 31.25672707303679
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 18.29896907216495
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 23.794887401095554
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 22.71308016877637
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 21.332630098452885
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 28.158760278304875
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 30.269526402640263
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 23.794887
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 25.76486932245341
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 15.800795844129082
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 20.15093291147501
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 21.07206583870373
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 17.574193620422378
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 24.320829130759748
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 25.79592246362482
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 21.072066
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Payment Networks",
+    "members": [
+     "MA",
+     "AXP",
+     "SPGI",
+     "CME",
+     "ICE",
+     "MCO",
+     "MSCI"
+    ],
+    "members_used": [
+     {
+      "market_cap": 500366596261.0,
+      "name": "Mastercard Incorporated",
+      "symbol": "MA",
+      "value": 0.48133542992307343
+     },
+     {
+      "market_cap": 203896341547.0,
+      "name": "American Express Company",
+      "symbol": "AXP",
+      "value": 0.13014483490362244
+     },
+     {
+      "market_cap": 115169516000.0,
+      "name": "S&P Global Inc.",
+      "symbol": "SPGI",
+      "value": 0.10225269935402885
+     },
+     {
+      "market_cap": 96719634465.0,
+      "name": "CME Group Inc.",
+      "symbol": "CME",
+      "value": 0.09381447613570089
+     },
+     {
+      "market_cap": 85275900500.0,
+      "name": "Intercontinental Exchange, Inc.",
+      "symbol": "ICE",
+      "value": 0.08416370166587614
+     },
+     {
+      "market_cap": 77248932000.0,
+      "name": "Moody's Corporation",
+      "symbol": "MCO",
+      "value": 0.23879904718237654
+     },
+     {
+      "market_cap": 40134035000.0,
+      "name": "MSCI Inc.",
+      "symbol": "MSCI",
+      "value": 0.393655882227215
+     }
+    ],
+    "peer_count": 7,
+    "subject_excluded": true,
+    "value": 0.130145
+   }
+  }
+ }
 }

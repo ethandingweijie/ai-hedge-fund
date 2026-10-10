@@ -49,5 +49,8 @@
    "peer_count": 20,
    "value": 15.195
   }
+ },
+ "store_calls": {
+  "profile_basket_multiples|[[\"SES\", \"S-REIT\"], {\"exclude\": \"C38U.SI\"}]": {}
  }
 }

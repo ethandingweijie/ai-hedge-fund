@@ -218,4 +218,9 @@ def test_the_dbs_golden_keeps_the_research_roe_without_family_guidance_and_reads
     assert any("bank model" in s for s in ggm2["assumptions"]["provenance"])
     assert dr2.get("guidance_forecast") in (None, {})                           # the working-capital roll does not run for a bank
     fpe = dr2["base"]["leg_inputs"].get("Forward P/E") or {}
-    assert fpe.get("metric_value") == pytest.approx(th2["eps_fy1"]) if fpe else True
+    # Cross-sector audit E6 (2026-10-10): the SG bank basket has no forward peer P/E, so the (cross-check) Forward P/E
+    # is relabelled trailing rather than putting the model's FY+1 EPS on a trailing multiple.
+    if fpe and fpe.get("basis") != "trailing (relabelled)":
+        assert fpe.get("metric_value") == pytest.approx(th2["eps_fy1"])
+    elif fpe:
+        assert "TTM" in fpe["metric"]

@@ -122,6 +122,8 @@ def _stub_fmp(calls):
             "ratios-ttm": [{"priceToEarningsRatioTTM": 12.10578, "netIncomePerShareTTM": 16.24773}],
             "financial-growth": [{"revenueGrowth": 0.2}],
             "analyst-estimates": _rows(),
+            # Cross-sector audit E1 (2026-10-10): a US GAAP candidate's lease liabilities, for a lease-free EV.
+            "balance-sheet-statement": [{"capitalLeaseObligations": 0.0, "totalDebt": 1e9, "reportedCurrency": "USD"}],
         }[ep]
     return fake
 
@@ -131,7 +133,8 @@ def test_the_refresh_makes_one_extra_call_per_name_and_forms_both_multiples(monk
     monkeypatch.delenv("COMPS_NTM_DISABLED", raising=False)
     monkeypatch.setattr(rc, "_fmp_get", _stub_fmp(calls))
     out = rc.fetch_name_multiples("FSLR")
-    assert calls == ["key-metrics-ttm", "ratios-ttm", "financial-growth", "analyst-estimates"]
+    # audit E1: a US listing also reads its balance sheet, so its EV multiples sit ex leases like the subject's
+    assert calls == ["key-metrics-ttm", "balance-sheet-statement", "ratios-ttm", "financial-growth", "analyst-estimates"]
     assert out["pe"] == pytest.approx(12.10578) and out["pe_ntm"] < out["pe"]
     assert out["ev_ebitda_ntm"] < out["ev_ebitda"]
 
@@ -198,10 +201,13 @@ def test_a_forward_multiple_from_a_broader_basket_than_the_trailing_one_is_not_u
     assert tr["multiple_parts"]["peer_multiple"] == expect
 
 
-def test_a_basket_with_no_forward_median_keeps_the_trailing_one_even_with_the_flag_on(monkeypatch):
+def test_a_basket_with_no_forward_median_is_relabelled_trailing_with_the_flag_on(monkeypatch):
+    # Cross-sector audit E6 (owner, 2026-10-10): never forward EPS x a trailing multiple -- the leg prices TTM EPS
+    # (net income 1bn / 1bn shares) on the trailing peer P/E and says so.
     monkeypatch.setenv(dcf_agent.NTM_FORWARD_FLAG, "true")
     v, tr = _leg("Forward P/E", monkeypatch, peer={"pe": 20.0})
-    assert v == pytest.approx(40.0) and tr["multiple_parts"]["peer_source"] == "peer median pe"
+    assert v == pytest.approx(20.0) and tr["basis"] == "trailing (relabelled)"
+    assert tr["multiple_parts"]["peer_source"].startswith("peer median pe")
 
 
 def test_the_trailing_legs_never_read_the_forward_multiple(monkeypatch):

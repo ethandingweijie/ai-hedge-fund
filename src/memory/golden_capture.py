@@ -554,6 +554,19 @@ def read_comps(ticker: str) -> dict | None:
         return json.load(fh)
 
 
+#: The comps-store readers the engine calls besides get_regional_multiples (curated profile baskets, explicit member
+#: baskets, ruled labels, the developer cluster, label members and per-basket field values). Cross-sector audit,
+#: 2026-10-10: these read the LOCAL store live during replay, so refreshing it moved four goldens (AAPL, V, BABA,
+#: 09988.HK) with no code change. They are now recorded into comps.json["store_calls"] and served from there.
+_STORE_READERS = ("profile_basket_multiples", "basket_multiples", "label_multiples_ruled",
+                  "developer_cluster_multiples", "label_member_symbols", "basket_field_values")
+_LIST_READERS = ("label_member_symbols", "basket_field_values")
+
+
+def _store_key(fn: str, args: tuple, kwargs: dict) -> str:
+    return fn + "|" + json.dumps([list(args), kwargs], sort_keys=True, default=str)
+
+
 class frozen_comps:
     """Serve a fixture's recorded comps instead of the regional_comps table.
 
@@ -561,24 +574,62 @@ class frozen_comps:
     fixture's peer multiples (US names flipped from static tables to live
     industry medians) with no code change. A fixture without comps.json
     resolves no live comps at all, which is what a stale store gave it.
+
+    The store readers in _STORE_READERS are served from comps.json["store_calls"]; a call never recorded
+    returns the empty result (no basket). GOLDEN_RECORD_STORE_CALLS=1 records them from the live store
+    instead and writes them back into the fixture's comps.json on exit (an explicit, reviewed re-record).
     """
 
-    def __init__(self, comps: dict | None):
+    def __init__(self, comps: dict | None, ticker: str | None = None):
         c = comps or {}
+        self._comps = c
+        self._ticker = ticker
         self._fields = c.get("fields") or {}
         self._age = c.get("comp_age_days")
+        self._store = dict(c.get("store_calls") or {})
+        self._record = bool(ticker) and os.environ.get("GOLDEN_RECORD_STORE_CALLS", "").strip() in ("1", "true", "yes")
+        self._recorded = False
 
     def __enter__(self):
         from src.data import regional_comps as rc
         self._rc = rc
         self._orig = (rc.get_regional_multiples, rc.latest_refresh_age_days)
+        self._orig_store = {fn: getattr(rc, fn) for fn in _STORE_READERS if hasattr(rc, fn)}
         fields, age = self._fields, self._age
         rc.get_regional_multiples = lambda *a, **k: {f: dict(v) for f, v in fields.items()}
         rc.latest_refresh_age_days = lambda *a, **k: age
+        for fn, real in self._orig_store.items():
+            setattr(rc, fn, self._reader(fn, real))
+        # The local credit_ratings table is a store too (owner, 2026-10-08 default for US tickers): a local run
+        # outside pytest researches ratings and records them, which then surfaced in replay. A fixture carries
+        # no rating record, so replay sees none.
+        from src.data import credit_ratings as cr
+        self._cr, self._cr_lookup = cr, cr.lookup
+        cr.lookup = lambda *a, **k: {}
         return self
+
+    def _reader(self, fn, real):
+        store, record = self._store, self._record
+
+        def served(*a, **k):
+            key = _store_key(fn, a, k)
+            if record:
+                out = real(*a, **k)
+                store[key] = json.loads(json.dumps(out, default=str))
+                self._recorded = True
+                return out
+            if key in store:
+                return json.loads(json.dumps(store[key]))
+            return [] if fn in _LIST_READERS else {}
+        return served
 
     def __exit__(self, *exc):
         self._rc.get_regional_multiples, self._rc.latest_refresh_age_days = self._orig
+        for fn, real in self._orig_store.items():
+            setattr(self._rc, fn, real)
+        self._cr.lookup = self._cr_lookup
+        if self._recorded and self._ticker:
+            write_comps(self._ticker, {**self._comps, "store_calls": self._store})
         return False
 
 

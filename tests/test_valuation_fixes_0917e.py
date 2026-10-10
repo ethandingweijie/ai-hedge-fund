@@ -438,6 +438,16 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 #: net-debt basis, interest income out of UFCF, core earnings, the latest-year trough kept in the base
 #: margin, the sigma scenario spread bounded by each name's own history (the +/-50bp scenario WACC was removed the same day), the
 #: subject out of its own peer medians. Bear and bull widen most (the spread is the company's own).
+#: Cross-sector audit batch A (2026-10-10): golden replay freezes every comps-store reader, so the curated baskets
+#: now price on the values recorded into each fixture's comps.json (2026-10-10 store) instead of whatever the local
+#: store held -- the earlier pins rode a 2026-09-21 store (BABA's China Internet Platform EV/EBITDA 9.94x -> 7.29x).
+#: No engine change moved these four.
+_AUDIT_A_MOVED = {
+    "09988_HK": (104.76, 71.75, 231.43, (96.16, 107.71, 152.05)),
+    "AAPL": (179.36, 143.3, 232.08, (237.32, 255.35, 281.71)),
+    "BABA": (99.49, 57.26, 226.09, (91.37, 106.15, 150.46)),
+    "V": (336.13, 261.16, 403.15, (335.56, 361.8, 385.26)),
+}
 _PHASE1_MOVED = {
     "02888_HK": (294.91, 246.96, 346.94, (238.98, 262.96, 288.97)),
     "09988_HK": (106.4, 74.03, 233.53, (96.96, 108.28, 152.78)),
@@ -456,7 +466,7 @@ _PHASE1_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_AUDIT_A_MOVED.get(name) or _PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)
@@ -1273,12 +1283,14 @@ def test_fourteen_of_sixteen_leg_multiples_carry_the_premium():
     # +2 for Wave 3 (2026-09-22): EV/EBIT (norm) carries the premium like its
     # siblings; PEG is the FOURTH documented exception -- the growth is already
     # the multiplier, so a premium on top would count it twice.
-    assert len(mults) == 20
+    # +3 for cross-sector audit E6 (2026-10-10): Forward P/E, Forward EV/EBITDA and Fwd EV/EBIT each gain a
+    # relabelled-trailing branch (no forward peer multiple), carrying the premium like their trailing siblings.
+    assert len(mults) == 23
     # Plan E23 (2026-10-06): the three forward legs carry the FORWARD growth adjustment (`_gp_used`, the
     # growth gap over peers, falling back to the trailing premium) -- still a growth adjustment, counted.
     with_gp = [m for m in mults if "growth_premium" in m or "_gp_used" in m]
     without = [m for m in mults if "growth_premium" not in m and "_gp_used" not in m]
-    assert len(with_gp) == 16
+    assert len(with_gp) == 19
     assert without == ['mult = _fair_pe * _sm_peg * sbc_pe_discount * _own_disc',   # PEG, in file order
                        'mult = _mnav * sm', 'mult = _on_book * sm', 'mult = cfg["p_tbv"] * sm']
 
@@ -1319,10 +1331,13 @@ _02888_LEGS = {
     # not x0.75 / x1.25 of the base: 252.98 -> 271.40 bear, 421.63 -> 414.19 bull.
     # Plan EV6 (2026-10-04): the forward leg prices the next twelve months: Forward P/E 121.29 -> 134.74
     # bear, 159.86 -> 183.41 bull (not weighted on this fixture).
+    # Cross-sector audit E6 (2026-10-10): the HK bank basket has no forward peer P/E, so Forward P/E is relabelled
+    # trailing (TTM EPS on the trailing multiple, scenario band): 134.74 -> 90.70 bear, 183.41 -> 151.16 bull.
+    # Still not weighted; the blend is unchanged.
     "bear": {"Excess Capital": 188.02, "GGM (P/B)": 271.4, "P/TBV": 268.28,
-             "Residual Income": 238.57, "Forward P/E": 134.74, "P/E (norm)": 137.84},
+             "Residual Income": 238.57, "Forward P/E": 90.7, "P/E (norm)": 137.84},
     "bull": {"Excess Capital": 188.02, "GGM (P/B)": 414.19, "P/TBV": 447.13,
-             "Residual Income": 238.57, "Forward P/E": 183.41, "P/E (norm)": 229.74},
+             "Residual Income": 238.57, "Forward P/E": 151.16, "P/E (norm)": 229.74},
 }
 
 

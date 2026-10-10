@@ -41,5 +41,8 @@
    "peer_count": 9,
    "value": 12.8361
   }
+ },
+ "store_calls": {
+  "profile_basket_multiples|[[\"SES\", \"Money Center Bank (SG)\"], {\"exclude\": \"D05.SI\"}]": {}
  }
 }

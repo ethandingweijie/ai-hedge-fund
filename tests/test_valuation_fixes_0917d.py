@@ -638,7 +638,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
         # V re-recorded 2026-10-04: the toll-road Payment Networks basket's FCF yield (4.3%)
         # replaces the static 3.0%, and the bear premium is 1.065.
         # V again 2026-10-05: the owner-accepted as-converted count (1,880m) is the divisor.
-        "V":    {"bear": 194.98, "base": 278.98, "bull": 350.15},
+        # V again 2026-10-10 (cross-sector audit batch A): the Payment Networks basket now prices on the values
+        # recorded into the golden fixture (frozen store), not the local store; relationship unchanged.
+        "V":    {"bear": 192.29, "base": 275.14, "bull": 345.33},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

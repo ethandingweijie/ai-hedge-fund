@@ -89,5 +89,1107 @@
    "peer_count": 10,
    "value": 0.1358
   }
+ },
+ "store_calls": {
+  "basket_multiples|[[\"US\", [\"BABA\", \"PDD\", \"JD\", \"BIDU\", \"NTES\", \"TCOM\"], \"China Internet Platform\"], {\"exclude\": \"BABA\", \"max_age_days\": 14}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.608195568461607
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.535299458997556
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 13.972487223880728
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 4.871097940308963
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 8.239647
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.045763770788215
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.535299458997556
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 9.814110229883246
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 4.764832277140326
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 7.289471
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 8.906513070974265
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 8.175264707737387
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.580436361501303
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 4.007964613707143
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 5.5791579228246
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 5.579158
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 9.700351059650695
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 28.63044705818249
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 5.534960723554614
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 5.110563555054524
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 9.317268029584659
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 9.317268
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 4.299099379431389
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 2.2413384856088956
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.3739314821095736
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.2001347306337063
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 2.0466230011960564
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 2.046623
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 3.919187288341892
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 2.1412242360593985
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.2275209518091326
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.1846407323554564
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 1.8830115009661883
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 1.883012
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.09775005920636194
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.1505162043472904
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.1294099183576271
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.08331237693699695
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 0.11358
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.053177676200597594
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.015661335593083078
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.5278850370056832
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.07825609638475518
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.5192151439513851
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 0.078256
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 3.0868173020860983
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.724331368644565
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.6407686164253317
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 1.101878029609617
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 1.028366246046887
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 1.101878
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 15.877499999999998
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 7.842015000000001
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 16.63978682745826
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 7.031259424225965
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 11.859757
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.634572681830951
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 10.145112453021325
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 6.500995843293405
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 6.849525046725513
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 10.319994439770065
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 10.145112
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.1767013516948966
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.02121529033593784
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.17461436916517967
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.005641067704477397
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.04415221514454623
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 0.044152
+   }
+  },
+  "profile_basket_multiples|[[\"US\", \"China Internet Platform\"], {\"exclude\": \"BABA\"}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.608195568461607
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.535299458997556
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 13.972487223880728
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 4.871097940308963
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 8.239647
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.045763770788215
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.535299458997556
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 9.814110229883246
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 4.764832277140326
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 7.289471
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 8.906513070974265
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 8.175264707737387
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 4.580436361501303
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 4.007964613707143
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 5.5791579228246
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 5.579158
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 9.700351059650695
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 28.63044705818249
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 5.534960723554614
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 5.110563555054524
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 9.317268029584659
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 9.317268
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 4.299099379431389
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 2.2413384856088956
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.3739314821095736
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.2001347306337063
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 2.0466230011960564
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 2.046623
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 3.919187288341892
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 2.1412242360593985
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.2275209518091326
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.1846407323554564
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 1.8830115009661883
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 1.883012
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.09775005920636194
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.1505162043472904
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.1294099183576271
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.08331237693699695
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 0.11358
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.053177676200597594
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.015661335593083078
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.5278850370056832
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.07825609638475518
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.5192151439513851
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 0.078256
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 3.0868173020860983
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.724331368644565
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 1.6407686164253317
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 1.101878029609617
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 1.028366246046887
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 1.101878
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 15.877499999999998
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 7.842015000000001
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 16.63978682745826
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 7.031259424225965
+     }
+    ],
+    "peer_count": 4,
+    "subject_excluded": true,
+    "value": 11.859757
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 11.634572681830951
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 10.145112453021325
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 6.500995843293405
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 6.849525046725513
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 10.319994439770065
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 10.145112
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "China Internet Platform",
+    "members": [
+     "NTES",
+     "BIDU",
+     "PDD",
+     "JD",
+     "TCOM"
+    ],
+    "members_used": [
+     {
+      "market_cap": 76612156133.0,
+      "name": "NetEase, Inc.",
+      "symbol": "NTES",
+      "value": 0.1767013516948966
+     },
+     {
+      "market_cap": 28944618353.0,
+      "name": "Baidu, Inc.",
+      "symbol": "BIDU",
+      "value": 0.02121529033593784
+     },
+     {
+      "market_cap": 110971687995.0,
+      "name": "PDD Holdings Inc.",
+      "symbol": "PDD",
+      "value": 0.17461436916517967
+     },
+     {
+      "market_cap": 37453731356.0,
+      "name": "JD.com, Inc.",
+      "symbol": "JD",
+      "value": 0.005641067704477397
+     },
+     {
+      "market_cap": 24768616453.0,
+      "name": "Trip.com Group Limited",
+      "symbol": "TCOM",
+      "value": 0.04415221514454623
+     }
+    ],
+    "peer_count": 5,
+    "subject_excluded": true,
+    "value": 0.044152
+   }
+  }
  }
 }

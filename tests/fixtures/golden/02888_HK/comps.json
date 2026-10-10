@@ -49,5 +49,8 @@
    "peer_count": 7,
    "value": 8.3976
   }
+ },
+ "store_calls": {
+  "profile_basket_multiples|[[\"HKSE\", \"Money Center Bank\"], {\"exclude\": \"02888.HK\"}]": {}
  }
 }

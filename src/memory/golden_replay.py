@@ -464,7 +464,7 @@ def replay_fixture(name: str, *, frozen_now: Any = None, state_patch: Optional[d
     # frozen_comps imports regional_comps, so it must enter AFTER the Replayer:
     # regional_comps binds `_fmp_get` by value at import, and an import outside
     # the replay window captures the real network function.
-    with gc.pinned_env(), gc.Replayer(calls) as rp, gc.frozen_comps(gc.read_comps(name)):
+    with gc.pinned_env(), gc.Replayer(calls) as rp, gc.frozen_comps(gc.read_comps(name), name):
         out = run_dcf_agent(state)
 
     entry = (out.get("data", {}).get("dcf_range") or {}).get(ticker)

@@ -1,4 +1,1307 @@
 {
  "comp_age_days": null,
- "fields": {}
+ "fields": {},
+ "store_calls": {
+  "basket_multiples|[[\"US\", [\"CRM\", \"ADBE\", \"NOW\", \"INTU\", \"WDAY\", \"ADSK\"], \"Mature SaaS\"], {\"exclude\": null, \"max_age_days\": 14}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 16.836633709614635
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 61.64054566583953
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 9.907925992398647
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 13.096937836907184
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 39.88569548656946
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 22.83402328429046
+     }
+    ],
+    "peer_count": 6,
+    "value": 19.835328
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 13.686890703120055
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 42.71907120091716
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 9.16662189880836
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 11.565492168624742
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 31.17640145110978
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 20.845444999999998
+     }
+    ],
+    "peer_count": 6,
+    "value": 17.266168
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 8.867094496684622
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 22.266139395179316
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 6.148616162616972
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 8.970049398401947
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 13.095974535388759
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 12.786889036073424
+     }
+    ],
+    "peer_count": 6,
+    "value": 10.878469
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 13.73121015873016
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 28.079660779954786
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 8.414585761678472
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 9.46779088481557
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 16.862771323491238
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 16.613013487569063
+     }
+    ],
+    "peer_count": 6,
+    "value": 15.172112
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.922084755792253
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 10.117216903339669
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 3.6137033115132846
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 3.9013584408802684
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 5.116772789110958
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 6.1760317150192545
+     }
+    ],
+    "peer_count": 6,
+    "value": 5.019429
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.376756218825192
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 8.0390616101986
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 3.26512730544662
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 3.514330713747197
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 4.547739233164884
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 5.377061894467774
+     }
+    ],
+    "peer_count": 6,
+    "value": 4.462248
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.08288412696224916
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.032006297403657916
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.11962398111430521
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.10776593056390545
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.058207049460144066
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.058386591611929155
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.070635
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.09824739904814174
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.2238240665721356
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.10522575013400726
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.1429115508888722
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.15408783362632664
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.12965859329848975
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.136285
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.769836885715774
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 11.423580217321827
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 7.724392213532813
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 4.186554338668913
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 7.203176458204335
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 14.334028968371268
+     }
+    ],
+    "peer_count": 6,
+    "value": 7.463784
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 20.294545454545457
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 85.96894409937889
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 12.81615598885794
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 17.684210526315788
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 37.68282828282828
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 29.615979381443296
+     }
+    ],
+    "peer_count": 6,
+    "value": 24.955262
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 14.68101000394516
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 28.973815947117675
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 8.668213367940403
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 12.538390463348415
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 15.046134352073835
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 16.863110725661304
+     }
+    ],
+    "peer_count": 6,
+    "value": 14.863572
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.087268549036869
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.05508811683581679
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.36787257736943774
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.1676651997007513
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.11396295608203622
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.21189644908145164
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.140814
+   }
+  },
+  "profile_basket_multiples|[[\"US\", \"Hyper-Growth Platform\"], {\"exclude\": \"MELI\"}]": {},
+  "profile_basket_multiples|[[\"US\", \"Mature SaaS\"], {}]": {
+   "ev_ebit": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 16.836633709614635
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 61.64054566583953
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 9.907925992398647
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 13.096937836907184
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 39.88569548656946
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 22.83402328429046
+     }
+    ],
+    "peer_count": 6,
+    "value": 19.835328
+   },
+   "ev_ebitda": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 13.686890703120055
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 42.71907120091716
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 9.16662189880836
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 11.565492168624742
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 31.17640145110978
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 20.845444999999998
+     }
+    ],
+    "peer_count": 6,
+    "value": 17.266168
+   },
+   "ev_ebitda_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 8.867094496684622
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 22.266139395179316
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 6.148616162616972
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 8.970049398401947
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 13.095974535388759
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 12.786889036073424
+     }
+    ],
+    "peer_count": 6,
+    "value": 10.878469
+   },
+   "ev_ocf": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 13.73121015873016
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 28.079660779954786
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 8.414585761678472
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 9.46779088481557
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 16.862771323491238
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 16.613013487569063
+     }
+    ],
+    "peer_count": 6,
+    "value": 15.172112
+   },
+   "ev_revenue": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.922084755792253
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 10.117216903339669
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 3.6137033115132846
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 3.9013584408802684
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 5.116772789110958
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 6.1760317150192545
+     }
+    ],
+    "peer_count": 6,
+    "value": 5.019429
+   },
+   "ev_revenue_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.376756218825192
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 8.0390616101986
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 3.26512730544662
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 3.514330713747197
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 4.547739233164884
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 5.377061894467774
+     }
+    ],
+    "peer_count": 6,
+    "value": 4.462248
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.08288412696224916
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.032006297403657916
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.11962398111430521
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.10776593056390545
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.058207049460144066
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.058386591611929155
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.070635
+   },
+   "growth_avg": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.09824739904814174
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.2238240665721356
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.10522575013400726
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.1429115508888722
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.15408783362632664
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.12965859329848975
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.136285
+   },
+   "pb": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 4.769836885715774
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 11.423580217321827
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 7.724392213532813
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 4.186554338668913
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 7.203176458204335
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 14.334028968371268
+     }
+    ],
+    "peer_count": 6,
+    "value": 7.463784
+   },
+   "pe": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 20.294545454545457
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 85.96894409937889
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 12.81615598885794
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 17.684210526315788
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 37.68282828282828
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 29.615979381443296
+     }
+    ],
+    "peer_count": 6,
+    "value": 24.955262
+   },
+   "pe_ntm": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 14.68101000394516
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 28.973815947117675
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 8.668213367940403
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 12.538390463348415
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 15.046134352073835
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 16.863110725661304
+     }
+    ],
+    "peer_count": 6,
+    "value": 14.863572
+   },
+   "roic": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "US",
+    "key": "Mature SaaS",
+    "members": [
+     "CRM",
+     "NOW",
+     "ADBE",
+     "INTU",
+     "WDAY",
+     "ADSK"
+    ],
+    "members_used": [
+     {
+      "market_cap": 182956410000.0,
+      "name": "Salesforce, Inc.",
+      "symbol": "CRM",
+      "value": 0.087268549036869
+     },
+     {
+      "market_cap": 142879728400.0,
+      "name": "ServiceNow, Inc.",
+      "symbol": "NOW",
+      "value": 0.05508811683581679
+     },
+     {
+      "market_cap": 91488600000.0,
+      "name": "Adobe Inc.",
+      "symbol": "ADBE",
+      "value": 0.36787257736943774
+     },
+     {
+      "market_cap": 80387053560.0,
+      "name": "Intuit Inc.",
+      "symbol": "INTU",
+      "value": 0.1676651997007513
+     },
+     {
+      "market_cap": 48908520509.0,
+      "name": "Workday, Inc.",
+      "symbol": "WDAY",
+      "value": 0.11396295608203622
+     },
+     {
+      "market_cap": 48578187898.0,
+      "name": "Autodesk, Inc.",
+      "symbol": "ADSK",
+      "value": 0.21189644908145164
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.140814
+   }
+  }
+ }
 }

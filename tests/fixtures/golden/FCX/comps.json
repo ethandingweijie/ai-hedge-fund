@@ -89,5 +89,8 @@
    "peer_count": 7,
    "value": 0.088
   }
+ },
+ "store_calls": {
+  "profile_basket_multiples|[[\"US\", \"Base Metals\"], {\"exclude\": \"FCX\"}]": {}
  }
 }

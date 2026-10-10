@@ -1,4 +1,7 @@
 {
  "comp_age_days": 3.2,
- "fields": {}
+ "fields": {},
+ "store_calls": {
+  "profile_basket_multiples|[[\"SES\", \"Conglomerate / Industrial (SG)\"], {\"exclude\": \"U96.SI\"}]": {}
+ }
 }

@@ -1336,19 +1336,10 @@ def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
     return float(nd) - float(sti)
 
 
-#: Non-USD reporters that file under US GAAP (owner, 2026-10-04, plan 1C.2). A US GAAP filer's
-#: operating-lease cost sits inside EBITDA and operating cash flow, so its lease liabilities are not
-#: debt to an EV built on those figures; an IFRS 16 filer's lease cost is below EBITDA and its
-#: principal repayments are financing flows, so they are. Every USD reporter is treated as US GAAP;
-#: the Chinese issuers below report in RMB under US GAAP (both listings named).
-_US_GAAP_NON_USD_REPORTERS = frozenset({
-    "BABA", "09988.HK", "9988.HK", "JD", "09618.HK", "9618.HK", "PDD", "BIDU", "09888.HK", "9888.HK",
-    "NTES", "09999.HK", "9999.HK", "TCOM", "09961.HK", "9961.HK", "BILI", "09626.HK", "9626.HK",
-    "ZTO", "02057.HK", "2057.HK", "YUMC", "09987.HK", "9987.HK", "LI", "02015.HK", "2015.HK",
-    "NIO", "09866.HK", "9866.HK", "XPEV", "09868.HK", "9868.HK", "BEKE", "02423.HK", "2423.HK",
-    "TME", "01698.HK", "1698.HK", "WB", "09898.HK", "9898.HK", "VIPS", "HTHT", "01179.HK", "1179.HK",
-    "BZ", "02076.HK", "2076.HK", "TAL", "EDU", "09901.HK", "9901.HK", "QFIN", "03660.HK", "3660.HK",
-})
+#: The filing basis the lease treatment turns on (owner, 2026-10-04, plan 1C.2). Since 2026-10-10 (cross-sector
+#: audit E2) it comes from the explicit registry in src/data/filing_basis.py -- reporting in USD no longer stands
+#: for US GAAP (BHP, Shell, AstraZeneca and the HK / SG dollar reporters file IFRS).
+from src.data.filing_basis import US_GAAP_NON_USD_REPORTERS as _US_GAAP_NON_USD_REPORTERS  # noqa: E402
 
 #: Healthcare industries whose investments back claims inside regulated subsidiaries (FMP labels).
 _CLAIMS_BACKED_HEALTHCARE = ("healthcare plans", "managed care", "insurance")
@@ -1406,8 +1397,8 @@ def _bridge_adjustment(ticker: str) -> dict:
 
 
 def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
-    return (str(reported_currency or "").upper() == "USD"
-            or str(ticker or "").upper() in _US_GAAP_NON_USD_REPORTERS)
+    from src.data.filing_basis import reports_us_gaap
+    return reports_us_gaap(ticker, reported_currency)
 
 
 def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
@@ -4443,32 +4434,48 @@ _EPS_BASIS_DIVERGENCE = 0.15
 _EPS_BASIS_MIN_ANALYSTS = 5
 
 
+#: The forward legs each street-basis metric feeds, for the guard's flag (cross-sector audit E4, owner 2026-10-10:
+#: revenue and EBIT are guarded like EPS and EBITDA -- NVDA / AVGO / PLTR priced guidance revenue 33-40% from
+#: consensus on EV/NTM Revenue, MMM guidance EBIT -33% on its Fwd EV/EBIT anchor).
+_STREET_BASIS_LEGS = {"eps": "Forward P/E", "ebitda": "Forward EV/EBITDA",
+                      "revenue": "EV/NTM Revenue", "ebit": "Forward EV/EBIT"}
+
+
 def _street_basis_guard(fwd_sc: Optional[dict], scenario: str, decided: Optional[bool],
                         analyst_count: Optional[float], metric: str = "eps") -> tuple[Optional[dict], Optional[bool], Optional[str]]:
-    """(fwd_sc, decision, flag) for one forward metric (`eps` -> Forward P/E, `ebitda` -> Forward EV/EBITDA). The
-    decision is taken on the base scenario (passed back in for bear and bull): True when the base guidance-derived
-    figure diverges from consensus by more than _EPS_BASIS_DIVERGENCE with enough analysts. When True, this
-    scenario's metric reverts to consensus and is labelled as such -- the peers' NTM multiple is measured on the
-    street's (adjusted) figures."""
+    """(fwd_sc, decision, flag) for one forward metric (`eps` -> Forward P/E, `ebitda` -> Forward EV/EBITDA, `revenue`
+    -> EV/NTM Revenue and EV/Fwd Rev, `ebit` -> Forward EV/EBIT). The decision is taken on the base scenario (passed
+    back in for bear and bull): True when the base guidance-derived figure diverges from consensus by more than
+    _EPS_BASIS_DIVERGENCE with enough analysts, or when the two disagree in sign (audit E5, owner 2026-10-10: WBD
+    priced guidance EPS against a negative consensus; with consensus at or below zero the leg stands down). When
+    True, this scenario's metric reverts to consensus and is labelled as such -- the peers' NTM multiple is measured
+    on the street's (adjusted) figures."""
     if not isinstance(fwd_sc, dict):
         return fwd_sc, decided, None
     m_src = ((fwd_sc.get("_source") or {}).get(metric) or {}).get(scenario)
     cons = ((fwd_sc.get("_consensus") or {}).get(metric) or {}).get(scenario)
     cur = (fwd_sc.get(metric) or {}).get(scenario)
-    leg = {"eps": "Forward P/E", "ebitda": "Forward EV/EBITDA"}.get(metric, metric)
-    lab = {"eps": "EPS", "ebitda": "EBITDA"}.get(metric, metric)
+    leg = _STREET_BASIS_LEGS.get(metric, metric)
+    lab = {"eps": "EPS", "ebitda": "EBITDA", "revenue": "revenue", "ebit": "EBIT"}.get(metric, metric)
     flag = None
     if decided is None and scenario == "base":
-        decided = bool(m_src and isinstance(cons, (int, float)) and cons > 0 and isinstance(cur, (int, float))
-                       and (analyst_count or 0) >= _EPS_BASIS_MIN_ANALYSTS
-                       and abs(float(cur) / float(cons) - 1.0) > _EPS_BASIS_DIVERGENCE)
+        _enough = (analyst_count or 0) >= _EPS_BASIS_MIN_ANALYSTS
+        _num = isinstance(cons, (int, float)) and isinstance(cur, (int, float))
+        _sign_conflict = bool(m_src and _num and _enough and float(cur) > 0 and float(cons) <= 0)
+        decided = bool(m_src and _num and _enough and (
+            _sign_conflict or (float(cons) > 0 and abs(float(cur) / float(cons) - 1.0) > _EPS_BASIS_DIVERGENCE)))
         if decided:
             _fmt = (lambda x: f"{x:,.2f}") if metric == "eps" else (lambda x: f"{x / 1e9:,.2f}bn")
-            flag = (f"{leg} on consensus {lab} {_fmt(float(cons))} ({int(analyst_count)} analysts), not the {m_src} "
-                    f"{_fmt(float(cur))} ({float(cur) / float(cons) - 1.0:+.0%}): the peers' NTM multiple is measured on street "
-                    f"(adjusted) {lab}, and a figure more than {_EPS_BASIS_DIVERGENCE:.0%} away is on another basis; all "
-                    "scenarios use consensus")
-    if decided and m_src and isinstance(cons, (int, float)) and cons > 0:
+            if _sign_conflict:
+                flag = (f"{leg} stands down: consensus {lab} is {_fmt(float(cons))} ({int(analyst_count)} analysts) "
+                        f"against the {m_src} {_fmt(float(cur))} -- a multiple on a figure of the other sign is no "
+                        "valuation; its weight follows the standard waterfall")
+            else:
+                flag = (f"{leg} on consensus {lab} {_fmt(float(cons))} ({int(analyst_count)} analysts), not the {m_src} "
+                        f"{_fmt(float(cur))} ({float(cur) / float(cons) - 1.0:+.0%}): the peers' NTM multiple is measured on street "
+                        f"(adjusted) {lab}, and a figure more than {_EPS_BASIS_DIVERGENCE:.0%} away is on another basis; all "
+                        "scenarios use consensus")
+    if decided and m_src and isinstance(cons, (int, float)):
         out = {k: dict(v) if isinstance(v, dict) else v for k, v in fwd_sc.items()}
         out[metric][scenario] = float(cons)
         out["_source"][metric] = dict(out["_source"].get(metric) or {})
@@ -8703,22 +8710,54 @@ def _compute_method_value(
         ebit_fwd = _ebit_dict.get(scenario)
         if ebit_fwd is None or ebit_fwd <= 0 or shares <= 0:
             return None
-        # Tech sub-type has direct ev_ebit multiple; else use EV/EBITDA × 1.20
-        if (_is_tech_subtype(sector, profile_name)
-                and not (isinstance(peer.get("ev_ebitda"), (int, float)) and peer.get("ev_ebitda") > 0
-                         and _basket_rank(peer, "ev_ebitda") >= 1)):
-            base_mult = _tech_subtype_multiples(profile_name)["ev_ebit"]                  # fallback (Wave 7)
-        elif isinstance(peer.get("ev_ebit"), (int, float)) and peer.get("ev_ebit") > 0:
-            base_mult = float(peer["ev_ebit"])
+        # Cross-sector audit E6 (owner, 2026-10-10): the comps store has no EV / NTM EBIT, so the forward multiple is
+        # the peers' NTM EV/EBITDA carried to EBIT by their own trailing EV/EBIT : EV/EBITDA ratio (the D&A
+        # burden); with no NTM EV/EBITDA the leg is relabelled trailing and prices TTM EBIT on the trailing EV/EBIT.
+        # It used to put NTM (or guidance) EBIT on a trailing GAAP EV/EBIT -- MMM's 0.50 anchor.
+        _ntm_eb, _tt_eb, _tt_ebit = peer.get("ev_ebitda_ntm"), peer.get("ev_ebitda"), peer.get("ev_ebit")
+        _tech_static = (_is_tech_subtype(sector, profile_name)
+                        and not (isinstance(peer.get("ev_ebitda"), (int, float)) and peer.get("ev_ebitda") > 0
+                                 and _basket_rank(peer, "ev_ebitda") >= 1))
+        _fwd_ok = (_ntm_forward_enabled() and not _tech_static
+                   and all(isinstance(x, (int, float)) and x > 0 for x in (_ntm_eb, _tt_eb, _tt_ebit))
+                   and _basket_rank(peer, "ev_ebitda_ntm") >= _basket_rank(peer, "ev_ebit"))
+        if _fwd_ok:
+            base_mult = float(_ntm_eb) * float(_tt_ebit) / float(_tt_eb)
+            _src = "peer median ev_ebitda_ntm x (ev_ebit / ev_ebitda) (forward basis)"
+        elif not _ntm_forward_enabled():
+            # Legacy (COMPS / NTM switch off): consensus EBIT on the trailing multiple, as before the audit.
+            if _tech_static:
+                base_mult, _src = _tech_subtype_multiples(profile_name)["ev_ebit"], "tech sub-type table"
+            elif isinstance(_tt_ebit, (int, float)) and _tt_ebit > 0:
+                base_mult, _src = float(_tt_ebit), "peer median ev_ebit"
+            else:
+                base_mult, _src = peer.get("ev_ebitda", 12.0) * 1.20, "peer median ev_ebitda x 1.20"
         else:
-            base_mult = peer.get("ev_ebitda", 12.0) * 1.20
-        mult = base_mult * growth_premium
+            if not (ebit and ebit > 0):
+                return None
+            if _tech_static:
+                base_mult, _src = _tech_subtype_multiples(profile_name)["ev_ebit"], "tech sub-type table (trailing; no live peer data)"
+            elif isinstance(_tt_ebit, (int, float)) and _tt_ebit > 0:
+                base_mult, _src = float(_tt_ebit), "peer median ev_ebit (trailing; no NTM peer data)"
+            else:
+                base_mult, _src = peer.get("ev_ebitda", 12.0) * 1.20, "peer median ev_ebitda x 1.20 (trailing; no NTM peer data)"
+            mult = base_mult * sm * growth_premium * _own_disc
+            if reported_currency == "CNY":
+                mult *= peer.get("cn_adr_haircut", 1.0)
+            _leg_trace(kind="ev_multiple", metric="EBIT (TTM; relabelled trailing -- no forward peer EV/EBIT)",
+                       metric_value=float(ebit), multiple=float(mult),
+                       consensus_value=_fwd_consensus_value(forward_consensus, "ebit", scenario), basis="trailing (relabelled)",
+                       multiple_parts={"peer_multiple": float(base_mult), "peer_source": _src, "scenario_band": sm,
+                                       "growth_premium": growth_premium,
+                                       "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0) if reported_currency == "CNY" else 1.0)})
+            return _ev_to_equity_ps(float(ebit) * mult, net_debt, most_recent, shares)
+        mult = base_mult * growth_premium * _own_disc
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebit_fwd * mult
         _leg_trace(kind="ev_multiple", metric=_fwd_label(forward_consensus, "ebit", scenario, "EBIT (NTM consensus)"),
                    metric_value=float(ebit_fwd), multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "ebit", scenario),
-                   multiple_parts={"peer_multiple": float(base_mult),
+                   multiple_parts={"peer_multiple": float(base_mult), "peer_source": _src,
                                    "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
@@ -8853,6 +8892,25 @@ def _compute_method_value(
         if eps_fwd is None or eps_fwd <= 0:
             return None
         _fwd_pe, _fwd_pe_src = _forward_peer_multiple(peer, "pe", 18.0)
+        # Cross-sector audit E6 (owner, 2026-10-10): with no forward peer P/E (thin HK / SG NTM coverage, or a less
+        # specific NTM basket) the leg never multiplies forward EPS by a TRAILING multiple -- it is relabelled
+        # trailing and prices TTM EPS on the trailing peer P/E with the trailing scenario band.
+        if _ntm_forward_enabled() and "forward basis" not in _fwd_pe_src:
+            _eps_ttm = (net_income / shares) if (net_income is not None and shares > 0) else None
+            if not (_eps_ttm and _eps_ttm > 0):
+                return None
+            mult = _fwd_pe * sm * growth_premium * sbc_pe_discount * _own_disc
+            if reported_currency == "CNY":
+                mult *= peer.get("cn_adr_haircut", 1.0)
+            _leg_trace(kind="equity_multiple", metric="EPS (TTM; relabelled trailing -- no forward peer P/E)",
+                       metric_value=float(net_income), shares=float(shares), per_share_metric=float(_eps_ttm),
+                       multiple=float(mult), consensus_value=_fwd_consensus_value(forward_consensus, "eps", scenario),
+                       basis="trailing (relabelled)",
+                       multiple_parts={"peer_multiple": _fwd_pe, "peer_source": f"{_fwd_pe_src} (trailing; no NTM peer data)",
+                                       "scenario_band": sm, "growth_premium": growth_premium,
+                                       "sbc_pe_discount": sbc_pe_discount,
+                                       **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
+            return _eps_ttm * mult
         _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer, most_recent.get("_forecast_cagr5"))
         _gp_used = _fga if _fga is not None else growth_premium
         mult = _fwd_pe * _gp_used * sbc_pe_discount * _own_disc
@@ -8881,6 +8939,22 @@ def _compute_method_value(
         if ebitda_fwd is None or ebitda_fwd <= 0 or shares <= 0:
             return None
         _fwd_ev, _fwd_ev_src = _forward_peer_multiple(peer, "ev_ebitda", 12.0)
+        # Cross-sector audit E6: no forward peer EV/EBITDA -> relabelled trailing, TTM EBITDA on the trailing multiple.
+        if _ntm_forward_enabled() and "forward basis" not in _fwd_ev_src:
+            if not (ebitda and ebitda > 0):
+                return None
+            mult = _fwd_ev * sm * growth_premium * _own_disc
+            if reported_currency == "CNY":
+                mult *= peer.get("cn_adr_haircut", 1.0)
+            _leg_trace(kind="ev_multiple", metric="EBITDA (TTM; relabelled trailing -- no forward peer EV/EBITDA)",
+                       metric_value=float(ebitda), multiple=float(mult),
+                       consensus_value=_fwd_consensus_value(forward_consensus, "ebitda", scenario),
+                       basis="trailing (relabelled)",
+                       multiple_parts={"peer_multiple": _fwd_ev, "peer_source": f"{_fwd_ev_src} (trailing; no NTM peer data)",
+                                       "scenario_band": sm, "growth_premium": growth_premium,
+                                       "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0) if reported_currency == "CNY" else 1.0),
+                                       **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
+            return _ev_to_equity_ps(float(ebitda) * mult, net_debt, most_recent, shares)
         _fga, _fga_note = _forward_growth_adjustment(forward_consensus, peer, most_recent.get("_forecast_cagr5"))
         _gp_used = _fga if _fga is not None else growth_premium
         mult = _fwd_ev * _gp_used
@@ -16086,6 +16160,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _margin_sigma, _hist_lo, _hist_hi = 0.0, None, None
         _eps_street_basis: Optional[bool] = None     # REGN review: one EPS basis for all three scenarios
         _ebitda_street_basis: Optional[bool] = None  # AMGN / GILD review (plan E2): one EBITDA basis too
+        _revenue_street_basis: Optional[bool] = None  # cross-sector audit E4: revenue and EBIT on one basis as well
+        _ebit_street_basis: Optional[bool] = None
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -16457,11 +16533,37 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 (forward_consensus or {}).get("analyst_count_revenue"), "ebitda")
             if _ebb_flag:
                 ticker_forward_flags.append(_ebb_flag)
+            # Cross-sector audit E4 (owner, 2026-10-10): revenue and EBIT reach EV/NTM Revenue, EV/Fwd Rev and Fwd
+            # EV/EBIT the same way, so they take the same street-basis rule (EBIT counted on the EPS analysts, the
+            # count FMP's EBIT estimates rest on).
+            if _bank_models.get(scenario) and _bank_models[scenario].get("feeds_legs"):
+                _revenue_street_basis = False
+                _ebit_street_basis = False
+            _fwd_cons_sc, _revenue_street_basis, _rsb_flag = _street_basis_guard(
+                _fwd_cons_sc, scenario, _revenue_street_basis,
+                (forward_consensus or {}).get("analyst_count_revenue"), "revenue")
+            if _rsb_flag:
+                ticker_forward_flags.append(_rsb_flag)
+            _fwd_cons_sc, _ebit_street_basis, _etb_flag = _street_basis_guard(
+                _fwd_cons_sc, scenario, _ebit_street_basis,
+                (forward_consensus or {}).get("analyst_count_eps"), "ebit")
+            if _etb_flag:
+                ticker_forward_flags.append(_etb_flag)
             if scenario == "base" and isinstance(_fwd_cons_sc, dict) and _fwd_cons_sc.get("_source"):
+                # Audit E9: the header names what priced -- metrics a guard swapped back are listed as consensus.
                 _srcs = {m: v.get("base") for m, v in _fwd_cons_sc["_source"].items() if v.get("base")}
-                ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
-                                            + "; ".join(f"{m.upper() if m == 'eps' else m.upper() if m in ('ebit', 'ebitda') else m} from {lab}" for m, lab in _srcs.items())
-                                            + "; consensus kept beside each leg for comparison")
+                _guided = {m: lab for m, lab in _srcs.items() if not str(lab).startswith("consensus ")}
+                _swapped = [m for m, lab in _srcs.items() if str(lab).startswith("consensus ")]
+                _nm = lambda m: m.upper() if m in ("eps", "ebit", "ebitda") else m   # noqa: E731
+                if _guided:
+                    ticker_forward_flags.append("Forward multiples priced on guidance-derived estimates: "
+                                                + "; ".join(f"{_nm(m)} from {lab}" for m, lab in _guided.items())
+                                                + (f"; {', '.join(_nm(m) for m in _swapped)} on consensus (street basis)" if _swapped else "")
+                                                + "; consensus kept beside each leg for comparison")
+                elif _swapped:
+                    ticker_forward_flags.append("Forward multiples priced on consensus: the guidance-derived "
+                                                + ", ".join(_nm(m) for m in _swapped)
+                                                + " sat on another basis (street-basis rule)")
             _gc = None if _gf else _guidance_channel_schedule(
                 _guid_est, scenario, g, _growth_schedule, _PROJECTION_YEARS,
                 growth_adj=_guidance_growth_adj_for(ticker, sector))

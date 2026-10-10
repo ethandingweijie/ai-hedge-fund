@@ -1802,3 +1802,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Local comps store refreshed 2026-10-07 23:30 by another process (data drift: AAPL, V, BABA, 09988 peer baskets; confirmed identical on pushed code de03cdb8) + additive batch-3 fields (reverse_dcf, leg_dispersion, guidance scope checks); no batch-3 IV change
 
+## 2026-10-10T14:50:25+00:00
+
+- regenerated at HEAD: `434eccf0`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: cross-sector audit batch A (2026-10-10): E6 forward legs with no forward peer multiple relabelled trailing (shadow Forward P/E / Fwd EV/EBIT rows on 02888.HK, D05.SI, SCHW, MELI, MU, C38U.SI, U96.SI; no weighted leg moved); golden replay now freezes every comps-store reader (curated / explicit baskets recorded into comps.json store_calls on 2026-10-10) and the local credit_ratings table, so a local store refresh no longer moves goldens -- AAPL 182.97->179.36, V 340.84->336.13 on the recorded curated baskets; V gains 715994a3's E8 unvalued-acquisition flag (never rebased)
+
