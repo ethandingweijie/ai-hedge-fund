@@ -1074,7 +1074,17 @@ def _convergence_bound(scen_iv: float, spot: float, max_capture: float) -> float
 #: claims inside regulated subsidiaries (Molina's were 36% of its market cap in
 #: the 2026-09-15 audit), and biotech simply keeps its prior treatment.
 _NO_INVESTMENT_NETTING_SECTORS = frozenset({"Financials", "Insurance", "Banks",
-                                            "Healthcare", "Health Care"})
+                                            "Healthcare", "Health Care",
+                                            # audit E18: an exchange's / broker's investments back customer balances
+                                            "Crypto"})
+
+#: Cross-sector audit E18 (owner, 2026-10-10): investments that back customer funds (a payments float, a fintech's
+#: client money) are not spare cash. Named because the feed does not separate them from the treasury.
+_CUSTOMER_FUND_HOLDERS = frozenset({"MELI", "SE", "PYPL", "HOOD", "COIN", "XYZ", "SQ", "NU", "AFRM", "SOFI", "STNE",
+                                    "PAGS", "GRAB"})
+#: Sectors whose long-term investments are operating assets, regulated capital or the business itself.
+_NO_LTI_NETTING_SECTORS = frozenset({"Financials", "Insurance", "Banks", "Property", "RealEstate", "REIT", "Crypto",
+                                     "HealthcareServices"})
 
 
 #: Balance-sheet lines the EV bridge reads. Everything else on the row is a
@@ -1401,6 +1411,42 @@ def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
     return reports_us_gaap(ticker, reported_currency)
 
 
+def _profile_prices_holdings(sector: str, profile_name: str) -> bool:
+    """True when the profile weights a SOTP / look-through / NAV leg, which values the investments itself."""
+    if not profile_name:
+        return False
+    try:
+        from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as _IVP
+        meths = ((_IVP.get(sector) or {}).get(profile_name) or {}).get("methods") or []
+        if not meths:
+            meths = next(((d.get(profile_name) or {}).get("methods") or [] for d in _IVP.values() if profile_name in d), [])
+        return any((m.get("weight") or 0) > 0 and ("SOTP" in str(m.get("name")) or "NAV" in str(m.get("name")))
+                   for m in meths)
+    except Exception:                                      # noqa: BLE001
+        return True
+
+
+def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: str,
+                       profile_name: str) -> tuple[float, dict, Optional[str]]:
+    """Cross-sector audit E18 (owner, 2026-10-10): a non-financial company's long-term investments (Apple's non-current
+    marketable securities, ~US$5 a share) are value the operating legs never price -- their income sits below EBITDA --
+    so they count against debt like the short-term book. Not where a SOTP / look-through / NAV leg already prices the
+    holdings (the guard follows the pricing), not for financials, property or customer-fund holders, and never twice
+    (the biotech rule nets them first). Applied once the profile is known. Returns (net debt, basis, flag)."""
+    lti = row.get("long_term_investments")
+    comp = dict(basis.get("components") or {})
+    if (not isinstance(lti, (int, float)) or lti <= 0 or comp.get("long_term_investments")
+            or (sector or "") in _NO_LTI_NETTING_SECTORS or (sector or "") in _NO_INVESTMENT_NETTING_SECTORS
+            or str(ticker or "").upper() in _CUSTOMER_FUND_HOLDERS or _profile_prices_holdings(sector, profile_name)):
+        return nd, basis, None
+    nd2 = float(nd) - float(lti)
+    comp["long_term_investments"] = float(lti)
+    comp["result"] = nd2
+    out = dict(basis, long_term_investments_netted=float(lti), components=comp)
+    return nd2, out, (f"Long-term investments of {float(lti) / 1e9:,.2f}bn counted as cash in net debt (audit E18): value no "
+                      f"operating leg prices; net debt {float(nd) / 1e9:,.2f}bn -> {nd2 / 1e9:,.2f}bn")
+
+
 def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
                         reported_currency: Optional[str] = None,
                         industry: Optional[str] = None) -> tuple[float, dict]:
@@ -1414,7 +1460,8 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
       filers, whose EBITDA and cash flows already pay the rent (FMP's totalDebt carries them:
       Starbucks US$10.5bn, JD RMB25.4bn).
     """
-    nd = _net_debt_net_of_investments(row, sector)
+    nd = _net_debt_net_of_investments(row, sector) if str(ticker or "").upper() not in _CUSTOMER_FUND_HOLDERS \
+        else (float(row["net_debt"]) if isinstance(row.get("net_debt"), (int, float)) else 0.0)
     _raw_nd = row.get("net_debt")
     netted = isinstance(_raw_nd, (int, float)) and abs(float(nd) - float(_raw_nd)) > 1e-6
     sti = row.get("short_term_investments") or 0.0
@@ -1436,6 +1483,7 @@ def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
             and isinstance(lti, (int, float)) and lti > 0):
         lti_netted = float(lti)
         nd = nd - lti_netted
+
     # Plan IN1 (2026-10-04): a claims-backed insurer's cash and investments are regulated capital in its
     # insurance subsidiaries; the parent cannot pay them out. Only parent-level cash counts (owner-set per
     # ticker in valuation_constants.parent_cash; none on record = none counted), against the full debt,
@@ -8204,12 +8252,8 @@ def _compute_method_value(
         else:
             base_mult = peer.get("ev_ebitda", 12.0)
         mult = base_mult * sm * growth_premium
-        # Tier 2 Tech SBC discount on EV multiples
-        _sbc_v = most_recent.get("stock_based_compensation")
-        if _sbc_v and revenue_base and revenue_base > 0 and is_tech_sector(sector):
-            _sbc_pct = abs(_sbc_v) / revenue_base
-            if _sbc_pct > 0.10:
-                mult *= 0.90   # 10% haircut on EV/EBITDA
+        # Cross-sector audit E13 (owner, 2026-10-10): the 10% SBC haircut is gone -- subject and peers are both GAAP
+        # EBITDA, which already carries SBC as an expense, so the trim charged it twice and was nowhere disclosed.
         # Change 7: apply Chinese ADR multiple haircut for CNY-reporting US-listed companies
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
@@ -8228,9 +8272,6 @@ def _compute_method_value(
                                                and isinstance(peer.get("ev_ebit"), (int, float)))
                                            else "peer median ev_ebitda"),
                            "scenario_band": sm, "growth_premium": growth_premium,
-                           "sbc_haircut": (0.90 if (_sbc_v and revenue_base and revenue_base > 0
-                                                    and is_tech_sector(sector)
-                                                    and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
                            "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                               if reported_currency == "CNY" else 1.0),
                            **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
@@ -8632,15 +8673,8 @@ def _compute_method_value(
         except Exception:  # noqa: BLE001
             pass
         mult = base_mult * _gp_used * _margin_adj
-        # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
-        # revenue get a multiple haircut because SBC is shareholder
-        # dilution disguised as non-cash expense. Resolves the "cheap on
-        # EBITDA, expensive on FCF" paradox for SNOW/PLTR/DDOG.
-        _sbc_v = most_recent.get("stock_based_compensation")
-        if _sbc_v and revenue_base and revenue_base > 0 and is_tech_sector(sector):
-            _sbc_pct = abs(_sbc_v) / revenue_base
-            if _sbc_pct > 0.10:
-                mult *= 0.93   # 7% haircut on EV/Revenue
+        # Cross-sector audit E13 (owner, 2026-10-10): no hidden SBC trim on a revenue multiple -- peers' EV / revenue
+        # carries no SBC adjustment either (the 7% haircut is retired with the EV/EBITDA one).
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = fwd_rev * mult
@@ -8652,9 +8686,6 @@ def _compute_method_value(
                                    "growth_premium": _gp_used,
                                    "growth_basis": (_fga_note if _fga is not None else "trailing growth premium (no forward growth data)"),
                                    **({"margin_adjustment": _margin_adj, "margin_basis": _margin_note} if _margin_note else {}),
-                                   "sbc_haircut": (0.93 if (_sbc_v and revenue_base and revenue_base > 0
-                                                            and is_tech_sector(sector)
-                                                            and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
@@ -9240,30 +9271,22 @@ def _compute_method_value(
         from src.data.regional_comps import MIN_VALID_FCF_YIELD
         if target_yield <= MIN_VALID_FCF_YIELD:
             return None
-        # Prefer SBC-adjusted (owner-earnings) FCF; falls back to reported FCF
-        # when SBC isn't disclosed (fcf_owner_earnings is seeded to reported
-        # FCF in _extract_annual_series when SBC is missing).
-        fcf = most_recent.get("fcf_owner_earnings") or most_recent.get("free_cash_flow")
-        _fcf_label = ("FCF, owner earnings (TTM)"
-                      if most_recent.get("fcf_owner_earnings") else "FCF (TTM)")
-        # Wave 9 (owner guardrail, 2026-09-27): heavy-asset processors deduct capex only up to a ceiling of
-        # D&A x _MAINT_CAPEX_CEILING_K (PROPOSED 1.0), so growth capex does not read as a lower free cash yield.
-        if profile_name in _MAINT_CAPEX_CEILING_PROFILES:
-            _ocf9, _cx9, _da9 = (most_recent.get("operating_cash_flow"), most_recent.get("capital_expenditure"),
-                                 most_recent.get("depreciation_and_amortization"))
-            if all(isinstance(x, (int, float)) for x in (_ocf9, _cx9, _da9)):
-                fcf = float(_ocf9) - min(abs(float(_cx9)), _MAINT_CAPEX_CEILING_K * abs(float(_da9)))
-                _fcf_label = f"FCF, capex capped at {_MAINT_CAPEX_CEILING_K:g}x D&A (TTM)"
+        # Cross-sector audit E13 / E15 (owner, 2026-10-10): the yield is divided by the peers' FMP free-cash-flow
+        # yield, which is operating cash flow less ALL capex and deducts no SBC -- so the subject's FCF is stated the
+        # same way. The owner-earnings SBC deduction (subject only) and the Wave 9 capex ceiling at D&A (subject only,
+        # against peers' full capex) each priced the two sides on different cash flows. Owner earnings remain the
+        # fallback where the feed has no reported FCF.
+        fcf = most_recent.get("free_cash_flow") or most_recent.get("fcf_owner_earnings")
+        _fcf_label = "FCF: operating cash flow less capex (TTM; the peers' basis)"
         # On a cyclical the same normalisation the EV/EBITDA and P/E legs use --
         # mean margin on revenue over five years, IQR-trimmed -- so the whole
         # blend stands on one basis. Anywhere else the TTM figure is the right
         # one and this is a no-op.
         if profile_name in _CYCLICAL_PROFILES:
-            _norm = most_recent.get("normalized_fcf_owner_earnings")
+            _norm = most_recent.get("normalized_free_cash_flow") or most_recent.get("normalized_fcf_owner_earnings")
             if _norm and _norm > 0:
                 fcf = _norm
-                _fcf_label = ("FCF, owner earnings (5y normalised)"
-                              if most_recent.get("fcf_owner_earnings") else "FCF (5y normalised)")
+                _fcf_label = "FCF: operating cash flow less capex (5y normalised)"
         if fcf and fcf > 0 and shares > 0:
             _leg_trace(kind="yield", metric=_fcf_label,
                        metric_value=float(fcf), shares=float(shares),
@@ -13142,6 +13165,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
+        # audit E13 / E15: the cyclical FCF Yield leg's normalised figure on the peers' basis (OCF less all capex)
+        most_recent["normalized_free_cash_flow"] = _normalized_earnings(series, "free_cash_flow", window=5)
         # Review-gated industry input (Wave 1): an owner-accepted maintenance
         # capex replaces the D&A stand-in in the Distributable CF Yield leg. In
         # the currency the statements are now in -- the listing currency when
@@ -15547,6 +15572,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             agent_id, ticker,
             f"Profile: {profile_name} | Anchor: {_anchor_method} | WACC={wacc:.1%} | g={growth_base:.1%} | C_macro={c_macro:+.2f}"
         )
+        try:
+            net_debt, _net_debt_basis, _lti_flag = _apply_lti_netting(net_debt, _net_debt_basis, most_recent, sector,
+                                                                      ticker, profile_name)
+            if _lti_flag:
+                ticker_forward_flags.append(_lti_flag)
+        except NameError:                                  # a path that computed no net-debt basis
+            pass
 
         # ── Phase 1.1: CAGR-divergence gate (all profiles) ────────────────
         # Applied BEFORE the revenue-scale tier below and BEFORE the scenario

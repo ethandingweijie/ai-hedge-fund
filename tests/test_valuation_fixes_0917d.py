@@ -420,10 +420,14 @@ def test_the_leg_still_returns_none_when_fcf_is_absent_or_non_positive():
         assert _call({"fcf_yield": 0.03}, row=row) is None
 
 
-def test_owner_earnings_still_take_precedence_over_reported_fcf():
+def test_reported_fcf_now_takes_precedence_over_owner_earnings():
+    # Cross-sector audit E13 / E15 (owner, 2026-10-10): the leg divides by the peers' FMP FCF yield (OCF less all capex,
+    # no SBC deduction), so the subject's FCF is stated the same way; owner earnings are only the fallback.
     row = {**_ROW, "fcf_owner_earnings": 1e9, "free_cash_flow": 2e9}
     assert _call({"fcf_yield": 0.05}, row=row) == pytest.approx(
-        (1e9 / 200e6) / 0.05, rel=1e-9)
+        (2e9 / 200e6) / 0.05, rel=1e-9)
+    row2 = {**_ROW, "fcf_owner_earnings": 1e9, "free_cash_flow": None}
+    assert _call({"fcf_yield": 0.05}, row=row2) == pytest.approx((1e9 / 200e6) / 0.05, rel=1e-9)
 
 
 # ── The lazy import is load-bearing ─────────────────────────────────────────
@@ -629,7 +633,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
     # filing's diluted/basic ratio -- the basic count is fetched at last (plan 1C.6), so the dilution
     # the 2026-09-20 rule meant to carry is carried: AAPL x0.9835, V x0.9878. Relationship unchanged.
     expected = {
-        "AAPL": {"bear": 136.63, "base": 191.92, "bull": 247.57},
+        # AAPL and V re-recorded 2026-10-10 (cross-sector audit E13 / E15): the leg prices reported FCF (OCF less all
+        # capex), the basis of the peers' FMP yield, not SBC-deducted owner earnings. Relationship unchanged.
+        "AAPL": {"bear": 143.54, "base": 201.63, "bull": 260.1},
         # COST re-recorded 2026-09-26 on the Wave 4 pin (Membership / Subscription
         # Retail, live Discount Stores comps): its bear premium is now 0.941, Gate B
         # fires, and the leaves below are no longer this fix's evidence.
@@ -640,7 +646,7 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
         # V again 2026-10-05: the owner-accepted as-converted count (1,880m) is the divisor.
         # V again 2026-10-10 (cross-sector audit batch A): the Payment Networks basket now prices on the values
         # recorded into the golden fixture (frozen store), not the local store; relationship unchanged.
-        "V":    {"bear": 192.29, "base": 275.14, "bull": 345.33},
+        "V":    {"bear": 195.3, "base": 279.44, "bull": 350.72},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

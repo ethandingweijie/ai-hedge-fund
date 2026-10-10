@@ -268,6 +268,10 @@ def test_e1_amortisation_heavy_capex_follows_its_intensity_and_amortisation_runs
     for r in series:
         r["depreciation_and_amortization"] = 0.10 * r["revenue"]      # D&A 10% of revenue
         r["capital_expenditure"] = -0.02 * r["revenue"]               # capex 2% (5x below D&A)
+    # Cross-sector audit E3 (2026-10-10): the split needs the acquired intangibles it runs off -- ten years of
+    # the excess D&A, so the implied remaining life matches the 10-year default these assertions use.
+    series[-1]["intangible_assets"] = 10 * (series[-1]["depreciation_and_amortization"]
+                                         - abs(series[-1]["capital_expenditure"]))
     fc = gf.build_forecast(_gft._BLOCK, scenario="base", series=series, profile_name="Managed Care", sector="Healthcare",
                            wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
     rows = fc["rows"]
@@ -322,6 +326,10 @@ def test_amortisation_mode_holds_the_ebitda_margin_so_ebit_rises_as_amortisation
         r["capital_expenditure"] = -0.04 * r["revenue"]
     blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
            "estimates": {"base": {"revenue_growth_fy1": 0.03, "revenue_growth_fy2": 0.03}}}
+    # Cross-sector audit E3 (2026-10-10): the split needs the acquired intangibles it runs off -- ten years of
+    # the excess D&A, so the implied remaining life matches the 10-year default these assertions use.
+    series[-1]["intangible_assets"] = 10 * (series[-1]["depreciation_and_amortization"]
+                                         - abs(series[-1]["capital_expenditure"]))
     fc = gf.build_forecast(blk, scenario="base", series=series, profile_name="Large Cap Pharma", sector="Biopharma",
                            wacc=0.08, tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=12.0, market_growth=0.04)
     rows = fc["rows"]

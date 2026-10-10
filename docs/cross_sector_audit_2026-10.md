@@ -177,3 +177,35 @@ Each batch would be built as follows:
 **Register correction:** E14 is narrower than the trace claimed. `comps_history_backfill` already builds `pe_norm` / `ev_ebitda_norm` on mean margin × current revenue (fixed 2026-09-21). What remains is the trailing fallback and the missing `ev_ebit_norm`.
 
 **Owner note (2026-10-10):** AAPL is misclassified as Hyperscaler. A new Consumer Technology Ecosystem profile follows batch B as **batch F** (owner spec).
+
+### Batch B: capex & cash (E3, E13, E15, E18), 2026-10-10
+
+**Implemented**
+
+| Item | Change |
+|---|---|
+| **E3** | New `guidance_forecast._capex_rule`. The amortisation split runs when the **historical median** D&A/capex exceeds 1.0× **and** net acquired intangibles cover at least one year of the excess. Run-off is over the implied remaining useful life (net intangibles ÷ annual amortisation, bounded 3-25 years), otherwise 10 years. Content profiles (Media & Streaming) and any content/film amortisation line never split. The forecast reports `capex_rule` (mode, ratio, reason, run-off basis) |
+| **E13** | The 10% SBC haircut on EV/EBITDA and EV/EBIT, and the 7% one on EV/NTM Revenue, are retired |
+| **E13 / E15** | FCF Yield prices reported FCF (OCF less all capex), the basis of the peers' FMP yield. Owner earnings are only a fallback. The Wave 9 capex ceiling no longer reaches the yield leg. Cyclicals use a normalised reported FCF |
+| **E18** | `_apply_lti_netting`, applied once the profile is known: non-financial long-term investments count as cash unless a weighted SOTP or NAV leg prices them. Customer-fund holders (MELI, SE, PYPL, HOOD, COIN, …) and the Crypto sector keep their investments out of cash. The bridge `components` carry the LTI line |
+
+**Not done:** separating finance leases from operating leases. The feed exposes one `capitalLeaseObligations` line.
+
+**Forward tests:** 8 new tests (20 in the file). Local E2E (plain + probe):
+- NFLX, WBD: content excluded; NFLX probe FCF margin 23.6% vs 27.6% under the old rule.
+- CSCO now splits (3.11×, run-off 6.7 years).
+- AVGO splits (4.0-year implied remaining life); CRM splits (10 years).
+- AAPL: no split (D&A ≈ capex, no acquired intangibles, per the owner's AAPL spec); $84bn of long-term investments counted as cash.
+- WM: full-capex FCF.
+
+**Backward-test failures and fixes**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| Goldens AAPL, MELI, MU, V | Intended: E18 net debt (AAPL +21.9bn → −62.2bn, MU −20.9 → −25.0bn, MELI 4.9 → 7.0bn) and E15 FCF basis | Rebased with reason |
+| `test_three_statement` E1 ×2 | AMGN-like fixtures carried no intangibles, so the new evidence rule blocked the split | Fixtures given ten years of intangibles |
+| `0917d` owner-earnings precedence; `test_industrials_wave9` ceiling | Both pinned the subject-only bases E13/E15 retired | Restated |
+| `_normalized_earnings` census 12 → 13 | New normalised reported FCF | Restated |
+| `0917e` ×4, `0917d` FCF pins | Baselines | `_AUDIT_B_MOVED`: AAPL +2.6%, COST +1.2%, MU +1.1%, MELI, V |
+
+**Final backward run:** 6,489 passed, 1 skipped, 4 xfailed. Goldens re-checked after the reason-text fix: 17 passed.

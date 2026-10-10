@@ -442,6 +442,15 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 #: now price on the values recorded into each fixture's comps.json (2026-10-10 store) instead of whatever the local
 #: store held -- the earlier pins rode a 2026-09-21 store (BABA's China Internet Platform EV/EBITDA 9.94x -> 7.29x).
 #: No engine change moved these four.
+#: Cross-sector audit batch B (2026-10-10): E18 long-term investments as cash (AAPL, MU), customer funds not cash
+#: (MELI), E13 / E15 FCF Yield on the peers' basis -- reported FCF, all capex (AAPL, COST, V).
+_AUDIT_B_MOVED = {
+    "AAPL": (184.04, 147.71, 237.05, (239.52, 257.69, 284.19)),
+    "COST": (503.62, 364.13, 676.98, (643.45, 713.19, 799.87)),
+    "MELI": (4596.46, 3418.13, 5568.33, (2385.16, 2797.57, 3137.73)),
+    "MU": (183.78, 137.15, 235.92, (532.38, 555.69, 581.76)),
+    "V": (336.77, 261.64, 403.96, (335.73, 362.02, 385.54)),
+}
 _AUDIT_A_MOVED = {
     "09988_HK": (104.76, 71.75, 231.43, (96.16, 107.71, 152.05)),
     "AAPL": (179.36, 143.3, 232.08, (237.32, 255.35, 281.71)),
@@ -466,7 +475,7 @@ _PHASE1_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_AUDIT_A_MOVED.get(name) or _PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_AUDIT_B_MOVED.get(name) or _AUDIT_A_MOVED.get(name) or _PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)

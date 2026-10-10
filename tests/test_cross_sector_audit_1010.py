@@ -147,3 +147,88 @@ def test_e6_forward_ev_ebit_uses_a_derived_forward_multiple_or_relabels(monkeypa
     v2, tr2 = _leg("Forward EV/EBIT", {"ebit": 1.6e9}, {"ev_ebitda": 12.0, "ev_ebit": 15.0}, fc, monkeypatch)
     assert tr2["metric_value"] == 1.6e9 and tr2["basis"] == "trailing (relabelled)"
     assert v2 == pytest.approx((1.6e9 * 15.0 - 2e9) / 1e9)
+
+
+# ══ Batch B -- capex & cash: E3 capex vs D&A, E13 SBC, E15 FCF basis, E18 net debt ══════════════════════════════
+
+from src.agents.analysis import guidance_forecast as gf
+
+
+def _hist(da, cx, intang=0.0, ratio=None, content=None):
+    return {"da": da, "capex": cx, "intangible_assets": intang, "da_capex_ratio_median": ratio if ratio is not None else da / cx,
+            "content_amortisation": content}
+
+
+def test_e3_split_needs_a_median_ratio_above_one_and_acquired_intangibles():
+    cfg = gf.load_cfg()
+    # AVGO-like: D&A 14x capex, 40bn of acquired intangibles -> split, run-off on the implied remaining life
+    r = gf._capex_rule(_hist(7e9, 0.5e9, intang=40e9), cfg, "Fabless")
+    assert r["mode"] == "amortisation split" and r["runoff_years"] == pytest.approx(40e9 / 6.5e9)
+    # CSCO-like: 1.4x (the old 2.0x trigger missed it) with intangibles -> split now
+    assert gf._capex_rule(_hist(2.8e9, 2.0e9, intang=9e9), cfg, "Networking")["mode"] == "amortisation split"
+    # AAPL-like (owner spec): D&A ~1.1x capex but no acquired intangibles -> no runoff
+    a = gf._capex_rule(_hist(11.5e9, 10.5e9, intang=0.0), cfg, "Hyperscaler / Tech Conglomerate")
+    assert a["mode"] == "capex = D&A + growth" and "intangibles" in a["reason"]
+    # the HISTORICAL median decides, not a one-year spike
+    assert gf._capex_rule(_hist(3e9, 1e9, intang=9e9, ratio=0.95), cfg, "X")["mode"] == "capex = D&A + growth"
+
+
+def test_e3_content_companies_never_split():
+    cfg = gf.load_cfg()
+    n = gf._capex_rule(_hist(16e9, 0.5e9, intang=30e9), cfg, "Media & Streaming")       # NFLX: content amortisation
+    assert n["mode"] == "capex = D&A + growth" and "content" in n["reason"]
+    assert gf._capex_rule(_hist(16e9, 0.5e9, intang=30e9, content=15e9), cfg, "Other")["mode"] == "capex = D&A + growth"
+
+
+def test_e3_history_ratios_report_the_median_and_intangibles():
+    series = [{"revenue": 10e9, "depreciation_and_amortization": 1.2e9, "capital_expenditure": -1e9},
+              {"revenue": 11e9, "depreciation_and_amortization": 3.0e9, "capital_expenditure": -1e9},     # one-year spike
+              {"revenue": 12e9, "depreciation_and_amortization": 1.1e9, "capital_expenditure": -1e9, "intangible_assets": 2e9}]
+    h = gf.history_ratios(series, gf.load_cfg())
+    assert h["da_capex_ratio_median"] == pytest.approx(1.2) and h["intangible_assets"] == 2e9
+
+
+def test_e3_forecast_carries_the_rule_it_used():
+    from tests.test_guidance_forecast import _fc
+    fc = _fc()
+    assert fc["capex_rule"]["mode"] == "capex = D&A + growth"      # 1.33x but no acquired intangibles in the series
+
+
+def test_e13_no_hidden_sbc_trim_on_ev_multiples(monkeypatch):
+    row = {"ebitda": 2e9, "stock_based_compensation": 3e9}                              # SBC 30% of revenue
+    v, tr = _leg("EV/EBITDA", row, {"ev_ebitda": 20.0}, None, monkeypatch, sector="Tech", profile_name="Growth SaaS")
+    assert "sbc_haircut" not in tr["multiple_parts"] and tr["multiple"] == pytest.approx(tr["multiple_parts"]["peer_multiple"])
+
+
+def test_e13_e15_fcf_yield_on_the_peers_basis(monkeypatch):
+    row = {"free_cash_flow": 1.0e9, "fcf_owner_earnings": 0.6e9, "operating_cash_flow": 2e9,
+           "capital_expenditure": -1e9, "depreciation_and_amortization": 0.5e9}
+    v, tr = _leg("FCF Yield", row, {"fcf_yield": 0.05}, None, monkeypatch)
+    assert tr["metric_value"] == 1.0e9 and "peers' basis" in tr["metric"]
+    # the Wave 9 capex ceiling no longer prices the subject on maintenance capex against peers' full capex
+    v2, tr2 = _leg("FCF Yield", row, {"fcf_yield": 0.05}, None, monkeypatch, profile_name="Waste & Environmental Services")
+    assert tr2["metric_value"] == 1.0e9
+
+
+def test_e18_long_term_investments_count_as_cash_unless_a_sotp_prices_them():
+    basis = {"components": {"long_term_investments": None, "result": 10e9}}
+    row = {"long_term_investments": 80e9}
+    nd, b, flag = d._apply_lti_netting(10e9, dict(basis), row, "Tech", "AAPL", "Hyperscaler / Tech Conglomerate")
+    assert nd == pytest.approx(-70e9) and b["components"]["long_term_investments"] == 80e9 and "E18" in flag
+    # China Internet Platform weights SOTP (analyst): the holdings are priced there, never twice
+    nd2, _, f2 = d._apply_lti_netting(10e9, dict(basis), row, "Tech", "BABA", "China Internet Platform")
+    assert nd2 == 10e9 and f2 is None
+    # financials, property, customer-fund holders: not spare cash
+    for sec, t in (("Financials", "JPM"), ("Property", "X"), ("Tech", "MELI")):
+        assert d._apply_lti_netting(10e9, dict(basis), row, sec, t, "")[0] == 10e9
+    # the biotech rule nets them first: never twice
+    nd3, _, _ = d._apply_lti_netting(5e9, {"components": {"long_term_investments": 5e9}}, row, "Biopharma", "VRTX", "")
+    assert nd3 == 5e9
+
+
+def test_e18_customer_funds_and_crypto_short_term_investments_stay_out_of_cash():
+    row = {"net_debt": 5e9, "total_debt": 8e9, "cash_and_equivalents": 3e9, "short_term_investments": 4e9}
+    nd_meli, _ = d._valuation_net_debt(dict(row), "Tech", "MELI", "USD")
+    nd_x, _ = d._valuation_net_debt(dict(row), "Tech", "XYZW", "USD")
+    nd_coin, _ = d._valuation_net_debt(dict(row), "Crypto", "COIN2", "USD")
+    assert nd_meli == 5e9 and nd_coin == 5e9 and nd_x == pytest.approx(1e9)

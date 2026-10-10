@@ -49,6 +49,13 @@ DEFAULTS: dict = {
     # amortisation runs off as a non-cash charge.
     "amortisation_heavy_ratio": 2.0,
     "amortisation_runoff_years": 10,
+    # Owner, 2026-10-10 (cross-sector audit E3): the split runs whenever the HISTORICAL MEDIAN D&A / capex exceeds this
+    # (single-year noise ignored) and the balance sheet carries the acquired intangibles that amortise; content and
+    # operating intangibles (film / series libraries: a cash cost inside operating cash flow) never split. The run-off
+    # is the filed remaining useful life when it can be read (net intangibles / annual amortisation), else 10 years.
+    "amortisation_split_ratio": 1.0,
+    "amortisation_rul_bounds": [3.0, 25.0],
+    "content_amortisation_profiles": ["Media & Streaming"],
     "tax_rate_default": 0.21,
     "tax_rate_bounds": [0.10, 0.35],
     "jaws_margin_step": 0.005,
@@ -204,7 +211,7 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
     ni0 = _f(last.get("net_income"))
     int0 = abs(_f(last.get("interest_expense")) or 0.0)
     shares0 = _f(last.get("shares_outstanding"))
-    taxes, alphas, nwcs, buybacks, roics, cx_int = [], [], [], [], [], []
+    taxes, alphas, nwcs, buybacks, roics, cx_int, da_cx = [], [], [], [], [], [], []
     for i, r in enumerate(rows):
         e, n, it = _f(r.get("ebit")) or _f(r.get("operating_income")), _f(r.get("net_income")), abs(_f(r.get("interest_expense")) or 0.0)
         if e is not None and n is not None and (e - it) > 0:
@@ -215,6 +222,9 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         _rv, _cx = _f(r.get("revenue")), _f(r.get("capital_expenditure"))
         if _rv and _rv > 0 and _cx is not None:
             cx_int.append(abs(_cx) / _rv)
+        _da_r = _f(r.get("depreciation_and_amortization"))
+        if _cx and abs(_cx) > 0 and _da_r is not None:
+            da_cx.append(abs(_da_r) / abs(_cx))
         bb = _f(r.get("share_buyback")) or _f(r.get("common_stock_repurchased"))
         if bb is not None:
             buybacks.append(abs(bb))
@@ -234,6 +244,12 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         "da": da0, "da_pct_revenue": (da0 / rev0) if rev0 else 0.0, "capex": capex0, "net_income": ni0,
         "capex_intensity": _median(cx_int, 0.0, 1.0, (capex0 / rev0) if rev0 else 0.0) if cx_int else ((capex0 / rev0) if rev0 else 0.0),
         "interest": int0, "shares": shares0,
+        # audit E3: the ratio the amortisation split keys on (median, not the last year), the acquired intangibles it
+        # runs off, and any content-amortisation line the filings carry
+        "da_capex_ratio_median": (_median(da_cx, 0.0, float("inf"), 0.0) if da_cx else None),
+        "intangible_assets": _f(last.get("intangible_assets")), "goodwill": _f(last.get("goodwill")),
+        "content_amortisation": next((_f(r.get(k)) for r in rows[::-1] for k in ("content_amortization", "content_amortisation",
+                                                                                 "film_amortization") if _f(r.get(k))), None),
         "tax_rate": _median(taxes, tb[0], tb[1], cfg["tax_rate_default"]), "tax_rate_source": "history" if taxes else "default",
         "capex_alpha": _median(alphas, cfg["capex_alpha_bounds"][0], cfg["capex_alpha_bounds"][1], 0.0), "capex_alpha_n": len(alphas),
         "nwc_intensity": _median(nwcs, cfg["nwc_intensity_bounds"][0], cfg["nwc_intensity_bounds"][1], 0.0), "nwc_n": len(nwcs),
@@ -243,6 +259,47 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         # placed on the right projection year.
         "fy0": _year(str(last.get("period") or "")),
     }
+
+
+def _capex_rule(hist: dict, cfg: dict, profile_name: str = "") -> dict:
+    """How the forecast charges capex against D&A (cross-sector audit E3, owner 2026-10-10).
+
+    "amortisation split": the historical median D&A / capex exceeds `amortisation_split_ratio` (1.0) and the excess is
+    covered by acquired intangibles -- capex follows its intensity and the excess D&A runs off as amortisation over
+    the remaining useful life (net intangibles / that amortisation, bounded), else the default 10 years.
+    "capex = D&A + growth": otherwise, including content companies (film and series amortisation is a cash cost that
+    sits in operating cash flow) and a company with no acquired intangibles to amortise (Apple: D&A ~ capex)."""
+    cx, da = float(hist.get("capex") or 0.0), float(hist.get("da") or 0.0)
+    ratio = hist.get("da_capex_ratio_median")
+    if ratio is None:
+        ratio = (da / cx) if cx > 0 else None
+    out = {"mode": "capex = D&A + growth", "da_capex_ratio_median": ratio}
+    thr = float(cfg.get("amortisation_split_ratio", 1.0))
+    if (profile_name or "") in set(cfg.get("content_amortisation_profiles") or ()) or hist.get("content_amortisation"):
+        out["reason"] = "content / operating intangibles: amortisation is a cash cost (no split)"
+        return out
+    if not (cx > 0 and ratio is not None and ratio > thr):
+        out["reason"] = f"median D&A / capex {ratio:.2f}x at or below {thr:g}x" if ratio is not None else "no capex history"
+        return out
+    if da <= cx:
+        out["reason"] = (f"median D&A / capex {ratio:.2f}x is above {thr:g}x but the last year's D&A ({da / 1e9:,.2f}bn) does not "
+                         f"exceed its capex ({cx / 1e9:,.2f}bn): nothing to run off")
+        return out
+    excess = da - min(da, cx)
+    intang = float(hist.get("intangible_assets") or 0.0)
+    if intang < excess:
+        out["reason"] = (f"D&A runs {ratio:.2f}x capex but net acquired intangibles ({intang / 1e9:,.2f}bn) do not cover one year "
+                         f"of the excess ({excess / 1e9:,.2f}bn): no amortisation to run off")
+        return out
+    lo, hi = (cfg.get("amortisation_rul_bounds") or [3.0, 25.0])[:2]
+    rul = intang / excess if excess > 0 else None
+    years = float(cfg.get("amortisation_runoff_years", 10))
+    rul_used = rul is not None and lo <= rul <= hi
+    out.update(mode="amortisation split", runoff_years=(rul if rul_used else years),
+               runoff_basis=("remaining useful life: net intangibles / annual amortisation" if rul_used
+                             else f"default {years:g} years (implied life {rul:.1f}y outside {lo:g}-{hi:g})" if rul else f"default {years:g} years"),
+               reason=f"median D&A / capex {ratio:.2f}x above {thr:g}x, covered by {intang / 1e9:,.2f}bn of acquired intangibles")
+    return out
 
 
 # ── the targets ───────────────────────────────────────────────────────────────
@@ -555,11 +612,12 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     # revenue vs 5.1% actual, ~$3bn a year; GILD FCF margin 34% -> 21-23%). In that case capex follows its historical
     # intensity, depreciation rolls with it, and amortisation runs off over amortisation_runoff_years.
     _cx0, _da0 = float(hist.get("capex") or 0.0), float(hist.get("da") or 0.0)
-    amort_mode = bool(_cx0 > 0 and _da0 > float(cfg.get("amortisation_heavy_ratio", 2.0)) * _cx0)
+    capex_rule = _capex_rule(hist, cfg, profile_name)
+    amort_mode = capex_rule["mode"] == "amortisation split"
     dep_prev = min(_da0, _cx0) if amort_mode else None
     amort0 = (_da0 - dep_prev) if amort_mode else 0.0
     cx_int = float(hist.get("capex_intensity") or 0.0)
-    amort_n = float(cfg.get("amortisation_runoff_years", 10))
+    amort_n = float(capex_rule.get("runoff_years") or cfg.get("amortisation_runoff_years", 10))
     shares_path = [float(shares)]
     epsT = dec.get("eps_T_guided")
     rows: list[dict] = []
@@ -704,6 +762,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "calibration_applied": calibration_applied,
         "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
         "street_years": T_rev - T,
+        "capex_rule": capex_rule,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
         "history": {k: hist.get(k) for k in ("revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",

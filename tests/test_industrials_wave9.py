@@ -263,7 +263,9 @@ def test_maintenance_capex_is_capped_at_d_and_a_on_the_capital_heavy_profiles():
     assert d._MAINT_CAPEX_CEILING_K == 1.0                            # PROPOSED: the owner named the index, not the multiple
     assert d._MAINT_CAPEX_CEILING_PROFILES == frozenset({"Aggregates & Cement", "Diversified Miners",
                                                           "Packaging & Paper", "Waste & Environmental Services"})
-    assert "min(abs(float(_cx9)), _MAINT_CAPEX_CEILING_K * abs(float(_da9)))" in inspect.getsource(d._compute_method_value)
+    # Cross-sector audit E15 (owner, 2026-10-10): the ceiling no longer reaches the FCF Yield leg -- it priced the subject
+    # on maintenance capex against the peers' full-capex FMP yield. The constants stay for the DCF-side readers.
+    assert "min(abs(float(_cx9)), _MAINT_CAPEX_CEILING_K * abs(float(_da9)))" not in inspect.getsource(d._compute_method_value)
 
 
 # ── Asian holdco discount and the P/NAV boundary ─────────────────────────────

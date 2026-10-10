@@ -1810,3 +1810,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: cross-sector audit batch A (2026-10-10): E6 forward legs with no forward peer multiple relabelled trailing (shadow Forward P/E / Fwd EV/EBIT rows on 02888.HK, D05.SI, SCHW, MELI, MU, C38U.SI, U96.SI; no weighted leg moved); golden replay now freezes every comps-store reader (curated / explicit baskets recorded into comps.json store_calls on 2026-10-10) and the local credit_ratings table, so a local store refresh no longer moves goldens -- AAPL 182.97->179.36, V 340.84->336.13 on the recorded curated baskets; V gains 715994a3's E8 unvalued-acquisition flag (never rebased)
 
+## 2026-10-10T15:29:02+00:00
+
+- regenerated at HEAD: `5d8680fc`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: cross-sector audit batch B (2026-10-10): E18 non-financial long-term investments count as cash unless a SOTP / NAV leg prices them (AAPL net debt 21.9bn -> -62.2bn, MU -20.9bn -> -25.0bn) and customer-fund investments are not spare cash (MELI net debt 4.9bn -> 7.0bn); E13 / E15 FCF Yield on the peers' basis -- reported FCF, all capex, no subject-only SBC deduction (AAPL FCF Yield +5.1%); E13 SBC multiple haircuts retired; E3 capex split on the historical median D&A / capex above 1.0x with acquired-intangible evidence (no golden in amortisation mode)
+
