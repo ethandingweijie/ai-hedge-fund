@@ -204,6 +204,9 @@ _BANDS: dict[str, tuple[float, float]] = {
     # through-cycle multiple. Backfill-only for now (the weekly refresh sees
     # one year of EBITDA and cannot form it); same band as ev_ebitda.
     "ev_ebitda_norm": (0.5, 100.0),
+    # Cross-sector audit E14 (2026-10-10): EV over mean EBIT margin x the year's revenue -- the through-cycle EV/EBIT
+    # the EV/EBIT (norm) legs price on (they used the TRAILING ev_ebit). Backfill-only, like ev_ebitda_norm.
+    "ev_ebit_norm": (0.5, 120.0),
     # Market cap over the member's mean net income: the through-cycle P/E, for
     # industries that anchor on earnings rather than EBITDA. Backfill-only.
     "pe_norm":    (1.0, 200.0),
@@ -404,7 +407,10 @@ def profile_basket_multiples(exchange: str, profile: Optional[str],
                 out[field] = {"value": round(sum(c["value"] * w for c, w in cells), 6), "basis": "profile", "cohort": "all",
                               "peer_count": sum(int(c.get("peer_count") or 0) for c, _ in cells),
                               "key": " + ".join(f"{p} {w:.0%}" for p, w in _blend), "exchange": exchange,
-                              "members": [s for c, _ in cells for s in (c.get("members") or [])]}
+                              "members": [s for c, _ in cells for s in (c.get("members") or [])],
+                              # cross-sector audit E16 (2026-10-10): the blend names its peers like every basket
+                              "members_used": [m for c, _ in cells for m in (c.get("members_used") or [])],
+                              "subject_excluded": any(c.get("subject_excluded") for c, _ in cells)}
         if out:
             return out
     _xm = CROSS_MARKET_BASKETS.get(profile or "")
@@ -475,21 +481,23 @@ def developer_cluster_multiples(exchange: str, ticker: str, *, band: float = DEV
     cluster = {s: m for s, m in solvent.items()
                if isinstance((m.get("pb") or {}).get("value"), (int, float)) and abs(m["pb"]["value"] - own_pb) <= band
                and s != _store_symbol(ticker)}
-    cluster[_store_symbol(ticker)] = own_row                # the name sits in its own cluster
+    # Cross-sector audit E16 (2026-10-10): the valued name is located by its own P/B but is not in its own median
+    # (plan 1F.3: the valued company is never its own peer); it used to sit in the cluster.
     if len(cluster) < DEVELOPER_CLUSTER_MIN:
         return {}
     key = f"DEV_CLUSTER (P/B within +/-{band:.2f}x of own {own_pb:.2f}x)"
     out: dict = {}
     for field in FIELDS:
-        vals, used = [], []
+        vals, used, named = [], [], []
         for s, m in cluster.items():
             cell = (m.get(field) or {})
             if cell.get("in_band") and isinstance(cell.get("value"), (int, float)):
                 vals.append(float(cell["value"])); used.append(_canon(s))
+                named.append({"symbol": _canon(s), "value": float(cell["value"])})
         if len(vals) < DEVELOPER_CLUSTER_MIN:
             continue
         out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all", "peer_count": len(vals),
-                      "key": key, "exchange": exchange, "members": used,
+                      "key": key, "exchange": exchange, "members": used, "members_used": named, "subject_excluded": True,
                       "excluded_loss_makers": sorted(_canon(s) for s in members if s not in solvent)}
     return out
 
@@ -505,7 +513,8 @@ def label_member_symbols(exchange: str, label: str) -> list[str]:
     return [dict(r)["symbol"] for r in rows]
 
 
-def label_multiples_ruled(exchange: str, label: str, rule: dict, max_age_days: float = MAX_AGE_DAYS) -> dict[str, dict]:
+def label_multiples_ruled(exchange: str, label: str, rule: dict, max_age_days: float = MAX_AGE_DAYS,
+                          exclude: Optional[str] = None) -> dict[str, dict]:
     """Wave 9 (owner, 2026-09-27): a label's medians recomputed from its members with `rule["exclude"]`
     carved out and, when `rule["trim_field"]` is set, every member above median + trim_sigma x sigma on that
     field dropped. Basis "profile", key names the rule so the trace says which cohort priced the name."""
@@ -531,7 +540,8 @@ def label_multiples_ruled(exchange: str, label: str, rule: dict, max_age_days: f
     tag = []
     if excl: tag.append("ex " + ", ".join(sorted(excl)))
     if trimmed: tag.append(f"trimmed >{ts:g} sigma on {tf}: " + ", ".join(sorted(trimmed)))
-    return basket_multiples(exchange, tuple(keep), f"{label} ({'; '.join(tag)})", max_age_days=max_age_days)
+    return basket_multiples(exchange, tuple(keep), f"{label} ({'; '.join(tag)})", max_age_days=max_age_days,
+                            exclude=exclude)                      # audit E16: never the valued company
 
 
 def basket_field_values(exchange: str, syms: tuple, field: str, max_age_days: float = MAX_AGE_DAYS) -> list[float]:

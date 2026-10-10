@@ -665,6 +665,8 @@ PINNED_ENV = {
     # it would move with the table. Off in replay -- the live path is covered
     # by tests/test_dynamic_multiples_industry.py.
     "DYNAMIC_MULTIPLES_ENABLED": "false",
+    # Cross-sector audit E17 (2026-10-10): the HK / SG quote is a call the fixtures recorded before it existed.
+    "HKSG_QUOTE_CROSSCHECK": "off",
     "PYTHONUTF8": "1",
 }
 

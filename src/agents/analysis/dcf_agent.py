@@ -1454,6 +1454,38 @@ def _profile_prices_holdings(sector: str, profile_name: str) -> bool:
         return True
 
 
+def _hksg_quote_enabled() -> bool:
+    return os.environ.get("HKSG_QUOTE_CROSSCHECK", "on").strip().lower() not in ("0", "false", "no", "off")
+
+
+def _fmp_quote_symbol(ticker: str) -> str:
+    """FMP's form of a listing: Hong Kong codes are four digits (00700.HK -> 0700.HK)."""
+    t = str(ticker or "").upper()
+    if t.endswith(".HK"):
+        return (t.split(".")[0].lstrip("0") or "0").zfill(4) + ".HK"
+    return t
+
+
+#: Cross-sector audit E17 (owner, 2026-10-10): consensus net income / consensus EPS is the share count the street's
+#: per-share figures rest on. Further than this from the model's divisor, the per-share legs and the street are on
+#: different share bases (an ADS ratio, a share class, a unit error) -- flagged on every run, every name.
+_STREET_SHARE_BASIS_TOLERANCE = 0.15
+
+
+def _street_share_check(estimates: list, shares: Optional[float]) -> Optional[dict]:
+    """The street's implied share count against the model's, from the first estimate row carrying both figures."""
+    if not shares or shares <= 0:
+        return None
+    for e in estimates or []:
+        ni, eps = getattr(e, "net_income_avg", None), getattr(e, "eps_avg", None)
+        if isinstance(ni, (int, float)) and isinstance(eps, (int, float)) and ni > 0 and eps > 0:
+            implied = float(ni) / float(eps)
+            gap = implied / float(shares) - 1.0
+            return {"implied_shares": implied, "model_shares": float(shares), "gap": gap,
+                    "ok": abs(gap) <= _STREET_SHARE_BASIS_TOLERANCE, "period": getattr(e, "date", None)}
+    return None
+
+
 def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: str,
                        profile_name: str) -> tuple[float, dict, Optional[str]]:
     """Cross-sector audit E18 (owner, 2026-10-10): a non-financial company's long-term investments (Apple's non-current
@@ -2762,7 +2794,16 @@ def _reconcile_segment_ebitda(parts: list[dict], company_ebitda: Optional[float]
     raw_sum = sum(p["ebitda_estimated"] for p in est)
     if raw_sum <= 0:
         return parts
-    scaler = float(company_ebitda) / raw_sum
+    # Cross-sector audit E10 (2026-10-10): on a MIXED table (some rows on EBITDA, some on revenue) the company's EBITDA
+    # also pays for the revenue-priced businesses, so only the EBITDA rows' revenue share of it reconciles them --
+    # scaling them to the whole company double-counted the revenue rows (LyondellBasell).
+    _rev_rows = [p for p in parts if p.get("basis") == "ev_revenue" and p.get("multiple")]
+    _target = float(company_ebitda)
+    if _rev_rows:
+        _rv_e = sum(p["revenue"] for p in est)
+        _rv_all = _rv_e + sum(p["revenue"] for p in _rev_rows)
+        _target = _target * (_rv_e / _rv_all) if _rv_all > 0 else _target
+    scaler = _target / raw_sum
     for p in est:
         p["ebitda_unreconciled"] = p["ebitda_estimated"]
         p["ebitda_estimated"] = p["ebitda_estimated"] * scaler
@@ -2905,6 +2946,14 @@ def _sotp_parts(segments: dict[str, float], tier: str = "default",
                           "ev": seg_ebitda * mult})
             continue
         seg_type, mult = _classify_segment(seg_name, tier=tier)
+        if seg_type == "default":
+            # Cross-sector audit E10 (owner, 2026-10-10): no segment type matched, so the generic 3.0-4.5x revenue
+            # multiple stood in for a valuation (NKE's Footwear and Apparel at 3.0x). Unpriced and named; the 85%
+            # priced-revenue gate then refuses a SOTP that rests on defaults.
+            parts.append({"segment": seg_name, "revenue": float(seg_rev), "type": "default", "basis": "ev_revenue",
+                          "multiple": None, "ev": 0.0,
+                          "note": "no segment type matched -- unpriced (a generic revenue multiple is not a valuation)"})
+            continue
         parts.append({"segment": seg_name, "revenue": float(seg_rev),
                       "type": seg_type, "basis": "ev_revenue",
                       "multiple": float(mult),
@@ -3430,10 +3479,15 @@ def _sotp_12m_probabilistic(
     segment_data = []
     n_with_scenarios = 0
     n_fallback = 0
+    _rev_all = sum(float(v) for k, v in segments.items() if v and v > 0 and not _is_non_business_segment(k))
+    _rev_priced = 0.0
     for name, rev in segments.items():
-        if rev is None or rev <= 0:
+        if rev is None or rev <= 0 or _is_non_business_segment(name):
             continue
-        _, mult = _classify_segment(name, tier=tier)
+        _st, mult = _classify_segment(name, tier=tier)
+        if _st == "default":
+            continue                                   # audit E10: no generic multiple stands in for a valuation
+        _rev_priced += float(rev)
         scen_block = _find_scenario_for_segment(name, scenarios_by_segment)
         scenarios = scen_block.get("scenarios") if scen_block else None
         if scenarios:
@@ -3442,6 +3496,8 @@ def _sotp_12m_probabilistic(
             n_fallback += 1
         segment_data.append((name, float(rev), mult, scenarios))
 
+    if _rev_all > 0 and _rev_priced / _rev_all < _SOTP_MIN_PRICED_REVENUE:
+        return None                                    # audit E10: the same 85% priced-revenue bar as SOTP (segments)
     if not segment_data:
         return None
 
@@ -8341,6 +8397,11 @@ def _compute_method_value(
         _ev_ebit = peer.get("ev_ebit")
         if norm_ebit is None or norm_ebit <= 0 or shares <= 0:
             return None
+        # Cross-sector audit E14 (owner, 2026-10-10): normalised EBIT takes the basket's THROUGH-CYCLE EV/EBIT, as the
+        # EV/EBITDA (norm) and P/E (norm) legs do; the trailing median is the disclosed fallback until it exists.
+        _dyn_e, _dyn_e_src = _dynamic_norm_multiple(peer, "ev_ebit", ticker, "EV/EBIT (norm)")
+        if _dyn_e:
+            _ev_ebit = _dyn_e
         if not isinstance(_ev_ebit, (int, float)) or _ev_ebit <= 0:
             return None
         mult = float(_ev_ebit) * sm * growth_premium * _own_disc
@@ -8349,7 +8410,8 @@ def _compute_method_value(
         ev = norm_ebit * mult
         _leg_trace(kind="ev_multiple", metric="EBIT (5y normalised)",
                    metric_value=float(norm_ebit), multiple=float(mult),
-                   multiple_parts={"peer_multiple": float(_ev_ebit), "peer_source": "peer median ev_ebit",
+                   multiple_parts={"peer_multiple": float(_ev_ebit),
+                                   "peer_source": _dyn_e_src or "peer median ev_ebit (trailing; no through-cycle EV/EBIT yet)",
                                    "scenario_band": sm, "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0),
@@ -8370,7 +8432,7 @@ def _compute_method_value(
         _leg_trace(kind="ev_multiple", metric="EBITDA (5y normalised)",
                    metric_value=float(norm_ebitda), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(_base_mult),
-                                   "peer_source": _dyn_src or "peer median ev_ebitda",
+                                   "peer_source": _dyn_src or "peer median ev_ebitda (trailing; no through-cycle multiple)",
                                    "scenario_band": sm, "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
@@ -12728,11 +12790,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _price_avg_50:  float | None = None
         _price_avg_200: float | None = None
         _quote_mcap:    float | None = None
-        if not (_is_hk_ticker(ticker) or _is_sg_ticker(ticker)):
+        # Cross-sector audit E17 (owner, 2026-10-10): FMP now quotes Hong Kong and Singapore, so the quote -- and with
+        # it the share-count cross-check and the recency rebasing below -- runs there too (it was skipped, leaving
+        # HK / SG names on the trailing weighted-average count: Tencent and HSBC buy back stock every year).
+        # HKSG_QUOTE_CROSSCHECK=off restores the old skip (golden replay pins it off: its fixtures hold no such call).
+        if not (_is_hk_ticker(ticker) or _is_sg_ticker(ticker)) or _hksg_quote_enabled():
             try:
                 from src.tools.api import _fmp_get as _fmp_get_quote, _STABLE as _FMP_STABLE
                 _quote = _fmp_get_quote(
-                    f"{_FMP_STABLE}/quote", {"symbol": ticker}, api_key,
+                    f"{_FMP_STABLE}/quote", {"symbol": _fmp_quote_symbol(ticker)}, api_key,
                 )
                 if _quote and isinstance(_quote, list) and _quote:
                     _q = _quote[0]
@@ -14105,6 +14171,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             )
         except Exception:
             estimates = []
+        # Cross-sector audit E17 (owner, 2026-10-10): the share-count invariant on EVERY run, not only behind a
+        # guidance forecast -- the street's implied count against the model's divisor.
+        try:
+            _ssc = _street_share_check(estimates, shares)
+            if _ssc:
+                most_recent["_street_share_check"] = _ssc
+                if not _ssc["ok"]:
+                    ticker_forward_flags.append(
+                        f"Share-count check vs street FAILED: consensus net income / EPS implies "
+                        f"{_ssc['implied_shares'] / 1e6:,.1f}m shares against the model's {_ssc['model_shares'] / 1e6:,.1f}m "
+                        f"({_ssc['gap']:+.0%}) -- the per-share legs and the street's EPS sit on different share bases "
+                        f"(ADS ratio, share class or units); review before relying on EPS-based legs")
+        except Exception:                                  # noqa: BLE001
+            pass
 
         # ── Growth rate — priority: guided > analyst > historical ────────
         data_source = "historical"

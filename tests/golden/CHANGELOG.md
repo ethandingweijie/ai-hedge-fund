@@ -1826,3 +1826,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: batch F (owner, 2026-10-10): AAPL re-profiled from Hyperscaler / Tech Conglomerate to the new Consumer Technology Ecosystem profile (Hardware + Services SOTP 40% anchor, DCF 35%, Shareholder Yield 25%, NTM P/FCF fallback; cross-market basket MSFT GOOGL RMS.PA MC.PA 005930.KS SONY; WACC 8.25%, TGR 2.5-3.0%); AAPL fixture re-recorded at its original end date 2026-09-16 (its profile-keyed calls changed); every other fixture moves only param_version (the profile table is in the constants hash)
 
+## 2026-10-10T16:55:06+00:00
+
+- regenerated at HEAD: `7b413746`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: cross-sector audit batch D (2026-10-10): E10 SOTP segments with no type match are unpriced, so the generic-multiple SOTP (segments) and SOTP 12m cross-check rows are refused by the 85% priced-revenue gate on BABA, COST, FCX and V (methods_count -2, unweighted; no IV moved)
+

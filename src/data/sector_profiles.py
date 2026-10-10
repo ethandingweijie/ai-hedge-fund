@@ -4435,7 +4435,7 @@ def get_sector_peer_multiples(
             _lab9 = (get_fmp_classification(ticker) or {}).get("industry") or ""
             _rule9 = COHORT_RULES.get((_market or "US", _lab9))
             if _rule9:
-                _lr = label_multiples_ruled(_market or "US", _lab9, _rule9)
+                _lr = label_multiples_ruled(_market or "US", _lab9, _rule9, exclude=ticker)   # audit E16
                 if _lr:
                     regional = {**(regional or {}), **_lr}
             _sc9 = SUBCOHORT_OF.get((ticker or "").upper())

@@ -639,7 +639,7 @@ def industry_fields(key: str) -> list[str]:
         return []
     if any(x in k for x in _FINANCIAL_KEYS):
         return ["pe_norm"]
-    return ["ev_ebitda_norm", "pe_norm"]
+    return ["ev_ebitda_norm", "pe_norm", "ev_ebit_norm"]      # audit E14: the EV/EBIT (norm) legs' multiple
 
 
 def industry_anchor_field(key: str) -> Optional[str]:
@@ -658,7 +658,7 @@ def industry_anchor_field(key: str) -> Optional[str]:
 
 
 #: live comps field -> the through-cycle field that replaces it in a normalised leg
-LIVE_TO_NORM = {"ev_ebitda": "ev_ebitda_norm", "pe": "pe_norm"}
+LIVE_TO_NORM = {"ev_ebitda": "ev_ebitda_norm", "pe": "pe_norm", "ev_ebit": "ev_ebit_norm"}
 
 
 def propose_industry(exchange: str, level: str, key: str,

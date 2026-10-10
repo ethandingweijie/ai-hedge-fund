@@ -273,3 +273,29 @@ Each batch would be built as follows:
 | `test_research_guidance_channel` | Source pin on the payload call | Restated to the E19 call |
 
 **Final backward run:** 6,501 passed, 1 skipped, 4 xfailed; no golden moved.
+
+### Batch D: SOTP, normalisation, provenance, share basis (E10, E14, E16, E17), 2026-10-10
+
+**Implemented**
+
+| Item | Change |
+|---|---|
+| **E10** | A segment whose name matches no type is **unpriced**: no generic 3.0-4.5× revenue multiple, so the 85% gate refuses a SOTP built on defaults (NKE). Mixed EBITDA/revenue tables reconcile the EBITDA rows to their revenue share of company EBITDA (no double count, LYB). The probabilistic 12m SOTP applies the same type rule and the same 85% gate |
+| **E14** | New through-cycle field `ev_ebit_norm`: EV / (mean EBIT margin × the year's revenue) in the comps backfill, a band, `industry_fields` and `LIVE_TO_NORM`. EV/EBIT (norm) prices on it and otherwise discloses the trailing fallback, as does EV/EBITDA (norm). Populates when production's history backfill / quarterly update runs |
+| **E16** | Ticker blends carry `members_used` and `subject_excluded`. The developer cluster no longer includes the valued name (plan 1F.3) and names its members with values. Ruled labels pass `exclude=ticker` |
+| **E17** | The street share-count check runs on **every** run: consensus net income / EPS vs the model's divisor; outside ±15% it flags (ADS ratio, share class, units). HK/SG now fetch the FMP quote, so the share cross-check and recency/dilution rebasing apply there too. `HKSG_QUOTE_CROSSCHECK` switch; golden replay pins it off because the fixtures predate the call |
+
+**Forward tests:** 8 new (39 in the file). Local E2E:
+- 00700.HK, 00688.HK: shares from `quote_current_diluted`.
+- NKE: the segment SOTP leaves its cross-checks.
+- 00688.HK: developer cluster excludes itself, 10 peers.
+
+**Backward-test failures and fixes**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| Goldens BABA, COST, FCX, V | Generic-multiple SOTP cross-checks refused (−2 unweighted rows; no IV moved) | Rebased |
+| `test_aerospace_defense_wave3`, `test_dynamic_multiples_industry` ×2 | Fallback labels now disclose the trailing basis; `industry_fields` gained `ev_ebit_norm` | Restated |
+| `test_realestate_wave8b` | Asserted the developer sat in its own cluster | Restated: it does not (1F.3) |
+
+**Final backward run:** 6,509 passed, 1 skipped, 4 xfailed.

@@ -101,7 +101,9 @@ def test_a_developer_prices_on_the_solvent_peers_around_its_own_book_multiple():
     r = rc.developer_cluster_multiples("HKSE", "00688.HK")
     if r and not r.get("_withheld"):                               # the local store may be empty on a fresh clone
         pb = r["pb"]
-        assert pb["basis"] == "profile" and pb["key"].startswith("DEV_CLUSTER") and "00688.HK" in pb["members"]
+        # cross-sector audit E16 (2026-10-10): located by its own P/B, never in its own median (plan 1F.3)
+        assert pb["basis"] == "profile" and pb["key"].startswith("DEV_CLUSTER") and "00688.HK" not in pb["members"]
+        assert pb.get("subject_excluded") is True and pb.get("members_used")
         assert not (set(pb["members"]) & set(pb["excluded_loss_makers"]))
         own = float(pb["key"].split("own ")[1].rstrip("x)"))
         assert abs(pb["value"] - own) <= 0.15 + 1e-9                # the cluster median sits inside the band around the name's own

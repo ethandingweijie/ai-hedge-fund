@@ -96,12 +96,17 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
     rev = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("revenue")) for r in inc}
     ebitda = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("ebitda")) for r in inc}
     ni = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("netIncome")) for r in inc}
+    ebit = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("operatingIncome")) for r in inc}
     eb_m = [ebitda[y] / rev[y] for y in rev
             if rev.get(y) and rev[y] > 0 and ebitda.get(y) is not None]
     ni_m = [ni[y] / rev[y] for y in rev
             if rev.get(y) and rev[y] > 0 and ni.get(y) is not None]
     eb_margin = (sum(eb_m) / len(eb_m)) if len(eb_m) >= 3 else None
     ni_margin = (sum(ni_m) / len(ni_m)) if len(ni_m) >= 3 else None
+    eb_m2 = [ebit[y] / rev[y] for y in rev if rev.get(y) and rev[y] > 0 and ebit.get(y) is not None]
+    ebit_margin = (sum(eb_m2) / len(eb_m2)) if len(eb_m2) >= 3 else None
+    if ebit_margin is not None and ebit_margin <= 0:
+        ebit_margin = None
     # A mean margin that is not positive has no multiple, rather than a
     # negative one.
     if eb_margin is not None and eb_margin <= 0:
@@ -131,6 +136,8 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
                     vals[_cf] = vals[_cf] * _lf
         if ccy_ok and ev and ev > 0 and eb_margin and rev_y and rev_y > 0:
             vals["ev_ebitda_norm"] = ev / (eb_margin * rev_y)
+        if ccy_ok and ev and ev > 0 and ebit_margin and rev_y and rev_y > 0:        # audit E14
+            vals["ev_ebit_norm"] = ev / (ebit_margin * rev_y)
         mc = rc._safe_float(r.get("marketCap"))
         if ccy_ok and mc and mc > 0 and ni_margin and rev_y and rev_y > 0:
             vals["pe_norm"] = mc / (ni_margin * rev_y)

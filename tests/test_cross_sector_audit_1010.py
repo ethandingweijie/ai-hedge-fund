@@ -356,3 +356,75 @@ def test_e7_overlay_paths_reach_a_tab():
     src = inspect.getsource(vw)
     assert 'self.sheet("Valuation paths"' in src and '("ppa_dcf", "depleting_dcf")' in src
     assert 'kind="depleting_dcf", rows=_rows_d' in inspect.getsource(d)
+
+
+# ══ Batch D -- SOTP & normalisation & provenance: E10, E14, E16, E17 ═════════════════════════════════════════
+
+def test_e10_unmatched_segments_are_unpriced_and_the_gate_refuses():
+    parts = d._sotp_parts({"Footwear": 30e9, "Apparel": 15e9, "Product and Service, Other": 0.1e9})
+    fw = next(p for p in parts if p["segment"] == "Footwear")
+    assert fw["multiple"] is None and fw["ev"] == 0.0 and "unpriced" in fw["note"]
+    priced = sum(p["revenue"] for p in parts if p.get("multiple"))
+    assert priced / sum(p["revenue"] for p in parts) < d._SOTP_MIN_PRICED_REVENUE
+
+
+def test_e10_mixed_basis_reconcile_leaves_the_revenue_rows_their_share():
+    parts = [{"segment": "Olefins", "revenue": 60.0, "basis": "ev_ebitda", "ebitda_estimated": 12.0, "multiple": 6.0, "ev": 72.0},
+             {"segment": "Technology", "revenue": 40.0, "basis": "ev_revenue", "multiple": 3.0, "ev": 120.0}]
+    out = d._reconcile_segment_ebitda(parts, 10.0)
+    assert out[0]["ebitda_estimated"] == pytest.approx(10.0 * 0.60)        # the EBITDA rows' revenue share only
+
+
+def test_e10_probabilistic_sotp_takes_the_same_gate():
+    assert d._sotp_12m_probabilistic({"Footwear": 30e9, "Apparel": 15e9}, {}, "default", 0.0, 1e9) is None
+    priced = d._sotp_12m_probabilistic({"Cloud Services": 30e9, "Software": 15e9}, {}, "default", 0.0, 1e9)
+    assert priced is not None
+
+
+def test_e14_ev_ebit_norm_is_a_through_cycle_field_and_the_leg_reads_it(monkeypatch):
+    from src.data import dynamic_multiples as dm
+    assert dm.LIVE_TO_NORM["ev_ebit"] == "ev_ebit_norm" and "ev_ebit_norm" in rc.FIELDS
+    monkeypatch.setattr(d, "_dynamic_norm_multiple", lambda peer, f, t, leg: (14.0, "dynamic through-cycle ev_ebit_norm (US industry: X)") if f == "ev_ebit" else (None, None))
+    v, tr = _leg("EV/EBIT (norm)", {"normalized_ebit": 1e9}, {"ev_ebit": 20.0}, None, monkeypatch)
+    assert tr["multiple_parts"]["peer_multiple"] == 14.0 and "through-cycle" in tr["multiple_parts"]["peer_source"]
+    monkeypatch.setattr(d, "_dynamic_norm_multiple", lambda *a, **k: (None, None))
+    v2, tr2 = _leg("EV/EBIT (norm)", {"normalized_ebit": 1e9}, {"ev_ebit": 20.0}, None, monkeypatch)
+    assert "trailing; no through-cycle" in tr2["multiple_parts"]["peer_source"]
+
+
+def test_e14_backfill_derives_ev_ebit_norm(monkeypatch):
+    def fake(path, params, api_key=None):
+        if "key-metrics" in path:
+            return [{"date": "2024-12-31", "enterpriseValue": 100e9, "reportedCurrency": "EUR", "marketCap": 90e9}]
+        if "income-statement" in path:
+            return [{"date": f"{y}-12-31", "revenue": 50e9, "ebitda": 10e9, "operatingIncome": 7e9, "netIncome": 4e9,
+                     "reportedCurrency": "EUR"} for y in (2022, 2023, 2024)]
+        return []
+    monkeypatch.setattr(rc, "_fmp_get", fake)
+    h = hb.member_history("SAP.DE")["2024"]
+    assert h["ev_ebit_norm"] == pytest.approx(100e9 / 7e9)
+
+
+def test_e16_developer_cluster_never_contains_the_valued_name():
+    import inspect
+    src = inspect.getsource(rc.developer_cluster_multiples)
+    assert "cluster[_store_symbol(ticker)] = own_row" not in src and '"subject_excluded": True' in src
+    assert "exclude=exclude" in inspect.getsource(rc.label_multiples_ruled)
+
+
+def test_e17_street_share_check_flags_a_different_share_basis():
+    class E:
+        def __init__(self, ni, eps): self.net_income_avg, self.eps_avg, self.date = ni, eps, "2026-12-31"
+    ok = d._street_share_check([E(100e9, 10.0)], 10e9)
+    assert ok["ok"] and ok["gap"] == pytest.approx(0.0)
+    ads = d._street_share_check([E(100e9, 80.0)], 10e9)                    # EPS per ADS of 8 shares
+    assert not ads["ok"] and ads["gap"] == pytest.approx(-0.875)
+    assert d._fmp_quote_symbol("00700.HK") == "0700.HK" and d._fmp_quote_symbol("D05.SI") == "D05.SI"
+
+
+def test_e17_hksg_quote_switch_and_replay_pin(monkeypatch):
+    from src.memory import golden_capture as gc
+    monkeypatch.setenv("HKSG_QUOTE_CROSSCHECK", "on")
+    assert d._hksg_quote_enabled()
+    monkeypatch.setenv("HKSG_QUOTE_CROSSCHECK", "off")
+    assert not d._hksg_quote_enabled() and gc.PINNED_ENV["HKSG_QUOTE_CROSSCHECK"] == "off"

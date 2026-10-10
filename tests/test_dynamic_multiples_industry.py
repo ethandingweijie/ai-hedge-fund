@@ -46,7 +46,8 @@ def _seed(key, values, field="ev_ebitda_norm", roic=0.08, exchange="US", level="
 
 class TestWhichMultiples:
     def test_most_industries_carry_both_normalised_multiples(self):
-        assert dm.industry_fields("Software - Application") == ["ev_ebitda_norm", "pe_norm"]
+        # + ev_ebit_norm (cross-sector audit E14, 2026-10-10): the EV/EBIT (norm) legs' through-cycle multiple
+        assert dm.industry_fields("Software - Application") == ["ev_ebitda_norm", "pe_norm", "ev_ebit_norm"]
 
     def test_financials_carry_pe_only(self):
         """A bank's EBITDA is not a meaningful figure."""
@@ -193,7 +194,7 @@ class TestItReachesTheValuation:
     def test_no_dynamic_row_falls_back_to_the_peer_median(self, store, monkeypatch):
         _, trace = self._leg("EV/EBITDA (norm)", self._peer("Unknown Industry"), monkeypatch)
         assert trace["multiple_parts"]["peer_multiple"] == pytest.approx(30.0)
-        assert trace["multiple_parts"]["peer_source"] == "peer median ev_ebitda"
+        assert trace["multiple_parts"]["peer_source"] == "peer median ev_ebitda (trailing; no through-cycle multiple)"
 
     def test_switching_valuations_off_restores_the_peer_median(self, store, monkeypatch):
         _seed("Semiconductors", [18.0, 19.0, 20.0, 21.0, 22.0])

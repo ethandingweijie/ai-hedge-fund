@@ -156,7 +156,8 @@ def test_ev_ebit_norm_prices_normalised_ebit_at_an_ev_ebit_median_and_declines_w
     row = {"normalized_ebit": 8e9}
     v, tr = _leg("EV/EBIT (norm)", row, {"ev_ebit": 19.0, "ev_ebitda": 15.0}, monkeypatch, COMM)
     assert v == pytest.approx((8e9 * 19.0 - 1.8e10) / 2.4e8)
-    assert tr["multiple_parts"]["peer_source"] == "peer median ev_ebit"
+    # cross-sector audit E14 (2026-10-10): the trailing median is the disclosed fallback until a through-cycle EV/EBIT exists
+    assert tr["multiple_parts"]["peer_source"] == "peer median ev_ebit (trailing; no through-cycle EV/EBIT yet)"
     # Never EBIT at EV/EBITDA: without an EV/EBIT median the leg declines.
     assert _leg("EV/EBIT (norm)", row, {"ev_ebitda": 15.0}, monkeypatch, COMM)[0] is None
     assert _leg("EV/EBIT (norm)", {"normalized_ebit": -1e9}, {"ev_ebit": 19.0}, monkeypatch, COMM)[0] is None

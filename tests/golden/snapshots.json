@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-10-10T16:06:34+00:00",
+  "generated_at": "2026-10-10T16:55:06+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "dc5dee71",
-  "reason": "batch F (owner, 2026-10-10): AAPL re-profiled from Hyperscaler / Tech Conglomerate to the new Consumer Technology Ecosystem profile (Hardware + Services SOTP 40% anchor, DCF 35%, Shareholder Yield 25%, NTM P/FCF fallback; cross-market basket MSFT GOOGL RMS.PA MC.PA 005930.KS SONY; WACC 8.25%, TGR 2.5-3.0%); AAPL fixture re-recorded at its original end date 2026-09-16 (its profile-keyed calls changed); every other fixture moves only param_version (the profile table is in the constants hash)",
+  "regenerated_at_commit": "7b413746",
+  "reason": "cross-sector audit batch D (2026-10-10): E10 SOTP segments with no type match are unpriced, so the generic-multiple SOTP (segments) and SOTP 12m cross-check rows are refused by the 85% priced-revenue gate on BABA, COST, FCX and V (methods_count -2, unweighted; no IV moved)",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -2314,9 +2314,7 @@
    "routing_trace.steps.2.sector": "Tech",
    "routing_trace.winner": "ticker_override",
    "scenarios.base.cross_check_methods": [
-    "Forward EV/EBITDA",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward EV/EBITDA"
    ],
    "scenarios.base.effective_weights.0.bucket": "dcf",
    "scenarios.base.effective_weights.0.method": "DCF",
@@ -2365,9 +2363,7 @@
    "scenarios.base.method_iv_table.EV/EBITDA (norm)": 82.4,
    "scenarios.base.method_iv_table.Forward EV/EBITDA": 96.41,
    "scenarios.base.method_iv_table.P/E (norm)": 65.68,
-   "scenarios.base.method_iv_table.SOTP (segments)": 326.79,
-   "scenarios.base.method_iv_table.SOTP 12m (probabilistic)": 357.37,
-   "scenarios.base.methods_count": 6,
+   "scenarios.base.methods_count": 4,
    "scenarios.base.methods_used": [
     "DCF",
     "EV/EBITDA (norm)",
@@ -2409,9 +2405,7 @@
    "scenarios.base.yr1_eps_est": 6.8078,
    "scenarios.base.yr1_revenue": 167036382407.0,
    "scenarios.bear.cross_check_methods": [
-    "Forward EV/EBITDA",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward EV/EBITDA"
    ],
    "scenarios.bear.effective_weights.0.bucket": "multi",
    "scenarios.bear.effective_weights.0.method": "EV/EBITDA (norm)",
@@ -2457,9 +2451,7 @@
    "scenarios.bear.method_iv_table.EV/EBITDA (norm)": 63.25,
    "scenarios.bear.method_iv_table.Forward EV/EBITDA": 78.86,
    "scenarios.bear.method_iv_table.P/E (norm)": 49.26,
-   "scenarios.bear.method_iv_table.SOTP (segments)": 326.79,
-   "scenarios.bear.method_iv_table.SOTP 12m (probabilistic)": 350.73,
-   "scenarios.bear.methods_count": 5,
+   "scenarios.bear.methods_count": 3,
    "scenarios.bear.methods_used": [
     "DCF",
     "EV/EBITDA (norm)",
@@ -2501,9 +2493,7 @@
    "scenarios.bear.yr1_eps_est": 6.6792,
    "scenarios.bear.yr1_revenue": 163880972485.0,
    "scenarios.bull.cross_check_methods": [
-    "Forward EV/EBITDA",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward EV/EBITDA"
    ],
    "scenarios.bull.effective_weights.0.bucket": "dcf",
    "scenarios.bull.effective_weights.0.method": "DCF",
@@ -2552,9 +2542,7 @@
    "scenarios.bull.method_iv_table.EV/EBITDA (norm)": 105.71,
    "scenarios.bull.method_iv_table.Forward EV/EBITDA": 113.97,
    "scenarios.bull.method_iv_table.P/E (norm)": 85.67,
-   "scenarios.bull.method_iv_table.SOTP (segments)": 340.75,
-   "scenarios.bull.method_iv_table.SOTP 12m (probabilistic)": 365.4,
-   "scenarios.bull.methods_count": 6,
+   "scenarios.bull.methods_count": 4,
    "scenarios.bull.methods_used": [
     "DCF",
     "EV/EBITDA (norm)",
@@ -3433,9 +3421,7 @@
    "routing_trace.winner": "ticker_override",
    "scenarios.base.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.base.effective_weights.0.bucket": "multi",
    "scenarios.base.effective_weights.0.method": "P/E",
@@ -3478,9 +3464,7 @@
    "scenarios.base.method_iv_table.Forward EV/EBITDA": 518.52,
    "scenarios.base.method_iv_table.Forward P/E": 427.2,
    "scenarios.base.method_iv_table.P/E": 413.13,
-   "scenarios.base.method_iv_table.SOTP (segments)": 2945.15,
-   "scenarios.base.method_iv_table.SOTP 12m (probabilistic)": 3064.72,
-   "scenarios.base.methods_count": 8,
+   "scenarios.base.methods_count": 6,
    "scenarios.base.methods_used": [
     "DCF",
     "EV/EBITDA",
@@ -3503,9 +3487,7 @@
    "scenarios.base.yr1_revenue": 328198637883.0,
    "scenarios.bear.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bear.effective_weights.0.bucket": "multi",
    "scenarios.bear.effective_weights.0.method": "P/E",
@@ -3549,9 +3531,7 @@
    "scenarios.bear.method_iv_table.Forward EV/EBITDA": 504.99,
    "scenarios.bear.method_iv_table.Forward P/E": 411.94,
    "scenarios.bear.method_iv_table.P/E": 288.13,
-   "scenarios.bear.method_iv_table.SOTP (segments)": 2741.72,
-   "scenarios.bear.method_iv_table.SOTP 12m (probabilistic)": 2982.76,
-   "scenarios.bear.methods_count": 8,
+   "scenarios.bear.methods_count": 6,
    "scenarios.bear.methods_used": [
     "DCF",
     "EV/EBITDA",
@@ -3574,9 +3554,7 @@
    "scenarios.bear.yr1_revenue": 319356678686.0,
    "scenarios.bull.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bull.effective_weights.0.bucket": "multi",
    "scenarios.bull.effective_weights.0.method": "P/E",
@@ -3620,9 +3598,7 @@
    "scenarios.bull.method_iv_table.Forward EV/EBITDA": 527.45,
    "scenarios.bull.method_iv_table.Forward P/E": 437.42,
    "scenarios.bull.method_iv_table.P/E": 539.35,
-   "scenarios.bull.method_iv_table.SOTP (segments)": 3074.05,
-   "scenarios.bull.method_iv_table.SOTP 12m (probabilistic)": 3116.9,
-   "scenarios.bull.methods_count": 8,
+   "scenarios.bull.methods_count": 6,
    "scenarios.bull.methods_used": [
     "DCF",
     "EV/EBITDA",
@@ -4161,9 +4137,7 @@
    "scenarios.base.cross_check_methods": [
     "Forward EV/EBITDA",
     "Forward P/E",
-    "P/B-ROE (mid-cycle)",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "P/B-ROE (mid-cycle)"
    ],
    "scenarios.base.effective_weights.0.bucket": "multi",
    "scenarios.base.effective_weights.0.method": "EV/EBITDA (norm)",
@@ -4201,9 +4175,7 @@
    "scenarios.base.method_iv_table.Forward EV/EBITDA": 43.9,
    "scenarios.base.method_iv_table.Forward P/E": 70.36,
    "scenarios.base.method_iv_table.P/B-ROE (mid-cycle)": 55.05,
-   "scenarios.base.method_iv_table.SOTP (segments)": 42.04,
-   "scenarios.base.method_iv_table.SOTP 12m (probabilistic)": 49.8,
-   "scenarios.base.methods_count": 7,
+   "scenarios.base.methods_count": 5,
    "scenarios.base.methods_used": [
     "EV/EBITDA (norm)",
     "EV/OCF"
@@ -4224,9 +4196,7 @@
    "scenarios.base.yr1_revenue": 29430166695.0,
    "scenarios.bear.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bear.effective_weights.0.bucket": "multi",
    "scenarios.bear.effective_weights.0.method": "EV/EBITDA (norm)",
@@ -4262,9 +4232,7 @@
    "scenarios.bear.method_iv_table.EV/OCF": 28.47,
    "scenarios.bear.method_iv_table.Forward EV/EBITDA": 30.93,
    "scenarios.bear.method_iv_table.Forward P/E": 46.0,
-   "scenarios.bear.method_iv_table.SOTP (segments)": 42.04,
-   "scenarios.bear.method_iv_table.SOTP 12m (probabilistic)": 46.47,
-   "scenarios.bear.methods_count": 6,
+   "scenarios.bear.methods_count": 4,
    "scenarios.bear.methods_used": [
     "EV/EBITDA (norm)",
     "EV/OCF"
@@ -4285,9 +4253,7 @@
    "scenarios.bear.yr1_revenue": 27847678681.0,
    "scenarios.bull.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bull.effective_weights.0.bucket": "multi",
    "scenarios.bull.effective_weights.0.method": "EV/EBITDA (norm)",
@@ -4322,9 +4288,7 @@
    "scenarios.bull.method_iv_table.EV/OCF": 65.53,
    "scenarios.bull.method_iv_table.Forward EV/EBITDA": 54.18,
    "scenarios.bull.method_iv_table.Forward P/E": 91.02,
-   "scenarios.bull.method_iv_table.SOTP (segments)": 50.04,
-   "scenarios.bull.method_iv_table.SOTP 12m (probabilistic)": 56.44,
-   "scenarios.bull.methods_count": 6,
+   "scenarios.bull.methods_count": 4,
    "scenarios.bull.methods_used": [
     "EV/EBITDA (norm)",
     "EV/OCF"
@@ -6160,9 +6124,7 @@
    "routing_trace.winner": "ticker_override",
    "scenarios.base.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.base.effective_weights.0.bucket": "multi",
    "scenarios.base.effective_weights.0.method": "P/E (norm)",
@@ -6209,9 +6171,7 @@
    "scenarios.base.method_iv_table.Forward EV/EBITDA": 302.69,
    "scenarios.base.method_iv_table.Forward P/E": 307.7,
    "scenarios.base.method_iv_table.P/E (norm)": 287.56,
-   "scenarios.base.method_iv_table.SOTP (segments)": 272.43,
-   "scenarios.base.method_iv_table.SOTP 12m (probabilistic)": 291.49,
-   "scenarios.base.methods_count": 8,
+   "scenarios.base.methods_count": 6,
    "scenarios.base.methods_used": [
     "DCF",
     "EV/EBITDA",
@@ -6263,9 +6223,7 @@
    "scenarios.base.yr1_revenue": 45854091712.0,
    "scenarios.bear.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bear.effective_weights.0.bucket": "multi",
    "scenarios.bear.effective_weights.0.method": "P/E (norm)",
@@ -6313,9 +6271,7 @@
    "scenarios.bear.method_iv_table.Forward EV/EBITDA": 296.59,
    "scenarios.bear.method_iv_table.Forward P/E": 299.63,
    "scenarios.bear.method_iv_table.P/E (norm)": 214.03,
-   "scenarios.bear.method_iv_table.SOTP (segments)": 270.32,
-   "scenarios.bear.method_iv_table.SOTP 12m (probabilistic)": 290.65,
-   "scenarios.bear.methods_count": 8,
+   "scenarios.bear.methods_count": 6,
    "scenarios.bear.methods_used": [
     "DCF",
     "EV/EBITDA",
@@ -6367,9 +6323,7 @@
    "scenarios.bear.yr1_revenue": 45724023374.0,
    "scenarios.bull.cross_check_methods": [
     "Forward EV/EBITDA",
-    "Forward P/E",
-    "SOTP (segments)",
-    "SOTP 12m (probabilistic)"
+    "Forward P/E"
    ],
    "scenarios.bull.effective_weights.0.bucket": "multi",
    "scenarios.bull.effective_weights.0.method": "P/E (norm)",
@@ -6417,9 +6371,7 @@
    "scenarios.bull.method_iv_table.Forward EV/EBITDA": 308.78,
    "scenarios.bull.method_iv_table.Forward P/E": 312.16,
    "scenarios.bull.method_iv_table.P/E (norm)": 360.91,
-   "scenarios.bull.method_iv_table.SOTP (segments)": 273.56,
-   "scenarios.bull.method_iv_table.SOTP 12m (probabilistic)": 291.95,
-   "scenarios.bull.methods_count": 8,
+   "scenarios.bull.methods_count": 6,
    "scenarios.bull.methods_used": [
     "DCF",
     "EV/EBITDA",
