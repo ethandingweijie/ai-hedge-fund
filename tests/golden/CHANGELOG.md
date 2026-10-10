@@ -1818,3 +1818,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: cross-sector audit batch B (2026-10-10): E18 non-financial long-term investments count as cash unless a SOTP / NAV leg prices them (AAPL net debt 21.9bn -> -62.2bn, MU -20.9bn -> -25.0bn) and customer-fund investments are not spare cash (MELI net debt 4.9bn -> 7.0bn); E13 / E15 FCF Yield on the peers' basis -- reported FCF, all capex, no subject-only SBC deduction (AAPL FCF Yield +5.1%); E13 SBC multiple haircuts retired; E3 capex split on the historical median D&A / capex above 1.0x with acquired-intangible evidence (no golden in amortisation mode)
 
+## 2026-10-10T16:06:34+00:00
+
+- regenerated at HEAD: `dc5dee71`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: batch F (owner, 2026-10-10): AAPL re-profiled from Hyperscaler / Tech Conglomerate to the new Consumer Technology Ecosystem profile (Hardware + Services SOTP 40% anchor, DCF 35%, Shareholder Yield 25%, NTM P/FCF fallback; cross-market basket MSFT GOOGL RMS.PA MC.PA 005930.KS SONY; WACC 8.25%, TGR 2.5-3.0%); AAPL fixture re-recorded at its original end date 2026-09-16 (its profile-keyed calls changed); every other fixture moves only param_version (the profile table is in the constants hash)
+

@@ -551,7 +551,8 @@ def test_exactly_three_fixtures_dispatch_the_fcf_yield_leg():
                 or "method_iv_table.P/CF" in k
                 or "method_iv_table.Price/CF" in k]
         (with_leg if keys else without).append(name)
-    assert sorted(with_leg) == ["AAPL", "COST", "V"]
+    # 2026-10-10 (owner): AAPL left Hyperscaler for Consumer Technology Ecosystem, which carries no FCF Yield leg.
+    assert sorted(with_leg) == ["COST", "V"]
     assert "SCHW" in without
     assert len(with_leg) + len(without) == 14
 
@@ -569,7 +570,6 @@ def test_the_three_fixtures_target_yields_all_clear_the_new_floor():
     snap = _snapshot()
     measured = {
         # fixture -> (peer fcf_yield, min target_yield, max target_yield)
-        "AAPL": (0.035, 0.025437, 0.046667),
         "COST": (0.020, 0.014710, 0.026667),
         "V":    (0.030, 0.020973, 0.040000),
     }
@@ -635,7 +635,7 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
     expected = {
         # AAPL and V re-recorded 2026-10-10 (cross-sector audit E13 / E15): the leg prices reported FCF (OCF less all
         # capex), the basis of the peers' FMP yield, not SBC-deducted owner earnings. Relationship unchanged.
-        "AAPL": {"bear": 143.54, "base": 201.63, "bull": 260.1},
+
         # COST re-recorded 2026-09-26 on the Wave 4 pin (Membership / Subscription
         # Retail, live Discount Stores comps): its bear premium is now 0.941, Gate B
         # fires, and the leaves below are no longer this fix's evidence.

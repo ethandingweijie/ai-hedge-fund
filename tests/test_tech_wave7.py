@@ -59,7 +59,8 @@ OWNER_PINS = {
     "IT Services": ["ACN", "IBM", "CTSH", "INFY"],
     "China Internet Platform": ["00700.HK", "09888.HK", "01024.HK", "09999.HK"],
     "Consumer Electronics / Hardware Ecosystem": ["01810.HK", "00992.HK", "02382.HK", "00285.HK"],
-    "Hyperscaler / Tech Conglomerate": ["AAPL", "MSFT", "GOOG", "META", "ORCL"],
+    "Hyperscaler / Tech Conglomerate": ["MSFT", "GOOG", "META", "ORCL"],      # AAPL left 2026-10-10 (owner)
+    "Consumer Technology Ecosystem": ["AAPL"],
     "Growth SaaS": ["PLTR", "SNOW", "DDOG", "NET"],
     "Cybersecurity / Mission-Critical SaaS": ["CRWD", "PANW", "ZS"],
 }
@@ -104,7 +105,8 @@ def test_the_static_tech_table_is_a_fallback_not_an_override():
     # the live cohort of a profile with a curated basket is that basket (the one the table was
     # re-derived from), so one profile is priced on one cohort, not on each name's FMP industry
     from src.data.regional_comps import PROFILE_PEER_BASKETS as PB
-    assert PB["Hyperscaler / Tech Conglomerate"]["US"] == ("AAPL", "MSFT", "GOOG", "META", "AMZN", "ORCL")
+    # 2026-10-10 (owner): AAPL is not a hyperscaler -- it prices on the Consumer Technology Ecosystem cross-market basket
+    assert PB["Hyperscaler / Tech Conglomerate"]["US"] == ("MSFT", "GOOG", "META", "AMZN", "ORCL")
     assert PB["Mature SaaS"]["US"] == ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")
     assert PB["Mature Platform"]["US"] == ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")
     assert "profile_basket_multiples(ex, convergence)" in inspect.getsource(d._live_mature_ev_revenue)

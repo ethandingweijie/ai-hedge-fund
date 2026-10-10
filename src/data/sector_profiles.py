@@ -258,7 +258,13 @@ _CONSUMER_PROFILE_WACC: dict[str, float] = {
     "Tobacco":                        0.0825,
 }
 
+#: Owner, 2026-10-10 (AAPL spec): an AA+ balance sheet and low operating beta -- 8.0-8.5%, the middle taken.
+_TECH_PROFILE_WACC: dict[str, float] = {
+    "Consumer Technology Ecosystem": 0.0825,
+}
+
 _PROFILE_WACC: dict[str, dict[str, float]] = {
+    "Tech":        _TECH_PROFILE_WACC,
     "Energy":      _ENERGY_PROFILE_WACC,
     "Financials":  _FINANCIALS_PROFILE_WACC,
     "Industrials": _INDUSTRIALS_PROFILE_WACC,
@@ -2265,6 +2271,28 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "due to massive growth CapEx (cloud, AI, logistics).  EV/EBITDA anchors "
                 "because it strips CapEx distortion.  EPV excluded — it weights "
                 "current FCF which is temporarily suppressed by investment cycles."
+            ),
+        },
+        # ── Consumer Technology Ecosystem (owner, 2026-10-10: AAPL is not a hyperscaler) ──────────────
+        # Annuity hardware (~70-75% of revenue at ~35-37% gross margin) plus high-margin services (~70-75%),
+        # monetised through an installed base -- neither a pure OEM nor a cloud / ad platform. Three legs: a
+        # Hardware + Services SOTP (the two businesses have different margins and capital needs), a
+        # reinvestment DCF, and a shareholder-yield leg (>100% of FCF returned, mostly by buyback, so a DDM
+        # understates it). With no segment data the anchor's weight goes to NTM P/FCF, never Forward P/E.
+        "Consumer Technology Ecosystem": {
+            "methods": [
+                {"name": "SOTP (Hardware + Services)", "weight": 0.40, "anchor": True, "implementable": True,
+                 "fallback": "P/FCF (NTM)"},
+                {"name": "DCF",                        "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "Shareholder Yield",          "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/FCF (NTM)",                "weight": 0.0,  "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/EBITDA", "Forward P/E", "DDM"],
+            "rationale": (
+                "Owner spec 2026-10-10. Hardware on a premium-OEM P/E (15-18x), services on a platform P/E "
+                "(26-32x), net cash added back; DCF at fabless capex intensity (D&A ~ capex: no amortisation "
+                "run-off); shareholder yield = normalised FCF / (cost of equity - net share shrink). Peers: MSFT, "
+                "GOOGL (ecosystem), Hermes, LVMH (luxury annuity), Samsung, Sony (hardware floor)."
             ),
         },
         # ── Cybersecurity / Mission-Critical SaaS ─────────────────────
@@ -5556,7 +5584,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     #   "Cybersecurity / Mission-Critical SaaS" → growth_saas variant with
     #     platform-attach + renewals emphasis (already in place below)
     "MSFT":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (System & Application)", "Azure + M365 + AI capex; hyperscaler profile"),
-    "AAPL":  ("Tech", "Hyperscaler / Tech Conglomerate", "Computers/Peripherals", "Hardware + services + AI capex; Tech WACC applies"),
+    "AAPL":  ("Tech", "Consumer Technology Ecosystem", "Computers/Peripherals", "Annuity hardware + high-margin services (owner, 2026-10-10: not a hyperscaler)"),
 
     # ── Semiconductor (separate sector from Tech) ─────────────────────────
     # Fabless

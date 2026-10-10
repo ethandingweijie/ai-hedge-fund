@@ -1857,7 +1857,7 @@
     "operatingCashFlow": 29728000000,
     "capitalExpenditure": -3242000000,
     "freeCashFlow": 26486000000,
-    "incomeTaxesPaid": -37332000000,
+    "incomeTaxesPaid": 6037000000,
     "interestPaid": 0
    },
    {
@@ -2264,21 +2264,21 @@
    {
     "symbol": "AAPL",
     "name": "Apple Inc.",
-    "price": 331.34,
-    "changePercentage": -0.5224,
-    "change": -1.74001,
-    "volume": 31420574,
-    "dayLow": 328.35,
-    "dayHigh": 331.75,
-    "yearHigh": 344.57,
-    "yearLow": 236.65,
-    "marketCap": 4866508537040,
-    "priceAvg50": 318.8368,
-    "priceAvg200": 285.511,
+    "price": 336.64,
+    "changePercentage": -1.11039,
+    "change": -3.78,
+    "volume": 37821157,
+    "dayLow": 330.7,
+    "dayHigh": 338.6,
+    "yearHigh": 345.34,
+    "yearLow": 243.42,
+    "marketCap": 4944351523840,
+    "priceAvg50": 322.3886,
+    "priceAvg200": 290.74344,
     "exchange": "NASDAQ",
-    "open": 330.26001,
-    "previousClose": 333.08001,
-    "timestamp": 1789502401
+    "open": 331.79,
+    "previousClose": 340.42,
+    "timestamp": 1791576000
    }
   ]
  },
@@ -2290,49 +2290,20 @@
     "symbol": "AAPL",
     "targetHigh": 400,
     "targetLow": 245,
-    "targetConsensus": 339.35,
-    "targetMedian": 360
+    "targetConsensus": 341.68,
+    "targetMedian": 357.5
    }
   ]
  },
  {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2026-09-16\", \"symbol\": \"AAPL\", \"to\": \"2026-09-16\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
-  "result": []
- },
- {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2026-09-09\", \"symbol\": \"AAPL\", \"to\": \"2026-09-16\"}, \"<redacted>\"]]",
-  "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "AAPL",
-    "date": "2026-09-15",
-    "price": 331.34,
-    "volume": 31748183
-   },
-   {
-    "symbol": "AAPL",
-    "date": "2026-09-14",
-    "price": 333.08,
-    "volume": 39269147
-   },
-   {
-    "symbol": "AAPL",
-    "date": "2026-09-11",
-    "price": 332.27,
-    "volume": 50716900
-   },
-   {
-    "symbol": "AAPL",
-    "date": "2026-09-10",
-    "price": 326.57,
-    "volume": 70011913
-   },
-   {
-    "symbol": "AAPL",
-    "date": "2026-09-09",
-    "price": 315.34,
-    "volume": 65640000
+    "date": "2026-09-16",
+    "price": 332.41,
+    "volume": 35981000
    }
   ]
  },
@@ -2564,126 +2535,170 @@
   ]
  },
  {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"AAPL\"}, [\"api_key\", \"<redacted>\"]]]",
+  "target": "src.tools.api._fmp_get",
+  "result": [
+   {
+    "symbol": "AAPL",
+    "price": 336.64,
+    "marketCap": 4944351523840,
+    "beta": 1.069,
+    "lastDividend": 1.06,
+    "range": "243.42-345.34",
+    "change": -3.78,
+    "changePercentage": -1.11039,
+    "volume": 37821157,
+    "averageVolume": 50634879,
+    "companyName": "Apple Inc.",
+    "currency": "USD",
+    "cik": "0000320193",
+    "isin": "US0378331005",
+    "cusip": "037833100",
+    "exchangeFullName": "NASDAQ Global Select",
+    "exchange": "NASDAQ",
+    "industry": "Consumer Electronics",
+    "website": "https://www.apple.com",
+    "description": "Apple Inc. is a global technology corporation that specializes in the conceptualization, production, and sale of a diverse suite of electronic devices. Its comprehensive hardware lineup features the well-known iPhone smartphones, Mac personal computers, and versatile iPad tablets. The company also supplies a range of wearables, smart home products, and accessories, including AirPods, Apple TV, Apple Watch, items from the Beats brand, and HomePod speakers. Beyond its device offerings, Apple delivers essential support services like AppleCare and robust cloud solutions. It oversees key digital platforms, prominently the App Store, which acts as a central hub for customers to discover and download countless applications and digital content, from e-books and music to videos, games, and podcasts. The company also generates revenue via advertising, leveraging both its proprietary ad platforms and third-party licensing deals. Apple's ecosystem is further bolstered by a wide array of subscription-based services: Apple Arcade for gaming, Apple Fitness+ for personalized wellness, Apple Music for curated audio experiences and on-demand radio, Apple News+ for access to news and magazines, and Apple TV+ for exclusive original video programming. Its financial services portfolio includes the co-branded Apple Card and the mobile payment system, Apple Pay. Additionally, Apple strategically licenses its intellectual property. The company serves a broad clientele that spans individual consumers, small and medium-sized enterprises, as well as institutional clients in the education, corporate, and governmental sectors. Products are distributed through a multi-channel strategy, utilizing Apple's own physical retail locations and online storefronts, a dedicated direct sales team, and collaborations with external partners such as mobile network providers, wholesalers, general retailers, and authorized resellers. The App Store additionally functions as the primary conduit for third-party applications designed for its devices. Founded in 1976, Apple Inc. is headquartered in Cupertino, California.",
+    "ceo": "John Ternus",
+    "sector": "Technology",
+    "country": "US",
+    "fullTimeEmployees": "166000",
+    "phone": "(408) 996-1010",
+    "address": "One Apple Park Way",
+    "city": "Cupertino",
+    "state": "CA",
+    "zip": "95014",
+    "image": "https://images.financialmodelingprep.com/symbol/AAPL.png",
+    "ipoDate": "1980-12-12",
+    "defaultImage": false,
+    "isEtf": false,
+    "isActivelyTrading": true,
+    "isAdr": false,
+    "isFund": false
+   }
+  ]
+ },
+ {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/analyst-estimates\", {\"limit\": 10, \"period\": \"annual\", \"symbol\": \"AAPL\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
    {
     "symbol": "AAPL",
     "date": "2030-09-27",
-    "revenueLow": 620025918549,
-    "revenueHigh": 698622435063,
+    "revenueLow": 617378530229,
+    "revenueHigh": 705192002580,
     "revenueAvg": 647707000000,
-    "ebitdaLow": 235375620735,
-    "ebitdaHigh": 272083083309,
-    "ebitdaAvg": 248303724497,
-    "ebitLow": 221077223926,
-    "ebitHigh": 257784686500,
+    "ebitdaLow": 234751689686,
+    "ebitdaHigh": 275763771933,
+    "ebitdaAvg": 248916201822,
+    "ebitLow": 219840815552,
+    "ebitHigh": 260852897799,
     "ebitAvg": 234005327688,
-    "netIncomeLow": 182877547142,
-    "netIncomeHigh": 213423509108,
+    "netIncomeLow": 181848675068,
+    "netIncomeHigh": 215976708350,
     "netIncomeAvg": 193635614797,
-    "sgaExpenseLow": 39906392466,
-    "sgaExpenseHigh": 44965057500,
+    "sgaExpenseLow": 39736000045,
+    "sgaExpenseHigh": 45387891017,
     "sgaExpenseAvg": 41688014923,
     "epsAvg": 12.905,
-    "epsHigh": 14.22378,
-    "epsLow": 12.18802,
-    "numAnalystsRevenue": 22,
-    "numAnalystsEps": 15
+    "epsHigh": 14.39394,
+    "epsLow": 12.11945,
+    "numAnalystsRevenue": 1,
+    "numAnalystsEps": 1
    },
    {
     "symbol": "AAPL",
     "date": "2029-09-27",
-    "revenueLow": 462446076766,
-    "revenueHigh": 521067256335,
-    "revenueAvg": 483092000000,
-    "ebitdaLow": 223146371876,
-    "ebitdaHigh": 257975510692,
-    "ebitdaAvg": 235412906102,
-    "ebitLow": 209831984292,
-    "ebitHigh": 244661123108,
-    "ebitAvg": 222098518518,
-    "netIncomeLow": 173519867857,
-    "netIncomeHigh": 202502790537,
-    "netIncomeAvg": 183727413180,
-    "sgaExpenseLow": 29764166435,
-    "sgaExpenseHigh": 33537169674,
-    "sgaExpenseAvg": 31092988813,
-    "epsAvg": 12.24466,
-    "epsHigh": 13.49596,
-    "epsLow": 11.56437,
-    "numAnalystsRevenue": 11,
-    "numAnalystsEps": 11
+    "revenueLow": 607422523206,
+    "revenueHigh": 631134714882,
+    "revenueAvg": 618060150234,
+    "ebitdaLow": 221083032998,
+    "ebitdaHigh": 251098347354,
+    "ebitdaAvg": 236090690176,
+    "ebitLow": 207003048757,
+    "ebitHigh": 237018363113,
+    "ebitAvg": 222010705935,
+    "netIncomeLow": 171165780944,
+    "netIncomeHigh": 196142899666,
+    "netIncomeAvg": 183654340305,
+    "sgaExpenseLow": 39095206956,
+    "sgaExpenseHigh": 40621381909,
+    "sgaExpenseAvg": 39779870784,
+    "epsAvg": 12.23979,
+    "epsHigh": 13.0721,
+    "epsLow": 11.40748,
+    "numAnalystsRevenue": 3,
+    "numAnalystsEps": 2
    },
    {
     "symbol": "AAPL",
     "date": "2028-09-27",
-    "revenueLow": 527127809341,
-    "revenueHigh": 630136821762,
-    "revenueAvg": 564116930829,
-    "ebitdaLow": 185514227387,
-    "ebitdaHigh": 225131225547,
-    "ebitdaAvg": 198537537523,
-    "ebitLow": 172271279130,
-    "ebitHigh": 211888277290,
-    "ebitAvg": 185294589266,
-    "netIncomeLow": 142263883628,
-    "netIncomeHigh": 175231003503,
-    "netIncomeAvg": 153101176870,
-    "sgaExpenseLow": 33927241765,
-    "sgaExpenseHigh": 40557155055,
-    "sgaExpenseAvg": 36307952563,
-    "epsAvg": 10.6933,
-    "epsHigh": 11.67841,
-    "epsLow": 9.48129,
+    "revenueLow": 527128555962,
+    "revenueHigh": 630137714284,
+    "revenueAvg": 564183930875,
+    "ebitdaLow": 185525635182,
+    "ebitdaHigh": 225143895535,
+    "ebitdaAvg": 198405618292,
+    "ebitLow": 172275606649,
+    "ebitHigh": 211893867002,
+    "ebitAvg": 185155589759,
+    "netIncomeLow": 142267484755,
+    "netIncomeHigh": 175235654959,
+    "netIncomeAvg": 152985509010,
+    "sgaExpenseLow": 33927289819,
+    "sgaExpenseHigh": 40557212500,
+    "sgaExpenseAvg": 36312264850,
+    "epsAvg": 10.68651,
+    "epsHigh": 11.67872,
+    "epsLow": 9.48153,
     "numAnalystsRevenue": 23,
     "numAnalystsEps": 21
    },
    {
     "symbol": "AAPL",
     "date": "2027-09-27",
-    "revenueLow": 499230706867,
-    "revenueHigh": 553831860926,
-    "revenueAvg": 523387031393,
-    "ebitdaLow": 177420892072,
-    "ebitdaHigh": 203737619793,
-    "ebitdaAvg": 179200300377,
-    "ebitLow": 164837502263,
-    "ebitHigh": 191154229984,
-    "ebitAvg": 166616910568,
-    "netIncomeLow": 136077897196,
-    "netIncomeHigh": 157977252468,
-    "netIncomeAvg": 137558624400,
-    "sgaExpenseLow": 32131715664,
-    "sgaExpenseHigh": 35645980178,
-    "sgaExpenseAvg": 33686476100,
-    "epsAvg": 9.59243,
-    "epsHigh": 10.52852,
-    "epsLow": 9.06902,
+    "revenueLow": 502764320863,
+    "revenueHigh": 557751948350,
+    "revenueAvg": 524594957025,
+    "ebitdaLow": 177525017235,
+    "ebitdaHigh": 203857071588,
+    "ebitdaAvg": 179217805349,
+    "ebitLow": 164933248631,
+    "ebitHigh": 191265302984,
+    "ebitAvg": 166626036745,
+    "netIncomeLow": 136157572137,
+    "netIncomeHigh": 158069681402,
+    "netIncomeAvg": 137566218710,
+    "sgaExpenseLow": 32359147748,
+    "sgaExpenseHigh": 35898286642,
+    "sgaExpenseAvg": 33764221163,
+    "epsAvg": 9.60811,
+    "epsHigh": 10.53468,
+    "epsLow": 9.07433,
     "numAnalystsRevenue": 30,
     "numAnalystsEps": 30
    },
    {
     "symbol": "AAPL",
     "date": "2026-09-27",
-    "revenueLow": 472353325879,
-    "revenueHigh": 482869837674,
-    "revenueAvg": 477261697829,
-    "ebitdaLow": 172375631826,
-    "ebitdaHigh": 173095262251,
-    "ebitdaAvg": 172735447039,
-    "ebitLow": 160330030116,
-    "ebitHigh": 161049660541,
-    "ebitAvg": 160689845329,
-    "netIncomeLow": 132327023039,
-    "netIncomeHigh": 132925860497,
-    "netIncomeAvg": 132626441768,
-    "sgaExpenseLow": 30401821345,
-    "sgaExpenseHigh": 31078689899,
-    "sgaExpenseAvg": 30717736231,
-    "epsAvg": 8.82902,
-    "epsHigh": 8.85895,
-    "epsLow": 8.81904,
+    "revenueLow": 472670264879,
+    "revenueHigh": 483193833029,
+    "revenueAvg": 477611940418,
+    "ebitdaLow": 172315936700,
+    "ebitdaHigh": 173035026184,
+    "ebitdaAvg": 172675481442,
+    "ebitLow": 160268362964,
+    "ebitHigh": 160987452448,
+    "ebitAvg": 160627907706,
+    "netIncomeLow": 132275706975,
+    "netIncomeHigh": 132874094292,
+    "netIncomeAvg": 132574900633.5,
+    "sgaExpenseLow": 30422220318,
+    "sgaExpenseHigh": 31099543037,
+    "sgaExpenseAvg": 30740278705,
+    "epsAvg": 8.83556,
+    "epsHigh": 8.8555,
+    "epsLow": 8.81562,
     "numAnalystsRevenue": 30,
     "numAnalystsEps": 29
    }
@@ -2793,40 +2808,42 @@
   "result": null
  },
  {
-  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [\"EPV\", \"LBO Floor\"], \"methods\": [{\"anchor\": true, \"implementable\": true, \"name\": \"EV/EBITDA\", \"weight\": 0.4}, {\"anchor\": false, \"implementable\": true, \"name\": \"P/E\", \"weight\": 0.25}, {\"anchor\": false, \"implementable\": true, \"name\": \"DCF\", \"weight\": 0.25}, {\"anchor\": false, \"implementable\": true, \"name\": \"FCF Yield\", \"weight\": 0.1}], \"rationale\": \"Mega-cap tech conglomerates have structurally depressed FCF margins due to massive growth CapEx (cloud, AI, logistics).  EV/EBITDA anchors because it strips CapEx distortion.  EPV excluded \\u2014 it weights current FCF which is temporarily suppressed by investment cycles.\"}, \"Tech\", \"Hyperscaler / Tech Conglomerate\", [\"active\", null]]]",
+  "key": "[\"src.memory.calibration.apply_profile_weights\", [{\"excluded\": [\"EV/EBITDA\", \"Forward P/E\", \"DDM\"], \"methods\": [{\"anchor\": true, \"fallback\": \"P/FCF (NTM)\", \"implementable\": true, \"name\": \"SOTP (Hardware + Services)\", \"weight\": 0.4}, {\"anchor\": false, \"implementable\": true, \"name\": \"DCF\", \"weight\": 0.35}, {\"anchor\": false, \"implementable\": true, \"name\": \"Shareholder Yield\", \"weight\": 0.25}, {\"anchor\": false, \"implementable\": true, \"name\": \"P/FCF (NTM)\", \"weight\": 0.0}], \"rationale\": \"Owner spec 2026-10-10. Hardware on a premium-OEM P/E (15-18x), services on a platform P/E (26-32x), net cash added back; DCF at fabless capex intensity (D&A ~ capex: no amortisation run-off); shareholder yield = normalised FCF / (cost of equity - net share shrink). Peers: MSFT, GOOGL (ecosystem), Hermes, LVMH (luxury annuity), Samsung, Sony (hardware floor).\"}, \"Tech\", \"Consumer Technology Ecosystem\", [\"active\", null]]]",
   "target": "src.memory.calibration.apply_profile_weights",
   "result": {
    "methods": [
     {
-     "name": "EV/EBITDA",
+     "name": "SOTP (Hardware + Services)",
      "weight": 0.4,
      "anchor": true,
-     "implementable": true
-    },
-    {
-     "name": "P/E",
-     "weight": 0.25,
-     "anchor": false,
-     "implementable": true
+     "implementable": true,
+     "fallback": "P/FCF (NTM)"
     },
     {
      "name": "DCF",
+     "weight": 0.35,
+     "anchor": false,
+     "implementable": true
+    },
+    {
+     "name": "Shareholder Yield",
      "weight": 0.25,
      "anchor": false,
      "implementable": true
     },
     {
-     "name": "FCF Yield",
-     "weight": 0.1,
+     "name": "P/FCF (NTM)",
+     "weight": 0.0,
      "anchor": false,
      "implementable": true
     }
    ],
    "excluded": [
-    "EPV",
-    "LBO Floor"
+    "EV/EBITDA",
+    "Forward P/E",
+    "DDM"
    ],
-   "rationale": "Mega-cap tech conglomerates have structurally depressed FCF margins due to massive growth CapEx (cloud, AI, logistics).  EV/EBITDA anchors because it strips CapEx distortion.  EPV excluded \u2014 it weights current FCF which is temporarily suppressed by investment cycles."
+   "rationale": "Owner spec 2026-10-10. Hardware on a premium-OEM P/E (15-18x), services on a platform P/E (26-32x), net cash added back; DCF at fabless capex intensity (D&A ~ capex: no amortisation run-off); shareholder yield = normalised FCF / (cost of equity - net share shrink). Peers: MSFT, GOOGL (ecosystem), Hermes, LVMH (luxury annuity), Samsung, Sony (hardware floor)."
   }
  },
  {
@@ -2837,7 +2854,7 @@
  {
   "key": "[\"src.tools.fred.get_fred_spread\", [\"BAMLC0A1CAAA\"]]",
   "target": "src.tools.fred.get_fred_spread",
-  "result": 0.43
+  "result": 0.38
  },
  {
   "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"AAPL\", [\"limit\", 1]]]",
@@ -2938,53 +2955,44 @@
   }
  },
  {
-  "key": "[\"src.memory.analyst_basis.method_disagrees\", [{\"as_of\": \"3 Aug 2026\", \"house\": \"PHILLIP SECURITIES RESEARCH (SINGAPORE)\", \"method\": \"dcf\", \"price_target\": 290.0, \"price_target_currency\": \"\", \"rating\": \"REDUCE\", \"raw\": \"Discounted Cash-Flow, WACC 6.3%, g 3.5%\", \"terminal_growth\": 0.035, \"wacc\": 0.063}, \"EV/EBITDA\"]]",
+  "key": "[\"src.memory.analyst_basis.method_disagrees\", [{\"as_of\": \"3 Aug 2026\", \"house\": \"PHILLIP SECURITIES RESEARCH (SINGAPORE)\", \"method\": \"dcf\", \"price_target\": 290.0, \"price_target_currency\": \"\", \"rating\": \"REDUCE\", \"raw\": \"Discounted Cash-Flow, WACC 6.3%, g 3.5%\", \"terminal_growth\": 0.035, \"wacc\": 0.063}, \"SOTP (Hardware + Services)\"]]",
   "target": "src.memory.analyst_basis.method_disagrees",
   "result": true
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/profile\", {\"symbol\": \"AAPL\"}, [\"api_key\", \"<redacted>\"]]]",
-  "target": "src.tools.api._fmp_get",
-  "result": [
-   {
-    "symbol": "AAPL",
-    "price": 331.34,
-    "marketCap": 4866508537040,
-    "beta": 1.085,
-    "lastDividend": 1.06,
-    "range": "236.65-344.57",
-    "change": -1.74001,
-    "changePercentage": -0.5224,
-    "volume": 31420574,
-    "averageVolume": 52589493,
-    "companyName": "Apple Inc.",
-    "currency": "USD",
-    "cik": "0000320193",
-    "isin": "US0378331005",
-    "cusip": "037833100",
-    "exchangeFullName": "NASDAQ Global Select",
-    "exchange": "NASDAQ",
-    "industry": "Consumer Electronics",
-    "website": "https://www.apple.com",
-    "description": "Apple Inc. is a global technology corporation that specializes in the conceptualization, production, and sale of a diverse suite of electronic devices. Its comprehensive hardware lineup features the well-known iPhone smartphones, Mac personal computers, and versatile iPad tablets. The company also supplies a range of wearables, smart home products, and accessories, including AirPods, Apple TV, Apple Watch, items from the Beats brand, and HomePod speakers. Beyond its device offerings, Apple delivers essential support services like AppleCare and robust cloud solutions. It oversees key digital platforms, prominently the App Store, which acts as a central hub for customers to discover and download countless applications and digital content, from e-books and music to videos, games, and podcasts. The company also generates revenue via advertising, leveraging both its proprietary ad platforms and third-party licensing deals. Apple's ecosystem is further bolstered by a wide array of subscription-based services: Apple Arcade for gaming, Apple Fitness+ for personalized wellness, Apple Music for curated audio experiences and on-demand radio, Apple News+ for access to news and magazines, and Apple TV+ for exclusive original video programming. Its financial services portfolio includes the co-branded Apple Card and the mobile payment system, Apple Pay. Additionally, Apple strategically licenses its intellectual property. The company serves a broad clientele that spans individual consumers, small and medium-sized enterprises, as well as institutional clients in the education, corporate, and governmental sectors. Products are distributed through a multi-channel strategy, utilizing Apple's own physical retail locations and online storefronts, a dedicated direct sales team, and collaborations with external partners such as mobile network providers, wholesalers, general retailers, and authorized resellers. The App Store additionally functions as the primary conduit for third-party applications designed for its devices. Founded in 1976, Apple Inc. is headquartered in Cupertino, California.",
-    "ceo": "John Ternus",
-    "sector": "Technology",
-    "country": "US",
-    "fullTimeEmployees": "166000",
-    "phone": "(408) 996-1010",
-    "address": "One Apple Park Way",
-    "city": "Cupertino",
-    "state": "CA",
-    "zip": "95014",
-    "image": "https://images.financialmodelingprep.com/symbol/AAPL.png",
-    "ipoDate": "1980-12-12",
-    "defaultImage": false,
-    "isEtf": false,
-    "isActivelyTrading": true,
-    "isAdr": false,
-    "isFund": false
-   }
-  ]
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"est\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
  },
  {
   "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-09-13\", \"symbol\": \"AAPL\", \"to\": \"2025-09-28\"}, \"<redacted>\"]]",
@@ -4551,5 +4559,10 @@
     "volume": 36766619
    }
   ]
+ },
+ {
+  "key": "[\"src.memory.calibration.active_version\", [\"pt\"]]",
+  "target": "src.memory.calibration.active_version",
+  "result": null
  }
 ]

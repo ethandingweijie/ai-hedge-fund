@@ -2,1064 +2,1290 @@
  "comp_age_days": null,
  "fields": {},
  "store_calls": {
-  "basket_multiples|[[\"US\", [\"AAPL\", \"MSFT\", \"GOOG\", \"META\", \"AMZN\", \"ORCL\"], \"Hyperscaler / Tech Conglomerate\"], {\"exclude\": \"AAPL\", \"max_age_days\": 14}]": {
+  "basket_multiples|[[\"XMKT\", [\"MSFT\", \"GOOGL\", \"RMS.PA\", \"MC.PA\", \"005930.KS\", \"SONY\"], \"Consumer Technology Ecosystem\"], {\"exclude\": \"AAPL\", \"max_age_days\": 14}]": {
    "ev_ebit": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 13.995746200397313
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 21.41710514961576
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 23.758425433263312
+      "value": 23.626641645708197
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 19.873698494671732
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 14.164576100593976
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 16.163844883247485
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 16.92865365845358
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 12.545731646256929
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 9.308760541451226
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 13.767931325900522
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 19.873698
+    "peer_count": 6,
+    "value": 13.966254
    },
    "ev_ebitda": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 12.99258478503935
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 18.142091489511728
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 19.346746668208695
+      "value": 18.79438711734994
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 14.140252391304347
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 13.068908526517275
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 11.378272080339533
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 15.21197428440367
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 9.085238277419894
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 7.307684680526574
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 8.00049431083908
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 14.140252
+    "peer_count": 6,
+    "value": 11.077073
    },
    "ev_ebitda_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 15.156981210662185
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 13.472542986688618
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 16.73472618574056
+      "value": 16.610754563754522
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 10.935261044305989
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 15.035465165042734
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 11.905294446860799
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 15.724482421469657
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 8.814261512388699
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 2.888839822676406
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 6.800505210044598
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 13.472543
+    "peer_count": 6,
+    "value": 11.924863
    },
    "ev_ocf": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 22.69033263894439
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 14.907867322315253
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 21.946688833957417
+      "value": 21.82495442916883
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 11.362810400511291
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 22.964044846926075
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 17.905782256773417
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 21.40042845895715
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 11.63880318632442
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 8.386811653247163
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 10.81353426414832
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 17.905782
+    "peer_count": 6,
+    "value": 16.519616
    },
    "ev_revenue": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 9.449088992513445
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 8.510523728422594
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 12.09869099726072
+      "value": 12.031581696244263
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 7.43093637516196
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 9.563072822222368
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 3.7258237592692867
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.7092486377161995
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.727134343616981
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.400014514074042
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 1.7405906763777181
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 8.510524
+    "peer_count": 6,
+    "value": 5.554632
    },
    "ev_revenue_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 7.182564407088873
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 6.614878730086623
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 9.755332124988565
+      "value": 9.686371814775809
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 5.083391533883885
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 7.241924609172414
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 3.1360288979818494
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.021548784901865
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.613873645478053
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 1.7970927277162478
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 1.733344878480791
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 6.614879
+    "peer_count": 6,
+    "value": 4.817711
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
+    "members": [
+     "MSFT",
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
+    ],
+    "members_used": [
+     {
+      "market_cap": null,
+      "name": "MSFT",
+      "symbol": "MSFT",
+      "value": 0.01685975657108166
+     },
+     {
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.012619164003149445
+     },
+     {
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.03528696786452281
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.08038843201068438
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.08249375557745788
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.07001237083073102
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.05265
    },
    "growth_avg": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 0.12546364877238483
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 0.19931873227762906
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
       "value": 0.16130268348441554
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 0.10583255200567987
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.12546364877238483
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 0.11732740353281505
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.11398620588640922
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.008392279574362274
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.042499998694599785
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.0482432266164843
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 0.125464
+    "peer_count": 6,
+    "value": 0.081115
    },
    "pb": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 6.497241084811392
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 7.053045122712186
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 8.835463203032639
+      "value": 8.985424594303177
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 6.3813508656323
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 6.599498594803898
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 4.974957108154164
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.067745657204436
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.760013494382847
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.0982067753864806
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 2.6850011610346867
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 6.497241
+    "peer_count": 6,
+    "value": 4.848853
    },
    "pe": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 17.004468718967228
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 26.923076923076923
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 29.229999999999997
+      "value": 29.726111111111113
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 22.16975308641975
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 17.272095332671302
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 20.249206349206347
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 29.77488976560687
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 17.3120728929385
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 11.59970053292212
      }
     ],
     "peer_count": 5,
-    "subject_excluded": true,
-    "value": 22.169753
+    "value": 17.312073
    },
    "pe_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 20.814838823128202
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 21.617966006764533
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 25.344979937923405
+      "value": 25.73685172204331
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 15.445920888017708
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 21.172186227577285
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 22.885128841791747
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 26.81882651176222
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 15.964430388917098
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.9698141826213162
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 16.881533731755408
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 21.617966
+    "peer_count": 6,
+    "value": 19.02686
    },
    "roic": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 0.1515357148991219
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 0.17079081539682006
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
       "value": 0.20564635220712557
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 0.07680382516960285
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.1515357148991219
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 0.08484086365312504
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.22743953251137503
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.09524624654967614
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.22429680253292192
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.1100807794561564
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 0.151536
+    "peer_count": 6,
+    "value": 0.178591
    }
   },
-  "profile_basket_multiples|[[\"US\", \"Hyperscaler / Tech Conglomerate\"], {\"exclude\": \"AAPL\"}]": {
+  "profile_basket_multiples|[[\"US\", \"Consumer Technology Ecosystem\"], {\"exclude\": \"AAPL\"}]": {
    "ev_ebit": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 13.995746200397313
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 21.41710514961576
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 23.758425433263312
+      "value": 23.626641645708197
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 19.873698494671732
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 14.164576100593976
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 16.163844883247485
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 16.92865365845358
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 12.545731646256929
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 9.308760541451226
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 13.767931325900522
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 19.873698
+    "peer_count": 6,
+    "value": 13.966254
    },
    "ev_ebitda": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 12.99258478503935
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 18.142091489511728
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 19.346746668208695
+      "value": 18.79438711734994
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 14.140252391304347
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 13.068908526517275
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 11.378272080339533
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 15.21197428440367
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 9.085238277419894
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 7.307684680526574
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 8.00049431083908
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 14.140252
+    "peer_count": 6,
+    "value": 11.077073
    },
    "ev_ebitda_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 15.156981210662185
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 13.472542986688618
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 16.73472618574056
+      "value": 16.610754563754522
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 10.935261044305989
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 15.035465165042734
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 11.905294446860799
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 15.724482421469657
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 8.814261512388699
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 2.888839822676406
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 6.800505210044598
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 13.472543
+    "peer_count": 6,
+    "value": 11.924863
    },
    "ev_ocf": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 22.69033263894439
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 14.907867322315253
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 21.946688833957417
+      "value": 21.82495442916883
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 11.362810400511291
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 22.964044846926075
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 17.905782256773417
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 21.40042845895715
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 11.63880318632442
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 8.386811653247163
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 10.81353426414832
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 17.905782
+    "peer_count": 6,
+    "value": 16.519616
    },
    "ev_revenue": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 9.449088992513445
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 8.510523728422594
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 12.09869099726072
+      "value": 12.031581696244263
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 7.43093637516196
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 9.563072822222368
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 3.7258237592692867
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.7092486377161995
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.727134343616981
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.400014514074042
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 1.7405906763777181
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 8.510524
+    "peer_count": 6,
+    "value": 5.554632
    },
    "ev_revenue_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 7.182564407088873
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 6.614878730086623
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 9.755332124988565
+      "value": 9.686371814775809
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 5.083391533883885
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 7.241924609172414
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 3.1360288979818494
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.021548784901865
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.613873645478053
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 1.7970927277162478
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 1.733344878480791
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 6.614879
+    "peer_count": 6,
+    "value": 4.817711
+   },
+   "fcf_yield": {
+    "basis": "profile",
+    "cohort": "all",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
+    "members": [
+     "MSFT",
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
+    ],
+    "members_used": [
+     {
+      "market_cap": null,
+      "name": "MSFT",
+      "symbol": "MSFT",
+      "value": 0.01685975657108166
+     },
+     {
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.012619164003149445
+     },
+     {
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.03528696786452281
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.08038843201068438
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.08249375557745788
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.07001237083073102
+     }
+    ],
+    "peer_count": 6,
+    "value": 0.05265
    },
    "growth_avg": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 0.12546364877238483
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 0.19931873227762906
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
       "value": 0.16130268348441554
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 0.10583255200567987
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.12546364877238483
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 0.11732740353281505
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.11398620588640922
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.008392279574362274
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.042499998694599785
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.0482432266164843
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 0.125464
+    "peer_count": 6,
+    "value": 0.081115
    },
    "pb": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 6.497241084811392
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 7.053045122712186
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 8.835463203032639
+      "value": 8.985424594303177
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 6.3813508656323
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 6.599498594803898
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 4.974957108154164
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 7.067745657204436
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 2.760013494382847
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.0982067753864806
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 2.6850011610346867
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 6.497241
+    "peer_count": 6,
+    "value": 4.848853
    },
    "pe": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 17.004468718967228
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 26.923076923076923
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 29.229999999999997
+      "value": 29.726111111111113
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 22.16975308641975
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 17.272095332671302
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 20.249206349206347
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 29.77488976560687
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 17.3120728929385
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 11.59970053292212
      }
     ],
     "peer_count": 5,
-    "subject_excluded": true,
-    "value": 22.169753
+    "value": 17.312073
    },
    "pe_ntm": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 20.814838823128202
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 21.617966006764533
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
-      "value": 25.344979937923405
+      "value": 25.73685172204331
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 15.445920888017708
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 21.172186227577285
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 22.885128841791747
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 26.81882651176222
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 15.964430388917098
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 3.9698141826213162
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 16.881533731755408
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 21.617966
+    "peer_count": 6,
+    "value": 19.02686
    },
    "roic": {
     "basis": "profile",
     "cohort": "all",
-    "exchange": "US",
-    "key": "Hyperscaler / Tech Conglomerate",
+    "exchange": "XMKT",
+    "key": "Consumer Technology Ecosystem",
     "members": [
-     "GOOG",
-     "META",
      "MSFT",
-     "ORCL",
-     "AMZN"
+     "GOOGL",
+     "RMS.PA",
+     "MC.PA",
+     "005930.KS",
+     "SONY"
     ],
     "members_used": [
      {
-      "market_cap": 4154847563467.0,
-      "name": "Alphabet Inc.",
-      "symbol": "GOOG",
-      "value": 0.1515357148991219
-     },
-     {
-      "market_cap": 1845552120502.0,
-      "name": "Meta Platforms, Inc.",
-      "symbol": "META",
-      "value": 0.17079081539682006
-     },
-     {
-      "market_cap": 3902796309610.0,
-      "name": "Microsoft Corporation",
+      "market_cap": null,
+      "name": "MSFT",
       "symbol": "MSFT",
       "value": 0.20564635220712557
      },
      {
-      "market_cap": 413635492000.0,
-      "name": "Oracle Corporation",
-      "symbol": "ORCL",
-      "value": 0.07680382516960285
+      "market_cap": null,
+      "name": "GOOGL",
+      "symbol": "GOOGL",
+      "value": 0.1515357148991219
      },
      {
-      "market_cap": 2745534633000.0,
-      "name": "Amazon.com, Inc.",
-      "symbol": "AMZN",
-      "value": 0.08484086365312504
+      "market_cap": null,
+      "name": "RMS.PA",
+      "symbol": "RMS.PA",
+      "value": 0.22743953251137503
+     },
+     {
+      "market_cap": null,
+      "name": "MC.PA",
+      "symbol": "MC.PA",
+      "value": 0.09524624654967614
+     },
+     {
+      "market_cap": null,
+      "name": "005930.KS",
+      "symbol": "005930.KS",
+      "value": 0.22429680253292192
+     },
+     {
+      "market_cap": null,
+      "name": "SONY",
+      "symbol": "SONY",
+      "value": 0.1100807794561564
      }
     ],
-    "peer_count": 5,
-    "subject_excluded": true,
-    "value": 0.151536
+    "peer_count": 6,
+    "value": 0.178591
    }
   }
  }

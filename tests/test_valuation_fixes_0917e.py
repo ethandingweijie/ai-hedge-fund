@@ -175,7 +175,8 @@ _PREFIX = {
 #: Gate B deactivated on exactly these five: their corrected bear ROIC clears
 #: WACC, so terminal growth survives the bear scenario for the first time. Value
 #: is the bear `tgr` each one now carries.
-_DEACTIVATED = {"02888_HK": 0.01, "AAPL": 0.02, "COST": 0.01, "MELI": 0.02, "V": 0.01}
+# AAPL 0.02 -> 0.025 on 2026-10-10: the Consumer Technology Ecosystem profile sets its own bear TGR (2.5%).
+_DEACTIVATED = {"02888_HK": 0.01, "AAPL": 0.025, "COST": 0.01, "MELI": 0.02, "V": 0.01}
 
 #: Gate B still fires on these eight — correctly, on a now-POSITIVE ROIC below
 #: the bear threshold — and D05_SI never fired at all.
@@ -386,7 +387,7 @@ _WAVE6_MOVED = {
 #: +21.2%), so the ratio penalty (0.65-0.79) lifts to the floor in every scenario.
 #: AAPL, V, SCHW and COST move on the same premium (AAPL also on the EV/EBITDA leg reading the
 #: live Consumer Electronics cohort in place of the static table, decision 2).
-_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.077, "AAPL": 1.087}   # V 1.12 until 2026-10-04 (toll-road Payment Networks basket: growth_avg 11.7%)
+_WAVE7_BULL_GP = {"D05_SI": 0.85, "V": 1.077, "AAPL": 1.2}   # AAPL 1.087 -> 1.2 on 2026-10-10 (new profile and basket)   # V 1.12 until 2026-10-04 (toll-road Payment Networks basket: growth_avg 11.7%)
 _WAVE7_BULL_GP_NOTE = None   # AAPL 1.097 until Phase 1 (2026-10-04: interest income out of UFCF lowers its ROIC)
 #: Wave 8 (2026-09-27, owner decision 3): the S-REIT NAV leg reads the live SES REIT - Retail cohort's
 #: implied cap rate (5.45%) ahead of the 6.5% table default; C38U.SI is the one fixture on that path.
@@ -444,6 +445,10 @@ _UFCF_BASIS_MOVED = frozenset({"FCX", "U96_SI"})
 #: No engine change moved these four.
 #: Cross-sector audit batch B (2026-10-10): E18 long-term investments as cash (AAPL, MU), customer funds not cash
 #: (MELI), E13 / E15 FCF Yield on the peers' basis -- reported FCF, all capex (AAPL, COST, V).
+#: Batch F (owner, 2026-10-10): AAPL re-profiled to Consumer Technology Ecosystem; fixture re-recorded at 2026-09-16.
+_AUDIT_F_MOVED = {
+    "AAPL": (195.07, 157.63, 237.68, (247.13, 265.86, 287.16)),
+}
 _AUDIT_B_MOVED = {
     "AAPL": (184.04, 147.71, 237.05, (239.52, 257.69, 284.19)),
     "COST": (503.62, 364.13, 676.98, (643.45, 713.19, 799.87)),
@@ -475,7 +480,7 @@ _PHASE1_MOVED = {
 
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return (_AUDIT_B_MOVED.get(name) or _AUDIT_A_MOVED.get(name) or _PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
+    return (_AUDIT_F_MOVED.get(name) or _AUDIT_B_MOVED.get(name) or _AUDIT_A_MOVED.get(name) or _PHASE1_MOVED.get(name) or _UFCF_MOVED.get(name) or _CIP_BASKET_MOVED.get(name) or _WAVE9_MOVED.get(name) or _WAVE8_MOVED.get(name) or _WAVE7_MOVED.get(name) or _WAVE6_MOVED.get(name) or _REMEDIATION_MOVED.get(name) or _WAVE4_MOVED.get(name) or _CHINA_PROFILE_MOVED.get(name)
             or _SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name])
 #: Restated onto the current share count (sixth re-baseline).
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (41.92, 46.84, 56.98)}   # restated 2026-09-26 (minority interest in the bridge)

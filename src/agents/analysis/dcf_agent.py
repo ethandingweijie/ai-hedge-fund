@@ -151,7 +151,16 @@ _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 #: Industrials sector table says 2.0% base, which is a machinery rate.
 _PROFILE_TGR: dict[str, dict[str, float]] = {
     "Defense Primes": {"bear": 0.020, "base": 0.0275, "bull": 0.030},
+    # Owner, 2026-10-10 (AAPL spec): a finite fade to a 2.5-3.0% perpetual growth rate.
+    "Consumer Technology Ecosystem": {"bear": 0.025, "base": 0.0275, "bull": 0.030},
 }
+
+#: Owner, 2026-10-10 (AAPL spec), Consumer Technology Ecosystem SOTP. PROPOSED constants inside the owner's ranges:
+#: hardware gross margin ~35-37% on a premium-OEM P/E of 15-18x; services ~70-75% on a platform P/E of 26-32x (bear /
+#: base / bull at the low / mid / high end); the bear case stresses services gross margin by 300bp for the
+#: distribution-fee / TAC risk. The two gross margins only split the company's own earnings between the segments.
+_CTE_SOTP = {"hw_gm": 0.36, "svc_gm": 0.725, "svc_tac_haircut": {"bear": 0.03, "base": 0.0, "bull": 0.0},
+             "hw_pe": {"bear": 15.0, "base": 16.5, "bull": 18.0}, "svc_pe": {"bear": 26.0, "base": 29.0, "bull": 32.0}}
 
 # RSU/PSU cash tax withholding, as a fraction of gross SBC expense — used
 # when FMP doesn't expose a clean withholding line (same estimator and rate
@@ -1411,6 +1420,14 @@ def _reports_us_gaap(ticker: str, reported_currency: Optional[str]) -> bool:
     return reports_us_gaap(ticker, reported_currency)
 
 
+#: Legs that value a company's holdings themselves (look-through, analyst / published SOTP, NAV). An OPERATING SOTP --
+#: segments, Hardware + Services -- values the businesses and adds net cash back, so it does not count.
+_HOLDINGS_PRICING_METHODS = frozenset({
+    "SOTP (analyst)", "Analyst SOTP", "SOTP (published)", "Published SOTP", "SOTP / NAV", "SOTP / NAV (look-through)",
+    "SOTP (FRE + carry)", "NAV", "NAV (Cap Rates)", "NAV Discount", "RNAV", "RNAV (published)", "Platform SOTP",
+})
+
+
 def _profile_prices_holdings(sector: str, profile_name: str) -> bool:
     """True when the profile weights a SOTP / look-through / NAV leg, which values the investments itself."""
     if not profile_name:
@@ -1420,8 +1437,7 @@ def _profile_prices_holdings(sector: str, profile_name: str) -> bool:
         meths = ((_IVP.get(sector) or {}).get(profile_name) or {}).get("methods") or []
         if not meths:
             meths = next(((d.get(profile_name) or {}).get("methods") or [] for d in _IVP.values() if profile_name in d), [])
-        return any((m.get("weight") or 0) > 0 and ("SOTP" in str(m.get("name")) or "NAV" in str(m.get("name")))
-                   for m in meths)
+        return any((m.get("weight") or 0) > 0 and str(m.get("name")) in _HOLDINGS_PRICING_METHODS for m in meths)
     except Exception:                                      # noqa: BLE001
         return True
 
@@ -2577,6 +2593,7 @@ _SEGMENT_MULTIPLE_TIERS: dict[str, dict[str, float]] = {
 _PROFILE_TIER_MAP: dict[str, str] = {
     # Premium — full ecosystem leader multiples
     "Hyperscaler / Tech Conglomerate":           "premium",
+    "Consumer Technology Ecosystem":             "premium",
     "Growth SaaS":                               "premium",
     "Cybersecurity / Mission-Critical SaaS":     "premium",
     "Payment Networks":                          "premium",
@@ -9223,6 +9240,61 @@ def _compute_method_value(
         return None
 
     # ── FCF Yield ─────────────────────────────────────────────────────────
+    # ── Consumer Technology Ecosystem legs (owner spec, 2026-10-10) ───────────────────────────────────
+    if method_name == "SOTP (Hardware + Services)":
+        segs = most_recent.get("segment_breakdown") or {}
+        svc = sum(float(v) for k, v in segs.items() if isinstance(v, (int, float)) and "servic" in str(k).lower())
+        hw = sum(float(v) for k, v in segs.items() if isinstance(v, (int, float)) and "servic" not in str(k).lower())
+        if not (svc > 0 and hw > 0 and shares > 0 and net_income and net_income > 0):
+            return None
+        c = _CTE_SOTP
+        tac = float(c["svc_tac_haircut"].get(scenario, 0.0))
+        gp_hw, gp_svc = hw * c["hw_gm"], svc * (c["svc_gm"] - tac)
+        # earnings from operations: net income less after-tax interest income (the cash is added back in full)
+        _ii = most_recent.get("interest_income") or 0.0
+        ni_ops = float(net_income) - max(float(_ii), 0.0) * (1.0 - _EFFECTIVE_TAX_RATE) - svc * tac * (1.0 - _EFFECTIVE_TAX_RATE)
+        if ni_ops <= 0:
+            return None
+        ni_hw = ni_ops * gp_hw / (gp_hw + gp_svc)
+        ni_svc = ni_ops - ni_hw
+        pe_hw, pe_svc = float(c["hw_pe"][scenario]), float(c["svc_pe"][scenario])
+        equity = ni_hw * pe_hw + ni_svc * pe_svc - float(net_debt or 0.0)
+        _leg_trace(kind="sotp", metric="Net income from operations, split by segment gross profit",
+                   metric_value=float(ni_ops), shares=float(shares),
+                   segments=[{"segment": "Hardware (Products)", "revenue": hw, "gross_margin": c["hw_gm"],
+                              "net_income": ni_hw, "basis": "pe", "multiple": pe_hw, "value": ni_hw * pe_hw},
+                             {"segment": "Services", "revenue": svc, "gross_margin": c["svc_gm"] - tac,
+                              "net_income": ni_svc, "basis": "pe", "multiple": pe_svc, "value": ni_svc * pe_svc}],
+                   net_debt=float(net_debt or 0.0), priced_share_of_revenue=1.0, tac_haircut=tac,
+                   multiple_parts={"peer_source": "owner spec 2026-10-10 (PROPOSED inside the owner's ranges)"},
+                   value=equity / shares)
+        return equity / shares
+
+    if method_name == "Shareholder Yield":
+        fcf = most_recent.get("normalized_free_cash_flow") or most_recent.get("free_cash_flow")
+        g = float(most_recent.get("_net_share_shrink") or 0.0) * {"bear": 0.75, "base": 1.0, "bull": 1.25}.get(scenario, 1.0)
+        ke = float(wacc)
+        if not (fcf and fcf > 0 and shares > 0) or ke - g < 0.02:
+            return None
+        _leg_trace(kind="yield", metric="Normalised FCF (OCF less capex) / (cost of equity - net share shrink)",
+                   metric_value=float(fcf), shares=float(shares), per_share_metric=float(fcf) / shares,
+                   cost_of_equity=ke, net_share_shrink=g,
+                   multiple_parts={"basis": "WACC as cost of equity (net-cash balance sheet)"})
+        return (float(fcf) / shares) / (ke - g)
+
+    if method_name == "P/FCF (NTM)":
+        fcf = most_recent.get("free_cash_flow")
+        rev_ntm = ((forward_consensus or {}).get("revenue") or {}).get(scenario)
+        y = peer.get("fcf_yield")
+        if not (fcf and fcf > 0 and shares > 0 and isinstance(y, (int, float)) and y > 0.005):
+            return None
+        scale = (float(rev_ntm) / float(revenue_base)) if (rev_ntm and revenue_base and revenue_base > 0) else 1.0
+        fcf_ntm = float(fcf) * scale
+        _leg_trace(kind="yield", metric="FCF (NTM: TTM FCF x NTM / TTM revenue)", metric_value=fcf_ntm, shares=float(shares),
+                   per_share_metric=fcf_ntm / shares, target_yield=float(y),
+                   multiple_parts={"peer_source": "peer median fcf_yield"})
+        return (fcf_ntm / shares) / float(y)
+
     if method_name in {"FCF Yield", "P/CF", "Price/CF"}:
         target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)  # higher growth → lower yield req → higher price
         # Owner decision 5 (2026-09-17). This line used to read
@@ -11566,7 +11638,16 @@ def _blend_methods(
             # on its cash flows at all; a profile with no DCF-family leg (banks, insurers, managed care
             # once its DCF is retired) falls back to Forward P/E, the leg closest to how it is priced.
             _profile_has_dcf = any(m.get("name") in _DCF_FAMILY_NAMES for m in profile_methods)
-            if (_profile_has_dcf and _anchor_m["name"] not in _DCF_FAMILY_NAMES
+            # Owner, 2026-10-10 (AAPL spec): a profile may name its anchor's fallback (Consumer Technology Ecosystem:
+            # NTM P/FCF, never Forward P/E); it is used when it values, else the D7 / EN6 order below.
+            _fb_name = _anchor_m.get("fallback")
+            _fb_v = method_values.get(_fb_name) if _fb_name else None
+            if isinstance(_fb_v, (int, float)) and _fb_v > 0 and _aw > 0:
+                multi_bucket.append((float(_fb_v), _aw))
+                parts.append((f"{_fb_name} (anchor fallback)", _fb_name, _aw, "multi"))
+                surviving_w += _aw
+                _to = _fb_name
+            elif (_profile_has_dcf and _anchor_m["name"] not in _DCF_FAMILY_NAMES
                     and isinstance(_dcf_v, (int, float)) and _dcf_v > 0 and _aw > 0):
                 dcf_bucket.append((float(_dcf_v), _aw))
                 parts.append(("DCF (anchor fallback)", "DCF", _aw, "dcf"))
@@ -13167,6 +13248,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
         # audit E13 / E15: the cyclical FCF Yield leg's normalised figure on the peers' basis (OCF less all capex)
         most_recent["normalized_free_cash_flow"] = _normalized_earnings(series, "free_cash_flow", window=5)
+        # Owner, 2026-10-10 (Shareholder Yield leg): the median annual decline in the share count, 0-5%
+        try:
+            _sh = [float(r["shares_outstanding"]) for r in series if isinstance(r.get("shares_outstanding"), (int, float))
+                   and r["shares_outstanding"] > 0]
+            _chg = sorted(_sh[i] / _sh[i - 1] - 1.0 for i in range(1, len(_sh)))
+            most_recent["_net_share_shrink"] = (min(max(-_chg[len(_chg) // 2], 0.0), 0.05) if _chg else 0.0)
+        except Exception:                                  # noqa: BLE001
+            most_recent["_net_share_shrink"] = 0.0
         # Review-gated industry input (Wave 1): an owner-accepted maintenance
         # capex replaces the D&A stand-in in the Distributable CF Yield leg. In
         # the currency the statements are now in -- the listing currency when

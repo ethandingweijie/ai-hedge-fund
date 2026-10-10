@@ -816,7 +816,8 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
         # six-name basket (regional_comps.PROFILE_PEER_BASKETS), and a basket resolves growth_avg
         # like every other field. The static fill is gone for this one name because a live cohort
         # now exists, which is the opposite of the condition this test was written under.
-        assert b["basis"] == "profile" and b["key"] == "Hyperscaler / Tech Conglomerate" and b["peer_count"] == 5, (name, b)   # 6 less itself (Phase 1, plan 1F.3)
+        # 2026-10-10 (owner): AAPL is not a hyperscaler -- the Consumer Technology Ecosystem cross-market basket.
+        assert b["basis"] == "profile" and b["key"] == "Consumer Technology Ecosystem", (name, b)
         return
     if name == "FCX":
         # Wave 9 (2026-09-27): FCX re-routed to Base Metals and resolves the live US Copper cohort (seven

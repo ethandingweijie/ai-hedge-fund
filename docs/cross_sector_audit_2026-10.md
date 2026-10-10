@@ -209,3 +209,38 @@ Each batch would be built as follows:
 | `0917e` ×4, `0917d` FCF pins | Baselines | `_AUDIT_B_MOVED`: AAPL +2.6%, COST +1.2%, MU +1.1%, MELI, V |
 
 **Final backward run:** 6,489 passed, 1 skipped, 4 xfailed. Goldens re-checked after the reason-text fix: 17 passed.
+
+### Batch F: AAPL, Consumer Technology Ecosystem (owner spec), 2026-10-10
+
+**Implemented**
+
+| Item | Change |
+|---|---|
+| **Profile** | New Tech profile `Consumer Technology Ecosystem`. Weights: SOTP (Hardware + Services) 0.40 (anchor, fallback `P/FCF (NTM)`), DCF 0.35, Shareholder Yield 0.25, P/FCF (NTM) 0 (cross-check). Excluded: EV/EBITDA, Forward P/E, DDM |
+| **Routing** | AAPL pinned to the new profile; AAPL removed from the Hyperscaler curated basket |
+| **Peers** | Cross-market basket MSFT, GOOGL, RMS.PA, MC.PA, 005930.KS, SONY. Rebuilt by the weekly comps job, so production gets it at the next refresh |
+| **WACC / TGR** | 8.25% (owner range 8.0-8.5%); TGR 2.5 / 2.75 / 3.0% |
+| **SOTP (Hardware + Services)** | Operating net income (ex after-tax interest income) is split by segment gross profit: hardware GM 36%, services 72.5%. Hardware at 15 / 16.5 / 18× and Services at 26 / 29 / 32×. Net cash is added back. The bear case stresses services GM by 300bp (TAC). Constants are PROPOSED, inside the owner's ranges |
+| **Shareholder Yield** | Normalised reported FCF / (cost of equity − net share shrink). Shrink is the median annual share-count decline, 0-5%, scaled 0.75 / 1 / 1.25 by scenario |
+| **P/FCF (NTM)** | TTM FCF × NTM/TTM revenue over the peer FCF yield |
+| **D7 hook** | A profile can name its anchor fallback, used before the DCF / Forward P/E order |
+| **Holdings guard fix** | Only holdings-pricing legs (analyst / published SOTP, look-through, NAV, RNAV, FRE + carry) block the long-term investment netting. An operating SOTP adds net cash back, so AAPL nets its ~$84bn |
+| **E3** | AAPL's D&A ≈ capex with no acquired intangibles, so no amortisation run-off, as the spec requires |
+
+**Forward evidence (local, current engine, 2026-10-10 data):**
+- AAPL base IV $161.91 (bear $131.11, bull $202.85).
+- SOTP $163.51: Hardware net income $65.3bn at 16.5×, Services $46.7bn at 29×.
+- DCF $185.77; Shareholder Yield $125.94 (2.6% shrink, 8.5% cost of equity); P/FCF (NTM) $160.83.
+- 4 tests (24 in the file).
+- **Owner note:** at these constants the blend sits well below the ~$330 spot. The spec's multiple ranges put AAPL near 21× operating earnings, against the ~40× the market pays.
+
+**Backward-test failures and fixes**
+
+| Failure | Cause | Fix |
+|---|---|---|
+| All 17 goldens | `param_version` hashes the profile table | Rebased. The AAPL fixture was re-recorded at its original 2026-09-16 end date, because its profile-keyed calls changed; base IV 184.04 → 195.07 |
+| Census tests ×5 | Profile count 147 → 148 | Updated |
+| `test_tech_wave7` | Pins and basket listed AAPL under Hyperscaler | Updated |
+| `0917d` / `0917e` / `0917f` | AAPL pins from the Hyperscaler profile (FCF Yield leg, bear TGR, bull premium, basket) | Restated; `_AUDIT_F_MOVED` |
+
+**Final backward run:** 6,494 passed, 1 skipped, 4 xfailed.

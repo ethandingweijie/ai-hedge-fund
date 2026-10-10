@@ -87,7 +87,7 @@ _PROFILE_ARCHETYPE: dict[str, str] = {
     "Refining & Marketing": "II", "Oilfield Services & Drilling": "II", "Cruise Lines": "II", "Casinos & Integrated Resorts": "II",
     "Traditional Retail": "III", "Specialty Retail": "III", "Restaurants": "III", "Luxury Goods": "III",
     "Apparel & Footwear": "III", "Lodging (Asset-Light)": "III", "Household / Personal": "III",
-    "Hyperscaler / Tech Conglomerate": "IV", "China Internet Platform": "IV", "Hyper-Growth Platform": "IV",
+    "Hyperscaler / Tech Conglomerate": "IV", "Consumer Technology Ecosystem": "IV", "China Internet Platform": "IV", "Hyper-Growth Platform": "IV",
     "Mature Platform": "IV", "Mature SaaS": "IV", "Growth SaaS": "IV", "Cybersecurity": "IV", "Online Travel": "IV",
     "Payment Network": "IV", "Payment Networks": "IV",
 }

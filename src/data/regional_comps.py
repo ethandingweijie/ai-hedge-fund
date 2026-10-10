@@ -299,7 +299,8 @@ INDUSTRY_FAMILIES: dict[str, frozenset] = {
 PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     "Defense Primes":              {"US": ("LMT", "RTX", "NOC", "GD", "LHX", "ESLT")},
     "Niche Aerospace Components":  {"US": ("TDG", "HEI", "HWM", "CW", "WWD")},
-    "Hyperscaler / Tech Conglomerate": {"US": ("AAPL", "MSFT", "GOOG", "META", "AMZN", "ORCL")},
+    # AAPL left 2026-10-10 (owner: not a hyperscaler; Consumer Technology Ecosystem, cross-market basket below).
+    "Hyperscaler / Tech Conglomerate": {"US": ("MSFT", "GOOG", "META", "AMZN", "ORCL")},
     "Mature SaaS":                 {"US": ("CRM", "ADBE", "NOW", "INTU", "WDAY", "ADSK")},
     "Mature Platform":             {"US": ("GOOG", "META", "BKNG", "UBER", "EBAY", "SPOT")},
     "REIT (Specialty / OpCo)":     {"US": ("WELL", "VTR", "IRM", "EQIX", "DLR", "AMT", "CCI", "SBAC")},   # Wave 8b step 3
@@ -353,6 +354,10 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
     "Grocery & Discount Retail": {"markets": ("SES",),
                                   "symbols": ("D01.SI", "CPALL.BK", "CPAXT.BK", "BJC.BK", "PGOLD.PS", "8267.T",
                                               "WOW.AX", "COL.AX", "OV8.SI")},
+    # Owner, 2026-10-10 (AAPL spec): ecosystem monetisation (MSFT, GOOGL), luxury annuity pricing power (Hermes,
+    # LVMH) and the hardware floor (Samsung, Sony) -- a blended basket no single market or label holds.
+    "Consumer Technology Ecosystem": {"markets": ("US",),
+                                      "symbols": ("MSFT", "GOOGL", "RMS.PA", "MC.PA", "005930.KS", "SONY")},
 }
 
 

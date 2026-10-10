@@ -140,7 +140,7 @@ REPORT_FAMILIES: dict[str, dict] = {
     },
     "Technology, telecom and media": {
         "profiles": ["AI Infrastructure / Neocloud", "Consumer Electronics / Hardware Ecosystem", "China Internet Platform",
-                     "Tech Manufacturing / EMS (SG)", "Growth SaaS", "Hyperscaler / Tech Conglomerate",
+                     "Tech Manufacturing / EMS (SG)", "Growth SaaS", "Hyperscaler / Tech Conglomerate", "Consumer Technology Ecosystem",
                      "Cybersecurity / Mission-Critical SaaS", "Mature SaaS", "Hyper-Growth Platform",
                      "Mature Platform", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND",
                      "Equipment / EDA", "Telco / Infrastructure (SG)", "Ad / Consulting",

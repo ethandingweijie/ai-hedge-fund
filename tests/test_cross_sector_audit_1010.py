@@ -232,3 +232,54 @@ def test_e18_customer_funds_and_crypto_short_term_investments_stay_out_of_cash()
     nd_x, _ = d._valuation_net_debt(dict(row), "Tech", "XYZW", "USD")
     nd_coin, _ = d._valuation_net_debt(dict(row), "Crypto", "COIN2", "USD")
     assert nd_meli == 5e9 and nd_coin == 5e9 and nd_x == pytest.approx(1e9)
+
+
+# ══ Batch F -- AAPL: Consumer Technology Ecosystem (owner spec, 2026-10-10) ══════════════════════════════════════
+
+from src.data import sector_profiles as sp
+
+CTE = "Consumer Technology Ecosystem"
+
+
+def test_f_aapl_is_pinned_to_the_ecosystem_profile_not_hyperscaler():
+    assert sp.TICKER_SECTOR_LOOKUP["AAPL"][:2] == ("Tech", CTE)
+    m = {x["name"]: x for x in sp.INDUSTRY_VALUATION_PROFILES["Tech"][CTE]["methods"]}
+    assert (m["SOTP (Hardware + Services)"]["weight"], m["DCF"]["weight"], m["Shareholder Yield"]["weight"]) == (0.40, 0.35, 0.25)
+    assert m["SOTP (Hardware + Services)"]["anchor"] and m["SOTP (Hardware + Services)"]["fallback"] == "P/FCF (NTM)"
+    assert "AAPL" not in rc.PROFILE_PEER_BASKETS["Hyperscaler / Tech Conglomerate"]["US"]
+    assert rc.CROSS_MARKET_BASKETS[CTE]["symbols"] == ("MSFT", "GOOGL", "RMS.PA", "MC.PA", "005930.KS", "SONY")
+    assert sp._profile_wacc_rate("Tech", CTE)[0] == 0.0825 and d._PROFILE_TGR[CTE]["base"] == 0.0275
+
+
+def test_f_hardware_services_sotp_splits_operating_earnings_and_adds_net_cash(monkeypatch):
+    row = {"segment_breakdown": {"iPhone": 200e9, "Mac": 30e9, "iPad": 27e9, "Wearables": 36e9, "Service": 109e9},
+           "net_income": 112e9, "interest_income": 0.0}
+    v, tr = _leg("SOTP (Hardware + Services)", row, {}, None, monkeypatch, net_debt=-60e9, shares=14.8e9,
+                 sector="Tech", profile_name=CTE)
+    hw, svc = 293e9 * 0.36, 109e9 * 0.725
+    ni_hw = 112e9 * hw / (hw + svc)
+    assert v == pytest.approx((ni_hw * 16.5 + (112e9 - ni_hw) * 29.0 + 60e9) / 14.8e9)
+    # bear: low-end multiples and a 300bp services gross-margin (TAC) stress
+    vb, trb = _leg("SOTP (Hardware + Services)", row, {}, None, monkeypatch, net_debt=-60e9, shares=14.8e9,
+                   sector="Tech", profile_name=CTE, scenario="bear")
+    assert trb["tac_haircut"] == 0.03 and vb < v
+    # no segment data -> the anchor cannot value
+    assert _leg("SOTP (Hardware + Services)", {"net_income": 1e9}, {}, None, monkeypatch, profile_name=CTE)[0] is None
+
+
+def test_f_shareholder_yield_and_ntm_pfcf(monkeypatch):
+    row = {"normalized_free_cash_flow": 100e9, "free_cash_flow": 110e9, "_net_share_shrink": 0.03}
+    v, tr = _leg("Shareholder Yield", row, {}, None, monkeypatch, shares=15e9, wacc=0.085)
+    assert v == pytest.approx((100e9 / 15e9) / (0.085 - 0.03))
+    fc = {"revenue": {"base": 440e9}}
+    v2, tr2 = _leg("P/FCF (NTM)", row, {"fcf_yield": 0.05}, fc, monkeypatch, shares=15e9, revenue_base=400e9)
+    assert v2 == pytest.approx((110e9 * 1.1 / 15e9) / 0.05)
+
+
+def test_f_anchor_fallback_is_the_profile_named_leg_and_an_operating_sotp_still_nets_investments():
+    import inspect
+    src = inspect.getsource(d)
+    assert '_fb_name = _anchor_m.get("fallback")' in src
+    # the operating SOTP adds net cash back, so long-term investments are netted for AAPL
+    nd, b, flag = d._apply_lti_netting(21.9e9, {"components": {}}, {"long_term_investments": 84e9}, "Tech", "AAPL", CTE)
+    assert nd == pytest.approx(21.9e9 - 84e9) and flag
