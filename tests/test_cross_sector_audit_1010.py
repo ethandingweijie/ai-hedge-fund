@@ -485,7 +485,7 @@ def test_i4_profiles_name_sector_bridges_and_life_pe_is_capped():
 def test_i4_bridge_legs_value(monkeypatch):
     row = {"total_equity": 30e9, "aoci": -10e9}
     v, tr = _leg("P/B ex-AOCI", row, {"pb": 1.0}, None, monkeypatch, shares=1e9)
-    assert v == pytest.approx(40.0) and tr["multiple_parts"]["aoci"] == -10e9
+    assert v == pytest.approx(40.0) and tr["aoci"] == -10e9
     row2 = {"ebit_core": 40e9, "cash_and_equivalents": 50e9, "short_term_investments": 100e9,
             "long_term_investments": 300e9, "total_debt": 100e9}
     v2, tr2 = _leg("Two-Pillar (synthetic)", row2, {}, None, monkeypatch, shares=2e9)
@@ -512,3 +512,35 @@ def test_consumer_growth_drops_trailing_pe_for_forward_ev_ebitda():
     w = {m["name"]: m["weight"] for m in prof["methods"]}
     assert w == {"DCF": 0.40, "EV/Revenue": 0.25, "Forward EV/EBITDA": 0.20, "EV/EBITDA": 0.15}
     assert "P/E" not in w and prof["excluded"] == ["P/E"]
+
+
+# ══ Prod re-run follow-up (2026-10-11): every new leg ties out in the workbook ═══════════════════════════════════
+
+def test_new_legs_carry_the_trace_shape_the_workbook_rebuilds(monkeypatch):
+    v, tr = _leg("P/B ex-AOCI", {"total_equity": 30e9, "aoci": -10e9}, {"pb": 1.0}, None, monkeypatch, shares=1e9)
+    nums = {k: x for k, x in tr["multiple_parts"].items() if isinstance(x, (int, float))}
+    assert set(nums) <= {"peer_multiple", "scenario_band", "growth_premium"} and tr["aoci"] == -10e9
+    assert tr["per_share_metric"] * nums["peer_multiple"] * nums["scenario_band"] == pytest.approx(v)
+    v2, tr2 = _leg("Shareholder Yield", {"normalized_free_cash_flow": 100e9, "_net_share_shrink": 0.03}, {}, None, monkeypatch,
+                   shares=15e9, wacc=0.085)
+    assert tr2["per_share_metric"] / tr2["multiple_parts"]["peer_fcf_yield"] == pytest.approx(v2)
+    v3, tr3 = _leg("P/FCF (NTM)", {"free_cash_flow": 110e9}, {"fcf_yield": 0.05}, {"revenue": {"base": 440e9}}, monkeypatch,
+                   shares=15e9, revenue_base=400e9)
+    assert tr3["per_share_metric"] / tr3["multiple_parts"]["peer_fcf_yield"] == pytest.approx(v3)
+    v4, tr4 = _leg("EV/EBIT (cycle median)", {"_ebit_history": [5e9, 6e9, 7e9]}, {"ev_ebit": 15.0}, None, monkeypatch,
+                   net_debt=1e9, shares=1e9)
+    assert (tr4["metric_value"] * tr4["multiple"] - tr4["net_debt"]) / tr4["shares"] == pytest.approx(v4)
+    row = {"segment_breakdown": {"iPhone": 200e9, "Service": 100e9}, "net_income": 100e9}
+    assert _leg("SOTP (Hardware + Services)", row, {}, None, monkeypatch, shares=15e9)[1]["kind"] == "equity_build"
+
+
+def test_pde_trace_records_its_scenario_band(monkeypatch):
+    row = {"alt_de_ps_fwd": 6.0, "alt_pde_multiple": 25.0}
+    v, tr = _leg("P/DE (Forward)", row, {}, None, monkeypatch, scenario="bear")
+    assert tr["multiple_parts"]["scenario_band"] == 0.75 and v == pytest.approx(6.0 * 25.0 * 0.75)
+
+
+def test_workbook_bridge_applies_fx_only_to_source_currency_components():
+    import inspect
+    from src.utils import valuation_workbook as vw
+    assert "abs(float(_cmp[\"result\"]) - float(_v_nd)) <= 0.005" in inspect.getsource(vw)

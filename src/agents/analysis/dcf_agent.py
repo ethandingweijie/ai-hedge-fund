@@ -9258,7 +9258,8 @@ def _compute_method_value(
         _de = _de if (_de and _de > 0) else _de_ps * shares
         _leg_trace(kind="equity_multiple", metric="Distributable earnings (forward, accepted input)",
                    metric_value=float(_de), per_share_metric=_de_ps, multiple=float(_pde),
-                   multiple_parts={"peer_multiple": float(_pde), "peer_source": "accepted alt_manager input (cited P/DE range midpoint)"})
+                   multiple_parts={"peer_multiple": float(_pde), "peer_source": "accepted alt_manager input (cited P/DE range midpoint)",
+                                   "scenario_band": sm})
         return _de_ps * float(_pde) * sm
     if method_name in {"SOTP (FRE + carry)", "SOTP (FRE+Carry)"}:
         _fre = most_recent.get("alt_fre_fwd_total")
@@ -9490,9 +9491,8 @@ def _compute_method_value(
         if not (_adj > 0 and isinstance(_pb, (int, float)) and _pb > 0):
             return None
         _leg_trace(kind="equity_multiple", metric="Book value ex AOCI", metric_value=_adj, shares=float(shares),
-                   per_share_metric=_adj / shares, multiple=float(_pb) * sm,
-                   multiple_parts={"peer_multiple": float(_pb), "peer_source": "peer median pb (reported book)", "scenario_band": sm,
-                                   "aoci": float(_aoci)})
+                   per_share_metric=_adj / shares, multiple=float(_pb) * sm, aoci=float(_aoci),
+                   multiple_parts={"peer_multiple": float(_pb), "peer_source": "peer median pb (reported book)", "scenario_band": sm})
         return (_adj / shares) * float(_pb) * sm
 
     if method_name == "Two-Pillar (synthetic)":
@@ -9504,7 +9504,7 @@ def _compute_method_value(
             return None
         _mult = 12.0 * sm
         _eq = _cash + float(_ebit_ops) * _mult - _debt - float(_minority_interest(most_recent) or 0.0)
-        _leg_trace(kind="sotp", metric="Cash and investments + operating pre-tax earnings x 12 - debt",
+        _leg_trace(kind="equity_build", metric="Cash and investments + operating pre-tax earnings x 12 - debt",
                    metric_value=float(_ebit_ops), shares=float(shares), investments=_cash, debt=_debt, multiple=_mult,
                    float_adjustment="not applied (the feed carries no insurance float split)",
                    multiple_parts={"peer_source": "owner spec 2026-10-10 (two-pillar, 12x pre-tax)", "scenario_band": sm})
@@ -9520,8 +9520,11 @@ def _compute_method_value(
         _medE = _pos[len(_pos) // 2] if len(_pos) % 2 else (_pos[len(_pos) // 2 - 1] + _pos[len(_pos) // 2]) / 2.0
         mult = float(_ev_ebit) * sm * growth_premium * _own_disc
         _leg_trace(kind="ev_multiple", metric=f"EBIT (median of {len(_pos)} positive years, up to 7)", metric_value=_medE,
-                   multiple=mult, multiple_parts={"peer_multiple": float(_ev_ebit), "peer_source": "peer median ev_ebit",
-                                                  "scenario_band": sm, "growth_premium": growth_premium})
+                   multiple=mult, net_debt=float(net_debt or 0.0), minority_interest=_minority_interest(most_recent),
+                   preferred_equity=_preferred_equity(most_recent), shares=float(shares),
+                   multiple_parts={"peer_multiple": float(_ev_ebit), "peer_source": "peer median ev_ebit",
+                                   "scenario_band": sm, "growth_premium": growth_premium,
+                                   **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
         return _ev_to_equity_ps(_medE * mult, net_debt, most_recent, shares)
 
     # ── Consumer Technology Ecosystem legs (owner spec, 2026-10-10) ───────────────────────────────────
@@ -9543,7 +9546,7 @@ def _compute_method_value(
         ni_svc = ni_ops - ni_hw
         pe_hw, pe_svc = float(c["hw_pe"][scenario]), float(c["svc_pe"][scenario])
         equity = ni_hw * pe_hw + ni_svc * pe_svc - float(net_debt or 0.0)
-        _leg_trace(kind="sotp", metric="Net income from operations, split by segment gross profit",
+        _leg_trace(kind="equity_build", metric="Net income from operations, split by segment gross profit",
                    metric_value=float(ni_ops), shares=float(shares),
                    segments=[{"segment": "Hardware (Products)", "revenue": hw, "gross_margin": c["hw_gm"],
                               "net_income": ni_hw, "basis": "pe", "multiple": pe_hw, "value": ni_hw * pe_hw},
@@ -9562,8 +9565,8 @@ def _compute_method_value(
             return None
         _leg_trace(kind="yield", metric="Normalised FCF (OCF less capex) / (cost of equity - net share shrink)",
                    metric_value=float(fcf), shares=float(shares), per_share_metric=float(fcf) / shares,
-                   cost_of_equity=ke, net_share_shrink=g,
-                   multiple_parts={"basis": "WACC as cost of equity (net-cash balance sheet)"})
+                   cost_of_equity=ke, net_share_shrink=g, target_yield=ke - g,
+                   multiple_parts={"peer_fcf_yield": ke - g, "peer_source": "cost of equity - net share shrink (WACC as cost of equity, net-cash balance sheet)"})
         return (float(fcf) / shares) / (ke - g)
 
     if method_name == "P/FCF (NTM)":
@@ -9576,7 +9579,7 @@ def _compute_method_value(
         fcf_ntm = float(fcf) * scale
         _leg_trace(kind="yield", metric="FCF (NTM: TTM FCF x NTM / TTM revenue)", metric_value=fcf_ntm, shares=float(shares),
                    per_share_metric=fcf_ntm / shares, target_yield=float(y),
-                   multiple_parts={"peer_source": "peer median fcf_yield"})
+                   multiple_parts={"peer_fcf_yield": float(y), "peer_source": "peer median fcf_yield"})
         return (fcf_ntm / shares) / float(y)
 
     if method_name in {"FCF Yield", "P/CF", "Price/CF"}:

@@ -2953,13 +2953,18 @@ class _Book:
                 _b0 = r
                 for _lab, _v in (("Feed net debt (total debt incl. leases − cash and equivalents)", _cmp.get("feed_net_debt")),
                                  ("Less: short-term investments (counted as cash)", -(_cmp.get("short_term_investments") or 0.0)),
-                                 ("Less: long-term marketable securities (a biotech treasury)", -(_cmp.get("long_term_investments") or 0.0)),
+                                 ("Less: long-term investments counted as cash (biotech treasury; non-financial holdings, audit E18)", -(_cmp.get("long_term_investments") or 0.0)),
                                  ("Less: lease liabilities (US GAAP: rent is inside EBITDA)", -(_cmp.get("leases_removed") or 0.0)),
                                  ("Add: owner-accepted debt-like items", (_cmp.get("debt_like") or 0.0))):
                     sh.label(r, 1, _lab, indent=1); sh.put(r, 2, float(_v) / 1e6, MIL).font = Font(color=BLUE); r += 1
                 sh.label(r, 1, "Valuation net debt (filing currency)", indent=1, bold=True)
                 sh.put(r, 2, f"=SUM(B{_b0}:B{r - 1})", MIL, bold=True); _bs = r; r += 1
                 _fxv = _num(_fu.get("fx_rate")) or 1.0
+                # Since the REGN-review bridge, a non-USD reporter's components can already be in the valuation currency
+                # (their result IS the net debt used); multiplying by FX again failed every such check (09988.HK, 00177.HK).
+                if (_v_nd is not None and isinstance(_cmp.get("result"), (int, float))
+                        and abs(float(_cmp["result"]) - float(_v_nd)) <= 0.005 * max(abs(float(_v_nd)), 1.0)):
+                    _fxv = 1.0
                 sh.label(r, 1, f"× FX to {self.ccy}", indent=1); sh.put(r, 2, _fxv, "0.0000"); _bf = r; r += 1
                 if _v_nd is not None:
                     sh.label(r, 1, "Check: bridge × FX − net debt used (should be ~0)", indent=1)

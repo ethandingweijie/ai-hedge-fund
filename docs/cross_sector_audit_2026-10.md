@@ -358,3 +358,37 @@ Each batch would be built as follows:
 | **Evidence (local)** | ONON IV $31.89; Forward EV/EBITDA prices on `peer median ev_ebitda_ntm (forward basis)` |
 | **Tests** | 6,517 passed, 1 skipped, 4 xfailed. Goldens move only `param_version` (no golden is on this profile). Census 26 → 25 trailing-P/E carriers |
 | **Other confirmations, no code change** | Alt managers stay on P/DE (BX shows no IV until it is accepted; no Forward P/E carry-over). MET/PRU stay on embedded value or adjusted book. BRK-B, infrastructure and resources wait for SOTP, NAV/concession and 2P inputs |
+
+### Production re-run, 2026-10-11 (18 audited names, deployed 09f5f320)
+
+Fixes confirmed in production:
+
+| Fix | Names |
+|---|---|
+| E18 long-term investments as cash | AAPL, MSFT, MU, SBUX, NEE, COP |
+| E4 / E5 street-basis guards on revenue, EPS, EBITDA and EBIT | NFLX, MU, NKE, MMM, MET, COP |
+| E9 superseded flags named | all guidance runs |
+| E3 amortisation split | MMM, NKE in; AAPL, NFLX out |
+| F | AAPL on its new profile |
+| I4 | BRK-B on the two-pillar bridge; MET on P/B ex-AOCI |
+| I1 / I2 | concession flag (00177.HK, ~47%); depletion flag (COP) |
+| E17 | street share-count flags (BX −36%, 00177.HK −21%) |
+
+**Before/after on identical local data**, to isolate the audit's effect:
+
+| Name | Pre-audit (434eccf0) | Now | Note |
+|---|---|---|---|
+| MU | 2,130 | 2,144 | The production jump 276 → 2,437 is new FY data, not the audit |
+| JPM | 223.91 | 223.91 | |
+| COP | 124.37 | 132.44 | E18 |
+
+**Defects found and fixed (6be… follow-up commit):**
+- **Workbook tie-outs** failed on AAPL 20/33, BRK-B 13/23, MET 16/26, BX 16/23, 00177.HK 22/23 and 09988.HK 28/29. Causes:
+  - New-leg traces did not match the workbook's rebuild forms: P/B ex-AOCI put AOCI in `multiple_parts`; Shareholder Yield and P/FCF (NTM) lacked `peer_fcf_yield`; EV/EBIT (cycle median) lacked the bridge fields; the Hardware + Services SOTP and Two-Pillar were traced as segment SOTPs (now `equity_build`, engine value).
+  - P/DE (Wave 6) never recorded its scenario band.
+  - The workbook bridge multiplied valuation-currency components by FX again for every non-USD reporter (pre-existing since the 10-07 REGN bridge).
+- **After the fix,** local tie-outs pass: AAPL 23/23, BRK-B 20/20, MET 26/26, 00177.HK 23/23, 09988.HK 29/29.
+
+**Owner attention:**
+- MU IV is about 2.1× spot on new peak-cycle earnings (pre-existing cyclical calibration, not the audit).
+- AAPL IV $171 vs spot $337 at the spec's multiple ranges.
