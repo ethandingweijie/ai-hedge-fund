@@ -382,7 +382,7 @@ Fixes confirmed in production:
 | JPM | 223.91 | 223.91 | |
 | COP | 124.37 | 132.44 | E18 |
 
-**Defects found and fixed (6be… follow-up commit):**
+**Defects found and fixed (baa68b97):**
 - **Workbook tie-outs** failed on AAPL 20/33, BRK-B 13/23, MET 16/26, BX 16/23, 00177.HK 22/23 and 09988.HK 28/29. Causes:
   - New-leg traces did not match the workbook's rebuild forms: P/B ex-AOCI put AOCI in `multiple_parts`; Shareholder Yield and P/FCF (NTM) lacked `peer_fcf_yield`; EV/EBIT (cycle median) lacked the bridge fields; the Hardware + Services SOTP and Two-Pillar were traced as segment SOTPs (now `equity_build`, engine value).
   - P/DE (Wave 6) never recorded its scenario band.
@@ -392,3 +392,14 @@ Fixes confirmed in production:
 **Owner attention:**
 - MU IV is about 2.1× spot on new peak-cycle earnings (pre-existing cyclical calibration, not the audit).
 - AAPL IV $171 vs spot $337 at the spec's multiple ranges.
+
+**Production re-check after baa68b97 (2026-10-11 05:03 UTC):** every workbook ties out. IVs are unchanged (the fix touched traces and the workbook only).
+
+| Name | Checks passed |
+|---|---|
+| AAPL | 30/30 |
+| BRK-B | 20/20 |
+| MET | 26/26 |
+| BX | 23/23 |
+| 00177.HK | 23/23 |
+| 09988.HK | 29/29 |
