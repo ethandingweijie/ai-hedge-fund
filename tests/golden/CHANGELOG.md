@@ -1842,3 +1842,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: cross-sector audit batch E (2026-10-10): valuation_constants gains the owner registries 'concessions' and 'reserves' (PROPOSED, no accepted entries), so every fixture moves only param_version; I3-I5 profile changes touch no golden's weighted legs
 
+## 2026-10-10T23:45:17+00:00
+
+- regenerated at HEAD: `928aae67`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-10-10: Consumer Growth drops its 20% trailing P/E for Forward EV/EBITDA; no golden is on the profile, every fixture moves only param_version
+

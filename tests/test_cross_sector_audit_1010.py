@@ -503,4 +503,12 @@ def test_i5_stand_ins_roll_into_operating_legs_and_i7_i9_hygiene():
     hotel = P["Consumer"]["Hotel Owner-Operator (HK)"]
     assert hotel["leg_fallback"]["RNAV (published)"] == ["EV/EBITDA", "DDM"]
     assert sp.SECTOR_PEER_BASKETS["Consumer Durables"] == ["WHR", "NWL", "SNBR"]
-    assert "P/E" not in P["Consumer"]["Consumer Growth"]["excluded"]
+    assert P["Consumer"]["Consumer Growth"]["excluded"] == ["P/E"]     # owner 2026-10-10: P/E dropped, stays excluded
+
+
+def test_consumer_growth_drops_trailing_pe_for_forward_ev_ebitda():
+    # Owner, 2026-10-10: the 20% trailing P/E goes to the forward EBITDA multiple.
+    prof = sp.INDUSTRY_VALUATION_PROFILES["Consumer"]["Consumer Growth"]
+    w = {m["name"]: m["weight"] for m in prof["methods"]}
+    assert w == {"DCF": 0.40, "EV/Revenue": 0.25, "Forward EV/EBITDA": 0.20, "EV/EBITDA": 0.15}
+    assert "P/E" not in w and prof["excluded"] == ["P/E"]

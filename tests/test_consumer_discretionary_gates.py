@@ -2139,7 +2139,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # priced on normalised earnings like every other trailing-P/E profile.
     # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
     # Wave 3 (owner framework 2026-09-22): Aerospace & Defense split into seven profiles; none of the new trailing P/E legs is an anchor.
-    assert (tot, trail, elig, anchored) == (148, 26, 26, 7)   # 2026-10-10: +1 Consumer Technology Ecosystem (owner: AAPL is not a hyperscaler); 2026-10-06: +2 biopharma method profiles; plan IN1 (2026-10-04): Managed Care's anchor moved to Forward P/E;   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
+    assert (tot, trail, elig, anchored) == (148, 25, 25, 7)   # 2026-10-10: Consumer Growth dropped its trailing P/E for Forward EV/EBITDA (owner, -1 trailing); 2026-10-10: +1 Consumer Technology Ecosystem (owner: AAPL is not a hyperscaler); 2026-10-06: +2 biopharma method profiles; plan IN1 (2026-10-04): Managed Care's anchor moved to Forward P/E;   # Wave 10 (owner, 2026-09-27): +10 profiles; Traditional Retail left trailing P/E for Forward P/E (decision 5);  # 2026-09-27: 14 unrouted profiles removed (owner)   # Wave 7: three anchors to Forward P/E, +4 profiles; Wave 8 +4; Wave 8b step 3 +1; Wave 9 +19 profiles, and Airlines, Rail and Steel left trailing P/E (-3) while Route & Uniform took one (+1)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.
@@ -3273,22 +3273,23 @@ def test_consumer_growth_declares_a_leg_it_always_strips():
     assert _SECTOR_PROFILE_DEFAULT["Consumer"] == "Consumer Growth"
     prof = _consumer_profiles()["Consumer Growth"]
     ms = prof["methods"]
+    # Owner, 2026-10-10: the trailing P/E's 20% moved to Forward EV/EBITDA
     assert {m["name"]: m["weight"] for m in ms} == {
-        "DCF": 0.40, "EV/Revenue": 0.25, "P/E": 0.20, "EV/EBITDA": 0.15}
+        "DCF": 0.40, "EV/Revenue": 0.25, "Forward EV/EBITDA": 0.20, "EV/EBITDA": 0.15}
     assert sum(m["weight"] for m in ms) == pytest.approx(1.0, abs=1e-9)
-    # Audit I9 (2026-10-10): "excluded" no longer lists the P/E the table weights (the engine always priced it), and the
-    # rationale states the weights the table carries.
-    assert prof["excluded"] == []
+    # Owner, 2026-10-10: the P/E row is gone (its 20% is Forward EV/EBITDA) and stays excluded, so nothing re-adds it.
+    assert prof["excluded"] == ["P/E"]
     assert "DCF intrinsic value (40%)" in prof["rationale"]
-    assert "trailing P/E carries 20%" in prof["rationale"]
+    assert "Trailing P/E is excluded" in prof["rationale"]
 
-    flat = {"DCF": 100.0, "EV/Revenue": 100.0, "P/E": 100.0, "EV/EBITDA": 100.0}
-    _, with_pe = _blend_methods(ms, dict(flat), 1.0, [], 0.5)
-    assert with_pe["weight_dcf"] == pytest.approx(0.40)
-    assert {e["method"]: e["weight"] for e in with_pe["effective_weights"]} == \
-        {"DCF": 0.40, "EV/Revenue": 0.25, "P/E": 0.20, "EV/EBITDA": 0.15}
+    flat = {"DCF": 100.0, "EV/Revenue": 100.0, "Forward EV/EBITDA": 100.0, "EV/EBITDA": 100.0}
+    _, with_fwd = _blend_methods(ms, dict(flat), 1.0, [], 0.5)
+    assert with_fwd["weight_dcf"] == pytest.approx(0.40)
+    assert {e["method"]: e["weight"] for e in with_fwd["effective_weights"]} == \
+        {"DCF": 0.40, "EV/Revenue": 0.25, "Forward EV/EBITDA": 0.20, "EV/EBITDA": 0.15}
 
-    stripped = {k: v for k, v in flat.items() if k != "P/E"}
+    # without forward consensus the forward leg cannot value and renormalises exactly as the P/E strip did
+    stripped = {k: v for k, v in flat.items() if k != "Forward EV/EBITDA"}
     iv, no_pe = _blend_methods(ms, dict(stripped), 1.0, [], 0.5)
     assert no_pe["weight_dcf"] == pytest.approx(0.50)
     assert {e["method"]: e["weight"] for e in no_pe["effective_weights"]} == \

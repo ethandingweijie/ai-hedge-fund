@@ -348,3 +348,13 @@ Each batch would be built as follows:
 - **Production comps refresh:** E1 lease-free peer EV, the AAPL cross-market basket and `ev_ebit_norm` take effect at the next weekly refresh and the history backfill / quarterly update.
 - **Finance vs operating leases (E18c):** the feed exposes one lease line, so both are stripped together.
 - **Golden fixtures** predate the HK/SG quote call (`HKSG_QUOTE_CROSSCHECK` is pinned off in replay). Re-record them to cover it.
+
+### Owner follow-up, 2026-10-10: Consumer Growth
+
+| Item | Detail |
+|---|---|
+| **Decision** | Drop the 20% trailing P/E (backward-looking) and give its weight to Forward EV/EBITDA (NTM consensus on the peers' NTM multiple, under the street-basis guard). New weights: DCF .40, EV/Revenue .25, **Forward EV/EBITDA .20**, EV/EBITDA .15. P/E stays in `excluded` |
+| **Correction to the I9 note above** | `excluded` *was* enforced: an excluded leg is never valued, so the blend renormalised without it. Before batch E, Consumer Growth priced with no P/E (DCF effectively 50%). Batch E's I9 edit briefly let the 20% P/E price. This decision settles it |
+| **Evidence (local)** | ONON IV $31.89; Forward EV/EBITDA prices on `peer median ev_ebitda_ntm (forward basis)` |
+| **Tests** | 6,517 passed, 1 skipped, 4 xfailed. Goldens move only `param_version` (no golden is on this profile). Census 26 → 25 trailing-P/E carriers |
+| **Other confirmations, no code change** | Alt managers stay on P/DE (BX shows no IV until it is accepted; no Forward P/E carry-over). MET/PRU stay on embedded value or adjusted book. BRK-B, infrastructure and resources wait for SOTP, NAV/concession and 2P inputs |

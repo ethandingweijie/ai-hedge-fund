@@ -2765,17 +2765,18 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "methods": [
                 {"name": "DCF",        "weight": 0.40, "anchor": True,  "implementable": True},
                 {"name": "EV/Revenue", "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E",        "weight": 0.20, "anchor": False, "implementable": True},
+                # Owner, 2026-10-10: the trailing P/E (20%) is dropped -- backward-looking and inflated in a hypergrowth
+                # phase -- and its weight goes to the forward EBITDA multiple (NTM consensus on the peers' NTM multiple).
+                {"name": "Forward EV/EBITDA", "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "EV/EBITDA",  "weight": 0.15, "anchor": False, "implementable": True},
             ],
-            # Audit I9 (2026-10-10): "excluded" listed P/E while the table weights it at 0.20 -- the engine priced it.
-            # The pricing is kept and the record now says so; whether to drop the leg is an owner decision.
-            "excluded": [],
+            "excluded": ["P/E"],
             "rationale": (
                 "High-growth consumer brands (CAGR ≥ 15%) with strong FCF margins are "
-                "valued on a blend of DCF intrinsic value (40%) and revenue/EBITDA/earnings market comps. "
-                "EV/Revenue prices against peer brands at a similar growth stage; EV/EBITDA provides "
-                "a current-profitability floor; trailing P/E carries 20% (inflated in a hypergrowth phase)."
+                "valued on a blend of DCF intrinsic value (40%) and forward-looking market comps. "
+                "EV/Revenue prices against peer brands at a similar growth stage; forward EV/EBITDA (20%) prices next "
+                "year's earnings power; trailing EV/EBITDA provides a current-profitability floor. Trailing P/E is "
+                "excluded (owner, 2026-10-10): backward-looking and inflated in a hypergrowth phase."
             ),
         },
         # ── Membership / Subscription Retail profile ──────────────────────
