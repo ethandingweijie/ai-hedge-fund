@@ -328,7 +328,30 @@ def targets_for(block: dict, scenario: str, hist: dict) -> dict:
         if val is not None and y1 and yT and yT > y1:
             out["target"] = {"metric": str(mt["metric"]), "year_index": yT - y1 + 1, "target_year": str(mt["target_year"]),
                              "value": val, "unit": mt.get("unit"), "basis": mt.get("basis"), "source": mt.get("source")}
+            why = _segment_scoped_target(mt, val, hist)
+            if why:
+                out["target"] = None
+                out["target_dropped"] = why
     return out
+
+
+_MARGIN_TARGETS = ("ebitda_margin", "operating_margin", "ebit_margin")
+
+
+def _segment_scoped_target(mt: dict, val: float, hist: dict) -> Optional[str]:
+    """Why a medium-term target is not the company's own, or None. 2026-11-12 (09988.HK): the extractor took a
+    segment's commitment ("operating break-even for Quick Commerce" by FY2029) as the group's operating-margin
+    target; the forecast drove the group from a 13.6% margin to zero, FCF negative, and the DCF leg fell out."""
+    scope = str(mt.get("scope") or "").strip().lower()
+    label = f"{mt.get('metric')} {val:.1%} by {mt.get('target_year')}" if str(mt.get("metric")) in _MARGIN_TARGETS else f"{mt.get('metric')} {val:g} by {mt.get('target_year')}"
+    if scope and scope not in ("company", "group", "consolidated"):
+        return f"Medium-term target dropped ({label}): scoped to {scope} ({str(mt.get('basis') or '')[:80]}), not the company"
+    trailing = hist.get("ebit_margin")
+    if (str(mt.get("metric")) in _MARGIN_TARGETS and val <= 0.0
+            and isinstance(trailing, (int, float)) and trailing > 0.0):
+        return (f"Medium-term target dropped ({label}): a break-even or loss margin for a company earning "
+                f"{trailing:.1%} is a segment's target, not the group's ({str(mt.get('basis') or '')[:80]})")
+    return None
 
 
 def _year(s: str) -> Optional[int]:
@@ -547,6 +570,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     for _l in lead:
         _lead_rev *= (1.0 + _l)
     dec = deconstruct(tg, {**hist, "revenue": _lead_rev}, shares, cfg, market_growth)
+    if tg.get("target_dropped"):
+        dec["flags"].append(tg["target_dropped"])
     if lead:
         dec["lead_years"] = [round(x, 6) for x in lead]
         dec["flags"].append(f"Research FY+1 is {block.get('fiscal_year_1')} against a last actual of FY{_fy0}: "

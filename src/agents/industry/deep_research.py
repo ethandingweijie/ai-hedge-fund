@@ -1122,7 +1122,7 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     '  "consensus": {"revenue_growth_fy1": n, "eps_fy1": n, "as_of": "<date or null>", "source": "<...>"},\n'
     '  "guidance_vs_consensus_pct": n,\n'
     '  "medium_term_target": {"metric": "eps|revenue|revenue_growth|ebitda_margin|operating_margin", "target_year": "<FY label, e.g. FY2029>", '
-    '"low": n, "mid": n, "high": n, "unit": "<USD per share | USD bn | decimal>", "basis": "<workplan, investor day, breakeven commitment>", "source": "<publisher, date>"} or null,\n'
+    '"low": n, "mid": n, "high": n, "unit": "<USD per share | USD bn | decimal>", "basis": "<workplan, investor day, breakeven commitment>", "scope": "company|segment", "source": "<publisher, date>"} or null,\n'
     '  "track_record": "<=120 chars: beats/meets/misses and bias>",\n'
     '  "family_metrics": {"family": "bank|insurer|null",\n'
     '     "bank": {"loan_growth_fy1": n, "loan_growth_fy2": n, "nim_fy1": n, "nim_fy2": n, "fee_income_growth_fy1": n, "fee_income_growth_fy2": n,\n'
@@ -1150,7 +1150,9 @@ _GUIDANCE_ESTIMATES_SYSTEM = (
     "forward with the note's cycle view (2D) -- never extrapolate a one-off.\n"
     "- medium_term_target: ONLY a target management has stated for a year beyond FY+2 (a 2029 EPS "
     "workplan, a margin target, a capex breakeven year); null when there is none. Decimals for "
-    "rates and margins; the EPS or revenue number as stated for amounts. Never invent one.\n"
+    "rates and margins; the EPS or revenue number as stated for amounts. Never invent one. "
+    "COMPANY-WIDE only: a segment's or business line's target (one unit's break-even year, a "
+    "division's margin) is not the company's -- leave it out; scope is \"company\".\n"
     "- confidence: HIGH = formal ranged guidance within the last quarter and a consistent track "
     "record; MEDIUM = guidance exists but is qualitative, stale or the record is mixed; LOW = no "
     "guidance and thin consensus.\n"
@@ -1294,6 +1296,8 @@ def _normalize_guidance_estimates(parsed: dict) -> dict:
                        "source": (str(mt_in.get("source"))[:160] if mt_in.get("source") else None)}
         if medium_term["mid"] is None and medium_term["low"] is None and medium_term["high"] is None:
             medium_term = None
+        elif mt_in.get("scope"):
+            medium_term["scope"] = str(mt_in["scope"]).strip().lower()[:20]
     # Owner, 2026-10-03 (step two): the family's own guided metrics, for the earnings-and-capital model.
     fm_in = parsed.get("family_metrics") if isinstance(parsed.get("family_metrics"), dict) else {}
     family_metrics = None

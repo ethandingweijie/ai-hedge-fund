@@ -106,3 +106,59 @@ def test_a_resume_bundle_is_never_discarded_for_missing_2g(monkeypatch):
     bundle = {**_hit({"2a": "x"}), "research_tier": "anthropic_web"}
     got = dr._resolve_research_cache("09988.HK", resume_research=bundle, max_age_days=None)
     assert got is not None
+
+
+# ── 09988.HK re-run: a segment's break-even target drove the group's margin to zero ────────────────
+
+from src.agents.analysis import guidance_forecast as gfm
+
+_gfs = importlib.util.spec_from_file_location("_gft2", Path(__file__).resolve().parent / "test_guidance_forecast.py")
+_gft = importlib.util.module_from_spec(_gfs)
+_gfs.loader.exec_module(_gft)
+
+_QUICK_COMMERCE = {"metric": "operating_margin", "target_year": "FY2029", "low": 0.0, "mid": 0.0, "high": 0.0, "unit": "decimal",
+                   "basis": "operating break-even commitment for Quick Commerce", "source": "Q1 FY27 call"}
+
+
+def _with_target(mt):
+    return {**copy.deepcopy(_gft._BLOCK), "medium_term_target": mt}
+
+
+@pytest.mark.parametrize("scenario", ["bear", "base", "bull"])
+def test_a_break_even_margin_target_on_a_profitable_company_is_dropped_as_segment_scope(scenario):
+    t = gfm.targets_for(_with_target(_QUICK_COMMERCE), scenario, {"ebit_margin": 0.136})
+    assert t["target"] is None
+    assert "segment's target" in t["target_dropped"] and "Quick Commerce" in t["target_dropped"]
+
+
+def test_a_target_the_extractor_scoped_to_a_segment_is_dropped():
+    mt = {**_QUICK_COMMERCE, "mid": 0.12, "low": 0.12, "high": 0.12, "scope": "segment"}
+    t = gfm.targets_for(_with_target(mt), "base", {"ebit_margin": 0.136})
+    assert t["target"] is None and "scoped to segment" in t["target_dropped"]
+
+
+def test_a_company_margin_target_is_kept():
+    mt = {**_QUICK_COMMERCE, "low": 0.18, "mid": 0.20, "high": 0.22, "basis": "group operating margin target", "scope": "company"}
+    t = gfm.targets_for(_with_target(mt), "base", {"ebit_margin": 0.136})
+    assert t["target"] and t["target"]["value"] == pytest.approx(0.20) and not t.get("target_dropped")
+
+
+def test_a_loss_makers_own_break_even_commitment_is_kept():
+    t = gfm.targets_for(_with_target(_QUICK_COMMERCE), "base", {"ebit_margin": -0.25})
+    assert t["target"] and t["target"]["value"] == 0.0
+
+
+def test_the_forecast_keeps_its_margin_and_flags_the_dropped_target():
+    kw = dict(scenario="base", series=_gft._SERIES, profile_name="Managed Care", sector="Healthcare", wacc=0.08, tgr=0.025,
+              shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+    clean = gfm.build_forecast(_with_target(None), **kw)                  # the same block with no medium-term target
+    seg = gfm.build_forecast(_with_target(_QUICK_COMMERCE), **kw)
+    assert [r["ebit_margin"] for r in seg["rows"]] == pytest.approx([r["ebit_margin"] for r in clean["rows"]])
+    assert any("Medium-term target dropped" in f for f in seg["flags"])
+
+
+def test_the_extractor_keeps_the_scope_it_was_asked_for():
+    out = dr._normalize_guidance_estimates({"estimates": {"base": {"revenue_growth_fy1": 0.09}},
+                                            "medium_term_target": {**_QUICK_COMMERCE, "scope": "Segment"}})
+    assert out["medium_term_target"]["scope"] == "segment"
+    assert "COMPANY-WIDE only" in dr._GUIDANCE_ESTIMATES_SYSTEM
