@@ -162,3 +162,36 @@ def test_the_extractor_keeps_the_scope_it_was_asked_for():
                                             "medium_term_target": {**_QUICK_COMMERCE, "scope": "Segment"}})
     assert out["medium_term_target"]["scope"] == "segment"
     assert "COMPANY-WIDE only" in dr._GUIDANCE_ESTIMATES_SYSTEM
+
+
+# ── 09988.HK second re-run: EPS per ADS set a 109.6% EBIT margin once the segment target was gone ──────
+
+def _ads_block(mult):
+    blk = _with_target(None)
+    for sc in blk["estimates"].values():
+        for k in ("eps_fy1", "eps_fy2"):
+            if sc.get(k) is not None:
+                sc[k] = sc[k] * mult
+    return blk
+
+
+def _kw():
+    return dict(scenario="base", series=_gft._SERIES, profile_name="Managed Care", sector="Healthcare", wacc=0.08, tgr=0.025,
+                shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+
+
+def test_an_eps_off_the_share_basis_does_not_set_the_margin_and_the_share_check_fails():
+    fc = gfm.build_forecast(_ads_block(20.0), **_kw())                # an EPS in the wrong unit: far past any margin it could earn
+    assert max(r["ebit_margin"] for r in fc["rows"]) < 0.10
+    assert any("not on the model's share basis" in f for f in fc["flags"])
+    inv3 = next(i for i in fc["invariants"] if i["id"] == 3)
+    assert inv3["ok"] is False                                        # the check now bites, and the intervention acts
+
+
+def test_a_plausible_eps_implied_margin_still_replaces_a_conflicting_guided_margin():
+    assert gfm._eps_margin_plausible(0.08 * 100, 100, {"ebit_margin": 0.05}) is True       # 8% against 5%: EN3 applies
+    assert gfm._eps_margin_plausible(1.096 * 100, 100, {"ebit_margin": 0.136}) is False    # BABA's 109.6%
+    assert gfm._eps_margin_plausible(0.30 * 100, 100, {"ebit_margin": 0.136}) is True      # within 20 points
+    assert gfm._eps_margin_plausible(0.50 * 100, 100, {}) is True                           # no trailing margin, no bound
+    assert gfm._eps_margin_plausible(0.115 * 100, 100, {"ebit_margin": 0.114}) is True     # BSL.SI: the EPS sits on its own margin
+    assert gfm._eps_margin_plausible(0.125 * 100, 100, {"ebit_margin": 0.056}) is True     # 01801.HK: a biotech turning profitable

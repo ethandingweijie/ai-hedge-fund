@@ -454,6 +454,15 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
             # one-off costs, so it cannot set a GAAP margin -- the guided / history margin stands.
             out["flags"].append(f"Guided EPS is on an adjusted (non-GAAP) basis: it implies a {implied_tax:.0%} tax-and-"
                                 f"non-operating take against a GAAP margin, so it does not set the margin ({mT:.1%} stands)")
+        elif not (0.0 <= implied_tax <= 0.45) and not _eps_margin_plausible(ni_T_from_eps / (1.0 - tax) + interest, revT, hist):
+            # 2026-11-12 (09988.HK): research EPS per ADS (8 shares) over ordinary shares implied a 109.6% EBIT margin;
+            # taking it made the share-count check pass by construction (EPS x shares = net income) and sent the DCF
+            # to 646 against a 92 spot. An implausible implied margin means the EPS is off the model's share basis:
+            # the margin stands, and the share-count check fails and acts on the EPS.
+            out["eps_margin_implausible"] = (ni_T_from_eps / (1.0 - tax) + interest) / revT if revT else None
+            out["flags"].append(f"Guided EPS implies an EBIT margin of {out['eps_margin_implausible']:.1%} against "
+                                f"{float(hist.get('ebit_margin') or 0.0):.1%} trailing: not on the model's share basis (ADS, units or "
+                                f"currency), so it does not set the margin ({mT:.1%} stands)")
         elif not (0.0 <= implied_tax <= 0.45):
             # Owner, 2026-10-04 (plan EN3): flagged AND resolved. Guided EPS is the endpoint management and
             # the street both state, and it carries the share count; the margin that delivers it at the
@@ -471,6 +480,15 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
         out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest
         out["margin_T_implied"] = out["ebit_T_implied"] / revT if revT else None
     return out
+
+
+def _eps_margin_plausible(ebit_implied: float, rev: float, hist: dict) -> bool:
+    """Whether the EBIT margin a guided EPS implies is one the company could earn: at most double its trailing EBIT
+    margin or 20 points above it, whichever is higher. No trailing margin, no bound (EN3 applies as before)."""
+    h = hist.get("ebit_margin")
+    if not rev or not isinstance(h, (int, float)):
+        return True
+    return ebit_implied / rev <= max(2.0 * h, h + 0.20)
 
 
 # ── the forecast ──────────────────────────────────────────────────────────────
@@ -515,6 +533,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     tg = targets_for(block, scenario, hist)
     tg["eps_adjusted"] = bool((block or {}).get("_eps_adjusted"))     # plan E28
     tg["street_m1"] = _num((block or {}).get("_street_ebitda_margin_fy1"))
+    tg["mid_cycle"] = _num((block or {}).get("_mid_cycle_ebit_margin"))           # owner, 2026-11-12 (cycle.py)
+    tg["cycle_reversion_years"] = _num((block or {}).get("_cycle_reversion_years"))
     if tg["g1"] is None:
         return None
     # Owner, 2026-10-04 (plan 1B.1): guided EPS is in the filing's currency; net income here is in
@@ -625,10 +645,23 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     for t in range(1, PROJECTION_YEARS + 1):
         rev_all.append(rev_all[-1] * (1.0 + growth_sched[t - 1]))
     # margin path: the archetype curve to the target margin, held after T (steady state)
+    # Owner, 2026-11-12: a cyclical does not hold the margin it is guided to -- after the guided years it returns to
+    # its own mid-cycle EBIT margin over the reversion years (a peak fades, a trough recovers), and the terminal
+    # value capitalises mid-cycle.
+    _mid = tg.get("mid_cycle")
+    _R = max(1, int(tg.get("cycle_reversion_years") or 3))
     margins = []
     for t in range(1, PROJECTION_YEARS + 1):
         w = curve[t - 1] if t <= T else 1.0
-        margins.append(m0 + (mT - m0) * w)
+        m_t = m0 + (mT - m0) * w
+        if _mid is not None and t > T:
+            m_t = mT + (float(_mid) - mT) * min(1.0, (t - T) / float(_R))
+        margins.append(m_t)
+    _mcr = None
+    if _mid is not None:
+        dec["flags"].append(f"Cyclical: the EBIT margin returns from the guided {mT:.1%} to its mid-cycle {float(_mid):.1%} "
+                            f"over {_R} years after year {T}; the terminal value capitalises mid-cycle")
+        _mcr = {"from": mT, "to": float(_mid), "years": _R, "after_year": T}
     # three statements
     da_prev, life = hist["da"], float(cfg["da_useful_life_years"])
     alpha, nwc_i = hist["capex_alpha"], hist["nwc_intensity"]
@@ -809,6 +842,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "calibration_applied": calibration_applied,
         "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
         "street_years": T_rev - T,
+        "mid_cycle_reversion": _mcr,
         "capex_rule": capex_rule,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
