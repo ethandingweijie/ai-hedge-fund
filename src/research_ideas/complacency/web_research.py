@@ -27,7 +27,8 @@ Implementation notes (from src/agents/industry/deep_research.py):
   - DashScope's enable_search requires `stream=True` (non-streaming = 400).
   - Cannot combine with `enable_thinking` (errors).
   - search_options.search_strategy="agent" lets Qwen run multiple
-    searches before synthesising.
+    searches before synthesising; the flash tier only accepts "pro"
+    (deep_research._qwen_search_extra_body picks per model).
   - Empty-content failures happen under concurrent load; retry once.
 """
 from __future__ import annotations
@@ -121,6 +122,12 @@ def qwen_web_search(
 
     last_exc: Exception | None = None
     from src.research_ideas.complacency import qwen_throttle
+    # Model-aware search options, shared with deep research: the flash tier
+    # (prod DEEP_RESEARCH_MODEL=qwen3.8-flash) 400s on search_strategy="agent"
+    # ("The current model does not support the agent search strategy"), which
+    # took Idea of the Day and the complacency web research down.
+    from src.agents.industry.deep_research import _qwen_search_extra_body
+    search_body = _qwen_search_extra_body(QWEN_RESEARCH_MODEL)
     for attempt in range(retries + 1):
         # Process-wide throttle: blocks if 429-cooldown active or
         # bucket empty. weight=2 because web-search calls are heavier
@@ -133,10 +140,7 @@ def qwen_web_search(
                     {"role": "system", "content": system_prompt},
                     {"role": "user",   "content": user_prompt},
                 ],
-                extra_body={
-                    "enable_search": True,
-                    "search_options": {"search_strategy": "agent"},
-                },
+                extra_body=search_body,
                 stream=True,
             )
 
