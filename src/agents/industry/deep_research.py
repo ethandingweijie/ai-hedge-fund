@@ -4449,7 +4449,32 @@ def _resolve_research_cache(
         )
         _cached = None
 
+    # 2026-11-12 (09988.HK): archived research written before section 2G existed (2026-10-03) has no
+    # guidance to extract, and the fast path reused it at any age -- so the name never got guidance
+    # estimates, a guidance forecast or forward statements. One fresh pass writes 2G; later runs reuse it.
+    if (_cached is not None and not resume_research
+            and not _research_has_guidance(_cached) and _pre_2g_refresh_enabled()):
+        progress.update_status(
+            agent_id, ticker,
+            f"Cached research ({_cached.get('age_days') or 0:.1f}d old) predates section 2G "
+            f"(guidance -> estimates) — discarding, will run fresh to build forward estimates"
+        )
+        _cached = None
+
     return _cached
+
+
+def _pre_2g_refresh_enabled() -> bool:
+    """Kill switch PRE_2G_RESEARCH_REFRESH=false keeps reusing pre-2G archived research."""
+    return os.environ.get("PRE_2G_RESEARCH_REFRESH", "true").strip().lower() not in ("0", "false", "no", "off", "")
+
+
+def _research_has_guidance(cached: dict) -> bool:
+    """True when archived research carries a 2G section or a GUIDANCE_BLOCK the estimates extractor can read."""
+    secs = cached.get("deep_research_sections") or {}
+    if isinstance(secs, dict) and ((secs.get("2g") or secs.get("2G") or "").strip()):
+        return True
+    return "GUIDANCE_BLOCK_START" in str(cached.get("deep_research_text") or "")
 
 
 def _research_one_ticker(

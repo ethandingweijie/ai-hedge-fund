@@ -23,6 +23,8 @@ from statistics import median
 from typing import Optional
 
 YEARS = 5
+# An as-filed A = L + E gap at or below this share of total assets is the filing's rounding, absorbed at the opening.
+OPENING_ROUNDING_TOLERANCE = 1e-6
 
 DEFAULTS = {
     "interest_rate_bounds": (0.005, 0.15),
@@ -99,6 +101,13 @@ def opening_from_raw(raw_financials: Optional[dict]) -> Optional[dict]:
     tl = out.get("total_liabilities")
     out["other_noncurrent_liabilities"] = (tl - (cl or 0.0) - (out.get("long_term_debt") or 0.0)) if tl is not None else 0.0
     out["balance_gap_as_filed"] = ((ta or 0.0) - (tl or 0.0) - (out.get("equity") or 0.0) - (out.get("minority_interest") or 0.0)) if ta is not None else None
+    # 2026-11-12 (00177.HK): a filing that misses A = L + E by its own rounding (HKD 1,000 on 96bn) carried the gap
+    # into every forecast year and failed assertion #1, withholding the statements. An immaterial gap is a rounding
+    # residual like the other "other" lines; a material one stays and fails the suite, as it should.
+    gap = out["balance_gap_as_filed"]
+    if gap and ta and abs(gap) <= OPENING_ROUNDING_TOLERANCE * abs(ta):
+        out["other_noncurrent_liabilities"] += gap
+        out["balance_gap_absorbed"] = gap
     return out
 
 
@@ -306,6 +315,9 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         notes.append("Cash would fall below the opening level in " + ", ".join(c["year"] for c in checks if c["revolver_draw"] > 0) + "; a revolver draw keeps it there (shown in short-term debt).")
     if price is None and bb_target:
         notes.append("No spot price for the buyback: cash is spent, the share count is held.")
+    if opening.get("balance_gap_absorbed"):
+        notes.append(f"The filing's own balance sheet misses A = L + E by {opening['balance_gap_absorbed']:,.0f} (rounding); "
+                     "the gap is carried in other non-current liabilities so the opening year ties.")
     notes.append("Minority interest and 'other' balance-sheet lines are held at the opening year; goodwill and intangibles are not amortised separately (all D&A rolls PP&E).")
     failures = [r for r in recon if not r["ok"]]
     reconciliation = {"ok": not failures, "assertions": recon, "failures": failures,

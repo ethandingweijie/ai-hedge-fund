@@ -24,6 +24,13 @@ import src.memory.run_archive as run_archive
 from src.memory.run_archive import LATEST_DEV_ADDENDUM_MARKER
 
 
+@pytest.fixture(autouse=True)
+def _reuse_pre_2g_fixtures(monkeypatch):
+    """These fixtures' archived research has no section 2G; the cache mechanics under test are independent of
+    the pre-2G refresh (2026-11-12), which tests/test_forward_estimates_reinstated.py pins."""
+    monkeypatch.setenv("PRE_2G_RESEARCH_REFRESH", "false")
+
+
 # ── tmp-archive fixture ───────────────────────────────────────────────────────
 
 @pytest.fixture

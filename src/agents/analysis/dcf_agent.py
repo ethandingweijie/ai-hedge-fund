@@ -589,6 +589,24 @@ def _interest_is_cost_of_goods(profile_name, sector) -> bool:
         pass
     return (sector or "") == "Financials" and not (profile_name or "")
 
+
+#: 2026-11-12 (BX): an asset manager keeps the levered DCF basis (its family sits in _INTEREST_IS_COST_FAMILIES),
+#: but its statements are fees, compensation and a working-capital balance sheet -- the three-statement roll fits.
+#: Only a family whose estimates need an earnings-and-capital model withholds the statements.
+_STATEMENTS_ROLL_FAMILIES = frozenset({"Fee financials"})
+
+
+def _statements_need_capital_model(profile_name, sector) -> bool:
+    """True when the three-statement working-capital roll does not describe the business (banks, insurers,
+    property and holdcos); an asset-light fee business takes the roll even though its DCF stays levered."""
+    if not _interest_is_cost_of_goods(profile_name, sector):
+        return False
+    try:
+        from src.data.report_families import report_family_for
+        return report_family_for(profile_name or "") not in _STATEMENTS_ROLL_FAMILIES
+    except Exception:  # noqa: BLE001
+        return True
+
 # Retries for the line-items fetch — a single FMP hiccup shouldn't blank the
 # whole Valuation Methodology panel. Short exponential backoff (1.5s, 3s).
 _LINE_ITEMS_MAX_RETRIES = 2
@@ -16846,7 +16864,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _fc_ctx["fx_to_valuation"] = float(fx_rate or 1.0)       # statement → valuation currency
                         _fc_ctx["statement_assumptions"] = _ts.assumptions_from_history(
                             _raw_fin, _fc_ctx["history"], spot=_fc_ctx["inputs"].get("spot"))
-                        _fc_ctx["statements_family_ok"] = not _interest_is_cost_of_goods(profile_name, sector)
+                        _fc_ctx["statements_family_ok"] = not _statements_need_capital_model(profile_name, sector)
                         if _bank_models.get("base"):
                             _fc_ctx["bank_model"] = {"kind": _bank_models["base"].get("kind"), "opening": _bank_models["base"].get("opening"),
                                                      "assumptions": _bank_models["base"].get("assumptions")}
