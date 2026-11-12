@@ -6127,6 +6127,26 @@ _NAV_PRIMARY_BAND = 0.30
 _MARGIN_PEAK_WINDOW = 7             # years of operating margin the median and sigma are read over
 _MARGIN_PEAK_SIGMA = 1.5            # above median + 1.5 sigma the EBITDA and P/E legs move to mid-cycle
 _MARGIN_PEAK_SWAPS = {"Forward EV/EBITDA": "EV/EBITDA (norm)", "EV/EBITDA": "EV/EBITDA (norm)", "P/E": "P/E (norm)"}
+#: Owner, 2026-11-12: at a cycle peak (src/agents/analysis/cycle.py) these legs capitalise mid-cycle earnings instead.
+_CYCLE_PEAK_SWAPS = {"Forward EV/EBITDA": "EV/EBITDA (norm)", "EV/EBITDA": "EV/EBITDA (norm)",
+                     "Forward P/E": "P/E (norm)", "P/E": "P/E (norm)"}
+
+
+def _merge_named_rows(methods: list) -> list:
+    """Rows that now share a name (two legs swapped onto one normalised leg) become one row, weights summed and the
+    anchor kept -- two rows of one leg would otherwise count it twice in every consumer of the list."""
+    out: list = []
+    seen: dict = {}
+    for m in methods:
+        if not isinstance(m, dict) or m.get("name") not in seen:
+            if isinstance(m, dict):
+                seen[m.get("name")] = len(out)
+            out.append(dict(m) if isinstance(m, dict) else m)
+            continue
+        row = out[seen[m.get("name")]]
+        row["weight"] = float(row.get("weight") or 0.0) + float(m.get("weight") or 0.0)
+        row["anchor"] = bool(row.get("anchor")) or bool(m.get("anchor"))
+    return out
 _BACKLOG_MULTIPLE_COVER = 1.2       # funded backlog / trailing revenue under which the multiple scales down linearly
 _EBITDA_BRIDGE_PROFILES = frozenset({"Capital Goods", "Long-Cycle E&C", "Equipment Rental", "Industrial Distribution",
                                      "Airlines", "Rail / Logistics", "Trucking & Parcel Logistics", "Container & Bulk Shipping"})
@@ -16314,6 +16334,51 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # `methods_used`, `methods_unavailable` and the bank block's
         # `primary_anchor` must all read; `_pe_norm_flag` is the disclosure each
         # scenario appends to its own flag list.
+        # Owner, 2026-11-12 (cyclical and money-losing firms, phase 1): where the company sits in its cycle, read on
+        # up to fifteen years of its own income statements (src/agents/analysis/cycle.py). On a cyclical PROFILE:
+        #   * normalised EBIT / EBITDA / net income are rebuilt on the ten-year mid-cycle margins (net income at
+        #     today's interest burden), so every normalised leg capitalises the same mid-cycle as the forecast;
+        #   * at a cycle PEAK the trailing and forward EBITDA and P/E legs move onto those mid-cycle figures;
+        #   * the forecast margin returns to mid-cycle after the guided years (guidance_forecast).
+        _cyc = None
+        try:
+            from src.agents.analysis import cycle as _cycm
+            _cyc_hist = _cycm.fetch_long_history(ticker, api_key)
+            _cyc_long = len(_cyc_hist) > len(series)
+            _cyc = _cycm.measure(_cyc_hist if _cyc_long else series,
+                                 profile_cyclical=(profile_name in _CYCLICAL_PROFILES))
+            if _cyc:
+                _cyc["history_source"] = (f"income statements, {len(_cyc_hist)} years" if _cyc_long
+                                          else "the valuation series")
+            most_recent["_cycle"] = _cyc
+            _cyc_note = _cycm.describe(_cyc)
+            if _cyc_note:
+                ticker_forward_flags.append(_cyc_note)
+            if _cyc and _cyc.get("cyclical") and isinstance(_guid_est, dict) and _guid_est:
+                _guid_est = {**_guid_est, "_mid_cycle_ebit_margin": _cyc["mid_cycle_margin"],
+                             "_cycle_reversion_years": _cyc["reversion_years"]}
+            _rev_cur = (series[-1] or {}).get("revenue") if series else None
+            if (_cyc and _cyc.get("cyclical") and _cyc_long and _cyc["n_years"] >= 8
+                    and isinstance(_rev_cur, (int, float)) and _rev_cur > 0):
+                _ebitda_m = _cycm.mid_cycle_ratio(_cyc_hist, "ebitda")
+                _mid_e = float(_cyc["mid_cycle_margin"])
+                _ie_c = abs(float(most_recent.get("interest_expense") or 0.0))
+                _before = {k: most_recent.get("normalized_" + k) for k in ("ebit", "ebitda", "net_income")}
+                most_recent["normalized_ebit"] = _mid_e * float(_rev_cur)
+                if _ebitda_m is not None:
+                    most_recent["normalized_ebitda"] = _ebitda_m * float(_rev_cur)
+                most_recent["normalized_net_income"] = (_mid_e * float(_rev_cur) - _ie_c) * (1.0 - _UFCF_TAX_DEFAULT)
+                most_recent["_normalized_net_income_basis"] = (
+                    f"mid-cycle EBIT margin {_mid_e:.1%} ({_cyc['mid_cycle_years']}-year median) x current revenue, "
+                    f"less today's interest, taxed at {_UFCF_TAX_DEFAULT:.0%}")
+                _cyc["normalized_before"] = _before
+                ticker_forward_flags.append(
+                    f"Normalised earnings on the {_cyc['mid_cycle_years']}-year mid-cycle (cyclical): EBIT margin "
+                    f"{_mid_e:.1%}" + (f", EBITDA margin {_ebitda_m:.1%}" if _ebitda_m is not None else "")
+                    + " x current revenue; net income at today's interest burden (was the five-year mean)")
+        except Exception as _cyc_exc:                      # noqa: BLE001
+            _log.warning("[dcf] %s: cycle measure failed: %s", ticker, _cyc_exc)
+            most_recent["_cycle"] = None
         _pe_norm_methods: list = (profile_data or {}).get("methods") or []
         _pe_norm_flag: str = ""
         _pe_norm_dev = _pe_normalization_deviation(most_recent)
@@ -16327,6 +16392,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if _pe_norm_swaps:
             _pe_norm_methods = _apply_pe_norm_swaps(
                 _pe_norm_methods, _pe_norm_swaps)
+        # Owner, 2026-11-12: a cyclical at a cycle PEAK does not capitalise peak earnings in any multiple -- the
+        # trailing and forward EBITDA and P/E legs move onto the mid-cycle figures above (rows landing on the same
+        # normalised leg are merged, weights summed). Supersedes the observation-only peak-consensus record.
+        if _cyc and _cyc.get("cyclical") and _cyc.get("position") == "peak":
+            _present_c = {m.get("name") for m in _pe_norm_methods if isinstance(m, dict)}
+            _cyc_swaps = [{"from": f, "to": t} for f, t in _CYCLE_PEAK_SWAPS.items()
+                          if f in _present_c and t not in _pe_norm_excluded]
+            if _cyc_swaps:
+                _pe_norm_methods = _merge_named_rows(_apply_pe_norm_swaps(_pe_norm_methods, _cyc_swaps))
+                _pe_norm_flag = (_pe_norm_flag + " " if _pe_norm_flag else "") + (
+                    f"Cycle peak: EBIT margin {_cyc['latest_margin']:.1%} against a mid-cycle {_cyc['mid_cycle_margin']:.1%} "
+                    f"(z {_cyc['z']:+.1f}); " + ", ".join(f"{x['from']} -> {x['to']}" for x in _cyc_swaps)
+                    + " (cycle peak: no multiple capitalises peak earnings)")
+                _cyc["peak_swaps"] = _cyc_swaps
         # Wave 9 (owner, 2026-09-27): GATE_MARGIN_PEAK. A capital-goods margin above its seven-year median by more
         # than 1.5 sigma moves the EBITDA and P/E legs onto mid-cycle earnings for every scenario.
         _mp9 = None
@@ -20303,6 +20382,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "pipeline_input":        most_recent.get("_pipeline_input_summary"),
             "product_build":         most_recent.get("_product_build"),
             "reverse_dcf":           most_recent.get("_reverse_dcf"),
+            "cycle":                 most_recent.get("_cycle"),
             # Trailing dividend per share, in the listing currency (the FX
             # block above converts per-share fields in place). The research
             # rating's 12-month total shareholder return adds it to the target.

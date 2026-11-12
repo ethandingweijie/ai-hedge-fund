@@ -1390,19 +1390,21 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # The dispatch gap the docstring describes was closed on 2026-09-22: the
     # "EV/EBIT (norm)" leg (Boeing on a normalised EV/EBIT, owner framework) is
     # its one reader. Two occurrences: the write, and that branch's read.
-    assert src.count('"normalized_ebit"') == 2, "normalized_ebit gained a reader beyond EV/EBIT (norm)"
+    # THREE since 2026-11-12: a second WRITE -- the cycle measure rebuilds it on the ten-year mid-cycle margin for
+    # cyclical profiles (src/agents/analysis/cycle.py). Still one reader.
+    assert src.count('"normalized_ebit"') == 3, "normalized_ebit gained a reader beyond EV/EBIT (norm)"
     # THREE since 2026-09-20: the segment SOTP reconciles its estimated segment
     # EBITDA to this figure, so the parts sum to the company's own normalised
     # earnings. Phillips 66's segments summed to $16.6bn of EBITDA against the
     # $9.8bn it reported, because a peer basket's margin is a pure-play margin
     # and segment revenue is not pure-play revenue.
     # FOUR since 2026-10-04 (plan EN2): the recovery discount re-reads it.
-    assert src.count('"normalized_ebitda"') == 4
+    assert src.count('"normalized_ebitda"') == 5          # 2026-11-12: + the cycle measure's mid-cycle rebuild (a write)
     # SEVEN since 2026-09-19: the P/E (norm) leg trace reads it once more, to
     # label whether the bank fallback (equity x target ROE) supplied the
     # earnings -- a disclosure read for the Excel export, not a valuation one.
     # EIGHT since 2026-10-04 (plan EN2): the recovery discount re-reads it.
-    assert src.count('"normalized_net_income"') == 8
+    assert src.count('"normalized_net_income"') == 9          # 2026-11-12: + the cycle measure's mid-cycle rebuild (a write)
     # SIX since 2026-09-20: the FCF Yield leg on a cyclical profile now stands
     # on the same five-year normalisation as the EV/EBITDA and P/E legs, so
     # `_norm_fcf` is computed beside the other three (with a `free_cash_flow`
@@ -2625,7 +2627,7 @@ def test_every_blend_that_values_the_profile_reads_the_promoted_rows():
     # ── (1) computed once, above the loop ─────────────────────────────────
     assert body.count("_pe_normalization_deviation(") == 1
     assert body.count("_pe_norm_leg_swaps(") == 1
-    assert body.count("_apply_pe_norm_swaps(") == 2          # Wave 9: the margin-peak gate rewrites the same rows through the same helper
+    assert body.count("_apply_pe_norm_swaps(") == 3          # Wave 9 margin-peak gate; 2026-11-12 the cycle-peak swap (same rows, same helper)
     assert body.count('for scenario in ("base", "bear", "bull"):') == 1
 
     # On comment-stripped lines, and that is not stylistic. The `_cyc_rec`

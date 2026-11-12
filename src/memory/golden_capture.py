@@ -667,6 +667,9 @@ PINNED_ENV = {
     "DYNAMIC_MULTIPLES_ENABLED": "false",
     # Cross-sector audit E17 (2026-10-10): the HK / SG quote is a call the fixtures recorded before it existed.
     "HKSG_QUOTE_CROSSCHECK": "off",
+    # Owner, 2026-11-12: the cycle measure's 15-year income-statement fetch is a call the fixtures recorded before it
+    # existed; in replay the measure reads the valuation series.
+    "CYCLE_LONG_HISTORY": "off",
     "PYTHONUTF8": "1",
 }
 
