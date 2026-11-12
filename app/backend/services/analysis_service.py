@@ -253,6 +253,14 @@ _ARCHIVE_DDL = [
     )""",
 ]
 
+# Archive runs kept for the learning layer but hidden from History. Purging a
+# web report leaves its archive row behind (the 90/180-day scorers read
+# runs + ticker_signals), and History would then list that row as a CLI run.
+_HISTORY_HIDDEN_DDL = (
+    "CREATE TABLE IF NOT EXISTS history_hidden_runs ("
+    "run_id TEXT PRIMARY KEY, hidden_at TEXT)"
+)
+
 # Archive table indexes (runs + ticker_signals live in run_archive.db too)
 _ARCHIVE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_runs_run_at ON runs(run_at DESC)",
@@ -311,6 +319,7 @@ def _ensure_web_runs_table():
                 db.execute(idx_sql)
             except Exception:
                 pass
+        db.execute(_HISTORY_HIDDEN_DDL)
         return
 
     db_path = _get_db_path()
@@ -330,6 +339,7 @@ def _ensure_web_runs_table():
                 conn.execute(idx_sql)
             except Exception:
                 pass
+        conn.execute(_HISTORY_HIDDEN_DDL)
         conn.commit()
     finally:
         conn.close()
@@ -1379,6 +1389,7 @@ def get_history(
         ",".join("?" * len(imported_archive_ids)) if imported_archive_ids else "'__none__'"
     )]
     cli_params: list[Any] = list(imported_archive_ids)
+    cli_where.append("r.run_id NOT IN (SELECT run_id FROM history_hidden_runs)")
 
     if ticker:
         # Same tolerant match as the web_runs filter above — CLI archive rows
