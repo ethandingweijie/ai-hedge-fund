@@ -55,6 +55,16 @@ def test_dated_projection_is_mid_year_and_stubbed():
     assert rows[1]["discount_factor"] == pytest.approx(1.1 ** (-(f1 + 0.5)))
 
 
+def _value_driver_trace() -> dict:
+    """Owner, 2026-11-25: an engine that prices the value-driver terminal value (TV x (1 - g/RONIC), NOPAT/UFCF ratio)
+    records its inputs in the DCF trace; the workbook keys its terminal formula on that record. Before the change
+    the trace carries neither key and the workbook rebuilds the Gordon form."""
+    import inspect
+    if "terminal_ronic_spread" in inspect.signature(d._project_dcf).parameters:
+        return {"terminal_nopat_ratio": None, "terminal_ronic_spread": 0.0}
+    return {}
+
+
 def _dated_run():
     tm = d._dcf_timing("2025-09-30", "2026-06-30", "2026-10-04")
     sched = [0.18, 0.19, 0.2, 0.2, 0.21, 0.21, 0.21, 0.21, 0.21, 0.21]
@@ -67,7 +77,7 @@ def _dated_run():
         legs = copy.deepcopy(dr[s]["leg_inputs"])
         legs["DCF"].update(value=iv, pv_fcf_per_share=pv_f, pv_tv_per_share=pv_t, projection_rows=rows,
                            growth_schedule=None, growth_base=0.08, timing=tm, minority_interest=40.0,
-                           preferred_equity=5.0)
+                           preferred_equity=5.0, **_value_driver_trace())
         dr[s]["leg_inputs"] = legs
         dr[s]["method_iv_table"]["DCF"] = iv
         dr[s]["intrinsic_value"] = round(0.4 * iv + 0.4 * 230.0 + 0.2 * 180.0, 2)
@@ -94,11 +104,13 @@ def test_the_workbook_rebuilds_a_dated_projection_with_a_margin_path_to_zero():
 
 # ── 1A: the workbook ───────────────────────────────────────────────────────────
 
-def test_d1_an_unweighted_dcf_has_no_tab_and_one_summary_line():
+def test_d1_an_unweighted_dcf_is_a_labelled_shadow_and_one_summary_line():
+    # Audit 2026-11-25 (item 3): the unweighted DCF is built as a shadow -- weight 0, outside the blend.
     run = _wbt._run_with({}, [{"method": "EV/EBITDA", "value_key": "EV/EBITDA", "bucket": "multi", "weight": 0.6},
                               {"method": "P/E", "value_key": "P/E", "bucket": "multi", "weight": 0.4}])
     wb = load_workbook(io.BytesIO(build_workbook(run, "TEST")))
-    assert "DCF" not in wb.sheetnames
+    assert "DCF" in wb.sheetnames and wb["DCF"]["A1"].value.startswith("Shadow DCF -- weight 0")
+    assert any("Sensitivity: value per share, flat WACC" in str(c.value) for c in wb["DCF"]["A"] if c.value)
     lines = [str(c.value) for c in wb["Summary"]["A"] if c.value]
     assert sum(1 for x in lines if x.startswith("DCF EXCLUDED from the blend")) == 1
 
@@ -582,7 +594,7 @@ def test_i14_terminal_multiplier_scales_the_terminal_value_and_the_workbook_repr
         legs = copy.deepcopy(dr[s]["leg_inputs"])
         legs["DCF"].update(value=iv, pv_fcf_per_share=pv_f, pv_tv_per_share=pv_t, projection_rows=rows,
                            growth_schedule=None, growth_base=0.08, timing=tm, minority_interest=40.0,
-                           preferred_equity=5.0, terminal_loe_multiplier=0.8)
+                           preferred_equity=5.0, terminal_loe_multiplier=0.8, **_value_driver_trace())
         dr[s]["leg_inputs"] = legs
         dr[s]["method_iv_table"]["DCF"] = iv
         dr[s]["intrinsic_value"] = round(0.4 * iv + 0.4 * 230.0 + 0.2 * 180.0, 2)

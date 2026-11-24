@@ -4,6 +4,8 @@ probability-weighted and base-case targets each named (A9), every net-debt figur
 negative equity and the WACC the valuation used stated with its parts (A8)."""
 import importlib.util
 import io
+
+import pytest
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -41,8 +43,11 @@ def test_an_unweighted_sotp_trace_creates_no_tab_and_an_unweighted_dcf_says_so()
     wb = load_workbook(io.BytesIO(build_workbook(_run_without_dcf_weight(), "TEST", load_statements=_wbt._statements)))
     assert "SOTP" not in wb.sheetnames
     assert "SOTP" not in _col_a(wb["Cover"])
-    # Owner, 2026-10-04 (decision D1): an unweighted DCF is not an output -- no tab, one Summary line.
-    assert "DCF" not in wb.sheetnames
+    # Owner, 2026-10-04 (decision D1): an unweighted DCF is not an output -- one Summary line. Audit 2026-11-25:
+    # it is still built, as a labelled shadow (weight 0), so a DCF-specific failure stays traceable.
+    assert "DCF" in wb.sheetnames
+    assert str(wb["DCF"]["A1"].value).startswith("Shadow DCF -- weight 0, not in the blend")
+    assert not any("'DCF'!" in str(c.value) for c in wb["Blend"]["E"] if c.value)
     notes = [v for v in _col_a(wb["Summary"]) if v.startswith("DCF EXCLUDED from the blend")]
     assert len(notes) == 1 and "Test Profile profile weights EV/EBITDA, P/E" in notes[0]
     assert "blended intrinsic value" in notes[0]
@@ -65,7 +70,7 @@ def test_the_two_targets_and_the_three_net_debts_are_each_named():
     assert _R["net_debt"][0] == "Net debt / (cash) — FMP annual, lease liabilities included"   # the family history row's label
     # Alibaba review (2026-10-03, section 1): the bridge deducts minorities and preferreds on both tabs,
     # and the Summary's static column carries the same sign as the linked "Less:" cells.
-    assert "DCF" not in wb.sheetnames                 # D1: this fixture's DCF carries no weight
+    assert wb["DCF"]["A1"].value.startswith("Shadow DCF")   # D1: this fixture's DCF carries no weight
     _r3 = _wbt._run()
     _r3["data"]["dcf_range"]["TEST"]["financials_used"] = {"balance_sheet_period": "2026-06-28", "net_debt_basis": {
         "balance_sheet_date": "2026-06-28", "short_term_investments_netted": True, "accounting_basis": "US GAAP",
@@ -80,7 +85,7 @@ def test_the_two_targets_and_the_three_net_debts_are_each_named():
     r_nd = next(c.row for c in s3["A"] if str(c.value).startswith("Less: net debt — valuation basis"))
     _static, _linked = s3.cell(row=r_nd, column=2).value, s3.cell(row=r_nd, column=3).value
     _nd_trace = _wbt._run()["data"]["dcf_range"]["TEST"]["base"]["leg_inputs"]["DCF"]["net_debt"]
-    assert _static == -_nd_trace                      # "Less:" sign, matching the DCF tab's =-nd cell
+    assert _static == pytest.approx(-_nd_trace / 1e6)  # "Less:" sign, in millions, matching the DCF tab's =-nd cell
     assert str(_linked).startswith("='DCF'!") or str(_linked).startswith("=DCF!")
     assert any(v.startswith("Net debt — this tab's formula (debt − cash − short-term investments; leases excluded)") for v in _col_a(wb["BS"]))
 
