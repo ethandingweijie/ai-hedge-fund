@@ -75,8 +75,8 @@ export function AssumptionWatchCard({ ticker }: Props) {
     <div className="rounded-xl border border-border/70 bg-card shadow-sm p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-          Assumption Watch
+        <div className="text-[15px] font-semibold text-foreground">
+          Assumption watch
         </div>
         <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
           recursive steward
@@ -118,7 +118,7 @@ export function AssumptionWatchCard({ ticker }: Props) {
       {/* Variant drivers — where our view diverges most from the street */}
       {drivers.length > 0 && (
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/60 mb-1">
+          <div className="text-[12px] font-medium text-muted-foreground mb-1">
             Variant drivers
           </div>
           <div className="space-y-1">

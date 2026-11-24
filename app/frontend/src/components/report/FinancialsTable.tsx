@@ -195,7 +195,7 @@ export function FinancialsTable({ rawFinancials, ticker }: FinancialsTableProps)
 
   return (
     <Card className="p-4">
-      <h3 className="text-sm font-semibold mb-3">Financials — {ticker}</h3>
+      <h3 className="text-[15px] font-semibold mb-3">Financials</h3>
 
       {layout.kind === 'by-year' && (
         <MultiYearTable

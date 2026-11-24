@@ -5,7 +5,8 @@ import type { ValueTrapAnalysis } from '@/lib/reportTypes';
 
 interface ValueTrapChecklistProps {
   analysis?: ValueTrapAnalysis;
-  ticker: string;
+  /** Kept for call-site compatibility; the title no longer repeats it. */
+  ticker?: string;
 }
 
 const CHECKS = [
@@ -36,7 +37,7 @@ const rowTint: Record<string, string> = {
   GREEN: 'hover:bg-surface-2 dark:hover:bg-surface-2',
 };
 
-export function ValueTrapChecklist({ analysis, ticker }: ValueTrapChecklistProps) {
+export function ValueTrapChecklist({ analysis }: ValueTrapChecklistProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   if (!analysis) {
@@ -64,7 +65,7 @@ export function ValueTrapChecklist({ analysis, ticker }: ValueTrapChecklistProps
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Value Trap Audit — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold">Value trap check</h3>
         {verdict && (
           <span className={`text-xs px-2 py-1 rounded border font-semibold ${verdictCls}`}>
             {verdict}

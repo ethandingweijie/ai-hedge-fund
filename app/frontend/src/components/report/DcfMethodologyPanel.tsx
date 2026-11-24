@@ -78,7 +78,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   if (!dcfRange || Object.keys(dcfRange).length === 0) {
     return (
       <Card className="p-4">
-        <h3 className="text-sm font-semibold mb-1.5">Valuation Methodology — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold mb-1.5">Valuation methodology</h3>
         <p className="text-xs text-muted-foreground">
           {skipReason
             ? `Not available for this run — ${friendlySkipReason(skipReason)}.`
@@ -128,7 +128,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between mb-1 gap-2">
-        <h3 className="text-sm font-semibold">Valuation Methodology — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold">Valuation methodology</h3>
         {dcfRange.calibration_error && (
           <Badge variant="warning" className="h-5 px-2 text-[10px] shrink-0">
             BACKTEST WARNING
@@ -239,7 +239,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
           value in each scenario, then the blended value. Nothing here is computed for display. */}
       {methodBadges.length > 0 && (
         <div className="mt-4 overflow-x-auto">
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+          <div className="text-[12px] font-medium text-muted-foreground mb-1">
             Methods used
           </div>
           <table className="w-full text-xs">

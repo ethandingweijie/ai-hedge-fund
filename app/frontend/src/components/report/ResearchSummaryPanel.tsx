@@ -32,7 +32,7 @@ function parseSummary(text: string): React.ReactNode[] {
     blocks.push(
       <div key={currentSection ?? blocks.length} className="flex flex-col gap-1">
         {currentSection && (
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          <p className="text-[12px] font-medium text-muted-foreground">
             {currentSection}
           </p>
         )}
@@ -163,10 +163,9 @@ export function ResearchSummaryPanel({
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={15} className="text-amber-500" />
-          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            AI Research Summary
+          <span className="text-[15px] font-semibold text-foreground">
+            Research summary
           </span>
-          <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">{ticker}</span>
         </div>
 
         {loading && (

@@ -36,7 +36,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
   if (!decisionInputs) {
     return (
       <div className="rounded-xl border border-border/70 bg-card shadow-sm p-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
+        <div className="text-[15px] font-semibold text-foreground mb-2">
           Decision inputs
         </div>
         <p className="text-[12px] text-muted-foreground">
@@ -56,7 +56,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
     <div className="rounded-xl border border-border/70 bg-card shadow-sm p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+        <div className="text-[15px] font-semibold text-foreground">
           Decision inputs
         </div>
         {conviction?.value != null && (

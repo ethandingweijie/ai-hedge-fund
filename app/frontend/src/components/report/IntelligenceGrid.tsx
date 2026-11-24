@@ -26,25 +26,40 @@ interface IntelligenceGridProps {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** "HEAVILY_SHORTED" -> "Heavily shorted". */
+function sentence(s: string): string {
+  const t = s.replace(/_/g, ' ').toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 function badge(text: string, color: string) {
   return (
-    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${color}`}>
-      {text}
+    <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold ${color}`}>
+      {sentence(text)}
     </span>
   );
 }
 
+/**
+ * Signal pills: one accent for constructive reads, inverted monochrome for
+ * negative ones, an outline for neutral. Green/red stay reserved for price
+ * change; the label carries the direction.
+ */
 function signalColor(s: string): string {
   const u = (s ?? '').toUpperCase();
   if (['BULLISH', 'BUY', 'POSITIVE', 'HIGH_QUALITY', 'HIGH', 'ACCELERATING_UP', 'BEAT'].includes(u))
-    return 'bg-primary text-primary-foreground';
+    return 'bg-brand text-white';
   if (['BEARISH', 'SELL', 'NEGATIVE', 'LOW_QUALITY', 'HEAVILY_SHORTED', 'ACCELERATING_DOWN', 'MISS'].includes(u))
-    return 'bg-primary text-primary-foreground';
-  if (['NEUTRAL', 'HOLD', 'STABLE', 'MEDIUM', 'MODERATELY_SHORTED', 'DECELERATING'].includes(u))
-    return 'bg-yellow-500 text-white';
-  if (['LOW_SHORT_INTEREST', 'LOW'].includes(u))
-    return 'bg-surface-2 text-content-high';
-  return 'bg-muted text-muted-foreground';
+    return 'bg-foreground text-background';
+  return 'border border-border text-foreground';
+}
+
+/** Signals with no information: the card is hidden when one of these has no data either. */
+const EMPTY_SIGNALS = new Set(['', 'UNKNOWN', 'N/A', 'NONE', 'NO_DATA', 'INSUFFICIENT_DATA']);
+
+/** True when at least one of the given fields carries a real value (0 counts and empty strings do not). */
+function hasAnyValue(...vals: unknown[]): boolean {
+  return vals.some(v => v != null && v !== '' && v !== 0 && v !== '—' && !(typeof v === 'string' && EMPTY_SIGNALS.has(v.toUpperCase())));
 }
 
 function flagColor(f: string): string {
@@ -82,91 +97,112 @@ function fmtPct(v: number | null | undefined): string {
 }
 
 function Row({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  // Empty readings are left out rather than shown as "—".
+  if (value === '—' || value === '') return null;
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[10px] text-muted-foreground truncate">{label}</span>
-      <span className={`text-[11px] font-semibold tabular-nums shrink-0 ${valueClass ?? ''}`}>{value}</span>
+    <div className="flex items-center justify-between gap-3 py-1">
+      <span className="text-[13px] text-muted-foreground truncate">{label}</span>
+      <span className={`text-[14px] font-semibold tabular-nums shrink-0 ${valueClass ?? ''}`}>{value}</span>
     </div>
   );
 }
 
+const yesNo = (v: unknown) => (v == null ? '—' : v ? 'Yes' : 'No');
+const enumText = (v: unknown) => (v == null || v === '' ? '—' : sentence(String(v)));
+
 // ── Agent card renderers ───────────────────────────────────────────────────────
+// Each card has a matching *HasData check; the grid drops the cards with
+// nothing to say (an "Unknown" pill over a column of dashes reads as broken).
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type D = Record<string, any>;
 
+function insiderHasData(d: D) {
+  return hasAnyValue(d.net_buying_30d_usd, d.net_buying_90d_usd, d.buy_sell_ratio_12m, d.cluster_buy, d.conviction_sell_flag);
+}
 function InsiderCard({ d }: { d: D }) {
   const sig = d.signal ?? d.insider_signal ?? '';
   return (
-    <AgentCard title="Insider Activity" signal={sig}>
-      <Row label="Net Buying (30d)"  value={fmtMoney(d.net_buying_30d_usd)} valueClass={d.net_buying_30d_usd > 0 ? 'text-content-high' : 'text-content-high'} />
-      <Row label="Net Buying (90d)"  value={fmtMoney(d.net_buying_90d_usd)} />
-      <Row label="Buy/Sell Ratio 12m" value={d.buy_sell_ratio_12m != null ? fmtNum(d.buy_sell_ratio_12m, 2) : '—'} />
-      <Row label="Cluster Buy"       value={d.cluster_buy != null ? (d.cluster_buy ? 'Yes' : 'No') : '—'} valueClass={d.cluster_buy ? 'text-content-high' : ''} />
-      <Row label="Conviction Sell"   value={d.conviction_sell_flag != null ? (d.conviction_sell_flag ? '⚠ Yes' : 'No') : '—'} valueClass={d.conviction_sell_flag ? 'text-content-high' : ''} />
-      {d.data_source && <Row label="Source" value={d.data_source} />}
-      {d.analysis_note && <p className="text-[10px] text-muted-foreground/80 mt-1 line-clamp-2 italic">{d.analysis_note}</p>}
+    <AgentCard title="Insider activity" signal={sig}>
+      <Row label="Net buying (30d)"     value={d.net_buying_30d_usd ? fmtMoney(d.net_buying_30d_usd) : '—'} />
+      <Row label="Net buying (90d)"     value={d.net_buying_90d_usd ? fmtMoney(d.net_buying_90d_usd) : '—'} />
+      <Row label="Buy/sell ratio (12m)" value={d.buy_sell_ratio_12m != null ? fmtNum(d.buy_sell_ratio_12m, 2) : '—'} />
+      <Row label="Cluster buying"       value={yesNo(d.cluster_buy)} />
+      <Row label="Conviction selling"   value={yesNo(d.conviction_sell_flag)} />
+      {d.analysis_note && <p className="text-[13px] text-muted-foreground mt-1 line-clamp-2">{d.analysis_note}</p>}
     </AgentCard>
   );
 }
 
+function revisionHasData(d: D) {
+  return hasAnyValue(d.surprise_streak, d.eps_dispersion_pct, d.revenue_dispersion_pct, d.analyst_count, d.surprise_direction);
+}
 function RevisionCard({ d }: { d: D }) {
   const sig = d.revision_direction ?? d.signal ?? '';
+  const streak = d.surprise_streak;
   return (
-    <AgentCard title="Analyst Revisions" signal={sig}>
-      <Row label="Surprise Direction" value={d.surprise_direction ?? '—'} />
-      <Row label="Surprise Streak"    value={d.surprise_streak != null ? (d.surprise_streak > 0 ? `+${d.surprise_streak} beats` : `${d.surprise_streak} misses`) : '—'} valueClass={d.surprise_streak > 0 ? 'text-content-high' : d.surprise_streak < 0 ? 'text-content-high' : ''} />
-      <Row label="EPS Dispersion"     value={d.eps_dispersion_pct != null ? fmtPct(d.eps_dispersion_pct) : '—'} />
-      <Row label="Rev Dispersion"     value={d.revenue_dispersion_pct != null ? fmtPct(d.revenue_dispersion_pct) : '—'} />
-      <Row label="Estimate Spread"    value={d.estimate_dispersion ?? '—'} />
-      <Row label="Analyst Count"      value={d.analyst_count != null ? String(d.analyst_count) : '—'} />
-      {d.analysis_note && <p className="text-[10px] text-muted-foreground/80 mt-1 line-clamp-2 italic">{d.analysis_note}</p>}
+    <AgentCard title="Analyst revisions" signal={sig}>
+      <Row label="Last surprise"      value={hasAnyValue(d.surprise_direction) ? enumText(d.surprise_direction) : '—'} />
+      <Row label="Surprise streak"    value={streak ? (streak > 0 ? `${streak} beats` : `${Math.abs(streak)} misses`) : '—'} />
+      <Row label="EPS dispersion"     value={d.eps_dispersion_pct != null ? fmtPct(d.eps_dispersion_pct) : '—'} />
+      <Row label="Revenue dispersion" value={d.revenue_dispersion_pct != null ? fmtPct(d.revenue_dispersion_pct) : '—'} />
+      <Row label="Analysts"           value={d.analyst_count ? String(d.analyst_count) : '—'} />
+      {d.analysis_note && <p className="text-[13px] text-muted-foreground mt-1 line-clamp-2">{d.analysis_note}</p>}
     </AgentCard>
   );
 }
 
+function sentimentHasData(d: D) {
+  return hasAnyValue(d.article_count, d.bullish_count, d.bearish_count, d.press_release_count);
+}
 function SentimentCard({ d }: { d: D }) {
   const sig = d.signal ?? '';
   const score = d.composite_score;
   return (
-    <AgentCard title="News Sentiment" signal={sig}>
-      <Row label="Composite Score"   value={score != null ? fmtNum(score, 3) : '—'} valueClass={score != null ? (score > 0 ? 'text-content-high' : score < 0 ? 'text-content-high' : '') : ''} />
-      <Row label="Articles Analysed" value={d.article_count != null ? String(d.article_count) : '—'} />
-      <Row label="Bullish / Bearish" value={(d.bullish_count != null && d.bearish_count != null) ? `${d.bullish_count} / ${d.bearish_count}` : '—'} />
-      <Row label="Press Releases"    value={d.press_release_signal ?? (d.press_release_count != null ? String(d.press_release_count) : '—')} />
-      <Row label="Volume Spike"      value={d.volume_spike != null ? (d.volume_spike ? '⚑ Yes' : 'No') : '—'} valueClass={d.volume_spike ? 'text-amber-500' : ''} />
-      {d.top_headlines?.[0] && <p className="text-[10px] text-muted-foreground/80 mt-1 line-clamp-2 italic">"{d.top_headlines[0]}"</p>}
+    <AgentCard title="News sentiment" signal={sig}>
+      <Row label="Sentiment score"     value={score != null && d.article_count ? fmtNum(score, 2) : '—'} />
+      <Row label="Articles read"       value={d.article_count ? String(d.article_count) : '—'} />
+      <Row label="Positive / negative" value={(d.bullish_count || d.bearish_count) ? `${d.bullish_count ?? 0} / ${d.bearish_count ?? 0}` : '—'} />
+      <Row label="Volume spike"        value={d.volume_spike ? 'Yes' : '—'} />
+      {d.top_headlines?.[0] && <p className="text-[13px] text-muted-foreground mt-1 line-clamp-2">“{d.top_headlines[0]}”</p>}
     </AgentCard>
   );
 }
 
+function earningsHasData(d: D) {
+  return hasAnyValue(d.overall_quality_score, d.pre_earnings_risk, d.accrual_flag, d.cash_conversion_flag, d.fcf_ni_divergence);
+}
 function EarningsQualityCard({ d }: { d: D }) {
   const sig = d.quality_verdict ?? d.signal ?? '';
-  const score = d.overall_quality_score ?? d.overall_quality_score;
+  const score = d.overall_quality_score;
   return (
-    <AgentCard title="Earnings Quality" signal={sig}>
-      {score != null && <Row label="Quality Score" value={`${fmtNum(score, 1)} / 10`} valueClass={score >= 7 ? 'text-content-high' : score >= 4 ? 'text-amber-500' : 'text-content-high'} />}
-      <Row label="Pre-Earnings Risk"  value={d.pre_earnings_risk ?? '—'} valueClass={d.pre_earnings_risk ? flagColor(d.pre_earnings_risk) : ''} />
-      <Row label="Accrual Flag"       value={d.accrual_flag ?? '—'} valueClass={d.accrual_flag ? flagColor(d.accrual_flag) : ''} />
-      <Row label="Accrual Trend"      value={d.accrual_trend ?? '—'} />
-      <Row label="Cash Conversion"    value={d.cash_conversion_flag ?? '—'} valueClass={d.cash_conversion_flag ? flagColor(d.cash_conversion_flag) : ''} />
-      <Row label="FCF vs NI"         value={d.fcf_ni_divergence ?? '—'} valueClass={d.fcf_ni_divergence ? flagColor(d.fcf_ni_divergence) : ''} />
-      <Row label="SBC Drag"          value={d.sbc_drag_flag ?? (d.sbc_drag_pct != null ? fmtPct(d.sbc_drag_pct) : '—')} valueClass={d.sbc_drag_flag ? flagColor(d.sbc_drag_flag) : ''} />
-      {d.flags?.length > 0 && <p className="text-[10px] text-content-high mt-1 line-clamp-2">⚠ {d.flags[0]}</p>}
+    <AgentCard title="Earnings quality" signal={sig}>
+      {score != null && <Row label="Quality score" value={`${fmtNum(score, 1)} / 10`} />}
+      <Row label="Pre-earnings risk" value={enumText(d.pre_earnings_risk)}    valueClass={d.pre_earnings_risk ? flagColor(d.pre_earnings_risk) : ''} />
+      <Row label="Accruals"          value={enumText(d.accrual_flag)}         valueClass={d.accrual_flag ? flagColor(d.accrual_flag) : ''} />
+      <Row label="Accrual trend"     value={enumText(d.accrual_trend)} />
+      <Row label="Cash conversion"   value={enumText(d.cash_conversion_flag)} valueClass={d.cash_conversion_flag ? flagColor(d.cash_conversion_flag) : ''} />
+      <Row label="FCF vs net income" value={enumText(d.fcf_ni_divergence)}    valueClass={d.fcf_ni_divergence ? flagColor(d.fcf_ni_divergence) : ''} />
+      <Row label="SBC drag"          value={d.sbc_drag_flag ? enumText(d.sbc_drag_flag) : (d.sbc_drag_pct != null ? fmtPct(d.sbc_drag_pct) : '—')} valueClass={d.sbc_drag_flag ? flagColor(d.sbc_drag_flag) : ''} />
+      {d.flags?.length > 0 && <p className="text-[13px] text-foreground mt-1 line-clamp-2">{d.flags[0]}</p>}
     </AgentCard>
   );
 }
 
+function shortHasData(d: D) {
+  return hasAnyValue(d.short_float_pct, d.si_short_float_pct, d.days_to_cover, d.borrow_rate_pct, d.short_interest_trend);
+}
 function ShortInterestCard({ d }: { d: D }) {
   const sig = d.signal ?? d.si_signal ?? '';
+  const float = d.short_float_pct ?? d.si_short_float_pct;
   return (
-    <AgentCard title="Short Interest" signal={sig}>
-      <Row label="Short Float %"    value={fmtPct(d.short_float_pct ?? d.si_short_float_pct)} valueClass={d.short_float_pct > 20 ? 'text-content-high' : d.short_float_pct > 10 ? 'text-amber-500' : 'text-content-high'} />
-      <Row label="Days to Cover"    value={d.days_to_cover != null ? fmtNum(d.days_to_cover, 1) : '—'} />
-      <Row label="Borrow Rate"      value={d.borrow_rate_pct != null ? fmtPct(d.borrow_rate_pct) : '—'} />
-      <Row label="SI Trend"         value={d.short_interest_trend ?? '—'} valueClass={d.short_interest_trend === 'INCREASING' ? 'text-content-high' : d.short_interest_trend === 'DECREASING' ? 'text-content-high' : ''} />
-      <Row label="Squeeze Risk"     value={d.squeeze_risk != null ? (d.squeeze_risk ? '⚠ Yes' : 'No') : (d.si_squeeze_risk ? '⚠ Yes' : '—')} valueClass={(d.squeeze_risk || d.si_squeeze_risk) ? 'text-content-high' : ''} />
-      <Row label="Crowded Trade"    value={d.crowded_trade != null ? (d.crowded_trade ? 'Yes' : 'No') : (d.si_crowded_trade ? 'Yes' : '—')} valueClass={(d.crowded_trade || d.si_crowded_trade) ? 'text-amber-500' : ''} />
+    <AgentCard title="Short interest" signal={sig}>
+      <Row label="Short float"   value={float != null ? fmtPct(float) : '—'} />
+      <Row label="Days to cover" value={d.days_to_cover != null ? fmtNum(d.days_to_cover, 1) : '—'} />
+      <Row label="Borrow rate"   value={d.borrow_rate_pct != null ? fmtPct(d.borrow_rate_pct) : '—'} />
+      <Row label="Trend"         value={enumText(d.short_interest_trend)} />
+      <Row label="Squeeze risk"  value={(d.squeeze_risk || d.si_squeeze_risk) ? 'Yes' : '—'} />
+      <Row label="Crowded trade" value={(d.crowded_trade || d.si_crowded_trade) ? 'Yes' : '—'} />
     </AgentCard>
   );
 }
@@ -174,13 +210,12 @@ function ShortInterestCard({ d }: { d: D }) {
 // ── Generic card shell ────────────────────────────────────────────────────────
 
 function AgentCard({ title, signal, children }: { title: string; signal: string; children: React.ReactNode }) {
+  const showSignal = !!signal && !EMPTY_SIGNALS.has(signal.toUpperCase());
   return (
-    <div className="border border-border rounded-lg p-3 space-y-1.5">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-xs font-semibold">{title}</span>
-        {signal ? badge(signal.replace(/_/g, ' '), signalColor(signal)) : (
-          <span className="text-[10px] text-muted-foreground">No signal</span>
-        )}
+    <div className="border-t border-border pt-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[15px] font-semibold text-foreground">{title}</span>
+        {showSignal && badge(signal, signalColor(signal))}
       </div>
       {children}
     </div>
@@ -251,41 +286,39 @@ export function IntelligenceGrid({ agentSignals, pipelineData, ticker }: Intelli
   const shortInt  = liveData?.short_interest    as D | undefined
                     ?? resolve(ticker, agentSignals, pipelineData, 'short_interest_agent',    'short_interest');
 
-  const hasAny = insider || revision || sentiment || earnings || shortInt;
+  // Only agents with something to report get a card.
+  const showInsider   = !!insider   && insiderHasData(insider);
+  const showRevision  = !!revision  && revisionHasData(revision);
+  const showSentiment = !!sentiment && sentimentHasData(sentiment);
+  const showEarnings  = !!earnings  && earningsHasData(earnings);
+  const showShort     = !!shortInt  && shortHasData(shortInt);
+  const hasAny = showInsider || showRevision || showSentiment || showEarnings || showShort;
 
   if (fetching && !hasAny) {
     return (
-      <Card className="p-4 flex items-center justify-center min-h-[120px]">
-        <p className="text-xs text-muted-foreground">Loading intelligence signals…</p>
+      <Card className="p-5 flex items-center justify-center min-h-[120px]">
+        <p className="text-[13px] text-muted-foreground">Loading signals…</p>
       </Card>
     );
   }
 
-  if (!hasAny) {
-    return (
-      <Card className="p-4">
-        <p className="text-muted-foreground text-sm">No intelligence signals for {ticker}.</p>
-      </Card>
-    );
-  }
+  // Nothing to say: no card at all, rather than an empty-state box.
+  if (!hasAny) return null;
 
   return (
-    <Card className="p-4">
+    <Card className="p-5">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold">Intelligence Signals — {ticker}</h3>
-        {fetching && (
-          <span className="text-[10px] text-muted-foreground animate-pulse">Refreshing…</span>
-        )}
-        {!fetching && liveData && (
-          <span className="text-[10px] text-muted-foreground">Live · FMP + yfinance</span>
-        )}
+        <h3 className="text-[15px] font-semibold">Signals</h3>
+        {fetching
+          ? <span className="text-[12px] text-muted-foreground animate-pulse">Refreshing…</span>
+          : liveData && <span className="text-[12px] text-muted-foreground">Live</span>}
       </div>
-      <div className="mobile-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {insider   && <InsiderCard         d={insider}   />}
-        {revision  && <RevisionCard        d={revision}  />}
-        {sentiment && <SentimentCard       d={sentiment} />}
-        {earnings  && <EarningsQualityCard d={earnings}  />}
-        {shortInt  && <ShortInterestCard   d={shortInt}  />}
+      <div className="mobile-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+        {showInsider   && <InsiderCard         d={insider!}   />}
+        {showRevision  && <RevisionCard        d={revision!}  />}
+        {showSentiment && <SentimentCard       d={sentiment!} />}
+        {showEarnings  && <EarningsQualityCard d={earnings!}  />}
+        {showShort     && <ShortInterestCard   d={shortInt!}  />}
       </div>
     </Card>
   );

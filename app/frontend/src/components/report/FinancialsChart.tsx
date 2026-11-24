@@ -178,7 +178,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
     <Card className="p-4">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <h3 className="text-sm font-semibold">Income Statement — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold">Income statement</h3>
 
         <div className="flex items-center gap-2">
           {/* Period toggle */}

@@ -95,8 +95,8 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
     <Card className="p-5">
       {target != null && (
         <div className="text-center">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-            12-Month Price Target — {ticker}
+          <div className="text-[15px] font-semibold text-foreground">
+            12-month price target
           </div>
           <div className="text-[34px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
             {sym}{target.toFixed(2)}
@@ -168,13 +168,13 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
       {hasScenarioTable && (
         <div className={target != null ? 'mt-5 pt-4 border-t border-border/60' : ''}>
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Scenario Probabilities
+            <span className="text-[12px] font-medium text-muted-foreground">
+              Scenarios
             </span>
             {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
           </div>
-          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
-            <span className="w-[60px] text-right">12M Target</span>
+          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[11px] text-muted-foreground">
+            <span className="w-[60px] text-right">12m target</span>
             <span className="w-[56px] text-right">Fair value</span>
           </div>
           {[

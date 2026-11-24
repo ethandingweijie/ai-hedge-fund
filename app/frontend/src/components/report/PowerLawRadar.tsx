@@ -15,7 +15,8 @@ import { rankTextTone } from '@/lib/semanticColors';
 
 interface PowerLawRadarProps {
   powerLaw?: PowerLawAnalysis;
-  ticker: string;
+  /** Kept for call-site compatibility; the title no longer repeats it. */
+  ticker?: string;
 }
 
 // ── Dimension config ───────────────────────────────────────────────────────────
@@ -165,7 +166,7 @@ function extractConcern(
   return '';
 }
 
-export function PowerLawRadar({ powerLaw, ticker }: PowerLawRadarProps) {
+export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
   if (!powerLaw) {
     return (
       <Card className="p-4">
@@ -262,7 +263,7 @@ export function PowerLawRadar({ powerLaw, ticker }: PowerLawRadarProps) {
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Power Law Score — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold">Power law score</h3>
         <span className={`text-2xl font-bold ${scoreColor(totalScore)}`}>
           {totalScore.toFixed(1)}
           <span className="text-sm font-normal text-muted-foreground">/10</span>
@@ -320,16 +321,16 @@ export function PowerLawRadar({ powerLaw, ticker }: PowerLawRadarProps) {
                 <div className="px-5 pb-3 pt-0.5 space-y-2">
                   {hasNote && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-content-high mb-0.5">
-                        ✓ What Checks Off
+                      <p className="text-[12px] font-semibold text-foreground mb-0.5">
+                        Strengths
                       </p>
                       <p className="text-[11px] leading-relaxed text-muted-foreground">{note}</p>
                     </div>
                   )}
                   {hasConcern && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500 dark:text-amber-400 mb-0.5">
-                        ? Concerns
+                      <p className="text-[12px] font-semibold text-foreground mb-0.5">
+                        Concerns
                       </p>
                       <p className="text-[11px] leading-relaxed text-muted-foreground">{concern}</p>
                     </div>

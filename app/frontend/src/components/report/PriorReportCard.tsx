@@ -39,7 +39,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+        <div className="text-[15px] font-semibold text-foreground">
           Since last report
         </div>
         <div className="text-[10px] text-muted-foreground">

@@ -37,7 +37,7 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
   if (typeof raw === 'string') {
     return (
       <Card className="p-4">
-        <h3 className="text-sm font-semibold mb-3">Citation Audit — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold mb-3">Citation audit</h3>
         <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 p-3 rounded">
           {raw as string}
         </pre>
@@ -55,7 +55,7 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Citation Audit — {ticker}</h3>
+        <h3 className="text-[15px] font-semibold">Citation audit</h3>
         <span className={`text-sm font-bold ${scoreColor(score)}`}>
           Score {score}<span className="text-muted-foreground font-normal text-xs">/10</span>
         </span>
@@ -64,8 +64,8 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
       {/* ── Hallucination Flags ─────────────────────────────────────────────── */}
       {hallucinationFlags.length > 0 && (
         <section>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-content-high mb-2">
-            Hallucination Flags ({hallucinationFlags.length})
+          <p className="text-[13px] font-semibold text-foreground mb-2">
+            Unsupported claims ({hallucinationFlags.length})
           </p>
           <ul className="space-y-1.5">
             {hallucinationFlags.map((flag, i) => (
@@ -81,8 +81,8 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
       {/* ── Source Gaps ─────────────────────────────────────────────────────── */}
       {sourceGaps.length > 0 && (
         <section>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600/80 mb-2">
-            Primary Source Gaps ({sourceGaps.length})
+          <p className="text-[13px] font-semibold text-foreground mb-2">
+            Missing primary sources ({sourceGaps.length})
           </p>
           <ul className="space-y-1.5">
             {sourceGaps.map((gap, i) => (
