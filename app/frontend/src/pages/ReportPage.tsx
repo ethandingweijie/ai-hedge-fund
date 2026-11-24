@@ -53,6 +53,7 @@ import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 import { PulseCard }           from '@/components/report/PulseCard';
+import { LandingGreeting }     from '@/components/report/LandingGreeting';
 
 // ── Investor profiles retired (M2 Track E) ──────────────────────────────────
 // ALL_AGENTS / PROFILES lived here: the 12-persona committee and its
@@ -952,14 +953,8 @@ export function ReportPage() {
           {/* Greeting — left-aligned: the top-left hamburger is gone (avatar
               sits top-right), so the hero uses the full left gutter. */}
           <div className="px-4 text-left">
-            {/* Same size/weight as the h1 below — the greeting reads as the
-                first line of the hero headline, not a caption. */}
-            <p className="text-[24px] leading-[1.15] font-semibold tracking-tight text-foreground">
-              Hello, {user?.name ?? user?.email ?? 'friend'}
-            </p>
-            <h1 className="mt-1 text-[24px] leading-[1.15] font-semibold tracking-tight text-foreground">
-              What ticker are we analysing?
-            </h1>
+            {/* Greeting + a rotating prompt (owner, 2026-11-24); pauses while typing. */}
+            <LandingGreeting name={user?.name ?? user?.email ?? 'friend'} paused={ticker.trim().length > 0} />
           </div>
 
           {/* Search form */}
