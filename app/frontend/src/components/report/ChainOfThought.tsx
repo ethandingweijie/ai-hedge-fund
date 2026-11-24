@@ -300,7 +300,7 @@ export function ChainOfThought({
           <span className="text-[12px] font-medium text-content-high">
             How this was researched
           </span>
-          <span className="text-[11px] text-content-muted ml-auto numeric">
+          <span className="text-xs text-content-muted ml-auto numeric">
             {bits.join(' · ')}
           </span>
         </button>
@@ -342,7 +342,7 @@ export function ChainOfThought({
                       {node.label}
                     </span>
                     {!open && node.state === 'done' && node.steps.length > 0 && (
-                      <span className="ml-auto shrink-0 text-[10.5px] text-content-muted numeric">
+                      <span className="ml-auto shrink-0 text-xs text-content-muted numeric">
                         {node.phase === 'deep_research' && node.searches.length > 0
                           ? `${node.searches.length} searches · ${node.sources.length} sources`
                           : `${node.steps.length} step${node.steps.length === 1 ? '' : 's'}`}
@@ -355,14 +355,14 @@ export function ChainOfThought({
                 {open && (
                   <div className="ml-[17px] border-l border-[var(--hairline)] pl-3 pb-1.5">
                     {node.steps.length === 0 && (
-                      <p className="text-[11px] text-content-muted py-1">
+                      <p className="text-xs text-content-muted py-1">
                         No detail reported for this step.
                       </p>
                     )}
                     {node.steps.map((s, i) => (
                       <p
                         key={i}
-                        className={`text-[11px] leading-snug py-[3px] ${
+                        className={`text-xs leading-snug py-[3px] ${
                           i === node.steps.length - 1 && isActive
                             ? 'text-content-high'
                             : 'text-content-muted'
@@ -375,10 +375,10 @@ export function ChainOfThought({
                     {/* Level 3 — deep research only */}
                     {node.thinking && (
                       <div className="mt-1.5">
-                        <p className="text-[10.5px] font-medium text-content-high mb-0.5">
+                        <p className="text-xs font-medium text-content-high mb-0.5">
                           Thinking
                         </p>
-                        <p className="text-[11px] leading-snug text-content-muted line-clamp-4">
+                        <p className="text-xs leading-snug text-content-muted line-clamp-4">
                           {node.thinking.slice(-600)}
                         </p>
                       </div>
@@ -386,7 +386,7 @@ export function ChainOfThought({
 
                     {node.searches.length > 0 && (
                       <div className="mt-1.5">
-                        <p className="text-[10.5px] font-medium text-content-high mb-0.5">
+                        <p className="text-xs font-medium text-content-high mb-0.5">
                           Searching the web
                           <span className="ml-1.5 text-content-muted numeric font-normal">
                             {node.searches.length}
@@ -397,7 +397,7 @@ export function ChainOfThought({
                           {node.searches.slice(-6).map((q, i) => (
                             <li
                               key={`${q.query}-${i}`}
-                              className="text-[11px] text-content-medium leading-snug flex gap-1.5"
+                              className="text-xs text-content-medium leading-snug flex gap-1.5"
                             >
                               <span className="text-content-disabled shrink-0">›</span>
                               <span className="truncate">{q.query}</span>
@@ -409,13 +409,13 @@ export function ChainOfThought({
 
                     {node.sources.length > 0 && (
                       <div className="mt-1.5">
-                        <p className="text-[10.5px] font-medium text-content-high mb-0.5">
+                        <p className="text-xs font-medium text-content-high mb-0.5">
                           Sources found
                           <span className="ml-1.5 text-content-muted numeric font-normal">
                             {node.sources.length}
                           </span>
                         </p>
-                        <p className="text-[11px] text-content-muted leading-snug">
+                        <p className="text-xs text-content-muted leading-snug">
                           {[...new Set(node.sources.map((s) => extractDomain(s.url)))]
                             .slice(0, 8)
                             .join(' · ')}

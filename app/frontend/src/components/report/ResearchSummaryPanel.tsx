@@ -162,7 +162,7 @@ export function ResearchSummaryPanel({
       {/* ── AI Summary card ── */}
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center gap-2 mb-3">
-          <Sparkles size={15} className="text-amber-500" />
+          <Sparkles size={15} className="text-warning" />
           <span className="text-[15px] font-semibold text-foreground">
             Research summary
           </span>

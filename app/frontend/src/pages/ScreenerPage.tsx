@@ -176,7 +176,7 @@ function FilterDropdown({
         onClick={() => setOpen(v => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`h-8 md:h-9 pl-2.5 md:pl-3 pr-2 md:pr-2.5 text-[11px] md:text-[12px] rounded-lg border flex items-center gap-1.5 transition-colors
+        className={`h-8 md:h-9 pl-2.5 md:pl-3 pr-2 md:pr-2.5 text-xs md:text-[12px] rounded-lg border flex items-center gap-1.5 transition-colors
           ${active
             ? 'bg-primary text-primary-foreground border-primary'
             : 'bg-card text-muted-foreground border-border active:bg-muted'}`}
@@ -230,7 +230,7 @@ function FilterDropdown({
                 <span className="truncate">{o.label}</span>
                 <span className="flex items-center gap-1.5 shrink-0">
                   {o.count != null && (
-                    <span className="text-[10.5px] text-muted-foreground/60 tabular-nums">{o.count}</span>
+                    <span className="text-xs text-muted-foreground/60 tabular-nums">{o.count}</span>
                   )}
                   {o.id === value && <Check width={12} height={12}/>}
                 </span>
@@ -424,7 +424,7 @@ export function ScreenerPage() {
             <button
               key={m}
               onClick={() => { setMarket(m); setSector('all'); setCapId('all'); }}
-              className={`flex-1 h-8 md:h-9 rounded-md text-[11.5px] md:text-[12.5px] font-medium transition-colors
+              className={`flex-1 h-8 md:h-9 rounded-md text-xs md:text-[12.5px] font-medium transition-colors
                 ${market === m ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground active:text-foreground'}`}
             >
               {MARKET_LABELS[m]}
@@ -443,7 +443,7 @@ export function ScreenerPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search ticker or name"
-              className="w-full h-8 md:h-9 pl-7 pr-2 text-[13px] md:text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
+              className="w-full h-11 md:h-10 pl-7 pr-2 text-[13px] md:text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
             />
           </div>
           <div className="flex flex-wrap items-center gap-1.5 ml-auto justify-end">
@@ -463,13 +463,13 @@ export function ScreenerPage() {
               Top candidates
             </span>
             {lastRefreshed && (
-              <span className="inline-flex items-center gap-1 text-[10px] md:text-[11px] text-muted-foreground/70">
+              <span className="inline-flex items-center gap-1 text-xs md:text-xs text-muted-foreground/70">
                 <span className="w-1 h-1 rounded-full bg-brand"/>
                 updated {lastRefreshed.toLocaleTimeString()}
               </span>
             )}
           </div>
-          <span className="text-[10px] md:text-[11px] text-muted-foreground/70">{rows.length} · {market}</span>
+          <span className="text-xs md:text-xs text-muted-foreground/70">{rows.length} · {market}</span>
         </div>
 
         <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
@@ -524,7 +524,7 @@ export function ScreenerPage() {
                       <span className="text-[13.5px] font-semibold text-foreground tabular-nums shrink-0">{r.symbol}</span>
                       <span className="text-[12px] text-muted-foreground truncate">{r.companyName}</span>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
                       <span className="truncate">{r.sector || '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
                       <span className="tabular-nums shrink-0">{formatMarketCap(r.marketCap)}</span>
@@ -552,7 +552,7 @@ export function ScreenerPage() {
                       <span className="text-[14px] font-semibold text-foreground tabular-nums">
                         {r.composite_score ?? '—'}
                       </span>
-                      <span className="text-[10.5px] text-muted-foreground/70">/100</span>
+                      <span className="text-xs text-muted-foreground/70">/100</span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
                       <div
@@ -609,6 +609,7 @@ export function ScreenerPage() {
                     icon: <Search width={18} height={18} strokeWidth={2}/>,
                     label: 'Analyse',
                     color: 'hsl(var(--brand))',
+                    textColor: 'hsl(var(--brand-foreground))',
                     onClick: () => handleOpen(r.symbol),
                   },
                   {
@@ -622,8 +623,8 @@ export function ScreenerPage() {
                 <div className="w-full text-left grid grid-cols-12 items-center gap-2 px-3 py-4 active:bg-muted/60 transition-colors">
                   <div className="col-span-5 min-w-0">
                     <div className="text-[12.5px] font-semibold text-foreground tabular-nums truncate">{r.symbol}</div>
-                    <div className="text-[11px] text-muted-foreground truncate">{r.companyName}</div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                    <div className="text-xs text-muted-foreground truncate">{r.companyName}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
                       <span className="truncate">{r.sector || '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
                       <span className="tabular-nums">{formatMarketCap(r.marketCap)}</span>
@@ -634,7 +635,7 @@ export function ScreenerPage() {
                       <span className="text-[14px] font-semibold text-foreground tabular-nums">
                         {r.composite_score ?? '—'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground/70">/100</span>
+                      <span className="text-xs text-muted-foreground/70">/100</span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
                       <div

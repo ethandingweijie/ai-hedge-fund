@@ -457,30 +457,30 @@ export function ComplacencyPage() {
         <p className="text-xs text-muted-foreground mb-1 ml-7">
           Ackman 4-pillar equity screen · Valuation / Behavioural / Technical / Quality · gate ≥ 6/8 & all pillars ≥ 1
         </p>
-        <p className="text-[10px] text-muted-foreground/70 mb-4 ml-7">
+        <p className="text-xs text-muted-foreground/70 mb-4 ml-7">
           Valuation pillar uses live S&P 500 sector medians (cached weekly). Hover EV/S column for per-row comparison.
         </p>
 
         {/* Cohort summary bar */}
         <div className="flex flex-wrap items-center gap-4 mb-3 p-3 rounded-md border border-border bg-card">
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Gate Passers</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">Gate Passers</span>
             <span className="text-lg font-bold font-mono text-foreground">
               {cohort?.gate_passers ?? 0} <span className="text-xs text-muted-foreground">/ {cohort?.ticker_count ?? 0}</span>
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Tickers</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">Tickers</span>
             <span className="text-lg font-bold font-mono text-foreground">{cohort?.ticker_count ?? 0}</span>
           </div>
           {cohort?.failed_tickers && cohort.failed_tickers.length > 0 && (
             <div className="flex flex-col" title={cohort.failed_tickers.map((f) => `${f.ticker}: ${f.reason}`).join('\n')}>
-              <span className="text-[10px] uppercase tracking-wider text-amber-500">Failed</span>
-              <span className="text-lg font-bold font-mono text-amber-500">{cohort.failed_tickers.length}</span>
+              <span className="text-xs uppercase tracking-wider text-warning">Failed</span>
+              <span className="text-lg font-bold font-mono text-warning">{cohort.failed_tickers.length}</span>
             </div>
           )}
           <div className="flex flex-col">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Last run</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">Last run</span>
             <span className="text-xs text-foreground">{formatRunTime(cohort?.created_at ?? null)}</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
@@ -517,12 +517,12 @@ export function ComplacencyPage() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-1 ml-auto">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Verdict</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">Verdict</span>
             {VERDICT_FILTERS.map((v) => (
               <button
                 key={v}
                 onClick={() => setVerdictFilter(v)}
-                className={`px-2 py-1 text-[10px] font-semibold rounded-md border transition-colors ${
+                className={`px-2 py-1 text-xs font-semibold rounded-md border transition-colors ${
                   verdictFilter === v
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-card text-muted-foreground border-border hover:bg-muted'
@@ -536,7 +536,7 @@ export function ComplacencyPage() {
 
         {/* Rank chips */}
         <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex-shrink-0">Rank by</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground flex-shrink-0">Rank by</span>
           {RANK_DEFS.map((r) => (
             <button
               key={r.id}
@@ -563,7 +563,7 @@ export function ComplacencyPage() {
 
         {!loading && (!cohort || cohort.results.length === 0) && !refreshing && (
           <div className="p-6 border border-dashed border-border rounded-md text-center">
-            <AlertTriangle className="mx-auto mb-2 text-amber-500" size={20} />
+            <AlertTriangle className="mx-auto mb-2 text-warning" size={20} />
             <p className="text-sm text-muted-foreground">No Complacency run yet. Click <strong>Refresh</strong> to run the screener.</p>
           </div>
         )}
@@ -587,7 +587,7 @@ export function ComplacencyPage() {
                 {scoringAdhoc ? `Scoring ${trimmedQuery}…` : `Score ${trimmedQuery} on-the-fly`}
               </button>
             ) : (
-              <p className="text-[11px] text-muted-foreground/70">
+              <p className="text-xs text-muted-foreground/70">
                 Type a valid US ticker (1-6 letters) to score it ad-hoc.
               </p>
             )}
@@ -603,26 +603,26 @@ export function ComplacencyPage() {
                     on white. Dark-mode keeps the pastel softness via `dark:`. */}
                 <tr className="border-b border-border/50">
                   <th colSpan={5} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high dark:text-brand">
+                  <th colSpan={1} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-surface-2 text-content-high dark:text-brand">
                     Aggregate
                   </th>
-                  <th colSpan={4} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
+                  <th colSpan={4} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
                     Pillar scores
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
+                  <th colSpan={2} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Valuation
                   </th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
+                  <th colSpan={1} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Behav.
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
                     Technical
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
+                  <th colSpan={2} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
+                  <th colSpan={1} className="px-2 py-1 text-center text-xs uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Put rec
                   </th>
                 </tr>
@@ -673,25 +673,25 @@ export function ComplacencyPage() {
                         {r.ticker}
                         {adhoc.some((a) => a.ticker === r.ticker) && (
                           <span
-                            className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold"
+                            className="text-xs uppercase tracking-wider px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold"
                             title="Ad-hoc — scored on-the-fly, not part of the persisted cohort"
                           >
                             ad-hoc
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-muted-foreground truncate max-w-[110px]">{r.name}</div>
+                      <div className="text-xs text-muted-foreground truncate max-w-[110px]">{r.name}</div>
                     </td>
-                    <td className="px-2 py-1.5 text-[10px] text-muted-foreground truncate max-w-[120px]">{r.sector ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-xs text-muted-foreground truncate max-w-[120px]">{r.sector ?? '—'}</td>
                     <td className="px-2 py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${VERDICT_COLOR[r.verdict]}`}>
+                      <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${VERDICT_COLOR[r.verdict]}`}>
                         {r.verdict}
                       </span>
                     </td>
                     <td className="px-2 py-1.5 text-right bg-surface-2/50">
                       {r.aggregate_score != null ? (
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${aggregateColor(r.aggregate_score)}`}
+                          className={`px-1.5 py-0.5 rounded text-xs font-bold ${aggregateColor(r.aggregate_score)}`}
                           title={[
                             `Aggregate ${r.aggregate_score.toFixed(1)} / 100`,
                             `quant ${(r.aggregate_quant_pts ?? 0).toFixed(1)} + qual ${(r.aggregate_qual_pts ?? 0).toFixed(1)}`,
@@ -707,10 +707,10 @@ export function ComplacencyPage() {
                     <td className="px-2 py-1.5 text-right">
                       <span className="font-bold text-foreground">{r.composite.toFixed(1)}</span>
                     </td>
-                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.val_score)}`}>{r.val_score}</span></td>
-                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.beh_score)}`}>{r.beh_score}</span></td>
-                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.tech_score)}`}>{r.tech_score}</span></td>
-                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.qual_score)}`}>{r.qual_score}</span></td>
+                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${pillarColor(r.val_score)}`}>{r.val_score}</span></td>
+                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${pillarColor(r.beh_score)}`}>{r.beh_score}</span></td>
+                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${pillarColor(r.tech_score)}`}>{r.tech_score}</span></td>
+                    <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${pillarColor(r.qual_score)}`}>{r.qual_score}</span></td>
                     <td
                       className="px-2 py-1.5 text-right"
                       title={
@@ -781,7 +781,7 @@ export function ComplacencyPage() {
                         </span>
                       ) : (
                         (r.verdict === 'Strong-Short' || r.verdict === 'Watch') ? (
-                          <span className="text-muted-foreground/60 italic text-[10px]" title="No liquid put in target tenor band">illiquid</span>
+                          <span className="text-muted-foreground/60 italic text-xs" title="No liquid put in target tenor band">illiquid</span>
                         ) : (
                           <span className="text-muted-foreground/40">—</span>
                         )
@@ -791,7 +791,7 @@ export function ComplacencyPage() {
                 ))}
               </tbody>
             </table>
-            <div className="px-3 py-2 text-[10px] text-muted-foreground border-t border-border">
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
               Showing <strong className="text-foreground">{rows.length}</strong> of {cohort.ticker_count} ·
               ranked by <strong className="text-foreground">{activeRank.label}</strong> ({activeRank.asc ? 'asc' : 'desc'}) ·
               click any row for pillar inputs + flag notes
@@ -1007,16 +1007,16 @@ function ComplacencyDrawer({
                 <span className="text-lg font-bold text-foreground">{ticker.ticker}</span>
                 <span className="text-sm text-muted-foreground">{ticker.name}</span>
                 {ticker.rank && (
-                  <span className="text-[10px] text-muted-foreground ml-auto">#{ticker.rank}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">#{ticker.rank}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${VERDICT_COLOR[ticker.verdict]}`}>
+                <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${VERDICT_COLOR[ticker.verdict]}`}>
                   {ticker.verdict}
                 </span>
                 {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
                   <span
-                    className={`px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[ticker.qualitative.conviction_label]}`}
+                    className={`px-1.5 py-0.5 rounded border text-xs font-bold uppercase tracking-wider ${CONVICTION_COLOR[ticker.qualitative.conviction_label]}`}
                     title={`Qual conviction · ${ticker.qualitative.composite}/${ticker.qualitative.max_possible}`}
                   >
                     {ticker.qualitative.conviction_label}
@@ -1050,19 +1050,19 @@ function ComplacencyDrawer({
               <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
                 1 · Quantitative Score
               </h2>
-              <span className="text-[10px] font-mono font-bold text-foreground">
+              <span className="text-xs font-mono font-bold text-foreground">
                 {ticker.composite.toFixed(1)} / 8
                 {ticker.passes_gate && (
-                  <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-200 text-[10px] uppercase">
+                  <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-200 text-xs uppercase">
                     Gate passed
                   </span>
                 )}
               </span>
             </div>
-            <p className="text-[10px] text-muted-foreground italic mb-2">
+            <p className="text-xs text-muted-foreground italic mb-2">
               Initial Ackman 4-pillar scoring against FMP fundamentals + live S&P 500 sector medians.
             </p>
-            <div className="grid grid-cols-4 gap-2 text-[11px]">
+            <div className="grid grid-cols-4 gap-2 text-xs">
               <Pillar
                 label="Valuation"
                 score={ticker.val_score}
@@ -1110,7 +1110,7 @@ function ComplacencyDrawer({
                   Without this, cached high-conf scores never re-trigger the
                   deep-research path on subsequent refreshes. */}
               <div className="flex items-center justify-end gap-2 px-3">
-                <span className="text-[10px] text-muted-foreground italic">
+                <span className="text-xs text-muted-foreground italic">
                   Cached {ticker.qualitative!.indicators &&
                     Object.values(ticker.qualitative!.indicators).filter(
                       (i) => (i.model_used || '').includes('deep'),
@@ -1119,7 +1119,7 @@ function ComplacencyDrawer({
                 <button
                   onClick={handleGenerateQual}
                   disabled={generatingQual}
-                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-border bg-card text-foreground text-[10px] font-medium hover:bg-muted disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted disabled:opacity-50"
                   title="Force a fresh qualitative scoring run, invalidating the per-indicator cache. Re-fires evidence gathering (incl. earnings Q&A) and deep-research escalation for low-confidence indicators. Costs ~$0.05-0.10 in Qwen calls and ~4-5 min."
                 >
                   {generatingQual ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
@@ -1137,9 +1137,9 @@ function ComplacencyDrawer({
               <div className="flex items-start justify-between gap-3 flex-wrap not-italic">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-semibold mb-1">2 · Qualitative Thesis</div>
-                  <p className="text-[11px] italic leading-snug">
+                  <p className="text-xs italic leading-snug">
                     {isGate
-                      ? <>Not yet scored. The agent runs qwen3.6-plus on 10-K, 10-Q diff, 8-K, DEF 14A, Form 144 and Tavily evidence. This run may have been cached without it or the Qwen key (<code className="text-[10px]">DEEP_RESEARCH_API_KEY</code>) may not be set.</>
+                      ? <>Not yet scored. The agent runs qwen3.6-plus on 10-K, 10-Q diff, 8-K, DEF 14A, Form 144 and Tavily evidence. This run may have been cached without it or the Qwen key (<code className="text-xs">DEEP_RESEARCH_API_KEY</code>) may not be set.</>
                       : <>Not auto-generated for {ticker.verdict.toLowerCase()} verdicts (auto-qual only fires for Strong-Short / Watch). You can still trigger it manually — the aggregate score will be recomputed.</>
                     }
                   </p>
@@ -1147,7 +1147,7 @@ function ComplacencyDrawer({
                 <button
                   onClick={handleGenerateQual}
                   disabled={generatingQual}
-                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 disabled:opacity-50 not-italic"
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50 not-italic"
                   title="Run the 10-indicator qualitative scorer on this ticker. Costs ~$0.02 in Qwen calls and ~4-5 min wall clock."
                 >
                   {generatingQual ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
@@ -1175,7 +1175,7 @@ function ComplacencyDrawer({
             <section className="border border-[var(--hairline)] rounded-md bg-surface-2/50 p-3">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-content-high">Put Recommendation</h2>
-                <span className="text-[10px] text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
+                <span className="text-xs text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
                 <FragmentRow row={{ label: 'Strike',  value: `${fmtPrice(ticker.put_recommendation.strike)}  (${(ticker.put_recommendation.strike_pct_otm * 100).toFixed(1)}% OTM)`, highlight: true }} />
@@ -1187,14 +1187,14 @@ function ComplacencyDrawer({
                 <FragmentRow row={{ label: 'Volume today',       value: ticker.put_recommendation.volume != null ? ticker.put_recommendation.volume.toLocaleString() : '—' }} />
               </div>
               {ticker.put_recommendation.contract_symbol && (
-                <div className="mt-2 pt-2 border-t border-[var(--hairline)] font-mono text-[10px] text-muted-foreground">
+                <div className="mt-2 pt-2 border-t border-[var(--hairline)] font-mono text-xs text-muted-foreground">
                   OCC: <span className="text-foreground">{ticker.put_recommendation.contract_symbol}</span>
                 </div>
               )}
-              <p className="mt-2 text-[11px] text-foreground/80 leading-relaxed italic">
+              <p className="mt-2 text-xs text-foreground/80 leading-relaxed italic">
                 {ticker.put_recommendation.rationale}
               </p>
-              <p className="mt-2 text-[10px] text-amber-500/70">
+              <p className="mt-2 text-xs text-warning">
                 ⚠ Mechanical recommendation only. US options premiums are subject to 30% withholding for non-US residents.
                 Verify chain, liquidity, and earnings calendar before trading.
               </p>
@@ -1265,7 +1265,7 @@ function ComplacencyDrawer({
 
             {/* Meta — not pillar-scored */}
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Meta</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Meta</div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                 <KV label="Price"      value={fmtPrice(ticker.price)} />
                 <KV label="Market cap" value={ticker.market_cap == null ? '—' : `$${(ticker.market_cap / 1e9).toFixed(1)}B`} />
@@ -1282,7 +1282,7 @@ function ComplacencyDrawer({
               <ul className="space-y-1.5">
                 {ticker.flag_notes.map((note, i) => (
                   <li key={i} className="text-xs text-foreground flex gap-2 items-start">
-                    <span className="text-amber-500 flex-shrink-0">▸</span>
+                    <span className="text-warning flex-shrink-0">▸</span>
                     <span>{note}</span>
                   </li>
                 ))}
@@ -1370,18 +1370,18 @@ function QualitativePanel(
         <div className="flex items-center gap-1.5">
           {deepCount > 0 && (
             <span
-              className="px-1.5 py-0.5 rounded bg-surface-2-active text-content-high text-[10px] font-bold uppercase tracking-wider"
+              className="px-1.5 py-0.5 rounded bg-surface-2-active text-content-high text-xs font-bold uppercase tracking-wider"
               title="Indicators that escalated to Qwen native web search after a low-confidence first-pass score."
             >
               ★ {deepCount}/{totalIndicators} deep-research
             </span>
           )}
-          <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
+          <span className={`px-2 py-0.5 rounded border text-xs font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
             {qual.conviction_label}
           </span>
         </div>
       </div>
-      <p className="text-[10px] text-muted-foreground italic mb-3">{CONVICTION_BLURB[qual.conviction_label]}</p>
+      <p className="text-xs text-muted-foreground italic mb-3">{CONVICTION_BLURB[qual.conviction_label]}</p>
 
       {/* Composite bar */}
       <div className="mb-3">
@@ -1411,32 +1411,32 @@ function QualitativePanel(
                 className="w-full flex items-baseline gap-2 px-2 py-1.5 rounded hover:bg-muted/30 text-left"
                 onClick={() => setExpandedIndicator(expanded ? null : s.indicator)}
               >
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
+                <span className="text-xs uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
                 <span className="text-foreground flex-1 truncate">{meta.label}</span>
                 {(s.model_used || '').includes('deep') && (
                   <span
-                    className="px-1 py-0.5 rounded bg-surface-2-active text-content-high text-[8px] font-bold tracking-wider"
+                    className="px-1 py-0.5 rounded bg-surface-2-active text-content-high text-xs font-bold tracking-wider"
                     title="This indicator escalated to deep-research (Qwen native web search) after a low-confidence first-pass score."
                   >
                     ★ DEEP
                   </span>
                 )}
-                <span className="text-[10px] text-muted-foreground/60">
+                <span className="text-xs text-muted-foreground/60">
                   conf {(s.confidence * 100).toFixed(0)}%
                 </span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${scoreChipColor(s.score)}`}>
+                <span className={`px-1.5 py-0.5 rounded text-xs font-bold font-mono ${scoreChipColor(s.score)}`}>
                   {s.score}/5
                 </span>
               </button>
               {expanded && (
                 <div className="pl-22 pr-2 py-2 bg-muted/20 rounded mb-1">
-                  <p className="text-[11px] italic text-foreground/80 mb-2">{s.summary}</p>
+                  <p className="text-xs italic text-foreground/80 mb-2">{s.summary}</p>
                   {s.evidence.length === 0 ? (
-                    <p className="text-[10px] text-muted-foreground/60 italic">No evidence cited.</p>
+                    <p className="text-xs text-muted-foreground/60 italic">No evidence cited.</p>
                   ) : (
                     <ul className="space-y-2">
                       {s.evidence.map((e, i) => (
-                        <li key={i} className="text-[10px] leading-relaxed">
+                        <li key={i} className="text-xs leading-relaxed">
                           <div className="text-content-high font-semibold">
                             {e.source} {e.date && <span className="text-muted-foreground/60 font-normal">· {e.date}</span>}
                           </div>
@@ -1456,17 +1456,17 @@ function QualitativePanel(
 
       {qual.incomplete && (
         <div className="mt-2 p-2 rounded border border-amber-500/30 bg-amber-500/10">
-          <p className="text-[11px] text-amber-900 dark:text-amber-200 font-semibold not-italic">
+          <p className="text-xs text-amber-900 dark:text-amber-200 font-semibold not-italic">
             ⚠ Partial assessment — {Object.keys(qual.indicators).length}/{Math.round(qual.max_possible / 5)} indicators scored
           </p>
-          <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80 italic mt-0.5">
+          <p className="text-xs text-amber-900/80 dark:text-amber-200/80 italic mt-0.5">
             Click <strong className="not-italic">Re-score (force fresh)</strong> below to fill the gaps —
             high-confidence indicators are preserved, only the unfinished ones re-run.
             Cost ≈ ${(0.01 * (Math.round(qual.max_possible / 5) - Object.keys(qual.indicators).length)).toFixed(2)} this time.
           </p>
         </div>
       )}
-      <p className="mt-2 text-[10px] text-muted-foreground/60 italic">
+      <p className="mt-2 text-xs text-muted-foreground/60 italic">
         Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-plus'} on 10-K + transcripts + 90-day news.
         {qual.assessed_at && ` Assessed ${qual.assessed_at.slice(0, 10)}.`}
       </p>
@@ -1502,11 +1502,11 @@ function AggregateScorePanel(
         <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
           3 · Aggregate Score
         </h2>
-        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${tier.color}`}>
+        <span className={`px-2 py-0.5 rounded border text-xs font-bold uppercase tracking-wider ${tier.color}`}>
           {tier.label}
         </span>
       </div>
-      <p className="text-[10px] text-muted-foreground italic mb-3">
+      <p className="text-xs text-muted-foreground italic mb-3">
         Quant (0-50) + Qual (0-50) = combined 0-100 conviction.
       </p>
 
@@ -1515,7 +1515,7 @@ function AggregateScorePanel(
         <span className="text-3xl font-bold font-mono text-foreground">{total.toFixed(0)}</span>
         <span className="text-base font-mono text-muted-foreground">/ 100</span>
         {convictionLabel && hasQual && (
-          <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[convictionLabel]}`}>
+          <span className={`ml-auto px-1.5 py-0.5 rounded border text-xs font-bold uppercase tracking-wider ${CONVICTION_COLOR[convictionLabel]}`}>
             {convictionLabel}
           </span>
         )}
@@ -1534,7 +1534,7 @@ function AggregateScorePanel(
           title={`Qual: ${qualPts.toFixed(1)} / 50`}
         />
       </div>
-      <div className="flex justify-between text-[10px] mt-1">
+      <div className="flex justify-between text-xs mt-1">
         <span className="text-cyan-300">
           ● Quant {quantPts.toFixed(1)} / 50
         </span>
@@ -1543,7 +1543,7 @@ function AggregateScorePanel(
         </span>
       </div>
 
-      <p className="mt-2 text-[10px] text-foreground/80 italic">{tier.blurb}</p>
+      <p className="mt-2 text-xs text-foreground/80 italic">{tier.blurb}</p>
     </section>
   );
 }
@@ -1556,19 +1556,19 @@ function Pillar(
   const liveInputs = inputs.filter((x): x is string => Boolean(x));
   return (
     <div className="p-2 rounded border border-border bg-muted/30">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-bold ${pillarColor(score)}`}>
         {score} / 2
       </div>
       {liveInputs.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {liveInputs.map((line, i) => (
-            <div key={i} className="text-[10px] text-muted-foreground leading-tight">{line}</div>
+            <div key={i} className="text-xs text-muted-foreground leading-tight">{line}</div>
           ))}
         </div>
       )}
       {liveInputs.length === 0 && score === 0 && (
-        <div className="text-[10px] text-muted-foreground/60 italic mt-1">no inputs returned</div>
+        <div className="text-xs text-muted-foreground/60 italic mt-1">no inputs returned</div>
       )}
     </div>
   );
@@ -1604,8 +1604,8 @@ function InputGroup(
   return (
     <div className={`mt-3 border-l-2 ${ACCENT_BORDER[accent]} pl-3`}>
       <div className={`flex items-center gap-2 px-2 py-1 rounded-t ${ACCENT_BG[accent]}`}>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">{title}</span>
-        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ml-auto ${pillarColor(score)}`}>
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</span>
+        <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ml-auto ${pillarColor(score)}`}>
           {score} / 2
         </span>
       </div>
@@ -1624,7 +1624,7 @@ function FragmentRow({ row }: { row: { label: string; value: string; threshold?:
       <div>
         <div className="text-muted-foreground">{row.label}</div>
         {row.threshold && (
-          <div className="text-[10px] text-muted-foreground/60 italic">{row.threshold}</div>
+          <div className="text-xs text-muted-foreground/60 italic">{row.threshold}</div>
         )}
       </div>
       <div className={`text-right font-mono self-start ${row.highlight ? 'text-foreground font-bold' : 'text-foreground'}`}>

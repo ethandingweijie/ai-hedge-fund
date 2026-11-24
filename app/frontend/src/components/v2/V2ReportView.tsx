@@ -73,7 +73,7 @@ import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDeriv
 import { Delta, BRAND } from '@/components/v2/shared';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
-import { ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBlock';
+import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { Markdown } from '@/components/report/shared/Markdown';
 import { currencySymbol } from '@/lib/utils';
 
@@ -226,7 +226,7 @@ export function V2ReportView({
             <Link
               to={`/discuss/${ticker}`}
               title={`Discuss ${ticker}`}
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-brand text-white text-[13px] font-semibold active:bg-brand/90 shrink-0"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-brand text-brand-foreground text-[13px] font-semibold active:bg-brand/90 shrink-0"
             >
               <MessageSquare size={14} />
               Discuss
@@ -421,7 +421,6 @@ function SummaryBody({
   /** Price at run time; upside is measured from it (same basis as desktop). */
   runPrice: number | undefined;
 }) {
-  const sym = currencySymbol(ticker);
   const target = typeof decision?.price_target === 'number' && decision.price_target > 0 ? decision.price_target : null;
   const upside = target != null && runPrice ? (target / runPrice - 1) * 100 : null;
   const position = typeof decision?.position_size_pct === 'number' ? decision.position_size_pct * 100 : null;
@@ -442,8 +441,11 @@ function SummaryBody({
         <section>
           <MobileSectionTitle
             right={decision && !decision.research_view
-              ? <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(decision.action)}`}>
-                  {capWord(String(decision.action ?? '').toLowerCase()) || '—'}
+              ? <span className="flex items-center gap-2">
+                  <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(decision.action)}`}>
+                    {capWord(String(decision.action ?? '').toLowerCase()) || '—'}
+                  </span>
+                  {target != null && <TargetPill value={target} ticker={ticker} className="h-9 py-0 text-[15px]" />}
                 </span>
               : undefined}
           >
@@ -462,7 +464,6 @@ function SummaryBody({
                 <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact />
               ) : (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-                  {target != null && <MobileFigure label="12-month target" value={`${sym}${target.toFixed(2)}`} />}
                   {upside != null && (
                     <MobileFigure
                       label="Upside"
@@ -686,7 +687,7 @@ function ValuationBody({
       {sectorCard && <SectorValuationCard payload={sectorCard} dcfRange={dcfRange} />}
 
       {isRunning && !haveAny && (
-        <p className="text-center text-[11px] text-muted-foreground/70 pt-2">
+        <p className="text-center text-xs text-muted-foreground/70 pt-2">
           Valuation renders once the pipeline reaches Phase 4.5 (DCF Engine).
         </p>
       )}
@@ -730,7 +731,7 @@ function V2ValuationLadder({
           Fair value ladder
         </span>
         {wacc != null && (
-          <span className="text-[10px] tabular-nums text-muted-foreground/70">
+          <span className="text-xs tabular-nums text-muted-foreground/70">
             WACC: {(wacc * 100).toFixed(1)}%
           </span>
         )}
@@ -738,7 +739,7 @@ function V2ValuationLadder({
       <div className="space-y-2.5">
         {rows.map(r => r.value != null && (
           <div key={r.name} className="flex items-center gap-3">
-            <span className="text-[11.5px] text-muted-foreground w-[62px] shrink-0">{r.name}</span>
+            <span className="text-xs text-muted-foreground w-[62px] shrink-0">{r.name}</span>
             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
                 className={`h-full rounded-full ${r.color}`}
@@ -750,13 +751,13 @@ function V2ValuationLadder({
                 ${r.value.toFixed(2)}
               </span>
               {r.delta != null && (
-                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-gain' : 'text-loss'}`}>
+                <span className={`text-xs font-medium tabular-nums ${r.delta >= 0 ? 'text-gain' : 'text-loss'}`}>
                   {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(1)}%
                 </span>
               )}
             </div>
             {r.growth != null && (
-              <span className="text-[10px] text-muted-foreground/70 tabular-nums w-[38px] text-right">
+              <span className="text-xs text-muted-foreground/70 tabular-nums w-[38px] text-right">
                 @ {(r.growth * 100).toFixed(0)}% g
               </span>
             )}
@@ -843,7 +844,7 @@ function RiskBody({
             </span>
             {powerLawOverall != null && (
               <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                {powerLawOverall.toFixed(1)} <span className="text-[11px] text-muted-foreground/70 font-normal">/ 10</span>
+                {powerLawOverall.toFixed(1)} <span className="text-xs text-muted-foreground/70 font-normal">/ 10</span>
               </span>
             )}
           </div>
@@ -868,12 +869,12 @@ function RiskBody({
                   />
                 </div>
                 {d.note && (
-                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                     {d.note}
                   </p>
                 )}
                 {d.concern && (
-                  <p className="text-[11px] text-content-high mt-0.5 leading-relaxed">
+                  <p className="text-xs text-content-high mt-0.5 leading-relaxed">
                     Watch: {d.concern}
                   </p>
                 )}
@@ -893,11 +894,11 @@ function RiskBody({
               Value trap check
             </span>
             {trapVerdict && (
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-md border ${
                 trapVerdict.includes('HIGH')
                   ? 'text-content-high bg-surface-2 border-[var(--hairline)]'
                   : trapVerdict.includes('MEDIUM')
-                  ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
+                  ? 'text-amber-700 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
                   : 'text-brand bg-brand/10 border-brand/25'
               }`}>
                 {trapVerdict}
@@ -917,16 +918,16 @@ function RiskBody({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[12.5px] font-semibold text-foreground">{c.k}</span>
-                    <span className={`text-[10px] font-semibold tracking-wide shrink-0 ${
+                    <span className={`text-xs font-semibold tracking-wide shrink-0 ${
                       c.rating === 'GREEN' ? 'text-brand'
-                      : c.rating === 'AMBER' ? 'text-amber-600 dark:text-amber-400'
+                      : c.rating === 'AMBER' ? 'text-warning'
                       : 'text-content-high'
                     }`}>
                       {c.rating}
                     </span>
                   </div>
                   {c.ev && (
-                    <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                       {c.ev}
                     </p>
                   )}
@@ -946,7 +947,7 @@ function RiskBody({
             <span className="text-xs font-semibold text-muted-foreground">
               Scenario mix
             </span>
-            <span className="text-[10px] text-muted-foreground/70">12-mo</span>
+            <span className="text-xs text-muted-foreground/70">12-mo</span>
           </div>
           <div className="w-full h-2 rounded-full bg-muted overflow-hidden flex">
             <div
@@ -958,7 +959,7 @@ function RiskBody({
               style={{ width: `${Math.round(((bearProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}%` }}
             />
           </div>
-          <div className="flex items-center justify-between mt-2 text-[11px] tabular-nums">
+          <div className="flex items-center justify-between mt-2 text-xs tabular-nums">
             <span className="text-brand">
               {Math.round(((bullProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}% bull
             </span>
@@ -1073,7 +1074,7 @@ function ResearchBody({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold text-foreground">Research complete</div>
-            <div className="text-[11px] text-muted-foreground truncate">
+            <div className="text-xs text-muted-foreground truncate">
               {sourceCount > 0 && <>{sourceCount} source{sourceCount === 1 ? '' : 's'} · </>}
               Live web research
             </div>
@@ -1091,7 +1092,7 @@ function ResearchBody({
             <button
               key={t.id}
               onClick={() => setSub(t.id)}
-              className={`flex-1 h-8 rounded-md text-[11.5px] font-medium transition-colors
+              className={`flex-1 h-8 rounded-md text-xs font-medium transition-colors
                 ${sub === t.id
                   ? 'bg-card text-foreground shadow-sm border border-border'
                   : 'text-muted-foreground active:text-foreground'}`}
@@ -1130,7 +1131,7 @@ function ResearchBody({
       )}
 
       {!isComplete && isResearchPhase && (
-        <p className="text-[11px] text-muted-foreground/70 text-center">
+        <p className="text-xs text-muted-foreground/70 text-center">
           Research streaming — thinking stream shown above. Sections fill in as synthesis completes.
         </p>
       )}
@@ -1162,7 +1163,7 @@ function StreamingResearchSummary({
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-surface-2 animate-pulse" />
-          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
             Research streaming
           </span>
         </div>
@@ -1178,7 +1179,7 @@ function StreamingResearchSummary({
             className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
             <span>Industry brief</span>
-            <span className="text-[11px] text-muted-foreground/70">{briefOpen ? '▲' : '▼'}</span>
+            <span className="text-xs text-muted-foreground/70">{briefOpen ? '▲' : '▼'}</span>
           </button>
           {briefOpen && (
             <Markdown>{industryBrief}</Markdown>
@@ -1193,7 +1194,7 @@ function StreamingResearchSummary({
             className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
             <span>Deep research</span>
-            <span className="text-[11px] text-muted-foreground/70">{deepOpen ? '▲' : '▼'}</span>
+            <span className="text-xs text-muted-foreground/70">{deepOpen ? '▲' : '▼'}</span>
           </button>
           {deepOpen && (
             <Markdown>{deepResearch}</Markdown>
@@ -1314,7 +1315,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           key={p}
           type="button"
           onClick={() => setPeriod(p)}
-          className={`h-5 px-2 text-[10px] font-medium rounded uppercase tracking-wider transition-colors ${
+          className={`h-5 px-2 text-xs font-medium rounded uppercase tracking-wider transition-colors ${
             period === p
               ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground active:text-foreground'
@@ -1381,9 +1382,9 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
                 {fmtMoney(s.revenue)}
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-[10px] text-muted-foreground tabular-nums">{pctLabel}</span>
+                <span className="text-xs text-muted-foreground tabular-nums">{pctLabel}</span>
                 {yoy != null && (
-                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-brand' : 'text-content-high'}`}>
+                  <span className={`text-xs font-medium tabular-nums ${yoy >= 0 ? 'text-brand' : 'text-content-high'}`}>
                     {yoy >= 0 ? '+' : ''}{yoy.toFixed(1)}%
                   </span>
                 )}
@@ -1399,7 +1400,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           );
         })}
       </div>
-      <div className="flex items-center justify-between text-[10.5px] text-muted-foreground/70">
+      <div className="flex items-center justify-between text-xs text-muted-foreground/70">
         <span>{periodLabel}</span>
         <span className="tabular-nums">
           Total {data.total_revenue != null ? `${fmtMoney(data.total_revenue)} ${currency}` : '—'}

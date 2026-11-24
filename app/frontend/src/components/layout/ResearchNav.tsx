@@ -60,7 +60,7 @@ export function ResearchNav() {
             className={`
               flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
               ${hash.startsWith('#/pricing')
-                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                ? 'bg-amber-500/15 text-warning'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               }
             `}

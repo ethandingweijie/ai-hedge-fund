@@ -338,20 +338,20 @@ export function LoginPage() {
           {/* Market chip divider */}
           <div className="mt-8 flex items-center gap-3">
             <Divider className="flex-1" />
-            <span className="text-[11px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+            <span className="text-xs text-muted-foreground/70 uppercase tracking-[0.1em]">
               US · HK · SGX
             </span>
             <Divider className="flex-1" />
           </div>
 
-          <p className="text-[11px] text-muted-foreground/70 text-center mt-6 leading-relaxed">
+          <p className="text-xs text-muted-foreground/70 text-center mt-6 leading-relaxed">
             By signing in you agree to the Terms &amp; Privacy. Your searches are private to your account.
           </p>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 h-10 border-t border-border/60 bg-background/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-[11px] text-muted-foreground/70">
+      <div className="relative z-10 h-10 border-t border-border/60 bg-background/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-xs text-muted-foreground/70">
         <span className="inline-flex items-center gap-1.5">
           <Check width={12} height={12} /> Secure · Private · v1.7.1
         </span>

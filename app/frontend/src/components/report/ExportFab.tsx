@@ -69,7 +69,7 @@ export function ExportFab({ runId, ticker }: { runId: string; ticker?: string })
       {open && (
         <div role="menu" aria-label="Export" className="flex flex-col items-end gap-2">
           {error && (
-            <span className="max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-[11px] text-muted-foreground shadow-sm"
+            <span className="max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground shadow-sm"
                   title={error}>
               Export failed. Try again.
             </span>

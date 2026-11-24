@@ -38,14 +38,14 @@ export const SEVERITY_VISUALS: Record<AuditSeverity, AuditSeverityVisuals> = {
     bgClass:     'bg-yellow-50 dark:bg-yellow-950/30',
     borderClass: 'border-yellow-300 dark:border-yellow-800',
     textClass:   'text-yellow-900 dark:text-yellow-200',
-    iconClass:   'text-yellow-600 dark:text-yellow-400',
+    iconClass:   'text-warning',
     label:       'WARNING',
   },
   info: {
     bgClass:     'bg-blue-50 dark:bg-blue-950/30',
     borderClass: 'border-blue-300 dark:border-blue-800',
     textClass:   'text-blue-900 dark:text-blue-200',
-    iconClass:   'text-blue-600 dark:text-blue-400',
+    iconClass:   'text-brand',
     label:       'INFO',
   },
   ok: {

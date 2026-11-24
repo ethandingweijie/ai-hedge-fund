@@ -72,7 +72,7 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
 
         <span className="text-sm font-semibold">{label}</span>
 
-        <span className={`ml-auto text-[11px] italic transition-opacity duration-500 ${
+        <span className={`ml-auto text-xs italic transition-opacity duration-500 ${
           resultReady ? 'text-content-high' : 'text-muted-foreground'
         }`}>
           {resultReady ? 'Ready — loading…' : PHRASES[phraseIdx]}
@@ -81,7 +81,7 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
 
       {/* ── Latest phase summary ────────────────────────────────────────────── */}
       {summary && !resultReady && (
-        <p className="text-[11px] text-muted-foreground pl-8 leading-relaxed">
+        <p className="text-xs text-muted-foreground pl-8 leading-relaxed">
           {phaseName && (
             <span className="font-medium text-foreground/50">
               {phaseName.replace(/_/g, ' ')}
@@ -95,10 +95,10 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
       {/* ── Chain of Thought ────────────────────────────────────────────────── */}
       {reasoning && !resultReady && (
         <div className="pl-8">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/40 mb-1.5">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground/40 mb-1.5">
             Chain of Thought
           </p>
-          <pre className="text-[10px] text-muted-foreground/55 whitespace-pre-wrap leading-relaxed
+          <pre className="text-xs text-muted-foreground/55 whitespace-pre-wrap leading-relaxed
                           max-h-56 overflow-y-auto bg-muted/20 rounded-md p-2.5
                           border border-border/25 font-sans scrollbar-thin">
             {reasoning}

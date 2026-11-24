@@ -298,7 +298,7 @@ export function FundFlowPage() {
               column below. One control for the whole page, so the reader
               never has to reconcile two horizons on screen at once. */}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mr-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground mr-1">
               Compare vs
             </span>
             {PERIODS.map((p) => (
@@ -368,7 +368,7 @@ function SummaryPanel({ summary }: { summary: FundFlowSummary }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className={
-              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider '
+              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider '
               + (isAi ? 'bg-primary/20 text-brand' : 'bg-muted text-muted-foreground')
             }
             title={
@@ -380,12 +380,12 @@ function SummaryPanel({ summary }: { summary: FundFlowSummary }) {
             <Sparkles size={10} />
             {isAi ? `AI brief · ${summary.model_used}` : 'Computed brief'}
           </span>
-          <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-[11.5px] font-semibold">
+          <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold">
             {summary.inflow_count} inflow / {summary.outflow_count} outflow
           </span>
           {summary.net_implied_flow_21d != null && (
             <span
-              className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-[11.5px] font-semibold font-mono"
+              className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold font-mono"
               title={`Summed measured issuer creation/redemption across the ${summary.implied_coverage} geographies with a live share-count feed`}
             >
               Net issuer flow 1m {fmtUsd(summary.net_implied_flow_21d)}
@@ -452,7 +452,7 @@ function SummarySection({ icon: Icon, title, items, tone, emphasis = false }: {
     <div>
       <div className={`flex items-center gap-1.5 mb-2 ${tone}`}>
         <Icon size={13} />
-        <span className="text-[11px] font-bold uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
       </div>
       <ul className={
         'space-y-1.5 ' + (emphasis
@@ -547,14 +547,14 @@ function StrengthBars({ rows, onSelect, period }: {
                   )}
                 </span>
 
-                <span className={`w-11 flex-shrink-0 text-center px-1 py-0.5 rounded text-[11.5px] font-bold font-mono ${compositeColor(c)}`}>
+                <span className={`w-11 flex-shrink-0 text-center px-1 py-0.5 rounded text-xs font-bold font-mono ${compositeColor(c)}`}>
                   {fmtSigned(c)}
                 </span>
               </button>
             );
           })}
         </div>
-        <div className="flex items-center justify-between text-[10.5px] text-muted-foreground mt-2 px-1">
+        <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 px-1">
           <span>← outflow</span>
           <span>0</span>
           <span>inflow →</span>
@@ -571,7 +571,7 @@ function StrengthBars({ rows, onSelect, period }: {
  *  the small multiples are comparable, with a zero rule for the baseline. */
 function Sparkline({ points }: { points: { d: string; v: number }[] }) {
   if (!points || points.length < 2) {
-    return <span className="text-muted-foreground/40 text-[11px]">—</span>;
+    return <span className="text-muted-foreground/40 text-xs">—</span>;
   }
   const W = 68, H = 20;
   const vals = points.map((p) => p.v);
@@ -604,7 +604,7 @@ function FlowTable({ rows, onSelect, period }: {
     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
       <table className="w-full text-[14px]">
         <thead>
-          <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+          <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-foreground/70">
             <th className="text-left px-4 py-3 font-bold">Geography</th>
             <th className="text-left px-4 py-3 font-bold">Verdict</th>
             <th className="text-right px-3 py-3 font-bold" title="Flow composite, −6…+6">Flow</th>
@@ -632,11 +632,11 @@ function FlowTable({ rows, onSelect, period }: {
             >
               <td className="px-4 py-3 whitespace-nowrap">
                 <span className="font-semibold text-foreground">{r.emoji} {r.label}</span>
-                <span className="ml-2 font-mono text-[11.5px] text-muted-foreground">{r.etf}</span>
+                <span className="ml-2 font-mono text-xs text-muted-foreground">{r.etf}</span>
               </td>
               <td className="px-4 py-3">
                 {r.verdict !== 'Neutral' ? (
-                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap border ${verdictColor(r.verdict)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap border ${verdictColor(r.verdict)}`}>
                     {verdictLabel(r.verdict)}
                   </span>
                 ) : (
@@ -644,16 +644,16 @@ function FlowTable({ rows, onSelect, period }: {
                 )}
               </td>
               <td className="px-3 py-3 text-right">
-                <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(r.composite)}`}>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(r.composite)}`}>
                   {fmtSigned(r.composite)}
                 </span>
               </td>
-              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.pressure_score)}`}>{fmtSigned(r.pressure_score)}</span></td>
-              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
-              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
+              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.pressure_score)}`}>{fmtSigned(r.pressure_score)}</span></td>
+              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
+              <td className="px-2 py-3 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
               <td className="px-3 py-3"><div className="flex justify-center"><Sparkline points={r.spark} /></div></td>
               <td className="px-3 py-3 text-right">
-                <span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${compositeColor(period.was(r))}`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-mono ${compositeColor(period.was(r))}`}>
                   {fmtSigned(period.was(r))}
                 </span>
               </td>
@@ -677,13 +677,13 @@ function FlowTable({ rows, onSelect, period }: {
                 {fmtSigma(r.rel_flow_z_delta)}
               </td>
               <td className="px-3 py-3 text-right">
-                <span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${compositeColor(r.price_composite)}`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-mono ${compositeColor(r.price_composite)}`}>
                   {fmtSigned(r.price_composite)}
                 </span>
               </td>
               <td className="px-3 py-3">
                 {r.divergence ? (
-                  <span className={`px-2 py-1 rounded text-[11px] font-semibold whitespace-nowrap ${divergenceColor(r.divergence)}`}>
+                  <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${divergenceColor(r.divergence)}`}>
                     {r.divergence}
                   </span>
                 ) : <span className="text-muted-foreground/40">—</span>}
@@ -705,7 +705,7 @@ function Legend() {
     <div className="mt-3 rounded-md border border-border/60 bg-muted/20 p-3">
       <div className="flex items-center gap-1.5 mb-1.5 text-muted-foreground">
         <Info size={12} />
-        <span className="text-[11px] font-bold uppercase tracking-wider">How to read this</span>
+        <span className="text-xs font-bold uppercase tracking-wider">How to read this</span>
       </div>
       <p className="text-[12px] text-muted-foreground leading-relaxed">
         <span className="font-semibold text-foreground">Flow</span> = composite (−6…+6, the sum of three
@@ -940,7 +940,7 @@ function MethodBlock({ title, children }: { title: string; children: React.React
 
 function Formula({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-md bg-muted/50 border border-border/60 px-3 py-2 font-mono text-[11.5px] leading-relaxed text-foreground overflow-x-auto">
+    <div className="rounded-md bg-muted/50 border border-border/60 px-3 py-2 font-mono text-xs leading-relaxed text-foreground overflow-x-auto">
       {children}
     </div>
   );
@@ -1018,7 +1018,7 @@ function DetailDrawer({ row, onClose }: { row: FundFlowRegionResult; onClose: ()
         <div className="overflow-x-auto mb-4 -mx-1 px-1">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
+              <tr className="text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
                 <th className="text-left py-1 font-semibold">Measure</th>
                 {PERIODS.map((p) => (
                   <th key={p.key} className="text-right py-1 font-semibold">{p.key}</th>
@@ -1105,7 +1105,7 @@ function DetailDrawer({ row, onClose }: { row: FundFlowRegionResult; onClose: ()
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5 mt-1">
+    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5 mt-1">
       {children}
     </div>
   );
@@ -1114,7 +1114,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function Stat({ label, value, cls }: { label: string; value: string; cls: string }) {
   return (
     <div className="text-center">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{label}</div>
       <div className={`py-1.5 rounded font-mono font-bold ${cls}`}>{value}</div>
     </div>
   );

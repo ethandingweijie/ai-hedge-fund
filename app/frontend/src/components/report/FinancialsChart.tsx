@@ -38,9 +38,9 @@ interface MetricConfig {
 }
 
 const METRICS: MetricConfig[] = [
-  { key: 'revenue',          label: 'Total Revenue',    color: '#3b82f6' },
-  { key: 'operating_income', label: 'Operating Income', color: '#8b5cf6' },
-  { key: 'net_income',       label: 'Net Income',       color: '#22c55e' },
+  { key: 'revenue',          label: 'Total revenue',    color: '#2563eb' },
+  { key: 'operating_income', label: 'Operating income', color: '#7c3aed' },
+  { key: 'net_income',       label: 'Net income',       color: '#15803d' },
 ];
 
 // ── Formatters (sym injected at component level via makeFmtFull/makeFmtAxis) ──
@@ -187,7 +187,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
               <button
                 key={pt}
                 onClick={() => setPeriodType(pt)}
-                className={`text-[11px] font-semibold px-3 py-1 transition-colors
+                className={`text-xs font-semibold px-3 py-1 transition-colors
                   ${periodType === pt
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -206,7 +206,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
           <button
             key={m.key}
             onClick={() => setMetricIdx(i)}
-            className={`text-[11px] font-semibold px-3 py-1 rounded-full border transition-colors
+            className={`text-xs font-semibold px-3 py-1 rounded-full border transition-colors
               ${metricIdx === i
                 ? 'border-transparent text-white'
                 : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 bg-transparent'
@@ -343,7 +343,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
                     return (
                       <td
                         key={i}
-                        className="text-center py-1.5 px-1 text-[11px] font-mono font-semibold align-middle"
+                        className="text-center py-1.5 px-1 text-xs font-mono font-semibold align-middle"
                         style={{ color: metric.key === 'net_income' ? barColor(metric, v) : undefined }}
                       >
                         {fmtFull(v)}
@@ -360,7 +360,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
                   {changeRow.map((cr, i) => (
                     <td
                       key={i}
-                      className={`text-center py-1.5 px-1 text-[11px] font-semibold font-mono align-middle
+                      className={`text-center py-1.5 px-1 text-xs font-semibold font-mono align-middle
                         ${cr.positive === true
                           ? 'text-content-high'
                           : cr.positive === false

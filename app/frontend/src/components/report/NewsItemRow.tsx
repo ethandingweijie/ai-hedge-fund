@@ -62,7 +62,7 @@ export function NewsItemRow({ article, showSymbol = false, fallbackLabel = '' }:
         />
       ) : (
         <div className="w-12 h-12 rounded bg-muted shrink-0 flex items-center justify-center">
-          <span className="text-[10px] text-muted-foreground font-bold">
+          <span className="text-xs text-muted-foreground font-bold">
             {(article.site || article.symbol || fallbackLabel).slice(0, 2).toUpperCase()}
           </span>
         </div>
@@ -72,7 +72,7 @@ export function NewsItemRow({ article, showSymbol = false, fallbackLabel = '' }:
         <p className="text-xs font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
           {article.title}
         </p>
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           {showSymbol && article.symbol && (
             <>
               <span className="font-semibold text-content-high tabular-nums">{article.symbol}</span>

@@ -87,10 +87,10 @@ function AgeBadge({ runAt }: { runAt: string }) {
   return (
     <span
       title={fresh ? 'Report is fresh (under 7 days)' : 'Report is 7+ days old — consider re-running'}
-      className={`text-[9px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
+      className={`text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
         fresh
           ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
-          : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+          : 'bg-amber-500/10 text-warning border-amber-500/20'
       }`}
     >
       {label}
@@ -257,7 +257,7 @@ export function HistoryPage() {
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Search ticker or company"
-              className="w-full h-8 md:h-9 pl-7 pr-2 text-[13px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
+              className="w-full h-11 md:h-10 pl-7 pr-2 text-[13px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
             />
           </div>
           <div className="flex flex-wrap items-center gap-1.5 ml-auto justify-end">
@@ -303,7 +303,7 @@ export function HistoryPage() {
                 <span className="text-[13px] font-semibold text-foreground tabular-nums">{r.ticker}</span>
                 <span className="text-xs font-medium text-brand">Ongoing</span>
               </div>
-              <div className="text-[11px] text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground truncate">
                 started {daysAgo(r.startedAt)}
               </div>
             </div>
@@ -316,7 +316,7 @@ export function HistoryPage() {
           <span className="text-xs font-semibold text-muted-foreground">
             Recent analyses
           </span>
-          <span className="text-[10px] text-muted-foreground/70">
+          <span className="text-xs text-muted-foreground/70">
             {history?.total ?? 0} total
           </span>
         </div>
@@ -404,21 +404,21 @@ export function HistoryPage() {
         {/* Pagination */}
         {history && history.total > 50 && (
           <div className="flex items-center justify-between mt-4 px-1">
-            <span className="text-[11px] text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground/70">
               Page {history.page} · {history.items.length} of {history.total}
             </span>
             <div className="flex gap-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="h-8 px-3 text-[11px] rounded-md border border-border text-muted-foreground active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-8 px-3 text-xs rounded-md border border-border text-muted-foreground active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page * 50 >= history.total}
-                className="h-8 px-3 text-[11px] rounded-md border border-border text-foreground/80 active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-8 px-3 text-xs rounded-md border border-border text-foreground/80 active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next
               </button>
@@ -459,7 +459,7 @@ function HistoryRow({
         {
           icon: <X width={20} height={20} strokeWidth={2}/>,
           label: 'Delete',
-          color: '#ef4444',
+          color: '#b91c1c', // white label clears 4.5:1
           onClick: onDelete,
         },
       ]}
@@ -488,7 +488,7 @@ function HistoryRow({
               </span>
             )}
           </div>
-          <div className={`text-muted-foreground truncate ${isDesktop ? 'text-[12.5px]' : 'text-[11px]'}`}>
+          <div className={`text-muted-foreground truncate ${isDesktop ? 'text-[12.5px]' : 'text-xs'}`}>
             {name || row.sector || '—'}
           </div>
           <div className="mt-1 flex items-center gap-1.5">
@@ -506,10 +506,10 @@ function HistoryRow({
                   maximumFractionDigits: row.price_target < 10 ? 2 : 0,
                 })}
               </div>
-              <div className={isDesktop ? 'text-[12px]' : 'text-[10px]'}><Delta v={upside}/></div>
+              <div className={isDesktop ? 'text-[12px]' : 'text-xs'}><Delta v={upside}/></div>
             </>
           ) : (
-            <div className="text-[10px] text-muted-foreground/70">—</div>
+            <div className="text-xs text-muted-foreground/70">—</div>
           )}
         </div>
         {/* Grade cluster — chips are unlabeled (letters are in the column
@@ -613,7 +613,7 @@ function FilterPill({
         ref={btnRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`h-8 pl-2.5 pr-1.5 text-[11px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors ${
+        className={`h-8 pl-2.5 pr-1.5 text-xs rounded-lg border flex items-center gap-1 shrink-0 transition-colors ${
           active
             ? 'bg-brand/10 border-brand/25 text-brand'
             : 'bg-card border-border text-muted-foreground active:bg-muted/60'

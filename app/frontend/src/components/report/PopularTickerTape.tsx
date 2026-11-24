@@ -48,12 +48,12 @@ function TickerChip({ item, onClick }: { item: PopularTicker; onClick: (t: strin
       {!noData && (
         <>
           {/* Price */}
-          <span className="text-[11px] text-white/80 font-medium">
+          <span className="text-xs text-white/80 font-medium">
             {currencySymbol(item.ticker)}{item.price!.toFixed(2)}
           </span>
 
           {/* Arrow + % change */}
-          <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${up ? 'text-gain' : 'text-loss'}`}>
+          <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${up ? 'text-gain' : 'text-loss'}`}>
             {up ? (
               <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 10 10" fill="currentColor">
                 <path d="M5 1 L9 7 L1 7 Z" />
@@ -93,7 +93,7 @@ export function PopularTickerTape({ onSelect }: PopularTickerTapeProps) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 whitespace-nowrap shrink-0">
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50 whitespace-nowrap shrink-0">
           Popular
         </span>
         <div className="flex gap-2 overflow-hidden">
@@ -112,7 +112,7 @@ export function PopularTickerTape({ onSelect }: PopularTickerTapeProps) {
 
   return (
     <div className="space-y-1">
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-white/60 px-1">
+      <span className="text-xs font-semibold uppercase tracking-widest text-white/60 px-1">
         Popular
       </span>
 

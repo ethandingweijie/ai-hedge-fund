@@ -60,7 +60,7 @@ function hasSubsection(sectionText: string | null, subsection: string): boolean 
 }
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
+  'text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -157,7 +157,7 @@ function ScenarioStrip({
       <div className="flex items-center justify-between mb-3">
         <p className={SECTION_HEADING_CLS}>Scenario Fair Value</p>
         {currentPrice != null && (
-          <span className="text-[10px] text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             current {fmtMoney(currentPrice, sym)}
           </span>
         )}
@@ -165,37 +165,37 @@ function ScenarioStrip({
       <div className="grid grid-cols-3 gap-3">
         {/* BEAR */}
         <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-content-high">
+          <p className="text-xs font-semibold uppercase tracking-wider text-content-high">
             Bear
           </p>
           <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bear != null ? fmtMoney(bear, sym, bear >= 100 ? 0 : 2) : '—'}
           </p>
-          <p className="text-[11px] font-semibold tabular-nums text-content-high mt-0.5">
+          <p className="text-xs font-semibold tabular-nums text-content-high mt-0.5">
             {delta(bear) != null ? fmtPct(delta(bear), 1, true) : '—'}
           </p>
         </div>
         {/* BASE */}
         <div className="text-center border-x border-border">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand">
             Base
           </p>
           <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {base != null ? fmtMoney(base, sym, base >= 100 ? 0 : 2) : '—'}
           </p>
-          <p className="text-[11px] font-semibold tabular-nums text-blue-600 dark:text-blue-400 mt-0.5">
+          <p className="text-xs font-semibold tabular-nums text-brand mt-0.5">
             {delta(base) != null ? fmtPct(delta(base), 1, true) : '—'}
           </p>
         </div>
         {/* BULL */}
         <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-content-high">
+          <p className="text-xs font-semibold uppercase tracking-wider text-content-high">
             Bull
           </p>
           <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bull != null ? fmtMoney(bull, sym, bull >= 100 ? 0 : 2) : '—'}
           </p>
-          <p className="text-[11px] font-semibold tabular-nums text-content-high mt-0.5">
+          <p className="text-xs font-semibold tabular-nums text-content-high mt-0.5">
             {delta(bull) != null ? fmtPct(delta(bull), 1, true) : '—'}
           </p>
         </div>
@@ -216,19 +216,19 @@ function KPITile({
 }) {
   const toneCls =
     tone === 'green' ? 'text-content-high' :
-    tone === 'amber' ? 'text-amber-600' :
+    tone === 'amber' ? 'text-warning' :
     tone === 'red'   ? 'text-content-high'   :
                        'text-foreground';
   return (
     <div>
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">
         {label}
       </p>
       <p className={`text-xl font-bold tabular-nums ${toneCls} mt-0.5`}>
         {value}
       </p>
       {sub && (
-        <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>
+        <p className="text-xs text-muted-foreground/70 mt-0.5">{sub}</p>
       )}
     </div>
   );
@@ -245,7 +245,7 @@ function SubtypeBanner({
   if (subtype === 'hyperscaler') {
     return (
       <div className="rounded-xl bg-gradient-to-r from-surface-2 to-transparent border border-[var(--hairline)] dark:border-[var(--hairline)] px-4 py-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-content-high dark:text-content-300">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-content-high dark:text-content-300">
           Hyperscaler · AI Capex ROI
         </p>
         <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
@@ -255,7 +255,7 @@ function SubtypeBanner({
   if (subtype === 'mature_saas') {
     return (
       <div className="rounded-xl bg-gradient-to-r from-sky-100 to-sky-50 dark:from-sky-950/60 dark:to-sky-950/20 border border-sky-200 dark:border-sky-900 px-4 py-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300">
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300">
           Mature SaaS · Durability
         </p>
         <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
@@ -265,7 +265,7 @@ function SubtypeBanner({
   // growth_saas
   return (
     <div className="rounded-xl bg-gradient-to-r from-surface-2 to-surface-2 dark:from-surface-2 dark:to-surface-2 border border-[var(--hairline)] px-4 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-content-high">
+      <p className="text-xs font-bold uppercase tracking-[0.22em] text-content-high">
         Growth SaaS · Unit Economics
       </p>
       <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
@@ -393,7 +393,7 @@ function HyperscalerView({
         <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
             <p className={SECTION_HEADING_CLS}>Revenue Trend · last {trendRows.length} FY</p>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               bar = revenue · overlay = capex
             </span>
           </div>
@@ -405,7 +405,7 @@ function HyperscalerView({
                 : null;
               return (
                 <div key={r.period} className="flex items-center gap-2">
-                  <span className="w-14 text-[10px] font-mono text-muted-foreground shrink-0">
+                  <span className="w-14 text-xs font-mono text-muted-foreground shrink-0">
                     {r.period}
                   </span>
                   <div className="flex-1 h-6 rounded bg-muted relative overflow-hidden">
@@ -417,14 +417,14 @@ function HyperscalerView({
                            title={`capex ${((r.capex! / r.revenue) * 100).toFixed(0)}%`}></div>
                     )}
                   </div>
-                  <span className="w-14 text-right text-[11px] font-mono tabular-nums text-foreground shrink-0">
+                  <span className="w-14 text-right text-xs font-mono tabular-nums text-foreground shrink-0">
                     {fmtBn(r.revenue, sym)}
                   </span>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-3 font-mono leading-relaxed">
             Revenue from FMP · capex overlay = |capital_expenditure| / revenue
           </p>
         </div>
@@ -599,7 +599,7 @@ function MatureSaasView({
             <p className={SECTION_HEADING_CLS}>Rule of 40 · Decomposition</p>
             <span className={`text-lg font-bold tabular-nums ${
               decompTone === 'green' ? 'text-content-high' :
-              decompTone === 'amber' ? 'text-amber-600' :
+              decompTone === 'amber' ? 'text-warning' :
               decompTone === 'red'   ? 'text-content-high'   :
                                        'text-foreground'
             }`}>
@@ -607,12 +607,12 @@ function MatureSaasView({
             </span>
           </div>
           <div className="w-full h-8 rounded-lg overflow-hidden flex border border-border">
-            <div className="bg-blue-500 flex items-center justify-center text-white text-[11px] font-semibold"
+            <div className="bg-blue-500 flex items-center justify-center text-white text-xs font-semibold"
                  style={{ width: `${growthW}%` }}
                  title={`Growth ${growthPct.toFixed(0)}%`}>
               {growthW > 15 ? `Growth ${growthPct.toFixed(0)}%` : ''}
             </div>
-            <div className="bg-surface-2 flex items-center justify-center text-content-high text-[11px] font-semibold"
+            <div className="bg-surface-2 flex items-center justify-center text-content-high text-xs font-semibold"
                  style={{ width: `${fcfW}%` }}
                  title={`FCF ${fcfPct.toFixed(0)}%`}>
               {fcfW > 15 ? `FCF ${fcfPct.toFixed(0)}%` : ''}
@@ -634,7 +634,7 @@ function MatureSaasView({
               </span>
             </li>
           </ul>
-          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-3 font-mono leading-relaxed">
             Target ≥40 healthy · ≥60 best-in-class
           </p>
         </div>
@@ -820,7 +820,7 @@ function GrowthSaasView({
   const dotCls = (tone: 'green' | 'amber' | 'red') =>
     tone === 'green' ? 'bg-surface-2' : tone === 'amber' ? 'bg-amber-500' : 'bg-surface-2';
   const textCls = (tone: 'green' | 'amber' | 'red') =>
-    tone === 'green' ? 'text-content-high' : tone === 'amber' ? 'text-amber-600' : 'text-content-high';
+    tone === 'green' ? 'text-content-high' : tone === 'amber' ? 'text-warning' : 'text-content-high';
 
   return (
     <>
@@ -866,7 +866,7 @@ function GrowthSaasView({
               ))}
             </tbody>
           </table>
-          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
+          <p className="text-xs text-muted-foreground mt-3 font-mono leading-relaxed">
             Benchmarks: NRR ≥115 · GR ≥95 · CAC &lt;18mo · Magic &gt;1.0 · Post-SBC FCF &gt;10%
           </p>
         </div>

@@ -139,17 +139,17 @@ export function ResearchNarrativeCard({
   return (
     <div className="rounded-card border border-[var(--hairline)] bg-card p-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {icon && <span className="mr-1.5">{icon}</span>}
           {title}
         </p>
         {truncated && (
-          <span className="text-[10px] text-muted-foreground">(excerpt)</span>
+          <span className="text-xs text-muted-foreground">(excerpt)</span>
         )}
       </div>
       <Markdown>{display}</Markdown>
       {sourceLabel && (
-        <p className="text-[10px] text-muted-foreground mt-3 italic">
+        <p className="text-xs text-muted-foreground mt-3 italic">
           {sourceLabel}
         </p>
       )}

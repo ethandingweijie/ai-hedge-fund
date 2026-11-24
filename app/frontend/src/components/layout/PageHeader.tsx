@@ -17,7 +17,7 @@ interface PageHeaderProps {
   title: string;
   subtitle?: ReactNode;
   icon?: LucideIcon;
-  /** Extra classes for the icon (e.g. a brand colour like `text-amber-500`). */
+  /** Extra classes for the icon (e.g. a brand colour like `text-warning`). */
   iconClassName?: string;
   /** Optional content (e.g. a back button) rendered before the title. */
   leading?: ReactNode;

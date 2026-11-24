@@ -38,7 +38,7 @@ export function ProgressHeader({
           {onCancel && (
             <button
               onClick={onCancel}
-              className="text-[11.5px] font-medium text-muted-foreground hover:text-content-high dark:hover:text-content-high transition-colors"
+              className="text-xs font-medium text-muted-foreground hover:text-content-high dark:hover:text-content-high transition-colors"
             >
               Cancel
             </button>
@@ -47,7 +47,7 @@ export function ProgressHeader({
       </div>
       {/* Row 2 — live thinking/status detail flows into the full width,
           wraps up to 3 lines. */}
-      <div className="px-4 pb-2.5 text-[11.5px] text-muted-foreground leading-snug line-clamp-3 break-words min-h-[1.35em]">
+      <div className="px-4 pb-2.5 text-xs text-muted-foreground leading-snug line-clamp-3 break-words min-h-[1.35em]">
         {thinkingDetail ?? 'Running analysis — research streams in over 4–6 minutes.'}
       </div>
       <div className="h-1 bg-muted overflow-hidden">

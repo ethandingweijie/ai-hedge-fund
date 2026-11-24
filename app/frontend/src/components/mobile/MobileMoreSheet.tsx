@@ -25,7 +25,7 @@ export function MobileMoreSheet({ children }: MobileMoreSheetProps) {
         className="flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-full text-muted-foreground hover:bg-muted transition-colors"
       >
         <MoreHorizontal size={18} />
-        <span className="text-[10px] font-medium leading-none">More</span>
+        <span className="text-xs font-medium leading-none">More</span>
       </button>
 
       {/* Portal to document.body so it's above everything */}

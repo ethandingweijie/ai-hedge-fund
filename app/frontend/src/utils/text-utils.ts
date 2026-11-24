@@ -210,7 +210,7 @@ export function createHighlightedJson(jsonString: string): string {
             return `<span style="color: #c586c0">${match}</span>`;
           } else {
             // Numbers are light blue/teal
-            return `<span class="text-blue-500">${match}</span>`;
+            return `<span class="text-brand">${match}</span>`;
           }
         }
       );

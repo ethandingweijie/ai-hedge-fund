@@ -29,7 +29,7 @@ export function MobileBottomNav() {
                 }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
-              <span className="text-[10px] font-medium leading-none">{label}</span>
+              <span className="text-xs font-medium leading-none">{label}</span>
             </a>
           );
         })}

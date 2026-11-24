@@ -76,10 +76,10 @@ export function CardAuditBanner({
         <IconForSeverity severity={severity} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${visuals.iconClass}`}>
+            <span className={`text-xs font-bold uppercase tracking-widest ${visuals.iconClass}`}>
               {visuals.label}
             </span>
-            <span className={`text-[10px] uppercase tracking-wider text-muted-foreground`}>
+            <span className={`text-xs uppercase tracking-wider text-muted-foreground`}>
               Card QA{tickerSuffix}
             </span>
           </div>
@@ -142,12 +142,12 @@ function AuditDetail({ audit }: { audit: DdCardAudit }) {
                   {card.remediation_success === true && ' · auto-resolved'}
                   {card.remediation_success === false && ' · re-extract NOT_FOUND'}
                   {card.missing_mandatory.length > 0 && (
-                    <div className="ml-3 text-[11px] opacity-70">
+                    <div className="ml-3 text-xs opacity-70">
                       Missing: {card.missing_mandatory.join(', ')}
                     </div>
                   )}
                   {card.judge_reasoning && (
-                    <div className="ml-3 text-[11px] italic opacity-70">
+                    <div className="ml-3 text-xs italic opacity-70">
                       “{card.judge_reasoning.slice(0, 200)}”
                     </div>
                   )}
@@ -175,11 +175,11 @@ function AuditDetail({ audit }: { audit: DdCardAudit }) {
       )}
 
       {/* Cost + budget */}
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-current/10">
+      <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-current/10">
         <span>
           QA cost: ${audit.qa_cost_estimate_usd.toFixed(4)}
           {audit.qa_budget_hit && (
-            <span className="ml-2 font-medium text-yellow-600 dark:text-yellow-400">
+            <span className="ml-2 font-medium text-warning">
               · budget cap reached
             </span>
           )}

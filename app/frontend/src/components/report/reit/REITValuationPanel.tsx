@@ -51,7 +51,7 @@ const fmtPct = (v: number | null | undefined, decimals = 1): string => {
 };
 // Section heading — matches live UI "SCENARIO PROBABILITIES" style
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
+  'text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // Blue tints for pie slices — matches live app's scenario bar colors
 const PIE_COLORS_BLUE = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
@@ -118,7 +118,7 @@ function NAVHeroCard({ rb, price, sym, navLeg, navPs, weight }: {
 
       {/* Derivation formula footer -- only where the bridge is the leg's own */}
       {aligned && navLeg === 'NAV (Cap Rates)' && shares && shares > 0 && (
-        <p className="text-[11px] text-muted-foreground mt-4 font-mono">
+        <p className="text-xs text-muted-foreground mt-4 font-mono">
           NAV = NOI / cap − debt + cash ÷ {(shares / 1e6).toFixed(1)}M sh
         </p>
       )}
@@ -333,7 +333,7 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
         <p className="text-xs font-medium text-muted-foreground mb-2">By asset class</p>
         <PieRow data={assetClassData} />
         {!hasSubtype && (
-          <p className="text-[10px] text-muted-foreground/70 mt-2 italic">
+          <p className="text-xs text-muted-foreground/70 mt-2 italic">
             Property-level breakdown requires a fresh deep-research pass.
           </p>
         )}
@@ -348,7 +348,7 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
       ) : (
         <div className="pt-4 border-t border-border">
           <p className="text-xs font-medium text-muted-foreground mb-1">By geography</p>
-          <p className="text-[11px] text-muted-foreground/70 italic">
+          <p className="text-xs text-muted-foreground/70 italic">
             Geographic mix not yet extracted — available after a fresh
             deep-research pipeline run.
           </p>
@@ -356,7 +356,7 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
       )}
 
       {rb.research_evidence && (
-        <p className="text-[11px] text-muted-foreground mt-4 italic">
+        <p className="text-xs text-muted-foreground mt-4 italic">
           Source: {rb.research_evidence.slice(0, 200)}
         </p>
       )}
@@ -393,7 +393,7 @@ function CapRateScenarios({ rb, sym, price }: {
   };
   const rowColor = (label: typeof noiLabels[number]) =>
     label === 'Bull' ? 'text-content-high' :
-    label === 'Base' ? 'text-blue-500'  : 'text-content-high';
+    label === 'Base' ? 'text-brand'  : 'text-content-high';
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
@@ -406,13 +406,13 @@ function CapRateScenarios({ rb, sym, price }: {
       </p>
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground">
+          <tr className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">
             <th className="text-left py-2">NOI Δ</th>
             {capRates.map((c, i) => (
               <th key={i} className="text-right py-2 px-1.5">
                 {fmtPct(c, 1)}
                 {i === 1 && (
-                  <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                  <span className="block text-xs font-normal normal-case tracking-normal text-muted-foreground/70">
                     (peer)
                   </span>
                 )}
@@ -427,7 +427,7 @@ function CapRateScenarios({ rb, sym, price }: {
               <tr key={d} className="border-t border-border">
                 <td className={`py-3 pr-1.5 font-semibold ${rowColor(label)}`}>
                   {label}<br/>
-                  <span className="text-[10px] font-normal text-muted-foreground">
+                  <span className="text-xs font-normal text-muted-foreground">
                     {d === 0 ? 'flat' : `${d > 0 ? '+' : ''}${(d * 100).toFixed(0)}%`}
                   </span>
                 </td>
@@ -444,12 +444,12 @@ function CapRateScenarios({ rb, sym, price }: {
                       }`}
                     >
                       <div className={`font-${isBase ? 'bold' : 'semibold'} tabular-nums ${
-                        isBase ? 'text-blue-700 dark:text-blue-400' : 'text-foreground'
+                        isBase ? 'text-blue-700' : 'text-foreground'
                       }`}>
                         {sym}{p.toFixed(0)}
                       </div>
                       {price != null && (
-                        <div className={`text-[10px] ${upsideColor(up)}`}>
+                        <div className={`text-xs ${upsideColor(up)}`}>
                           {up >= 0 ? '+' : ''}{up.toFixed(0)}%
                         </div>
                       )}
@@ -461,7 +461,7 @@ function CapRateScenarios({ rb, sym, price }: {
           })}
         </tbody>
       </table>
-      <p className="text-[11px] text-muted-foreground mt-3 font-mono leading-tight">
+      <p className="text-xs text-muted-foreground mt-3 font-mono leading-tight">
         NAV = NOI × (1+Δ) / cap − {fmtBn(debt, sym)} + {fmtBn(cash, sym)} ÷ {(shares / 1e6).toFixed(1)}M sh
       </p>
     </div>

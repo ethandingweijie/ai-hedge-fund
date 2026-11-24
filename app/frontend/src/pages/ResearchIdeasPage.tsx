@@ -112,10 +112,10 @@ export function ResearchIdeasPage() {
     title: isDesktop ? 'text-[22px]' : 'text-[19px]',
     blurb: isDesktop ? 'text-base leading-relaxed' : 'text-[13.5px] leading-relaxed',
     meta: isDesktop ? 'text-[14px]' : 'text-[12px]',
-    badge: isDesktop ? 'text-[12px]' : 'text-[11px]',
+    badge: isDesktop ? 'text-[12px]' : 'text-xs',
     preview: isDesktop ? 'text-[15px]' : 'text-[12.5px]',
     previewLabel: isDesktop ? 'text-[13px]' : 'text-[12px]',
-    chip: isDesktop ? 'text-[12px]' : 'text-[10.5px]',
+    chip: isDesktop ? 'text-[12px]' : 'text-xs',
   };
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,7 +273,7 @@ export function ResearchIdeasPage() {
         <button
           onClick={() => { if (!loading) load(); }}
           disabled={loading}
-          className="p-2 rounded-full text-current opacity-80 hover:opacity-100 hover:bg-muted-foreground/15 disabled:opacity-50 transition-all"
+          className="w-11 h-11 flex items-center justify-center rounded-full text-current opacity-80 hover:opacity-100 hover:bg-muted-foreground/15 disabled:opacity-50 transition-all"
           title="Re-fetch latest cohorts (auto-fires on tab focus too)"
           aria-label="Refresh"
         >
@@ -332,7 +332,7 @@ export function ResearchIdeasPage() {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {isAi && (
                         <span
-                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand text-white text-[12px] font-semibold"
+                          className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand text-brand-foreground text-[12px] font-semibold"
                           title="Generated daily by Qwen3.6-plus with native web search"
                         >
                           <Sparkles size={10} />
@@ -429,17 +429,17 @@ export function ResearchIdeasPage() {
                             pill style for every mode, matching the detail page. */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {idea.latest_idea_mode && (
-                            <span className="px-2 py-1 rounded-full text-[11px] font-semibold bg-primary/15 text-brand">
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-primary/15 text-brand">
                               {idea.latest_idea_mode.replace('_', ' ')}
                             </span>
                           )}
                           {idea.latest_idea_region && (
-                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold">
+                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold">
                               {idea.latest_idea_region}
                             </span>
                           )}
                           {idea.latest_idea_vehicle && idea.latest_idea_vehicle !== 'stock' && (
-                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold">
+                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold">
                               {idea.latest_idea_vehicle}
                             </span>
                           )}
@@ -587,7 +587,7 @@ export function ResearchIdeasPage() {
                           })}
                         </div>
                         {topComplacency.some((t) => t.aggregate_score == null) && (
-                          <p className="mt-1 text-[11px] text-muted-foreground/70 italic">
+                          <p className="mt-1 text-xs text-muted-foreground/70 italic">
                             * quant-only score (qual not yet computed —
                             cohort row's aggregate_score is null;
                             force-rescore the ticker to populate it)
@@ -747,7 +747,7 @@ export function ResearchIdeasPage() {
                         <button
                           onClick={handleGenerateIdea}
                           disabled={generatingIdea}
-                          className="p-1.5 rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                          className="w-11 h-11 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                           title="Generate a new contrarian idea (~30-90s, costs ~$0.01)"
                           aria-label="Generate new idea"
                         >
@@ -757,7 +757,7 @@ export function ResearchIdeasPage() {
                         {idea.latest_idea_id && (
                           <button
                             onClick={(e) => handleDeleteIdea(e, idea.latest_idea_id!)}
-                            className="p-1.5 rounded-full bg-muted/40 hover:bg-surface-2 text-muted-foreground hover:text-content-high dark:hover:text-content-high"
+                            className="w-11 h-11 flex items-center justify-center rounded-full bg-muted/40 hover:bg-surface-2 text-muted-foreground hover:text-content-high dark:hover:text-content-high"
                             title="Delete this idea"
                             aria-label="Delete idea"
                           >

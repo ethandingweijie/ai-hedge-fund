@@ -60,7 +60,7 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
       <div className="text-center py-2">
         {pmTarget != null && pmTarget > 0 ? (
           <>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">12-Month Price Target</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">12-Month Price Target</p>
             <p className="text-3xl font-bold tabular-nums mt-1">{fmt(pmTarget, sym)}</p>
             {pmUp != null && (
               <p className={`text-lg font-bold ${upColor(pmUp)}`}>{fmtPct(pmUp)} upside</p>
@@ -71,7 +71,7 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
           </>
         ) : blended12m != null && blended12m > 0 ? (
           <>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Blended 12-Month Target</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Blended 12-Month Target</p>
             <p className="text-3xl font-bold tabular-nums mt-1">{fmt(blended12m, sym)}</p>
             {blendedUp != null && (
               <p className={`text-lg font-bold ${upColor(blendedUp)}`}>{fmtPct(blendedUp)}</p>
@@ -82,7 +82,7 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
 
       {/* ── How it was derived (one-liner) ── */}
       {pmDiffersFromBlend && (
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+        <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40 px-3 py-2 text-xs text-amber-800 dark:text-amber-300 leading-snug">
           The Portfolio Manager set {fmt(pmTarget, sym)} as the target.
           The scenario-weighted blend is {fmt(blended12m, sym)} ({fmtPct(blendedUp)}).
           The PM may weight scenarios differently based on its thesis.
@@ -92,29 +92,29 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
       {/* ── At a glance: 4 key numbers ── */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-muted/40 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Current Price</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Current Price</p>
           <p className="text-base font-bold tabular-nums">{fmt(current || undefined, sym)}</p>
         </div>
         <div className="bg-muted/40 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Long-term Value</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Long-term Value</p>
           <p className="text-base font-bold tabular-nums">{fmt(ev, sym)}</p>
-          {evUp != null && <p className={`text-[10px] font-semibold ${upColor(evUp)}`}>{fmtPct(evUp)}</p>}
+          {evUp != null && <p className={`text-xs font-semibold ${upColor(evUp)}`}>{fmtPct(evUp)}</p>}
         </div>
         <div className="bg-surface-2 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bull Case</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Bull Case</p>
           <p className="text-base font-bold tabular-nums text-content-high">{fmt(bullIV, sym)}</p>
         </div>
         <div className="bg-surface-2 rounded-lg px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bear Case</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Bear Case</p>
           <p className="text-base font-bold tabular-nums text-content-high">{fmt(bearIV, sym)}</p>
-          {bearDown != null && <p className={`text-[10px] font-semibold text-content-high`}>{fmtPct(bearDown)}</p>}
+          {bearDown != null && <p className={`text-xs font-semibold text-content-high`}>{fmtPct(bearDown)}</p>}
         </div>
       </div>
 
       {/* ── Scenario probabilities ── */}
       {(scenario?.bear || scenario?.base || scenario?.bull) && (
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scenario Probabilities</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scenario Probabilities</p>
           {[
             { label: 'Bear',  prob: scenario?.bear?.probability, target: targets12m?.bear, iv: bearIV, color: 'bg-surface-2' },
             { label: 'Base',  prob: scenario?.base?.probability, target: targets12m?.base, iv: baseIV, color: 'bg-blue-500' },
@@ -133,10 +133,10 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
                 <span className="text-xs font-semibold w-[36px]">{r.label}</span>
                 {/* 12m target + fair value (blended IV) */}
                 <div className="text-right w-[60px]">
-                  <p className="text-[10px] font-mono tabular-nums">{r.target != null && r.target > 0 ? fmt(r.target, sym) : '—'}</p>
+                  <p className="text-xs font-mono tabular-nums">{r.target != null && r.target > 0 ? fmt(r.target, sym) : '—'}</p>
                 </div>
                 <div className="text-right w-[60px]">
-                  <p className="text-[10px] font-mono tabular-nums text-muted-foreground">{r.iv != null ? fmt(r.iv, sym) : '—'}</p>
+                  <p className="text-xs font-mono tabular-nums text-muted-foreground">{r.iv != null ? fmt(r.iv, sym) : '—'}</p>
                 </div>
               </div>
             );
@@ -146,15 +146,15 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
             <div className="w-[42px]" />
             <div className="flex-1" />
             <span className="w-[36px]" />
-            <span className="text-[8px] text-muted-foreground text-right w-[60px]">12m Target</span>
-            <span className="text-[8px] text-muted-foreground text-right w-[60px]">Fair value</span>
+            <span className="text-xs text-muted-foreground text-right w-[60px]">12m Target</span>
+            <span className="text-xs text-muted-foreground text-right w-[60px]">Fair value</span>
           </div>
         </div>
       )}
 
       {/* ── WACC footnote ── */}
       {wacc != null && (
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           DCF discount rate (WACC): {(wacc * 100).toFixed(1)}%
         </p>
       )}

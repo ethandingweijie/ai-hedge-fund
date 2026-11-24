@@ -87,7 +87,7 @@ export const Divider = ({ className = '' }: { className?: string }) =>
 
 export function ActionPill({ action, size = 'sm' }: { action?: string | null; size?: 'sm' | 'lg' }) {
   const base = actionTone(action);
-  const sz = size === 'lg' ? 'text-[11px] px-2.5 py-1' : 'text-[10px] px-1.5 py-0.5';
+  const sz = size === 'lg' ? 'text-xs px-2.5 py-1' : 'text-xs px-1.5 py-0.5';
   return <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`}>{action || '—'}</span>;
 }
 
@@ -97,10 +97,10 @@ export function GradeChip({ grade, label, tooltip, size = 'sm' }: { grade?: stri
   // a step up for list rows where the chip is a primary column value (History).
   const pill = size === 'md'
     ? 'min-w-[24px] h-[22px] px-2 text-[13px]'
-    : 'min-w-[22px] h-[20px] px-1.5 text-[11.5px]';
+    : 'min-w-[22px] h-[20px] px-1.5 text-xs';
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      {label && <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
+      {label && <span className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
       <span
         title={tooltip}
         className={`inline-flex items-center justify-center rounded-md font-bold tabular-nums ${pill} ${tooltip ? 'cursor-help' : ''} ${gradeTone(grade)}`}
@@ -153,7 +153,8 @@ export function SwipeRow({
   className = '',
 }: {
   onClick?: () => void;
-  actions?: { icon: React.ReactNode; color: string; onClick?: () => void; label?: string }[];
+  /** `textColor` defaults to white; pass the fill's paired foreground when white would fail contrast. */
+  actions?: { icon: React.ReactNode; color: string; textColor?: string; onClick?: () => void; label?: string }[];
   children: React.ReactNode;
   className?: string;
 }) {
@@ -209,12 +210,12 @@ export function SwipeRow({
               setDx(0);
               setOpen(false);
             }}
-            style={{ backgroundColor: a.color, width: 64 }}
+            style={{ backgroundColor: a.color, color: a.textColor ?? '#fff', width: 64 }}
             className="flex flex-col items-center justify-center gap-0.5 text-white active:opacity-85 transition-opacity"
             aria-label={a.label}
           >
             {a.icon}
-            {a.label && <span className="text-[10px] font-medium tracking-wide">{a.label}</span>}
+            {a.label && <span className="text-xs font-medium tracking-wide">{a.label}</span>}
           </button>
         ))}
       </div>

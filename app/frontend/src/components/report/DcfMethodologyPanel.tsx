@@ -130,7 +130,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
       <div className="flex items-center justify-between mb-1 gap-2">
         <h3 className="text-[15px] font-semibold">Valuation methodology</h3>
         {dcfRange.calibration_error && (
-          <Badge variant="warning" className="h-5 px-2 text-[10px] shrink-0">
+          <Badge variant="warning" className="h-5 px-2 text-xs shrink-0">
             BACKTEST WARNING
           </Badge>
         )}
@@ -160,7 +160,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
             unlabelled, LULU's "$458.14" read as the current blend. */}
         {dcfRange.calibration_note && (
           <p
-            className="text-xs text-amber-600 dark:text-amber-400"
+            className="text-xs text-warning"
             title="Today's methodology re-run on the previous fiscal year's financials and compared with the share price at that year end. It tests how the method performed in the past; it is not today's valuation."
           >
             <span className="font-medium">Methodology Backtest:</span>{' '}
@@ -189,7 +189,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
         {src && (
           <span className="inline-flex items-center gap-1.5">
             <span className="text-muted-foreground">Growth source:</span>
-            <Badge variant={src.variant} className="h-5 px-2 text-[10px]" title={src.detail}>
+            <Badge variant={src.variant} className="h-5 px-2 text-xs" title={src.detail}>
               {src.label}
             </Badge>
           </span>
@@ -276,13 +276,13 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
               </tr>
             </tbody>
           </table>
-          <p className="mt-1 text-[10px] text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             Weights are the base case's; each value is that method's per-share result in the scenario.
           </p>
         </div>
       )}
 
-      <p className="mt-3 text-[10px] text-muted-foreground">
+      <p className="mt-3 text-xs text-muted-foreground">
         Model estimate, not investment advice. Assumptions reflect data available at run time.
       </p>
     </Card>

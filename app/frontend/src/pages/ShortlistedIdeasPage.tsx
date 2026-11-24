@@ -114,14 +114,14 @@ export function ShortlistedIdeasPage() {
                       <Sparkles size={12} className="text-brand" />
                       <span className="font-mono text-base font-bold text-foreground">{idea.ticker}</span>
                       <span className="text-xs text-muted-foreground truncate max-w-[200px]">{idea.company_name}</span>
-                      <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-bold ${convictionColor(idea.conviction_score)}`}>
+                      <span className={`ml-auto px-1.5 py-0.5 rounded text-xs font-bold ${convictionColor(idea.conviction_score)}`}>
                         {idea.conviction_score}/10
                       </span>
                     </div>
                     <p className="text-xs italic text-foreground/80 leading-snug line-clamp-3 mb-1">
                       {idea.hypothesis}
                     </p>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
                       <span>{idea.sector || '—'}</span>
                       {idea.market_cap_usd != null && (
                         <span>${(idea.market_cap_usd / 1e9).toFixed(1)}B</span>
@@ -129,7 +129,7 @@ export function ShortlistedIdeasPage() {
                       <span>shortlisted {fmtDate(entry.shortlisted_at)}</span>
                     </div>
                     {entry.user_note && (
-                      <p className="mt-1 text-[11px] text-foreground/70 italic">📝 {entry.user_note}</p>
+                      <p className="mt-1 text-xs text-foreground/70 italic">📝 {entry.user_note}</p>
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2">

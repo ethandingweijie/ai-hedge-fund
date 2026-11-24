@@ -79,15 +79,15 @@ const PHASE_COLORS: Record<string, string> = {
   approved:    'bg-surface-2 text-content-high',
   marketed:    'bg-surface-2 text-content-high',
   launched:    'bg-surface-2 text-content-high',
-  filed:       'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
+  filed:       'bg-blue-100 text-blue-700 dark:bg-blue-950/50',
   ph3:         'bg-surface-2-active text-content-high',
-  ph2:         'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
+  ph2:         'bg-amber-100 text-amber-700 dark:bg-amber-950/50',
   ph1:         'bg-surface-2 text-content-high',
   preclinical: 'bg-muted text-muted-foreground',
 };
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
+  'text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -190,7 +190,7 @@ function RNPVHeader({ dcfRange, currentPrice, sym, leg }: {
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-baseline justify-between">
         <p className={SECTION_HEADING_CLS}>Pipeline rNPV / share</p>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {leg}{weight != null && weight > 0 ? ` · ${(weight * 100).toFixed(0)}% of the valuation` : ''}
           {' '}· base case · WACC {fmtPct(dcfRange.wacc, 1)}
         </span>
@@ -207,7 +207,7 @@ function RNPVHeader({ dcfRange, currentPrice, sym, leg }: {
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
         <div>
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Net Cash</p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Net Cash</p>
           <p className={`font-semibold tabular-nums ${
             (netCashPerShare ?? 0) > 0 ? 'text-content-high' : 'text-foreground'
           }`}>
@@ -248,7 +248,7 @@ function PipelineTable({ assets, sym }: {
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <p className={SECTION_HEADING_CLS}>Pipeline Assets</p>
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {ranked.length} assets
         </span>
       </div>
@@ -272,18 +272,18 @@ function PipelineTable({ assets, sym }: {
                     <div className="font-semibold text-foreground">
                       {asset.name}
                       {asset.partner && (
-                        <span className="text-[10px] text-muted-foreground ml-1">
+                        <span className="text-xs text-muted-foreground ml-1">
                           w/ {asset.partner}
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-muted-foreground truncate">
+                    <div className="text-xs text-muted-foreground truncate">
                       {asset.indication ?? '—'}
                       {asset.therapeutic_area && ` · ${asset.therapeutic_area.replace(/_/g, ' ')}`}
                     </div>
                   </td>
                   <td className="py-2 pr-2">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${chipCls}`}>
+                    <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${chipCls}`}>
                       {phaseLabel(asset.phase)}
                     </span>
                   </td>
@@ -299,7 +299,7 @@ function PipelineTable({ assets, sym }: {
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
+      <p className="text-xs text-muted-foreground mt-3 font-mono leading-relaxed">
         PoS from BIO 2011-2020 phase success rates × therapeutic-area multiplier
       </p>
     </div>
@@ -350,10 +350,10 @@ function CatalystsTimeline({ assets, sym }: {
     amber:  'bg-amber-500',
   };
   const chipCls = {
-    blue:   'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
+    blue:   'bg-blue-100 text-blue-700 dark:bg-blue-950/50',
     purple: 'bg-surface-2-active text-content-high',
     green:  'bg-surface-2 text-content-high',
-    amber:  'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
+    amber:  'bg-amber-100 text-amber-700 dark:bg-amber-950/50',
   };
 
   return (
@@ -372,7 +372,7 @@ function CatalystsTimeline({ assets, sym }: {
                 <span className="text-xs font-semibold text-foreground">
                   {c.asset.launch_year ?? 'TBD'}
                 </span>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${chipCls[c.color]}`}>
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${chipCls[c.color]}`}>
                   {c.eventType}
                 </span>
               </div>
@@ -381,7 +381,7 @@ function CatalystsTimeline({ assets, sym }: {
                 {c.asset.indication && ` — ${c.asset.indication}`}
               </p>
               {peak_bn != null && (
-                <p className="text-[10px] text-muted-foreground mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Peak {sym}{peak_bn.toFixed(1)}B · driving {sym}{rnpv_bn.toFixed(2)}B rNPV
                   {c.asset.partner && ` · w/ ${c.asset.partner}`}
                 </p>
@@ -432,7 +432,7 @@ function RDProductivity({
         {rdRatio != null ? (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">R&amp;D / Revenue</span>
-            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-content-high' : rdRatio > 0.25 ? 'text-amber-500' : 'text-foreground'}`}>
+            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-content-high' : rdRatio > 0.25 ? 'text-warning' : 'text-foreground'}`}>
               {(rdRatio * 100).toFixed(0)}%
             </span>
           </div>
@@ -454,7 +454,7 @@ function RDProductivity({
         {runwayYears != null ? (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Runway</span>
-            <span className={`font-semibold tabular-nums ${runwayYears < 2 ? 'text-content-high' : runwayYears < 3 ? 'text-amber-500' : 'text-content-high'}`}>
+            <span className={`font-semibold tabular-nums ${runwayYears < 2 ? 'text-content-high' : runwayYears < 3 ? 'text-warning' : 'text-content-high'}`}>
               {runwayYears.toFixed(1)}y
             </span>
           </div>

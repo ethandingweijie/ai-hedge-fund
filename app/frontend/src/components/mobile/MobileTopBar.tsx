@@ -25,7 +25,7 @@ export function MobileTopBar() {
       <button
         onClick={() => navigate('/menu')}
         aria-label="Open menu"
-        className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden shadow-md border border-border bg-primary/15 text-primary"
+        className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden shadow-md border border-border bg-primary/15 text-primary"
       >
         {user?.avatar_url ? (
           <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />

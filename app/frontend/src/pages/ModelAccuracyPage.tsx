@@ -57,7 +57,7 @@ const FAMILY_LABEL: Record<string, string> = { iv: 'intrinsic value', pt: 'targe
 
 function Chip({ children, strong = false }: { children: React.ReactNode; strong?: boolean }) {
   return (
-    <span className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border
+    <span className={`inline-flex items-center text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border
       ${strong ? 'bg-foreground text-background border-foreground' : 'bg-muted text-muted-foreground border-border'}`}>
       {children}
     </span>
@@ -263,7 +263,7 @@ function DiagnosticItem({ card }: { card: DiagnosticCard }) {
     <div className="py-3 border-t border-border/60 first:border-t-0">
       <div className="flex items-center gap-2 mb-1">
         <Chip>{CATEGORY_LABEL[card.category]}</Chip>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">
           {card.action === 'code_change' ? 'Needs a code change' : 'Addressed by a calibration proposal'}
         </span>
       </div>
@@ -444,7 +444,7 @@ function SotpInputFigures({ row }: { row: IndustryInputRow }) {
   const fig = (c?: CitedFigure | null) => c?.value == null ? '—'
     : `${c.value.toLocaleString()} ${c.currency ?? ''} ${c.scale ?? ''}`.trim();
   const tag = (p?: string | null) => (
-    <span className="ml-1 rounded border border-border px-1 text-[10px] text-muted-foreground">{p ?? 'period n/a'}</span>
+    <span className="ml-1 rounded border border-border px-1 text-xs text-muted-foreground">{p ?? 'period n/a'}</span>
   );
   return (
     <div className="text-left">
@@ -607,7 +607,7 @@ function LearningSection({ allowed }: { allowed: boolean }) {
           <div className="flex gap-1">
             {(['archetype', 'confidence', 'market'] as const).map((g) => (
               <button key={g} type="button" onClick={() => setGroup(g)}
-                className={`text-[11px] px-2 py-0.5 rounded-full border ${group === g ? 'bg-foreground text-background border-foreground' : 'border-border text-muted-foreground'}`}>
+                className={`text-xs px-2 py-0.5 rounded-full border ${group === g ? 'bg-foreground text-background border-foreground' : 'border-border text-muted-foreground'}`}>
                 by {GROUP_LABEL[g]}
               </button>
             ))}
@@ -619,7 +619,7 @@ function LearningSection({ allowed }: { allowed: boolean }) {
         </Card>
         {qt && Object.keys(qt.groups).length > 0 && (
           <div className="mt-2">
-            <p className="text-[11px] text-muted-foreground mb-1">Quarterly tracking (latest quarter year on year vs the FY+1 growth estimate; an early read, not a verdict)</p>
+            <p className="text-xs text-muted-foreground mb-1">Quarterly tracking (latest quarter year on year vs the FY+1 growth estimate; an early read, not a verdict)</p>
             <Card className="p-0 overflow-x-auto"><ScorecardTable card={qt} /></Card>
           </div>
         )}
@@ -648,7 +648,7 @@ function LearningSection({ allowed }: { allowed: boolean }) {
               </table>
             )}
             {((data.guidance?.best?.length ?? 0) > 0 || (data.guidance?.worst?.length ?? 0) > 0) && (
-              <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
+              <p className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
                 most credible: {(data.guidance?.best ?? []).join(', ') || '—'} · least: {(data.guidance?.worst ?? []).join(', ') || '—'}
               </p>
             )}
@@ -695,7 +695,7 @@ function LearningSection({ allowed }: { allowed: boolean }) {
                 <tbody>
                   {gates.map(([g, r]) => (
                     <tr key={g} className="border-b border-border last:border-0">
-                      <td className="px-3 py-1.5 font-mono text-[11px]">{g}</td>
+                      <td className="px-3 py-1.5 font-mono text-xs">{g}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{r.HELPED}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.FALSE_ALARM}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{r.NEUTRAL}</td><td className="px-3 py-1.5 text-right tabular-nums">{r.UNSCORABLE}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{r.status === 'insufficient' ? <Chip>insufficient</Chip> : share(r.false_alarm_share)}</td>
@@ -729,7 +729,7 @@ function LearningSection({ allowed }: { allowed: boolean }) {
                 ))}
               </tbody>
             </table>
-            <p className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
+            <p className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
               {data.overrides?.n_overrides ?? 0} active override(s)
               {fields.length > 0 && ` · fields changed: ${fields.map(([f, n]) => `${f} ×${n}`).join(', ')}`}
               {(data.overrides?.estimate_fields?.n ?? 0) > 0 && ` · on printed FY+1 fields the user was closer ${share(data.overrides?.estimate_fields?.user_closer_share)} of ${data.overrides?.estimate_fields?.n} times`}
@@ -795,7 +795,7 @@ function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="p-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">1 · Update ran</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">1 · Update ran</div>
               {last ? (
                 <>
                   <div className="text-sm font-medium mt-1">{last.run_at.replace('T', ' ').slice(0, 16)} UTC</div>
@@ -808,7 +808,7 @@ function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
               ) : <div className="text-sm mt-1">No update has run yet.</div>}
             </Card>
             <Card className="p-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">2 · In the engine, every industry</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">2 · In the engine, every industry</div>
               {Object.entries(log.coverage).map(([ex, c]) => (
                 <div key={ex} className="text-xs mt-1 tabular-nums">
                   <span className="font-medium">{ex}</span>: {c.multiples_live} of {c.multiple_slots} multiples live
@@ -817,7 +817,7 @@ function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
               ))}
             </Card>
             <Card className="p-4">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">3 · Reached valuations</div>
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">3 · Reached valuations</div>
               <div className="text-sm font-medium mt-1 tabular-nums">{log.reached_valuations.tickers} valuations</div>
               <div className="text-xs text-muted-foreground mt-1 tabular-nums">
                 across {log.reached_valuations.baskets_used} industries;

@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react';
 import { getAssumptionWatch, type AssumptionWatchPayload } from '@/lib/api';
 
 const ANOMALY_CHIP: Record<string, string> = {
-  divergence:         'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25',
+  divergence:         'bg-amber-500/15 text-warning border-amber-500/25',
   direction_reversal: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   theme_divergence:   'bg-surface-2 text-content-high border-[var(--hairline)]',
   earnings_quality:   'bg-surface-2 text-content-high border-[var(--hairline)]',
@@ -78,7 +78,7 @@ export function AssumptionWatchCard({ ticker }: Props) {
         <div className="text-[15px] font-semibold text-foreground">
           Assumption watch
         </div>
-        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+        <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
           recursive steward
         </span>
       </div>
@@ -91,21 +91,21 @@ export function AssumptionWatchCard({ ticker }: Props) {
             return (
               <div key={c.id} className="rounded-lg border border-border/60 bg-muted/30 p-2.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${
                     ANOMALY_CHIP[c.anomaly_type] ?? 'bg-muted text-muted-foreground border-border/60'
                   }`}
                   >
                     {ANOMALY_LABEL[c.anomaly_type] ?? c.anomaly_type}
                   </span>
-                  <span className="text-[10px] font-medium font-mono text-foreground/85">
+                  <span className="text-xs font-medium font-mono text-foreground/85">
                     {c.field_key}
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   {truncate(c.evidence, 200)}
                 </p>
                 {reading && (
-                  <p className="text-[11px] text-foreground/80 mt-1 leading-relaxed border-l-2 border-brand/40 pl-2">
+                  <p className="text-xs text-foreground/80 mt-1 leading-relaxed border-l-2 border-brand/40 pl-2">
                     {truncate(reading, 260)}
                   </p>
                 )}
@@ -123,10 +123,10 @@ export function AssumptionWatchCard({ ticker }: Props) {
           </div>
           <div className="space-y-1">
             {drivers.map((d, i) => (
-              <div key={i} className="flex items-baseline gap-2 text-[11px]">
+              <div key={i} className="flex items-baseline gap-2 text-xs">
                 <span className="font-mono text-foreground/85 shrink-0">{d.field_key}</span>
                 {Number.isFinite(d.gap_pct) && d.gap_pct !== 0 && (
-                  <span className="text-amber-600 dark:text-amber-400 font-semibold tabular-nums shrink-0">
+                  <span className="text-warning font-semibold tabular-nums shrink-0">
                     ~{Math.abs(d.gap_pct).toFixed(1)}{d.field_key.includes('growth') ? 'pp' : '%'}
                   </span>
                 )}
@@ -145,7 +145,7 @@ export function AssumptionWatchCard({ ticker }: Props) {
           {records.map(([source, r]) => (
             <span
               key={source}
-              className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-muted/70 text-muted-foreground"
+              className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted/70 text-muted-foreground"
               title={`${source}: hit rate ${
                 r.hit_rate != null ? `${Math.round(r.hit_rate * 100)}%` : 'n/a'
               } across ${r.n} scored call${r.n === 1 ? '' : 's'}`}

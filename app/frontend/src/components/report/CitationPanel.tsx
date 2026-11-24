@@ -87,7 +87,7 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
           <ul className="space-y-1.5">
             {sourceGaps.map((gap, i) => (
               <li key={i} className="flex gap-2 text-xs text-foreground/80 leading-relaxed">
-                <span className="text-amber-500 shrink-0">›</span>
+                <span className="text-warning shrink-0">›</span>
                 <span>{gap}</span>
               </li>
             ))}

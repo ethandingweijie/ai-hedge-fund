@@ -233,15 +233,15 @@ export type ActionVariant = 'pill' | 'text';
 
 const ACTION_TONES: Record<string, Record<ActionVariant, string>> = {
   BUY: {
-    pill: 'bg-brand text-white border border-transparent',
+    pill: 'bg-brand text-brand-foreground border border-transparent',
     text: 'text-brand',
   },
   STRONG_BUY: {
-    pill: 'bg-brand text-white border border-transparent',
+    pill: 'bg-brand text-brand-foreground border border-transparent',
     text: 'text-brand',
   },
   SHORT: {
-    pill: 'bg-warning text-black border border-transparent',
+    pill: 'bg-warning text-warning-foreground border border-transparent',
     text: 'text-warning',
   },
   SELL: {
@@ -260,7 +260,7 @@ const ACTION_TONES: Record<string, Record<ActionVariant, string>> = {
   // accent; Neutral, Underweight and Under Review stay monochrome, matching
   // HOLD and SELL — direction reads from the label, never from green/red.
   OVERWEIGHT: {
-    pill: 'bg-brand text-white border border-transparent',
+    pill: 'bg-brand text-brand-foreground border border-transparent',
     text: 'text-brand',
   },
   NEUTRAL: {

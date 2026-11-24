@@ -375,7 +375,7 @@ export function PortfolioPage() {
                   value={ticker} onChange={e => setTicker(e.target.value)}
                   placeholder="AAPL · 9988 · D05"
                   title="US tickers, HK codes (9988 or 9988.HK) and SGX codes (D05 or D05.SI). Enter avg cost in the stock's trading currency."
-                  className="w-36 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm uppercase"
+                  className="w-36 h-11 rounded-lg border border-input bg-background px-3 text-sm uppercase"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
@@ -384,7 +384,7 @@ export function PortfolioPage() {
                 <input
                   value={qty} onChange={e => setQty(e.target.value)}
                   placeholder="100" inputMode="decimal"
-                  className="w-24 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+                  className="w-24 h-11 rounded-lg border border-input bg-background px-3 text-sm"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
@@ -393,7 +393,7 @@ export function PortfolioPage() {
                 <input
                   value={cost} onChange={e => setCost(e.target.value)}
                   placeholder="150.00" inputMode="decimal"
-                  className="w-28 rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+                  className="w-28 h-11 rounded-lg border border-input bg-background px-3 text-sm"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
@@ -402,7 +402,7 @@ export function PortfolioPage() {
                 <input
                   value={notes} onChange={e => setNotes(e.target.value)}
                   placeholder="thesis, entry rationale…"
-                  className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
@@ -462,7 +462,7 @@ export function PortfolioPage() {
                     <TableRow key={h.id}>
                       <TableCell className="font-semibold">
                         {h.ticker}
-                        {h.notes && <div className="text-[11px] font-normal text-muted-foreground max-w-40 truncate" title={h.notes}>{h.notes}</div>}
+                        {h.notes && <div className="text-xs font-normal text-muted-foreground max-w-40 truncate" title={h.notes}>{h.notes}</div>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtNum(h.quantity, 0)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmtMoney(h.avg_cost, h.currency)}</TableCell>
@@ -470,7 +470,7 @@ export function PortfolioPage() {
                       <TableCell className="text-right tabular-nums font-medium">
                         {fmtMoney(h.market_value, h.currency)}
                         {h.currency && h.currency !== 'USD' && h.market_value_usd != null && (
-                          <div className="text-[11px] font-normal text-muted-foreground">≈ {fmtMoney(h.market_value_usd, 'USD_MIXED')}</div>
+                          <div className="text-xs font-normal text-muted-foreground">≈ {fmtMoney(h.market_value_usd, 'USD_MIXED')}</div>
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{fmtNum(h.weight_pct ?? null, 1)}%</TableCell>
@@ -641,7 +641,7 @@ function MobileHoldings({ holdings, loading, removingId, onDelete }: {
                 <div className="flex items-center gap-2">
                   <span className="text-[17px] font-semibold text-foreground">{h.ticker}</span>
                   {decision && (
-                    <span className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-semibold ${actionTone(decision)}`}>
+                    <span className={`inline-flex items-center h-5 px-2 rounded-full text-xs font-semibold ${actionTone(decision)}`}>
                       {ratingLabel(decision)}
                     </span>
                   )}
@@ -781,7 +781,7 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
           <Card key={ev.key} className="p-4">
             <div className="flex items-baseline justify-between gap-2">
               <div className="text-sm font-semibold">{ev.name}</div>
-              <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                 {ev.window.start} → {ev.window.end}
               </span>
             </div>
@@ -804,7 +804,7 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
             {ev.tags.length > 0 && (
               <div className="flex gap-1 mt-2 flex-wrap">
                 {ev.tags.map(t => (
-                  <span key={t} className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px]">{t}</span>
+                  <span key={t} className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-xs">{t}</span>
                 ))}
               </div>
             )}
@@ -812,7 +812,7 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
           </Card>
         ))}
       </div>
-      <p className="text-[11px] text-muted-foreground mt-3">
+      <p className="text-xs text-muted-foreground mt-3">
         Curated crisis windows with reference SPY/QQQ numbers (live-cross-checked on every run).
         Run the replay to see what YOUR portfolio did through each event.
       </p>
@@ -858,7 +858,7 @@ function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined 
         </div>
       </div>
       {missing.length > 0 && (
-        <p className="text-[10px] text-muted-foreground mt-1.5">
+        <p className="text-xs text-muted-foreground mt-1.5">
           {missing.map(m => `${m.sector} (${m.symbol})`).join(' and ')} ETF{missing.length > 1 ? 's' : ''} not
           listed yet during this window — excluded, not zero-filled.
         </p>
@@ -879,12 +879,12 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div>
           <div className="text-sm font-semibold">{ev.name}</div>
-          <div className="text-[11px] text-muted-foreground tabular-nums">
+          <div className="text-xs text-muted-foreground tabular-nums">
             {ev.window.start} → {ev.window.end}
           </div>
         </div>
         <span
-          className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${matchChip(sim.matches)}`}
+          className={`px-2 py-0.5 rounded border text-xs font-semibold ${matchChip(sim.matches)}`}
           title={`Regime similarity vs today: exact match on ${sim.matches} of ${sim.of} dimensions${sim.matched_dims.length ? ` (${sim.matched_dims.join(', ')})` : ''}`}
         >
           {sim.matches}/{sim.of} regime match
@@ -893,7 +893,7 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
 
       {/* Benchmark cross-check warning */}
       {divergent && (
-        <div className="mt-2 p-2 rounded border border-amber-600/40 bg-amber-600/10 text-[11px] text-amber-800 dark:text-amber-200 flex items-start gap-2">
+        <div className="mt-2 p-2 rounded border border-amber-600/40 bg-amber-600/10 text-xs text-amber-800 dark:text-amber-200 flex items-start gap-2">
           <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
           <span>
             Benchmark cross-check divergent — curated vs live FMP history differ by &gt;8pp on:{' '}
@@ -913,22 +913,22 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
         <div className="p-2.5 rounded-md bg-muted/40">
           <div className="text-xs text-muted-foreground">Your portfolio</div>
           <div className="text-lg font-semibold"><RetText value={ev.portfolio.window_return_pct} /></div>
-          <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.portfolio.max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.portfolio.max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
           <div className="text-xs text-muted-foreground">SPY (live)</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.spy_return_pct} /></div>
-          <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.benchmarks.live.spy_max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.benchmarks.live.spy_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
           <div className="text-xs text-muted-foreground">QQQ (live)</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.qqq_return_pct} /></div>
-          <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.benchmarks.live.qqq_max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.benchmarks.live.qqq_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
           <div className="text-xs text-muted-foreground">Coverage</div>
           <div className="text-lg font-semibold tabular-nums">{covered != null ? `${fmtNum(covered, 1)}%` : '—'}</div>
-          <div className="text-[10px] text-muted-foreground">of cost basis replayed</div>
+          <div className="text-xs text-muted-foreground">of cost basis replayed</div>
         </div>
       </div>
 
@@ -937,7 +937,7 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
 
       {/* Coverage guard note */}
       {partialCoverage && ev.excluded.length > 0 && (
-        <p className="text-[11px] text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           Excluded: <span className="font-semibold">{ev.excluded.join(', ')}</span> — no sufficient
           price history in this window (listed later). Weights renormalized over the covered{' '}
           {fmtNum(covered, 1)}%.
@@ -960,7 +960,7 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
               <TableCell className="font-medium">
                 {h.ticker}
                 {!h.covered && (
-                  <span className="ml-2 text-[10px] text-muted-foreground" title="Not listed yet or too few in-window price points — excluded from portfolio aggregates">
+                  <span className="ml-2 text-xs text-muted-foreground" title="Not listed yet or too few in-window price points — excluded from portfolio aggregates">
                     not covered then
                   </span>
                 )}
@@ -1034,7 +1034,7 @@ function RegimeSection({
             </span>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           From the latest macro regime snapshot. Similarity = exact match per dimension (5 max);
           events below are ordered most-similar first.
         </p>
@@ -1054,12 +1054,12 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-sm font-semibold">{ev.name}</div>
-          <div className="text-[11px] text-muted-foreground tabular-nums">
+          <div className="text-xs text-muted-foreground tabular-nums">
             {ev.window.start} → {ev.window.end}
           </div>
         </div>
         <span
-          className={`px-2 py-0.5 rounded border text-[11px] font-semibold whitespace-nowrap ${matchChip(sim.matches)}`}
+          className={`px-2 py-0.5 rounded border text-xs font-semibold whitespace-nowrap ${matchChip(sim.matches)}`}
           title={`Matched: ${sim.matched_dims.length ? sim.matched_dims.join(', ') : 'none'}`}
         >
           {sim.matches}/{sim.of}
@@ -1084,7 +1084,7 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
             </div>
           );
         })}
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-2 pt-1 text-[10px] text-muted-foreground">
+        <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-2 pt-1 text-xs text-muted-foreground">
           <span />
           <span className="w-20 text-right">then</span>
           <span className="w-20 text-right">now</span>
@@ -1092,7 +1092,7 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
       </div>
 
       {ev.macro.notes && (
-        <p className="text-[11px] text-muted-foreground italic mt-3 leading-relaxed">{ev.macro.notes}</p>
+        <p className="text-xs text-muted-foreground italic mt-3 leading-relaxed">{ev.macro.notes}</p>
       )}
     </Card>
   );
@@ -1135,7 +1135,7 @@ function WhatIfSection({
     if (meta && !category) setCategory(meta.categories[0] ?? 'Custom');
   }, [meta, category]);
 
-  const selectCls = 'rounded-md border border-input bg-background px-2.5 py-1.5 text-sm';
+  const selectCls = 'h-11 rounded-lg border border-input bg-background px-3 text-sm';
 
   function run() {
     if (positionCount === 0) return;
@@ -1159,7 +1159,7 @@ function WhatIfSection({
       {/* Scenario form */}
       <Card className="p-4 mt-2">
         <div className="text-sm font-semibold mb-1">Simulate a crisis that hasn&apos;t happened yet</div>
-        <p className="text-[11px] text-muted-foreground mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Deterministic skeleton first (sector anchors from the reference crisis, leveraged-product
           time decay computed in closed form), then ONE deepseek-v4-flash call adds the sectoral
           narrative, assumptions to watch and recommendations. Short/inverse products you hold
@@ -1168,7 +1168,7 @@ function WhatIfSection({
 
         {parentId && (
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-[11px]">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-xs">
               <GitFork size={12} />
               Building on: {parentLabel ?? 'shared scenario'}
             </span>
@@ -1235,7 +1235,7 @@ function WhatIfSection({
             onChange={e => setConcerns(e.target.value)}
             rows={3}
             placeholder="e.g. Rising rates pressure AI data centres — PE-owned capacity is rate-sensitive; circular vendor financing; multiple-compression risk in memory stocks…"
-            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm"
           />
         </div>
 
@@ -1301,19 +1301,19 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
         <div className="flex items-start justify-between gap-2 flex-wrap">
           <div>
             <div className="text-sm font-semibold">{result.category}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5 max-w-2xl">{result.concerns}</div>
+            <div className="text-xs text-muted-foreground mt-0.5 max-w-2xl">{result.concerns}</div>
           </div>
           <div className="flex gap-1.5 flex-wrap">
-            <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+            <span className="px-2 py-0.5 rounded border text-xs bg-muted/40 border-border">
               {result.horizon_days}d horizon
             </span>
             {ref && (
-              <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+              <span className="px-2 py-0.5 rounded border text-xs bg-muted/40 border-border">
                 anchor: {ref.name}
               </span>
             )}
             <span
-              className={`px-2 py-0.5 rounded border text-[11px] ${
+              className={`px-2 py-0.5 rounded border text-xs ${
                 result.search.used
                   ? 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40'
                   : result.search.recommended
@@ -1330,7 +1330,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
 
         {/* Warnings (assumed classifications, unknown products, missing LLM) */}
         {result.warnings.length > 0 && (
-          <div className="mt-3 p-2.5 rounded border border-amber-600/40 bg-amber-600/10 text-[11px] text-amber-800 dark:text-amber-200 space-y-1">
+          <div className="mt-3 p-2.5 rounded border border-amber-600/40 bg-amber-600/10 text-xs text-amber-800 dark:text-amber-200 space-y-1">
             {result.warnings.map((w, i) => (
               <div key={i} className="flex items-start gap-2">
                 <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
@@ -1345,26 +1345,26 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Portfolio est. impact</div>
             <div className="text-lg font-semibold"><RetText value={skel.portfolio_est_impact_pct} /></div>
-            <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
+            <div className="text-xs text-muted-foreground">cost-basis weighted</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Coverage</div>
             <div className="text-lg font-semibold tabular-nums">
               {skel.covered_weight_pct != null ? `${fmtNum(skel.covered_weight_pct, 1)}%` : '—'}
             </div>
-            <div className="text-[10px] text-muted-foreground">of cost basis estimated</div>
+            <div className="text-xs text-muted-foreground">of cost basis estimated</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Model</div>
             <div className="text-lg font-semibold">{result.model.name.replace('deepseek-v4-flash', 'DS-v4-flash')}</div>
-            <div className="text-[10px] text-muted-foreground">est. cost ${result.model.cost_usd_est.toFixed(4)}</div>
+            <div className="text-xs text-muted-foreground">est. cost ${result.model.cost_usd_est.toFixed(4)}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Reference SPY/QQQ</div>
             <div className="text-lg font-semibold">
               {ref ? (<><RetText value={ref.benchmarks.spy_return_pct} /> / <RetText value={ref.benchmarks.qqq_return_pct} /></>) : '—'}
             </div>
-            <div className="text-[10px] text-muted-foreground">{ref ? `${ref.window.start} → ${ref.window.end}` : 'no anchor'}</div>
+            <div className="text-xs text-muted-foreground">{ref ? `${ref.window.start} → ${ref.window.end}` : 'no anchor'}</div>
           </div>
         </div>
       </Card>
@@ -1379,7 +1379,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               <div className="text-xs text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
                 ))}
               </div>
             </div>
@@ -1387,7 +1387,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
                 ))}
               </div>
             </div>
@@ -1419,15 +1419,15 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
       {llm && llm.assumptions_to_watch.length > 0 && (
         <Card className="p-4">
           <div className="text-sm font-semibold mb-1">Assumptions to watch across the quarterlies</div>
-          <p className="text-[11px] text-muted-foreground mb-2">
+          <p className="text-xs text-muted-foreground mb-2">
             The datapoints that confirm or disconfirm this scenario as the quarter unfolds.
           </p>
           <div className="grid md:grid-cols-2 gap-2">
             {llm.assumptions_to_watch.map((a, i) => (
               <div key={i} className="p-2.5 rounded-md bg-muted/40">
                 <div className="text-xs font-semibold">{a.metric}</div>
-                <div className="text-[11px] text-muted-foreground mt-0.5">{a.watch_for}</div>
-                <div className="text-[10px] text-primary mt-1">{a.timing}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{a.watch_for}</div>
+                <div className="text-xs text-primary mt-1">{a.timing}</div>
               </div>
             ))}
           </div>
@@ -1454,7 +1454,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
             })}
           </TableBody>
         </Table>
-        <p className="text-[10px] text-muted-foreground mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           Product estimates are closed-form: log(return) ≈ k·L − k(k−1)/2·N·σ². Inverse and leveraged
           products decay with volatility even when the underlying moves in your favour — the drag column
           shows the percentage points lost to that effect over the horizon.
@@ -1469,19 +1469,19 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
             {llm.recommendations.map((r, i) => (
               <div key={i} className="p-2.5 rounded-md border border-border">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${actionTone(r.action)}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${actionTone(r.action)}`}>
                     {r.action}
                   </span>
                   <span className="text-xs font-semibold">{r.instrument}</span>
-                  <span className="text-[10px] text-muted-foreground tabular-nums" title="Model confidence">
+                  <span className="text-xs text-muted-foreground tabular-nums" title="Model confidence">
                     {Math.round(r.confidence * 100)}%
                   </span>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5">{r.rationale}</p>
+                <p className="text-xs text-muted-foreground mt-1.5">{r.rationale}</p>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Not investment advice — scenario-conditioned suggestions from a single cheap-model pass
             {result.search.used ? ', grounded in the search evidence gathered above' : ''}.
           </p>
@@ -1493,7 +1493,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
 
 function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rationale: string | null }) {
   const typeBadge = h.kind === 'product' ? (
-    <span className={`px-1.5 py-0.5 rounded border text-[10px] ${
+    <span className={`px-1.5 py-0.5 rounded border text-xs ${
       h.product?.confidence === 'confirmed'
         ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
         : h.product?.confidence === 'assumed'
@@ -1504,12 +1504,12 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
       {h.product?.confidence === 'assumed' ? ' (assumed)' : ''}
     </span>
   ) : h.kind === 'unknown_product' ? (
-    <span className="px-1.5 py-0.5 rounded border text-[10px] bg-surface-2 text-content-high border-[var(--hairline)]"
+    <span className="px-1.5 py-0.5 rounded border text-xs bg-surface-2 text-content-high border-[var(--hairline)]"
           title={h.product?.hint ?? 'Unknown product'}>
       unclassified
     </span>
   ) : (
-    <span className="text-[10px] text-muted-foreground">{h.gics ?? h.sector ?? '—'}</span>
+    <span className="text-xs text-muted-foreground">{h.gics ?? h.sector ?? '—'}</span>
   );
 
   return (
@@ -1526,7 +1526,7 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
           </span>
         ) : <span className="text-muted-foreground">—</span>}
       </TableCell>
-      <TableCell className="text-[11px] text-muted-foreground max-w-72">{rationale ?? '—'}</TableCell>
+      <TableCell className="text-xs text-muted-foreground max-w-72">{rationale ?? '—'}</TableCell>
     </TableRow>
   );
 }
@@ -1571,7 +1571,7 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-muted-foreground" />
           <div className="text-sm font-semibold">Scenario memory</div>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             shared by everyone — open one to compare it against your portfolio,
             check its assumptions, or build on it
           </span>
@@ -1597,12 +1597,12 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
             <div key={e.scenario_id} className="p-3 rounded-md border border-border bg-muted/20 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold truncate">{e.category}</span>
-                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {e.created_by_name ?? 'anonymous'} · {ageLabel(e.created_at)}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground line-clamp-2">{e.concerns_excerpt}</p>
-              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+              <p className="text-xs text-muted-foreground line-clamp-2">{e.concerns_excerpt}</p>
+              <div className="flex items-center gap-1.5 flex-wrap text-xs">
                 {e.reference_key && (
                   <span className="px-1.5 py-0.5 rounded border border-border bg-muted/40">
                     anchor: {e.reference_key}
@@ -1774,26 +1774,26 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               </button>
               <span className="text-sm font-semibold">{detail.category}</span>
               {detail.horizon_days != null && (
-                <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+                <span className="px-2 py-0.5 rounded border text-xs bg-muted/40 border-border">
                   {detail.horizon_days}d horizon
                 </span>
               )}
               {detail.reference_key && (
-                <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+                <span className="px-2 py-0.5 rounded border text-xs bg-muted/40 border-border">
                   anchor: {detail.reference_key}
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               {detail.created_by_name ?? 'anonymous'} · {ageLabel(detail.created_at)}
               {detail.build_count > 0 && ` · built on ${detail.build_count}×`}
               {detail.children_count > 0 && ` · ${detail.children_count} fork${detail.children_count > 1 ? 's' : ''}`}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1.5 max-w-2xl">{detail.concerns}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 max-w-2xl">{detail.concerns}</p>
             {detail.parent && (
               <button
                 onClick={() => onOpen(detail.parent!.scenario_id)}
-                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-[11px] hover:bg-brand/10"
+                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-xs hover:bg-brand/10"
                 title="Open the scenario this one was built on"
               >
                 <GitFork size={12} />
@@ -1813,17 +1813,17 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
             <div className="text-lg font-semibold">
               <RetText value={skel?.portfolio_est_impact_pct ?? null} />
             </div>
-            <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
+            <div className="text-xs text-muted-foreground">cost-basis weighted</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Assumptions tracked</div>
             <div className="text-lg font-semibold tabular-nums">{detail.assumptions.length}</div>
-            <div className="text-[10px] text-muted-foreground">verifiable datapoints</div>
+            <div className="text-xs text-muted-foreground">verifiable datapoints</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
             <div className="text-xs text-muted-foreground">Community notes</div>
             <div className="text-lg font-semibold tabular-nums">{detail.notes.length}</div>
-            <div className="text-[10px] text-muted-foreground">append your own below</div>
+            <div className="text-xs text-muted-foreground">append your own below</div>
           </div>
         </div>
       </Card>
@@ -1838,7 +1838,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <div className="text-xs text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
                 ))}
               </div>
             </div>
@@ -1846,7 +1846,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
                 ))}
               </div>
             </div>
@@ -1874,7 +1874,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <div className="text-sm font-semibold">Compare to my portfolio</div>
-            <p className="text-[11px] text-muted-foreground max-w-xl">
+            <p className="text-xs text-muted-foreground max-w-xl">
               Re-runs the scenario&apos;s deterministic skeleton against YOUR holdings — no LLM,
               no re-simulation of the narrative. Sensitivities show how each assumption,
               if it holds, moves your portfolio.
@@ -1953,7 +1953,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                 </div>
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Computed {new Date(compare.computed_at).toLocaleString()} · deterministic skeleton math only.
             </p>
           </div>
@@ -1964,7 +1964,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
       {detail.assumptions.length > 0 && (
         <Card className="p-4">
           <div className="text-sm font-semibold mb-1">Assumptions to watch</div>
-          <p className="text-[11px] text-muted-foreground mb-3">
+          <p className="text-xs text-muted-foreground mb-3">
             Anyone can verify whether an assumption is holding true — market data checks a
             deterministic FMP reading; research check runs one web-search sweep. Verdicts are
             LLM judgement, always attributed.
@@ -1977,16 +1977,16 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <div className="text-xs font-semibold">{a.metric}</div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">{a.watch_for}</div>
-                      <div className="text-[10px] text-primary mt-1">{a.timing}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{a.watch_for}</div>
+                      <div className="text-xs text-primary mt-1">{a.timing}</div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] ${VERDICT_CLASS[a.status] ?? VERDICT_CLASS.open}`}>
+                      <span className={`px-1.5 py-0.5 rounded border text-xs ${VERDICT_CLASS[a.status] ?? VERDICT_CLASS.open}`}>
                         {a.status}
                       </span>
                       {a.author_delta && a.author_delta.base_portfolio_est_pct != null && (
                         <span
-                          className="px-1.5 py-0.5 rounded border border-border bg-muted/60 text-[10px] tabular-nums"
+                          className="px-1.5 py-0.5 rounded border border-border bg-muted/60 text-xs tabular-nums"
                           title={`Author's portfolio if this holds — ${a.author_delta.affected_tickers.join(', ') || 'no direct linkage'}`}
                         >
                           if holds: <RetText value={a.author_delta.base_portfolio_est_pct} /> →{' '}
@@ -2000,7 +2000,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                       variant="outline" size="sm"
                       disabled={!!inFlight}
                       onClick={() => void runCheck(a, 'market_data')}
-                      className="gap-1 text-[11px]"
+                      className="gap-1 text-xs"
                       title="Deterministic FMP reading (rates / inflation / sector ETF) judged against the watch-point"
                     >
                       {inFlight === 'market_data' ? <Loader2 size={12} className="animate-spin" /> : null}
@@ -2010,21 +2010,21 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                       variant="outline" size="sm"
                       disabled={!!inFlight}
                       onClick={() => void runCheck(a, 'deep_research')}
-                      className="gap-1 text-[11px]"
+                      className="gap-1 text-xs"
                       title="One web-research sweep (qwen) judging the latest evidence"
                     >
                       {inFlight === 'deep_research' ? <Loader2 size={12} className="animate-spin" /> : null}
                       Research check
                     </Button>
                     {a.checks_count > 0 && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {a.checks_count} check{a.checks_count > 1 ? 's' : ''} recorded
                       </span>
                     )}
                   </div>
                   {a.latest_check && (
                     <div className="mt-2 p-2 rounded border border-border bg-background/60">
-                      <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                      <div className="flex items-center gap-1.5 flex-wrap text-xs">
                         <span className={`px-1.5 py-0.5 rounded border ${VERDICT_CLASS[a.latest_check.verdict] ?? VERDICT_CLASS.open}`}>
                           {a.latest_check.verdict}
                         </span>
@@ -2038,7 +2038,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                         )}
                       </div>
                       {a.latest_check.evidence && (
-                        <p className="text-[11px] text-muted-foreground mt-1">{a.latest_check.evidence}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{a.latest_check.evidence}</p>
                       )}
                     </div>
                   )}
@@ -2053,12 +2053,12 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
       <Card className="p-4">
         <div className="text-sm font-semibold mb-2">Community notes</div>
         {detail.notes.length === 0 ? (
-          <p className="text-[11px] text-muted-foreground">No notes yet — add the first observation below.</p>
+          <p className="text-xs text-muted-foreground">No notes yet — add the first observation below.</p>
         ) : (
           <div className="space-y-2 mb-3">
             {detail.notes.map(n => (
               <div key={n.note_id} className="p-2 rounded border border-border">
-                <div className="text-[10px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {n.user_name ?? 'anonymous'} · {ageLabel(n.created_at)}
                 </div>
                 <p className="text-xs mt-0.5 whitespace-pre-wrap">{n.note}</p>

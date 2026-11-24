@@ -76,7 +76,7 @@ export function StockPanel({ ticker }: StockPanelProps) {
           <button
             key={t.label}
             onClick={() => setTfIdx(i)}
-            className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors
+            className={`text-xs font-semibold px-2 py-0.5 rounded transition-colors
               ${tfIdx === i
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -153,7 +153,7 @@ export function StockPanel({ ticker }: StockPanelProps) {
               : val >= 0 ? 'text-foreground' : 'text-content-medium';
             return (
               <div key={key}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none mb-0.5">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground leading-none mb-0.5">
                   {label}
                 </p>
                 <p className={`text-sm font-semibold tabular-nums ${valueColor}`}>

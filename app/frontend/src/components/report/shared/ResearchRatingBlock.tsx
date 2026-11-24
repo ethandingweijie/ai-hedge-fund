@@ -9,9 +9,28 @@
  */
 import type { ResearchView } from '@/lib/reportTypes';
 import { actionTone } from '@/lib/semanticColors';
-import { currencySymbol } from '@/lib/utils';
+import { cn, currencySymbol } from '@/lib/utils';
 
 const title = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '—');
+
+/**
+ * The 12-month target as a pill that sits beside the rating / action pill
+ * (owner, 2026-11-24: "include a pill for the target price, clearly").
+ * Outlined so it reads as a figure, not a second rating.
+ */
+export function TargetPill({ value, ticker, className = '' }: { value: number; ticker: string; className?: string }) {
+  return (
+    <span
+      // cn() (tailwind-merge) so a caller's size classes replace the defaults
+      // instead of racing them in the stylesheet.
+      className={cn('inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm font-semibold tabular-nums text-foreground', className)}
+      title="12-month price target"
+    >
+      <span className="font-medium text-muted-foreground">Target</span>
+      {currencySymbol(ticker)}{value.toFixed(2)}
+    </span>
+  );
+}
 
 export function RatingPill({ view, className = '' }: { view: ResearchView; className?: string }) {
   const key = view.under_review ? 'UNDER_REVIEW' : view.research_rating;
@@ -29,7 +48,7 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
 }) {
   const sym = currencySymbol(ticker);
   const text = compact ? 'text-[12px]' : 'text-sm';
-  const small = compact ? 'text-[10.5px]' : 'text-xs';
+  const small = compact ? 'text-xs' : 'text-xs';
   const diverges = view.structural_rating && view.structural_rating !== view.tactical_rating;
 
   // Unrated / Pre-Revenue: no target, no upside, no TSR, no benchmark. The
@@ -57,7 +76,7 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
         <div className="rounded-lg border border-dashed border-[var(--hairline)] bg-surface-2 px-3 py-2 text-content-high leading-relaxed">
           {view.callout}
         </div>
-        <p className={`${compact ? 'text-[10px]' : 'text-[11px]'} text-content-muted leading-relaxed`}>
+        <p className={`${compact ? 'text-xs' : 'text-xs'} text-content-muted leading-relaxed`}>
           {view.rating_definition} {view.disclaimer}
         </p>
       </div>
@@ -69,6 +88,7 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
       <div className="flex items-center gap-2 flex-wrap" title={[view.callout, view.structural_rating ? `Structural: ${title(view.structural_rating)}; tactical (12M): ${title(view.tactical_rating)}${diverges ? ' (views differ, see disclosure)' : ''}.` : '',
         ...(view.compliance?.notes ?? []), view.rating_definition, view.benchmark ? `Benchmark expected return ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).` : '', view.disclaimer].filter(Boolean).join(' | ')}>
         <RatingPill view={view} />
+        {view.target_12m != null && <TargetPill value={view.target_12m} ticker={ticker} />}
         {view.benchmark && <span className="text-content-medium">vs {view.benchmark.name}</span>}
         <span className={`${small} text-content-muted`}>· trade action {view.trade_action}</span>
       </div>

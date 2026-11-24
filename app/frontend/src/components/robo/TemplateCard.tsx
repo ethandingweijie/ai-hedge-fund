@@ -25,7 +25,7 @@ const RISK_LABEL: Record<StrategyTemplate['riskLevel'], string> = {
 
 const RISK_PILL: Record<StrategyTemplate['riskLevel'], string> = {
   conservative: 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
-  moderate: 'bg-brand text-white',
+  moderate: 'bg-brand text-brand-foreground',
   aggressive: 'bg-surface-2 text-content-high',
 };
 
@@ -57,7 +57,7 @@ export function TemplateCard({ template, onSelect }: { template: StrategyTemplat
 
       <div className="flex flex-wrap gap-1.5">
         {template.tags.map((tag) => (
-          <span key={tag} className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground">
+          <span key={tag} className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground">
             {tag}
           </span>
         ))}
@@ -66,15 +66,15 @@ export function TemplateCard({ template, onSelect }: { template: StrategyTemplat
       <div className="grid grid-cols-3 gap-2 bg-muted/60 rounded-lg py-3 mt-auto">
         <div className="text-center">
           <div className="text-[16px] font-bold font-mono text-foreground">{stocks}%</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Stocks</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Stocks</div>
         </div>
         <div className="text-center">
           <div className="text-[16px] font-bold font-mono text-foreground">{bonds}%</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Bonds</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Bonds</div>
         </div>
         <div className="text-center">
           <div className="text-[14px] font-semibold text-foreground">{template.timeHorizon}</div>
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Horizon</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Horizon</div>
         </div>
       </div>
     </button>

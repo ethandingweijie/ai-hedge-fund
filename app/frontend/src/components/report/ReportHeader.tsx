@@ -61,7 +61,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           <Link
             to={`/discuss/${ticker}`}
             title={`Discuss ${ticker}`}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand text-white hover:bg-brand/90 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand text-brand-foreground hover:bg-brand/90 transition-colors"
           >
             <MessageSquare size={13} />
             Discuss
@@ -80,7 +80,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
       )}
       {/* Owner, 2026-10-03: an estimate override moved the figures; the PM text is the agent's until rewritten. */}
       {decision?.price_target_override && (
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           {decision.pm_regenerated_at
             ? `PM rationale and headline rewritten on your estimate override (${String(decision.pm_regenerated_at).slice(0, 16).replace('T', ' ')} UTC).`
             : `Target and intrinsic value reflect your estimate override; the PM rationale and headline were written before it. Rewrite them from the estimates panel.`}
@@ -140,7 +140,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
             ].join('\n');
             return (
               <div key={key} className="flex flex-col items-center gap-1">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
                 <span
                   title={tooltip}
                   className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeTone(dim.grade)}`}
@@ -169,7 +169,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
       {/* ── Sector ── */}
       {(displaySector || displaySubSector) && (
         <div className="mt-4 pt-3 border-t flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">Sector</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mr-1">Sector</span>
           {displaySector && (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
               {displaySector}

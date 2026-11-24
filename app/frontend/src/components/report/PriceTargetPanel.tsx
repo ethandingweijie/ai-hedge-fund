@@ -107,7 +107,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             </div>
           )}
           {current != null && (
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-xs text-muted-foreground">
               vs current {sym}{current.toFixed(2)}
             </div>
           )}
@@ -116,7 +116,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             /* Same target, read as the rating reads it: price return plus
                dividend, against the benchmark. Absent for an unrated view,
                which has no target to return anything on. */
-            <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+            <div className="mt-1 text-xs text-muted-foreground tabular-nums">
               {decision.research_view.dividend_known && decision.research_view.dividend_yield != null
                 ? `+ ${(decision.research_view.dividend_yield * 100).toFixed(1)}% dividend = `
                 : ''}
@@ -126,7 +126,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             </div>
           )}
           {consensusPt != null && (
-            <div className="mt-1.5 text-[11px] text-muted-foreground">
+            <div className="mt-1.5 text-xs text-muted-foreground">
               Wall St. consensus{' '}
               <span className="font-semibold text-foreground/80 tabular-nums">
                 {sym}{consensusPt.toFixed(2)}
@@ -145,7 +145,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             </div>
           )}
           {baseDelta != null && bearDelta != null && (
-            <p className="text-[11px] text-muted-foreground leading-relaxed mt-2.5">
+            <p className="text-xs text-muted-foreground leading-relaxed mt-2.5">
               {/* These are FAIR VALUES (intrinsic value), not targets. The
                   12-month target converges only part of the way from spot
                   toward them, so a target below the bear-case IV is the rule
@@ -171,9 +171,9 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             <span className="text-[12px] font-medium text-muted-foreground">
               Scenarios
             </span>
-            {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
+            {wacc != null && <span className="text-xs tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
           </div>
-          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-xs text-muted-foreground">
             <span className="w-[60px] text-right">12m target</span>
             <span className="w-[56px] text-right">Fair value</span>
           </div>
@@ -183,7 +183,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             { prob: probBull, name: 'Bull', target12m: bull12m, iv: bullIV, color: 'brand' as const },
           ].map((r, i) => (
             <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
-              <span className="w-[34px] text-[11.5px] font-semibold text-foreground/80 tabular-nums">
+              <span className="w-[34px] text-xs font-semibold text-foreground/80 tabular-nums">
                 {Math.round((r.prob ?? 0) * 100)}%
               </span>
               <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
@@ -196,7 +196,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
               <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-foreground">
                 {r.target12m != null ? `${sym}${r.target12m.toFixed(2)}` : '—'}
               </span>
-              <span className="w-[56px] text-right text-[11px] tabular-nums text-muted-foreground">
+              <span className="w-[56px] text-right text-xs tabular-nums text-muted-foreground">
                 {r.iv != null ? `${sym}${r.iv.toFixed(2)}` : '—'}
               </span>
             </div>

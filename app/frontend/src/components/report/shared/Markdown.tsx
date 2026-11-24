@@ -85,7 +85,7 @@ export const mdComponents: Components = {
   ),
   thead: ({ children }) => <thead className="bg-surface-2">{children}</thead>,
   th: ({ children }) => (
-    <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap border-b border-[var(--hairline)]">
+    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap border-b border-[var(--hairline)]">
       {children}
     </th>
   ),

@@ -65,15 +65,15 @@ const formatRunTime = (iso: string | null): string => {
 // was nearly illegible against the app's light cream theme.
 const AICT_COLOR: Record<AICTTier, string> = {
   Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
-  Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  Castle:   'bg-blue-600/20 text-blue-700 border-blue-700/40',
+  Chapel:   'bg-amber-600/20 text-amber-700 border-amber-700/40',
   Stone:    'bg-surface-2 text-content-medium border-[var(--hairline)]',
   Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 
 const TA_COLOR: Record<TATier, string> = {
   'Not-TT':  'bg-surface-2 text-content-high border-[var(--hairline)]',
-  'Near-TT': 'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  'Near-TT': 'bg-amber-600/20 text-amber-700 border-amber-700/40',
   'TT*':     'bg-surface-2 text-content-high border-[var(--hairline)]',
   'N/A':     'bg-muted text-muted-foreground border-border',
 };
@@ -248,12 +248,12 @@ export function SW46Page() {
             />
           </div>
           <div className="flex flex-wrap items-center gap-1 ml-auto">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">AICT</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground mr-1">AICT</span>
             {AICT_FILTERS.map((t) => (
               <button
                 key={t}
                 onClick={() => setAictFilter(t)}
-                className={`px-2 py-1 text-[10px] font-semibold rounded-md border transition-colors ${
+                className={`px-2 py-1 text-xs font-semibold rounded-md border transition-colors ${
                   aictFilter === t
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-card text-muted-foreground border-border hover:bg-muted'
@@ -267,7 +267,7 @@ export function SW46Page() {
 
         {/* ── Rank-by chips ───────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex-shrink-0">Rank by</span>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground flex-shrink-0">Rank by</span>
           {RANK_DEFS.map((r) => (
             <button
               key={r.id}
@@ -294,7 +294,7 @@ export function SW46Page() {
 
         {!loading && (!cohort || cohort.results.length === 0) && !refreshing && (
           <div className="p-6 border border-dashed border-border rounded-md text-center">
-            <AlertTriangle className="mx-auto mb-2 text-amber-500" size={20} />
+            <AlertTriangle className="mx-auto mb-2 text-warning" size={20} />
             <p className="text-sm text-muted-foreground">No SW50 cohort run yet. Click <strong>Refresh</strong> to run the first one.</p>
           </div>
         )}
@@ -338,15 +338,15 @@ export function SW46Page() {
                     <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rank ?? '—'}</td>
                     <td className="px-2 py-1.5">
                       <div className="font-bold text-foreground">{r.ticker}</div>
-                      <div className="text-[10px] text-muted-foreground truncate max-w-[110px]">{r.name}</div>
+                      <div className="text-xs text-muted-foreground truncate max-w-[110px]">{r.name}</div>
                     </td>
                     <td className="px-2 py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR[r.aict.tier]}`}>
+                      <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR[r.aict.tier]}`}>
                         {r.aict.tier}
                       </span>
                     </td>
                     <td className="px-2 py-1.5">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR[r.tragic_algebra.ta_tier]}`}>
+                      <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR[r.tragic_algebra.ta_tier]}`}>
                         {r.tragic_algebra.ta_tier}
                       </span>
                     </td>
@@ -354,7 +354,7 @@ export function SW46Page() {
                       <span className="font-bold text-foreground" title={r.justification ?? `Shareholder ${r.composite.shareholder_bucket.toFixed(1)} / Quality ${r.composite.quality_bucket.toFixed(1)} / Valuation ${r.composite.valuation_bucket.toFixed(1)}`}>{r.composite.total.toFixed(1)}</span>
                     </td>
                     <td className="px-2 py-1.5" title={r.justification ?? ''}>
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${verdictColor(r.composite.total)}`}>
+                      <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${verdictColor(r.composite.total)}`}>
                         {verdictLabel(r.composite.total)}
                       </span>
                     </td>
@@ -374,34 +374,34 @@ export function SW46Page() {
                 ))}
               </tbody>
             </table>
-            <div className="px-3 py-2 text-[10px] text-muted-foreground border-t border-border">
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
               Showing <strong className="text-foreground">{rows.length}</strong> of {cohort.ticker_count} ·
               ranked by <strong className="text-foreground">{activeRank.label}</strong> ({activeRank.asc ? 'asc' : 'desc'}) ·
               click any row for the full Tragic Algebra / ROIC / IV15 breakdown
             </div>
-            <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border leading-relaxed space-y-2">
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border leading-relaxed space-y-2">
               <div>
                 <span className="font-semibold text-foreground">AICT</span> — AI Competitive Threat:
                 business-model survival outlook in the AI era (best&nbsp;→&nbsp;worst):
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Fortress}`}>Fortress</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR.Fortress}`}>Fortress</span>
                     minimal AI threat
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Castle}`}>Castle</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR.Castle}`}>Castle</span>
                     defensible against AI
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Chapel}`}>Chapel</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR.Chapel}`}>Chapel</span>
                     acute AI threat but real R&amp;D
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Stone}`}>Stone</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR.Stone}`}>Stone</span>
                     moderate threat, shallower moat
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Wood}`}>Wood</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR.Wood}`}>Wood</span>
                     AI strategy fully borrowed
                   </span>
                 </div>
@@ -411,19 +411,19 @@ export function SW46Page() {
                 stock-based comp: share of earnings shareholders keep after SBC drag &amp; dilution (ΔE):
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['Not-TT']}`}>Not-TT</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR['Not-TT']}`}>Not-TT</span>
                     clean SBC discipline (keeps&nbsp;≥85%)
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['Near-TT']}`}>Near-TT</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR['Near-TT']}`}>Near-TT</span>
                     borderline retention (60–84%)
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['TT*']}`}>TT*</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR['TT*']}`}>TT*</span>
                     Tragic-Tier SBC abuser (keeps&nbsp;&lt;60%)
                   </span>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['N/A']}`}>N/A</span>
+                    <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR['N/A']}`}>N/A</span>
                     inflecting from losses — ΔE math unstable
                   </span>
                 </div>
@@ -444,11 +444,11 @@ export function SW46Page() {
 // ─── Small summary chip ────────────────────────────────────────────────────
 
 function Stat({ label, value, tone, mono = true, title }: { label: string; value: string; tone?: 'warn'; mono?: boolean; title?: string }) {
-  const valueColor = tone === 'warn' ? 'text-amber-500' : 'text-foreground';
-  const labelColor = tone === 'warn' ? 'text-amber-500/80' : 'text-muted-foreground';
+  const valueColor = tone === 'warn' ? 'text-warning' : 'text-foreground';
+  const labelColor = tone === 'warn' ? 'text-warning' : 'text-muted-foreground';
   return (
     <div className="flex flex-col" title={title}>
-      <span className={`text-[10px] uppercase tracking-wider ${labelColor}`}>{label}</span>
+      <span className={`text-xs uppercase tracking-wider ${labelColor}`}>{label}</span>
       <span className={`${mono ? 'font-mono' : ''} text-sm font-bold ${valueColor}`}>{value}</span>
     </div>
   );
@@ -479,12 +479,12 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                 <span className="text-lg font-bold text-foreground">{ticker.ticker}</span>
                 <span className="text-sm text-muted-foreground">{ticker.name}</span>
                 {ticker.rank && (
-                  <span className="text-[10px] text-muted-foreground ml-auto">SW50 #{ticker.rank}</span>
+                  <span className="text-xs text-muted-foreground ml-auto">SW50 #{ticker.rank}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR[ticker.aict.tier]}`}>AICT · {ticker.aict.tier}</span>
-                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR[ticker.tragic_algebra.ta_tier]}`}>TA · {ticker.tragic_algebra.ta_tier}</span>
+                <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${AICT_COLOR[ticker.aict.tier]}`}>AICT · {ticker.aict.tier}</span>
+                <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${TA_COLOR[ticker.tragic_algebra.ta_tier]}`}>TA · {ticker.tragic_algebra.ta_tier}</span>
                 <span className="text-xs text-muted-foreground">Composite <strong className="text-foreground">{ticker.composite.total.toFixed(1)}</strong> / 100</span>
                 {ticker.ivb_pct != null && (
                   <span className="text-xs text-muted-foreground">IVB <strong className="text-foreground">{(ticker.ivb_pct * 100).toFixed(1)}%</strong></span>
@@ -516,7 +516,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
               <div className="bg-cyan-500/70" style={{ width: `${ticker.composite.quality_bucket}%` }} title={`Quality ${ticker.composite.quality_bucket.toFixed(1)} / 35`} />
               <div className="bg-surface-2" style={{ width: `${Math.max(ticker.composite.valuation_bucket, 0)}%` }} title={`Valuation ${ticker.composite.valuation_bucket.toFixed(1)} / 35`} />
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
               <Bucket label="Shareholder" value={ticker.composite.shareholder_bucket} cap={30} subs={[
                 { label: 'TA tier', value: ticker.composite.pts_ta_tier },
                 { label: 'ΔE', value: ticker.composite.pts_delta_e },
@@ -572,17 +572,17 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tragic Algebra · year-by-year</h2>
-              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${netDiluter ? 'text-content-high border-[var(--hairline)] bg-surface-2' : 'text-content-high border-[var(--hairline)] bg-surface-2'}`}>
+              <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${netDiluter ? 'text-content-high border-[var(--hairline)] bg-surface-2' : 'text-content-high border-[var(--hairline)] bg-surface-2'}`}>
                 {netDiluter ? 'Net diluter' : 'Net buyer'}
               </span>
             </div>
             {ticker.tragic_algebra.estimated_c_years > 0 && (
-              <p className="text-[10px] text-amber-500 mb-2">
+              <p className="text-xs text-warning mb-2">
                 <AlertTriangle size={10} className="inline mb-0.5" /> C estimated for {ticker.tragic_algebra.estimated_c_years} year(s) — FMP /stable/ does not break out RSU tax withholding.
               </p>
             )}
             <div className="overflow-x-auto">
-              <table className="w-full text-[10px] font-mono">
+              <table className="w-full text-xs font-mono">
                 <thead className="text-muted-foreground">
                   <tr>
                     <th className="px-1 py-1 text-left">FY</th>
@@ -606,7 +606,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                       <td className="px-1 py-1 text-right">{fmtMoney(y.sbc_expense)}</td>
                       <td className="px-1 py-1 text-right">
                         {fmtMoney(y.cash_tax_withholding)}
-                        {y.cash_tax_withholding_estimated && <span className="text-amber-500 ml-0.5">*</span>}
+                        {y.cash_tax_withholding_estimated && <span className="text-warning ml-0.5">*</span>}
                       </td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.buybacks)}</td>
                       <td className={`px-1 py-1 text-right ${y.is_net_diluter ? 'text-content-high' : 'text-muted-foreground'}`}>{fmtMoney(y.unfunded_comp)}</td>
@@ -619,7 +619,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                   ))}
                 </tbody>
               </table>
-              <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                 Ω = SBC + C + Unf, where <strong className="text-foreground">Unf</strong> = max(0, SBC − B) is the comp buybacks didn't fund;
                 OE = N − C − Unf. ΔS and P are informational (no longer in Ω).
                 Pooled ΔE = <strong className="text-foreground">{fmtPct(ticker.tragic_algebra.pooled_delta_e)}</strong>;
@@ -652,12 +652,12 @@ function Bucket(
   return (
     <div className="p-2 rounded border border-border bg-muted/30">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
         <span className="text-xs font-mono font-bold text-foreground">{value.toFixed(1)}/{cap}</span>
       </div>
       <div className="mt-1 space-y-0.5">
         {subs.map((s) => (
-          <div key={s.label} className="flex items-center justify-between text-[10px]">
+          <div key={s.label} className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">{s.label}</span>
             <span className="font-mono text-foreground">{s.value.toFixed(1)}</span>
           </div>

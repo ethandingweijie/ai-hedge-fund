@@ -65,10 +65,10 @@ export function PriceTargetHistoryStrip({ history, ticker }: Props) {
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
           Model target track record
         </div>
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <span className="inline-block h-0.5 w-4 rounded bg-brand" /> Intrinsic value
           </span>
@@ -103,7 +103,7 @@ export function PriceTargetHistoryStrip({ history, ticker }: Props) {
         </text>
       </svg>
 
-      <div className="mt-1 flex items-baseline justify-between text-[10.5px] text-muted-foreground tabular-nums">
+      <div className="mt-1 flex items-baseline justify-between text-xs text-muted-foreground tabular-nums">
         <span>{pts.length} prior runs</span>
         {last.intrinsic_value != null && last.price_at_run != null && last.price_at_run > 0 && (
           <span>

@@ -119,7 +119,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
               {!collapsed && <span className={`text-sm font-medium truncate ${active ? 'text-primary' : ''}`}>{label}</span>}
               {!collapsed && item.path === '/model-accuracy' && eligibleProposals > 0 && (
                 <span
-                  className="ml-auto text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full bg-foreground text-background"
+                  className="ml-auto text-xs font-bold leading-none px-1.5 py-0.5 rounded-full bg-foreground text-background"
                   title={`${eligibleProposals} proposal(s) eligible for promotion`}
                 >
                   {eligibleProposals}
@@ -141,11 +141,11 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
               >
                 <span className="font-mono text-xs font-bold text-foreground min-w-[44px]">{run.ticker}</span>
                 {run.final_action && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
                     {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
                   </span>
                 )}
-                <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
+                <span className="ml-auto text-xs text-muted-foreground/50 font-mono">
                   {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               </a>
@@ -177,7 +177,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             </button>
             <a
               href="#/pricing"
-              className="p-2 rounded-md hover:bg-muted text-amber-500"
+              className="p-2 rounded-md hover:bg-muted text-warning"
               title="Pricing"
               aria-label="Pricing"
             >
@@ -208,7 +208,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
               href="#/pricing"
               className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors"
             >
-              <Zap size={16} className="text-amber-500" />
+              <Zap size={16} className="text-warning" />
               <span className="text-sm font-medium">Pricing</span>
             </a>
             {user && (
@@ -232,7 +232,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
                   )}
                   <div className="flex flex-col min-w-0">
                     <span className="text-xs font-medium truncate">{user.name ?? user.email}</span>
-                    <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
+                    <span className="text-xs text-muted-foreground truncate">{user.email}</span>
                   </div>
                 </div>
               </div>

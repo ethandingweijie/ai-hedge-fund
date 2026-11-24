@@ -69,7 +69,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
                     <TableCell className="text-sm max-w-[220px] truncate text-muted-foreground">{item.name}</TableCell>
                     <TableCell className="text-sm">
                       {isEtf && item.category ? (
-                        <span className="inline-flex items-center rounded-md border border-brand/25 bg-brand/10 px-1.5 py-0.5 text-[11px] font-semibold text-brand capitalize">
+                        <span className="inline-flex items-center rounded-md border border-brand/25 bg-brand/10 px-1.5 py-0.5 text-xs font-semibold text-brand capitalize">
                           {item.category}
                         </span>
                       ) : (
@@ -92,7 +92,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
                     <TableRow>
                       <TableCell colSpan={isEtf ? 8 : 7} className="bg-muted/30 py-2.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2">
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
                             Top holdings
                           </span>
                           {item.topHoldings!.map((h, i) => (
@@ -132,16 +132,16 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
                       ) : null}
                       {item.ticker}
                     </div>
-                    <div className="text-[11px] text-muted-foreground truncate">{item.name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{item.name}</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="font-mono font-semibold text-[14px] text-foreground">{item.allocationPercent.toFixed(1)}%</div>
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       ${item.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-xs text-muted-foreground">
                   <span>{item.shares.toLocaleString()} sh @ ${item.price.toFixed(2)}</span>
                   {isEtf && item.expenseRatio != null && <span>Exp: {item.expenseRatio.toFixed(2)}%</span>}
                   {item.sector && <span className="truncate">{item.sector}</span>}
@@ -149,11 +149,11 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
               </button>
               {expanded === item.ticker && hasHoldings && (
                 <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap gap-x-2 gap-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-full">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 w-full">
                     Top holdings
                   </span>
                   {item.topHoldings!.map((h, i) => (
-                    <span key={i} className="text-[11px] text-foreground">
+                    <span key={i} className="text-xs text-foreground">
                       {h.asset} <span className="text-muted-foreground">{h.weightPercentage.toFixed(1)}%</span>
                     </span>
                   ))}

@@ -32,7 +32,7 @@ export function MobileTickerHeader({
             </span>
           </div>
           {regime && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border border-border mt-0.5">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border mt-0.5">
               {regime.risk_appetite} · {regime.volatility_regime} vol
             </span>
           )}
@@ -46,7 +46,7 @@ export function MobileTickerHeader({
             </p>
           )}
           {priceChange != null && (
-            <p className={`text-[10px] font-semibold tabular-nums leading-tight ${isPositive ? 'text-gain' : 'text-loss'}`}>
+            <p className={`text-xs font-semibold tabular-nums leading-tight ${isPositive ? 'text-gain' : 'text-loss'}`}>
               {isPositive ? '+' : ''}{priceChange.toFixed(2)}% <span className="text-muted-foreground font-normal">1Y</span>
             </p>
           )}

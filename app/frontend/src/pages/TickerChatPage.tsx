@@ -111,7 +111,7 @@ function MessageRow({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-baseline gap-2 min-w-0">
             <span className="font-semibold text-sm text-foreground truncate">{message.author_name}</span>
-            <span className="text-[11px] text-muted-foreground shrink-0">{timeAgo(message.created_at)}</span>
+            <span className="text-xs text-muted-foreground shrink-0">{timeAgo(message.created_at)}</span>
           </div>
           {isAuthor && !message.is_deleted && (
             <button

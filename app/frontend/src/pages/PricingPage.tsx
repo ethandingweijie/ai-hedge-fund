@@ -108,7 +108,7 @@ function TierCard({
     >
       {isHighlighted && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="bg-blue-500 text-white text-[11px] font-bold px-3 py-0.5 rounded-full">
+          <span className="bg-blue-500 text-white text-xs font-bold px-3 py-0.5 rounded-full">
             MOST POPULAR
           </span>
         </div>
@@ -116,7 +116,7 @@ function TierCard({
 
       {active && (
         <div className="absolute top-3 right-3">
-          <span className="bg-surface-2 text-content-high text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <span className="bg-surface-2 text-content-high text-xs font-bold px-2 py-0.5 rounded-full">
             CURRENT PLAN
           </span>
         </div>
@@ -168,7 +168,7 @@ function TierCard({
       )}
 
       {profile.addOnRuns && !active && (
-        <p className="text-[11px] text-muted-foreground text-center mt-2">
+        <p className="text-xs text-muted-foreground text-center mt-2">
           Add-on: {profile.addOnRuns.count} runs for ${profile.addOnRuns.price}
         </p>
       )}
@@ -230,7 +230,7 @@ export function PricingPage() {
                 onClick={() => setBilling('annual')}
               >
                 Annual
-                <span className="ml-1.5 text-[10px] bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
+                <span className="ml-1.5 text-xs bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
                   SAVE 20%
                 </span>
               </button>
@@ -312,9 +312,9 @@ export function PricingPage() {
                 <tr className="bg-muted/50">
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-1/2">Feature</th>
                   {TIER_ORDER.map(t => (
-                    <th key={t} className={`px-4 py-3 font-semibold text-center ${activeTier === t ? 'text-blue-600 dark:text-blue-400' : ''}`}>
+                    <th key={t} className={`px-4 py-3 font-semibold text-center ${activeTier === t ? 'text-brand' : ''}`}>
                       {TIER_PROFILES[t].name}
-                      {activeTier === t && <span className="ml-1 text-[10px]">✓</span>}
+                      {activeTier === t && <span className="ml-1 text-xs">✓</span>}
                     </th>
                   ))}
                 </tr>
@@ -323,7 +323,7 @@ export function PricingPage() {
                 {categories.map(cat => (
                   <>
                     <tr key={`cat-${cat}`} className="bg-muted/20">
-                      <td colSpan={4} className="px-4 py-1.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      <td colSpan={4} className="px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                         {cat}
                       </td>
                     </tr>

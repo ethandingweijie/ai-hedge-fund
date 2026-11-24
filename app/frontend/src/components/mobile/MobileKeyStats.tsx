@@ -77,7 +77,7 @@ export function MobileKeyStats({ ticker, metrics }: MobileKeyStatsProps) {
               key={key}
               className="bg-card border border-border rounded-lg px-2 py-1.5 text-center"
             >
-              <p className="text-[8px] uppercase tracking-wider text-muted-foreground leading-none mb-0.5">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground leading-none mb-0.5">
                 {label}
               </p>
               <p className={`text-[13px] font-bold tabular-nums leading-tight ${colorClass}`}>

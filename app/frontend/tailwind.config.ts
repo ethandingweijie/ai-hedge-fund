@@ -74,7 +74,10 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
   			},
-  			brand: 'hsl(var(--brand) / <alpha-value>)',
+  			brand: {
+  				DEFAULT: 'hsl(var(--brand) / <alpha-value>)',
+  				foreground: 'hsl(var(--brand-foreground) / <alpha-value>)'
+  			},
   			hero: {
   				DEFAULT: 'hsl(var(--hero) / <alpha-value>)',
   				foreground: 'hsl(var(--hero-foreground) / <alpha-value>)'
@@ -119,7 +122,10 @@ const config: Config = {
   			// for the surface tiers and content ramp instead.
   			gain: 'hsl(var(--gain) / <alpha-value>)',
   			loss: 'hsl(var(--loss) / <alpha-value>)',
-  			warning: 'hsl(var(--warning) / <alpha-value>)',
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning) / <alpha-value>)',
+  				foreground: 'hsl(var(--warning-foreground) / <alpha-value>)'
+  			},
   			'ramp-grey': {
   				'100': 'var(--ramp-grey-100)',
   				'200': 'var(--ramp-grey-200)',

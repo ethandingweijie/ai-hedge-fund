@@ -189,7 +189,7 @@ export function HundredQPage() {
           <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
             <table className="w-full text-[14px]">
               <thead>
-                <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+                <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-foreground/70">
                   <th className="text-left px-4 py-3 font-bold">Ticker</th>
                   <th className="text-right px-4 py-3 font-bold" title="Flat composite: yes / answered, quant+qual combined">Composite</th>
                   <th className="text-right px-4 py-3 font-bold" title="Quant-only composite">Quant</th>
@@ -210,7 +210,7 @@ export function HundredQPage() {
                       <span className="ml-2.5 text-[13px] font-semibold text-foreground hidden md:inline">{r.company_name}</span>
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(r.composite_pct)}`}>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(r.composite_pct)}`}>
                         {fmtPct(r.composite_pct)}
                       </span>
                     </td>
@@ -309,7 +309,7 @@ function TickerDrawer({ ticker, onClose, onRescored }: { ticker: string; onClose
               <div>
                 <div className="flex items-baseline gap-2">
                   <span className="font-mono text-lg font-bold text-foreground">{detail.ticker}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${TIER_TAB_CLS[detail.tier]}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIER_TAB_CLS[detail.tier]}`}>
                     {TIER_LABEL[detail.tier]}
                   </span>
                 </div>
@@ -362,8 +362,8 @@ function TickerDrawer({ ticker, onClose, onRescored }: { ticker: string; onClose
                     >
                       <span className="text-[13px] font-semibold text-foreground">{ps.label}</span>
                       <span className="flex items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground font-mono">{ps.questions_yes}/{ps.questions_answered}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold font-mono ${compositeColor(pct)}`}>{fmtPct(pct)}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{ps.questions_yes}/{ps.questions_answered}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold font-mono ${compositeColor(pct)}`}>{fmtPct(pct)}</span>
                       </span>
                     </button>
                     {isOpen && (
@@ -381,7 +381,7 @@ function TickerDrawer({ ticker, onClose, onRescored }: { ticker: string; onClose
             {/* Tier history */}
             {history.length > 0 && (
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">Tier history</div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Tier history</div>
                 <ul className="space-y-1.5 text-[12px] text-foreground/80">
                   {history.map((h) => (
                     <li key={h.id} className="flex items-start gap-2">
@@ -414,20 +414,20 @@ function QuestionRow({ qa }: { qa: HundredQQuestionAnswer }) {
           <span className={`flex-shrink-0 font-bold text-sm ${answerCls}`}>{answerGlyph}</span>
           <div className="min-w-0">
             <div className="text-[12.5px] text-foreground leading-snug">{qa.label}</div>
-            {qa.raw_value && <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{qa.raw_value}</div>}
+            {qa.raw_value && <div className="text-xs text-muted-foreground font-mono mt-0.5">{qa.raw_value}</div>}
             {qa.threshold_desc && qa.answer == null && (
-              <div className="text-[11px] text-muted-foreground/80 italic mt-0.5">{qa.threshold_desc}</div>
+              <div className="text-xs text-muted-foreground/80 italic mt-0.5">{qa.threshold_desc}</div>
             )}
           </div>
         </div>
-        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badgeCls}`}>
+        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${badgeCls}`}>
           {qa.q_type}
         </span>
       </div>
       {qa.evidence.length > 0 && (
         <div className="mt-1.5 ml-6 space-y-1">
           {qa.evidence.slice(0, 2).map((ev, i) => (
-            <div key={i} className="text-[11px] text-muted-foreground/90 border-l-2 border-border pl-2">
+            <div key={i} className="text-xs text-muted-foreground/90 border-l-2 border-border pl-2">
               <span className="font-semibold">{ev.source}:</span> "{ev.quote}"
             </div>
           ))}

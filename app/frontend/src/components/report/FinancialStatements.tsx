@@ -154,7 +154,7 @@ export function FinancialStatements({
           </button>
         ))}
         {statements?.layout && statements.layout !== 'standard' && (
-          <span className={`ml-auto pb-2 text-[10px] uppercase tracking-wide ${emphasisTone('ghost')}`}>
+          <span className={`ml-auto pb-2 text-xs uppercase tracking-wide ${emphasisTone('ghost')}`}>
             {statements.layout} layout
           </span>
         )}
@@ -168,11 +168,11 @@ export function FinancialStatements({
               <tr>
                 <th className="sticky left-0 z-10 bg-card" />
                 <th colSpan={periods.length}
-                  className={`text-right font-medium px-3 pt-2 text-[10px] uppercase tracking-wide ${emphasisTone('ghost')}`}>
+                  className={`text-right font-medium px-3 pt-2 text-xs uppercase tracking-wide ${emphasisTone('ghost')}`}>
                   Reported
                 </th>
                 <th colSpan={forecast.length}
-                  className={`text-right font-medium px-3 pt-2 text-[10px] uppercase tracking-wide border-l border-border ${emphasisTone('ghost')}`}>
+                  className={`text-right font-medium px-3 pt-2 text-xs uppercase tracking-wide border-l border-border ${emphasisTone('ghost')}`}>
                   Forecast (valuation agent)
                 </th>
               </tr>
@@ -224,7 +224,7 @@ export function FinancialStatements({
                         {fmtValue(row.values?.[p] ?? null, sym)}
                       </span>
                       {g != null && (
-                        <span className={`ml-2 text-[11px] ${emphasisTone('ghost')}`}>
+                        <span className={`ml-2 text-xs ${emphasisTone('ghost')}`}>
                           {fmtGrowth(g)}
                         </span>
                       )}
@@ -237,7 +237,7 @@ export function FinancialStatements({
         </table>
       </div>
 
-      <div className={`px-3 py-2 text-[11px] space-y-1 ${emphasisTone('ghost')}`}>
+      <div className={`px-3 py-2 text-xs space-y-1 ${emphasisTone('ghost')}`}>
         <p>
           Growth is year-on-year, derived from the reported series. Blank where
           the prior year is zero or the sign flips.

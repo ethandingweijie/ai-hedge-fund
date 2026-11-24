@@ -61,11 +61,11 @@ export function NewsPanel({ ticker }: NewsPanelProps) {
         </h3>
         <div className="flex items-center gap-2">
           {!loading && articles.length > 0 && (
-            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full tabular-nums">
+            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full tabular-nums">
               {articles.length}
             </span>
           )}
-          <span className="text-[10px] text-muted-foreground">{ticker}</span>
+          <span className="text-xs text-muted-foreground">{ticker}</span>
         </div>
       </div>
 

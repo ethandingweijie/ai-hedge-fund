@@ -16,7 +16,7 @@ const badgeVariants = cva(
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
         // Amber survives — the reserved-colour rule covers green and red only.
         warning:
-          "border-transparent bg-warning text-black shadow hover:bg-warning/80",
+          "border-transparent bg-warning text-warning-foreground shadow hover:bg-warning/80",
         // "success" must NOT be green: it is a status, not a price move.
         success:
           "border border-[var(--hairline)] bg-surface-2 text-content-high",

@@ -20,12 +20,12 @@ export function BriefReferences({ footnotes }: { footnotes?: CitationRegistryEnt
   if (!rows.length) return null;
   return (
     <div className="border-t border-border/60 px-6 py-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70 mb-2">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/70 mb-2">
         References
       </div>
       <ol className="space-y-1">
         {rows.map((f) => (
-          <li key={f.ref_id} className="flex gap-2 text-[11px] leading-snug">
+          <li key={f.ref_id} className="flex gap-2 text-xs leading-snug">
             <span className="shrink-0 font-mono text-muted-foreground w-7">[{f.ref_id}]</span>
             <span className={f.source_type === 'unresolved' ? 'text-muted-foreground italic' : 'text-foreground/85'}>
               {f.url ? (
@@ -63,14 +63,14 @@ const mdComponents: Components = {
       const badges = parts.slice(1);
       return (
         <div className="mb-6 pb-5 border-b">
-          <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
+          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">
             Industry brief
           </p>
           <h2 className="text-base font-bold text-foreground leading-snug">{company}</h2>
           {badges.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {badges.map((b, i) => (
-                <Badge key={i} variant="outline" className="text-[11px] font-normal px-2 py-0.5">
+                <Badge key={i} variant="outline" className="text-xs font-normal px-2 py-0.5">
                   {b}
                 </Badge>
               ))}
@@ -188,7 +188,7 @@ const mdComponents: Components = {
 
   th({ children }) {
     return (
-      <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/60 border-b border-border whitespace-nowrap">
+      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-foreground/60 border-b border-border whitespace-nowrap">
         {children}
       </th>
     );
@@ -314,7 +314,7 @@ function parseLegacy(raw: string): LegacyBlock[] {
 }
 
 function cites(text: string): React.ReactNode {
-  return <>{text.split(/(\[\d+\])/g).map((p, i) => { const m = p.match(/^\[(\d+)\]$/); return m ? <sup key={i} className="text-[10px] font-mono text-sky-400 ml-[1px]">[{m[1]}]</sup> : <span key={i}>{p}</span>; })}</>;
+  return <>{text.split(/(\[\d+\])/g).map((p, i) => { const m = p.match(/^\[(\d+)\]$/); return m ? <sup key={i} className="text-xs font-mono text-sky-400 ml-[1px]">[{m[1]}]</sup> : <span key={i}>{p}</span>; })}</>;
 }
 
 function LegacyBodyBlock({ text }: { text: string }) {
@@ -337,11 +337,11 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
           case 'header':
             return (
               <div key={idx} className="px-6 py-5 border-b">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Industry Intelligence Brief</p>
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-1">Industry Intelligence Brief</p>
                 <h2 className="text-base font-bold text-foreground">{block.company}</h2>
                 {block.sectorLine && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {block.sectorLine.split('|').map((s, i) => <Badge key={i} variant="outline" className="text-[11px] font-normal">{s.trim()}</Badge>)}
+                    {block.sectorLine.split('|').map((s, i) => <Badge key={i} variant="outline" className="text-xs font-normal">{s.trim()}</Badge>)}
                   </div>
                 )}
                 {block.date && <p className="text-xs text-muted-foreground mt-2">{block.date}</p>}
@@ -352,7 +352,7 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
               <div key={idx} className="px-6 pt-7 pb-2">
                 <div className="flex items-center gap-3">
                   <div className="h-px w-4 bg-border shrink-0" />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-foreground/50 whitespace-nowrap">{block.text}</span>
+                  <span className="text-xs font-bold uppercase tracking-[0.15em] text-foreground/50 whitespace-nowrap">{block.text}</span>
                   <div className="h-px flex-1 bg-border" />
                 </div>
               </div>
@@ -369,7 +369,7 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
             return (
               <div key={idx} className="px-6 pt-5 pb-0">
                 <div className="flex items-start gap-2.5 flex-wrap">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-sm">{block.label}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-sm">{block.label}</span>
                   <span className="text-sm font-semibold text-foreground leading-snug">{block.title}</span>
                 </div>
               </div>
@@ -377,7 +377,7 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
           case 'body':
             return <div key={idx} className="px-6 py-2.5"><LegacyBodyBlock text={block.text} /></div>;
           case 'disclaimer':
-            return <div key={idx} className="px-6 py-4 mt-2 border-t bg-muted/15"><p className="text-[11px] text-muted-foreground italic">{block.text.replace(/^DISCLAIMER:\s*/i, '')}</p></div>;
+            return <div key={idx} className="px-6 py-4 mt-2 border-t bg-muted/15"><p className="text-xs text-muted-foreground italic">{block.text.replace(/^DISCLAIMER:\s*/i, '')}</p></div>;
           default: return null;
         }
       })}

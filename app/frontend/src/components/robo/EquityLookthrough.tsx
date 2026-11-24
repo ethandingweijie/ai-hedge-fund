@@ -61,7 +61,7 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
         <h3 className="text-[13px] font-semibold text-foreground">
           Equity distribution
         </h3>
-        <p className="text-[11px] text-muted-foreground mt-0.5">
+        <p className="text-xs text-muted-foreground mt-0.5">
           The companies your funds hold, aggregated across the plan.
         </p>
       </div>
@@ -79,14 +79,14 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
           },
         ].map((s) => (
           <div key={s.label} className="bg-card px-4 py-3">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
               {s.label}
             </div>
             <div className="text-[15px] font-semibold text-foreground tabular-nums mt-0.5">
               {s.value}
             </div>
             {s.hint && (
-              <div className="text-[10px] text-muted-foreground/80 mt-0.5">{s.hint}</div>
+              <div className="text-xs text-muted-foreground/80 mt-0.5">{s.hint}</div>
             )}
           </div>
         ))}
@@ -135,12 +135,12 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
               </span>
             </div>
             <div className="flex items-baseline justify-between gap-2 mt-0.5">
-              <span className="text-[11px] text-muted-foreground truncate">{p.name}</span>
-              <span className="text-[11px] tabular-nums text-muted-foreground">
+              <span className="text-xs text-muted-foreground truncate">{p.name}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">
                 {money(p.amount)}
               </span>
             </div>
-            <div className="text-[10px] text-muted-foreground/80 mt-1">
+            <div className="text-xs text-muted-foreground/80 mt-1">
               via {p.viaFunds.map((v) => v.ticker).join(', ')}
             </div>
           </div>
@@ -159,7 +159,7 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
       )}
 
       {thin.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-border text-[10px] text-muted-foreground/80">
+        <div className="px-4 py-2.5 border-t border-border text-xs text-muted-foreground/80">
           Partial constituent data:{' '}
           {thin.map(([t, pct]) => `${t} (${pct.toFixed(0)}%)`).join(', ')}
           {' '}— weights for these are floors.
@@ -167,7 +167,7 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
       )}
 
       {totalInvestment > 0 && (
-        <div className="px-4 py-2.5 border-t border-border text-[10px] text-muted-foreground/80">
+        <div className="px-4 py-2.5 border-t border-border text-xs text-muted-foreground/80">
           Values shown against a {money(totalInvestment)} plan.
         </div>
       )}

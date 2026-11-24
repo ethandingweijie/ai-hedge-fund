@@ -54,10 +54,10 @@ function AgeBadge({ ageDays }: { ageDays?: number }) {
   return (
     <span
       title={fresh ? 'Report is fresh (under 7 days)' : 'Report is 7+ days old — consider re-running'}
-      className={`text-[9px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
+      className={`text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
         fresh
           ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
-          : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+          : 'bg-amber-500/10 text-warning border-amber-500/20'
       }`}
     >
       {label}
@@ -174,19 +174,19 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
     <div className={`mx-4 mt-3 rounded-xl border border-border bg-card/95 backdrop-blur shadow-sm p-4 max-h-[38vh] overflow-y-auto${suppressed ? ' hidden' : ''}`}>
       {/* Header row */}
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
           Pulse · past research
         </span>
-        <span className="text-[11px] font-semibold text-foreground tabular-nums">{t}</span>
+        <span className="text-xs font-semibold text-foreground tabular-nums">{t}</span>
         {prior?.covered && <AgeBadge ageDays={prior.age_days} />}
         {delta?.from_cache && (
-          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+          <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
             cached today
           </span>
         )}
         <span className="ml-auto">
           {searching && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <span className="w-2.5 h-2.5 rounded-full border border-brand/40 border-t-brand animate-spin" />
               checking latest…
             </span>
@@ -197,7 +197,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
       {showSkeleton ? (
         /* Fetch fired, beat 1 not back yet — show something immediately
            instead of nothing (the old null-render hid the card for ~1 s+). */
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Recalling past research…
         </p>
       ) : (
@@ -207,7 +207,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
         <div className="text-[12px] leading-relaxed">
           <div className="flex items-center gap-2 flex-wrap">
             {prior.final_action && (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${actionTone(prior.final_action)}`}>
+              <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${actionTone(prior.final_action)}`}>
                 {prior.final_action}
               </span>
             )}
@@ -228,7 +228,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
           {(prior.catalysts?.length ?? 0) > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
               {(prior.catalysts ?? []).slice(0, 4).map((c, i) => (
-                <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/70 text-muted-foreground">
+                <span key={i} className="text-xs px-1.5 py-0.5 rounded-full bg-muted/70 text-muted-foreground">
                   {c}
                 </span>
               ))}
@@ -267,9 +267,9 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
             </ul>
           ) : null}
           {delta.verdict && (
-            <p className={`text-[11px] mt-1.5 font-medium ${
+            <p className={`text-xs mt-1.5 font-medium ${
               delta.material === true
-                ? 'text-amber-600 dark:text-amber-400'
+                ? 'text-warning'
                 : delta.material === false
                   ? 'text-content-high'
                   : 'text-muted-foreground'
@@ -282,7 +282,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
       )}
 
       {error && !prior && !delta && (
-        <p className="text-[11px] text-muted-foreground">{error}</p>
+        <p className="text-xs text-muted-foreground">{error}</p>
       )}
 
       {/* Actions */}
@@ -291,7 +291,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
           <button
             type="button"
             onClick={() => onOpenReport(prior.run_id!)}
-            className="h-8 px-3 text-[11px] font-semibold rounded-full border border-border bg-card text-foreground hover:bg-muted/60 transition-colors"
+            className="h-8 px-3 text-xs font-semibold rounded-full border border-border bg-card text-foreground hover:bg-muted/60 transition-colors"
           >
             Open full report
           </button>
@@ -299,7 +299,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
         <button
           type="button"
           onClick={onRunFull}
-          className="h-8 px-3 text-[11px] font-semibold rounded-full bg-primary text-primary-foreground hover:bg-primary/85 transition-colors"
+          className="h-8 px-3 text-xs font-semibold rounded-full bg-primary text-primary-foreground hover:bg-primary/85 transition-colors"
         >
           Run full analysis
         </button>

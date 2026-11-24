@@ -59,7 +59,7 @@ export function MobileChartStrip({ ticker }: MobileChartStripProps) {
           <button
             key={t.label}
             onClick={() => setTfIdx(i)}
-            className={`text-[11px] font-semibold px-3 py-1 rounded-full shrink-0 transition-colors
+            className={`text-xs font-semibold px-3 py-1 rounded-full shrink-0 transition-colors
               ${tfIdx === i
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground'

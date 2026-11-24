@@ -28,7 +28,7 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
 
   const cases = [
     { label: 'Bull Case',  iv: dcfRange.bull?.intrinsic_value, growth: dcfRange.bull?.growth_rate, color: 'text-content-high' },
-    { label: 'Base Case',  iv: dcfRange.base?.intrinsic_value, growth: dcfRange.base?.growth_rate, color: 'text-blue-500'  },
+    { label: 'Base Case',  iv: dcfRange.base?.intrinsic_value, growth: dcfRange.base?.growth_rate, color: 'text-brand'  },
     { label: 'Bear Case',  iv: dcfRange.bear?.intrinsic_value, growth: dcfRange.bear?.growth_rate, color: 'text-content-high'   },
   ];
 

@@ -261,7 +261,7 @@ export function MomentumPage() {
           <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
             <table className="w-full text-[14px]">
               <thead>
-                <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+                <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-foreground/70">
                   <th className="text-left px-4 py-3 font-bold">#</th>
                   <th className="text-left px-4 py-3 font-bold">Ticker</th>
                   <th className="text-left px-4 py-3 font-bold">Verdict</th>
@@ -288,18 +288,18 @@ export function MomentumPage() {
                       <span className="ml-2.5 text-[13px] font-semibold text-foreground hidden md:inline">{r.name}</span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap ${verdictColor(r.verdict)}`}>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${verdictColor(r.verdict)}`}>
                         {r.verdict}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(r.composite)}`}>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(r.composite)}`}>
                         {fmtSigned(r.composite)}
                       </span>
                     </td>
-                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.state_score)}`}>{fmtSigned(r.state_score)}</span></td>
-                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
-                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.state_score)}`}>{fmtSigned(r.state_score)}</span></td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-xs font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold text-foreground text-[13px]">{fmtPct(r.r_21d)}</td>
                     <td className="px-4 py-3.5 text-right font-mono font-semibold text-foreground text-[13px]">{fmtPct(r.r_63d)}</td>
                     <td className="px-2.5 py-3.5 text-center">{r.sector_aligned ? <span className="text-[12px] text-brand font-bold">✓</span> : ''}</td>
@@ -353,7 +353,7 @@ function SectorTable({ sectors, dir }: {
     <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
       <table className="w-full text-[14px]">
         <thead>
-          <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+          <tr className="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-foreground/70">
             <th className="text-left px-4 py-3 font-bold">ETF</th>
             <th className="text-left px-4 py-3 font-bold">Sector</th>
             <th className="text-left px-4 py-3 font-bold">Status</th>
@@ -369,7 +369,7 @@ function SectorTable({ sectors, dir }: {
               <td className="px-4 py-3.5 text-[13px] font-semibold text-foreground">{sectorName(s)}</td>
               <td className="px-4 py-3.5">
                 {s.verdict && s.verdict !== 'Neutral' ? (
-                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap ${verdictColor(s.verdict)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${verdictColor(s.verdict)}`}>
                     {verdictShort(s.verdict)}
                   </span>
                 ) : (
@@ -377,7 +377,7 @@ function SectorTable({ sectors, dir }: {
                 )}
               </td>
               <td className="px-4 py-3.5 text-right">
-                <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite)}`}>
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(s.composite)}`}>
                   {fmtSigned(s.composite)}
                 </span>
               </td>
@@ -385,7 +385,7 @@ function SectorTable({ sectors, dir }: {
                 {s.composite_1m == null ? (
                   <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
                 ) : (
-                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite_1m)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(s.composite_1m)}`}>
                     {fmtSigned(s.composite_1m)}
                   </span>
                 )}
@@ -394,7 +394,7 @@ function SectorTable({ sectors, dir }: {
                 {s.composite_3m == null ? (
                   <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
                 ) : (
-                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite_3m)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold font-mono ${compositeColor(s.composite_3m)}`}>
                     {fmtSigned(s.composite_3m)}
                   </span>
                 )}
@@ -475,7 +475,7 @@ function DetailDrawer({ row, onClose }: { row: MomentumTickerResult; onClose: ()
 
         {row.flag_notes?.length > 0 && (
           <div>
-            <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">Evidence</div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">Evidence</div>
             <ul className="space-y-1 text-[13px] text-foreground/80 list-disc pl-4">
               {row.flag_notes.map((n, i) => <li key={i}>{n}</li>)}
             </ul>
@@ -489,7 +489,7 @@ function DetailDrawer({ row, onClose }: { row: MomentumTickerResult; onClose: ()
 function Stat({ label, value, cls }: { label: string; value: string; cls: string }) {
   return (
     <div className="text-center">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{label}</div>
       <div className={`py-1.5 rounded font-mono font-bold ${cls}`}>{value}</div>
     </div>
   );

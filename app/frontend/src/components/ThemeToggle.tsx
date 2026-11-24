@@ -21,7 +21,7 @@ export function ThemeToggle() {
         <button
           key={value}
           onClick={() => setTheme(value)}
-          className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-md transition-colors text-[10px] font-medium
+          className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-md transition-colors text-xs font-medium
             ${theme === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
         >
           <Icon size={14} />

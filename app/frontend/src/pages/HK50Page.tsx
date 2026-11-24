@@ -88,8 +88,8 @@ const formatRunTime = (iso: string | null): string => {
 // Dark mode (`dark:`): keep the original light-300 text.
 const AICT_COLOR: Record<string, string> = {
   Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
-  Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  Castle:   'bg-blue-600/20 text-blue-700 border-blue-700/40',
+  Chapel:   'bg-amber-600/20 text-amber-700 border-amber-700/40',
   Stone:    'bg-surface-2 text-content-medium border-[var(--hairline)]',
   Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
@@ -150,7 +150,7 @@ const CONVICTION_SHORT: Record<string, string> = {
 // Dark mode (`dark:`): keep the original light-300 text.
 const POLICY_TEXT: Record<string, string> = {
   Tailwind:  'text-content-high',
-  Favorable: 'text-blue-700 dark:text-blue-300',
+  Favorable: 'text-blue-700',
   Neutral:   'text-muted-foreground',
   Headwind:  'text-content-medium',
   Crackdown: 'text-content-high',
@@ -158,8 +158,8 @@ const POLICY_TEXT: Record<string, string> = {
 // Moat ladder reuses the AICT names generalised to every sector.
 const MOAT_TEXT: Record<string, string> = {
   Fortress: 'text-content-high',
-  Castle:   'text-blue-700 dark:text-blue-300',
-  Chapel:   'text-amber-700 dark:text-amber-300',
+  Castle:   'text-blue-700',
+  Chapel:   'text-amber-700',
   Stone:    'text-content-medium',
   Wood:     'text-content-high',
 };
@@ -473,13 +473,13 @@ export function HK50Page() {
         {/* ── Membership changes since last run ───────────────────────────── */}
         {!loading && cohort && ((cohort.promoted?.length ?? 0) > 0 || (cohort.relegated?.length ?? 0) > 0) && (
           <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-2 px-3 py-2 rounded-md border border-border bg-card">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground pt-1">Changes since last run</span>
+            <span className="text-xs uppercase tracking-wider text-muted-foreground pt-1">Changes since last run</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {(cohort.promoted ?? []).map((p) => (
                 <span
                   key={`up-${p.ticker}`}
                   title={`Promoted into the cohort · lead score ${p.lead_score.toFixed(1)} (cleared ENTER ${cohort.enter_threshold.toFixed(0)})`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-content-high border border-[var(--hairline)]"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-surface-2 text-content-high border border-[var(--hairline)]"
                 >
                   ▲ {p.name} <span className="font-mono opacity-70">{p.lead_score.toFixed(0)}</span>
                 </span>
@@ -488,7 +488,7 @@ export function HK50Page() {
                 <span
                   key={`down-${r.ticker}`}
                   title={`Relegated · lead score ${r.lead_score.toFixed(1)} · ${r.reason ?? ''}`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-600/15 text-amber-700 dark:text-amber-300 border border-amber-700/30"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-600/15 text-amber-700 border border-amber-700/30"
                 >
                   ▼ {r.name} <span className="font-mono opacity-70">{r.lead_score.toFixed(0)}</span>
                 </span>
@@ -510,7 +510,7 @@ export function HK50Page() {
             />
             <TopFive
               title="Top 5 · Dividend"
-              icon={<Coins size={14} className="text-amber-400" />}
+              icon={<Coins size={14} className="text-warning" />}
               rows={top5Dividend}
               screen="Dividend"
               onPick={setSelected}
@@ -581,7 +581,7 @@ export function HK50Page() {
 
         {!loading && (!cohort || cohort.results.length === 0) && !refreshing && (
           <div className="p-6 border border-dashed border-border rounded-md text-center">
-            <AlertTriangle className="mx-auto mb-2 text-amber-500" size={20} />
+            <AlertTriangle className="mx-auto mb-2 text-warning" size={20} />
             <p className="text-sm text-muted-foreground">No cohort run yet. Click <strong>Refresh</strong> to run the first one.</p>
           </div>
         )}
@@ -630,16 +630,16 @@ export function HK50Page() {
                         <div className="font-bold text-foreground flex items-center gap-1 whitespace-nowrap">
                           {r.name}
                           {r.lead === screen && (
-                            <span className="text-[8px] px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
+                            <span className="text-xs px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
                           )}
                           {r.membership === 'promoted' && (
-                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-surface-2 text-content-high uppercase tracking-wide">new</span>
+                            <span title="Newly promoted into the cohort this run" className="text-xs px-1 rounded bg-surface-2 text-content-high uppercase tracking-wide">new</span>
                           )}
                           {benched && (
-                            <span title="Bench — below the membership line (not in the displayed cohort)" className="text-[8px] px-1 rounded bg-muted text-muted-foreground uppercase tracking-wide">bench</span>
+                            <span title="Bench — below the membership line (not in the displayed cohort)" className="text-xs px-1 rounded bg-muted text-muted-foreground uppercase tracking-wide">bench</span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">
+                        <div className="text-xs text-muted-foreground truncate max-w-[140px]">
                           {r.ticker}{r.ticker !== r.hk_ticker ? ` · ${r.hk_ticker}` : ''}
                         </div>
                       </td>
@@ -647,12 +647,12 @@ export function HK50Page() {
                         <QualCell q={r.qualitative} onClick={() => setConvDetail(r)} />
                       </td>
                       <td className="px-2 py-1.5 text-right">
-                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${scoreColor(screenScore(r, screen))}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${scoreColor(screenScore(r, screen))}`}>
                           {screenScore(r, screen).toFixed(1)}
                         </span>
                       </td>
                       <td className="px-2 py-1.5">
-                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${aictClass(r.aict_tier)}`}>
+                        <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${aictClass(r.aict_tier)}`}>
                           {r.aict_tier}
                         </span>
                       </td>
@@ -671,7 +671,7 @@ export function HK50Page() {
                           {metricKeys.map((m) => (
                             <span
                               key={m}
-                              className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-muted/40 text-[10px] whitespace-nowrap"
+                              className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-muted/40 text-xs whitespace-nowrap"
                               title={`${METRIC_META[m]?.label ?? m} · source: ${r.metrics[m]?.source ?? 'missing'}`}
                             >
                               <span className={`w-1 h-1 rounded-full ${SOURCE_DOT[r.metrics[m]?.source ?? 'missing'] ?? SOURCE_DOT.missing}`} />
@@ -686,37 +686,37 @@ export function HK50Page() {
                 })}
               </tbody>
             </table>
-            <div className="px-3 py-2 text-[10px] text-muted-foreground border-t border-border">
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border">
               Showing <strong className="text-foreground">{rows.length}</strong> of {cohort.ticker_count} ·
               ranked by <strong className="text-foreground">{screen}</strong> score (desc) ·
               click any row for both screens + the IV15 build-up
             </div>
-            <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border leading-relaxed">
+            <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border leading-relaxed">
               <span className="font-semibold text-foreground">Conviction</span> — a qualitative
               Policy&nbsp;×&nbsp;Moat overlay, <em>never</em> summed into the {screen} score:
               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('HIGH-CONVICTION')}`}>HIGH</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('HIGH-CONVICTION')}`}>HIGH</span>
                   strong screen + favourable policy + wide moat
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('SOLID')}`}>SOLID</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('SOLID')}`}>SOLID</span>
                   decent screen, adequate policy &amp; moat
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('QUAL-SUPPORT')}`}>QUAL</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('QUAL-SUPPORT')}`}>QUAL</span>
                   weak screen but strong policy &amp; moat — await catalyst
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('WATCH')}`}>WATCH</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('WATCH')}`}>WATCH</span>
                   mixed signals — no dimension decisive
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('QUANT-RICH')}`}>TRAP?</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('QUANT-RICH')}`}>TRAP?</span>
                   top screen undercut by policy headwind / thin moat — verify it isn&apos;t a value trap
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('POLICY-RISK')}`}>RISK</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass('POLICY-RISK')}`}>RISK</span>
                   active crackdown or eroding moat — overrides screen rank
                 </span>
               </div>
@@ -772,10 +772,10 @@ function TopFive({
             onClick={() => onPick(r)}
             className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 text-left"
           >
-            <span className="text-[10px] text-muted-foreground w-4 text-right">{i + 1}</span>
+            <span className="text-xs text-muted-foreground w-4 text-right">{i + 1}</span>
             <span className="text-xs font-semibold text-foreground flex-1 truncate">{r.name}</span>
-            <span className="text-[10px] text-muted-foreground font-mono">{r.ticker}</span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${scoreColor(screenScore(r, screen))}`}>
+            <span className="text-xs text-muted-foreground font-mono">{r.ticker}</span>
+            <span className={`px-1.5 py-0.5 rounded text-xs font-bold font-mono ${scoreColor(screenScore(r, screen))}`}>
               {screenScore(r, screen).toFixed(1)}
             </span>
           </button>
@@ -789,11 +789,11 @@ function TopFive({
 // ─── Small summary chip ────────────────────────────────────────────────────
 
 function Stat({ label, value, tone, mono = true, title }: { label: string; value: string; tone?: 'warn'; mono?: boolean; title?: string }) {
-  const valueColor = tone === 'warn' ? 'text-amber-500' : 'text-foreground';
-  const labelColor = tone === 'warn' ? 'text-amber-500/80' : 'text-muted-foreground';
+  const valueColor = tone === 'warn' ? 'text-warning' : 'text-foreground';
+  const labelColor = tone === 'warn' ? 'text-warning' : 'text-muted-foreground';
   return (
     <div className="flex flex-col" title={title}>
-      <span className={`text-[10px] uppercase tracking-wider ${labelColor}`}>{label}</span>
+      <span className={`text-xs uppercase tracking-wider ${labelColor}`}>{label}</span>
       <span className={`${mono ? 'font-mono' : ''} text-sm font-bold ${valueColor}`}>{value}</span>
     </div>
   );
@@ -828,12 +828,12 @@ function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, rese
                 <span className="text-lg font-bold text-foreground">{ticker.name}</span>
                 <span className="text-sm text-muted-foreground font-mono">{ticker.ticker}</span>
                 {ticker.ticker !== ticker.hk_ticker && (
-                  <span className="text-[10px] text-muted-foreground font-mono">({ticker.hk_ticker})</span>
+                  <span className="text-xs text-muted-foreground font-mono">({ticker.hk_ticker})</span>
                 )}
-                <span className="text-[10px] text-muted-foreground ml-auto">{ticker.route_label}</span>
+                <span className="text-xs text-muted-foreground ml-auto">{ticker.route_label}</span>
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${aictClass(ticker.aict_tier)}`}>AICT · {ticker.aict_tier}</span>
+                <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold ${aictClass(ticker.aict_tier)}`}>AICT · {ticker.aict_tier}</span>
                 <span className="text-xs text-muted-foreground">Lead: <strong className="text-foreground">{ticker.lead}</strong></span>
                 <span className="text-xs text-muted-foreground">{ticker.currency}</span>
               </div>
@@ -855,7 +855,7 @@ function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, rese
 
         <div className="p-4 space-y-6">
           {ticker.error && (
-            <p className="text-[11px] text-amber-500">
+            <p className="text-xs text-warning">
               <AlertTriangle size={11} className="inline mb-0.5" /> {ticker.error}
             </p>
           )}
@@ -886,7 +886,7 @@ function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, rese
             </div>
             {d.oe_retention != null && (
               <div className="mt-3 pt-2 border-t border-border/40">
-                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                   Owner-earnings adjustment (Method E) {d.is_net_diluter ? '· net diluter' : '· net buyer'}
                 </h3>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -895,14 +895,14 @@ function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, rese
                   <KV label="SBC % of NI" value={fmtPct(d.sbc_pct_ni)} />
                   <KV label="Unfunded comp ($M)" value={d.unfunded_comp == null ? '—' : fmtNum(d.unfunded_comp / 1e6, 0)} />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   E₀ is charged for the stock comp buybacks did not fund: retention = (NI − cash-tax
                   {d.oe_cash_tax_estimated ? ' (est. SBC×0.37)' : ''} − max(0, SBC − buybacks)) ÷ NI, clamped 30–100%.
                   Net buyers carry no charge; SOEs/banks (sparse SBC) and native-HK names are not adjusted.
                 </p>
               </div>
             )}
-            <p className="text-[10px] text-muted-foreground mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               IV15 = 15-year owner-earnings discount @ 15% required return; blended between a Gordon-terminal valuation
               and {d.terminal_multiple == null ? 'no Buffett-multiple leg (pure Gordon)' : 'a Buffett terminal-multiple leg'}.
               {d.aict === '—' && ' AICT is not applicable to this name (non-software / non-internet).'}
@@ -936,7 +936,7 @@ function QualCell({ q, onClick }: { q?: HK50Qualitative | null; onClick?: () => 
       <button
         onClick={handle}
         title="No qualitative research yet — click to view / generate the Policy × Moat overlay"
-        className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground"
+        className="text-xs text-muted-foreground/40 hover:text-muted-foreground"
       >
         —
       </button>
@@ -954,11 +954,11 @@ function QualCell({ q, onClick }: { q?: HK50Qualitative | null; onClick?: () => 
   const title = `${lines.join('\n')}\n\n(click to elaborate on the moat breakdown)`;
   return (
     <button onClick={handle} className="flex flex-col gap-0.5 text-left hover:opacity-80 cursor-pointer" title={title}>
-      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold w-fit ${convictionClass(q.conviction)}`}>
+      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-bold w-fit ${convictionClass(q.conviction)}`}>
         {q.incomplete && <Loader2 size={8} className="animate-spin" />}
         {CONVICTION_SHORT[q.conviction] ?? q.conviction}
       </span>
-      <span className="text-[10px] leading-tight whitespace-nowrap">
+      <span className="text-xs leading-tight whitespace-nowrap">
         <span className={POLICY_TEXT[pol] ?? 'text-muted-foreground'}>P:{pol}</span>
         <span className="text-muted-foreground/40"> · </span>
         <span className={MOAT_TEXT[moat] ?? 'text-muted-foreground'}>M:{moat}</span>
@@ -987,9 +987,9 @@ function ConvictionPopover({ row, onClose, onOpenDetail }: {
         <div className="sticky top-0 bg-background border-b border-border px-4 py-3 flex items-center justify-between gap-2 z-10">
           <div className="flex items-center gap-2 flex-wrap min-w-0">
             <span className="text-sm font-bold text-foreground truncate">{row.name}</span>
-            <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{row.ticker}</span>
+            <span className="text-xs text-muted-foreground font-mono flex-shrink-0">{row.ticker}</span>
             {scored && (
-              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold flex-shrink-0 ${convictionClass(q!.conviction)}`}>
+              <span className={`px-1.5 py-0.5 rounded border text-xs font-bold flex-shrink-0 ${convictionClass(q!.conviction)}`}>
                 {q!.incomplete && <Loader2 size={8} className="inline animate-spin mr-1" />}
                 {q!.conviction}
               </span>
@@ -1008,7 +1008,7 @@ function ConvictionPopover({ row, onClose, onOpenDetail }: {
             </p>
           ) : (
             <>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Conviction blends the <strong>Policy posture</strong> and <strong>competitive-moat</strong> tiers
                 (parallel to the quant screens — <strong>never</strong> summed into Growth / Dividend). Each card
                 below breaks the dimension into its scored sub-metrics.
@@ -1016,7 +1016,7 @@ function ConvictionPopover({ row, onClose, onOpenDetail }: {
               {q!.flags && q!.flags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {q!.flags.map((f, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-xs border border-amber-700/30">{f}</span>
                   ))}
                 </div>
               )}
@@ -1053,10 +1053,10 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
       <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2 flex-wrap">
         Qualitative overlay
         {scored && (
-          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass(q!.conviction)}`}>{q!.conviction}</span>
+          <span className={`px-1.5 py-0.5 rounded border text-xs font-bold ${convictionClass(q!.conviction)}`}>{q!.conviction}</span>
         )}
         {q && (
-          <span className="text-[10px] text-muted-foreground/70 normal-case">
+          <span className="text-xs text-muted-foreground/70 normal-case">
             source: {q.source}{q.incomplete ? ' · streaming…' : ''}
           </span>
         )}
@@ -1064,24 +1064,24 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
           onClick={onGenerate}
           disabled={researching}
           title="Run the LLM Policy + Moat deep-research for THIS name only. Patches the card live; ~2-5 min. Runs independently of the cohort-wide deep research."
-          className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--hairline)] bg-brand/10 text-brand text-[10px] font-medium hover:bg-brand/10 disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--hairline)] bg-brand/10 text-brand text-xs font-medium hover:bg-brand/10 disabled:opacity-50"
         >
           {researching ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} className="text-brand" />}
           {researching ? 'Researching…' : scored ? 'Re-run research' : 'Generate research'}
         </button>
       </h2>
-      <p className="text-[10px] text-muted-foreground mb-2">
+      <p className="text-xs text-muted-foreground mb-2">
         Parallel to the two quant screens — <strong>never</strong> summed into Growth / Dividend. Policy posture
         (state tailwind ↔ crackdown) × competitive moat, confidence-weighted.
       </p>
       {researching && (
-        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded border border-[var(--hairline)] bg-brand/10 text-[10px] text-brand">
+        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded border border-[var(--hairline)] bg-brand/10 text-xs text-brand">
           <Loader2 size={10} className="animate-spin flex-shrink-0" />
           <span className="truncate">{researchMsg || 'Starting research…'}</span>
         </div>
       )}
       {!scored ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           No qualitative research yet for this name. Click <strong>Generate research</strong> to run the
           Policy × Moat overlay on demand.
         </p>
@@ -1090,7 +1090,7 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
           {q!.flags && q!.flags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-2">
               {q!.flags.map((f, i) => (
-                <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
+                <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-xs border border-amber-700/30">{f}</span>
               ))}
             </div>
           )}
@@ -1112,7 +1112,7 @@ function QualDimensionCard({ dim, title, tierColors }: {
   if (!dim) {
     return (
       <div className="rounded border border-border bg-muted/20 p-2">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">{title}</div>
         <div className="text-xs text-muted-foreground mt-1">Not scored</div>
       </div>
     );
@@ -1121,19 +1121,19 @@ function QualDimensionCard({ dim, title, tierColors }: {
   return (
     <div className="rounded border border-border bg-muted/20 p-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</span>
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">{title}</span>
         <span className={`text-xs font-bold ${tierColors[dim.tier] ?? 'text-foreground'}`}>{dim.tier}</span>
       </div>
-      <div className="flex items-center flex-wrap gap-x-2 mt-1 text-[10px] text-muted-foreground">
+      <div className="flex items-center flex-wrap gap-x-2 mt-1 text-xs text-muted-foreground">
         <span>score {dim.score_0_100 == null ? '—' : dim.score_0_100.toFixed(0)}/100</span>
         <span>· {dim.n_scored} scored</span>
         <span>· conf {(dim.mean_confidence * 100).toFixed(0)}%</span>
       </div>
-      {dim.summary && <p className="text-[10px] text-foreground/80 mt-1">{dim.summary}</p>}
+      {dim.summary && <p className="text-xs text-foreground/80 mt-1">{dim.summary}</p>}
       {indicators.length > 0 && (
         <div className="mt-2 space-y-1">
           {indicators.map((ind) => (
-            <div key={ind.indicator} className="text-[10px] border-t border-border/40 pt-1">
+            <div key={ind.indicator} className="text-xs border-t border-border/40 pt-1">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground truncate" title={ind.indicator}>{ind.indicator}</span>
                 <span className="font-mono text-foreground flex-shrink-0">
@@ -1156,13 +1156,13 @@ function ScoreBanner({ label, score, rank, active }: { label: string; score: num
   return (
     <div className={`p-2 rounded border ${active ? 'border-primary bg-primary/5' : 'border-border bg-muted/20'}`}>
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
-        {rank != null && <span className="text-[10px] text-muted-foreground">#{rank}</span>}
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
+        {rank != null && <span className="text-xs text-muted-foreground">#{rank}</span>}
       </div>
       <span className={`inline-block mt-1 px-2 py-0.5 rounded text-sm font-bold font-mono ${scoreColor(score)}`}>
         {score.toFixed(1)}
       </span>
-      <span className="text-[10px] text-muted-foreground ml-1">/ 100</span>
+      <span className="text-xs text-muted-foreground ml-1">/ 100</span>
     </div>
   );
 }
@@ -1178,7 +1178,7 @@ function MetricSection({ title, keys, metrics }: { title: string; keys: string[]
             <div key={m} className="flex items-center gap-2 py-1 border-b border-border/50 last:border-0">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${SOURCE_DOT[mr?.source ?? 'missing'] ?? SOURCE_DOT.missing}`} />
               <span className="text-muted-foreground flex-1">{METRIC_META[m]?.label ?? m}</span>
-              <span className="text-[10px] text-muted-foreground/70 uppercase">{mr?.source ?? 'missing'}</span>
+              <span className="text-xs text-muted-foreground/70 uppercase">{mr?.source ?? 'missing'}</span>
               <span className="font-mono text-foreground w-16 text-right">{fmtMetric(m, mr?.value)}</span>
             </div>
           );

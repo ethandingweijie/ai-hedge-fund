@@ -192,7 +192,7 @@ export function IdeaOfTheDayPage() {
                   colour no longer needs to. */}
               {idea.idea_mode && (
                 <span
-                  className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-primary/15 text-brand"
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/15 text-brand"
                   title={
                     idea.idea_mode === 'thematic_geographic' ? 'Top-down country/region thesis → stock' :
                     idea.idea_mode === 'thematic_sector'     ? 'Top-down industry trend → stock' :
@@ -204,12 +204,12 @@ export function IdeaOfTheDayPage() {
                 </span>
               )}
               {idea.region && (
-                <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold">
+                <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold">
                   {idea.region}
                 </span>
               )}
               {idea.expression_vehicle && idea.expression_vehicle !== 'stock' && (
-                <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold uppercase">
+                <span className="px-2.5 py-1 rounded-full bg-muted text-foreground/80 text-xs font-semibold uppercase">
                   {idea.expression_vehicle}
                 </span>
               )}
@@ -337,7 +337,7 @@ export function IdeaOfTheDayPage() {
             <h3 className="text-[13px] font-bold text-foreground">
               Discuss · stress-test the thesis
             </h3>
-            <span className="ml-auto text-[11px] text-muted-foreground italic hidden sm:inline">qwen3.6-plus · web search enabled</span>
+            <span className="ml-auto text-xs text-muted-foreground italic hidden sm:inline">qwen3.6-plus · web search enabled</span>
           </div>
           <div className="max-h-[400px] overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
@@ -358,7 +358,7 @@ export function IdeaOfTheDayPage() {
                   }
                 >
                   {m.content}
-                  <div className={`mt-1 text-[10px] ${m.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                  <div className={`mt-1 text-xs ${m.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
                     {formatTime(m.created_at)}
                   </div>
                 </div>

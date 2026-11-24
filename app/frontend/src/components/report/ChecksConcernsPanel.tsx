@@ -48,7 +48,7 @@ function BulletList({
 }) {
   return (
     <div>
-      <p className={`text-[10px] font-bold uppercase tracking-widest mb-2 ${headerClass}`}>
+      <p className={`text-xs font-bold uppercase tracking-widest mb-2 ${headerClass}`}>
         {header}
       </p>
       <ul className="space-y-2">
@@ -92,9 +92,9 @@ export function ChecksConcernsPanel({
       <BulletList
         items={concerns}
         icon="?"
-        iconClass="text-yellow-500"
+        iconClass="text-warning"
         header={concernHeader}
-        headerClass="text-amber-500 dark:text-amber-400"
+        headerClass="text-warning"
       />
     </div>
   );

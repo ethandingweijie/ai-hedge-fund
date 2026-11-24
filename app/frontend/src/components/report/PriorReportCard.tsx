@@ -42,7 +42,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
         <div className="text-[15px] font-semibold text-foreground">
           Since last report
         </div>
-        <div className="text-[10px] text-muted-foreground">
+        <div className="text-xs text-muted-foreground">
           {runDate}{runDate && ageDays ? ' · ' : ''}{ageDays}
         </div>
       </div>
@@ -83,14 +83,14 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
       <div className="border-t pt-3">
         {material === true && (
           <>
-            <div className="text-[11px] font-semibold text-amber-500 mb-1.5">
+            <div className="text-xs font-semibold text-warning mb-1.5">
               Material developments since then
             </div>
             {events.length > 0 && (
               <ul className="space-y-1 mb-1.5">
                 {events.map((e, i) => (
                   <li key={i} className="text-[12px] text-foreground/80 flex gap-2">
-                    <span className="text-amber-500 shrink-0">•</span>
+                    <span className="text-warning shrink-0">•</span>
                     <span>
                       {e.headline || '(untitled event)'}
                       {e.date ? <span className="text-muted-foreground"> ({e.date})</span> : null}
@@ -105,12 +105,12 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
           </>
         )}
         {material === false && (
-          <div className="text-[11px] font-semibold text-content-high mb-1.5">
+          <div className="text-xs font-semibold text-content-high mb-1.5">
             No material change — prior report still current
           </div>
         )}
         {material == null && delta && (
-          <div className="text-[11px] font-semibold text-muted-foreground mb-1.5">
+          <div className="text-xs font-semibold text-muted-foreground mb-1.5">
             Freshness check unavailable
           </div>
         )}

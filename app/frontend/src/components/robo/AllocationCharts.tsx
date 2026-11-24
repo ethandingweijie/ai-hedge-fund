@@ -54,7 +54,7 @@ function MiniPie({ title, data }: { title: string; data: { name: string; value: 
       </div>
       <div className="mt-2 space-y-1">
         {data.slice(0, 6).map((d, i) => (
-          <div key={d.name} className="flex items-center justify-between text-[11px] gap-2">
+          <div key={d.name} className="flex items-center justify-between text-xs gap-2">
             <span className="flex items-center gap-1.5 text-muted-foreground truncate">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
               <span className="truncate">{d.name}</span>

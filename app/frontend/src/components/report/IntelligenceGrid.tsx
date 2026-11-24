@@ -48,7 +48,7 @@ function badge(text: string, color: string) {
 function signalColor(s: string): string {
   const u = (s ?? '').toUpperCase();
   if (['BULLISH', 'BUY', 'POSITIVE', 'HIGH_QUALITY', 'HIGH', 'ACCELERATING_UP', 'BEAT'].includes(u))
-    return 'bg-brand text-white';
+    return 'bg-brand text-brand-foreground';
   if (['BEARISH', 'SELL', 'NEGATIVE', 'LOW_QUALITY', 'HEAVILY_SHORTED', 'ACCELERATING_DOWN', 'MISS'].includes(u))
     return 'bg-foreground text-background';
   return 'border border-border text-foreground';

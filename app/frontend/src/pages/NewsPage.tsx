@@ -80,7 +80,7 @@ export function NewsPage() {
             onClick={() => setFilter(null)}
             className={`h-9 px-4 rounded-full text-sm font-semibold border transition-colors
               ${filter === null
-                ? 'bg-brand text-white border-transparent'
+                ? 'bg-brand text-brand-foreground border-transparent'
                 : 'text-foreground border-border hover:bg-muted'}`}
           >
             All
@@ -91,7 +91,7 @@ export function NewsPage() {
               onClick={() => setFilter(t === filter ? null : t)}
               className={`h-9 px-4 rounded-full text-sm font-semibold border tabular-nums transition-colors
                 ${filter === t
-                  ? 'bg-brand text-white border-transparent'
+                  ? 'bg-brand text-brand-foreground border-transparent'
                   : 'text-foreground border-border hover:bg-muted'}`}
             >
               {t}

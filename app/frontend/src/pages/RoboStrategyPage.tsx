@@ -244,7 +244,7 @@ export function RoboStrategyPage() {
                   onClick={() => setAnswers((prev) => ({ ...prev, risk_tolerance: opt.value }))}
                 >
                   <div className="text-[13px] font-semibold">{opt.label}</div>
-                  <div className="text-[11px] opacity-80 mt-0.5">{opt.desc}</div>
+                  <div className="text-xs opacity-80 mt-0.5">{opt.desc}</div>
                 </ChipButton>
               ))}
             </div>
@@ -272,7 +272,7 @@ export function RoboStrategyPage() {
           <AccordionTrigger className="text-[14px] font-semibold">
             <span className="flex items-center gap-2">
               Sector Preferences
-              <span className={`text-[11px] font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
+              <span className={`text-xs font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {sectorTotal}%
               </span>
             </span>
@@ -295,7 +295,7 @@ export function RoboStrategyPage() {
           <AccordionTrigger className="text-[14px] font-semibold">
             <span className="flex items-center gap-2">
               Geography Preferences
-              <span className={`text-[11px] font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
+              <span className={`text-xs font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {geoTotal}%
               </span>
             </span>
@@ -311,7 +311,7 @@ export function RoboStrategyPage() {
                 />
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground/80 italic mt-2 leading-relaxed">
+            <p className="text-xs text-muted-foreground/80 italic mt-2 leading-relaxed">
               In Individual Stocks mode, Emerging Markets exposure comes from our Hong Kong screener
               universe and Asia-Pacific from Singapore; Europe has no individual-stock coverage yet.
               Diversified ETFs mode has full coverage across all four regions, including dedicated
@@ -365,17 +365,17 @@ export function RoboStrategyPage() {
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Total Investment</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Total Investment</div>
           <div className="text-[18px] font-bold font-mono text-foreground mt-1">
             ${portfolio.total_investment.toLocaleString()}
           </div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Holdings</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Holdings</div>
           <div className="text-[18px] font-bold font-mono text-foreground mt-1">{activeItems.length}</div>
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Sectors</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Sectors</div>
           <div className="text-[18px] font-bold font-mono text-foreground mt-1">{sectorCount}</div>
         </div>
       </div>

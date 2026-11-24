@@ -289,7 +289,7 @@ export function WatchlistPage() {
                         actions still work anywhere on the card. */}
                     <div data-tap="open" className="shrink-0 w-[80px] active:bg-muted/60 rounded-md -m-1 p-1 cursor-pointer">
                       <span className="font-bold text-[15px] leading-none block text-foreground">{item.ticker}</span>
-                      <span className="text-[10px] text-muted-foreground leading-tight block mt-1">
+                      <span className="text-xs text-muted-foreground leading-tight block mt-1">
                         {item.companyName}
                       </span>
                     </div>
@@ -300,7 +300,7 @@ export function WatchlistPage() {
                         {price != null ? `$${price.toFixed(2)}` : '—'}
                       </span>
                       {pct != null && (
-                        <span className={`text-[10px] font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-gain' : 'text-loss'}`}>
+                        <span className={`text-xs font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-gain' : 'text-loss'}`}>
                           {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                         </span>
                       )}
@@ -448,8 +448,8 @@ export function WatchlistPage() {
                               flash === 'down' ? 'text-loss'   : ''
                             }`}>
                               {price != null ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
-                              {flash === 'up'   && <span className="text-[10px] leading-none">▲</span>}
-                              {flash === 'down' && <span className="text-[10px] leading-none">▼</span>}
+                              {flash === 'up'   && <span className="text-xs leading-none">▲</span>}
+                              {flash === 'down' && <span className="text-xs leading-none">▼</span>}
                             </span>
                           );
                         })()}

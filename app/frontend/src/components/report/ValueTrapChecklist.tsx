@@ -102,7 +102,7 @@ export function ValueTrapChecklist({ analysis }: ValueTrapChecklistProps) {
               {/* Collapsible evidence */}
               {isOpen && evidence && (
                 <div className="px-5 pb-2.5 pt-0.5">
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
                     {evidence}
                   </p>
                 </div>

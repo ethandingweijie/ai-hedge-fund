@@ -300,7 +300,7 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
                 className="w-full flex items-center gap-2.5 px-1 py-2 text-left transition-colors rounded-sm hover:bg-muted/40"
               >
                 {/* Score badge */}
-                <span className={`shrink-0 text-[11px] font-bold tabular-nums w-8 text-right ${scoreColor(score * 5)}`}>
+                <span className={`shrink-0 text-xs font-bold tabular-nums w-8 text-right ${scoreColor(score * 5)}`}>
                   {score}/2
                 </span>
 
@@ -324,7 +324,7 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
                       <p className="text-[12px] font-semibold text-foreground mb-0.5">
                         Strengths
                       </p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">{note}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{note}</p>
                     </div>
                   )}
                   {hasConcern && (
@@ -332,7 +332,7 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
                       <p className="text-[12px] font-semibold text-foreground mb-0.5">
                         Concerns
                       </p>
-                      <p className="text-[11px] leading-relaxed text-muted-foreground">{concern}</p>
+                      <p className="text-xs leading-relaxed text-muted-foreground">{concern}</p>
                     </div>
                   )}
                 </div>
@@ -344,7 +344,7 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
 
       {/* ── Valuation implication ────────────────────────────────────────────── */}
       {implication && (
-        <p className="text-[11px] text-muted-foreground border-t pt-2 leading-relaxed">
+        <p className="text-xs text-muted-foreground border-t pt-2 leading-relaxed">
           {implication}
         </p>
       )}

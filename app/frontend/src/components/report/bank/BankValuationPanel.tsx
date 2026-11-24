@@ -55,7 +55,7 @@ const fmtBps = (v: number | null | undefined, decimals = 0): string => {
 };
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
+  'text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── 1. P/TBV Fair Value Hero ──────────────────────────────────────────────
 
@@ -167,13 +167,13 @@ function PTBVHeroCard({ bb, price, sym, ticker, dcfRange }: {
       </div>
 
       {!ptbvExcluded && fairMult != null && bb.bvps != null && (
-        <p className="text-[11px] text-muted-foreground mt-4 font-mono">
+        <p className="text-xs text-muted-foreground mt-4 font-mono">
           Fair = BVPS × (ROE−g) / (CoE−g) = {fmtMoney(bb.bvps, sym)} × {fairMult.toFixed(2)}x
           {bb.ggm_terminal_growth != null && <>{'  ·  '}g {fmtPct(bb.ggm_terminal_growth, 1)}</>}
         </p>
       )}
       {bb.ggm_provenance != null && bb.ggm_provenance.length > 0 && (
-        <p className="text-[11px] text-muted-foreground mt-1">
+        <p className="text-xs text-muted-foreground mt-1">
           {bb.ggm_provenance.join(' · ')}
         </p>
       )}
@@ -285,7 +285,7 @@ function ROEGauge({ bb }: { bb: BankBreakdown }) {
           />
         )}
       </div>
-      <p className={`text-[11px] mt-2 font-mono ${
+      <p className={`text-xs mt-2 font-mono ${
         isPositive ? 'text-content-high' : 'text-content-high'
       }`}>
         ROE {fmtPct(bb.roe, 1)} − CoE {fmtPct(bb.coe, 1)} = {fmtBps(spreadBps)} · {label}
@@ -372,7 +372,7 @@ function HistoryChart({ title, unit, data, color, caption, yFormat }: {
           <p className={SECTION_HEADING_CLS}>{title}</p>
           <span className="text-xs font-medium text-muted-foreground">{unit}</span>
         </div>
-        <p className="text-[11px] text-muted-foreground/70 italic py-6 text-center">
+        <p className="text-xs text-muted-foreground/70 italic py-6 text-center">
           Insufficient data ({rows.length} of 5 years). Data vendor does not expose {title.toLowerCase()} for this ticker.
         </p>
       </div>
@@ -428,7 +428,7 @@ function NIMSensitivityTile({ bb }: { bb: BankBreakdown }) {
   return (
     <div className="rounded-lg border border-border bg-muted/50 p-3 mt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Rate sensitivity
         </span>
         <span className="text-sm font-bold tabular-nums text-foreground">
@@ -436,7 +436,7 @@ function NIMSensitivityTile({ bb }: { bb: BankBreakdown }) {
         </span>
       </div>
       {bb.forward_nim_guidance && (
-        <p className="text-[11px] text-muted-foreground mt-1 italic">
+        <p className="text-xs text-muted-foreground mt-1 italic">
           {bb.forward_nim_guidance}
         </p>
       )}
@@ -481,7 +481,7 @@ function LoanGrowthCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
           </p>
         )}
         {bb.forward_loan_growth_guidance && (
-          <p className="text-[11px] text-muted-foreground mt-3 italic px-2">
+          <p className="text-xs text-muted-foreground mt-3 italic px-2">
             {bb.forward_loan_growth_guidance}
           </p>
         )}
@@ -525,7 +525,7 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
             <span className={`font-semibold tabular-nums ${
               covColor === 'green' ? 'text-content-high' :
               covColor === 'red'   ? 'text-content-high'   :
-              covColor === 'amber' ? 'text-amber-500' : 'text-foreground'
+              covColor === 'amber' ? 'text-warning' : 'text-foreground'
             }`}>
               {(bb.npl_coverage_ratio * 100).toFixed(0)}%
             </span>
@@ -562,14 +562,14 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
             {/* 100% safety line */}
             <div className="absolute top-0 h-full w-px bg-muted-foreground/50" style={{ left: '50%' }} />
           </div>
-          <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+          <p className="text-xs text-muted-foreground mt-1 font-mono">
             coverage = provisions / NPLs · 100% = line
           </p>
         </>
       )}
 
       {bb.research_evidence && (
-        <p className="text-[11px] text-muted-foreground mt-3 italic">
+        <p className="text-xs text-muted-foreground mt-3 italic">
           Source: {bb.research_evidence.slice(0, 200)}
         </p>
       )}

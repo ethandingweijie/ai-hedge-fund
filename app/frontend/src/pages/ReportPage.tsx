@@ -1026,15 +1026,15 @@ export function ReportPage() {
                           <div className={`font-semibold tabular-nums flex items-center gap-1.5 ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
                             {s.ticker}
                             {isEtf && market !== null && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-brand" title="ETF support is in progress">
+                              <span className="text-xs font-bold uppercase tracking-wider text-brand" title="ETF support is in progress">
                                 WIP
                               </span>
                             )}
                           </div>
-                          <div className={`text-[11px] truncate ${disabled ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>{s.name}</div>
+                          <div className={`text-xs truncate ${disabled ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>{s.name}</div>
                         </div>
                         {s.exchange && (
-                          <span className="text-[10px] text-muted-foreground/70 shrink-0">{s.exchange}</span>
+                          <span className="text-xs text-muted-foreground/70 shrink-0">{s.exchange}</span>
                         )}
                       </button>
                     );
@@ -1061,10 +1061,10 @@ export function ReportPage() {
           {v2Popular.length > 0 && (
             <div className="mt-8 mb-6">
               <div className="px-4 mb-2 flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+                <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                   Popular
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70">
                   <span className="w-1 h-1 rounded-full bg-brand animate-pulse" />
                   live
                 </span>
@@ -1089,9 +1089,9 @@ export function ReportPage() {
                       >
                         <span className="text-[12px] font-semibold text-foreground tabular-nums tracking-tight">{t.ticker}</span>
                         {t.price != null && (
-                          <span className="text-[11px] text-muted-foreground tabular-nums">${t.price.toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">${t.price.toFixed(2)}</span>
                         )}
-                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-gain' : 'text-loss'}`}>
+                        <span className={`text-xs font-medium tabular-nums ${delta >= 0 ? 'text-gain' : 'text-loss'}`}>
                           {delta >= 0 ? '^' : 'v'} {Math.abs(delta).toFixed(2)}%
                         </span>
                       </button>
@@ -1107,7 +1107,7 @@ export function ReportPage() {
 
           {/* Footer hint */}
           <div className="px-6 pb-6 text-center">
-            <p className="text-[10.5px] text-muted-foreground/70 leading-relaxed">
+            <p className="text-xs text-muted-foreground/70 leading-relaxed">
               Results stream in over 4-6 minutes . US . HK . SGX universe
             </p>
           </div>
@@ -1230,7 +1230,7 @@ export function ReportPage() {
               Analysis complete
             </span>
             {events.length === 0 && (
-              <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded text-[10px] font-medium">
+              <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 px-1.5 py-0.5 rounded text-xs font-medium">
                 cached · ran &lt;30 min ago
               </span>
             )}
@@ -1534,7 +1534,7 @@ function ProgressOverlay({
       >
         <span className="font-semibold">
           {isRunning
-            ? <span className="text-yellow-500 animate-pulse">Pipeline Running…</span>
+            ? <span className="text-warning animate-pulse">Pipeline Running…</span>
             : error
             ? <span className="text-content-high">Pipeline Error</span>
             : <span className="text-content-high">Pipeline Complete</span>
@@ -1547,7 +1547,7 @@ function ProgressOverlay({
       {open && (
         <ul className="max-h-64 overflow-y-auto p-2 space-y-0.5">
           {error && (
-            <li className="p-2 bg-surface-2 border border-[var(--hairline)] rounded text-content-high text-[10px]">
+            <li className="p-2 bg-surface-2 border border-[var(--hairline)] rounded text-content-high text-xs">
               {error}
             </li>
           )}
@@ -1582,7 +1582,7 @@ function ProgressOverlay({
             return (
             <li key={ev.phase} className="flex items-start gap-1.5 px-1 py-0.5 rounded hover:bg-muted/30">
               <span className={`mt-0.5 font-bold w-3 shrink-0 ${
-                isDone ? 'text-content-high' : isErr ? 'text-content-high' : 'text-yellow-400 animate-pulse'
+                isDone ? 'text-content-high' : isErr ? 'text-content-high' : 'text-warning animate-pulse'
               }`}>
                 {isDone ? '✓' : isErr ? '✗' : '…'}
               </span>
@@ -1596,7 +1596,7 @@ function ProgressOverlay({
                     {milestones.map(m => (
                       <span
                         key={m.label}
-                        className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
                           m.hit
                             ? 'bg-surface-2 text-content-high'
                             : 'bg-muted/60 text-muted-foreground/50'

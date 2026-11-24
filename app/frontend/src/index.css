@@ -42,13 +42,14 @@
     --primary: 0 0% 0%;             /* #000000 */
     --primary-foreground: 0 0% 100%;/* #FFFFFF */
     --brand: 221 83% 53%;           /* #2563EB cobalt — links, active icons */
+    --brand-foreground: 0 0% 100%;  /* text on a cobalt fill (5.2:1) */
     --hero: 0 0% 0%;                /* black page-hero band */
     --hero-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;       /* #F3F4F6 light subtle neutral */
     --secondary-foreground: 0 0% 0%;
     --muted: 220 14% 96%;           /* #F3F4F6 */
-    --muted-foreground: 220 9% 46%; /* #6B7280 secondary labels */
+    --muted-foreground: 220 9% 40%; /* #5D636F secondary labels — 4.5:1+ on the grey surfaces too */
     --accent: 220 14% 96%;
     --accent-foreground: 0 0% 0%;
     /* Errors are MONOCHROME. Green and red are reserved for price change
@@ -80,8 +81,8 @@
     /* ── Text emphasis · Light ──────────────────────────────────────────── */
     --text-high: 0 0% 0%;           /* #000000 headings, fares */
     --text-medium: 215 14% 34%;     /* body copy */
-    --text-muted: 220 9% 46%;       /* #6B7280 timestamps, captions */
-    --text-disabled: 218 11% 65%;   /* #9CA3AF placeholders */
+    --text-muted: 220 9% 40%;       /* #5D636F timestamps, captions */
+    --text-disabled: 220 9% 43%;    /* #636A76 — also used for real figures, so it clears 4.5:1 */
 
     /* Hover / active — neutral, no brand tint */
     --hover-background: rgb(0 0 0 / 0.04);
@@ -123,9 +124,12 @@
        the surface tiers and text-emphasis ramp instead. Every non-price
        green/red in the app was migrated out on purpose; re-introducing one
        dilutes the signal that actually matters on a trading screen. */
-    --gain: 160 84% 39%;            /* #10B981 price up */
-    --loss: 0 84% 60%;              /* #EF4444 price down */
-    --warning: 38 92% 50%;          /* #F59E0B — advisory only, never price */
+    /* Light theme uses the 700 shades so price text clears WCAG AA (4.5:1)
+       on white and on the grey surfaces; dark theme keeps the bright 500s. */
+    --gain: 163 94% 24%;            /* #047857 price up (5.5:1 on white) */
+    --loss: 0 74% 42%;              /* #B91C1C price down (6.5:1 on white) */
+    --warning: 26 90% 37%;          /* #B45309 — advisory only, never price */
+    --warning-foreground: 0 0% 100%;
 
     /* ── Corner radii ───────────────────────────────────────────────────────
        Strict hierarchy: compact tags → controls → cards → sheets. */
@@ -173,7 +177,12 @@
     /* Primary action = full-contrast inversion (white fill, black label) */
     --primary: 0 0% 100%;             /* #FFFFFF */
     --primary-foreground: 0 0% 0%;    /* #000000 */
-    --brand: 217 91% 60%;             /* #3B82F6 accent on dark */
+    --brand: 226 100% 74%;            /* #7C9CFF periwinkle accent on dark */
+    --brand-foreground: 0 0% 0%;      /* black on the light accent (8:1) */
+    --gain: 160 84% 39%;              /* #10B981 price up on dark */
+    --loss: 0 84% 60%;                /* #EF4444 price down on dark */
+    --warning: 38 92% 50%;            /* #F59E0B advisory on dark */
+    --warning-foreground: 0 0% 0%;
     --hero: 0 0% 8%;                  /* L1 hero band */
     --hero-foreground: 0 0% 100%;
 
@@ -212,7 +221,7 @@
     --text-high: 0 0% 100%;           /* #FFFFFF 15.8:1 on L1 */
     --text-medium: 0 0% 88%;          /* #E0E0E0 body copy */
     --text-muted: 218 11% 65%;        /* #9CA3AF captions, ETAs */
-    --text-disabled: 0 0% 33%;        /* #555555 placeholders */
+    --text-disabled: 0 0% 58%;        /* #949494 — 4.5:1+ on black and on the #212121 cards */
 
     /* Hover / active — neutral luminance lift, no brand tint */
     --hover-background: rgb(255 255 255 / 0.06);
@@ -633,4 +642,26 @@ html, body {
 .ui-flat .bg-card:not(.fixed):not(.absolute):not(.shadow-lg):not(.shadow-xl):not(.shadow-2xl) {
   background-color: transparent;
   box-shadow: none;
+}
+
+/* ── Accessibility baselines ─────────────────────────────────────────────
+   Keyboard focus is always visible (many custom buttons had no focus
+   style); mouse/touch focus stays quiet because :focus-visible only matches
+   keyboard-driven focus. Utilities such as focus:outline-none still win on
+   the inputs that draw their own focus treatment. */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Honour the OS "reduce motion" setting across the app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

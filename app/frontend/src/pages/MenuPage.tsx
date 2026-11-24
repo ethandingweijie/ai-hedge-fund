@@ -102,7 +102,7 @@ export function MenuPage() {
         <button
           onClick={() => navigate(-1)}
           aria-label="Back"
-          className="w-9 h-9 rounded-full flex items-center justify-center border border-border/70 bg-card shadow-sm hover:bg-muted transition-colors"
+          className="w-11 h-11 rounded-full flex items-center justify-center border border-border/70 bg-card shadow-sm hover:bg-muted transition-colors"
         >
           <ChevronLeft size={18} className="text-foreground" />
         </button>
@@ -139,11 +139,11 @@ export function MenuPage() {
                     >
                       <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
                       {run.final_action && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
+                        <span className={`text-xs px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
                           {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
                         </span>
                       )}
-                      <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
+                      <span className="ml-auto text-xs text-muted-foreground/50 font-mono">
                         {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </span>
                     </button>
@@ -194,7 +194,7 @@ export function MenuPage() {
                       }`}
                   >
                     <Icon size={16} />
-                    <span className="text-[10px] font-medium">{label}</span>
+                    <span className="text-xs font-medium">{label}</span>
                   </button>
                 ))}
               </div>

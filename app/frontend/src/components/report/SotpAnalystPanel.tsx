@@ -28,7 +28,7 @@ const CCY_SYM: Record<string, string> = {
 };
 
 const LABEL_CLS =
-  'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
+  'text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
 
 function fmtAmount(v: number | null | undefined, sym = '$'): string {
   if (v == null || !isFinite(v)) return '—';
@@ -59,10 +59,10 @@ function methodChip(method?: string) {
   const tone = m.startsWith('P/E')
     ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
     : m.includes('fallback')
-      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+      ? 'bg-amber-500/10 text-warning'
       : 'bg-surface-2 text-content-high';
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${tone}`}>
       {m.replace(' (fallback)', ' · fb')}
     </span>
   );
@@ -76,7 +76,7 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
     <div className="mt-4 overflow-x-auto">
       <table className="w-full text-[12px] tabular-nums">
         <thead>
-          <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+          <tr className="text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
             <th className="text-left font-medium pb-1.5">Segment</th>
             <th className="text-right font-medium pb-1.5">{breakdown.revenue_label ?? 'Fwd Rev'}</th>
             <th className="text-right font-medium pb-1.5">{breakdown.earnings_label ?? 'EBIT'}</th>
@@ -92,7 +92,7 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
               <td className="py-1.5 pr-2">
                 <div className="font-medium text-foreground">{r.name}</div>
                 {r.rationale ? (
-                  <div className="text-[10.5px] text-muted-foreground/80 leading-snug max-w-[340px]">
+                  <div className="text-xs text-muted-foreground/80 leading-snug max-w-[340px]">
                     {r.rationale}
                   </div>
                 ) : null}
@@ -110,7 +110,7 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
                       style={{ width: `${Math.min(100, Math.max(0, (r.value_split_pct ?? 0) * 100))}%` }}
                     />
                   </div>
-                  <span className="text-[10.5px] text-muted-foreground w-8 text-right">
+                  <span className="text-xs text-muted-foreground w-8 text-right">
                     {r.value_split_pct != null ? `${(r.value_split_pct * 100).toFixed(0)}%` : '—'}
                   </span>
                 </div>
@@ -153,7 +153,7 @@ function NavBridge({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
             </span>
           </div>
         ))}
-        <div className="text-[10.5px] text-muted-foreground/70 pt-1">
+        <div className="text-xs text-muted-foreground/70 pt-1">
           ÷ {(breakdown.shares ?? 0) / 1e6 >= 1000
             ? `${((breakdown.shares ?? 0) / 1e9).toFixed(2)}B`
             : `${((breakdown.shares ?? 0) / 1e6).toFixed(0)}M`}{' '}
@@ -168,7 +168,7 @@ function NavBridge({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
           {fmtPs(breakdown.per_share_reporting, sym)}
         </span>
         {(breakdown.reporting_currency ?? 'USD') !== 'USD' && breakdown.per_share != null && !!breakdown.fx_to_reporting && breakdown.fx_to_reporting !== 1 && (
-          <span className="text-[10.5px] text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {fmtPs(breakdown.per_share, '$')} USD
           </span>
         )}
@@ -187,7 +187,7 @@ function FwdEstimates({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
       <div className="mt-2 overflow-x-auto">
         <table className="w-full text-[12px] tabular-nums">
           <thead>
-            <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+            <tr className="text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
               <th className="text-left font-medium pb-1">Period</th>
               <th className="text-right font-medium pb-1">Revenue</th>
               <th className="text-right font-medium pb-1">EBIT</th>
@@ -204,7 +204,7 @@ function FwdEstimates({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
                 <td className="py-1.5 text-right text-foreground/85">{fmtAmount(e.ebit, usd)}</td>
                 <td className="py-1.5 text-right text-foreground/85">{fmtAmount(e.ebitda, usd)}</td>
                 <td className="py-1.5 text-right text-foreground/85">{fmtAmount(e.net_income, usd)}</td>
-                <td className="py-1.5 pl-3 text-[10.5px] text-muted-foreground">{e.source ?? ''}</td>
+                <td className="py-1.5 pl-3 text-xs text-muted-foreground">{e.source ?? ''}</td>
               </tr>
             ))}
           </tbody>
@@ -242,7 +242,7 @@ function Revisions({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
       </div>
       <table className="mt-2 w-full text-[12px] tabular-nums">
         <thead>
-          <tr className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">
+          <tr className="text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
             <th className="text-left font-medium pb-1">Item</th>
             <th className="text-right font-medium pb-1">Old</th>
             <th className="text-right font-medium pb-1">New</th>
@@ -259,7 +259,7 @@ function Revisions({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
               <tr key={`${r.item}-${i}`} className={`border-t border-border/50 ${sectionRow ? 'border-t-border' : ''}`}>
                 <td className="py-1.5 pr-2">
                   {sectionRow && (
-                    <span className="mr-2 text-[9.5px] uppercase tracking-[0.08em] text-muted-foreground/60">
+                    <span className="mr-2 text-xs uppercase tracking-[0.08em] text-muted-foreground/60">
                       {r.section}
                     </span>
                   )}
@@ -308,7 +308,7 @@ function Elasticities({ breakdown, sym }: { breakdown: SotpBreakdown; sym: strin
       <div className={LABEL_CLS}>What moves the TP (±10% assumption shocks)</div>
       <div className="mt-2 space-y-1.5">
         {els.map((e) => (
-          <div key={e.label} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-3 text-[11.5px]">
+          <div key={e.label} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-3 text-xs">
             <span className="truncate text-foreground/85" title={e.label}>{e.label}</span>
             {bar(e)}
             <span className="tabular-nums text-right whitespace-nowrap">
@@ -341,11 +341,11 @@ function ScenarioStrip({ breakdown, sym }: { breakdown: SotpBreakdown; sym: stri
       <div className="mt-2 grid grid-cols-3 gap-2">
         {cells.map((c) => (
           <div key={c.label} className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-center">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground/70">{c.label}</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground/70">{c.label}</div>
             <div className={`text-[16px] font-semibold tabular-nums ${c.tone}`}>
               {c.ps != null ? fmtPs(c.ps, sym) : '—'}
             </div>
-            {c.note && <div className="text-[9.5px] text-muted-foreground/70 truncate" title={c.note}>{c.note}</div>}
+            {c.note && <div className="text-xs text-muted-foreground/70 truncate" title={c.note}>{c.note}</div>}
           </div>
         ))}
       </div>
@@ -412,26 +412,26 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
           {Object.keys(sources).length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(sources).map(([k, v]) => (
-                <span key={k} className="inline-flex items-center rounded bg-muted/70 px-1.5 py-0.5 text-[9.5px] text-muted-foreground">
+                <span key={k} className="inline-flex items-center rounded bg-muted/70 px-1.5 py-0.5 text-xs text-muted-foreground">
                   {k}: {String(v)}
                 </span>
               ))}
             </div>
           )}
           {basis?.summary && (
-            <div className="text-[10.5px] text-muted-foreground/80">Multiple basis: {basis.summary}</div>
+            <div className="text-xs text-muted-foreground/80">Multiple basis: {basis.summary}</div>
           )}
           {flags.map((f, i) => (
-            <div key={i} className="text-[10.5px] text-amber-600 dark:text-amber-400">⚠ {f}</div>
+            <div key={i} className="text-xs text-warning">⚠ {f}</div>
           ))}
           {(breakdown.reminders ?? []).map((r, i) => (
-            <div key={`rem-${i}`} className="text-[10.5px] font-medium text-foreground/80">{r}</div>
+            <div key={`rem-${i}`} className="text-xs font-medium text-foreground/80">{r}</div>
           ))}
           {breakdown.basis_note && (
-            <div className="text-[10.5px] text-muted-foreground/70">{breakdown.basis_note}</div>
+            <div className="text-xs text-muted-foreground/70">{breakdown.basis_note}</div>
           )}
           {breakdown.data_limitations && (
-            <div className="text-[10.5px] text-muted-foreground/70">Limitations: {breakdown.data_limitations}</div>
+            <div className="text-xs text-muted-foreground/70">Limitations: {breakdown.data_limitations}</div>
           )}
         </div>
       )}

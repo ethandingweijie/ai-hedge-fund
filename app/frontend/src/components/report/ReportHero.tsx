@@ -26,7 +26,7 @@ import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { useCompanyProfile } from '@/hooks/use-company-name';
 import type { MacroRegime, PortfolioDecision, VgpmResult } from '@/lib/reportTypes';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
-import { ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBlock';
+import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { HeroSectionTitle } from '@/components/report/SectionAnchor';
 import { METRICS, TIMEFRAMES, makeFmtLarge, makeFmtPrice, type StockData } from '@/lib/stockMetrics';
 
@@ -218,7 +218,7 @@ export function ReportHero({
                 role="tab"
                 aria-selected={tfIdx === i}
                 onClick={() => { setTfIdx(i); setHoverIdx(null); }}
-                className={`h-10 px-3 -mb-px text-[13px] font-semibold border-b-2 transition-colors ${
+                className={`h-11 px-3 -mb-px text-[13px] font-semibold border-b-2 transition-colors ${
                   tfIdx === i
                     ? `${up ? 'text-gain border-gain' : 'text-loss border-loss'}`
                     : 'text-muted-foreground border-transparent hover:text-foreground'
@@ -241,7 +241,7 @@ export function ReportHero({
                 <span className={`inline-flex items-center h-10 px-5 rounded-full text-lg font-bold ${actionTone(decision.action)}`}>
                   {cap(decision.action?.toLowerCase())}
                 </span>
-                {target != null && <Figure label="12-month target" value={`${sym}${target.toFixed(2)}`} />}
+                {target != null && <TargetPill value={target} ticker={ticker} className="h-10 px-5 py-0 text-lg" />}
                 {upside != null && (
                   <Figure
                     label="Upside"
@@ -337,7 +337,7 @@ export function ReportHero({
         )}
         <Link
           to={`/discuss/${ticker}`}
-          className="mt-2 inline-flex items-center justify-center gap-2 h-12 rounded-full bg-brand text-white text-[15px] font-semibold hover:bg-brand/90 transition-colors"
+          className="mt-2 inline-flex items-center justify-center gap-2 h-12 rounded-full bg-brand text-brand-foreground text-[15px] font-semibold hover:bg-brand/90 transition-colors"
         >
           <MessageSquare size={16} />
           Discuss this report
