@@ -39,7 +39,7 @@ const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-1 mb-2">
+    <p className="text-xs font-semibold text-muted-foreground/60 px-1 mb-2">
       {children}
     </p>
   );
@@ -79,8 +79,12 @@ export function MenuPage() {
   const [recentRuns, setRecentRuns] = useState<RunSummary[]>([]);
 
   useEffect(() => {
-    getHistory({ page: 1, page_size: 5 })
-      .then((res) => setRecentRuns(res.items.slice(0, 5)))
+    // One row per ticker: re-runs of the same name collapse to the latest.
+    getHistory({ page: 1, page_size: 20 })
+      .then((res) => {
+        const seen = new Set<string>();
+        setRecentRuns(res.items.filter((r) => !seen.has(r.ticker) && !!seen.add(r.ticker)).slice(0, 5));
+      })
       .catch(() => {});
   }, []);
 
@@ -92,7 +96,7 @@ export function MenuPage() {
   const initial = (user?.name ?? user?.email ?? '?')[0]?.toUpperCase() ?? '?';
 
   return (
-    <div className="min-h-full bg-background">
+    <div className="min-h-full bg-background ui-flat">
       {/* pt-16 clears the floating avatar (mobile); desktop gets normal py. */}
       <div className="mx-auto w-full max-w-3xl px-4 md:px-8 pt-16 pb-10 md:pt-8 space-y-6">
         <button
@@ -106,9 +110,9 @@ export function MenuPage() {
         {/* Identity header */}
         <div className="flex items-center gap-4">
           {user?.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="w-16 h-16 rounded-full object-cover ring-2 ring-border" />
+            <img src={user.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover" />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center text-xl font-bold text-primary ring-2 ring-border">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-lg font-bold text-foreground">
               {initial}
             </div>
           )}
@@ -125,7 +129,7 @@ export function MenuPage() {
             <Row icon={BarChart2} label="Current Analysis" onClick={() => handleNav(byAction('resume'))} />
             {recentRuns.length > 0 && (
               <div className="px-4 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Recent</p>
+                <p className="text-xs font-semibold text-muted-foreground/60 mb-1">Recent</p>
                 <div className="space-y-0.5">
                   {recentRuns.map((run) => (
                     <button
@@ -136,7 +140,7 @@ export function MenuPage() {
                       <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
                       {run.final_action && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
-                          {run.final_action}
+                          {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
@@ -177,7 +181,7 @@ export function MenuPage() {
           <SectionLabel>Preferences</SectionLabel>
           <Card>
             <div className="px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Theme</p>
               <div className="flex gap-2">
                 {THEMES.map(({ value, icon: Icon, label }) => (
                   <button
@@ -196,7 +200,7 @@ export function MenuPage() {
               </div>
             </div>
             <div className="px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Layout</p>
               <LayoutModeToggle />
             </div>
             <Row icon={LogOut} label="Sign out" muted onClick={() => logout()} />

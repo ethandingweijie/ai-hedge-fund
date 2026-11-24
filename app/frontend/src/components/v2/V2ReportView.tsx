@@ -378,7 +378,7 @@ function LoadingSpinner({ size = 16 }: { size?: number }) {
 function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
   return (
     <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
+      <div className="text-xs font-semibold text-muted-foreground mb-3">
         {label}
       </div>
       <div className="flex items-center justify-center gap-2.5 text-muted-foreground/70" style={{ minHeight: minH }}>
@@ -726,8 +726,8 @@ function V2ValuationLadder({
   return (
     <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-          Fair Value Ladder
+        <span className="text-xs font-semibold text-muted-foreground">
+          Fair value ladder
         </span>
         {wacc != null && (
           <span className="text-[10px] tabular-nums text-muted-foreground/70">
@@ -838,8 +838,8 @@ function RiskBody({
       {powerLaw ? (
         <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Power Law
+            <span className="text-xs font-semibold text-muted-foreground">
+              Power law
             </span>
             {powerLawOverall != null && (
               <span className="text-[15px] font-semibold tabular-nums text-foreground">
@@ -889,8 +889,8 @@ function RiskBody({
       {valueTrap ? (
         <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Value Trap Check
+            <span className="text-xs font-semibold text-muted-foreground">
+              Value trap check
             </span>
             {trapVerdict && (
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
@@ -943,8 +943,8 @@ function RiskBody({
       {showScenario && (
         <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Scenario Mix
+            <span className="text-xs font-semibold text-muted-foreground">
+              Scenario mix
             </span>
             <span className="text-[10px] text-muted-foreground/70">12-mo</span>
           </div>
@@ -1121,7 +1121,7 @@ function ResearchBody({
       )}
       {hasData && sub === 'brief' && industryBrief && (
         <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
+          <div className="text-xs font-semibold text-muted-foreground mb-3">
             Industry brief
           </div>
           <Markdown>{industryBrief}</Markdown>
@@ -1146,9 +1146,10 @@ function ResearchBody({
  * without the backend Qwen /analysis/research-summary call (no cache key yet).
  */
 function StreamingResearchSummary({
-  ticker, industryBrief, deepResearch,
+  industryBrief, deepResearch,
 }: {
-  ticker: string;
+  /** Kept for call-site compatibility; the header no longer repeats it. */
+  ticker?: string;
   industryBrief: string | undefined;
   deepResearch: string | undefined;
 }) {
@@ -1162,7 +1163,7 @@ function StreamingResearchSummary({
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-surface-2 animate-pulse" />
           <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-            Research streaming · {ticker}
+            Research streaming
           </span>
         </div>
         <p className="text-[12px] text-muted-foreground leading-relaxed">
@@ -1328,7 +1329,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
   const card = (body: React.ReactNode) => (
     <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+        <span className="text-xs font-semibold text-muted-foreground">
           {title}
         </span>
         {toggle}
@@ -1373,7 +1374,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           const yoy = s.yoy_pct;
           return (
             <div key={s.name} className="p-2.5 rounded-lg border border-border/60 bg-muted/40">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground truncate" title={s.name}>
+              <div className="text-xs font-semibold text-muted-foreground truncate" title={s.name}>
                 {shortName(s.name)}
               </div>
               <div className="text-[14px] font-semibold tabular-nums text-foreground mt-1">

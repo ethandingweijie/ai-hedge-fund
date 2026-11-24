@@ -110,7 +110,10 @@ export function SectorValuationCard({ payload, dcfRange }: Props) {
                       <span className={`text-[17px] font-semibold tabular-nums ${missing ? 'text-muted-foreground' : 'text-foreground'}`}>
                         {fmt(k)}
                       </span>
-                      {k.unit && !missing && <span className="text-[12px] text-muted-foreground">{k.unit}</span>}
+                      {/* Skip a unit the formatted value already carries ("5.30×" + "×"). */}
+                      {k.unit && !missing && !fmt(k).endsWith(k.unit.trim()) && (
+                        <span className="text-[12px] text-muted-foreground">{k.unit}</span>
+                      )}
                     </p>
                     {note && <p className="mt-0.5 text-[12px] text-muted-foreground">{note}</p>}
                   </div>

@@ -244,8 +244,9 @@ export function WatchlistPage() {
           </form>
           {addError && <p className="text-xs text-content-high">{addError}</p>}
 
-          {/* Column headers — V/G/P/M letters once; row grades align beneath */}
-          <div className="flex items-center px-3 mb-1">
+          {/* Column headers — V/G/P/M letters once; row grades align beneath.
+              Only when there are rows to label. */}
+          {!loading && items.length > 0 && <div className="flex items-center px-3 mb-1">
             <div className="flex-1" />
             <div className="flex items-center gap-0">
               <span className="w-9 text-center text-xs font-medium text-muted-foreground">V</span>
@@ -253,13 +254,13 @@ export function WatchlistPage() {
               <span className="w-9 text-center text-xs font-medium text-muted-foreground">P</span>
               <span className="w-9 text-center text-xs font-medium text-muted-foreground">M</span>
             </div>
-          </div>
+          </div>}
 
           {/* Watchlist cards */}
           {loading ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Loading watchlist...</div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Your watchlist is empty. Add a ticker above.</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">No tickers yet.</div>
           ) : (
             <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
               {items.map((item, i) => {
@@ -404,7 +405,7 @@ export function WatchlistPage() {
             <div className="text-sm text-muted-foreground animate-pulse">Loading watchlist…</div>
           ) : items.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground text-sm">
-              Your watchlist is empty. Add a ticker above to get started.
+              No tickers yet.
             </Card>
           ) : (
             <div className="rounded border overflow-x-auto bg-card [&_table]:bg-card [&_tr]:bg-card [&_td]:bg-card [&_th]:bg-card">

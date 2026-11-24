@@ -47,8 +47,12 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
   // Recent runs (mirrors the mobile drawer). Fetched once on mount; cheap and
   // gives the desktop rail a useful "jump back into a run" affordance.
   useEffect(() => {
-    getHistory({ page: 1, page_size: 5 })
-      .then((res) => setRecentRuns(res.items.slice(0, 5)))
+    // One row per ticker: re-runs of the same name collapse to the latest.
+    getHistory({ page: 1, page_size: 20 })
+      .then((res) => {
+        const seen = new Set<string>();
+        setRecentRuns(res.items.filter((r) => !seen.has(r.ticker) && !!seen.add(r.ticker)).slice(0, 5));
+      })
       .catch(() => {});
   }, []);
 
@@ -128,7 +132,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         {/* Recent runs — expanded only */}
         {!collapsed && recentRuns.length > 0 && (
           <div className="pt-3 mt-1 border-t border-border/60">
-            <span className="block px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Recent</span>
+            <span className="block px-3 text-xs font-semibold text-muted-foreground/60 mb-1">Recent</span>
             {recentRuns.map((run) => (
               <a
                 key={run.run_id}
@@ -138,7 +142,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
                 <span className="font-mono text-xs font-bold text-foreground min-w-[44px]">{run.ticker}</span>
                 {run.final_action && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
-                    {run.final_action}
+                    {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
                   </span>
                 )}
                 <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
@@ -193,11 +197,11 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         ) : (
           <>
             <div className="px-3 py-3 border-b border-border/60">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Layout</p>
               <LayoutModeToggle />
             </div>
             <div className="px-3 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Theme</p>
               <ThemeToggle />
             </div>
             <a

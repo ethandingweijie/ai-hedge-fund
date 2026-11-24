@@ -138,8 +138,11 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
 
       <div className="mt-2 space-y-1">
         <p className="text-xs">
-          <span className="text-muted-foreground">Profile:</span>{' '}
-          <span className="font-medium">{dcfRange.profile ?? '—'}</span>
+          {/* Empty profile is left out rather than shown as "Profile: —". */}
+          {dcfRange.profile && (<>
+            <span className="text-muted-foreground">Profile:</span>{' '}
+            <span className="font-medium">{dcfRange.profile}</span>
+          </>)}
           {dcfRange.anchor_method && (
             <>
               <span className="text-muted-foreground mx-1.5">·</span>
