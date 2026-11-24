@@ -159,3 +159,19 @@ def test_owner_earnings_charge_gross_sbc_whatever_the_buybacks():
                           stock_based_compensation=50.0, common_stock_repurchased=-300.0, currency="USD")]
     rows, _ = _extract_annual_series(li)
     assert rows[-1]["fcf_owner_earnings"] == pytest.approx(150.0)
+
+
+def test_the_moat_rule_and_the_blended_beta():
+    """Owner, 2026-11-25: RONIC above WACC only on the ROIC record; beta = average of industry and own adjusted."""
+    from src.data import capm
+    cost = capm.moat_spread([0.185, 0.191, 0.202, 0.163, 0.18, 0.165, 0.132, 0.154, 0.153, 0.146], 0.084)
+    assert cost["tagged"] and cost["qualifying_years"] == 9 and cost["spread"] == pytest.approx(0.04)
+    vlo = capm.moat_spread([0.05, 0.067, 0.192, 0.271, 0.042, -0.02, 0.074, 0.091, 0.092, 0.071], 0.075)
+    assert not vlo["tagged"] and vlo["spread"] == 0.0
+    assert capm.moat_spread([0.5] * 10, 0.08)["spread"] == pytest.approx(0.10)            # capped
+    assert not capm.moat_spread([0.5] * 5, 0.08)["tagged"]                                 # too short a record
+    w = capm.firm_wacc(profile="Consumer Technology Ecosystem", net_debt=0.0, market_cap=1e12, cost_of_debt=0.05, own_beta=1.11)
+    assert w["beta_levered"] == pytest.approx(0.5 * (1.32 + 0.67 * 1.11 + 0.33), abs=1e-4)
+    noisy = capm.firm_wacc(profile="Consumer Technology Ecosystem", net_debt=0.0, market_cap=1e12, cost_of_debt=0.05, own_beta=0.13)
+    assert noisy["beta_levered"] == pytest.approx(1.32) and noisy["beta_own_adjusted"] is None
+    assert capm.firm_wacc(profile="Money Center Bank", net_debt=0.0, market_cap=1e12, cost_of_debt=0.05) is None

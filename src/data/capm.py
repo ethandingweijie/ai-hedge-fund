@@ -170,9 +170,56 @@ def applies(profile: Optional[str]) -> bool:
     return bool(profile) and profile not in FINANCIAL_PROFILES
 
 
+#: Owner, 2026-11-25: the beta blends the relevered industry beta with the company's own Blume-adjusted regression
+#: beta (0.67 x raw + 0.33); an own beta outside this band is noise and the industry beta stands alone.
+OWN_BETA_BAND = (0.4, 2.5)
+#: Owner, 2026-11-25 (moat): a terminal RONIC above WACC is earned only on the record -- ROIC at least 5 points above
+#: WACC in 8 of the last 10 years; RONIC = WACC + half the median spread, capped at 10 points.
+MOAT_MIN_SPREAD, MOAT_MIN_YEARS, MOAT_SHARE, MOAT_CAP = 0.05, 8, 0.5, 0.10
+
+
+def moat_history_enabled() -> bool:
+    """MOAT_HISTORY=off skips the ROIC history fetch (golden replay pins it off: no such call in the fixtures)."""
+    return os.environ.get("MOAT_HISTORY", "on").strip().lower() not in ("0", "false", "no", "off")
+
+
+def roic_history(ticker: str, api_key: Optional[str] = None, years: int = 10) -> list[float]:
+    """The company's own annual after-tax ROIC (FMP key metrics), newest first; [] when disabled or unavailable."""
+    if not moat_history_enabled():
+        return []
+    try:
+        from src.tools.api import _STABLE, _fmp_get
+        rows = _fmp_get(f"{_STABLE}/key-metrics", {"symbol": ticker, "period": "annual", "limit": years}, api_key, uncap=True) or []
+    except Exception:                                      # noqa: BLE001
+        return []
+    out = []
+    for r in rows if isinstance(rows, list) else []:
+        v = r.get("returnOnInvestedCapital") if isinstance(r, dict) else None
+        if isinstance(v, (int, float)) and -1.0 < v < 3.0:
+            out.append(float(v))
+    return out
+
+
+def moat_spread(roics: list[float], wacc: float) -> dict:
+    """{'spread', 'qualifying_years', 'years', 'median_excess', 'tagged'}: the terminal RONIC premium over WACC."""
+    n = len(roics or [])
+    if n < MOAT_MIN_YEARS:
+        return {"spread": 0.0, "qualifying_years": 0, "years": n, "median_excess": None, "tagged": False,
+                "basis": f"{n} years of ROIC on file (needs {MOAT_MIN_YEARS})"}
+    ex = sorted(r - float(wacc) for r in roics)
+    q = sum(1 for e in ex if e >= MOAT_MIN_SPREAD)
+    med = ex[len(ex) // 2] if len(ex) % 2 else 0.5 * (ex[len(ex) // 2 - 1] + ex[len(ex) // 2])
+    tagged = q >= MOAT_MIN_YEARS and med > 0
+    spread = min(MOAT_SHARE * med, MOAT_CAP) if tagged else 0.0
+    return {"spread": round(spread, 5), "qualifying_years": q, "years": n, "median_excess": round(med, 5), "tagged": tagged,
+            "basis": (f"ROIC beat WACC by {MOAT_MIN_SPREAD:.0%}+ in {q} of {n} years (median excess {med:.1%}): terminal "
+                      f"RONIC = WACC + {spread:.1%}" if tagged else
+                      f"ROIC beat WACC by {MOAT_MIN_SPREAD:.0%}+ in {q} of {n} years (needs {MOAT_MIN_YEARS}): RONIC = WACC")}
+
+
 def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: Optional[float],
               cost_of_debt: Optional[float], crp: float = 0.0, market: str = "US",
-              contracted_discount: float = 0.0) -> Optional[dict]:
+              contracted_discount: float = 0.0, own_beta: Optional[float] = None) -> Optional[dict]:
     """The firm's WACC and its build, or None when it cannot be computed (no market cap; financial profile)."""
     if not applies(profile) or not market_cap or market_cap <= 0:
         return None
@@ -183,7 +230,11 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
     D = max(float(net_debt or 0.0), 0.0)
     E = float(market_cap)
     de = D / E
-    beta_l = beta_u * (1.0 + (1.0 - t) * de)
+    beta_l_industry = beta_u * (1.0 + (1.0 - t) * de)
+    beta_own_adj = None
+    if isinstance(own_beta, (int, float)) and OWN_BETA_BAND[0] <= own_beta <= OWN_BETA_BAND[1]:
+        beta_own_adj = 0.67 * float(own_beta) + 0.33
+    beta_l = 0.5 * (beta_l_industry + beta_own_adj) if beta_own_adj is not None else beta_l_industry
     ke = rf + beta_l * ERP + float(crp or 0.0)
     kd = float(cost_of_debt) if isinstance(cost_of_debt, (int, float)) and cost_of_debt > 0 else rf + 0.016
     dv = D / (D + E)
@@ -192,6 +243,8 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
     floored = wacc < floor
     wacc = max(wacc, floor)
     return {"wacc": round(wacc, 5), "industry": industry, "beta_unlevered": beta_u, "beta_levered": round(beta_l, 4),
+            "beta_industry_relevered": round(beta_l_industry, 4), "beta_own_raw": own_beta,
+            "beta_own_adjusted": (round(beta_own_adj, 4) if beta_own_adj is not None else None),
             "de_ratio": round(de, 4), "dv_ratio": round(dv, 4), "rf": round(rf, 5), "rf_source": rf_source, "erp": ERP,
             "crp": round(float(crp or 0.0), 5), "cost_of_equity": round(ke, 5), "cost_of_debt": round(kd, 5),
             "tax_rate": t, "contracted_discount": float(contracted_discount or 0.0), "floored": floored,
@@ -199,9 +252,13 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
 
 
 def describe(w: dict) -> str:
+    _b = (f"{w['beta_levered']:.2f} = average of industry {w['beta_industry_relevered']:.2f} ({w['industry']}, unlevered "
+          f"{w['beta_unlevered']:.2f} relevered at D/E {w['de_ratio']:.0%}) and own adjusted {w['beta_own_adjusted']:.2f}"
+          if w.get("beta_own_adjusted") is not None else
+          f"{w['beta_levered']:.2f} (industry: {w['industry']}, unlevered {w['beta_unlevered']:.2f} relevered at D/E "
+          f"{w['de_ratio']:.0%}; own beta unavailable or outside {OWN_BETA_BAND[0]}-{OWN_BETA_BAND[1]})")
     return (f"WACC {w['wacc']:.2%} (firm CAPM): Ke {w['cost_of_equity']:.2%} = rf {w['rf']:.2%} + beta "
-            f"{w['beta_levered']:.2f} (unlevered {w['beta_unlevered']:.2f}, {w['industry']}, relevered at D/E "
-            f"{w['de_ratio']:.0%}) x ERP {w['erp']:.2%}" + (f" + CRP {w['crp']:.2%}" if w['crp'] else "")
+            + _b + f" x ERP {w['erp']:.2%}" + (f" + CRP {w['crp']:.2%}" if w['crp'] else "")
             + f"; Kd {w['cost_of_debt']:.2%} pre-tax at D/V {w['dv_ratio']:.0%}"
             + (f"; contracted-revenue {w['contracted_discount']:+.2%}" if w['contracted_discount'] else "")
             + (f"; floored at rf + {WACC_FLOOR_OVER_RF:.0%}" if w['floored'] else "")

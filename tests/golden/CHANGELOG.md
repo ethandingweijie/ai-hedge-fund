@@ -1882,3 +1882,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-25 (CFA audit, relative valuation): no growth premium on through-cycle (norm / mid-cycle) legs or on cyclical profiles (02888.HK 294.91->298.15 and D05.SI 46.75->47.98: the 0.85 discount came off P/E (norm); SCHW 71.80->70.03); peers' growth read forward (NTM) not trailing (V 304.05->311.08: peer growth 7.1% vs 11.7%); AAPL / FCX / BABA / 09988.HK base unchanged
 
+## 2026-11-24T18:00:56+00:00
+
+- regenerated at HEAD: `fe9a2b06`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-25: CAPM beta = average of the relevered Damodaran industry beta and the company's own Blume-adjusted beta (09988.HK 80.73->88.98, BABA 72.65->81.48, AAPL 145.70->151.15, MELI 3961->4136; COST/V/MU/FCX small); the moat RONIC rule is off in replay (MOAT_HISTORY pinned off)
+

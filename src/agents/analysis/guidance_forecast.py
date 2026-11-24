@@ -822,7 +822,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     last = rows[-1]
     roic_T = hist["roic_median"] if (hist["roic_median"] is not None and hist["roic_median"] == hist["roic_median"]) else None
     # Owner, 2026-11-25: RONIC = WACC by default (growth earns its cost of capital); the user's terminal ROIC overrides.
-    roic_terminal = float(wacc)
+    roic_terminal = float(wacc) + float(_num((block or {}).get("_terminal_ronic_spread")) or 0.0)   # owner moat rule
     if roic_user is not None:
         roic_terminal = float(roic_user)                  # the user's terminal ROIC, as entered
     reinvest = float(tgr) / roic_terminal if roic_terminal > 0 else None

@@ -8483,7 +8483,7 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
-            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"),
+            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"), terminal_ronic_spread=_pj.get("terminal_ronic_spread", 0.0),
         )
         if _fade:
             _bound = {**(_bound or {}), "fcf_guidance_fade": {
@@ -8525,7 +8525,7 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
-            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"),
+            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"), terminal_ronic_spread=_pj.get("terminal_ronic_spread", 0.0),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
@@ -16169,7 +16169,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _firm_capm = None
         if _use_firm_capm:
             try:
+                try:
+                    from src.data.regional_comps import get_fmp_classification as _gfc_b
+                    _own_beta = _gfc_b(ticker).get("beta")
+                except Exception:                          # noqa: BLE001
+                    _own_beta = None
                 _firm_capm = _capmm.firm_wacc(
+                    own_beta=(float(_own_beta) if isinstance(_own_beta, (int, float)) else None),
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
@@ -16180,6 +16186,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _wacc_build["firm_capm"] = _firm_capm
                     wacc = float(_firm_capm["wacc"])
                     ticker_forward_flags.append(_capmm.describe(_firm_capm))
+                    # Owner, 2026-11-25 (moat): a terminal RONIC above WACC only on the company's own ROIC record.
+                    _moat = _capmm.moat_spread(_capmm.roic_history(ticker, api_key), wacc)
+                    _wacc_build["moat"] = _moat
+                    most_recent["_terminal_ronic_spread"] = float(_moat.get("spread") or 0.0)
+                    if isinstance(_guid_est, dict) and _guid_est and _moat.get("spread"):
+                        _guid_est = {**_guid_est, "_terminal_ronic_spread": float(_moat["spread"])}
+                    if _moat.get("tagged"):
+                        ticker_forward_flags.append("Terminal value: " + _moat["basis"])
             except Exception as _fc_exc:                   # noqa: BLE001
                 _log.warning("[DCF] %s: firm CAPM failed, table rate kept: %s", ticker, _fc_exc)
                 _firm_capm = None
@@ -17802,6 +17816,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "terminal_multiplier": _loe_tv_mult,      # audit E12: every DCF-family leg carries it, not only "DCF"
                 # Owner, 2026-11-25: the guidance path's terminal year on NOPAT (value-driver TV)
                 "terminal_nopat_ratio": (((_gf or {}).get("terminal") or {}).get("nopat_to_ufcf")) if _gf else None,
+                "terminal_ronic_spread": float(most_recent.get("_terminal_ronic_spread") or 0.0),   # owner, 2026-11-25 (moat)
                 "guided_years": (int((_gf or {}).get("horizon_years") or 0) if _gf else 0),   # audit I3: overlays start after
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
@@ -17823,6 +17838,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 timing=_dcf_timing_ctx,
                 terminal_multiplier=_loe_tv_mult,
                 terminal_nopat_ratio=_dcf_projection.get("terminal_nopat_ratio"),
+                terminal_ronic_spread=_dcf_projection.get("terminal_ronic_spread", 0.0),
             )
             leg_inputs["DCF"] = {
                 "kind": "dcf", "value": iv_dcf,
@@ -17830,7 +17846,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "growth_base": g, "growth_schedule": _growth_schedule,
                 "terminal_loe_multiplier": _loe_tv_mult,
                 # Owner, 2026-11-25: the value-driver terminal value's inputs, so the workbook rebuilds it exactly.
-                "terminal_nopat_ratio": _dcf_projection.get("terminal_nopat_ratio"), "terminal_ronic_spread": 0.0,
+                "terminal_nopat_ratio": _dcf_projection.get("terminal_nopat_ratio"),
+                "terminal_ronic_spread": _dcf_projection.get("terminal_ronic_spread", 0.0),
                 "terminal_formula": "value_driver" if _switch_on("VALUE_DRIVER_TV") else "gordon",
                 "margin_delta_absolute": md_abs, "wacc": wacc,
                 "wacc_schedule": _wacc_schedule, "tgr": tgr, "fcf_floor": fcf_floor,
@@ -17853,7 +17870,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
                         growth_schedule=_growth_schedule, wacc_schedule=_wacc_schedule, margin_delta_absolute=md_abs,
                         margin_schedule=_gf_margin_sched, timing=_dcf_timing_ctx, terminal_multiplier=_loe_tv_mult,
-                        terminal_nopat_ratio=_dcf_projection.get("terminal_nopat_ratio")),
+                        terminal_nopat_ratio=_dcf_projection.get("terminal_nopat_ratio"),
+                        terminal_ronic_spread=_dcf_projection.get("terminal_ronic_spread", 0.0)),
                         (resolved_mcap / shares) if (resolved_mcap and shares) else None)
                     if _rdcf:
                         most_recent["_reverse_dcf"] = _rdcf

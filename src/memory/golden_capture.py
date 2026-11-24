@@ -672,6 +672,8 @@ PINNED_ENV = {
     "CYCLE_LONG_HISTORY": "off",
     # Owner, 2026-11-25: the firm CAPM's live 10-year Treasury (FRED DGS10) is a call the fixtures hold no record of.
     "CAPM_LIVE_RF": "off",
+    # Owner, 2026-11-25 (moat): the ROIC history fetch (FMP key metrics) is a call the fixtures hold no record of.
+    "MOAT_HISTORY": "off",
     "PYTHONUTF8": "1",
 }
 
