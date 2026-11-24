@@ -34,10 +34,14 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "quality, and the primary risk. Use FEWER themes rather than padding — "
     "three dense themes beat five thin ones. Do NOT use bullet glyphs; "
     "number only.\n"
-    "Continuity rule — if prior-report context is supplied and this decision "
-    "DIFFERS from the prior action, open theme 1 by naming the change and "
-    "why (e.g. \"Upgraded from HOLD — ...\"). If the action is unchanged, do "
-    "not mention the prior report.\n"
+    "Continuity rule — the \"Change since the prior report\" block is the ONLY "
+    "permitted explanation of a change in rating or target. When it says the "
+    "rating is an upgrade or a downgrade, open theme 1 by naming the change "
+    "(e.g. \"Upgraded from Neutral — ...\") with the reasons it gives; when it "
+    "says the rating is unchanged, write \"maintain\" and never \"upgrade\" or "
+    "\"downgrade\". Never invent a cause the block does not give: not the macro "
+    "regime, not \"conservatism\", not a \"mechanical\" revision, not a change in "
+    "the share of the gap the target closes when that share did not change.\n"
     "Anchor-citation rule — the rationale MUST cite at least ONE quantitative "
     "anchor (blended IV, price target, upside %, WACC, or a multiple) AND at "
     "least ONE qualitative input from the research digest (a dated news "
@@ -86,9 +90,15 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "scenario values, leg values, or several intrinsic values side by side.\n"
     "Rounding rule — prices and price targets to whole currency units (one "
     "decimal when the price is below 20); percentages to the nearest whole "
-    "percent; gaps as \"about 29 points\" or a percent, never basis points "
-    "below 50bp resolution; two decimals only for per-share earnings, "
+    "percent; a gap between two returns as \"about 29 percentage points\" (use "
+    "the supplied percentage-point gap), never basis points and never bare "
+    "\"points\"; never \"-0.0%\"; a negative return is downside, never negative "
+    "\"upside\"; two decimals only for per-share earnings, "
     "dividends and multiples. Use the \"Rounded for prose\" line.\n"
+    "Banned-words rule — never use these operator words in the prose: engine, "
+    "leg, clamp, clamped, norm, rolled, gate, cascade, \"weight rolled\". Say "
+    "method (not leg), capped (not clamped), normalised (not norm), moved (not "
+    "rolled), check (not gate), sequence (not cascade).\n"
     "Arithmetic rule — write a formula only when the supplied inputs reproduce "
     "its result; otherwise name the method and the driver without the "
     "arithmetic. Never print a multiple that the stated inputs do not give.\n"
@@ -156,8 +166,49 @@ def _enforce_pm_length(d: dict, inputs_text: str) -> dict:
     rationale = str(d.get("rationale") or "")
     before = _word_count(rationale)
     trimmed = False
+    risk_kept = None
     if before > PM_RATIONALE_MAX_WORDS:
         themes = [t for t in _THEME_SPLIT.split(rationale) if t.strip()]
+        from src.agents.pm.reader_text import risk_theme_index as _rti
+        _ri = _rti(themes)
+    else:
+        themes, _ri = [], None
+    if before > PM_RATIONALE_MAX_WORDS and _ri is not None:
+        # Owner, 2026-11-25: the risk / bear theme is never the one cut (prod DOW, F, FCX,
+        # OXY, UAL, VLO lost it). Theme 1 and the risk theme are kept; middle themes are
+        # dropped first, then theme 1 is cut at a sentence boundary if the two still overflow.
+        risk = themes[_ri]
+        budget_first = max(PM_RATIONALE_MAX_WORDS - _word_count(risk), PM_RATIONALE_MAX_WORDS // 2)
+        first = themes[0]
+        if _word_count(first) > budget_first:
+            acc: list[str] = []
+            used = 0
+            for sent in _SENTENCE_SPLIT.split(first):
+                if used + _word_count(sent) > budget_first:
+                    break
+                acc.append(sent)
+                used += _word_count(sent)
+            first = " ".join(acc) if acc else _trim_to_words(first, budget_first)
+        if _word_count(first) + _word_count(risk) > PM_RATIONALE_MAX_WORDS:
+            risk = _trim_to_words(risk, PM_RATIONALE_MAX_WORDS - _word_count(first))
+        used = _word_count(first) + _word_count(risk)
+        keep_mid: dict[int, str] = {}
+        for i, t in enumerate(themes[1:_ri], start=1):
+            if used + _word_count(t) <= PM_RATIONALE_MAX_WORDS:
+                keep_mid[i] = t
+                used += _word_count(t)
+        for i, t in enumerate(themes[_ri + 1:], start=_ri + 1):
+            if used + _word_count(t) <= PM_RATIONALE_MAX_WORDS:
+                keep_mid[i] = t
+                used += _word_count(t)
+        ordered = [first] + [keep_mid[i] for i in sorted(k for k in keep_mid if k < _ri)] + [risk] \
+            + [keep_mid[i] for i in sorted(k for k in keep_mid if k > _ri)]
+        if all(re.match(r"^\s*\d+[.)]\s", t) for t in ordered):       # keep the numbering contiguous
+            ordered = [re.sub(r"^\s*\d+([.)])\s", f"{n}\\1 ", t, count=1) for n, t in enumerate(ordered, start=1)]
+        rationale = "\n".join(ordered).strip()
+        trimmed = True
+        risk_kept = True
+    elif before > PM_RATIONALE_MAX_WORDS:
         kept: list[str] = []
         used = 0
         for t in themes:
@@ -180,6 +231,8 @@ def _enforce_pm_length(d: dict, inputs_text: str) -> dict:
     d["rationale"] = rationale
     d["rationale_length"] = {"words_before": before, "words_after": _word_count(rationale),
                              "max_words": PM_RATIONALE_MAX_WORDS, "trimmed": trimmed}
+    if risk_kept:
+        d["rationale_length"]["risk_theme_kept"] = True
 
     headline = str(d.get("headline") or "").strip().strip("*").strip().strip('"').strip()
     flags: list[str] = []
@@ -207,6 +260,31 @@ def _enforce_pm_length(d: dict, inputs_text: str) -> dict:
     d["headline"] = headline
     d["headline_flags"] = flags
     return d
+
+def _finalise_reader_text(d: dict, change_attr: dict | None, inputs_text: str) -> dict:
+    """Post-checks on the published rationale and headline (owner, 2026-11-25):
+    change claims that contradict the computed attribution are replaced, unit errors and
+    operator jargon are rewritten, and the length cap is held again on the result."""
+    from src.agents.pm.reader_text import check_change_claims, lint_jargon, lint_units
+    rationale = str(d.get("rationale") or "")
+    change_hits: list[str] = []
+    if change_attr:
+        rationale, change_hits = check_change_claims(rationale, change_attr)
+    rationale, unit_hits = lint_units(rationale)
+    rationale, jargon_hits = lint_jargon(rationale)
+    headline, h_unit = lint_units(str(d.get("headline") or ""))
+    headline, h_jargon = lint_jargon(headline)
+    d["rationale"], d["headline"] = rationale, headline
+    d["reader_text_lint"] = {"change_claims": change_hits, "units": unit_hits + h_unit,
+                             "jargon": jargon_hits + h_jargon}
+    if change_attr:
+        d["change_attribution"] = {k: v for k, v in change_attr.items() if k != "prompt_block"}
+    if _word_count(rationale) > PM_RATIONALE_MAX_WORDS:
+        flags = list(d.get("headline_flags") or [])
+        d = _enforce_pm_length(d, inputs_text)
+        d["headline_flags"] = list(dict.fromkeys(flags + list(d.get("headline_flags") or [])))
+    return d
+
 
 # Profile addendum for banks. A bank thesis is written off different
 # primitives than an industrial or a software name: the P&L line that
@@ -620,11 +698,24 @@ def _regulatory_watch_hits(recent_news: str, delta: dict) -> list[str]:
     return hits
 
 
+def _search_degraded(data: dict) -> bool:
+    """research_degraded as the decision layer reads it: thin search evidence. Since
+    2026-11-25 the flag is also raised for disclosure when research contradicts the books
+    (C6 divergence beyond the threshold); that reason is disclosed in the report but does
+    not by itself move the rating or the size."""
+    if not data.get("research_degraded"):
+        return False
+    reasons = data.get("research_degraded_reasons")
+    if not reasons:
+        return True                                    # legacy: the search floor was the only cause
+    return any((r or {}).get("source") != "books_divergence" for r in reasons if isinstance(r, dict))
+
+
 def _research_is_stale(state) -> bool:
     """Degraded / knowledge-only research: no new BUY/SHORT may be opened.
     Missing tier (legacy/CLI states) is given the benefit of the doubt."""
     data = state["data"]
-    if data.get("research_degraded"):
+    if _search_degraded(data):
         return True
     tier = str(data.get("research_tier") or "").lower()
     return tier in ("none", "knowledge_only")
@@ -652,7 +743,7 @@ def _qualitative_conviction(state, ticker: str, final_action: str,
     data = state["data"]
     notes: list[str] = []
     tier = str(data.get("research_tier") or "").lower()
-    if tier in _PM_FRESH_TIERS and not data.get("research_degraded"):
+    if tier in _PM_FRESH_TIERS and not _search_degraded(data):
         fresh_pts = 1.0
     elif tier in _PM_RECENT_TIERS:
         fresh_pts = 0.75
@@ -1172,6 +1263,21 @@ def _gate_rated_action(view: dict, trap_verdict: str,
     return action, notes
 
 
+def _callout_in_points(view: dict) -> str:
+    """The rating callout for the writer with the excess return as a pre-rounded
+    percentage-point gap (owner, 2026-11-25: prod NEM printed "2,180 points" from a bps
+    figure). The basis-point figure is not passed to the writer at all."""
+    callout = re.sub(r"\s*\([+\-\u2212]?[\d,]+ bps\)", "", str(view.get("callout") or ""))
+    tsr = view.get("tsr_12m")
+    exp = (view.get("benchmark") or {}).get("expected_return")
+    if isinstance(tsr, (int, float)) and isinstance(exp, (int, float)):
+        gap = (tsr - exp) * 100
+        side = "ahead of" if gap >= 0 else "behind"
+        callout += (f" Gap to the benchmark: about {abs(gap):.0f} percentage points {side} it "
+                    f"(write it as \"about {abs(gap):.0f} percentage points\").")
+    return callout
+
+
 def _rating_block_text(view: dict | None) -> str:
     if view and view.get("research_rating") == "UNRATED":
         return (f"Research rating: {view['rating_label']}. {view['callout']} Do NOT state or imply a "
@@ -1183,7 +1289,7 @@ def _rating_block_text(view: dict | None) -> str:
     lines = [
         f"Research rating: {view['rating_label']} vs {view['benchmark']['name']} "
         f"(trade action {view['trade_action']})",
-        view["callout"],
+        _callout_in_points(view),
     ]
     if view.get("structural_rating"):
         lines.append(f"Structural (intrinsic value) view: {view['structural_rating'].title()}; "
@@ -1647,6 +1753,25 @@ def run_advanced_portfolio_manager(state) -> dict:
                     + _flip_flag
                 )
 
+        # Owner, 2026-11-25: the change since the prior report, decomposed on the target
+        # rule. It is the only explanation of a change the writer may give, and the
+        # post-check below holds the published prose to it.
+        _dr_t = (state["data"].get("dcf_range") or {}).get(ticker) or {}
+        _bridge_t = _dr_t.get("pt_bridge") or {}
+        _sym_ca = {"USD": "US$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£",
+                   "JPY": "¥", "AUD": "A$", "INR": "₹"}.get(
+            str(_dr_t.get("reported_currency") or state["data"].get("reported_currency") or "USD").upper(), "$")
+        try:
+            from src.agents.pm.reader_text import build_change_attribution as _bca
+            _change_attr = _bca(
+                _prior_recap, spot=current_price, blended_iv=recon.get("blended_iv"),
+                capture=_bridge_t.get("capture"), target=price_target,
+                rating_label=(research_view or {}).get("rating_label") or action,
+                capture_reason=str(_bridge_t.get("capture_reason") or ""), sym=_sym_ca)
+        except Exception:                                  # noqa: BLE001
+            _change_attr = None
+        _change_block = (_change_attr or {}).get("prompt_block") or "Change since the prior report: not available."
+
         # LLM writes the rationale as numbered thesis themes (Tier 2.7
         # thesis-density rule — see _PM_RATIONALE_SYSTEM_PROMPT).
         _upside_str = (f"{_upside_iv:+.1f}%"
@@ -1690,7 +1815,8 @@ def run_advanced_portfolio_manager(state) -> dict:
                 "Deposited analyst thesis (a view to weigh, not to adopt):\n"
                 "{analyst_thesis}\n"
                 "Research digest (qualitative):\n{digest}\n"
-                "Prior report context:\n{prior_block}\n\n"
+                "Prior report context:\n{prior_block}\n"
+                "{change_block}\n\n"
                 "Output:\n"
                 '{{\n'
                 '  "action": "{action}",\n'
@@ -1722,6 +1848,7 @@ def run_advanced_portfolio_manager(state) -> dict:
             "base_assumptions": _base_assumptions,
             "digest": _digest,
             "prior_block": _prior_block,
+            "change_block": _change_block,
             "stop_loss": stop_loss,
             "price_target": price_target,
         })
@@ -1883,6 +2010,27 @@ def run_advanced_portfolio_manager(state) -> dict:
             state["data"].setdefault("style_audit", {})[ticker] = (
                 f"stylist skipped ({type(_exc).__name__})"
             )
+
+        # Owner, 2026-11-25 (CFA audit): the published prose is held to the computed change
+        # attribution, the unit rules and the banned-words list; the risks to the rating
+        # are computed and published as their own field.
+        try:
+            d = _finalise_reader_text(d, _change_attr, _inputs_text)
+        except Exception:                                  # noqa: BLE001
+            pass
+        try:
+            from src.agents.pm.reader_text import build_risks_to_rating as _brr
+            d["risks_to_rating"] = _brr(
+                rating_label=(research_view or {}).get("rating_label"), spot=current_price,
+                target=d.get("price_target"), view=research_view, pt_bridge=_bridge_t,
+                scenario=scenario, trap=trap, sym=_sym_ca) if not _is_unrated else []
+        except Exception:                                  # noqa: BLE001
+            d["risks_to_rating"] = []
+        try:
+            from src.utils.llm import get_agent_model_config as _gamc
+            d["writer_model"] = _gamc(state, agent_id)[0]
+        except Exception:                                  # noqa: BLE001
+            d["writer_model"] = None
 
         # ── M2 D3 payload: what the decision was made from ─────────────────
         # Rendered by the frontend "Decision inputs" card (both render

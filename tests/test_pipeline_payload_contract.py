@@ -47,6 +47,7 @@ REQUIRED_KEYS = {
     "industry_brief",
     "deep_research",
     "profile_name",
+    "report_disclosures",     # disclosures / methodology / data limitations (owner, 2026-11-25)
 }
 
 

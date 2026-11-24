@@ -55,6 +55,81 @@ Output JSON only.
 """.strip()
 
 
+#: Owner, 2026-11-25: an unrun check is NOT ASSESSED, never a silent GREEN.
+NOT_ASSESSED = "NOT ASSESSED"
+NOT_ASSESSED_VERDICT = "TRAP RISK NOT ASSESSED"
+_NOT_ASSESSED_EVIDENCE = "Not assessed: the value-trap check could not run, so this item carries no verdict."
+
+#: Line items the checklist needs, in the order they are printed.
+_TRAP_FIELDS = (
+    ("revenue", "revenue"), ("net_income", "net income"), ("ebitda", "EBITDA"),
+    ("operating_cash_flow", "operating cash flow"), ("capital_expenditure", "capex"),
+    ("free_cash_flow", "FCF"), ("dividends_and_distributions", "dividends paid"),
+    ("share_buyback", "buybacks"), ("accounts_receivable", "receivables"),
+    ("net_debt", "net debt"), ("total_debt", "total debt"), ("shareholders_equity", "equity"),
+)
+
+
+def _fmt_amount(v) -> str:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "n/a"
+    a = abs(f)
+    if a >= 1e9:
+        return f"{f / 1e9:,.2f}B"
+    if a >= 1e6:
+        return f"{f / 1e6:,.1f}M"
+    return f"{f:,.0f}"
+
+
+def financials_for_trap(raw_financials: dict, years: int = 5) -> str:
+    """The newest `years` fiscal years, NEWEST FIRST, one compact line each, with the ratios
+    the checks ask for computed (FCF payout, net debt / EBITDA). Replaces str(raw)[:2000],
+    which sent the oldest year first and was cut off before the latest one (owner,
+    2026-11-25: prod GM's dividend check cited FY2021)."""
+    if not isinstance(raw_financials, dict):
+        return "Not available."
+    fys = sorted((k for k, v in raw_financials.items() if isinstance(v, dict)), reverse=True)[:years]
+    if not fys:
+        return "Not available."
+    ccy = raw_financials.get("currency") or raw_financials.get("reported_currency")
+    lines = [f"Fiscal years {fys[0]} back to {fys[-1]}, newest first"
+             + (f" (amounts in {ccy})" if ccy else "") + ":"]
+    for fy in fys:
+        r = raw_financials[fy]
+        ebitda = r.get("ebitda")
+        if ebitda is None and r.get("operating_income") is not None and r.get("depreciation_and_amortization") is not None:
+            try:
+                ebitda = float(r["operating_income"]) + float(r["depreciation_and_amortization"])
+            except (TypeError, ValueError):
+                ebitda = None
+        vals = dict(r, ebitda=ebitda)
+        bits = [f"{lbl} {_fmt_amount(vals.get(k))}" for k, lbl in _TRAP_FIELDS if vals.get(k) is not None]
+        try:
+            fcf, div = float(vals.get("free_cash_flow")), abs(float(vals.get("dividends_and_distributions")))
+            if div > 0:
+                bits.append("FCF payout n/m (FCF negative)" if fcf <= 0 else f"FCF payout {div / fcf:.0%}")
+        except (TypeError, ValueError):
+            pass
+        try:
+            nd, eb = float(vals.get("net_debt")), float(ebitda)
+            if eb > 0:
+                bits.append(f"net debt/EBITDA {nd / eb:.2f}x")
+        except (TypeError, ValueError):
+            pass
+        pe = r.get("period_end") or r.get("date")
+        lines.append(f"{fy}" + (f" (ended {pe})" if pe else "") + ": " + "; ".join(bits))
+    return "\n".join(lines)
+
+
+def not_assessed_output() -> ValueTrapOutput:
+    chk = lambda: ValueTrapCheck(status=NOT_ASSESSED, evidence=_NOT_ASSESSED_EVIDENCE)   # noqa: E731
+    return ValueTrapOutput(
+        dividend_sustainability=chk(), structural_decline=chk(), earnings_cashflow_mismatch=chk(),
+        insider_behaviour=chk(), balance_sheet_deterioration=chk(), overall_verdict=NOT_ASSESSED_VERDICT)
+
+
 def run_value_trap_agent(state: AgentState) -> AgentState:
     """Phase 7c: value trap checklist — RED/AMBER/GREEN per criterion."""
     agent_id = "value_trap_agent"
@@ -133,7 +208,8 @@ def run_value_trap_agent(state: AgentState) -> AgentState:
             ("system", SYSTEM_PROMPT),
             ("human", (
                 "Ticker: {ticker}\n\n"
-                "5-year raw financials:\n{raw_financials}\n\n"
+                "Financials (newest fiscal year first -- judge each check on the latest "
+                "year and the trend into it, and cite the latest year):\n{raw_financials}\n\n"
                 "Insider activity:\n{insider}\n"
                 "{eq_context}\n"
                 "2D — Industry Cycle Positioning (context for structural decline check —\n"
@@ -153,26 +229,19 @@ def run_value_trap_agent(state: AgentState) -> AgentState:
 
         prompt = template.invoke({
             "ticker": ticker,
-            "raw_financials": str(raw_financials)[:2000],
+            "raw_financials": financials_for_trap(raw_financials),
             "insider": insider_context,
             "eq_context": eq_context,
             "cycle": cycle_section[:1200] if cycle_section else "Not available.",
         })
 
-        _default_evidence = "Data unavailable — defaulting GREEN (conservative)."
+        # Owner, 2026-11-25: a failed call publishes NOT ASSESSED, never a default GREEN.
         result: ValueTrapOutput = call_llm(
             prompt=prompt,
             pydantic_model=ValueTrapOutput,
             agent_name=agent_id,
             state=state,
-            default_factory=lambda: ValueTrapOutput(
-                dividend_sustainability=ValueTrapCheck(status="GREEN", evidence=_default_evidence),
-                structural_decline=ValueTrapCheck(status="GREEN", evidence=_default_evidence),
-                earnings_cashflow_mismatch=ValueTrapCheck(status="GREEN", evidence=_default_evidence),
-                insider_behaviour=ValueTrapCheck(status="GREEN", evidence=_default_evidence),
-                balance_sheet_deterioration=ValueTrapCheck(status="GREEN", evidence=_default_evidence),
-                overall_verdict="TRAP RISK LOW",
-            ),
+            default_factory=not_assessed_output,
         )
 
         value_trap_results[ticker] = result.model_dump()

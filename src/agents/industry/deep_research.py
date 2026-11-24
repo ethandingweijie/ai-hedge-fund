@@ -3782,10 +3782,10 @@ def _check_research_financial_consistency(
         books_growth = rev / prev_rev - 1
         _claims = re.findall(
             r"(?i)revenue[^.%\n]{0,60}?(?:grew|growth|increase[d]?|up|rose)"
-            r"[^.%\n]{0,40}?(\d{1,2}(?:\.\d)?)\s*%",
+            r"[^.%\n]{0,40}?(?<![\d.,])(\d{1,2}(?:\.\d)?)\s*%",
             section_2a,
         ) + re.findall(
-            r"(?i)(\d{1,2}(?:\.\d)?)\s*%[^.\n]{0,40}?revenue\s+growth",
+            r"(?i)(?<![\d.,])(\d{1,2}(?:\.\d)?)\s*%[^.\n]{0,40}?revenue\s+growth",
             section_2a,
         )
         _claims_pct = [float(c) for c in _claims if 0 <= float(c) <= 200]
@@ -3846,6 +3846,11 @@ def _check_research_financial_consistency(
         _cand_scales = [1.0, 1e3, 1e6, 1e9]
         if _fx:
             _cand_scales += [_fx, _fx * 1e3, _fx * 1e6, _fx * 1e9]
+        # Owner, 2026-11-25: a figure that matches an EARLIER fiscal year in the books is a
+        # correct prior-year citation ("FY2026 growth 256% vs FY2025 $37.4B"), not a divergence.
+        _all_revs = [v for v in (_num(raw_financials[k], "revenue") for k in fy_keys) if v and v > 0]
+        _first_unmatched = None
+        _checked = _matching = 0
         for _amt_s, _unit in _r_claims[:5]:
             try:
                 _amt = float(_amt_s.replace(",", ""))
@@ -3858,21 +3863,30 @@ def _check_research_financial_consistency(
                 research_rev_usd = _amt * 1e6
             else:
                 research_rev_usd = _amt  # bare number — scale-ambiguous, try all
-            for _scale in _cand_scales:
-                _books_usd = rev * _scale
-                if _books_usd <= 0:
-                    continue
-                _ratio = research_rev_usd / _books_usd
-                if 0.75 <= _ratio <= 1.25:
-                    break
-            else:
-                flags["revenue_magnitude"] = {
-                    "books_raw":       rev,
-                    "research_claim":  research_rev_usd,
-                    "note":            "no books scale within ±25% of the research figure",
-                    "section":         "2a",
-                }
-                break  # one flag is enough
+            _checked += 1
+            if any(0.75 <= research_rev_usd / (rev * _sc) <= 1.25 for _sc in _cand_scales if rev * _sc > 0):
+                _matching += 1
+                continue
+            if any(0.75 <= research_rev_usd / (_r * _sc) <= 1.25
+                   for _r in _all_revs for _sc in _cand_scales if _r * _sc > 0):
+                continue
+            if _first_unmatched is None:
+                _first_unmatched = research_rev_usd
+        if _first_unmatched is not None:
+            import math as _math
+            _closest = min((_first_unmatched / (rev * _sc) for _sc in _cand_scales if rev * _sc > 0),
+                           key=lambda r: abs(_math.log(r)) if r > 0 else float("inf"))
+            flags["revenue_magnitude"] = {
+                "books_raw":       rev,
+                "research_claim":  _first_unmatched,
+                "closest_ratio":   round(_closest, 4),
+                # A loose "$X" near "revenue" is often another line item; how many of the
+                # research's figures DO match the books decides whether it is degraded.
+                "claims_checked":  _checked,
+                "claims_matching_books": _matching,
+                "note":            "no books scale within ±25% of the research figure",
+                "section":         "2a",
+            }
 
     # ── B2: FX-aware currency-mislabel check (non-USD reporters) ─────────────
     # A $-labeled claim must line up with the books value CONVERTED to USD.
@@ -3963,6 +3977,45 @@ def _hash_research_sections(sections: dict, profile_name: str = "") -> str:
 # these tiers are treated as live on their own evidence (non-empty report from
 # a search-enabled call) instead of a count they cannot report.
 _UNCOUNTABLE_LIVE_TIERS = ("qwen_web",)
+
+
+#: Owner, 2026-11-25: research that contradicts the books by more than this is disclosed
+#: as degraded (revenue off by more than 50%, or revenue growth off by more than 50 points).
+DIVERGENCE_DEGRADE_REVENUE = 0.50
+DIVERGENCE_DEGRADE_GROWTH_PP = 50.0
+
+
+def divergence_degradation(divergences: dict | None) -> list[dict]:
+    """Reasons the research is degraded because it contradicts the books (C6 flags).
+    Deterministic; [] when nothing crosses the threshold."""
+    import math as _math
+    out: list[dict] = []
+    dv = divergences or {}
+    mag = dv.get("revenue_magnitude")
+    # Only when NONE of the research's revenue figures matches the books: one stray "$X"
+    # beside a correct revenue citation is a parser catch, not wrong research. Legacy flags
+    # without the counts cannot tell the two apart and do not degrade.
+    if isinstance(mag, dict) and mag.get("claims_checked") and mag.get("claims_matching_books") == 0:
+        ratio = mag.get("closest_ratio")
+        if ratio is None:
+            try:
+                books, claim = float(mag.get("books_raw")), float(mag.get("research_claim"))
+                ratio = min((claim / (books * sc) for sc in (1.0, 1e3, 1e6, 1e9) if books * sc > 0),
+                            key=lambda r: abs(_math.log(r)) if r > 0 else float("inf"))
+            except (TypeError, ValueError):
+                ratio = None
+        if isinstance(ratio, (int, float)) and ratio > 0 and abs(ratio - 1) > DIVERGENCE_DEGRADE_REVENUE:
+            out.append({"source": "books_divergence", "check": "revenue_magnitude",
+                        "text": (f"The research quotes revenue {abs(ratio - 1):.0%} "
+                                 f"{'below' if ratio < 1 else 'above'} the reported figure; the research "
+                                 "narrative was not used as a source of numbers.")})
+    gr = dv.get("revenue_growth")
+    if isinstance(gr, dict) and isinstance(gr.get("divergence_pp"), (int, float)) \
+            and gr["divergence_pp"] > DIVERGENCE_DEGRADE_GROWTH_PP:
+        out.append({"source": "books_divergence", "check": "revenue_growth",
+                    "text": (f"The research quotes revenue growth {gr['divergence_pp']:.0f} percentage points "
+                             "away from the reported growth.")})
+    return out
 
 
 def _research_evidence_state(research_tier: str, search_count: int) -> tuple[bool, bool, str]:
@@ -6793,6 +6846,17 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     # C4: primary ticker below the live-search floor → downstream consumers
     # (DCF agent, investor agents) can discount thin-evidence research.
     state["data"]["research_degraded"]        = bool(primary.get("research_degraded"))
+    # Owner, 2026-11-25: research that contradicts the books beyond the threshold is also
+    # degraded, for disclosure. The reasons say which cause applies; the decision layer
+    # (portfolio_manager._search_degraded) acts only on the search-floor cause.
+    _deg_reasons: list[dict] = []
+    if primary.get("research_degraded"):
+        _deg_reasons.append({"source": "search_floor",
+                             "text": "Live research ran below the minimum number of confirmed web searches."})
+    _deg_reasons += divergence_degradation(primary.get("research_financial_divergences"))
+    if _deg_reasons:
+        state["data"]["research_degraded"] = True
+    state["data"]["research_degraded_reasons"] = _deg_reasons
     state["data"]["web_intelligence"]       = {}
     if primary.get("cache_hit"):
         state["data"]["research_cache_hit"]      = True
