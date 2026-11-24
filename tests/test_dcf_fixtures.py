@@ -667,7 +667,9 @@ def test_oe_cascade_median_of_positive_years(seams):
     base = entry["base"]
     # 2026-10-03 (owner, SBUX review A2): the basis is unlevered owner-earnings FCF, so the single
     # positive year carries its after-tax interest add-back (2.0e7 at the year's bounded effective rate).
-    expected_median = 0.16 - 0.08 - 0.37 * 0.08 + _ufcf_addback(3.4e9)          # the single + year
+    # 2026-11-25 (owner, CFA audit): owner earnings = FCF less gross SBC; the RSU withholding is part of the same
+    # grant value and is no longer charged a second time.
+    expected_median = 0.16 - 0.08 + _ufcf_addback(3.4e9)          # the single + year
     assert base["fcf_margin_start"] == pytest.approx(expected_median, abs=1e-3), (
         f"cascade basis {base['fcf_margin_start']} != median of positive "
         f"years {expected_median:.4f}"

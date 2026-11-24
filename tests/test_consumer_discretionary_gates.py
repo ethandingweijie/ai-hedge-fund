@@ -1026,7 +1026,8 @@ def test_project_dcf_charges_no_capital_for_growth():
         years=3,
     )
     assert len(rows) == 3
-    assert equity_ps == pytest.approx(112.89488, abs=1e-4)
+    # 2026-11-25: the value-driver terminal value (RONIC = WACC: growth adds no value) -- was 112.89488 on Gordon/FCF
+    assert equity_ps == pytest.approx(85.93972, abs=1e-4)
     prev = 2000.0
     for r in rows:
         assert r["fcf"] == pytest.approx(r["revenue"] * r["fcf_margin"], rel=1e-12)
@@ -1035,7 +1036,7 @@ def test_project_dcf_charges_no_capital_for_growth():
         assert r["reinvest_margin_deduction"] == 0.0
         assert r["revenue"] == pytest.approx(prev * 1.28, rel=1e-12)
         prev = r["revenue"]
-    assert pv_tv / (pv_fcf + pv_tv) == pytest.approx(0.8595, abs=1e-4)
+    assert pv_tv / (pv_fcf + pv_tv) == pytest.approx(0.8155, abs=1e-4)
 
 
 def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
@@ -1090,6 +1091,8 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         # 2026-10-07 (plan I14, REGN review): one scalar on the terminal value for loss of exclusivity
         # after the horizon. Still margin-only; 1.0 reproduces the old path exactly.
         "terminal_multiplier",
+        "terminal_nopat_ratio",   # owner, 2026-11-25: the value-driver terminal value (NOPAT on the guidance path)
+        "terminal_ronic_spread",  # owner-set moat spread over WACC (default 0)
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
                    "depreciation", "ebit",

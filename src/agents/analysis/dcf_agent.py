@@ -167,6 +167,13 @@ _CTE_SOTP = {"hw_gm": 0.36, "svc_gm": 0.725, "svc_tac_haircut": {"bear": 0.03, "
 # as src/research_ideas/sw46/tragic_algebra.py's Method E, calibrated
 # against Burry/Cassandra-Unchained's published SBC framework).
 _RSU_TAX_WITHHOLDING_RATE = 0.37
+
+
+def _switch_on(name: str) -> bool:
+    """Owner, 2026-11-25: kill switches for the CFA-audit methodology changes (VALUE_DRIVER_TV, SBC_FULL_EXPENSE,
+    FIRM_CAPM), on unless the environment sets them off -- a production rollback lever, like RESEARCH_FORCE_REUSE."""
+    import os as _os
+    return _os.environ.get(name, "on").strip().lower() not in ("0", "false", "no", "off")
 #: Owner, 2026-10-03 (SBUX review, A2): the unlevered basis' tax. The year's effective rate
 #: on pre-tax profit, bounded; the default when the statements give no usable rate.
 _UFCF_TAX_DEFAULT = 0.21
@@ -2124,15 +2131,22 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
     # search_line_items, so this is always the estimate for now — same
     # fallback and rate tragic_algebra.py uses when its own cleaner FMP line
     # is unavailable).
+    # Owner, 2026-11-25 (CFA audit): SBC is an operating expense, buybacks are a distribution -- the netting above
+    # valued a heavy issuer that also repurchases as if its staff worked for free, and charged the buyback nowhere.
+    # Owner earnings = reported FCF less GROSS SBC (FCF already carries SBC's tax deduction, so this is the cash the
+    # company would have had to pay); the RSU withholding is part of that same grant value, not charged twice.
+    # Outstanding awards are counted in the share count (treasury-stock method, carried through loss years).
+    _sbc_full = _switch_on("SBC_FULL_EXPENSE")
     for row in rows:
         fcf = row["free_cash_flow"]
         sbc = row["stock_based_compensation"]
-        buybacks = abs(row.get("common_stock_repurchased") or row.get("share_buyback") or 0.0)
         if fcf is not None and sbc is not None:
-            sbc_abs = abs(sbc)
-            unfunded_comp = max(0.0, sbc_abs - buybacks)
-            cash_tax_withholding = sbc_abs * _RSU_TAX_WITHHOLDING_RATE
-            row["fcf_owner_earnings"] = fcf - unfunded_comp - cash_tax_withholding
+            if _sbc_full:
+                row["fcf_owner_earnings"] = fcf - abs(sbc)
+            else:                                          # kill switch: the old buyback-netted charge
+                _bb = abs(row.get("common_stock_repurchased") or row.get("share_buyback") or 0.0)
+                row["fcf_owner_earnings"] = (fcf - max(0.0, abs(sbc) - _bb)
+                                             - abs(sbc) * _RSU_TAX_WITHHOLDING_RATE)
         else:
             row["fcf_owner_earnings"] = fcf
         # Owner, 2026-10-03 (SBUX review, A2): the unlevered basis. Reported FCF (operating cash
@@ -5581,6 +5595,8 @@ def _project_dcf(
     preferred_equity: float = 0.0,
     timing: Optional[dict] = None,
     terminal_multiplier: float = 1.0,
+    terminal_nopat_ratio: Optional[float] = None,
+    terminal_ronic_spread: float = 0.0,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -5791,7 +5807,17 @@ def _project_dcf(
         # Safety: terminal WACC must exceed TGR by a margin
         if wacc_T <= tgr:
             wacc_T = tgr + 0.005
-        fcf_terminal = fcf_T * (1 + tgr)
+        # Owner, 2026-11-25 (CFA audit): the value-driver terminal value, TV = NOPAT(T+1) x (1 - g/RONIC) / (WACC - g).
+        # The final year's owner earnings is the zero-growth cash flow (NOPAT less maintenance reinvestment); on the
+        # guidance path the final year's NOPAT is used (terminal_nopat_ratio = NOPAT / UFCF). RONIC defaults to WACC
+        # -- growth in perpetuity earns its cost of capital and adds no value -- plus an owner-set moat spread.
+        # Replaces Gordon on the final-year FCF, which let 2.5% growth arrive free of the reinvestment it needs.
+        if _switch_on("VALUE_DRIVER_TV"):
+            _ronic = float(wacc_T) + float(terminal_ronic_spread or 0.0)
+            _base_T = fcf_T * (float(terminal_nopat_ratio) if (terminal_nopat_ratio is not None and terminal_nopat_ratio > 0) else 1.0)
+            fcf_terminal = _base_T * (1 + tgr) * ((1.0 - tgr / _ronic) if _ronic > 0 else 1.0)
+        else:                                              # kill switch: Gordon on the final-year FCF
+            fcf_terminal = fcf_T * (1 + tgr)
         # Plan I14: the share of the terminal franchise still to lose exclusivity after the horizon.
         tv           = fcf_terminal / (wacc_T - tgr) * float(terminal_multiplier if terminal_multiplier is not None else 1.0)
         pv_tv        = tv * disc_cum
@@ -8395,7 +8421,7 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
-            terminal_multiplier=_pj.get("terminal_multiplier"),
+            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"),
         )
         if _fade:
             _bound = {**(_bound or {}), "fcf_guidance_fade": {
@@ -8437,7 +8463,7 @@ def _compute_method_value(
             minority_interest=_minority_interest(most_recent),
             preferred_equity=_preferred_equity(most_recent),
             timing=_pj.get("timing"),
-            terminal_multiplier=_pj.get("terminal_multiplier"),
+            terminal_multiplier=_pj.get("terminal_multiplier"), terminal_nopat_ratio=_pj.get("terminal_nopat_ratio"),
         )
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
@@ -13262,6 +13288,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _r = shares / _basic
                     if 1.0 <= _r <= 1.30:
                         _dilution = _r
+                # Owner, 2026-11-25: in a loss year GAAP excludes options and RSUs as antidilutive (diluted = basic),
+                # which dropped them from the valuation count. They are still claims on the equity: the latest
+                # profitable year's diluted/basic ratio (the treasury-stock method's own measure) carries across.
+                if (_dilution is None or _dilution <= 1.0001) and (most_recent.get("net_income") or 0.0) <= 0:
+                    for _row_d in reversed(series or []):
+                        _ni_d, _dl_d, _bs_d = (_row_d.get("net_income"), _row_d.get("shares_outstanding"),
+                                               _row_d.get("shares_outstanding_basic"))
+                        if (isinstance(_ni_d, (int, float)) and _ni_d > 0 and _dl_d and _bs_d and _bs_d > 0
+                                and 1.0001 < _dl_d / _bs_d <= 1.30):
+                            _dilution = _dl_d / _bs_d
+                            most_recent["_dilution_from_profitable_year"] = {
+                                "period": str(_row_d.get("period") or "")[:10], "ratio": round(_dilution, 4)}
+                            break
                 if _dilution is not None:
                     shares = _shares_implied * _dilution
                     _shares_source = "quote_current_diluted"
@@ -15851,13 +15890,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # the DCF. Apply a small ±bp WACC modifier so net-buying signals
         # tighten (lower WACC) and net-selling widens (higher WACC).
         # Capped at ±50bp by the helper so no single signal dominates.
+        # Owner, 2026-11-25 (CFA audit): operating companies discount at a firm-level CAPM (src/data/capm.py); the
+        # sector table's regime overlay and the research / insider loadings do not apply.
+        try:
+            from src.data import capm as _capmm
+            _use_firm_capm = bool(_capmm.applies(profile_name) and _market_cap and _market_cap > 0)
+        except Exception:                                  # noqa: BLE001
+            _use_firm_capm = False
         try:
             _insider_data = (
                 state["data"].get("insider_activity", {}) or {}
             ).get(ticker)
             _ins_bps, _ins_audit = _insider_wacc_modifier(_insider_data, _market_cap)
             _wacc_build["insider_bps"] = _ins_bps
-            if _ins_bps != 0.0:
+            # Owner, 2026-11-25: insider activity is information, not a cost of capital -- no overlay under firm CAPM.
+            if _ins_bps != 0.0 and not _use_firm_capm:
                 wacc = wacc + _ins_bps / 10000.0
                 if _ins_audit:
                     ticker_forward_flags.append(_ins_audit)
@@ -15868,6 +15915,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
         _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")
         _wacc_loading = {"HIGH": 0.0050, "MEDIUM": 0.0025, "LOW": 0.0}.get(_risk_flag, 0.0025)
+        if _use_firm_capm:
+            _wacc_loading = 0.0      # owner, 2026-11-25: research risk belongs in the scenarios, not the discount rate
         # Plan E4 (owner, 2026-10-07; GILD / AMGN reviews): for a DRUG DEVELOPER a MEDIUM research-risk loading is waived
         # when it was profitable in each of its last three years or its pipeline is priced explicitly -- the rNPV
         # (PTRS) and the LOE model already carry the clinical risk; the charge double-penalised GILD and AMGN. HIGH stays.
@@ -15984,6 +16033,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"(PPA/contracted keywords found) → WACC={wacc:.3f}"
                 )
 
+        _firm_capm = None
+        if _use_firm_capm:
+            try:
+                _firm_capm = _capmm.firm_wacc(
+                    profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
+                    cost_of_debt=_wacc_build.get("rd_live"),
+                    crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
+                    market=("HK" if _is_hk else "SG" if _is_sg else "US"),
+                    contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
+                if _firm_capm:
+                    _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
+                    _wacc_build["firm_capm"] = _firm_capm
+                    wacc = float(_firm_capm["wacc"])
+                    ticker_forward_flags.append(_capmm.describe(_firm_capm))
+            except Exception as _fc_exc:                   # noqa: BLE001
+                _log.warning("[DCF] %s: firm CAPM failed, table rate kept: %s", ticker, _fc_exc)
+                _firm_capm = None
         # ── CAPM cross-check and the risk-on band (owner, 2026-10-04, plan 1D.2/1D.4, D5) ─────
         # The table rate is the engine's; CAPM (rf + beta x ERP + country premium, blended with the
         # after-tax cost of debt at market weights) is the check. A beta outside a plausible band is
@@ -16012,7 +16078,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _capm_wacc = (1.0 - _dv) * _coe + _dv * _rd * (1.0 - 0.25)
             _capm.update(cost_of_equity=round(_coe, 6), wacc=round(_capm_wacc, 6), status="used")
             _ov = float((_wacc_build.get("base_breakdown") or {}).get("macro_overlay") or 0.0)
-            if _ov < 0 and wacc < _capm_wacc - _RISK_ON_CAPM_BAND:
+            if _ov < 0 and wacc < _capm_wacc - _RISK_ON_CAPM_BAND and not _firm_capm:
                 # Owner D5 bands the risk-on CUT: the overlay may not take WACC more than the band below CAPM.
                 # At most the cut is undone (plan E27, 2026-10-06) -- the floor is not a CAPM re-pricing
                 # (BEAM: 8.75% was lifted to 12.88%, +4.13pt, against a -0.50pt overlay).
@@ -16024,7 +16090,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _capm["risk_on_band"] = {"before": round(wacc, 6), "after": _floor}
                 wacc = _floor
             _band_capm, _band_beta = _capm_wacc, _beta
-            if _dv > 0 and _rd < _coe and wacc > _coe + 1e-9:
+            if _dv > 0 and _rd < _coe and wacc > _coe + 1e-9 and not _firm_capm:
                 ticker_forward_flags.append(
                     f"WACC {wacc:.2%} exceeds the CAPM cost of equity {_coe:.2%} although debt is cheaper: "
                     "the table rate and the market disagree; read the discount rate with care")
@@ -16044,7 +16110,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _ins = float(_wacc_build.get("insider_bps") or 0.0) / 10000.0
             _adds = max(_ov, 0.0) + max(_ins, 0.0)
             _ceil = _band_capm + _RISK_ON_CAPM_BAND
-            if _adds > 0 and wacc > _ceil + 1e-9:
+            if _adds > 0 and wacc > _ceil + 1e-9 and not _firm_capm:
                 _new = round(max(wacc - _adds, _ceil), 4)
                 ticker_forward_flags.append(
                     f"Risk-off band: WACC {wacc:.2%} (after {_adds:+.2%} of regime/insider overlays) sat more than "
@@ -16057,6 +16123,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         try:
             if (profile_name or "") in _PHARMA_CAPM_PROFILES:
                 _cr = _capm.get("wacc") if _capm.get("status") == "used" else _capm.get("band_wacc_on_clipped_beta")
+                if _firm_capm:
+                    _cr = float(_firm_capm["wacc"])      # owner, 2026-11-25: the floor applies to the firm CAPM
                 if isinstance(_cr, (int, float)) and _cr > 0:
                     _new = round(max(float(_cr), _PHARMA_CAPM_FLOOR), 4)
                     if abs(_new - wacc) > 1e-9:
@@ -16910,6 +16978,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 md_abs += guidance_margin_adj
 
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
+            # Owner, 2026-11-25: no company outgrows the economy in perpetuity -- terminal growth is capped at the
+            # risk-free rate (the long-run nominal growth proxy).
+            _rf_cap = float(((_wacc_build.get("firm_capm") or {}).get("rf")) or _CAPM_RF)
+            if tgr > _rf_cap:
+                forward_flags.append(f"Terminal growth {tgr:.2%} capped at the risk-free rate {_rf_cap:.2%}")
+                tgr = _rf_cap
 
             # ── Growth schedule: convergence fade, else tech decay ──────────
             # Built HERE, before Gate B, for two reasons.
@@ -17462,12 +17536,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "bull": float("-inf"),     # never triggers in bull
                 }[scenario]
 
-                if forward_roic < _gate_b_threshold:
-                    tgr = 0.0
+                # Owner, 2026-11-25: the value-driver terminal value already prices growth at RONIC = WACC (growth adds
+                # nothing), so a weak forward ROIC no longer zeroes terminal growth. Recorded, not applied.
+                if forward_roic < _gate_b_threshold and scenario == "base":
                     forward_flags.append(
-                        f"Gate B ({scenario}): Forward ROIC ({forward_roic:.1%} [{roic_source}]) "
-                        f"< threshold ({_gate_b_threshold:.1%}) → TGR set to 0"
-                    )
+                        f"Forward ROIC {forward_roic:.1%} ({roic_source}) is below the cost of capital {wacc:.1%}: "
+                        "terminal growth earns no excess return (RONIC = WACC), so it adds no value")
 
             # Safety: WACC must exceed TGR
             if wacc <= tgr:
@@ -17557,9 +17631,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _loe_tv_mult = 1.0
             # Cross-sector audit E20 (owner, 2026-10-10, selective gate): a forecast whose implied exit multiple left the
             # band is clamped to it -- the terminal value scales by bound / implied, on top of any LOE haircut.
-            _tclamp = (((_gf or {}).get("terminal") or {}).get("terminal_clamp")) if _gf else None
-            if isinstance(_tclamp, (int, float)) and _tclamp > 0:
-                _loe_tv_mult = float(_loe_tv_mult) * float(_tclamp)
+            # Owner, 2026-11-25: the peer exit multiple is a disclosed cross-check, never a clamp (the value-driver
+            # terminal value carries the discipline). E20's terminal_clamp is no longer applied.
             if scenario == "base" and isinstance(_fc_ctx, dict) and isinstance(_guid_est, dict):
                 # The research block's engine fields (street growth path, street FY+1 EBITDA margin, EPS basis),
                 # so an override rebuilds the forecast on the same reconciliation rules.
@@ -17593,6 +17666,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "margin_schedule": _gf_margin_sched,      # the guidance forecast's FCF margins, else None
                 "timing": _dcf_timing_ctx,                # D2: dated, mid-year (None = whole years)
                 "terminal_multiplier": _loe_tv_mult,      # audit E12: every DCF-family leg carries it, not only "DCF"
+                # Owner, 2026-11-25: the guidance path's terminal year on NOPAT (value-driver TV)
+                "terminal_nopat_ratio": (((_gf or {}).get("terminal") or {}).get("nopat_to_ufcf")) if _gf else None,
                 "guided_years": (int((_gf or {}).get("horizon_years") or 0) if _gf else 0),   # audit I3: overlays start after
             }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
@@ -17613,6 +17688,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 margin_schedule=_gf_margin_sched,
                 timing=_dcf_timing_ctx,
                 terminal_multiplier=_loe_tv_mult,
+                terminal_nopat_ratio=_dcf_projection.get("terminal_nopat_ratio"),
             )
             leg_inputs["DCF"] = {
                 "kind": "dcf", "value": iv_dcf,
@@ -17639,7 +17715,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         wacc=wacc, tgr=tgr, fcf_floor=fcf_floor, net_debt=net_debt, shares=shares,
                         minority_interest=_minority_interest(most_recent), preferred_equity=_preferred_equity(most_recent),
                         growth_schedule=_growth_schedule, wacc_schedule=_wacc_schedule, margin_delta_absolute=md_abs,
-                        margin_schedule=_gf_margin_sched, timing=_dcf_timing_ctx, terminal_multiplier=_loe_tv_mult),
+                        margin_schedule=_gf_margin_sched, timing=_dcf_timing_ctx, terminal_multiplier=_loe_tv_mult,
+                        terminal_nopat_ratio=_dcf_projection.get("terminal_nopat_ratio")),
                         (resolved_mcap / shares) if (resolved_mcap and shares) else None)
                     if _rdcf:
                         most_recent["_reverse_dcf"] = _rdcf

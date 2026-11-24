@@ -670,6 +670,8 @@ PINNED_ENV = {
     # Owner, 2026-11-12: the cycle measure's 15-year income-statement fetch is a call the fixtures recorded before it
     # existed; in replay the measure reads the valuation series.
     "CYCLE_LONG_HISTORY": "off",
+    # Owner, 2026-11-25: the firm CAPM's live 10-year Treasury (FRED DGS10) is a call the fixtures hold no record of.
+    "CAPM_LIVE_RF": "off",
     "PYTHONUTF8": "1",
 }
 

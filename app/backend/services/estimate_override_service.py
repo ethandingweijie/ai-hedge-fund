@@ -348,7 +348,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
             margin_delta_absolute=_num(leg.get("margin_delta_absolute")), margin_schedule=fc["fcf_margin_schedule"],
             minority_interest=float(leg.get("minority_interest") or 0.0), preferred_equity=float(leg.get("preferred_equity") or 0.0),
             timing=leg.get("timing"),                       # D2: the run's dating, so an override re-prices like-for-like
-            terminal_multiplier=_tv_mult)
+            terminal_multiplier=_tv_mult,
+            terminal_nopat_ratio=((fc.get("terminal") or {}).get("nopat_to_ufcf")))   # owner, 2026-11-25: value-driver TV
         iv_dcf = _num(iv_dcf)
         rec["forecast"] = gfm.summary(fc)
         if sc == "base":

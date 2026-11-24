@@ -815,11 +815,16 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     # terminal: ROIC consistency and the implied exit multiple against the mid-cycle peer median
     last = rows[-1]
     roic_T = hist["roic_median"] if (hist["roic_median"] is not None and hist["roic_median"] == hist["roic_median"]) else None
-    roic_terminal = max(float(wacc) + float(cfg["terminal_roic_floor_over_wacc"]), roic_T or 0.0)
+    # Owner, 2026-11-25: RONIC = WACC by default (growth earns its cost of capital); the user's terminal ROIC overrides.
+    roic_terminal = float(wacc)
     if roic_user is not None:
         roic_terminal = float(roic_user)                  # the user's terminal ROIC, as entered
     reinvest = float(tgr) / roic_terminal if roic_terminal > 0 else None
-    tv = last["ufcf"] * (1.0 + float(tgr)) / (float(wacc) - float(tgr)) if float(wacc) > float(tgr) else None
+    # the value-driver terminal value the DCF prices: NOPAT(T+1) x (1 - g/RONIC) / (WACC - g)
+    tv = (last["nopat"] * (1.0 + float(tgr)) * (1.0 - (reinvest or 0.0)) / (float(wacc) - float(tgr))
+          if float(wacc) > float(tgr) else None)
+    _nopat_to_ufcf = (last["nopat"] / last["ufcf"]) if (last.get("ufcf") and last["ufcf"] > 0 and last.get("nopat") is not None
+                                                         and last["nopat"] > 0) else None
     ebitda_T = last["ebit"] + last["da"]
     exit_mult = (tv / ebitda_T) if (tv and ebitda_T > 0) else None
     # Owner, 2026-10-04 (Visa review, plan EV7): the check is two-sided and value-driver aware. The
@@ -843,14 +848,10 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                    + f"; band {_floor:.1f}x-{_ceil:.1f}x")
         if _ok is False:
             _detail += " -- BELOW the floor (run-off pricing)" if exit_mult < _floor else " -- ABOVE the ceiling"
-    # Owner, 2026-10-10 (cross-sector audit E20, selective gate): an implied exit multiple outside the band is CLAMPED
-    # to it -- the DCF scales its terminal value by bound / implied (terminal_clamp); the check stays FAILED and says so.
+    # Owner, 2026-11-25: the band is a disclosed cross-check -- never a clamp (E20's terminal_clamp retired).
     _clamp = None
     if _ok is False and exit_mult:
-        _bound = _floor if (_floor is not None and exit_mult < _floor) else _ceil
-        if _bound:
-            _clamp = float(_bound) / float(exit_mult)
-            _detail += f"; ACTED: terminal value clamped to {_bound:.1f}x (x{_clamp:.3f})"
+        _detail += "; disclosed, not applied: the value-driver terminal value stands"
     inv.append({"id": 4, "name": "Terminal multiple bounds", "ok": _ok, "detail": _detail,
                 "justified_ev_ebitda": _just, "floor": _floor, "ceiling": _ceil,
                 **({"acted": True, "terminal_clamp": _clamp} if _clamp else {})})
@@ -883,7 +884,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "steps": steps,
         "rows": rows, "growth_schedule": [round(g, 6) for g in growth_sched], "fcf_margin_schedule": [round(m, 6) for m in fcf_sched],
         "terminal": {"tgr": float(tgr), "wacc": float(wacc), "roic_terminal": roic_terminal, "reinvestment_rate": reinvest,
-                     "implied_exit_ev_ebitda": exit_mult, "peer_ev_ebitda_median": peer_ev_ebitda, "terminal_clamp": _clamp},
+                     "implied_exit_ev_ebitda": exit_mult, "peer_ev_ebitda_median": peer_ev_ebitda, "terminal_clamp": _clamp,
+                     "nopat_to_ufcf": _nopat_to_ufcf},
         "invariants": inv,
         "target": tg.get("target"),
     }

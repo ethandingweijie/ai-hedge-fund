@@ -134,3 +134,28 @@ def test_the_forecast_revenue_converges_to_trend_after_the_guided_years():
     assert cyc["rows"][end - 1]["revenue"] == pytest.approx(rev0 / 2.0 * 1.03 ** end, rel=1e-6)
     assert cyc["growth_schedule"][end] == pytest.approx(0.03 + (0.025 - 0.03) / 5.0, abs=1e-9)   # fade from trend growth
     assert plain["trend_revenue_convergence"] is None
+
+
+def test_the_terminal_value_is_value_driver_and_growth_at_wacc_adds_nothing():
+    """Owner, 2026-11-25: TV = NOPAT(T+1) x (1 - g/RONIC) / (WACC - g) with RONIC = WACC -> growth is value-neutral."""
+    from src.agents.analysis import dcf_agent as d
+    kw = dict(revenue_base=1000.0, fcf_margin_base=0.10, growth_rate=0.0, margin_delta_per_year=0.0, wacc=0.08,
+              fcf_floor=-1.0, net_debt=0.0, shares=1.0, years=5)
+    _, _, tv0, _ = d._project_dcf(tgr=0.0, **kw)
+    _, _, tv2, _ = d._project_dcf(tgr=0.02, **kw)
+    # growth at RONIC = WACC adds no value beyond next year's NOPAT: TV = NOPAT(T+1) / WACC
+    assert tv2 == pytest.approx(tv0 * 1.02, rel=1e-9)
+    _, _, tvm, _ = d._project_dcf(tgr=0.02, terminal_ronic_spread=0.04, **kw)
+    assert tvm > tv0                                                # an owner-set moat spread makes growth valuable
+    _, _, tvn, _ = d._project_dcf(tgr=0.0, terminal_nopat_ratio=1.25, **kw)
+    assert tvn == pytest.approx(tv0 * 1.25, rel=1e-9)               # the guidance path's terminal year on NOPAT
+
+
+def test_owner_earnings_charge_gross_sbc_whatever_the_buybacks():
+    """Owner, 2026-11-25: SBC is an expense, buybacks a distribution -- no netting, no double-charged withholding."""
+    from types import SimpleNamespace
+    from src.agents.analysis.dcf_agent import _extract_annual_series
+    li = [SimpleNamespace(report_period="2025-12-31", period="2025-12-31", revenue=1000.0, free_cash_flow=200.0,
+                          stock_based_compensation=50.0, common_stock_repurchased=-300.0, currency="USD")]
+    rows, _ = _extract_annual_series(li)
+    assert rows[-1]["fcf_owner_earnings"] == pytest.approx(150.0)
