@@ -340,6 +340,19 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     # Wave 8c (owner verdict C1): the Tier-1 landlords' own median carries their P/B and so the P/NAV read
     # on a published NAV; the broad HKSE diversified label sat at 0.30x with small-cap illiquidity in it.
     "Landlord / Investment Property (HK)": {"HKSE": ("00016.HK", "01113.HK", "01997.HK", "01972.HK", "00012.HK", "00101.HK", "00014.HK", "00017.HK")},
+    # Owner, 2026-11-25 (premium-franchise review, option A): a membership warehouse club prices on the
+    # membership / scale grocers, not FMP's "Discount Stores" label (TGT, DG, DLTR, OLLI: 18.4x P/E against
+    # COST at 52.5x). Live 2026-11-25 ex-COST: P/E 32.3x, NTM EV/EBITDA 13.4x, FCF yield 1.8%. Three names
+    # is the whole like-for-like set, so the basket carries its own floor (BASKET_FLOORS).
+    "Membership / Subscription Retail": {"US": ("COST", "WMT", "PSMT", "BJ")},
+}
+
+#: Owner-approved thin baskets: the peer floor a named basket clears instead of MIN_INDUSTRY_PEERS. A
+#: like-for-like set this small is a decision, so it is listed here rather than lowered for every basket.
+BASKET_FLOORS: dict[str, int] = {
+    "Membership / Subscription Retail": 3,          # WMT, PSMT, BJ once COST is out (owner, 2026-11-25)
+    "Consumer Technology Ecosystem: Hardware": 3,   # SONY, RMS.PA, MC.PA, RACE (owner, 2026-11-25)
+    "Consumer Technology Ecosystem: Services": 4,   # MSFT, GOOGL, META, V, MA, SPGI (owner, 2026-11-25)
 }
 
 
@@ -361,6 +374,14 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
     # LVMH) and the hardware floor (Samsung, Sony) -- a blended basket no single market or label holds.
     "Consumer Technology Ecosystem": {"markets": ("US",),
                                       "symbols": ("MSFT", "GOOGL", "RMS.PA", "MC.PA", "005930.KS", "SONY")},
+    # Owner, 2026-11-25 (premium-franchise review): the AAPL hardware + services SOTP prices each segment on
+    # live forward P/E medians instead of the 2026-10-10 fixed 16.5x / 29x. Hardware: premium consumer hardware
+    # and luxury annuity brands; services: asset-light platform and network franchises. Not profile baskets
+    # (no `markets`): read only by the SOTP leg, refreshed weekly with the rest of this exchange.
+    "Consumer Technology Ecosystem: Hardware": {"markets": (),
+                                                "symbols": ("SONY", "RMS.PA", "MC.PA", "RACE")},
+    "Consumer Technology Ecosystem: Services": {"markets": (),
+                                                "symbols": ("MSFT", "GOOGL", "META", "V", "MA", "SPGI")},
 }
 
 
@@ -369,12 +390,15 @@ def refresh_cross_market_baskets(fetch=None) -> int:
     CROSS_MARKET_EXCHANGE (same row format as a market's members). Returns rows written."""
     fetch = fetch or fetch_name_multiples
     rows: list[dict] = []
+    _seen: dict[str, dict] = {}                 # a name in two baskets is fetched once
     for profile, spec in CROSS_MARKET_BASKETS.items():
         for sym in spec.get("symbols") or ():
-            try:
-                mm = fetch(sym) or {}
-            except Exception:                                  # noqa: BLE001
-                mm = {}
+            if sym not in _seen:
+                try:
+                    _seen[sym] = fetch(sym) or {}
+                except Exception:                              # noqa: BLE001
+                    _seen[sym] = {}
+            mm = _seen[sym]
             if not mm:
                 continue
             vals = {}
@@ -647,6 +671,8 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
     # FMP's "Specialty Retail" label at 24.4x).
     if _self_removed:
         floor = max(3, floor - 1)
+    if key in BASKET_FLOORS:                # an owner-approved thin basket sets its own floor
+        floor = BASKET_FLOORS[key]
     for field in FIELDS:
         cand = []
         for sym, m in metrics.items():

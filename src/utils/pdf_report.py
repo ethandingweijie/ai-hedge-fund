@@ -2559,6 +2559,10 @@ def _methodology_and_street_block(disc: dict, styles) -> list:
     if tm:
         out.append(Paragraph(f"<b>Target methodology.</b> {_strip(tm)}", styles["RptBody"]))
         out.append(Spacer(1, 3))
+    pi = disc.get("priced_in") or {}
+    if pi.get("applies") and pi.get("text"):
+        out.append(Paragraph(f"<b>What the price requires.</b> {_strip(pi['text'])}", styles["RptBody"]))
+        out.append(Spacer(1, 3))
     vc = disc.get("vs_consensus") or {}
     if vc.get("applies") and vc.get("text"):
         out.append(Paragraph(f"<b>Versus the Street.</b> {_strip(vc['text'])}", styles["RptBody"]))

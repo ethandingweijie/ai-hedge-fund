@@ -162,6 +162,28 @@ _PROFILE_TGR: dict[str, dict[str, float]] = {
 _CTE_SOTP = {"hw_gm": 0.36, "svc_gm": 0.725, "svc_tac_haircut": {"bear": 0.03, "base": 0.0, "bull": 0.0},
              "hw_pe": {"bear": 15.0, "base": 16.5, "bull": 18.0}, "svc_pe": {"bear": 26.0, "base": 29.0, "bull": 32.0}}
 
+
+#: Owner, 2026-11-25 (premium-franchise review): the segment P/Es come from live forward P/E medians over two
+#: cross-market baskets (src.data.regional_comps CROSS_MARKET_BASKETS, keys below) applied to NTM earnings; the
+#: fixed 16.5x / 29x above stay only as the fallback when a basket misses its floor. The bear / bull spread
+#: keeps the owner's original band around the base (15-18x on 16.5x, 26-32x on 29x).
+_CTE_SOTP_BASKETS = {"hw": "Consumer Technology Ecosystem: Hardware", "svc": "Consumer Technology Ecosystem: Services"}
+
+
+def _cte_live_pe(seg: str) -> Optional[dict]:
+    """{"value", "members_used", "key"} -- the live forward P/E median of one AAPL segment basket, or None."""
+    try:
+        from src.data.regional_comps import CROSS_MARKET_BASKETS, CROSS_MARKET_EXCHANGE, basket_multiples
+        key = _CTE_SOTP_BASKETS[seg]
+        cell = (basket_multiples(CROSS_MARKET_EXCHANGE, tuple(CROSS_MARKET_BASKETS[key]["symbols"]), key)
+                or {}).get("pe_ntm")
+    except Exception:                                      # noqa: BLE001
+        return None
+    v = (cell or {}).get("value")
+    if not (isinstance(v, (int, float)) and v > 0):
+        return None
+    return {"value": float(v), "key": key, "members_used": cell.get("members_used") or []}
+
 # RSU/PSU cash tax withholding, as a fraction of gross SBC expense — used
 # when FMP doesn't expose a clean withholding line (same estimator and rate
 # as src/research_ideas/sw46/tragic_algebra.py's Method E, calibrated
@@ -9728,19 +9750,41 @@ def _compute_method_value(
         ni_ops = float(net_income) - max(float(_ii), 0.0) * (1.0 - _EFFECTIVE_TAX_RATE) - svc * tac * (1.0 - _EFFECTIVE_TAX_RATE)
         if ni_ops <= 0:
             return None
+        # Owner, 2026-11-25: live forward segment P/Es on NTM earnings (the matched basis); the fixed
+        # constants only when a basket is short or no consensus EPS exists.
+        _live = {k: _cte_live_pe(k) for k in ("hw", "svc")}
+        _eps_ntm = ((forward_consensus or {}).get("eps") or {}).get(scenario) or ((forward_consensus or {}).get("eps") or {}).get("base")
+        _eps_ttm = float(net_income) / float(shares)
+        _ntm_f = (float(_eps_ntm) / _eps_ttm) if (isinstance(_eps_ntm, (int, float)) and _eps_ntm > 0 and _eps_ttm > 0) else None
+        _use_live = all(_live.values()) and _ntm_f is not None and 0.5 <= _ntm_f <= 2.0
+        if _use_live:
+            ni_ops = ni_ops * _ntm_f
         ni_hw = ni_ops * gp_hw / (gp_hw + gp_svc)
         ni_svc = ni_ops - ni_hw
-        pe_hw, pe_svc = float(c["hw_pe"][scenario]), float(c["svc_pe"][scenario])
+        if _use_live:
+            pe_hw = _live["hw"]["value"] * float(c["hw_pe"][scenario]) / float(c["hw_pe"]["base"])
+            pe_svc = _live["svc"]["value"] * float(c["svc_pe"][scenario]) / float(c["svc_pe"]["base"])
+            _src = {"peer_source": "live forward P/E medians on NTM earnings (owner, 2026-11-25)",
+                    "ntm_earnings_factor": round(_ntm_f, 4),
+                    "hardware_peer_pe_ntm": _live["hw"]["value"], "services_peer_pe_ntm": _live["svc"]["value"],
+                    "hardware_members_used": _live["hw"]["members_used"],
+                    "services_members_used": _live["svc"]["members_used"],
+                    "scenario_band": "owner band around base (hardware 15-18x on 16.5x, services 26-32x on 29x)"}
+        else:
+            pe_hw, pe_svc = float(c["hw_pe"][scenario]), float(c["svc_pe"][scenario])
+            _src = {"peer_source": "owner spec 2026-10-10 fixed 16.5x / 29x (fallback: a live segment basket "
+                                   "missed its floor or no NTM consensus EPS)"}
         equity = ni_hw * pe_hw + ni_svc * pe_svc - float(net_debt or 0.0)
-        _leg_trace(kind="equity_build", metric="Net income from operations, split by segment gross profit",
+        _leg_trace(kind="equity_build",
+                   metric=("Net income from operations (NTM), split by segment gross profit" if _use_live
+                           else "Net income from operations, split by segment gross profit"),
                    metric_value=float(ni_ops), shares=float(shares),
                    segments=[{"segment": "Hardware (Products)", "revenue": hw, "gross_margin": c["hw_gm"],
                               "net_income": ni_hw, "basis": "pe", "multiple": pe_hw, "value": ni_hw * pe_hw},
                              {"segment": "Services", "revenue": svc, "gross_margin": c["svc_gm"] - tac,
                               "net_income": ni_svc, "basis": "pe", "multiple": pe_svc, "value": ni_svc * pe_svc}],
                    net_debt=float(net_debt or 0.0), priced_share_of_revenue=1.0, tac_haircut=tac,
-                   multiple_parts={"peer_source": "owner spec 2026-10-10 (PROPOSED inside the owner's ranges)"},
-                   value=equity / shares)
+                   multiple_parts=_src, value=equity / shares)
         return equity / shares
 
     if method_name == "Shareholder Yield":

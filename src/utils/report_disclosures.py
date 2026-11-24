@@ -16,6 +16,7 @@ Shape (all keys always present; values may be None or empty):
   limitations           standing limitations of the method
   target_methodology    {text, rule, capture, capture_reason, method, scenarios: [...]}
   vs_consensus          {applies, text, our_target, street_low, street_high, street_mean, driver, facts}
+  priced_in             {applies, text, spot, implied_cagr10, model_cagr10, own_cagr, own_years} -- the reverse DCF
   data_limitations      list of plain-English strings for this run
 """
 from __future__ import annotations
@@ -93,6 +94,28 @@ def target_methodology(dcf_t: dict, scen: dict, sym: str) -> dict:
     text = ". ".join(p[:1].upper() + p[1:] for p in parts) + ("." if parts else "")
     return {"text": text or None, "rule": pb.get("rule"), "capture": cap, "capture_reason": reason or None,
             "method": method, "scenarios": rows}
+
+
+# ── what the price requires ──────────────────────────────────────────────────
+
+def priced_in(dcf_t: dict, sym: str) -> dict:
+    """Owner, 2026-11-25 (premium-franchise review): the reverse DCF beside the target -- the revenue growth
+    today's price needs, against the model's and the company's own ten-year record. Read from the run."""
+    rd = (dcf_t or {}).get("reverse_dcf") or {}
+    cyc = (dcf_t or {}).get("cycle") or {}
+    imp, mod, spot = _num(rd.get("implied_cagr10")), _num(rd.get("model_cagr10")), _num(rd.get("spot"))
+    own = _num(cyc.get("trend_revenue_growth"))
+    own_n = min(10, int(cyc.get("n_years") or 0)) if own is not None else 0
+    out = {"applies": False, "text": None, "spot": spot, "implied_cagr10": imp, "model_cagr10": mod,
+           "own_cagr": own if own_n >= 6 else None, "own_years": own_n if own_n >= 6 else None}
+    if not (rd.get("solved") and imp is not None and mod is not None and spot is not None):
+        return out
+    text = (f"At {_money(spot, sym)} the shares need revenue growth of about {imp:.1%} a year for ten years, "
+            f"with margins and the discount rate held at ours, against {mod:.1%} in our model")
+    if out["own_cagr"] is not None:
+        text += f" and {own:.1%} a year for the company over the last {own_n} years (log-linear trend)"
+    out.update(applies=True, text=text + ".")
+    return out
 
 
 # ── vs consensus ─────────────────────────────────────────────────────────────
@@ -263,6 +286,7 @@ def build_report_disclosures(data: dict, ticker: str, model: Optional[str] = Non
         "vs_consensus": vs_consensus(dcf_t, scen, target, sym) if target is not None else
         {"applies": False, "text": None, "our_target": None, "street_low": None, "street_high": None,
          "street_mean": None, "driver": None, "facts": []},
+        "priced_in": priced_in(dcf_t, sym),
         "data_limitations": data_limitations(data, ticker),
     }
 
