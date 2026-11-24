@@ -1103,10 +1103,13 @@ class _Book:
                 sh.put(r, last + 1 + k, f'=IF(OR({L}{num}="",{L}{c_rev}=""),"",IFERROR({L}{num}/{L}{c_rev},""))', PCT)
             r += 1
         r += 1
-        if self.model_rows and self.model_kind == "bank":
-            # a bank's income statement has lines the reported layout does not: shown here, linked
-            sh.section(r, "Forecast — bank earnings-and-capital model (Model tab), linked", last + n_fc); r += 1
-            for _lab, _key in (("Net interest income", "net_interest_income"), ("Non-interest income", "fee_income"), ("Provisions", "provisions"), ("Dividend per share", "dividend_per_share")):
+        if self.model_rows and self.model_kind in ("bank", "insurer"):
+            # a bank's or insurer's income statement has lines the reported layout does not: shown here, linked
+            sh.section(r, f"Forecast — {self.model_kind} earnings-and-capital model (Model tab), linked", last + n_fc); r += 1
+            _lines = ((("Net interest income", "net_interest_income"), ("Non-interest income", "fee_income"), ("Provisions", "provisions"))
+                      if self.model_kind == "bank" else
+                      (("Net earned premiums", "net_earned_premiums"), ("Underwriting result", "underwriting_result"), ("Investment income", "investment_income")))
+            for _lab, _key in _lines + (("Dividend per share", "dividend_per_share"),):
                 sh.label(r, 1, _lab); sh.label(r, 2, "Link")
                 if self._model_link(sh, r, _key, last + 1, NUM if _key == "dividend_per_share" else MIL):
                     r += 1
@@ -2295,7 +2298,7 @@ class _Book:
                   ("Tangible book value per share", "tbvps", NUM), ("ROE", "roe", PCT), ("RoTE", "rote", PCT), ("ROA", "roa", PCT)]
     _INSURER_ROWS = [("Premiums", None), ("Net earned premiums", "net_earned_premiums", MIL), ("Premium growth", "premium_growth", PCT), ("Combined ratio", "combined_ratio", PCT),
                      ("Underwriting result", "underwriting_result", MIL), ("Investments", None), ("Average float", "float_avg", MIL), ("Investment yield", "investment_yield", PCT), ("Investment income", "investment_income", MIL),
-                     ("Earnings", None), ("Pre-tax profit", "pretax", MIL), ("Tax", "tax", MIL), ("Net income", "net_income", MIL), ("Dividends", "dividends", MIL), ("Shareholders' equity", "equity", MIL), ("Total assets", "total_assets", MIL),
+                     ("Total revenue (premiums + investment income)", "total_income", MIL), ("Earnings", None), ("Pre-tax profit", "pretax", MIL), ("Tax", "tax", MIL), ("Net income", "net_income", MIL), ("Dividends", "dividends", MIL), ("Shareholders' equity", "equity", MIL), ("Total assets", "total_assets", MIL),
                      ("Per share and returns", None), ("Diluted shares (millions)", "shares", MIL), ("EPS", "eps", NUM), ("Dividend per share", "dividend_per_share", NUM), ("Book value per share", "bvps", NUM),
                      ("Tangible book value per share", "tbvps", NUM), ("ROE", "roe", PCT)]
 
@@ -2307,11 +2310,15 @@ class _Book:
         op, a, rows, labels = th.get("opening") or {}, th.get("assumptions") or {}, th.get("rows") or {}, th.get("fy_labels") or []
         n = len(labels)
         ovr = th.get("override") or (self.dr or {}).get("estimate_override") or {}
+        _how = ("Earnings come from the balance sheet (assets × margin, plus fees), costs and provisions are ratios, retained earnings build capital against the CET1 target; "
+                "the GGM (P/B) leg prices the steady-state RoTE and the FY+1 book value, the forward P/E the FY+1 EPS." if kind == "bank" else
+                "Earnings are the underwriting result (premiums × (1 − combined ratio)) plus investment income (float × yield); retained earnings build book value; "
+                "the GGM (P/B) leg prices the steady-state ROE and the FY+1 book value, the forward P/E the FY+1 EPS.")
         sh.title(f"{'Bank' if kind == 'bank' else 'Insurer'} earnings-and-capital model",
-                 f"In statement currency, millions. Opening column = {op.get('fy_label')} as filed. Earnings come from the balance sheet (assets × margin, plus fees), costs and provisions "
-                 "are ratios, retained earnings build capital against the CET1 target; the GGM (P/B) leg prices the steady-state RoTE and the FY+1 book value, the forward P/E the FY+1 EPS."
+                 f"In statement currency, millions. Opening column = {op.get('fy_label')} as filed. " + _how
                  + (f" USER OVERRIDE ({str(ovr.get('created_at') or '')[:10]}): {', '.join(ovr.get('fields') or [])}." if ovr else "")
-                 + (" Guided by management: " + ", ".join(th.get("guided_fields") or []) + "." if th.get("guided_fields") else " No family guidance in the research: drivers from the bank-metrics extraction and the filings."))
+                 + (" Guided by management: " + ", ".join(th.get("guided_fields") or []) + "." if th.get("guided_fields") else
+                    f" No family guidance in the research: drivers from the {'bank' if kind == 'bank' else 'insurance'}-metrics extraction and the filings."))
         C0 = 3
         r = 4
         sh.label(r, 1, "Fiscal year", bold=True); sh.put(r, C0, f"{op.get('fy_label')}A").font = Font(bold=True)

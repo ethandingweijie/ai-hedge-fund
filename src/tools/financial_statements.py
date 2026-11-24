@@ -375,6 +375,8 @@ def forecast_values(th: dict) -> dict:
     """The three-statement model's series keyed like the reported rows, in the reported sign
     conventions (expenses positive on the income statement; outflows negative on the cash
     flow), per forecast year."""
+    if th.get("kind") in _CAPITAL_MODEL_KINDS:
+        return _capital_model_values(th)
     IS, BS, CF = th.get("income") or {}, th.get("balance") or {}, th.get("cashflow") or {}
     op = th.get("opening") or {}
     n = len(th.get("fy_labels") or [])
@@ -430,11 +432,47 @@ def forecast_values(th: dict) -> dict:
     }
 
 
+_CAPITAL_MODEL_KINDS = ("bank", "insurer")
+
+
+def _capital_model_values(th: dict) -> dict:
+    """A bank or insurer's earnings-and-capital model on the reported rows it shares with them (owner, 2026-11-24:
+    the page printed no forward years for these families). Only lines the model computes are filled; the rest of
+    the reported layout (deposits, reserves, working capital) stays reported-only."""
+    R = th.get("rows") or {}
+    n = len(th.get("fy_labels") or [])
+
+    def ser(k, sign=1.0):
+        v = R.get(k)
+        return [((sign * x) if isinstance(x, (int, float)) else None) for x in v][:n] if v else None
+
+    if th.get("kind") == "insurer" and not R.get("total_income"):          # a model stored before total_income was a row
+        prem, inv = ser("net_earned_premiums"), ser("investment_income")
+        revenue = [((p or 0.0) + (i or 0.0)) if (p is not None or i is not None) else None
+                   for p, i in zip(prem or [None] * n, inv or [None] * n)] if (prem or inv) else None
+    else:
+        revenue = ser("total_income")
+    op = th.get("opening") or {}
+    gw = op.get("goodwill_intangibles")
+    return {
+        "income": {"revenue": revenue, "total_income": revenue, "pretax_income": ser("pretax"), "income_tax_expense": ser("tax", -1.0),
+                   "operating_expense": ser("operating_expenses", -1.0), "pre_provision_profit": ser("pre_provision_profit"),
+                   "net_income": ser("net_income"), "earnings_per_share": ser("eps")},
+        "balance": {"total_assets": ser("total_assets"), "shareholders_equity": ser("equity"), "book_value_per_share": ser("bvps"),
+                    "total_liabilities": ([(a - e) if (a is not None and e is not None) else None
+                                           for a, e in zip(ser("total_assets") or [None] * n, ser("equity") or [None] * n)]
+                                          if (R.get("total_assets") and R.get("equity")) else None)},
+        "cashflow": {"net_income": ser("net_income"), "dividends_and_distributions": ser("dividends"), "share_buyback": ser("buybacks")},
+    } if n else {"income": {}, "balance": {}, "cashflow": {}}
+
+
 def forecast_labels(th: Optional[dict]) -> list[str]:
-    """The forecast years an operating company's statements can carry; [] for a withheld
-    model, a bank or insurer (their earnings-and-capital model has its own lines) or none."""
+    """The forecast years the reported statements can carry: an operating company's three-statement model, or a
+    bank or insurer's earnings-and-capital model on the rows it shares (owner, 2026-11-24); [] when withheld or none."""
     th = th or {}
     if th.get("fy_labels") and not th.get("skipped") and th.get("kind") in (None, "operating") and th.get("income"):
+        return [str(x) for x in th["fy_labels"]]
+    if th.get("fy_labels") and not th.get("skipped") and th.get("kind") in _CAPITAL_MODEL_KINDS and th.get("rows"):
         return [str(x) for x in th["fy_labels"]]
     return []
 
@@ -499,7 +537,8 @@ def attach_forecast(fs: Optional[dict], th: Optional[dict], override: Optional[d
             slot["ok"] = bool(slot["ok"] and a.get("ok"))
     meta = {
         "status": "ok",
-        "source": "the valuation agent's three-statement forecast on its guidance-derived estimates",
+        "source": (f"the valuation agent's {th.get('kind')} earnings-and-capital model" if th.get("kind") in _CAPITAL_MODEL_KINDS
+                   else "the valuation agent's three-statement forecast on its guidance-derived estimates"),
         "rows_filled": filled,
         "reconciliation": {"ok": rc.get("ok"), "assertions": [by_id[k] for k in sorted(by_id)]},
     }

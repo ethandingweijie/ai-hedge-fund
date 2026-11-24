@@ -594,6 +594,9 @@ def _interest_is_cost_of_goods(profile_name, sector) -> bool:
 #: but its statements are fees, compensation and a working-capital balance sheet -- the three-statement roll fits.
 #: Only a family whose estimates need an earnings-and-capital model withholds the statements.
 _STATEMENTS_ROLL_FAMILIES = frozenset({"Fee financials"})
+# Profiles in the bank calibration table whose earnings-and-capital model is the insurer one (owner, 2026-11-24).
+# Life ("Insurance") is not here: the P&C model overstates a life book's earnings ~5x (MET, PRU) -- a separate build.
+_INSURER_MODEL_PROFILES = frozenset({"Insurance (P&C)"})
 
 
 def _statements_need_capital_model(profile_name, sector) -> bool:
@@ -15546,16 +15549,27 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # target (research family_metrics), else the bank-metrics extraction; the model's RoTE
             # and FY+1 book value price the GGM leg, its EPS the forward P/E, and it is published as
             # this family's statements in place of the working-capital roll.
+            # Owner, 2026-11-24: a P&C insurer takes the insurer model (premiums, combined ratio, float × yield) -- it
+            # had been built on the bank model's loans and NIM because its profile sits in the bank calibration table.
+            _bm_kind = "insurer" if profile_name in _INSURER_MODEL_PROFILES else "bank"
+            _bm_label = "Insurer" if _bm_kind == "insurer" else "Bank"
             try:
                 from src.agents.analysis import bank_model as _bmod
-                _bm_open = _bmod.opening_from_line_items({**most_recent, "ticker": ticker}, shares, _bank_total_income(most_recent),
-                                                         fy_label=str(most_recent.get("report_period") or "")[:4])
+                _bm_open = _bmod.opening_from_line_items(
+                    {**most_recent, "ticker": ticker}, shares,
+                    most_recent.get("revenue") if _bm_kind == "insurer" else _bank_total_income(most_recent),
+                    fy_label=str(most_recent.get("report_period") or "")[:4])
                 if _bm_open:
                     _bm_ggm = _bank_ggm_assumptions(ticker, profile_name, most_recent)
-                    _bm_a = _bmod.bank_assumptions(_bm_open, _bm_override, _guid_est or {}, coe=_bm_ggm.get("coe"),
-                                                   target_roe=_bank_cfg.get("target_roe"), cet1_target=_bank_cfg.get("target_cet1"))
+                    if _bm_kind == "insurer":
+                        _bm_a = _bmod.insurer_assumptions(
+                            _bm_open, ((state["data"].get("insurance_metrics_all") or {}).get(ticker) or {}), _guid_est or {},
+                            coe=_bm_ggm.get("coe"))
+                    else:
+                        _bm_a = _bmod.bank_assumptions(_bm_open, _bm_override, _guid_est or {}, coe=_bm_ggm.get("coe"),
+                                                       target_roe=_bank_cfg.get("target_roe"), cet1_target=_bank_cfg.get("target_cet1"))
                     for _sc in ("bear", "base", "bull"):
-                        _bm_out = _bmod.build_bank(_bm_open, _bm_a, scenario=_sc)
+                        _bm_out = (_bmod.build_insurer if _bm_kind == "insurer" else _bmod.build_bank)(_bm_open, _bm_a, scenario=_sc)
                         if _bm_out and not _bm_out.get("skipped"):
                             _bank_models[_sc] = _bm_out
                     _bm_base = _bank_models.get("base")
@@ -15576,16 +15590,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             most_recent["_bank_model_bvps"] = _bm_base.get("bvps_fy1")
                             most_recent["_bank_model_tbvps"] = _bm_base.get("tbvps_fy1")
                             most_recent["_bank_model_eps"] = {sc: m.get("eps_fy1") for sc, m in _bank_models.items()}
+                        _bm_ret = "RoTE" if _bm_base.get("steady_rote") else "ROE"
                         ticker_forward_flags.append(
-                            f"Bank earnings-and-capital model: FY+1 EPS {_bm_base['eps_fy1']:,.2f}, BVPS {_bm_base['bvps_fy1']:,.2f}, "
-                            f"steady RoTE {(_bm_base.get('steady_rote') or _bm_base.get('steady_roe') or 0):.1%} on "
-                            + (f"guided {', '.join(_bm_guided)}" if _bm_guided else "the bank-metrics extraction (no family guidance in the research)")
-                            + ("; the GGM leg prices its RoTE and FY+1 book, the forward P/E its EPS" if _bm_feeds
+                            f"{_bm_label} earnings-and-capital model: FY+1 EPS {_bm_base['eps_fy1']:,.2f}, BVPS {_bm_base['bvps_fy1']:,.2f}, "
+                            f"steady {_bm_ret} {(_bm_base.get('steady_rote') or _bm_base.get('steady_roe') or 0):.1%} on "
+                            + (f"guided {', '.join(_bm_guided)}" if _bm_guided else
+                               ("the insurance-metrics extraction and the latest audited year (no family guidance in the research)" if _bm_kind == "insurer"
+                                else "the bank-metrics extraction (no family guidance in the research)"))
+                            + (f"; the GGM leg prices its {_bm_ret} and FY+1 book, the forward P/E its EPS" if _bm_feeds
                                else "; shown as a cross-check beside the research's ROE target, which still prices the GGM leg"
                                     + (f" ({_bm_cal.get('detail')})" if _bm_cal.get("detail") else ""))
                             + ("; " + "; ".join(_bm_base["notes"]) if _bm_base.get("notes") else ""))
             except Exception as _bm_exc:                     # noqa: BLE001
-                ticker_forward_flags.append(f"Bank earnings-and-capital model did not build ({type(_bm_exc).__name__}: {str(_bm_exc)[:100]})")
+                ticker_forward_flags.append(f"{_bm_label} earnings-and-capital model did not build ({type(_bm_exc).__name__}: {str(_bm_exc)[:100]})")
             if _bm_override.get("target_price_to_book"):
                 most_recent["_bank_target_pb_research"] = _bm_override["target_price_to_book"]
 

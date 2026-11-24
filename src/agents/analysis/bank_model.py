@@ -293,6 +293,19 @@ def build_bank(opening: dict, a: dict, *, scenario: str = "base", years: int = Y
 
 # ── the insurer model ────────────────────────────────────────────────────────
 
+def implied_combined_ratio(opening: dict, investment_yield: Optional[float], float_share: float) -> Optional[float]:
+    """The combined ratio the latest audited year implies: premiums = revenue − float × yield, underwriting result =
+    pre-tax − float × yield, CR = 1 − underwriting / premiums. None when the year lacks revenue, pre-tax or assets."""
+    ti, pretax, ta, y = _f(opening.get("total_income")), _f(opening.get("pretax")), _f(opening.get("total_assets")), _f(investment_yield)
+    if not ti or pretax is None or not ta or y is None:
+        return None
+    inv = ta * float_share * y
+    prem = ti - inv
+    if prem <= 0:
+        return None
+    return 1.0 - (pretax - inv) / prem
+
+
 def insurer_assumptions(opening: dict, metrics: Optional[dict], block: Optional[dict], *, coe: Optional[float] = None) -> dict:
     m = metrics or {}
     fam = (((block or {}).get("family_metrics") or {}).get("insurer")) or {}
@@ -320,6 +333,16 @@ def insurer_assumptions(opening: dict, metrics: Optional[dict], block: Optional[
          bounds=icfg["investment_yield_bounds"], default=0.035)
     pick("investment_yield_fy2", "investment yield, year 2 onward", (fam.get("investment_yield_fy2"), "guidance: investment yield FY+2"), (a["investment_yield_fy1"]["value"], a["investment_yield_fy1"]["source"] + " (held)"),
          bounds=icfg["investment_yield_bounds"])
+    # Owner, 2026-11-24: with no guided or extracted combined ratio, the latest audited year implies one -- the 96%
+    # industry default understated PGR's earnings by half (its year ran near 87%). Same premium split as build_insurer.
+    if str(a["combined_ratio_fy1"].get("source") or "").startswith("default"):
+        cr0 = implied_combined_ratio(opening, a["investment_yield_fy1"]["value"], icfg["float_share_of_assets"])
+        if cr0 is not None:
+            a["combined_ratio_fy1"] = _src(_clamp(cr0, *icfg["combined_ratio_bounds"]),
+                                           "line items: implied by the latest audited year (pre-tax less float × yield, over premiums)",
+                                           a["combined_ratio_fy1"]["needed_for"])
+            a["combined_ratio_fy2"] = _src(a["combined_ratio_fy1"]["value"], a["combined_ratio_fy1"]["source"] + " (held)",
+                                           a["combined_ratio_fy2"]["needed_for"])
     tax_hist = (abs(opening["tax"]) / opening["pretax"]) if (opening.get("pretax") and opening.get("tax") is not None and opening["pretax"] > 0) else None
     pick("tax_rate", "income tax", (tax_hist, "line items: tax / pre-tax"), bounds=DEFAULTS["tax_rate_bounds"], default=DEFAULTS["tax_rate_default"])
     pick("payout_ratio", "dividends and the equity roll", (fam.get("payout_ratio"), "guidance: payout"), (m.get("dividend_payout_ratio"), "insurance metrics: payout"), bounds=DEFAULTS["payout_bounds"], default=0.40)
@@ -367,7 +390,7 @@ def build_insurer(opening: dict, a: dict, *, scenario: str = "base", years: int 
         eq = eq_open + ni - div
         roe = ni / ((eq_open + eq) / 2.0) if (eq_open + eq) else None
         for k, x in (("net_earned_premiums", prem), ("premium_growth", g), ("combined_ratio", cr), ("underwriting_result", uw), ("float_avg", float_avg), ("investment_yield", y),
-                     ("investment_income", inv), ("pretax", pretax), ("tax", -tax), ("net_income", ni), ("shares", sh), ("eps", ni / sh if sh else None), ("dividends", -div),
+                     ("investment_income", inv), ("total_income", prem + inv), ("pretax", pretax), ("tax", -tax), ("net_income", ni), ("shares", sh), ("eps", ni / sh if sh else None), ("dividends", -div),
                      ("dividend_per_share", div / sh if sh else None), ("equity", eq), ("bvps", eq / sh if sh else None), ("tbvps", (eq - gw) / sh if sh else None), ("roe", roe), ("total_assets", ta)):
             L(k, x)
         for aid, name, lhs, rhs in ((1, "Equity ending = prior + net income − dividends", eq, eq_open + ni - div), (2, "Book value per share = equity / shares", (eq / sh) if sh else 0.0, (eq / sh) if sh else 0.0),

@@ -244,9 +244,9 @@ export function FinancialStatements({
         </p>
         {forecast.length > 0 && (
           <p>
-            {shortPeriod(forecast[0])}–{shortPeriod(forecast[forecast.length - 1])} are the valuation
-            agent's three-statement forecast on its guidance-derived estimates; a line the model does not
-            build stays blank.{' '}
+            {shortPeriod(forecast[0])}–{shortPeriod(forecast[forecast.length - 1])} are{' '}
+            {meta?.source ?? "the valuation agent's three-statement forecast on its guidance-derived estimates"};
+            a line the model does not build stays blank.{' '}
             {suite && (suite.ok
               ? `Reconciliation suite: all ${suite.assertions?.length ?? 5} checks pass in every forecast year.`
               : `Reconciliation suite: FAILED${failed.length ? ` (${failed.map(a => a.name ?? `check ${a.id}`).join('; ')})` : ''}.`)}
