@@ -385,6 +385,8 @@ export const ZH: Record<string, string> = {
   'Cancel reply': '取消回复',
   'Start a new thread…': '发起新话题…',
   'live': '实时',
+  'More': '展开',
+  'Less': '收起',
   '{d}d old': '{d} 天前',
   'PT': '目标价',
   'DCF base': 'DCF 基准',

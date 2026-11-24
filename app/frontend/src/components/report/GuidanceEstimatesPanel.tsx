@@ -14,9 +14,19 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EstimateWorkbench } from '@/components/report/EstimateWorkbench';
+import { ClampText } from '@/components/report/shared/ClampText';
 import type { DcfRange, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult } from '@/lib/reportTypes';
 
-const LABEL_CLS = 'text-[14px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
+const LABEL_CLS = 'text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70';
+/** A compact figure: small label over a tabular value. */
+function Fig({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-[14px] font-medium tabular-nums text-foreground">{value}</div>
+    </div>
+  );
+}
 const SCENARIOS = ['bear', 'base', 'bull'] as const;
 
 function pct(v: number | null | undefined, digits = 1): string {
@@ -73,6 +83,48 @@ function amountBn(v: number | null | undefined): string {
   return (v / 1e9).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+/** Model checks: failures and flags shown, passes folded into one line. */
+function Checks({ invariants, flags }: { invariants: NonNullable<GuidanceForecast['invariants']>; flags: string[] }) {
+  const failed = invariants.filter((i) => i.ok === false);
+  const rest = invariants.filter((i) => i.ok !== false);
+  const passed = invariants.filter((i) => i.ok === true).length;
+  if (!invariants.length && !flags.length) return null;
+  return (
+    <div className="mt-4 space-y-1.5 text-[13px]">
+      {failed.map((inv) => (
+        <div key={inv.id} className="flex gap-2">
+          <span className="shrink-0 rounded bg-foreground px-1.5 text-xs font-semibold leading-5 text-background">FAIL</span>
+          <div className="min-w-0">
+            <span className="font-medium text-foreground">{inv.name}</span>
+            {inv.detail ? <ClampText text={inv.detail} lines={2} className="text-muted-foreground" /> : null}
+          </div>
+        </div>
+      ))}
+      {flags.map((f, i) => (
+        <div key={`f${i}`} className="flex gap-2">
+          <span className="shrink-0 rounded border border-border px-1.5 text-xs font-medium leading-5 text-muted-foreground">FLAG</span>
+          <ClampText text={f} lines={2} className="min-w-0 text-foreground/85" />
+        </div>
+      ))}
+      {rest.length ? (
+        <details className="group">
+          <summary className="cursor-pointer list-none text-muted-foreground hover:text-foreground">
+            <span className="inline-block transition-transform group-open:rotate-90">›</span> {passed} of {invariants.length} checks passed
+          </summary>
+          <ul className="mt-1.5 space-y-1">
+            {rest.map((inv) => (
+              <li key={inv.id} className="flex gap-2">
+                <span className="shrink-0 w-9 text-xs leading-5 text-muted-foreground">{inv.ok === true ? 'PASS' : 'n/a'}</span>
+                <span className="text-foreground/85">{inv.name}{inv.detail ? <span className="text-muted-foreground"> — {inv.detail}</span> : null}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 /** The forecast the DCF ran on: archetype, target-year deconstruction, the intermediate years, the checks. */
 function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenarios?: Partial<Record<'bear' | 'bull', GuidanceForecast>> | null }) {
   const [which, setWhich] = useState<'bear' | 'base' | 'bull'>('base');
@@ -89,45 +141,52 @@ function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenar
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className={LABEL_CLS}>Forecast the DCF ran on</span>
-          <Badge variant="outline" className="text-[14px]">{fc.archetype_name}</Badge>
+          <Badge variant="outline" className="text-xs">{fc.archetype_name}</Badge>
         </div>
         {scenarios && (scenarios.bear || scenarios.bull) ? (
           <div className="flex gap-1">
             {(['bear', 'base', 'bull'] as const).map((s) => (
               <button key={s} type="button" onClick={() => setWhich(s)} disabled={s !== 'base' && !scenarios[s]}
-                className={`rounded px-2 py-0.5 text-[15px] ${s === which ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground disabled:opacity-40'}`}>
+                className={`rounded-full px-2.5 py-1 text-xs capitalize ${s === which ? 'bg-foreground text-background' : 'border border-border text-muted-foreground hover:text-foreground disabled:opacity-40'}`}>
                 {s}
               </button>
             ))}
           </div>
         ) : null}
       </div>
-      <div className="mt-1 text-[16.5px] text-foreground">
-        {T}-year path to {t ? `the ${t.target_year} ${t.metric} target of ${num(t.value)}` : 'the FY+2 estimate'}; EBIT margin {margin(fc.margin_start)} → {margin(fc.margin_target)} ({fc.margin_source}); then a {fc.fade_years}-year fade to {margin(term?.tgr)} growth.
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <Fig label={`${T}-year path to`} value={t ? `${t.target_year} ${t.metric} ${num(t.value)}` : 'FY+2 est.'} />
+        <Fig label={`EBIT margin${fc.margin_source ? ` (${fc.margin_source})` : ''}`} value={`${margin(fc.margin_start)} → ${margin(fc.margin_target)}`} />
+        <Fig label={`${fc.fade_years}-year fade to`} value={`${margin(term?.tgr)} growth`} />
       </div>
       {fc.override ? (
-        <div className="mt-1 text-[15.5px] font-medium text-foreground">
+        <div className="mt-2 text-[13px] font-medium text-foreground">
           User override{fc.override.created_at ? ` (${fc.override.created_at.slice(0, 10)})` : ''}: {fc.override.fields?.join(', ')}{fc.override.note ? ` — ${fc.override.note}` : ''}. Agent's base IV {num(fc.override.before?.intrinsic_value)} → {num(fc.override.after?.intrinsic_value)}.
         </div>
       ) : null}
       {/* Owner, 2026-10-03: the agent's thinking, step by step, so the user can query and contest it. */}
       {fc.steps?.length ? (
-        <details className="mt-2" open>
-          <summary className="cursor-pointer text-[15px] text-muted-foreground">How the agent built this estimate ({fc.steps.length} steps)</summary>
-          <ol className="mt-1 space-y-1 text-[15.5px] leading-snug text-foreground/85">
+        <details className="group mt-3">
+          <summary className="cursor-pointer list-none text-[13px] font-medium text-muted-foreground hover:text-foreground">
+            <span className="inline-block transition-transform group-open:rotate-90">›</span> How the agent built it · {fc.steps.length} steps
+          </summary>
+          <ol className="mt-2 space-y-2 text-[13px] leading-snug">
             {fc.steps.map((s) => (
               <li key={s.n} className="flex gap-2">
-                <span className="shrink-0 font-mono text-[14px] text-muted-foreground">{s.n}</span>
-                <span><span className="font-medium text-foreground">{s.title}.</span> {s.detail}</span>
+                <span className="shrink-0 w-4 text-right tabular-nums text-muted-foreground">{s.n}</span>
+                <div className="min-w-0">
+                  <div className="font-medium text-foreground">{s.title}</div>
+                  {s.detail ? <ClampText text={s.detail} lines={2} className="text-muted-foreground" /> : null}
+                </div>
               </li>
             ))}
           </ol>
         </details>
       ) : null}
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-[16px] tabular-nums">
+        <table className="w-full text-[13px] tabular-nums">
           <thead>
-            <tr className="text-[14px] uppercase tracking-[0.08em] text-muted-foreground/70">
+            <tr className="whitespace-nowrap text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
               <th className="pb-1.5 text-left font-medium">Year</th>
               <th className="pb-1.5 text-right font-medium">Revenue (bn)</th>
               <th className="pb-1.5 text-right font-medium">Growth</th>
@@ -154,33 +213,21 @@ function ForecastSection({ fc: base, scenarios }: { fc: GuidanceForecast; scenar
           </tbody>
         </table>
       </div>
-      {dec.ebit_T_implied != null ? (
-        <div className="mt-2 text-[15px] text-muted-foreground">
-          Target year back-solved: revenue {amountBn(dec.revenue_T as number)}bn, implied EBIT {amountBn(dec.ebit_T_implied as number)}bn
-          {dec.implied_tax_rate != null ? `, implied tax-and-non-operating take ${margin(dec.implied_tax_rate as number)}` : ''}
-          {dec.guided_cagr != null && dec.market_cagr != null ? `; guided CAGR ${margin(dec.guided_cagr as number)} vs market ${margin(dec.market_cagr as number)}` : ''}.
+      {dec.ebit_T_implied != null || term ? (
+        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+          {dec.ebit_T_implied != null ? <Fig label="Target-year revenue" value={`${amountBn(dec.revenue_T as number)}bn`} /> : null}
+          {dec.ebit_T_implied != null ? <Fig label="Implied EBIT" value={`${amountBn(dec.ebit_T_implied as number)}bn`} /> : null}
+          {dec.guided_cagr != null && dec.market_cagr != null
+            ? <Fig label="CAGR guided vs market" value={`${margin(dec.guided_cagr as number)} vs ${margin(dec.market_cagr as number)}`} /> : null}
+          {dec.implied_tax_rate != null ? <Fig label="Tax & non-op take" value={margin(dec.implied_tax_rate as number)} /> : null}
+          {term ? <Fig label="Terminal growth" value={margin(term.tgr)} /> : null}
+          {term ? <Fig label="Terminal ROIC" value={margin(term.roic_terminal)} /> : null}
+          {term ? <Fig label="Reinvestment" value={margin(term.reinvestment_rate)} /> : null}
+          {term?.implied_exit_ev_ebitda != null
+            ? <Fig label="Exit EV/EBITDA" value={`${term.implied_exit_ev_ebitda.toFixed(1)}x${term.peer_ev_ebitda_median != null ? ` · peers ${term.peer_ev_ebitda_median.toFixed(1)}x` : ''}`} /> : null}
         </div>
       ) : null}
-      {term ? (
-        <div className="mt-1 text-[15px] text-muted-foreground">
-          Terminal: growth {margin(term.tgr)}, ROIC {margin(term.roic_terminal)}, reinvestment {margin(term.reinvestment_rate)}
-          {term.implied_exit_ev_ebitda != null ? `; implied exit EV/EBITDA ${term.implied_exit_ev_ebitda.toFixed(1)}x` : ''}
-          {term.peer_ev_ebitda_median != null ? ` vs peer median ${term.peer_ev_ebitda_median.toFixed(1)}x` : ''}.
-        </div>
-      ) : null}
-      <ul className="mt-2 space-y-0.5 text-[15px]">
-        {(fc.invariants ?? []).map((inv) => (
-          <li key={inv.id} className="flex gap-2">
-            <span className={`shrink-0 font-mono ${inv.ok === false ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-              {inv.ok === true ? 'PASS' : inv.ok === false ? 'FAIL' : 'n/a'}
-            </span>
-            <span className="text-foreground/85">{inv.name}: <span className="text-muted-foreground">{inv.detail}</span></span>
-          </li>
-        ))}
-        {(fc.flags ?? []).map((f, i) => (
-          <li key={`f${i}`} className="flex gap-2"><span className="shrink-0 font-mono text-muted-foreground">FLAG</span><span className="text-foreground/85">{f}</span></li>
-        ))}
-      </ul>
+      <Checks invariants={fc.invariants ?? []} flags={fc.flags ?? []} />
     </div>
   );
 }
@@ -206,27 +253,28 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className={LABEL_CLS}>Management guidance → estimates</div>
-          <div className="mt-0.5 text-[17px] text-foreground">
-            {block.applied
-              ? `Sets the DCF's year 1–${explicitYears} growth per scenario, fading onto the engine path by year ${explicitYears + fadeYears + 1}`
-              : `Shown, not applied — ${block.not_applied_reason ?? 'the DCF did not use it'}`}
+          <div className="mt-1 text-[15px] font-medium text-foreground">
+            {block.applied ? `Drives DCF years 1–${explicitYears}` : 'Not used in the DCF'}
           </div>
+          {block.applied
+            ? <div className="text-[13px] text-muted-foreground">Fades onto the engine path by year {explicitYears + fadeYears + 1}</div>
+            : <ClampText text={block.not_applied_reason ?? 'the DCF did not use it'} lines={2} className="text-[13px] text-muted-foreground" />}
         </div>
         <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="text-[14px]">confidence {block.confidence ?? '—'}</Badge>
-          {g.status && g.status !== 'none' ? <Badge variant="outline" className="text-[14px]">guidance {g.status}</Badge> : null}
-          {block.as_of ? <span className="text-[14px] text-muted-foreground">as of {block.as_of}</span> : null}
+          <Badge variant="outline" className="text-xs">confidence {block.confidence ?? '—'}</Badge>
+          {g.status && g.status !== 'none' ? <Badge variant="outline" className="text-xs">guidance {g.status}</Badge> : null}
+          {block.as_of ? <span className="text-xs text-muted-foreground">as of {block.as_of}</span> : null}
         </div>
       </div>
 
       {/* 1. Guidance as stated vs consensus */}
-      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-[16px] sm:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-[13px] sm:grid-cols-2">
         <div>
           <div className={LABEL_CLS}>Guidance ({fy1})</div>
           <dl className="mt-1 space-y-1 tabular-nums">
             <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Revenue growth</dt><dd>{range(g.revenue_growth, pct)}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Revenue</dt><dd>{amountRange(g.revenue)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">EBITDA / operating margin</dt><dd>{range(g.ebitda_margin, margin)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">EBITDA / op. margin</dt><dd>{range(g.ebitda_margin, margin)}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-muted-foreground">EPS{g.eps?.currency ? ` (${g.eps.currency})` : ''}</dt><dd>{range(g.eps, (v) => num(v))}</dd></div>
             {g.basis ? <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Basis</dt><dd>{g.basis}</dd></div> : null}
           </dl>
@@ -236,20 +284,20 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
           <dl className="mt-1 space-y-1 tabular-nums">
             <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Revenue growth</dt><dd>{pct(c.revenue_growth_fy1)}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-muted-foreground">EPS</dt><dd>{num(c.eps_fy1)}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Guidance vs consensus</dt><dd>{pct(block.guidance_vs_consensus_pct)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Guidance vs cons.</dt><dd>{pct(block.guidance_vs_consensus_pct)}</dd></div>
             {c.as_of ? <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Consensus as of</dt><dd>{c.as_of}</dd></div> : null}
           </dl>
         </div>
       </div>
       {g.quote ? (
-        <div className="mt-2 text-[15px] italic leading-snug text-muted-foreground">“{g.quote}”{g.source ? <span className="not-italic"> — {g.source}</span> : null}</div>
+        <ClampText text={`“${g.quote}”${g.source ? ` — ${g.source}` : ''}`} lines={2} className="mt-2 text-[13px] italic leading-snug text-muted-foreground" />
       ) : null}
 
       {/* 2. The model's estimates */}
       <div className="mt-4 overflow-x-auto">
-        <table className="w-full text-[16px] tabular-nums">
+        <table className="w-full text-[13px] tabular-nums">
           <thead>
-            <tr className="text-[14px] uppercase tracking-[0.08em] text-muted-foreground/70">
+            <tr className="whitespace-nowrap text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
               <th className="pb-1.5 text-left font-medium">Model estimate</th>
               {SCENARIOS.map((s) => <th key={s} className="pb-1.5 text-right font-medium">{s}</th>)}
             </tr>
@@ -267,7 +315,7 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
 
       {/* 3. How the DCF used it */}
       {ch?.schedule?.length ? (
-        <div className="mt-3 text-[15px] text-muted-foreground">
+        <div className="mt-4 text-[13px] text-muted-foreground">
           <span className={LABEL_CLS}>Base DCF growth path</span>
           <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
             {ch.schedule.map((v, i) => (
@@ -276,26 +324,25 @@ export function GuidanceEstimatesPanel({ block: blockIn, forecast, dcfRange, run
               </span>
             ))}
           </div>
-          <div className="mt-1">
-            Years 1–{explicitYears} from the guidance-derived estimate; engine year 1 was {pct(ch.engine_year1)}; the terminal is untouched.
+          <div className="mt-1 text-xs">
+            Bold = from guidance · engine Y1 was {pct(ch.engine_year1)}
           </div>
         </div>
       ) : null}
 
       {dcfRange?.estimate_override_carried ? (
-        <div className="mt-3 text-[15.5px] font-medium text-foreground">
-          Your earlier estimates were carried into this run ({dcfRange.estimate_override_carried.fields?.join(', ')}{dcfRange.estimate_override_carried.note ? ` — ${dcfRange.estimate_override_carried.note}` : ''}; saved {dcfRange.estimate_override_carried.created_at?.slice(0, 10)}). Revoke on the Model Accuracy page to return to the research's estimates.
+        <div className="mt-3 text-[13px] text-foreground">
+          <span className="font-medium">Your saved estimates applied</span>: {dcfRange.estimate_override_carried.fields?.join(', ')}{dcfRange.estimate_override_carried.note ? ` — ${dcfRange.estimate_override_carried.note}` : ''} · saved {dcfRange.estimate_override_carried.created_at?.slice(0, 10)}
+          <span className="text-muted-foreground"> · revoke on Model Accuracy</span>
         </div>
       ) : null}
       {forecast ? <ForecastSection fc={forecast} scenarios={dcfRange?.guidance_forecast_scenarios} /> : null}
       {canWork ? <EstimateWorkbench runId={runId!} ticker={ticker!} block={blockIn} forecast={forecast} dcfRange={dcfRange} onRunUpdated={onRunUpdated} /> : null}
 
-      {block.rationale ? <div className="mt-3 text-[15.5px] leading-snug text-foreground/85">{block.rationale}</div> : null}
-      {block.track_record ? <div className="mt-1 text-[15px] text-muted-foreground">Track record: {block.track_record}</div> : null}
+      {block.rationale ? <ClampText text={block.rationale} lines={3} className="mt-4 text-[13px] leading-snug text-foreground/85" /> : null}
+      {block.track_record ? <ClampText text={`Track record: ${block.track_record}`} lines={2} className="mt-2 text-xs text-muted-foreground" /> : null}
       {block.citations?.length ? (
-        <div className="mt-2 text-[14.5px] text-muted-foreground/80">
-          Sources: {block.citations.join(' · ')}{block.model ? ` · model ${block.model}` : ''}
-        </div>
+        <ClampText text={`Sources: ${block.citations.join(' · ')}${block.model ? ` · model ${block.model}` : ''}`} lines={1} className="mt-2 text-xs text-muted-foreground/80" />
       ) : null}
     </Card>
   );

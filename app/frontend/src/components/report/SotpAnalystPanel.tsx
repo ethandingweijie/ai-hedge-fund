@@ -21,6 +21,7 @@
 
 import { Card } from '@/components/ui/card';
 import type { SotpBreakdown, SotpElasticity, SotpRevision } from '@/lib/reportTypes';
+import { ClampText } from '@/components/report/shared/ClampText';
 
 const CCY_SYM: Record<string, string> = {
   USD: '$', HKD: 'HK$', CNY: 'RMB', RMB: 'RMB', SGD: 'S$',
@@ -72,8 +73,40 @@ function methodChip(method?: string) {
 function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: string }) {
   const rows = breakdown.rows ?? [];
   if (!rows.length) return null;
+  const earnLabel = breakdown.earnings_label ?? 'EBIT';
+  const revLabel = breakdown.revenue_label ?? 'Fwd Rev';
   return (
-    <div className="mt-4 overflow-x-auto">
+    <>
+    {/* Phone: one stacked row per segment — name + value on top, the figures on one
+        line, the rationale clamped to two lines. A 7-column table cannot fit 375px. */}
+    <ul className="mt-4 sm:hidden divide-y divide-border/50 border-y border-border/50">
+      {rows.map((r) => (
+        <li key={r.name} className="py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-[14px] font-medium text-foreground leading-snug">{r.name}</span>
+            <span className="shrink-0 text-[14px] font-semibold tabular-nums text-foreground">{fmtAmount(r.value, usd)}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
+            {methodChip(r.method)}
+            <span>{fmtMult(r.multiple)}</span>
+            <span aria-hidden>·</span>
+            <span>{revLabel} {fmtAmount(r.revenue_fwd, usd)}</span>
+            <span aria-hidden>·</span>
+            <span>{earnLabel} {fmtAmount(r.ebit, usd)}</span>
+            {r.value_split_pct != null && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{(r.value_split_pct * 100).toFixed(0)}% of value</span>
+              </>
+            )}
+          </div>
+          {r.rationale ? (
+            <ClampText text={r.rationale} lines={2} className="mt-1.5 text-xs leading-snug text-muted-foreground/80" />
+          ) : null}
+        </li>
+      ))}
+    </ul>
+    <div className="mt-4 hidden sm:block overflow-x-auto">
       <table className="w-full text-[12px] tabular-nums">
         <thead>
           <tr className="text-xs uppercase tracking-[0.08em] text-muted-foreground/70">
@@ -92,9 +125,7 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
               <td className="py-1.5 pr-2">
                 <div className="font-medium text-foreground">{r.name}</div>
                 {r.rationale ? (
-                  <div className="text-xs text-muted-foreground/80 leading-snug max-w-[340px]">
-                    {r.rationale}
-                  </div>
+                  <ClampText text={r.rationale} lines={2} className="text-xs text-muted-foreground/80 leading-snug max-w-[340px]" />
                 ) : null}
               </td>
               <td className="py-1.5 text-right text-foreground/85">{fmtAmount(r.revenue_fwd, usd)}</td>
@@ -120,6 +151,7 @@ function SegmentTable({ breakdown, usd }: { breakdown: SotpBreakdown; usd: strin
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 
@@ -383,9 +415,7 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
         Sum-of-the-Parts ({methodLabel(breakdown.method)}){w != null && w > 0 ? ` · ${(w * 100).toFixed(0)}% of the valuation` : ''}
       </div>
       {breakdown.sentence && (
-        <p className="mt-2 text-[12.5px] font-medium leading-relaxed text-foreground/90">
-          {breakdown.sentence}
-        </p>
+        <ClampText text={breakdown.sentence} lines={3} className="mt-2 text-[12.5px] font-medium leading-relaxed text-foreground/90" />
       )}
 
       {/* 2. Segment table */}
@@ -419,7 +449,7 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
             </div>
           )}
           {basis?.summary && (
-            <div className="text-xs text-muted-foreground/80">Multiple basis: {basis.summary}</div>
+            <ClampText text={`Multiple basis: ${basis.summary}`} lines={2} className="text-xs text-muted-foreground/80" />
           )}
           {flags.map((f, i) => (
             <div key={i} className="text-xs text-warning">⚠ {f}</div>
@@ -428,10 +458,10 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
             <div key={`rem-${i}`} className="text-xs font-medium text-foreground/80">{r}</div>
           ))}
           {breakdown.basis_note && (
-            <div className="text-xs text-muted-foreground/70">{breakdown.basis_note}</div>
+            <ClampText text={breakdown.basis_note} lines={2} className="text-xs text-muted-foreground/70" />
           )}
           {breakdown.data_limitations && (
-            <div className="text-xs text-muted-foreground/70">Limitations: {breakdown.data_limitations}</div>
+            <ClampText text={`Limitations: ${breakdown.data_limitations}`} lines={2} className="text-xs text-muted-foreground/70" />
           )}
         </div>
       )}
