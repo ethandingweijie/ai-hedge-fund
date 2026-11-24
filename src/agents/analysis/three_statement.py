@@ -124,6 +124,18 @@ def assumptions_from_history(raw_financials: Optional[dict], hist: Optional[dict
 
     gm, src = _bounded_median([(_f(r.get("gross_profit")) or 0.0) / _f(r["revenue"]) for r in rows if _f(r.get("gross_profit")) is not None], *cfg["gross_margin_bounds"], None)
     put("gross_margin", gm, src if gm is not None else "missing (no gross profit in the filings)", "gross profit and the COGS line")
+    # Owner, 2026-11-25 (CFA audit, workbook invariant): the forecast's EBIT is the driver, so gross profit follows it --
+    # operating expense ex-D&A holds its historical share of revenue and gross profit = EBIT + D&A + opex. A fixed
+    # historical gross margin under a cyclical EBIT path put MU's forecast EBIT (78%) above its gross profit (31%).
+    def _opex_ratio(r):
+        gp_, e_, da_, rv_ = _f(r.get("gross_profit")), _f(r.get("operating_income")), _f(r.get("depreciation_and_amortization")), _f(r.get("revenue"))
+        if gp_ is None or e_ is None or not rv_:
+            return None
+        return (gp_ - e_ - abs(da_ or 0.0)) / rv_
+    oxr, src = _bounded_median([_opex_ratio(r) for r in rows], 0.0, 0.90, None)
+    put("opex_ex_da_ratio", oxr if (oxr is not None and oxr > 0) else None,
+        src if (oxr is not None and oxr > 0) else "missing (gross profit, operating income or D&A not in the filings)",
+        "operating expense ex-D&A; gross profit = EBIT + D&A + opex")
     sbc, src = _bounded_median([abs(_f(r.get("stock_based_compensation")) or 0.0) / _f(r["revenue"]) for r in rows if _f(r.get("stock_based_compensation")) is not None], *cfg["sbc_pct_bounds"], 0.0)
     put("sbc_pct", sbc, src, "SBC add-back in operating cash flow and the equity roll")
     def _debt(r):
@@ -220,9 +232,18 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         # Plan E1 (owner, 2026-10-07): acquired-intangible amortisation runs off goodwill & intangibles, not PP&E.
         amort = max(0.0, min(float(r.get("amortisation") or 0.0), da))
         dep = da - amort
-        cogs = rev * (1.0 - gm) if gm is not None else None
-        gp = rev - cogs if cogs is not None else None
-        opex = (gp - ebit - da) if gp is not None else (rev - ebit - da)
+        # a user's gross-margin override wins; otherwise gross profit follows the forecast's EBIT
+        _oxr = v("opex_ex_da_ratio") if ((a.get("gross_margin") or {}).get("source") != "user override") else None
+        if _oxr is not None:
+            # gross profit follows the forecast's EBIT (owner, 2026-11-25); capped at revenue
+            opex = rev * float(_oxr)
+            gp = min(rev, ebit + da + opex)
+            opex = gp - ebit - da
+            cogs = rev - gp
+        else:
+            cogs = rev * (1.0 - gm) if gm is not None else None
+            gp = rev - cogs if cogs is not None else None
+            opex = (gp - ebit - da) if gp is not None else (rev - ebit - da)
         sbc = rev * sbc_pct
         debt_open = o["short_term_debt"] + o["long_term_debt"]
         int_exp = debt_open * ir + revolver * (ir + DEFAULTS["revolver_rate_spread"])

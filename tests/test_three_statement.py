@@ -363,3 +363,13 @@ def test_large_cap_pharma_discounts_at_capm_with_a_floor():
     from src.agents.analysis import dcf_agent as d_
     assert d_._PHARMA_CAPM_FLOOR == 0.075 and "Big Pharma (Consolidated DCF)" in d_._PHARMA_CAPM_PROFILES
     assert "max(float(_cr), _PHARMA_CAPM_FLOOR)" in inspect.getsource(d_)
+
+
+def test_gross_profit_follows_the_forecast_ebit_so_ebit_never_exceeds_it():
+    """Owner, 2026-11-25 (CFA audit, workbook invariant): MU's forecast EBIT (78%) sat above a fixed 31% gross margin.
+    Opex ex-D&A holds its historical share of revenue and gross profit = EBIT + D&A + opex, capped at revenue."""
+    from src.agents.analysis import three_statement as ts
+    raw = {f"FY{2021 + i}": {"revenue": 100.0, "gross_profit": gp, "operating_income": e, "depreciation_and_amortization": 5.0}
+           for i, (gp, e) in enumerate([(40.0, 10.0), (20.0, -10.0), (35.0, 5.0), (60.0, 30.0)])}
+    a = ts.assumptions_from_history(raw, {})
+    assert a["opex_ex_da_ratio"]["value"] == pytest.approx(25.0 / 100.0)          # median of 25, 25, 25, 25
