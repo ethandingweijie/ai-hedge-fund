@@ -1669,6 +1669,11 @@ def get_recent_research(
 
 # ── C2: persisted extractor fan-out outputs ──────────────────────────────────
 
+# The guidance → estimates normalizer version a persisted extractor set was written under. v2 (2026-11-24) keeps an
+# EPS-only block that v1 reduced to {}; a v1 set with an empty guidance result is re-extracted once (deep_research C2).
+GUIDANCE_NORMALIZER_VERSION = 2
+
+
 def save_extractor_outputs(
     ticker: str,
     sections_hash: str,
@@ -1682,7 +1687,8 @@ def save_extractor_outputs(
     Upserts — a later run with identical sections may hold a more complete
     extraction (e.g. an earlier dcf_calibration attempt timed out).
     """
-    payload = _safe_json({"results": results or {}, "failures": failures or []})
+    payload = _safe_json({"results": results or {}, "failures": failures or [],
+                          "guidance_normalizer": GUIDANCE_NORMALIZER_VERSION})
     if not ticker or not sections_hash or payload is None:
         return False
     try:
@@ -1735,6 +1741,8 @@ def get_extractor_outputs(ticker: str, sections_hash: str) -> dict | None:
         return None
     failures = parsed.get("failures")
     parsed["failures"] = failures if isinstance(failures, list) else []
+    gv = parsed.get("guidance_normalizer")
+    parsed["guidance_normalizer"] = gv if isinstance(gv, int) else 1
     return parsed
 
 

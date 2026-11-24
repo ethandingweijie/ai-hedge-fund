@@ -4172,6 +4172,17 @@ _RETRY_ON_EMPTY_EXTRACTORS = {
 }
 
 
+def _stale_empty_guidance(persisted: dict) -> bool:
+    """True when a persisted extractor set predates the current guidance normalizer and its guidance result is empty
+    -- the old normalizer may have discarded a block the current one keeps (EPS-only guidance)."""
+    try:
+        from src.memory.run_archive import GUIDANCE_NORMALIZER_VERSION as _cur
+    except Exception:                                      # noqa: BLE001
+        return False
+    return ((persisted.get("guidance_normalizer") or 1) < _cur
+            and _is_empty_extraction((persisted.get("results") or {}).get("guidance_estimates")))
+
+
 def _is_empty_extraction(out) -> bool:
     """True when an extractor output carries no usable payload."""
     if out is None:
@@ -4598,6 +4609,9 @@ def _research_one_ticker(
                 # extractor existed is reused as `precomputed` below, so only the
                 # missing extractor runs (the fan-out skips the ones it has).
                 and "guidance_estimates" in _persisted_ext["results"]
+                # 2026-11-24: a set written under the v1 normalizer stored an EPS-only guider's block as {} (NEE).
+                # Re-extract it once: the fan-out below reuses every non-empty output and runs only the guidance one.
+                and not _stale_empty_guidance(_persisted_ext)
             )
 
             # B8/R2: the citation registry rebuild (~128 s — the cached-run

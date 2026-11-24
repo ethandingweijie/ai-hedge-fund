@@ -245,3 +245,59 @@ def test_c2_persisted_without_dcf_falls_back_to_live(tmp_archive, monkeypatch):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ── 2026-11-24: guidance normalizer version (NEE: an EPS-only block persisted as {} under v1) ────────────────────
+
+def _save_v1(ticker, h, results, monkeypatch):
+    monkeypatch.setattr(run_archive, "GUIDANCE_NORMALIZER_VERSION", 1)
+    run_archive.save_extractor_outputs(ticker, h, results, [])
+    monkeypatch.setattr(run_archive, "GUIDANCE_NORMALIZER_VERSION", 2)
+
+
+def test_guidance_normalizer_version_round_trip(tmp_archive):
+    run_archive.save_extractor_outputs("ZZTEST", "h", {"dcf_calibration": {"wacc": 0.1}}, [])
+    assert run_archive.get_extractor_outputs("ZZTEST", "h")["guidance_normalizer"] == run_archive.GUIDANCE_NORMALIZER_VERSION
+
+
+def test_legacy_blob_without_version_reads_as_v1(tmp_archive):
+    run_archive.save_extractor_outputs("ZZTEST", "h", {"dcf_calibration": {"wacc": 0.1}}, [])
+    run_archive._exec("UPDATE extractor_outputs SET outputs_json = ? WHERE ticker = ?",
+                      [json.dumps({"results": {"guidance_estimates": {}}, "failures": []}), "ZZTEST"])
+    got = run_archive.get_extractor_outputs("ZZTEST", "h")
+    assert got["guidance_normalizer"] == 1
+    assert dr._stale_empty_guidance(got) is True
+
+
+@pytest.mark.parametrize("version, guidance, stale", [
+    (1, {}, True),
+    (1, {"confidence": "HIGH", "estimates": {"base": {"eps_fy1": 3.97}}}, False),   # a v1 block that survived stays
+    (2, {}, False),                                                                # v2 empty = genuinely no guidance
+])
+def test_stale_empty_guidance(version, guidance, stale):
+    assert dr._stale_empty_guidance({"guidance_normalizer": version,
+                                     "results": {"guidance_estimates": guidance}}) is stale
+
+
+def test_v1_set_with_empty_guidance_reruns_only_the_guidance_extractor(tmp_archive, monkeypatch):
+    _patch_cache_env(monkeypatch)
+    h = dr._hash_research_sections(_CACHED_ROW["deep_research_sections"], "SaaS")
+    _save_v1("ZZTEST", h, {**_PERSISTED, "guidance_estimates": {}}, monkeypatch)
+    seen = {}
+
+    def fake_fanout(c, m, sections, report, ticker, sector, profile_name, raw_financials, precomputed=None):
+        seen["precomputed"] = dict(precomputed or {})
+        return ({**(precomputed or {}),
+                 "guidance_estimates": {"confidence": "HIGH", "estimates": {"base": {"eps_fy1": 3.97}}}}, [])
+
+    monkeypatch.setattr(dr, "_run_extractor_fanout", fake_fanout)
+    out = dr._research_one_ticker(
+        ticker="ZZTEST", sector="Tech", end_date="2026-08-08", anthropic_key="k", model_name="qwen3.6-plus",
+        raw_financials={}, insider_summary="", base_url=None, synthesis_model="qwen3.6-plus", profile_name="SaaS",
+    )
+    # the other outputs are handed over as precomputed (the fan-out skips non-empty ones), so only guidance re-runs
+    assert seen["precomputed"]["saas_metrics"] == _PERSISTED["saas_metrics"]
+    assert out["guidance_estimates"]["estimates"]["base"]["eps_fy1"] == 3.97
+    stored = run_archive.get_extractor_outputs("ZZTEST", h)
+    assert stored["guidance_normalizer"] == 2
+    assert dr._stale_empty_guidance(stored) is False            # once: the next cache hit reuses with 0 LLM calls
