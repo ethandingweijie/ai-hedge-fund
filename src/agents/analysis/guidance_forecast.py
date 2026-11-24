@@ -535,6 +535,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     tg["street_m1"] = _num((block or {}).get("_street_ebitda_margin_fy1"))
     tg["mid_cycle"] = _num((block or {}).get("_mid_cycle_ebit_margin"))           # owner, 2026-11-12 (cycle.py)
     tg["cycle_reversion_years"] = _num((block or {}).get("_cycle_reversion_years"))
+    tg["trend_rev0"] = _num((block or {}).get("_trend_revenue0"))                # owner, 2026-11-24 (cycle peak)
+    tg["trend_growth"] = _num((block or {}).get("_trend_revenue_growth"))
     if tg["g1"] is None:
         return None
     # Owner, 2026-10-04 (plan 1B.1): guided EPS is in the filing's currency; net income here is in
@@ -640,6 +642,30 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             growth_sched.append(gT + (float(tgr) - gT) * (t - T_rev) / float(F + 1))
         else:
             growth_sched.append(float(tgr))
+    # Owner, 2026-11-24: at a cycle peak whose revenue is price-inflated, the top line converges to its ten-year
+    # trend path over the reversion years after the guided years (MU: $133bn against a $48bn trend), then fades
+    # from the trend growth to the terminal rate. Peak pricing is not compounded into the terminal value.
+    _trc = None
+    _tr0, _trg = tg.get("trend_rev0"), tg.get("trend_growth")
+    if _tr0 and _tr0 > 0 and _trg is not None:
+        _Rr = max(1, int(tg.get("cycle_reversion_years") or 3))
+        _rev_T = rev0
+        for _g in growth_sched[:T_rev]:
+            _rev_T *= (1.0 + _g)
+        _end = T_rev + _Rr
+        _tgt = float(_tr0) * (1.0 + float(_trg)) ** _end
+        if _end <= PROJECTION_YEARS and _rev_T > _tgt > 0:
+            _step = (_tgt / _rev_T) ** (1.0 / _Rr) - 1.0
+            for _t in range(T_rev + 1, _end + 1):
+                growth_sched[_t - 1] = _step
+            for _t in range(_end + 1, PROJECTION_YEARS + 1):
+                _k = _t - _end
+                growth_sched[_t - 1] = (float(_trg) + (float(tgr) - float(_trg)) * _k / float(F + 1)) if _k <= F else float(tgr)
+            _trc = {"revenue_at_guided_end": _rev_T, "trend_revenue_at_target": _tgt, "years": _Rr, "after_year": T_rev,
+                    "annual_change": _step, "trend_growth": float(_trg)}
+            dec["flags"].append(f"Cycle peak: revenue converges to its ten-year trend path over {_Rr} years after year "
+                                f"{T_rev} ({_step:+.1%} a year), then fades from the trend growth {float(_trg):.1%} to the "
+                                f"terminal rate -- peak pricing is not compounded")
     # extend revenue to year 10 on the faded growth
     rev_all = [rev0]
     for t in range(1, PROJECTION_YEARS + 1):
@@ -843,6 +869,7 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "scenario": scenario, "archetype": code, "archetype_name": arche, "archetype_reason": arche_reason, "horizon_years": T, "fade_years": F,
         "street_years": T_rev - T,
         "mid_cycle_reversion": _mcr,
+        "trend_revenue_convergence": _trc,
         "capex_rule": capex_rule,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],

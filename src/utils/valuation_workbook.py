@@ -2495,6 +2495,10 @@ class _Book:
                 ref = self.leg_cell.get((s, key))
                 _pa = sc.get("pipeline_addon") or {}
                 _pa_add = (f"+{float(_pa['per_share']):.6f}" if (_pa.get("per_share") and key in (_pa.get("legs") or [])) else "")
+                # Owner, 2026-11-24: a normalised leg carries the cycle-peak windfall (per share), stated in the formula.
+                _cw = sc.get("cycle_windfall") or {}
+                if _cw.get("per_share") and key in (_cw.get("legs") or []):
+                    _pa_add += f"+{float(_cw['per_share']):.6f}"
                 if ref:
                     # Plan IV2: an operating leg carries the pipeline rNPV add-on (per share), stated in the formula.
                     sh.put(r, 5, "=" + ref + _pa_add, NUM)

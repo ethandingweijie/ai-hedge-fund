@@ -30,6 +30,8 @@ MIN_CROSSINGS = 2
 PEAK_Z, EDGE_Z = 1.0, 0.5
 #: forecast years over which the margin returns to mid-cycle after the guided / street years
 REVERSION_YEARS = 3
+#: at a peak, revenue this far above its ten-year log-linear trend is price, not volume: normalised on the trend
+PEAK_REVENUE_RATIO = 1.25
 
 
 LONG_YEARS = 15
@@ -83,6 +85,28 @@ def _ebit_margin(row: dict) -> Optional[float]:
     return None if e is None else e / rev
 
 
+def trend_revenue(rows: list, years: int = 10) -> Optional[dict]:
+    """Ten-year log-linear revenue trend (owner, 2026-11-24): {trend (at the latest year), growth (per year),
+    ratio (latest / trend), n}. None under six usable years. Strips price from a price-driven top line (memory,
+    commodities) the way the mid-cycle margin strips it from the margin."""
+    import math
+    pts = [(i, math.log(r)) for i, r in enumerate(_f(x.get("revenue")) for x in (rows or [])[-years:]) if r and r > 0]
+    if len(pts) < 6:
+        return None
+    n = len(pts)
+    mx = sum(x for x, _ in pts) / n
+    my = sum(y for _, y in pts) / n
+    sxx = sum((x - mx) ** 2 for x, _ in pts)
+    if sxx <= 0:
+        return None
+    b = sum((x - mx) * (y - my) for x, y in pts) / sxx
+    a = my - b * mx
+    last_x = pts[-1][0]
+    trend = math.exp(a + b * last_x)
+    latest = math.exp(pts[-1][1])
+    return {"trend": trend, "growth": math.exp(b) - 1.0, "ratio": latest / trend if trend > 0 else None, "n": n}
+
+
 def _iqr_filter(vals: list[float]) -> list[float]:
     if len(vals) < 4:
         return list(vals)
@@ -132,6 +156,7 @@ def measure(series: Optional[list], *, profile_cyclical: bool = False, max_years
     # Cyclicality is an industry trait: only a cyclical PROFILE mean-reverts. Margins that swing on a non-cyclical
     # profile are usually one-offs or a broken franchise (INTC, WBD, MMM) -- flagged for review, never reverted.
     cyclical = bool(profile_cyclical) and not structural
+    tr = trend_revenue(rows)
     # A ten-year mid-cycle that is itself a loss (BA: 2019-2024) is not a cycle to revert to -- the franchise's
     # earning power is the question, which the turnaround model answers (phase 3).
     loss_mid = bool(profile_cyclical) and mid <= 0
@@ -147,6 +172,10 @@ def measure(series: Optional[list], *, profile_cyclical: bool = False, max_years
         "review_cyclical": bool(data_cyclical and not profile_cyclical and not structural),
         "data_cyclical": bool(data_cyclical), "structural_decline": bool(structural), "loss_making_mid_cycle": loss_mid,
         "reversion_years": REVERSION_YEARS,
+        "trend_revenue_ratio": round(tr["ratio"], 3) if tr and tr.get("ratio") else None,
+        "trend_revenue_growth": round(tr["growth"], 4) if tr else None,
+        # owner, 2026-11-24: at a peak, a top line this far above trend is normalised on the trend
+        "revenue_normalised": bool(cyclical and position == "peak" and tr and (tr.get("ratio") or 0) >= PEAK_REVENUE_RATIO),
     }
 
 

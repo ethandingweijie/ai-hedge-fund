@@ -6170,6 +6170,8 @@ _NAV_PRIMARY_BAND = 0.30
 _MARGIN_PEAK_WINDOW = 7             # years of operating margin the median and sigma are read over
 _MARGIN_PEAK_SIGMA = 1.5            # above median + 1.5 sigma the EBITDA and P/E legs move to mid-cycle
 _MARGIN_PEAK_SWAPS = {"Forward EV/EBITDA": "EV/EBITDA (norm)", "EV/EBITDA": "EV/EBITDA (norm)", "P/E": "P/E (norm)"}
+#: Owner, 2026-11-24: the legs the cycle-peak windfall is added to (they capitalise mid-cycle x trend earnings).
+_CYCLE_NORM_LEGS = ("EV/EBITDA (norm)", "EV/EBITDA (Norm)", "EV/EBIT (norm)", "P/E (norm)")
 #: Owner, 2026-11-12: at a cycle peak (src/agents/analysis/cycle.py) these legs capitalise mid-cycle earnings instead.
 _CYCLE_PEAK_SWAPS = {"Forward EV/EBITDA": "EV/EBITDA (norm)", "EV/EBITDA": "EV/EBITDA (norm)",
                      "Forward P/E": "P/E (norm)", "P/E": "P/E (norm)"}
@@ -16419,23 +16421,39 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _cyc_note = _cycm.describe(_cyc)
             if _cyc_note:
                 ticker_forward_flags.append(_cyc_note)
+            _rev_cur = (series[-1] or {}).get("revenue") if series else None
+            # Owner, 2026-11-24: at a peak with a price-inflated top line, normalised revenue is the ten-year trend
+            # (the current revenue over its ratio to trend, so the series' own currency carries through).
+            _rev_norm = _rev_cur
+            if (_cyc and _cyc.get("revenue_normalised") and isinstance(_rev_cur, (int, float)) and _rev_cur > 0
+                    and _cyc.get("trend_revenue_ratio")):
+                _rev_norm = float(_rev_cur) / float(_cyc["trend_revenue_ratio"])
+                _cyc["trend_revenue0"] = _rev_norm
+                ticker_forward_flags.append(
+                    f"Cycle peak revenue: {float(_rev_cur) / 1e9:,.1f}bn is {_cyc['trend_revenue_ratio']:.2f}x its ten-year "
+                    f"trend ({_rev_norm / 1e9:,.1f}bn, trend growth {_cyc['trend_revenue_growth']:+.1%}): normalised earnings "
+                    "use the trend revenue, the forecast converges to it, and the peak years' excess profit is added to "
+                    "the normalised legs once (not capitalised)")
             if _cyc and _cyc.get("cyclical") and isinstance(_guid_est, dict) and _guid_est:
                 _guid_est = {**_guid_est, "_mid_cycle_ebit_margin": _cyc["mid_cycle_margin"],
                              "_cycle_reversion_years": _cyc["reversion_years"]}
-            _rev_cur = (series[-1] or {}).get("revenue") if series else None
+                if _cyc.get("trend_revenue0"):
+                    _guid_est = {**_guid_est, "_trend_revenue0": _cyc["trend_revenue0"],
+                                 "_trend_revenue_growth": _cyc["trend_revenue_growth"]}
             if (_cyc and _cyc.get("cyclical") and _cyc_long and _cyc["n_years"] >= 8
                     and isinstance(_rev_cur, (int, float)) and _rev_cur > 0):
                 _ebitda_m = _cycm.mid_cycle_ratio(_cyc_hist, "ebitda")
                 _mid_e = float(_cyc["mid_cycle_margin"])
                 _ie_c = abs(float(most_recent.get("interest_expense") or 0.0))
                 _before = {k: most_recent.get("normalized_" + k) for k in ("ebit", "ebitda", "net_income")}
-                most_recent["normalized_ebit"] = _mid_e * float(_rev_cur)
+                most_recent["normalized_ebit"] = _mid_e * float(_rev_norm)
                 if _ebitda_m is not None:
-                    most_recent["normalized_ebitda"] = _ebitda_m * float(_rev_cur)
-                most_recent["normalized_net_income"] = (_mid_e * float(_rev_cur) - _ie_c) * (1.0 - _UFCF_TAX_DEFAULT)
+                    most_recent["normalized_ebitda"] = _ebitda_m * float(_rev_norm)
+                most_recent["normalized_net_income"] = (_mid_e * float(_rev_norm) - _ie_c) * (1.0 - _UFCF_TAX_DEFAULT)
                 most_recent["_normalized_net_income_basis"] = (
-                    f"mid-cycle EBIT margin {_mid_e:.1%} ({_cyc['mid_cycle_years']}-year median) x current revenue, "
-                    f"less today's interest, taxed at {_UFCF_TAX_DEFAULT:.0%}")
+                    f"mid-cycle EBIT margin {_mid_e:.1%} ({_cyc['mid_cycle_years']}-year median) x "
+                    + ("ten-year trend revenue" if _rev_norm != _rev_cur else "current revenue")
+                    + f", less today's interest, taxed at {_UFCF_TAX_DEFAULT:.0%}")
                 _cyc["normalized_before"] = _before
                 # the five-year audit line above no longer describes what the P/E (norm) leg reads
                 ticker_forward_flags[:] = [f for f in ticker_forward_flags if not str(f).startswith("Normalized NI: TTM")]
@@ -16447,7 +16465,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker_forward_flags.append(
                     f"Normalised earnings on the {_cyc['mid_cycle_years']}-year mid-cycle (cyclical): EBIT margin "
                     f"{_mid_e:.1%}" + (f", EBITDA margin {_ebitda_m:.1%}" if _ebitda_m is not None else "")
-                    + " x current revenue; net income at today's interest burden (was the five-year mean)")
+                    + (" x ten-year trend revenue" if _rev_norm != _rev_cur else " x current revenue")
+                    + "; net income at today's interest burden (was the five-year mean)")
         except Exception as _cyc_exc:                      # noqa: BLE001
             _log.warning("[dcf] %s: cycle measure failed: %s", ticker, _cyc_exc)
             most_recent["_cycle"] = None
@@ -18483,6 +18502,37 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 f"({_pipe_ps:,.2f}/share, {len(_pipe_assets)} unapproved asset(s); {_n_approved} approved asset(s) "
                                 f"left out, their sales being in the operating legs' revenue) is added to each operating leg "
                                 f"({', '.join(_added)}); its weight (w={_rn_rec.get('dropped_weight', 0.0):.2f}) rolls pro rata into them")
+            # Owner, 2026-11-24 (cycle peak): the years before the cycle normalises earn above trend. That excess is
+            # a finite, one-off cash windfall -- the after-tax operating profit above mid-cycle margin x trend revenue,
+            # discounted at WACC -- added once to each normalised leg (the DCF already carries those years).
+            try:
+                _cw = most_recent.get("_cycle") or {}
+                if _cw.get("trend_revenue0") and _gf and _gf.get("rows") and shares:
+                    _tax_w = float(((_gf.get("history") or {}).get("tax_rate")) or _UFCF_TAX_DEFAULT)
+                    _pv_w = 0.0
+                    for _row_w in _gf["rows"]:
+                        _yw = int(_row_w.get("year") or 0)
+                        if _yw < 1 or not isinstance(_row_w.get("ebit"), (int, float)):
+                            continue
+                        _norm_w = float(_cw["mid_cycle_margin"]) * float(_cw["trend_revenue0"]) * (
+                            1.0 + float(_cw.get("trend_revenue_growth") or 0.0)) ** _yw
+                        _ex = float(_row_w["ebit"]) - _norm_w
+                        if _ex > 0:
+                            _pv_w += _ex * (1.0 - _tax_w) / (1.0 + float(wacc)) ** _yw
+                    _w_ps = _pv_w * float(fx_rate or 1.0) / float(shares)
+                    _w_legs = [k for k in _CYCLE_NORM_LEGS if method_values.get(k) is not None]
+                    if _w_ps > 0 and _w_legs:
+                        for _k in _w_legs:
+                            method_values[_k] = float(method_values[_k]) + _w_ps
+                        most_recent.setdefault("_cycle_windfall", {})[scenario] = {
+                            "per_share": round(_w_ps, 4), "legs": _w_legs, "pv": _pv_w}
+                        if scenario == "base":
+                            forward_flags.append(
+                                f"Cycle peak windfall: the after-tax profit above mid-cycle x trend revenue until the cycle "
+                                f"normalises, discounted at WACC ({_w_ps:,.2f}/share), is added once to "
+                                + ", ".join(_w_legs) + " -- not capitalised")
+            except Exception as _cw_exc:                   # noqa: BLE001
+                _log.warning("[dcf] %s: cycle windfall failed: %s", ticker, _cw_exc)
             # Owner, 2026-10-06 (LLY review): a dividend model prices the dividend. Below a 2% trailing yield
             # (Lilly <1%, non-payers) the DDM weight rolls into the DCF legs (else the other legs).
             try:
@@ -18743,6 +18793,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "leg_dispersion":    _disp,
                 # Plan IV2: the pipeline rNPV added to each operating leg (per share), when it is an add-on.
                 "pipeline_addon":    (most_recent.get("_pipeline_addon") or {}).get(scenario),
+                # Owner, 2026-11-24: the cycle-peak windfall added to each normalised leg (per share).
+                "cycle_windfall":    (most_recent.get("_cycle_windfall") or {}).get(scenario),
                 # Owner, 2026-10-07: the priced pipeline, asset by asset, for the workbook's Pipeline tab.
                 "rnpv_audit":        (lambda _a: ({k: v for k, v in _a.items()} if _a else None))(
                                          (most_recent.get("_rnpv_audit") or {}).get(scenario)),

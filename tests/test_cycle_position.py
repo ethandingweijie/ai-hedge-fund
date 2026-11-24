@@ -99,3 +99,38 @@ def test_a_loss_making_mid_cycle_is_a_turnaround_not_a_cycle():
     c = cycle.measure(_series([0.06, 0.07, 0.05, -0.02, -0.18, -0.07, -0.04, 0.01, -0.14, 0.05]), profile_cyclical=True)
     assert c["mid_cycle_margin"] <= 0 and c["loss_making_mid_cycle"] and not c["cyclical"]
     assert "turnaround question" in cycle.describe(c)
+
+
+def test_a_price_inflated_peak_normalises_on_trend_revenue():
+    rev = [20, 22, 30, 23, 21, 27, 31, 16, 25, 80]                 # memory-shaped: last year 3x its trend
+    c = cycle.measure(_series([0.10, 0.30, 0.45, 0.25, 0.10, 0.20, 0.30, -0.35, 0.05, 0.70], rev=[float(x) for x in rev]),
+                      profile_cyclical=True)
+    assert c["position"] == "peak" and c["revenue_normalised"] and c["trend_revenue_ratio"] > 2.0
+    calm = cycle.measure(_series([0.10, 0.30, 0.45, 0.25, 0.10, 0.20, 0.30, -0.35, 0.05, 0.70]), profile_cyclical=True)
+    assert calm["position"] == "peak" and not calm["revenue_normalised"]          # flat revenue: margin only
+
+
+def test_trend_revenue_is_a_log_linear_fit():
+    tr = cycle.trend_revenue([{"revenue": 100.0 * 1.05 ** i} for i in range(10)])
+    assert tr["growth"] == pytest.approx(0.05, abs=1e-9) and tr["ratio"] == pytest.approx(1.0)
+
+
+def test_the_forecast_revenue_converges_to_trend_after_the_guided_years():
+    import importlib.util
+    from pathlib import Path
+    from src.agents.analysis import guidance_forecast as gf
+    spec = importlib.util.spec_from_file_location("_gft", Path(__file__).resolve().parent / "test_guidance_forecast.py")
+    gft = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gft)
+    kw = dict(scenario="base", series=gft._SERIES, profile_name="Managed Care", sector="Healthcare", wacc=0.08, tgr=0.025,
+              shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04)
+    plain = gf.build_forecast(gft._BLOCK, **kw)
+    rev0 = plain["rows"][0]["revenue"] / (1.0 + plain["growth_schedule"][0])
+    blk = {**gft._BLOCK, "_mid_cycle_ebit_margin": 0.02, "_cycle_reversion_years": 3,
+           "_trend_revenue0": rev0 / 2.0, "_trend_revenue_growth": 0.03}
+    cyc = gf.build_forecast(blk, **kw)
+    tc = cyc["trend_revenue_convergence"]
+    end = tc["after_year"] + tc["years"]
+    assert cyc["rows"][end - 1]["revenue"] == pytest.approx(rev0 / 2.0 * 1.03 ** end, rel=1e-6)
+    assert cyc["growth_schedule"][end] == pytest.approx(0.03 + (0.025 - 0.03) / 5.0, abs=1e-9)   # fade from trend growth
+    assert plain["trend_revenue_convergence"] is None
