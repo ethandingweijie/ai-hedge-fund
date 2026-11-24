@@ -76,6 +76,7 @@ import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { Markdown } from '@/components/report/shared/Markdown';
 import { currencySymbol } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials' | 'news';
 
@@ -124,6 +125,7 @@ export function V2ReportView({
   onCancel,
   onRunUpdated,
 }: V2ReportViewProps) {
+  const { t: tr } = useI18n();
   const [tab, setTab] = useState<TabId>('summary');
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceChangePct, setPriceChangePct] = useState<number | null>(null);
@@ -219,7 +221,7 @@ export function V2ReportView({
               )}
             </div>
             <p className="mt-1.5 text-[13px] text-muted-foreground truncate">
-              {[companyName, sector].filter(Boolean).join(' · ')}
+              {[companyName, sector ? tr(sector) : null].filter(Boolean).join(' · ')}
             </p>
           </div>
           {ticker && (
@@ -229,24 +231,24 @@ export function V2ReportView({
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-brand text-brand-foreground text-[13px] font-semibold active:bg-brand/90 shrink-0"
             >
               <MessageSquare size={14} />
-              Discuss
+              {tr('Discuss')}
             </Link>
           )}
         </div>
 
         {/* Tab strip */}
         <div className="px-3 flex items-center gap-1 overflow-x-auto phone-scroll">
-          {TABS.map(t => (
+          {TABS.map(tb => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
               className={`h-11 px-2.5 text-[14px] border-b-[2px] -mb-px transition-colors shrink-0 flex items-center gap-1
-                ${tab === t.id
+                ${tab === tb.id
                   ? 'text-foreground font-semibold border-foreground'
                   : 'text-muted-foreground font-medium border-transparent active:text-foreground'}`}
             >
-              {t.label}
-              {t.id === 'summary' && isRunning && (
+              {tr(tb.label)}
+              {tb.id === 'summary' && isRunning && (
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
               )}
             </button>
@@ -397,9 +399,10 @@ function vgpmTooltip(label: string, dim?: { score?: number; subs?: string[] }): 
 
 /** Sentence-case section title for the flat mobile Summary. */
 function MobileSectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+  const { t: tr } = useI18n();
   return (
     <div className="flex items-center justify-between gap-3 pb-2.5 mb-4 border-b border-border">
-      <h2 className="text-[20px] font-semibold tracking-tight text-foreground">{children}</h2>
+      <h2 className="text-[20px] font-semibold tracking-tight text-foreground">{typeof children === 'string' ? tr(children) : children}</h2>
       {right}
     </div>
   );
@@ -421,6 +424,7 @@ function SummaryBody({
   /** Price at run time; upside is measured from it (same basis as desktop). */
   runPrice: number | undefined;
 }) {
+  const { t: tr } = useI18n();
   const target = typeof decision?.price_target === 'number' && decision.price_target > 0 ? decision.price_target : null;
   const upside = target != null && runPrice ? (target / runPrice - 1) * 100 : null;
   const position = typeof decision?.position_size_pct === 'number' ? decision.position_size_pct * 100 : null;
@@ -443,7 +447,7 @@ function SummaryBody({
             right={decision && !decision.research_view
               ? <span className="flex items-center gap-2">
                   <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(decision.action)}`}>
-                    {capWord(String(decision.action ?? '').toLowerCase()) || '—'}
+                    {tr(capWord(String(decision.action ?? '').toLowerCase())) || '—'}
                   </span>
                   {target != null && <TargetPill value={target} ticker={ticker} className="h-9 py-0 text-[15px]" />}
                 </span>
@@ -454,7 +458,7 @@ function SummaryBody({
           {!decision ? (
             <div className="flex items-center gap-2.5 py-2 text-muted-foreground">
               <LoadingSpinner size={16} />
-              <span className="text-[14px]">{isRunning ? 'Research and valuation running…' : 'Waiting for decision'}</span>
+              <span className="text-[14px]">{isRunning ? tr('Research and valuation running…') : tr('Waiting for decision')}</span>
             </div>
           ) : (
             <>
@@ -473,8 +477,8 @@ function SummaryBody({
                   )}
                   {position != null && <MobileFigure label="Position" value={`${position.toFixed(1)}%`} />}
                   {regime?.risk_appetite && (
-                    <MobileFigure label="Regime" value={capWord(regime.risk_appetite)}
-                      sub={regime.volatility_regime ? `${regime.volatility_regime} vol` : undefined} />
+                    <MobileFigure label="Regime" value={tr(capWord(regime.risk_appetite))}
+                      sub={regime.volatility_regime ? tr('{v} vol', { v: tr(regime.volatility_regime) }) : undefined} />
                   )}
                 </div>
               )}
@@ -496,8 +500,8 @@ function SummaryBody({
               {decision.price_target_override ? (
                 <p className="mt-3 text-[12px] text-muted-foreground">
                   {decision.pm_regenerated_at
-                    ? 'Thesis and headline were rewritten on your estimate override.'
-                    : 'Figures reflect your estimate override; the thesis was written before it. Rewrite it from the Valuation tab.'}
+                    ? tr('Thesis and headline were rewritten on your estimate override.')
+                    : tr('Figures reflect your estimate override; the thesis was written before it. Rewrite it from the Valuation tab.')}
                 </p>
               ) : null}
             </>
@@ -524,7 +528,7 @@ function SummaryBody({
                   {dim?.grade
                     ? <p className={`text-[28px] font-bold leading-none ${gradeTone(dim.grade, 'text')}`}>{dim.grade}</p>
                     : <div className="h-7 flex items-center">{isRunning ? <LoadingSpinner size={14} /> : <span className="text-muted-foreground">—</span>}</div>}
-                  <p className="mt-1.5 text-[12px] text-muted-foreground">{label}</p>
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">{tr(label)}</p>
                 </div>
               );
             })}
@@ -538,9 +542,10 @@ function SummaryBody({
 function MobileFigure({ label, value, sub, className = 'text-foreground' }: {
   label: string; value: string; sub?: string; className?: string;
 }) {
+  const { t: tr } = useI18n();
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">{label}</p>
+      <p className="text-[13px] text-muted-foreground">{tr(label)}</p>
       <p className={`mt-0.5 text-[22px] font-semibold tabular-nums tracking-tight ${className}`}>{value}</p>
       {sub && <p className="text-[12px] text-muted-foreground">{sub}</p>}
     </div>
@@ -1433,6 +1438,7 @@ const V2_PERIOD_LABEL: Record<string, string> = {
  * green/red are for). Drag across the chart to read past closes.
  */
 function V2StockChart({ ticker }: { ticker: string }) {
+  const { t: tr } = useI18n();
   const sym = currencySymbol(ticker);
   const [tfIdx, setTfIdx] = useState(4); // default 1Y
   const [history, setHistory] = useState<{ date: string; close: number }[]>([]);
@@ -1467,7 +1473,7 @@ function V2StockChart({ ticker }: { ticker: string }) {
   const up = (change ?? 0) >= 0;
   const displayLabel = hoverIdx != null && history[hoverIdx]?.date
     ? new Date(history[hoverIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : V2_PERIOD_LABEL[tf.label] ?? tf.label;
+    : tr(V2_PERIOD_LABEL[tf.label] ?? tf.label);
 
   const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1492,11 +1498,11 @@ function V2StockChart({ ticker }: { ticker: string }) {
       <div className="mt-4 h-[200px]">
         {loading ? (
           <div className="h-full flex items-center justify-center gap-2 text-muted-foreground">
-            <LoadingSpinner size={14} /><span className="text-[13px]">Loading chart…</span>
+            <LoadingSpinner size={14} /><span className="text-[13px]">{tr('Loading chart…')}</span>
           </div>
         ) : points.length === 0 ? (
           <div className="h-full flex items-center justify-center text-[13px] text-muted-foreground">
-            No price data available
+            {tr('No price data available')}
           </div>
         ) : (
           <svg
@@ -1548,6 +1554,7 @@ function V2StockChart({ ticker }: { ticker: string }) {
 
 /* ───────── V2 Key Stats (flat, label above value, 2-col grid) ───────── */
 function V2KeyStats({ metrics, ticker }: { metrics: Record<string, number | undefined>; ticker: string }) {
+  const { t: tr } = useI18n();
   const sym = currencySymbol(ticker);
   // Sign before the currency symbol: "−S$631M", never "S$-631M".
   const fmtMoney = (v: number | undefined) => {
@@ -1617,7 +1624,7 @@ function V2KeyStats({ metrics, ticker }: { metrics: Record<string, number | unde
       <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
         {shown.map((r) => (
           <div key={r.k}>
-            <dt className="text-[13px] text-muted-foreground">{r.k}</dt>
+            <dt className="text-[13px] text-muted-foreground">{tr(r.k)}</dt>
             <dd className="mt-0.5 text-[17px] font-semibold tabular-nums text-foreground">{r.v}</dd>
           </div>
         ))}

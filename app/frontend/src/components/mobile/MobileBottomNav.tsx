@@ -1,5 +1,6 @@
 import { BarChart2, Filter, BookMarked, History } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { useI18n } from '@/i18n';
 
 const TABS = [
   { label: 'Research',  icon: BarChart2,  path: '/report',    href: '#/report'    },
@@ -9,6 +10,7 @@ const TABS = [
 ] as const;
 
 export function MobileBottomNav() {
+  const { t } = useI18n();
   const location = useLocation();
   const currentPath = location.pathname;
   const active = TABS.find(t => currentPath.startsWith(t.path)) ?? TABS[0];
@@ -29,7 +31,7 @@ export function MobileBottomNav() {
                 }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8} />
-              <span className="text-xs font-medium leading-none">{label}</span>
+              <span className="text-xs font-medium leading-none">{t(label)}</span>
             </a>
           );
         })}

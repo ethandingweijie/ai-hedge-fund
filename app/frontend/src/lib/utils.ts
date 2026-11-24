@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { currentLang } from "@/i18n";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -33,12 +34,16 @@ export function timeAgo(dateStr: string): string {
     const date = parseBackendIso(dateStr);
     const ms = Date.now() - date.getTime();
     const mins = Math.floor(ms / 60_000);
-    if (mins < 60) return `${Math.max(mins, 0)}m ago`;
+    const zh = currentLang() === 'zh';
+    if (mins < 1) return zh ? '刚刚' : 'just now';
+    if (mins < 60) return zh ? `${mins}分钟前` : `${mins}m ago`;
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
+    if (hrs < 24) return zh ? `${hrs}小时前` : `${hrs}h ago`;
     const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (days < 30) return zh ? `${days}天前` : `${days}d ago`;
+    return zh
+      ? date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
+      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   } catch {
     return '';
   }

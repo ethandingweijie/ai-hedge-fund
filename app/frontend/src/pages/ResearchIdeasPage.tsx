@@ -20,6 +20,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { rankTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 
 function formatRunTime(iso: string | null): string {
@@ -101,6 +102,7 @@ function momentumColor(composite: number | null | undefined): string {
 
 
 export function ResearchIdeasPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isDesktop = mode === 'desktop';
@@ -268,14 +270,14 @@ export function ResearchIdeasPage() {
     <>
     <TabHero
       icon={Lightbulb}
-      title="Research Ideas"
+      title={t("Research Ideas")}
       actions={
         <button
           onClick={() => { if (!loading) load(); }}
           disabled={loading}
           className="w-11 h-11 flex items-center justify-center rounded-full text-current opacity-80 hover:opacity-100 hover:bg-muted-foreground/15 disabled:opacity-50 transition-all"
-          title="Re-fetch latest cohorts (auto-fires on tab focus too)"
-          aria-label="Refresh"
+          title={t("Re-fetch latest cohorts (auto-fires on tab focus too)")}
+          aria-label={t("Refresh")}
         >
           {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
         </button>
@@ -286,13 +288,13 @@ export function ResearchIdeasPage() {
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 size={20} className="animate-spin mr-2" />
-            Loading ideas…
+            {t("Loading ideas…")}
           </div>
         )}
 
         {!loading && ideas.length === 0 && (
           <div className="text-sm text-muted-foreground p-6 border border-border rounded-md">
-            No research ideas yet.
+            {t("No research ideas yet.")}
           </div>
         )}
 
@@ -333,7 +335,7 @@ export function ResearchIdeasPage() {
                       {isAi && (
                         <span
                           className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-brand text-brand-foreground text-[12px] font-semibold"
-                          title="Generated daily by Qwen3.6-plus with native web search"
+                          title={t("Generated daily by Qwen3.6-plus with native web search")}
                         >
                           <Sparkles size={10} />
                           AI
@@ -390,13 +392,13 @@ export function ResearchIdeasPage() {
                         <span className="font-mono">{formatRunTime(idea.last_run_at)}</span>
                       </span>
                       {idea.last_pooled_delta_e != null && (
-                        <span>Pooled ΔE: <span className="font-mono font-semibold text-foreground">{(idea.last_pooled_delta_e * 100).toFixed(1)}%</span></span>
+                        <span>{t("Pooled ΔE:")} <span className="font-mono font-semibold text-foreground">{(idea.last_pooled_delta_e * 100).toFixed(1)}%</span></span>
                       )}
                       {idea.last_gate_passers != null && (
-                        <span>Gate passers: <span className="font-mono font-semibold text-foreground">{idea.last_gate_passers}</span></span>
+                        <span>{t("Gate passers:")} <span className="font-mono font-semibold text-foreground">{idea.last_gate_passers}</span></span>
                       )}
                       {idea.id === 'hk50' && idea.last_avg_growth != null && (
-                        <span>Avg G / D: <span className="font-mono font-semibold text-foreground">{idea.last_avg_growth.toFixed(1)} / {idea.last_avg_dividend != null ? idea.last_avg_dividend.toFixed(1) : '—'}</span></span>
+                        <span>{t("Avg G / D:")} <span className="font-mono font-semibold text-foreground">{idea.last_avg_growth.toFixed(1)} / {idea.last_avg_dividend != null ? idea.last_avg_dividend.toFixed(1) : '—'}</span></span>
                       )}
                       {idea.id === 'momentum' && (idea.long_count != null || idea.short_count != null) && (
                         <span>
@@ -407,7 +409,7 @@ export function ResearchIdeasPage() {
                         </span>
                       )}
                       {idea.id === 'momentum' && idea.as_of && (
-                        <span>As of: <span className="font-mono font-semibold text-foreground">{idea.as_of}</span></span>
+                        <span>{t("As of:")} <span className="font-mono font-semibold text-foreground">{idea.as_of}</span></span>
                       )}
                       {idea.id === 'fundflow' && (idea.long_count != null || idea.short_count != null) && (
                         <span>
@@ -465,7 +467,7 @@ export function ResearchIdeasPage() {
                         {/* Theme line for thematic modes */}
                         {idea.latest_idea_theme && (
                           <p className="text-[12px] text-foreground/80 leading-relaxed line-clamp-2">
-                            <span className="font-semibold text-foreground">Theme:</span>{' '}
+                            <span className="font-semibold text-foreground">{t("Theme:")}</span>{' '}
                             {idea.latest_idea_theme}
                           </p>
                         )}
@@ -478,7 +480,7 @@ export function ResearchIdeasPage() {
                         {/* Catalyst preview */}
                         {idea.latest_idea_catalyst && (
                           <p className="text-[12px] text-foreground/80 leading-relaxed line-clamp-2">
-                            <span className="font-semibold text-foreground">Catalyst:</span>{' '}
+                            <span className="font-semibold text-foreground">{t("Catalyst:")}</span>{' '}
                             {idea.latest_idea_catalyst}
                           </p>
                         )}
@@ -487,14 +489,14 @@ export function ResearchIdeasPage() {
 
                     {isAi && !idea.latest_idea_ticker && (
                       <div className="mt-4">
-                        <p className="text-[15px] text-muted-foreground">No idea yet. Tap + to generate one.</p>
+                        <p className="text-[15px] text-muted-foreground">{t("No idea yet. Tap + to generate one.")}</p>
                       </div>
                     )}
 
                     {/* SW46 top-3 picks preview */}
                     {idea.id === 'sw46' && topPicks.length > 0 && (
                       <div className="mt-4">
-                        <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Top 3 ranked</div>
+                        <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Top 3 ranked")}</div>
                         <div className="flex flex-wrap gap-1.5">
                           {topPicks.map((t) => (
                             <div
@@ -520,7 +522,7 @@ export function ResearchIdeasPage() {
                     {idea.id === 'hk50' && ((idea.top5_growth?.length ?? 0) > 0 || (idea.top5_dividend?.length ?? 0) > 0) && (
                       <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Top 5 · Growth</div>
+                          <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Top 5 · Growth")}</div>
                           <div className="space-y-1">
                             {(idea.top5_growth ?? []).map((t, i) => (
                               <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`}>
@@ -534,7 +536,7 @@ export function ResearchIdeasPage() {
                           </div>
                         </div>
                         <div>
-                          <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Top 5 · Dividend</div>
+                          <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Top 5 · Dividend")}</div>
                           <div className="space-y-1">
                             {(idea.top5_dividend ?? []).map((t, i) => (
                               <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`}>
@@ -611,7 +613,7 @@ export function ResearchIdeasPage() {
                         {((idea.top_long_sectors?.length ?? 0) > 0 || (idea.top_short_sectors?.length ?? 0) > 0) && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Long sector tailwinds</div>
+                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Long sector tailwinds")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_long_sectors ?? []).map((s) => (
                                   <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
@@ -621,11 +623,11 @@ export function ResearchIdeasPage() {
                                     </span>
                                   </div>
                                 ))}
-                                {(idea.top_long_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">none</span>}
+                                {(idea.top_long_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">{t("none")}</span>}
                               </div>
                             </div>
                             <div>
-                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Short sector tailwinds</div>
+                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Short sector tailwinds")}</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_short_sectors ?? []).map((s) => (
                                   <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
@@ -635,7 +637,7 @@ export function ResearchIdeasPage() {
                                     </span>
                                   </div>
                                 ))}
-                                {(idea.top_short_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">none</span>}
+                                {(idea.top_short_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">{t("none")}</span>}
                               </div>
                             </div>
                           </div>
@@ -644,7 +646,7 @@ export function ResearchIdeasPage() {
                         {((idea.lead_long_tickers?.length ?? 0) > 0 || (idea.lead_short_tickers?.length ?? 0) > 0) && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Lead longs</div>
+                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Lead longs")}</div>
                               <div className="space-y-1">
                                 {(idea.lead_long_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
@@ -658,7 +660,7 @@ export function ResearchIdeasPage() {
                               </div>
                             </div>
                             <div>
-                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>Lead shorts</div>
+                              <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>{t("Lead shorts")}</div>
                               <div className="space-y-1">
                                 {(idea.lead_short_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
@@ -692,7 +694,7 @@ export function ResearchIdeasPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>
-                              Money moving in
+                              {t("Money moving in")}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {(idea.top_inflow_regions ?? []).map((r) => (
@@ -708,13 +710,13 @@ export function ResearchIdeasPage() {
                                 </div>
                               ))}
                               {(idea.top_inflow_regions?.length ?? 0) === 0 && (
-                                <span className="text-muted-foreground/60 text-[12px] italic">none</span>
+                                <span className="text-muted-foreground/60 text-[12px] italic">{t("none")}</span>
                               )}
                             </div>
                           </div>
                           <div>
                             <div className={`${sz.previewLabel} font-medium text-muted-foreground mb-1.5`}>
-                              Money moving out
+                              {t("Money moving out")}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                               {(idea.top_outflow_regions ?? []).map((r) => (
@@ -730,7 +732,7 @@ export function ResearchIdeasPage() {
                                 </div>
                               ))}
                               {(idea.top_outflow_regions?.length ?? 0) === 0 && (
-                                <span className="text-muted-foreground/60 text-[12px] italic">none</span>
+                                <span className="text-muted-foreground/60 text-[12px] italic">{t("none")}</span>
                               )}
                             </div>
                           </div>
@@ -748,8 +750,8 @@ export function ResearchIdeasPage() {
                           onClick={handleGenerateIdea}
                           disabled={generatingIdea}
                           className="w-11 h-11 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
-                          title="Generate a new contrarian idea (~30-90s, costs ~$0.01)"
-                          aria-label="Generate new idea"
+                          title={t("Generate a new contrarian idea (~30-90s, costs ~$0.01)")}
+                          aria-label={t("Generate new idea")}
                         >
                           {generatingIdea ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                         </button>
@@ -758,8 +760,8 @@ export function ResearchIdeasPage() {
                           <button
                             onClick={(e) => handleDeleteIdea(e, idea.latest_idea_id!)}
                             className="w-11 h-11 flex items-center justify-center rounded-full bg-muted/40 hover:bg-surface-2 text-muted-foreground hover:text-content-high dark:hover:text-content-high"
-                            title="Delete this idea"
-                            aria-label="Delete idea"
+                            title={t("Delete this idea")}
+                            aria-label={t("Delete idea")}
                           >
                             <X size={14} />
                           </button>

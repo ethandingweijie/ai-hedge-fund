@@ -28,6 +28,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { useCompanyName } from '@/hooks/use-company-name';
 import { timeAgo, parseBackendIso } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 const POLL_INTERVAL_MS = 12_000;
 /** Messages from the same person within this window share one name/avatar. */
@@ -141,6 +142,7 @@ function Bubble({
 }
 
 function ActionButton({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
@@ -148,7 +150,7 @@ function ActionButton({ onClick, label, children }: { onClick: () => void; label
       className="h-9 px-3 rounded-full inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted"
     >
       {children}
-      {label}
+      {t(label)}
     </button>
   );
 }
@@ -169,6 +171,7 @@ function Thread({
   /** Bumped by the page after a reply to this message is posted. */
   repliesVersion: number;
 }) {
+  const { t } = useI18n();
   const [repliesOpen, setRepliesOpen] = useState(false);
   const [replies, setReplies] = useState<ChatMessage[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -261,7 +264,7 @@ function Thread({
 
       {repliesOpen && (
         <div className="ml-12 mt-1 space-y-3 border-l border-border pl-3">
-          {loading && replies === null && <p className="text-[13px] text-muted-foreground py-1">Loading replies…</p>}
+          {loading && replies === null && <p className="text-[13px] text-muted-foreground py-1">{t("Loading replies…")}</p>}
           {replies?.map((r) => (
             <div key={r.id} className="pt-1">
               <div className="mb-1 flex items-baseline gap-2 pl-9">
@@ -307,6 +310,7 @@ function Composer({
   ticker: string;
   bottomOffset: string;
 }) {
+  const { t } = useI18n();
   const [text, setText] = useState('');
   const [posting, setPosting] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -351,7 +355,7 @@ function Composer({
           <button
             type="button"
             onClick={onCancelReply}
-            aria-label="Cancel reply"
+            aria-label={t("Cancel reply")}
             className="w-9 h-9 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
           >
             <X size={16} />
@@ -377,7 +381,7 @@ function Composer({
           type="button"
           onClick={() => void submit()}
           disabled={posting || !text.trim()}
-          aria-label="Send"
+          aria-label={t("Send")}
           className="w-10 h-10 shrink-0 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-30 transition-opacity"
         >
           <ArrowUp size={18} strokeWidth={2.4} />
@@ -390,6 +394,7 @@ function Composer({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function TickerChatPage() {
+  const { t } = useI18n();
   const { ticker: rawTicker } = useParams<{ ticker: string }>();
   const ticker = (rawTicker ?? '').toUpperCase();
   const navigate = useNavigate();
@@ -520,7 +525,7 @@ export function TickerChatPage() {
           <button
             type="button"
             onClick={() => navigate('/discuss')}
-            aria-label="Back to discussions"
+            aria-label={t("Back to discussions")}
             className="w-11 h-11 shrink-0 rounded-full border border-border flex items-center justify-center text-foreground hover:bg-muted"
           >
             <ArrowLeft size={18} />
@@ -542,11 +547,11 @@ export function TickerChatPage() {
         </div>
 
         <div className="pb-4">
-          {loading && <p className="py-8 text-center text-[14px] text-muted-foreground">Loading discussion…</p>}
+          {loading && <p className="py-8 text-center text-[14px] text-muted-foreground">{t("Loading discussion…")}</p>}
           {error && <p className="py-8 text-center text-[14px] text-foreground">{error}</p>}
           {!loading && !error && messages.length === 0 && (
             <div className="py-16 text-center">
-              <p className="text-[17px] font-semibold text-foreground">No messages yet</p>
+              <p className="text-[17px] font-semibold text-foreground">{t("No messages yet")}</p>
               <p className="mt-1 text-[14px] text-muted-foreground">Start the first thread on {ticker}.</p>
             </div>
           )}

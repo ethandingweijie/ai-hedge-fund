@@ -27,8 +27,10 @@ import { getHistory } from '@/lib/api';
 import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
 import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
 import { actionTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 
 const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
@@ -38,9 +40,10 @@ const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
 ];
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
   return (
     <p className="text-xs font-semibold text-muted-foreground/60 px-1 mb-2">
-      {children}
+      {typeof children === 'string' ? t(children) : children}
     </p>
   );
 }
@@ -60,18 +63,20 @@ function Row({ icon: Icon, label, onClick, muted = false }: {
   onClick: () => void;
   muted?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <button
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/60 transition-colors"
     >
       <Icon size={18} strokeWidth={1.8} className={muted ? 'text-muted-foreground' : 'text-muted-foreground'} />
-      <span className={`text-sm font-medium ${muted ? 'text-muted-foreground' : 'text-foreground'}`}>{label}</span>
+      <span className={`text-sm font-medium ${muted ? 'text-muted-foreground' : 'text-foreground'}`}>{t(label)}</span>
     </button>
   );
 }
 
 export function MenuPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
@@ -101,7 +106,7 @@ export function MenuPage() {
       <div className="mx-auto w-full max-w-3xl px-4 md:px-8 pt-16 pb-10 md:pt-8 space-y-6">
         <button
           onClick={() => navigate(-1)}
-          aria-label="Back"
+          aria-label={t('Back')}
           className="w-11 h-11 rounded-full flex items-center justify-center border border-border/70 bg-card shadow-sm hover:bg-muted transition-colors"
         >
           <ChevronLeft size={18} className="text-foreground" />
@@ -129,7 +134,7 @@ export function MenuPage() {
             <Row icon={BarChart2} label="Current Analysis" onClick={() => handleNav(byAction('resume'))} />
             {recentRuns.length > 0 && (
               <div className="px-4 py-2">
-                <p className="text-xs font-semibold text-muted-foreground/60 mb-1">Recent</p>
+                <p className="text-xs font-semibold text-muted-foreground/60 mb-1">{t('Recent')}</p>
                 <div className="space-y-0.5">
                   {recentRuns.map((run) => (
                     <button
@@ -140,7 +145,7 @@ export function MenuPage() {
                       <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
                       {run.final_action && (
                         <span className={`text-xs px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
-                          {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
+                          {t(run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase())}
                         </span>
                       )}
                       <span className="ml-auto text-xs text-muted-foreground/50 font-mono">
@@ -181,7 +186,7 @@ export function MenuPage() {
           <SectionLabel>Preferences</SectionLabel>
           <Card>
             <div className="px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Theme</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Theme')}</p>
               <div className="flex gap-2">
                 {THEMES.map(({ value, icon: Icon, label }) => (
                   <button
@@ -194,14 +199,18 @@ export function MenuPage() {
                       }`}
                   >
                     <Icon size={16} />
-                    <span className="text-xs font-medium">{label}</span>
+                    <span className="text-xs font-medium">{t(label)}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div className="px-4 py-3">
-              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Layout</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Layout')}</p>
               <LayoutModeToggle />
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Language')}</p>
+              <LanguageToggle />
             </div>
             <Row icon={LogOut} label="Sign out" muted onClick={() => logout()} />
           </Card>
@@ -210,7 +219,7 @@ export function MenuPage() {
         {/* Fallback identity row for screen readers / empty states */}
         {!user && (
           <p className="text-xs text-muted-foreground flex items-center gap-2">
-            <User size={14} /> Not signed in.
+            <User size={14} /> {t('Not signed in.')}
           </p>
         )}
       </div>

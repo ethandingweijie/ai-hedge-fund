@@ -24,6 +24,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import type { LucideIcon } from 'lucide-react';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 interface TabHeroProps {
   title: string;
@@ -37,6 +38,7 @@ interface TabHeroProps {
 }
 
 export function TabHero({ title, actions, className }: TabHeroProps) {
+  const { t } = useI18n();
   const { mode } = useLayoutMode();
   const isMobile = mode === 'mobile';
   const [scrolled, setScrolled] = useState(false);
@@ -90,7 +92,7 @@ export function TabHero({ title, actions, className }: TabHeroProps) {
             )}
             style={{ letterSpacing: '-0.02em' }}
           >
-            {title}
+            {t(title)}
           </h1>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>

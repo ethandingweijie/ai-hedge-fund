@@ -54,6 +54,7 @@ import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 import { PulseCard }           from '@/components/report/PulseCard';
 import { LandingGreeting }     from '@/components/report/LandingGreeting';
+import { useI18n } from '@/i18n';
 
 // ── Investor profiles retired (M2 Track E) ──────────────────────────────────
 // ALL_AGENTS / PROFILES lived here: the 12-persona committee and its
@@ -205,6 +206,7 @@ function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export function ReportPage() {
+  const { t: tr } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const { mode } = useLayoutMode();
@@ -996,7 +998,7 @@ export function ReportPage() {
                 }}
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
                 onBlur={() => setTimeout(() => setShowSugg(false), 150)}
-                placeholder="Search ticker or company..."
+                placeholder={tr('Search ticker or company…')}
                 className="w-full h-11 pl-9 pr-4 text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
                 maxLength={60}
                 autoFocus
@@ -1047,7 +1049,7 @@ export function ReportPage() {
               disabled={!canSubmit}
               className="h-11 px-4 rounded-full bg-primary active:bg-primary/80 text-primary-foreground text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition-colors"
             >
-              Analyse
+              {tr('Analyse')}
             </button>
           </form>
 
@@ -1062,11 +1064,11 @@ export function ReportPage() {
             <div className="mt-8 mb-6">
               <div className="px-4 mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-                  Popular
+                  {tr('Popular')}
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground/70">
                   <span className="w-1 h-1 rounded-full bg-brand animate-pulse" />
-                  live
+                  {tr('live')}
                 </span>
               </div>
               <div
@@ -1108,7 +1110,7 @@ export function ReportPage() {
           {/* Footer hint */}
           <div className="px-6 pb-6 text-center">
             <p className="text-xs text-muted-foreground/70 leading-relaxed">
-              Results stream in over 4-6 minutes . US . HK . SGX universe
+              {tr('Results stream in over 4-6 minutes · US · HK · SGX universe')}
             </p>
           </div>
         </div>
@@ -1146,14 +1148,14 @@ export function ReportPage() {
           )}
           {isComplete && liveResult && (
             <span className="text-sm text-content-high font-medium">
-              Analysis complete
+              {tr('Analysis complete')}
             </span>
           )}
           {isComplete && !liveResult && (
-            <span className="text-xs text-muted-foreground animate-pulse">Loading report…</span>
+            <span className="text-xs text-muted-foreground animate-pulse">{tr('Loading report…')}</span>
           )}
           {isError && (
-            <span className="text-xs text-content-high">{error ?? 'Pipeline error'}</span>
+            <span className="text-xs text-content-high">{error ?? tr('Pipeline error')}</span>
           )}
 
           <div className="ml-auto flex items-center gap-2">
@@ -1164,7 +1166,7 @@ export function ReportPage() {
                 className="text-xs h-7 px-2"
                 onClick={() => navigate(`/report/${runId}`)}
               >
-                Permalink
+                {tr('Permalink')}
               </Button>
             )}
             {isRunning && (
@@ -1193,7 +1195,7 @@ export function ReportPage() {
                     : 'border-transparent text-muted-foreground font-medium hover:text-foreground'
                 }`}
               >
-                {s.label}
+                {tr(s.label)}
               </button>
             ))}
           </div>
@@ -1227,7 +1229,7 @@ export function ReportPage() {
           <div className="rounded-lg border border-[var(--hairline)] bg-surface-2 px-4 py-3 flex items-center gap-2">
             <span className="text-content-high text-base">✓</span>
             <span className="text-sm font-medium text-content-high">
-              Analysis complete
+              {tr('Analysis complete')}
             </span>
             {events.length === 0 && (
               <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 px-1.5 py-0.5 rounded text-xs font-medium">

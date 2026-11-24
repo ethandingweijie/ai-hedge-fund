@@ -20,8 +20,10 @@ import { NewsItemRow } from '@/components/report/NewsItemRow';
 import { getNewsFeed, type NewsArticle } from '@/lib/api';
 import { useNewsStream } from '@/hooks/useNewsStream';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { useI18n } from '@/i18n';
 
 export function NewsPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isMobile = mode === 'mobile';
@@ -62,14 +64,14 @@ export function NewsPage() {
   return (
     <PageContainer size="default">
       <div className="flex items-center justify-between gap-3 mb-6">
-        <h1 className="text-[32px] md:text-[36px] font-bold tracking-tight leading-none text-foreground">News</h1>
+        <h1 className="text-[32px] md:text-[36px] font-bold tracking-tight leading-none text-foreground">{t("News")}</h1>
         <Button
           variant="outline"
           size="sm"
           onClick={() => load(true)}
           disabled={loading || refreshing}
         >
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? t('Refreshing…') : t('Refresh')}
         </Button>
       </div>
 
@@ -83,7 +85,7 @@ export function NewsPage() {
                 ? 'bg-brand text-brand-foreground border-transparent'
                 : 'text-foreground border-border hover:bg-muted'}`}
           >
-            All
+            {t("All")}
           </button>
           {tickers.map(t => (
             <button
@@ -102,7 +104,7 @@ export function NewsPage() {
 
       {loading && (
         <Card className="p-8">
-          <p className="text-xs text-content-muted text-center">Loading news…</p>
+          <p className="text-xs text-content-muted text-center">{t("Loading news…")}</p>
         </Card>
       )}
 
@@ -116,9 +118,9 @@ export function NewsPage() {
           page says how rather than showing a bare "no results". */}
       {!loading && !error && tickers.length === 0 && (
         <Card className="p-8 flex flex-col items-center gap-3 text-center">
-          <p className="text-[15px] text-content-high font-semibold">No watchlist yet</p>
+          <p className="text-[15px] text-content-high font-semibold">{t("No watchlist yet")}</p>
           <Button size="sm" className="rounded-full" onClick={() => navigate('/watchlist')}>
-            Add tickers
+            {t("Add tickers")}
           </Button>
         </Card>
       )}

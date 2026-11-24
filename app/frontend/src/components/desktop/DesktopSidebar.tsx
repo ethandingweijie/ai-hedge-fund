@@ -24,9 +24,11 @@ import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
 import { visibleNavItems, useAppNav, type NavItem } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { EquitableMark } from '@/components/brand/EquitableMark';
 import { actionTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 
 const THEME_ICON = { light: Sun, dark: Moon, auto: Monitor } as const;
@@ -37,6 +39,7 @@ interface DesktopSidebarProps {
 }
 
 export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarProps) {
+  const { t } = useI18n();
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { toggle: toggleLayout } = useLayoutMode();
@@ -91,8 +94,8 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         <button
           onClick={onToggleCollapse}
           className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}
+          aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}
         >
           {collapsed ? <ChevronsRight size={18} /> : <ChevronsLeft size={18} />}
         </button>
@@ -107,7 +110,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             <button
               key={label}
               onClick={() => handleNav(item)}
-              title={collapsed ? label : hint}
+              title={collapsed ? t(label) : (hint ? t(hint) : undefined)}
               className={`w-full flex items-center rounded-md transition-colors
                 ${collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2'}
                 ${active
@@ -116,7 +119,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
                 }`}
             >
               <Icon size={18} strokeWidth={active ? 2.2 : 1.7} className={active ? 'text-primary shrink-0' : 'text-muted-foreground shrink-0'} />
-              {!collapsed && <span className={`text-sm font-medium truncate ${active ? 'text-primary' : ''}`}>{label}</span>}
+              {!collapsed && <span className={`text-sm font-medium truncate ${active ? 'text-primary' : ''}`}>{t(label)}</span>}
               {!collapsed && item.path === '/model-accuracy' && eligibleProposals > 0 && (
                 <span
                   className="ml-auto text-xs font-bold leading-none px-1.5 py-0.5 rounded-full bg-foreground text-background"
@@ -132,7 +135,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         {/* Recent runs — expanded only */}
         {!collapsed && recentRuns.length > 0 && (
           <div className="pt-3 mt-1 border-t border-border/60">
-            <span className="block px-3 text-xs font-semibold text-muted-foreground/60 mb-1">Recent</span>
+            <span className="block px-3 text-xs font-semibold text-muted-foreground/60 mb-1">{t('Recent')}</span>
             {recentRuns.map((run) => (
               <a
                 key={run.run_id}
@@ -142,7 +145,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
                 <span className="font-mono text-xs font-bold text-foreground min-w-[44px]">{run.ticker}</span>
                 {run.final_action && (
                   <span className={`text-xs px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
-                    {run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase()}
+                    {t(run.final_action.charAt(0) + run.final_action.slice(1).toLowerCase())}
                   </span>
                 )}
                 <span className="ml-auto text-xs text-muted-foreground/50 font-mono">
@@ -162,8 +165,8 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             <button
               onClick={toggleLayout}
               className="p-2 rounded-md hover:bg-muted text-muted-foreground"
-              title="Switch to mobile layout"
-              aria-label="Switch to mobile layout"
+              title={t('Switch to mobile layout')}
+              aria-label={t('Switch to mobile layout')}
             >
               <Smartphone size={18} />
             </button>
@@ -178,8 +181,8 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             <a
               href="#/pricing"
               className="p-2 rounded-md hover:bg-muted text-warning"
-              title="Pricing"
-              aria-label="Pricing"
+              title={t('Pricing')}
+              aria-label={t('Pricing')}
             >
               <Zap size={18} />
             </a>
@@ -187,8 +190,8 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
               <button
                 onClick={logout}
                 className="p-2 rounded-md hover:bg-muted text-muted-foreground"
-                title="Sign out"
-                aria-label="Sign out"
+                title={t('Sign out')}
+                aria-label={t('Sign out')}
               >
                 <LogOut size={18} />
               </button>
@@ -197,19 +200,23 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         ) : (
           <>
             <div className="px-3 py-3 border-b border-border/60">
-              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Layout</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Layout')}</p>
               <LayoutModeToggle />
             </div>
             <div className="px-3 py-3">
-              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Theme</p>
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Theme')}</p>
               <ThemeToggle />
+            </div>
+            <div className="px-3 py-3 border-t border-border/60">
+              <p className="text-xs font-semibold text-muted-foreground/60 mb-2">{t('Language')}</p>
+              <LanguageToggle />
             </div>
             <a
               href="#/pricing"
               className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors"
             >
               <Zap size={16} className="text-warning" />
-              <span className="text-sm font-medium">Pricing</span>
+              <span className="text-sm font-medium">{t('Pricing')}</span>
             </a>
             {user && (
               <button
@@ -217,7 +224,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
                 className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors text-left"
               >
                 <LogOut size={16} className="text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Sign out</span>
+                <span className="text-sm font-medium text-muted-foreground">{t('Sign out')}</span>
               </button>
             )}
             {user && (

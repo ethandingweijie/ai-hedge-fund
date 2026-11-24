@@ -30,6 +30,7 @@ import {
 } from '@/components/v2/shared';
 import { toast } from 'sonner';
 import { TabHero } from '@/components/layout/TabHero';
+import { useI18n } from '@/i18n';
 
 /* ───────── Filter option sets ───────── */
 // Union of sector labels across US, HK, SG markets (per ScreenerPage).
@@ -99,6 +100,7 @@ function AgeBadge({ runAt }: { runAt: string }) {
 }
 
 export function HistoryPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { activeRuns, recentlyCompleted, clearCompleted, byTicker } = useActiveRun();
   // Gate "wider + denser" desktop layout on the layout MODE (not raw viewport
@@ -242,7 +244,7 @@ export function HistoryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background ui-flat">
-      <TabHero title="History" />
+      <TabHero title={t("History")} />
       {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
           to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
           On mobile the max-width exceeds the 430px frame, so it no-ops and the
@@ -256,7 +258,7 @@ export function HistoryPage() {
             <input
               value={q}
               onChange={e => setQ(e.target.value)}
-              placeholder="Search ticker or company"
+              placeholder={t("Search ticker or company")}
               className="w-full h-11 md:h-10 pl-7 pr-2 text-[13px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
             />
           </div>
@@ -301,7 +303,7 @@ export function HistoryPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[13px] font-semibold text-foreground tabular-nums">{r.ticker}</span>
-                <span className="text-xs font-medium text-brand">Ongoing</span>
+                <span className="text-xs font-medium text-brand">{t("Ongoing")}</span>
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 started {daysAgo(r.startedAt)}
@@ -314,10 +316,10 @@ export function HistoryPage() {
         {/* Recent analyses header */}
         <div className="flex items-center justify-between px-1 mb-1.5">
           <span className="text-xs font-semibold text-muted-foreground">
-            Recent analyses
+            {t("Recent analyses")}
           </span>
           <span className="text-xs text-muted-foreground/70">
-            {history?.total ?? 0} total
+            {t('{n} total', { n: history?.total ?? 0 })}
           </span>
         </div>
 
@@ -331,7 +333,7 @@ export function HistoryPage() {
         <div className={`items-center gap-2 px-3 mx-px pb-1 ${isDesktop ? 'hidden' : 'flex'}`}>
           <div className="flex-1" />
           <div className="w-[72px] shrink-0 text-center text-xs font-medium text-muted-foreground">
-            Target
+            {t("Target")}
           </div>
           <div className="flex items-center shrink-0">
             {['V', 'G', 'P', 'M'].map(l => (
@@ -355,7 +357,7 @@ export function HistoryPage() {
               <div key={i} className={`items-center gap-5 px-4 mx-px ${i === 1 ? 'hidden lg:flex' : 'flex'}`}>
                 <div className="flex-1" />
                 <div className="w-24 shrink-0 text-center text-xs font-medium text-muted-foreground">
-                  Target
+                  {t("Target")}
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
                   {['V', 'G', 'P', 'M'].map(l => (
@@ -376,14 +378,14 @@ export function HistoryPage() {
           ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start'
           : 'rounded-lg border border-border bg-card overflow-hidden shadow-sm'}>
           {loading && !history ? (
-            <div className={`px-3 py-10 text-center text-[12px] text-muted-foreground/70 ${isDesktop ? 'lg:col-span-2' : ''}`}>Loading…</div>
+            <div className={`px-3 py-10 text-center text-[12px] text-muted-foreground/70 ${isDesktop ? 'lg:col-span-2' : ''}`}>{t("Loading…")}</div>
           ) : rows.length === 0 ? (
             <div className={`px-3 py-10 text-center text-[12px] text-muted-foreground/70 ${isDesktop ? 'lg:col-span-2' : ''}`}>
               {(history?.total ?? 0) === 0
-                ? 'No analysis runs yet. Run your first one from Home.'
+                ? t('No analysis runs yet. Run your first one from Home.')
                 : q
-                  ? 'No matches. Clear search to see all runs.'
-                  : 'No runs match the current filters. Try a wider time range or clearing filters.'}
+                  ? t('No matches. Clear search to see all runs.')
+                  : t('No runs match the current filters. Try a wider time range or clearing filters.')}
             </div>
           ) : (
             rows.map((r, i) => <HistoryRow
@@ -405,7 +407,7 @@ export function HistoryPage() {
         {history && history.total > 50 && (
           <div className="flex items-center justify-between mt-4 px-1">
             <span className="text-xs text-muted-foreground/70">
-              Page {history.page} · {history.items.length} of {history.total}
+              {t('Page {p} · {n} of {total}', { p: history.page, n: history.items.length, total: history.total })}
             </span>
             <div className="flex gap-1">
               <button
@@ -413,14 +415,14 @@ export function HistoryPage() {
                 disabled={page <= 1}
                 className="h-8 px-3 text-xs rounded-md border border-border text-muted-foreground active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Previous
+                {t("Previous")}
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page * 50 >= history.total}
                 className="h-8 px-3 text-xs rounded-md border border-border text-foreground/80 active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Next
+                {t("Next")}
               </button>
             </div>
           </div>
@@ -449,6 +451,7 @@ function HistoryRow({
   onOpen: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   const upside = typeof row.ev_upside_pct === 'number' ? row.ev_upside_pct : null;
 
   return (
@@ -484,7 +487,7 @@ function HistoryRow({
             </span>
             {isNew && (
               <span className="text-xs font-bold text-brand">
-                new
+                {t("new")}
               </span>
             )}
           </div>
@@ -557,6 +560,7 @@ function FilterPill({
   onChange: (v: string) => void;
   active?: boolean;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const btnRef    = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -581,9 +585,9 @@ function FilterPill({
     if (!open) return;
     recomputePos();
     const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (btnRef.current?.contains(t)) return;
-      if (popoverRef.current?.contains(t)) return;
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target)) return;
+      if (popoverRef.current?.contains(target)) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
@@ -605,7 +609,7 @@ function FilterPill({
   // At rest show just the category name (Sector | Market | Action) — the
   // redundant "All sectors" / "All markets" / "Any action" defaults only
   // appear as options. The selected value shows once a filter is active.
-  const display = active ? (label ? `${label}: ${value}` : value) : (label ?? value);
+  const display = active ? (label ? `${t(label)}: ${t(value)}` : t(value)) : t(label ?? value);
 
   return (
     <>
@@ -647,7 +651,7 @@ function FilterPill({
                     : 'text-foreground/80 hover:bg-muted/60'
                 }`}
               >
-                <span>{opt}</span>
+                <span>{t(opt)}</span>
                 {selected && (
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />

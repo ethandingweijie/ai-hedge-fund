@@ -12,6 +12,7 @@ import { Fragment, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoboHolding } from '@/lib/api';
+import { useI18n } from '@/i18n';
 
 interface HoldingsTableProps {
   items: RoboHolding[];
@@ -19,13 +20,14 @@ interface HoldingsTableProps {
 }
 
 export function HoldingsTable({ items, mode }: HoldingsTableProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState<string | null>(null);
   const isEtf = mode === 'etf';
 
   if (items.length === 0) {
     return (
       <div className="p-8 text-center text-sm text-muted-foreground rounded-lg border border-border bg-card">
-        No holdings generated for this mode.
+        {t("No holdings generated for this mode.")}
       </div>
     );
   }
@@ -37,14 +39,14 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Ticker</TableHead>
-              <TableHead>Name</TableHead>
+              <TableHead>{t("Ticker")}</TableHead>
+              <TableHead>{t("Name")}</TableHead>
               <TableHead>{isEtf ? 'Category' : 'Sector'}</TableHead>
-              <TableHead className="text-right">Allocation</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Shares</TableHead>
-              <TableHead className="text-right">Price</TableHead>
-              {isEtf && <TableHead className="text-right">Expense</TableHead>}
+              <TableHead className="text-right">{t("Allocation")}</TableHead>
+              <TableHead className="text-right">{t("Amount")}</TableHead>
+              <TableHead className="text-right">{t("Shares")}</TableHead>
+              <TableHead className="text-right">{t("Price")}</TableHead>
+              {isEtf && <TableHead className="text-right">{t("Expense")}</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -93,7 +95,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
                       <TableCell colSpan={isEtf ? 8 : 7} className="bg-muted/30 py-2.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2">
                           <span className="text-xs font-medium text-muted-foreground">
-                            Top holdings
+                            {t("Top holdings")}
                           </span>
                           {item.topHoldings!.map((h, i) => (
                             <span key={i} className="text-[12px] text-foreground">
@@ -150,7 +152,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
               {expanded === item.ticker && hasHoldings && (
                 <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap gap-x-2 gap-y-1">
                   <span className="text-xs font-medium text-muted-foreground w-full">
-                    Top holdings
+                    {t("Top holdings")}
                   </span>
                   {item.topHoldings!.map((h, i) => (
                     <span key={i} className="text-xs text-foreground">

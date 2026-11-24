@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoboEquityLookthrough } from '@/lib/api';
+import { useI18n } from '@/i18n';
 
 interface Props {
   lookthrough?: RoboEquityLookthrough;
@@ -33,6 +34,7 @@ const money = (v: number) =>
   v >= 1000 ? `$${Math.round(v).toLocaleString()}` : `$${v.toFixed(0)}`;
 
 export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
+  const { t } = useI18n();
   const [showAll, setShowAll] = useState(false);
 
   // Absent on portfolios generated before this shipped, and on plans with no
@@ -40,7 +42,7 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
   if (!lookthrough || lookthrough.positions.length === 0) {
     return (
       <div className="p-6 text-center text-sm text-muted-foreground rounded-lg border border-border bg-card">
-        No equity look-through available for this plan.
+        {t("No equity look-through available for this plan.")}
       </div>
     );
   }
@@ -59,10 +61,10 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
     <div className="border-t border-border">
       <div className="py-4">
         <h3 className="text-[17px] font-semibold text-foreground">
-          Equity distribution
+          {t("Equity distribution")}
         </h3>
         <p className="text-[13px] text-muted-foreground mt-0.5">
-          The companies your funds hold, aggregated across the plan.
+          {t("The companies your funds hold, aggregated across the plan.")}
         </p>
       </div>
 
@@ -97,11 +99,11 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="text-right">% of plan</TableHead>
-              <TableHead className="text-right">Value</TableHead>
-              <TableHead>Held via</TableHead>
+              <TableHead>{t("Company")}</TableHead>
+              <TableHead>{t("Name")}</TableHead>
+              <TableHead className="text-right">{t("% of plan")}</TableHead>
+              <TableHead className="text-right">{t("Value")}</TableHead>
+              <TableHead>{t("Held via")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

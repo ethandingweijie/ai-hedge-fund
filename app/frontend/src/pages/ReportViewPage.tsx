@@ -39,6 +39,7 @@ import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ChainOfThought } from '@/components/report/ChainOfThought';
+import { useI18n } from '@/i18n';
 
 // Mirrors the mobile tab order in V2ReportView so the two render paths present
 // the same information architecture.
@@ -77,6 +78,7 @@ const CARD_GRID =
   'grid gap-5 items-start [grid-template-columns:repeat(auto-fit,minmax(420px,1fr))]';
 
 export function ReportViewPage() {
+  const { t: tr } = useI18n();
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
   const [result, setResult] = useState<RunResult | null>(null);
@@ -119,7 +121,7 @@ export function ReportViewPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading report…</p>
+        <p className="text-muted-foreground">{tr('Loading report…')}</p>
       </div>
     );
   }
@@ -128,8 +130,8 @@ export function ReportViewPage() {
     return (
       <div className="min-h-screen bg-background">
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <p className="text-content-high">{error ?? 'Run not found.'}</p>
-          <Button onClick={() => navigate('/report')}>New Analysis</Button>
+          <p className="text-content-high">{error ?? tr('Run not found.')}</p>
+          <Button onClick={() => navigate('/report')}>{tr('New Analysis')}</Button>
         </div>
       </div>
     );
@@ -252,7 +254,7 @@ export function ReportViewPage() {
                     : 'border-transparent text-muted-foreground font-medium hover:text-foreground'
                   }`}
               >
-                {s.label}
+                {tr(s.label)}
               </button>
             ))}
           </div>

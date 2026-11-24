@@ -9,6 +9,7 @@
  */
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { RoboBreakdowns } from '@/lib/api';
+import { useI18n } from '@/i18n';
 
 const PALETTE = [
   'hsl(var(--brand))',
@@ -68,15 +69,16 @@ function MiniPie({ title, data }: { title: string; data: { name: string; value: 
 }
 
 export function AllocationCharts({ breakdowns }: { breakdowns: RoboBreakdowns }) {
+  const { t } = useI18n();
   const sectorData = toPieData(breakdowns.sector);
   const geoData = toPieData(breakdowns.geography);
   const riskData = toPieData(breakdowns.risk);
 
   return (
     <div className="flex flex-wrap gap-3">
-      <MiniPie title="Sector" data={sectorData} />
-      <MiniPie title="Geography" data={geoData} />
-      {riskData.length > 0 && <MiniPie title="Risk" data={riskData} />}
+      <MiniPie title={t("Sector")} data={sectorData} />
+      <MiniPie title={t("Geography")} data={geoData} />
+      {riskData.length > 0 && <MiniPie title={t("Risk")} data={riskData} />}
     </div>
   );
 }

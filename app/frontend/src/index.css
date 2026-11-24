@@ -13,8 +13,11 @@
    serif is a matter of re-adding the @font-face block and swapping
    --font-sans below — nothing else in the app names the family directly. */
 :root {
+  /* CJK faces follow the Latin ones: Chinese text uses a native Simplified
+     Chinese font (PingFang / YaHei / Noto) while numbers keep the UI face. */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI Variable Text',
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
   /* Numeric face. Deliberately the SAME family as --font-sans rather than a
      monospace: the 184 existing `font-mono` usages are tickers, prices and
      metric counters, not code, and the old config already mapped mono to the

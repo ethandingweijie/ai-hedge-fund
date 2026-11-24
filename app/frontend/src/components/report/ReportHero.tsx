@@ -29,6 +29,7 @@ import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { HeroSectionTitle } from '@/components/report/SectionAnchor';
 import { METRICS, TIMEFRAMES, makeFmtLarge, makeFmtPrice, type StockData } from '@/lib/stockMetrics';
+import { useI18n } from '@/i18n';
 
 const PERIOD_LABEL: Record<string, string> = {
   '1D': 'Today', '1W': 'Past week', '1M': 'Past month', '3M': 'Past 3 months',
@@ -80,6 +81,7 @@ interface ReportHeroProps {
 export function ReportHero({
   ticker, runAt, modelName, decision, regime, currentPrice, sector, subSector, vgpm,
 }: ReportHeroProps) {
+  const { t } = useI18n();
   const sym = currencySymbol(ticker);
   const fmtLarge = makeFmtLarge(sym);
   const fmtPrice = makeFmtPrice(sym);
@@ -115,7 +117,7 @@ export function ReportHero({
   const mutedColor = tokenColor('--muted-foreground', '#6B7280');
   const shownLabel = hoverIdx != null && history[hoverIdx]
     ? new Date(history[hoverIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : PERIOD_LABEL[tf.label] ?? tf.label;
+    : t(PERIOD_LABEL[tf.label] ?? tf.label);
 
   const domain = useMemo<[number, number]>(() => {
     if (!history.length) return [0, 1];
@@ -137,7 +139,7 @@ export function ReportHero({
           const v = stock.metrics[key];
           if (v == null) return null;
           const f = currency ? fmtLarge : price ? fmtPrice : (fmt ?? (() => '—'));
-          return { key, label: STAT_LABEL[key] ?? key, value: f(v) };
+          return { key, label: t(STAT_LABEL[key] ?? key), value: f(v) };
         })
         .filter((s): s is { key: keyof StockData['metrics']; label: string; value: string } => s != null)
     : [];
@@ -153,7 +155,7 @@ export function ReportHero({
         {/* ── Price + chart ─────────────────────────────────────────────── */}
         <section className="flex flex-col">
           <p className="text-sm text-muted-foreground">
-            {[ticker, displaySector, displaySub && displaySub !== displaySector ? displaySub : null]
+            {[ticker, displaySector ? t(displaySector) : null, displaySub && displaySub !== displaySector ? displaySub : null]
               .filter(Boolean).join(' · ')}
           </p>
           <h1 className="text-[32px] font-semibold tracking-tight leading-tight text-foreground">
@@ -171,9 +173,9 @@ export function ReportHero({
 
           <div className="mt-6 h-[280px]">
             {loading ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Loading chart…</div>
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{t('Loading chart…')}</div>
             ) : history.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No price data.</div>
+              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{t('No price data.')}</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
@@ -211,7 +213,7 @@ export function ReportHero({
             )}
           </div>
 
-          <div className="mt-2 flex gap-1 border-b border-border" role="tablist" aria-label="Chart range">
+          <div className="mt-2 flex gap-1 border-b border-border" role="tablist" aria-label={t('Chart range')}>
             {TIMEFRAMES.map((t, i) => (
               <button
                 key={t.label}
@@ -239,7 +241,7 @@ export function ReportHero({
             ) : (
               <div className="flex flex-wrap items-center gap-x-10 gap-y-5">
                 <span className={`inline-flex items-center h-10 px-5 rounded-full text-lg font-bold ${actionTone(decision.action)}`}>
-                  {cap(decision.action?.toLowerCase())}
+                  {t(cap(decision.action?.toLowerCase()))}
                 </span>
                 {target != null && <TargetPill value={target} ticker={ticker} className="h-10 px-5 py-0 text-lg" />}
                 {upside != null && (
@@ -253,8 +255,8 @@ export function ReportHero({
                 {regime?.risk_appetite && (
                   <Figure
                     label="Regime"
-                    value={cap(regime.risk_appetite)}
-                    sub={regime.volatility_regime ? `${regime.volatility_regime} vol` : undefined}
+                    value={t(cap(regime.risk_appetite))}
+                    sub={regime.volatility_regime ? t('{v} vol', { v: t(regime.volatility_regime) }) : undefined}
                   />
                 )}
               </div>
@@ -263,8 +265,8 @@ export function ReportHero({
               <div className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
                 {position != null && <Figure label="Position" value={`${position.toFixed(1)}%`} />}
                 {regime?.risk_appetite && (
-                  <Figure label="Regime" value={cap(regime.risk_appetite)}
-                    sub={regime.volatility_regime ? `${regime.volatility_regime} vol` : undefined} />
+                  <Figure label="Regime" value={t(cap(regime.risk_appetite))}
+                    sub={regime.volatility_regime ? t('{v} vol', { v: t(regime.volatility_regime) }) : undefined} />
                 )}
               </div>
             )}
@@ -284,8 +286,8 @@ export function ReportHero({
             {decision.price_target_override && (
               <p className="mt-3 text-xs text-muted-foreground">
                 {decision.pm_regenerated_at
-                  ? 'Thesis and headline were rewritten on your estimate override.'
-                  : 'Target reflects your estimate override; the thesis was written before it. Rewrite it from the estimates panel.'}
+                  ? t('Thesis and headline were rewritten on your estimate override.')
+                  : t('Target reflects your estimate override; the thesis was written before it. Rewrite it from the estimates panel.')}
               </p>
             )}
           </section>
@@ -318,7 +320,7 @@ export function ReportHero({
                 return (
                   <div key={key} title={tip} className="cursor-help">
                     <p className={`text-[32px] font-bold leading-none ${gradeTone(dim.grade, 'text')}`}>{dim.grade}</p>
-                    <p className="mt-2 text-[13px] text-muted-foreground">{label}</p>
+                    <p className="mt-2 text-[13px] text-muted-foreground">{t(label)}</p>
                   </div>
                 );
               })}
@@ -331,8 +333,8 @@ export function ReportHero({
       <aside className="lg:sticky lg:top-20 flex flex-col gap-3 rounded-2xl border border-border p-6">
         <p className="text-[17px] font-semibold text-foreground">{ticker}</p>
         {runDate && (
-          <p className="-mt-2 text-[13px] text-muted-foreground" title={modelName ? `Model: ${modelName}` : undefined}>
-            Report run {runDate}
+          <p className="-mt-2 text-[13px] text-muted-foreground" title={modelName ? `${t('Model')}: ${modelName}` : undefined}>
+            {t('Report run {date}', { date: runDate })}
           </p>
         )}
         <Link
@@ -340,7 +342,7 @@ export function ReportHero({
           className="mt-2 inline-flex items-center justify-center gap-2 h-12 rounded-full bg-brand text-brand-foreground text-[15px] font-semibold hover:bg-brand/90 transition-colors"
         >
           <MessageSquare size={16} />
-          Discuss this report
+          {t('Discuss this report')}
         </Link>
       </aside>
     </div>
@@ -350,9 +352,10 @@ export function ReportHero({
 function Figure({ label, value, sub, className = 'text-foreground' }: {
   label: string; value: string; sub?: string; className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div>
-      <p className="text-[13px] text-muted-foreground">{label}</p>
+      <p className="text-[13px] text-muted-foreground">{t(label)}</p>
       <p className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${className}`}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
     </div>

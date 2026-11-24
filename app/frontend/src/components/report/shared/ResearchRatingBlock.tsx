@@ -10,6 +10,7 @@
 import type { ResearchView } from '@/lib/reportTypes';
 import { actionTone } from '@/lib/semanticColors';
 import { cn, currencySymbol } from '@/lib/utils';
+import { useI18n } from '@/i18n';
 
 const title = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '—');
 
@@ -19,24 +20,26 @@ const title = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase()
  * Outlined so it reads as a figure, not a second rating.
  */
 export function TargetPill({ value, ticker, className = '' }: { value: number; ticker: string; className?: string }) {
+  const { t } = useI18n();
   return (
     <span
       // cn() (tailwind-merge) so a caller's size classes replace the defaults
       // instead of racing them in the stylesheet.
       className={cn('inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm font-semibold tabular-nums text-foreground', className)}
-      title="12-month price target"
+      title={t('12-month price target')}
     >
-      <span className="font-medium text-muted-foreground">Target</span>
+      <span className="font-medium text-muted-foreground">{t('Target')}</span>
       {currencySymbol(ticker)}{value.toFixed(2)}
     </span>
   );
 }
 
 export function RatingPill({ view, className = '' }: { view: ResearchView; className?: string }) {
+  const { t } = useI18n();
   const key = view.under_review ? 'UNDER_REVIEW' : view.research_rating;
   return (
     <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${actionTone(key)} ${className}`}>
-      {view.rating_label}
+      {t(view.rating_label)}
     </span>
   );
 }

@@ -40,6 +40,7 @@ import {
 import { toast } from 'sonner';
 import { TabHero } from '@/components/layout/TabHero';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { useI18n } from '@/i18n';
 
 type Market = 'US' | 'HK' | 'SG';
 type SortKey = 'composite' | 'valuation' | 'growth' | 'profitability' | 'momentum';
@@ -132,6 +133,7 @@ function FilterDropdown({
   /** Value that counts as "no selection applied" (default 'all'). */
   defaultValue?: string;
 }) {
+  const { t } = useI18n();
   const [open, setOpen]     = useState(false);
   const [query, setQuery]   = useState('');
   const rootRef  = useRef<HTMLDivElement>(null);
@@ -186,7 +188,7 @@ function FilterDropdown({
             "Any market cap" / "Overall" defaults are redundant. The
             selected value only appears once a real filter is active. */}
         <span className={active ? 'opacity-70' : ''}>
-          {active ? `${label}:` : label}
+          {active ? `${t(label)}:` : t(label)}
         </span>
         {active && (
           <span className="max-w-[9.5rem] truncate font-medium">
@@ -212,9 +214,9 @@ function FilterDropdown({
               </div>
             </div>
           )}
-          <div role="listbox" aria-label={label} className="max-h-64 overflow-y-auto py-1">
+          <div role="listbox" aria-label={t(label)} className="max-h-64 overflow-y-auto py-1">
             {visible.length === 0 ? (
-              <div className="px-3 py-2.5 text-[12px] text-muted-foreground/70">No matches</div>
+              <div className="px-3 py-2.5 text-[12px] text-muted-foreground/70">{t("No matches")}</div>
             ) : visible.map(o => (
               <button
                 key={o.id}
@@ -227,7 +229,7 @@ function FilterDropdown({
                     ? 'bg-muted text-foreground font-medium'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
               >
-                <span className="truncate">{o.label}</span>
+                <span className="truncate">{t(o.label)}</span>
                 <span className="flex items-center gap-1.5 shrink-0">
                   {o.count != null && (
                     <span className="text-xs text-muted-foreground/60 tabular-nums">{o.count}</span>
@@ -244,6 +246,7 @@ function FilterDropdown({
 }
 
 export function ScreenerPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isDesktop = mode === 'desktop';
@@ -416,7 +419,7 @@ export function ScreenerPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background ui-flat">
-      <TabHero title="Screener" />
+      <TabHero title={t("Screener")} />
       {/* Market segmented control */}
       <div className="px-3 md:px-6 pt-3">
         <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-lg">
@@ -442,7 +445,7 @@ export function ScreenerPage() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search ticker or name"
+              placeholder={t("Search ticker or name")}
               className="w-full h-11 md:h-10 pl-7 pr-2 text-[13px] md:text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
             />
           </div>
@@ -460,12 +463,12 @@ export function ScreenerPage() {
         <div className="flex items-center justify-between px-1 mb-1.5">
           <div className="flex items-center gap-1.5">
             <span className="text-[15px] md:text-[17px] font-semibold text-foreground">
-              Top candidates
+              {t("Top candidates")}
             </span>
             {lastRefreshed && (
               <span className="inline-flex items-center gap-1 text-xs md:text-xs text-muted-foreground/70">
                 <span className="w-1 h-1 rounded-full bg-brand"/>
-                updated {lastRefreshed.toLocaleTimeString()}
+                {t('updated {time}', { time: lastRefreshed.toLocaleTimeString() })}
               </span>
             )}
           </div>
@@ -478,10 +481,10 @@ export function ScreenerPage() {
               grid so the 12-column tracks line up exactly under each row. */}
           {isDesktop ? (
             <div className={`px-4 py-2.5 border-b border-border/60 text-xs font-medium text-muted-foreground ${DESK_GRID}`}>
-              <span>Ticker</span>
-              <span className="hidden lg:block text-right">Price</span>
-              <span className="hidden lg:block text-right">Change</span>
-              <span className="text-right">Score</span>
+              <span>{t("Ticker")}</span>
+              <span className="hidden lg:block text-right">{t("Price")}</span>
+              <span className="hidden lg:block text-right">{t("Change")}</span>
+              <span className="text-right">{t("Score")}</span>
               <div className="flex justify-end">
                 {['V', 'G', 'P', 'M'].map(l => (
                   <span key={l} className="w-9 text-center">{l}</span>
@@ -491,8 +494,8 @@ export function ScreenerPage() {
             </div>
           ) : (
             <div className="px-3 py-2 border-b border-border/60 grid grid-cols-12 items-center gap-2 text-xs font-medium text-muted-foreground">
-              <span className="col-span-5">Ticker · Sector</span>
-              <span className="col-span-2 text-right">Score</span>
+              <span className="col-span-5">{t("Ticker · Sector")}</span>
+              <span className="col-span-2 text-right">{t("Score")}</span>
               <div className="col-span-5 flex justify-end">
                 {['V', 'G', 'P', 'M'].map(l => (
                   <span key={l} className="w-9 text-center">{l}</span>
@@ -502,10 +505,10 @@ export function ScreenerPage() {
           )}
 
           {loading && !data ? (
-            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">Loading…</div>
+            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">{t("Loading…")}</div>
           ) : rows.length === 0 ? (
             <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">
-              No matches. Adjust filters.
+              {t("No matches. Adjust filters.")}
             </div>
           ) : isDesktop ? (
             /* ── Desktop rows: dense table-style list, hover actions ────────
@@ -525,7 +528,7 @@ export function ScreenerPage() {
                       <span className="text-[12px] text-muted-foreground truncate">{r.companyName}</span>
                     </div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                      <span className="truncate">{r.sector || '—'}</span>
+                      <span className="truncate">{r.sector ? t(r.sector) : '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
                       <span className="tabular-nums shrink-0">{formatMarketCap(r.marketCap)}</span>
                     </div>
@@ -578,7 +581,7 @@ export function ScreenerPage() {
                   >
                     <button
                       type="button"
-                      title="Analyse"
+                      title={t("Analyse")}
                       aria-label={`Analyse ${r.symbol}`}
                       onClick={() => handleOpen(r.symbol)}
                       className="p-1.5 rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-muted transition-colors"
@@ -587,7 +590,7 @@ export function ScreenerPage() {
                     </button>
                     <button
                       type="button"
-                      title="Add to watchlist"
+                      title={t("Add to watchlist")}
                       aria-label={`Add ${r.symbol} to watchlist`}
                       onClick={() => handleWatch(r.symbol)}
                       className="p-1.5 rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-muted transition-colors"
@@ -625,7 +628,7 @@ export function ScreenerPage() {
                     <div className="text-[12.5px] font-semibold text-foreground tabular-nums truncate">{r.symbol}</div>
                     <div className="text-xs text-muted-foreground truncate">{r.companyName}</div>
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
-                      <span className="truncate">{r.sector || '—'}</span>
+                      <span className="truncate">{r.sector ? t(r.sector) : '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
                       <span className="tabular-nums">{formatMarketCap(r.marketCap)}</span>
                     </div>
@@ -664,7 +667,7 @@ export function ScreenerPage() {
           className="mt-3 px-1 text-xs text-muted-foreground"
           title="Score = 0.30·V + 0.25·G + 0.25·P + 0.20·M, sector-neutralised"
         >
-          {data?.total ?? 0} stocks
+          {t('{n} stocks', { n: data?.total ?? 0 })}
         </div>
       </div>
     </div>

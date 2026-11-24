@@ -25,6 +25,7 @@ import { MenuPage } from './pages/MenuPage';
 import { ModelAccuracyPage } from './pages/ModelAccuracyPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
+import { LanguageProvider } from './i18n/LanguageProvider';
 import { AuthProvider, useAuth } from './contexts/auth-context';
 import { LayoutModeProvider } from './contexts/layout-mode-context';
 import { AppShell } from './components/AppShell';
@@ -39,6 +40,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <LanguageProvider>
     <ThemeProvider>
     <AuthProvider>
     <ActiveRunProvider>
@@ -102,5 +104,6 @@ export default function App() {
     </ActiveRunProvider>
     </AuthProvider>
     </ThemeProvider>
+    </LanguageProvider>
   );
 }

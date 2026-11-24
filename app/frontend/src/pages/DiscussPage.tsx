@@ -11,8 +11,10 @@ import { searchCompanies, getActiveChatTickers, type CompanySearchResult, type C
 import { timeAgo } from '@/lib/utils';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
+import { useI18n } from '@/i18n';
 
 export function DiscussPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [ticker, setTicker] = useState('');
   const [suggestions, setSuggestions] = useState<CompanySearchResult[]>([]);
@@ -74,7 +76,7 @@ export function DiscussPage() {
       {/* Hero sits OUTSIDE the padded container (same as Screener/Watchlist)
           so its title hugs the left gutter instead of doubling the px-4. */}
       <TabHero
-        title="Discuss"
+        title={t("Discuss")}
         subtitle="Search a ticker to join its discussion thread"
         icon={MessageSquare}
       />
@@ -90,7 +92,7 @@ export function DiscussPage() {
             value={ticker}
             onChange={(e) => handleChange(e.target.value)}
             onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
-            placeholder="Search ticker or company..."
+            placeholder={t("Search ticker or company...")}
             maxLength={20}
             autoFocus
             className="w-full h-12 pl-10 pr-4 text-[16px] rounded-full bg-card border border-border focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
@@ -119,13 +121,13 @@ export function DiscussPage() {
 
       <div className="mt-8">
         <h2 className="text-[22px] font-semibold tracking-tight text-foreground pb-3 border-b border-border">
-          Active discussions
+          {t("Active discussions")}
         </h2>
         {activeLoading && (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-muted-foreground">{t("Loading...")}</p>
         )}
         {!activeLoading && activeTickers.length === 0 && (
-          <p className="py-6 text-[15px] text-muted-foreground">No discussions yet. Search a ticker to start one.</p>
+          <p className="py-6 text-[15px] text-muted-foreground">{t("No discussions yet. Search a ticker to start one.")}</p>
         )}
         {!activeLoading && activeTickers.length > 0 && (
           <div className="flex flex-col divide-y divide-border">

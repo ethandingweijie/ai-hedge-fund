@@ -28,6 +28,7 @@ import { TabHero } from '@/components/layout/TabHero';
 import { toast } from 'sonner';
 import { actionTone } from '@/lib/semanticColors';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { useI18n } from '@/i18n';
 
 // ── small presentational helpers ────────────────────────────────────────────
 
@@ -111,6 +112,7 @@ function matchChip(matches: number): string {
 type PortfolioTab = 'positions' | 'replay' | 'regime' | 'whatif';
 
 export function PortfolioPage() {
+  const { t } = useI18n();
   const { mode } = useLayoutMode();
   const isMobile = mode === 'mobile';
   const [dash, setDash] = useState<PortfolioDashboard | null>(null);
@@ -305,16 +307,16 @@ export function PortfolioPage() {
   return (
     <PageContainer size="wide">
       <TabHero
-        title="Portfolio"
+        title={t("Portfolio")}
         subtitle="Your holdings against the system's latest valuation signals"
         icon={PieChart}
         actions={
           <button
             onClick={() => void load()}
             className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-hero-foreground hover:bg-hero-foreground/10"
-            title="Refresh prices & signals"
+            title={t("Refresh prices & signals")}
           >
-            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> {t('Refresh')}
           </button>
         }
       />
@@ -328,10 +330,10 @@ export function PortfolioPage() {
           // One scrollable row on a phone instead of two wrapped rows.
           ? 'flex-nowrap justify-start overflow-x-auto -mx-4 px-4 w-[calc(100%+2rem)] [&>*]:shrink-0 [scrollbar-width:none]'
           : 'h-auto flex-wrap justify-start'}>
-          <TabsTrigger value="positions">Positions &amp; indicators</TabsTrigger>
-          <TabsTrigger value="replay">Crisis replay</TabsTrigger>
-          <TabsTrigger value="regime">Regime then vs now</TabsTrigger>
-          <TabsTrigger value="whatif">What-if simulator</TabsTrigger>
+          <TabsTrigger value="positions">{t("Positions & indicators")}</TabsTrigger>
+          <TabsTrigger value="replay">{t("Crisis replay")}</TabsTrigger>
+          <TabsTrigger value="regime">{t("Regime then vs now")}</TabsTrigger>
+          <TabsTrigger value="whatif">{t("What-if simulator")}</TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Positions & indicators (P1) ─────────────────────────── */}
@@ -341,21 +343,21 @@ export function PortfolioPage() {
           {dash && (
             <div className="mt-6 flex flex-wrap items-end gap-x-12 gap-y-4">
               <div>
-                <div className="text-sm text-muted-foreground">Market value</div>
+                <div className="text-sm text-muted-foreground">{t("Market value")}</div>
                 <div className="mt-1 text-[40px] md:text-[48px] font-bold tracking-tight leading-none tabular-nums">
                   {fmtTotal(s?.total_market_value)}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Unrealised return</div>
+                <div className="text-sm text-muted-foreground">{t("Unrealised return")}</div>
                 <div className="mt-1 text-xl font-semibold"><PnlText value={s?.total_unrealized_pnl} pct={s?.total_pnl_pct} ccy={totalCcy} /></div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Cost basis</div>
+                <div className="text-sm text-muted-foreground">{t("Cost basis")}</div>
                 <div className="mt-1 text-xl font-semibold tabular-nums">{fmtTotal(s?.total_cost_basis)}</div>
               </div>
               <div>
-                <div className="text-sm text-muted-foreground">Positions</div>
+                <div className="text-sm text-muted-foreground">{t("Positions")}</div>
                 <div className="mt-1 text-xl font-semibold tabular-nums">
                   {s?.position_count ?? 0}
                   {s?.top_weight_pct != null && (
@@ -370,17 +372,17 @@ export function PortfolioPage() {
           <Card className="p-4 mt-4">
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Ticker</label>
+                <label className="text-xs text-muted-foreground block mb-1">{t("Ticker")}</label>
                 <input
                   value={ticker} onChange={e => setTicker(e.target.value)}
-                  placeholder="AAPL · 9988 · D05"
-                  title="US tickers, HK codes (9988 or 9988.HK) and SGX codes (D05 or D05.SI). Enter avg cost in the stock's trading currency."
+                  placeholder={t("AAPL · 9988 · D05")}
+                  title={t("US tickers, HK codes (9988 or 9988.HK) and SGX codes (D05 or D05.SI). Enter avg cost in the stock's trading currency.")}
                   className="w-36 h-11 rounded-lg border border-input bg-background px-3 text-sm uppercase"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Quantity</label>
+                <label className="text-xs text-muted-foreground block mb-1">{t("Quantity")}</label>
                 <input
                   value={qty} onChange={e => setQty(e.target.value)}
                   placeholder="100" inputMode="decimal"
@@ -389,7 +391,7 @@ export function PortfolioPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1" title="In the stock's trading currency (HK$ for HK, S$ for most SGX lines)">Avg cost (local ccy)</label>
+                <label className="text-xs text-muted-foreground block mb-1" title={t("In the stock's trading currency (HK$ for HK, S$ for most SGX lines)")}>{t("Avg cost (local ccy)")}</label>
                 <input
                   value={cost} onChange={e => setCost(e.target.value)}
                   placeholder="150.00" inputMode="decimal"
@@ -398,16 +400,16 @@ export function PortfolioPage() {
                 />
               </div>
               <div className="flex-1 min-w-40">
-                <label className="text-xs text-muted-foreground block mb-1">Notes (optional)</label>
+                <label className="text-xs text-muted-foreground block mb-1">{t("Notes (optional)")}</label>
                 <input
                   value={notes} onChange={e => setNotes(e.target.value)}
-                  placeholder="thesis, entry rationale…"
+                  placeholder={t("thesis, entry rationale…")}
                   className="w-full h-11 rounded-lg border border-input bg-background px-3 text-sm"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />
               </div>
               <Button onClick={() => void onAdd()} disabled={adding} className="gap-1.5">
-                <Plus size={15} /> {adding ? 'Saving…' : 'Add position'}
+                <Plus size={15} /> {adding ? t('Saving…') : t('Add position')}
               </Button>
             </div>
           </Card>
@@ -426,29 +428,29 @@ export function PortfolioPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Ticker</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Avg cost</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Value</TableHead>
-                  <TableHead className="text-right">Weight</TableHead>
-                  <TableHead className="text-right">Return</TableHead>
-                  <TableHead className="text-center">Rating</TableHead>
-                  <TableHead className="text-right">Fair value (bear / base / bull)</TableHead>
-                  <TableHead className="text-right">Upside</TableHead>
-                  <TableHead>Sector</TableHead>
-                  <TableHead className="text-right">Run</TableHead>
+                  <TableHead>{t("Ticker")}</TableHead>
+                  <TableHead className="text-right">{t("Qty")}</TableHead>
+                  <TableHead className="text-right">{t("Avg cost")}</TableHead>
+                  <TableHead className="text-right">{t("Price")}</TableHead>
+                  <TableHead className="text-right">{t("Value")}</TableHead>
+                  <TableHead className="text-right">{t("Weight")}</TableHead>
+                  <TableHead className="text-right">{t("Return")}</TableHead>
+                  <TableHead className="text-center">{t("Rating")}</TableHead>
+                  <TableHead className="text-right">{t("Fair value (bear / base / bull)")}</TableHead>
+                  <TableHead className="text-right">{t("Upside")}</TableHead>
+                  <TableHead>{t("Sector")}</TableHead>
+                  <TableHead className="text-right">{t("Run")}</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading && !dash && (
-                  <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Loading portfolio…</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">{t("Loading portfolio…")}</TableCell></TableRow>
                 )}
                 {dash && dash.holdings.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={13} className="text-center text-muted-foreground py-10">
-                      No positions yet — add your first holding above.
+                      {t("No positions yet — add your first holding above.")}
                     </TableCell>
                   </TableRow>
                 )}
@@ -513,7 +515,7 @@ export function PortfolioPage() {
           {/* Sector exposure */}
           {dash && Object.keys(dash.sector_exposure).length > 0 && (
             <Card className="p-4 mt-4">
-              <div className="text-sm font-semibold mb-3">Sector exposure</div>
+              <div className="text-sm font-semibold mb-3">{t("Sector exposure")}</div>
               <div className="space-y-2">
                 {Object.entries(dash.sector_exposure).map(([sector, pct]) => (
                   <div key={sector} className="flex items-center gap-3">
@@ -531,10 +533,10 @@ export function PortfolioPage() {
           {dash && (
             <p
               className="text-xs text-muted-foreground mt-3"
-              title="Price, cost, value and P&L per line are in its trading currency; fair values are in the same currency as the price. Signals are the latest saved analysis per ticker, not new valuations."
+              title={t("Price, cost, value and P&L per line are in its trading currency; fair values are in the same currency as the price. Signals are the latest saved analysis per ticker, not new valuations.")}
             >
-              Prices as of {new Date(dash.prices_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              {multiCcy ? ' · each line in its listing currency, totals in US$' : ''}
+              {t('Prices as of {time}', { time: new Date(dash.prices_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}
+              {multiCcy ? t(' · each line in its listing currency, totals in US$') : ''}
             </p>
           )}
         </TabsContent>
@@ -611,13 +613,14 @@ function MobileHoldings({ holdings, loading, removingId, onDelete }: {
   removingId: number | null;
   onDelete: (id: number, ticker: string) => void;
 }) {
+  const { t } = useI18n();
   const [openId, setOpenId] = useState<number | null>(null);
 
   if (loading && !holdings) {
-    return <p className="mt-6 text-center text-sm text-muted-foreground">Loading portfolio…</p>;
+    return <p className="mt-6 text-center text-sm text-muted-foreground">{t("Loading portfolio…")}</p>;
   }
   if (!holdings || holdings.length === 0) {
-    return <p className="mt-6 text-center text-sm text-muted-foreground">No positions yet.</p>;
+    return <p className="mt-6 text-center text-sm text-muted-foreground">{t("No positions yet.")}</p>;
   }
 
   return (
@@ -722,6 +725,7 @@ function ReplaySection({
   error: string | null;
   onRun: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap mt-2">
@@ -736,7 +740,7 @@ function ReplaySection({
         <span className="text-xs text-muted-foreground max-w-lg">
           {positionCount === 0
             ? positionsLoaded
-              ? 'Add positions on the first tab — the replay uses your actual holdings.'
+              ? t('Add positions on the first tab — the replay uses your actual holdings.')
               : 'Loading portfolio…'
             : replay
               ? `Computed ${replay.holdings_snapshot.position_count} positions × ${replay.event_count} events on a cost-basis snapshot. Cached until your holdings change.`
@@ -773,9 +777,10 @@ function ReplaySection({
 
 /** Pre-run view: the curated event library with reference benchmark numbers. */
 function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
+  const { t } = useI18n();
   return (
     <div>
-      <div className="text-sm font-semibold mb-2">Event library</div>
+      <div className="text-sm font-semibold mb-2">{t("Event library")}</div>
       <div className="grid md:grid-cols-2 gap-3">
         {events.map(ev => (
           <Card key={ev.key} className="p-4">
@@ -789,14 +794,14 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
               <div>
                 <span className="text-muted-foreground">SPY</span>{' '}
                 <RetText value={ev.benchmarks.spy_return_pct} />{' '}
-                <span className="text-muted-foreground">(DD </span>
+                <span className="text-muted-foreground">{t("(DD")} </span>
                 <RetText value={ev.benchmarks.spy_max_dd_pct} />
                 <span className="text-muted-foreground">)</span>
               </div>
               <div>
                 <span className="text-muted-foreground">QQQ</span>{' '}
                 <RetText value={ev.benchmarks.qqq_return_pct} />{' '}
-                <span className="text-muted-foreground">(DD </span>
+                <span className="text-muted-foreground">{t("(DD")} </span>
                 <RetText value={ev.benchmarks.qqq_max_dd_pct} />
                 <span className="text-muted-foreground">)</span>
               </div>
@@ -824,6 +829,7 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
  * GICS sector SPDRs (curated, calibrated to FMP EOD). Sectors whose ETFs
  * did not exist yet are named as absent, never zero-filled. */
 function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined }) {
+  const { t } = useI18n();
   if (!perf || perf.length === 0) return null;
   const best = perf.slice(0, 3);
   const worst = perf.slice(-3);
@@ -844,15 +850,15 @@ function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined 
       <div className="grid md:grid-cols-2 gap-2">
         <div>
           <div className="text-xs text-muted-foreground mb-1"
-               title="Best window returns across the GICS sector SPDR ETFs — positive (green) means the sector actually rose during the crisis">
-            Sectors that held up
+               title={t("Best window returns across the GICS sector SPDR ETFs — positive (green) means the sector actually rose during the crisis")}>
+            {t("Sectors that held up")}
           </div>
           <div className="space-y-1">{best.map(row)}</div>
         </div>
         <div>
           <div className="text-xs text-muted-foreground mb-1"
-               title="Worst window returns across the GICS sector SPDR ETFs">
-            Sectors hit hardest
+               title={t("Worst window returns across the GICS sector SPDR ETFs")}>
+            {t("Sectors hit hardest")}
           </div>
           <div className="space-y-1">{worst.map(row)}</div>
         </div>
@@ -868,6 +874,7 @@ function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined 
 }
 
 function EventCard({ ev }: { ev: ReplayEventResult }) {
+  const { t } = useI18n();
   const sim = ev.regime_similarity;
   const divergent = ev.benchmarks.cross_check === 'divergent';
   const covered = ev.portfolio.covered_weight_pct;
@@ -911,24 +918,24 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
       {/* Portfolio impact */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-xs text-muted-foreground">Your portfolio</div>
+          <div className="text-xs text-muted-foreground">{t("Your portfolio")}</div>
           <div className="text-lg font-semibold"><RetText value={ev.portfolio.window_return_pct} /></div>
-          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.portfolio.max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">{t("max DD")} <RetText value={ev.portfolio.max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-xs text-muted-foreground">SPY (live)</div>
+          <div className="text-xs text-muted-foreground">{t("SPY (live)")}</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.spy_return_pct} /></div>
-          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.benchmarks.live.spy_max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">{t("max DD")} <RetText value={ev.benchmarks.live.spy_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-xs text-muted-foreground">QQQ (live)</div>
+          <div className="text-xs text-muted-foreground">{t("QQQ (live)")}</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.qqq_return_pct} /></div>
-          <div className="text-xs text-muted-foreground">max DD <RetText value={ev.benchmarks.live.qqq_max_dd_pct} /></div>
+          <div className="text-xs text-muted-foreground">{t("max DD")} <RetText value={ev.benchmarks.live.qqq_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-xs text-muted-foreground">Coverage</div>
+          <div className="text-xs text-muted-foreground">{t("Coverage")}</div>
           <div className="text-lg font-semibold tabular-nums">{covered != null ? `${fmtNum(covered, 1)}%` : '—'}</div>
-          <div className="text-xs text-muted-foreground">of cost basis replayed</div>
+          <div className="text-xs text-muted-foreground">{t("of cost basis replayed")}</div>
         </div>
       </div>
 
@@ -948,10 +955,10 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
       <Table className="mt-3">
         <TableHeader>
           <TableRow>
-            <TableHead>Holding</TableHead>
-            <TableHead className="text-right">Window return</TableHead>
-            <TableHead className="text-right">Max DD</TableHead>
-            <TableHead className="text-right">Beta vs SPY</TableHead>
+            <TableHead>{t("Holding")}</TableHead>
+            <TableHead className="text-right">{t("Window return")}</TableHead>
+            <TableHead className="text-right">{t("Max DD")}</TableHead>
+            <TableHead className="text-right">{t("Beta vs SPY")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -960,8 +967,8 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
               <TableCell className="font-medium">
                 {h.ticker}
                 {!h.covered && (
-                  <span className="ml-2 text-xs text-muted-foreground" title="Not listed yet or too few in-window price points — excluded from portfolio aggregates">
-                    not covered then
+                  <span className="ml-2 text-xs text-muted-foreground" title={t("Not listed yet or too few in-window price points — excluded from portfolio aggregates")}>
+                    {t("not covered then")}
                   </span>
                 )}
               </TableCell>
@@ -993,6 +1000,7 @@ function RegimeSection({
   progress: string | null;
   onRun: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   if (!replay) {
     return (
       <div className="mt-2">
@@ -1012,7 +1020,7 @@ function RegimeSection({
                 <RefreshCw size={15} /> Run crisis replay
               </Button>
             ) : (
-              <p className="text-xs text-muted-foreground">Add positions first to enable replays.</p>
+              <p className="text-xs text-muted-foreground">{t("Add positions first to enable replays.")}</p>
             )}
           </Card>
         )}
@@ -1025,7 +1033,7 @@ function RegimeSection({
   return (
     <div className="space-y-4">
       <Card className="p-4 mt-2">
-        <div className="text-sm font-semibold mb-2">Today&apos;s regime</div>
+        <div className="text-sm font-semibold mb-2">{t("Today's regime")}</div>
         <div className="flex flex-wrap gap-2">
           {REGIME_DIMS.map(d => (
             <span key={d.key} className="px-2 py-1 rounded-md border border-border bg-muted/40 text-xs">
@@ -1048,6 +1056,7 @@ function RegimeSection({
 }
 
 function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
+  const { t } = useI18n();
   const sim = ev.regime_similarity;
   return (
     <Card className="p-4">
@@ -1086,8 +1095,8 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
         })}
         <div className="grid grid-cols-[1fr_auto_auto] gap-2 px-2 pt-1 text-xs text-muted-foreground">
           <span />
-          <span className="w-20 text-right">then</span>
-          <span className="w-20 text-right">now</span>
+          <span className="w-20 text-right">{t("then")}</span>
+          <span className="w-20 text-right">{t("now")}</span>
         </div>
       </div>
 
@@ -1123,6 +1132,7 @@ function WhatIfSection({
   parentLabel: string | null;
   onClearParent: () => void;
 }) {
+  const { t } = useI18n();
   const [category, setCategory] = useState('');
   const [concerns, setConcerns] = useState('');
   const [referenceKey, setReferenceKey] = useState('');
@@ -1158,7 +1168,7 @@ function WhatIfSection({
     <div className="space-y-4">
       {/* Scenario form */}
       <Card className="p-4 mt-2">
-        <div className="text-sm font-semibold mb-1">Simulate a crisis that hasn&apos;t happened yet</div>
+        <div className="text-sm font-semibold mb-1">{t("Simulate a crisis that hasn't happened yet")}</div>
         <p className="text-xs text-muted-foreground mb-3">
           Deterministic skeleton first (sector anchors from the reference crisis, leveraged-product
           time decay computed in closed form), then ONE deepseek-v4-flash call adds the sectoral
@@ -1175,7 +1185,7 @@ function WhatIfSection({
             <button
               onClick={onClearParent}
               className="text-muted-foreground hover:text-foreground"
-              title="Start fresh instead of building on this scenario"
+              title={t("Start fresh instead of building on this scenario")}
             >
               <X size={13} />
             </button>
@@ -1184,7 +1194,7 @@ function WhatIfSection({
 
         <div className="grid md:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Category</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("Category")}</label>
             <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectCls} w-full`}>
               {(meta?.categories ?? ['Custom']).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -1192,10 +1202,10 @@ function WhatIfSection({
           <div>
             <label className="text-xs text-muted-foreground block mb-1"
                    title="Closest historical crisis — its calibrated sector returns anchor the scenario. None = model from concerns only.">
-              Reference crisis
+              {t("Reference crisis")}
             </label>
             <select value={referenceKey} onChange={e => setReferenceKey(e.target.value)} className={`${selectCls} w-full`}>
-              <option value="">None — model from concerns only</option>
+              <option value="">{t("None — model from concerns only")}</option>
               {(meta?.reference_events ?? []).map(ev => (
                 <option key={ev.key} value={ev.key}>
                   {ev.name} (SPY {ev.spy_return_pct}%)
@@ -1204,7 +1214,7 @@ function WhatIfSection({
             </select>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1">Horizon</label>
+            <label className="text-xs text-muted-foreground block mb-1">{t("Horizon")}</label>
             <select value={horizon} onChange={e => setHorizon(parseInt(e.target.value, 10))} className={`${selectCls} w-full`}>
               {WHAT_IF_HORIZONS.map(d => (
                 <option key={d} value={d}>{d} days{d === 90 ? ' (1 quarter)' : ''}</option>
@@ -1214,14 +1224,14 @@ function WhatIfSection({
           <div>
             <label className="text-xs text-muted-foreground block mb-1"
                    title="auto = search only when the engine decides it's needed (unknown short product, no reference crisis). Tavily quota permitting.">
-              Online search
+              {t("Online search")}
             </label>
             <select value={searchOverride}
                     onChange={e => setSearchOverride(e.target.value as 'auto' | 'always' | 'never')}
                     className={`${selectCls} w-full`}>
-              <option value="auto">Auto (recommended)</option>
-              <option value="always">Always search</option>
-              <option value="never">Never search</option>
+              <option value="auto">{t("Auto (recommended)")}</option>
+              <option value="always">{t("Always search")}</option>
+              <option value="never">{t("Never search")}</option>
             </select>
           </div>
         </div>
@@ -1234,7 +1244,7 @@ function WhatIfSection({
             value={concerns}
             onChange={e => setConcerns(e.target.value)}
             rows={3}
-            placeholder="e.g. Rising rates pressure AI data centres — PE-owned capacity is rate-sensitive; circular vendor financing; multiple-compression risk in memory stocks…"
+            placeholder={t("e.g. Rising rates pressure AI data centres — PE-owned capacity is rate-sensitive; circular vendor financing; multiple-compression risk in memory stocks…")}
             className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm"
           />
         </div>
@@ -1251,14 +1261,14 @@ function WhatIfSection({
               id="whatif-share"
             />
             <span>
-              Publish to scenario memory
-              <span className="text-muted-foreground/70"> (others can see &amp; build on it)</span>
+              {t("Publish to scenario memory")}
+              <span className="text-muted-foreground/70"> {t("(others can see & build on it)")}</span>
             </span>
           </label>
           <span className="text-xs text-muted-foreground max-w-xl">
             {positionCount === 0
               ? positionsLoaded
-                ? 'Add positions on the first tab — the simulation compares the scenario against your actual holdings.'
+                ? t('Add positions on the first tab — the simulation compares the scenario against your actual holdings.')
                 : 'Loading portfolio…'
               : meta?.product_map?.length
                 ? `Short-product knowledge: ${meta.product_map.map(p =>
@@ -1290,6 +1300,7 @@ function WhatIfSection({
 }
 
 function WhatIfResultView({ result }: { result: WhatIfResult }) {
+  const { t } = useI18n();
   const llm = result.llm;
   const skel = result.skeleton;
   const ref = result.reference_event;
@@ -1343,24 +1354,24 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
         {/* Headline tiles */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Portfolio est. impact</div>
+            <div className="text-xs text-muted-foreground">{t("Portfolio est. impact")}</div>
             <div className="text-lg font-semibold"><RetText value={skel.portfolio_est_impact_pct} /></div>
-            <div className="text-xs text-muted-foreground">cost-basis weighted</div>
+            <div className="text-xs text-muted-foreground">{t("cost-basis weighted")}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Coverage</div>
+            <div className="text-xs text-muted-foreground">{t("Coverage")}</div>
             <div className="text-lg font-semibold tabular-nums">
               {skel.covered_weight_pct != null ? `${fmtNum(skel.covered_weight_pct, 1)}%` : '—'}
             </div>
-            <div className="text-xs text-muted-foreground">of cost basis estimated</div>
+            <div className="text-xs text-muted-foreground">{t("of cost basis estimated")}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Model</div>
+            <div className="text-xs text-muted-foreground">{t("Model")}</div>
             <div className="text-lg font-semibold">{result.model.name.replace('deepseek-v4-flash', 'DS-v4-flash')}</div>
             <div className="text-xs text-muted-foreground">est. cost ${result.model.cost_usd_est.toFixed(4)}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Reference SPY/QQQ</div>
+            <div className="text-xs text-muted-foreground">{t("Reference SPY/QQQ")}</div>
             <div className="text-lg font-semibold">
               {ref ? (<><RetText value={ref.benchmarks.spy_return_pct} /> / <RetText value={ref.benchmarks.qqq_return_pct} /></>) : '—'}
             </div>
@@ -1372,11 +1383,11 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
       {/* Scenario narrative */}
       {llm && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-2">Scenario</div>
+          <div className="text-sm font-semibold mb-2">{t("Scenario")}</div>
           <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
           <div className="grid md:grid-cols-2 gap-3 mt-3">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Most affected</div>
+              <div className="text-xs text-muted-foreground mb-1">{t("Most affected")}</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
@@ -1384,7 +1395,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="text-xs text-muted-foreground mb-1">{t("Hedged / holds up")}</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
@@ -1398,7 +1409,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
       {/* Sector impacts */}
       {llm && llm.sector_impacts.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-2">Sector-level scenario</div>
+          <div className="text-sm font-semibold mb-2">{t("Sector-level scenario")}</div>
           <div className="space-y-1">
             {[...llm.sector_impacts]
               .sort((a, b) => b.est_return_pct - a.est_return_pct)
@@ -1418,9 +1429,9 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
       {/* Assumptions to watch */}
       {llm && llm.assumptions_to_watch.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-1">Assumptions to watch across the quarterlies</div>
+          <div className="text-sm font-semibold mb-1">{t("Assumptions to watch across the quarterlies")}</div>
           <p className="text-xs text-muted-foreground mb-2">
-            The datapoints that confirm or disconfirm this scenario as the quarter unfolds.
+            {t("The datapoints that confirm or disconfirm this scenario as the quarter unfolds.")}
           </p>
           <div className="grid md:grid-cols-2 gap-2">
             {llm.assumptions_to_watch.map((a, i) => (
@@ -1436,15 +1447,15 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
 
       {/* Holdings impact (deterministic skeleton + LLM rationale) */}
       <Card className="p-4 overflow-x-auto">
-        <div className="text-sm font-semibold mb-2">Your holdings under this scenario</div>
+        <div className="text-sm font-semibold mb-2">{t("Your holdings under this scenario")}</div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Holding</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Est. impact</TableHead>
-              <TableHead className="text-right">Time-decay drag</TableHead>
-              <TableHead>Rationale</TableHead>
+              <TableHead>{t("Holding")}</TableHead>
+              <TableHead>{t("Type")}</TableHead>
+              <TableHead className="text-right">{t("Est. impact")}</TableHead>
+              <TableHead className="text-right">{t("Time-decay drag")}</TableHead>
+              <TableHead>{t("Rationale")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1464,7 +1475,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
       {/* Recommendations */}
       {llm && llm.recommendations.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-2">Recommended tools</div>
+          <div className="text-sm font-semibold mb-2">{t("Recommended tools")}</div>
           <div className="grid md:grid-cols-2 gap-2">
             {llm.recommendations.map((r, i) => (
               <div key={i} className="p-2.5 rounded-md border border-border">
@@ -1473,7 +1484,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
                     {r.action}
                   </span>
                   <span className="text-xs font-semibold">{r.instrument}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums" title="Model confidence">
+                  <span className="text-xs text-muted-foreground tabular-nums" title={t("Model confidence")}>
                     {Math.round(r.confidence * 100)}%
                   </span>
                 </div>
@@ -1482,7 +1493,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
             ))}
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Not investment advice — scenario-conditioned suggestions from a single cheap-model pass
+            {t("Not investment advice — scenario-conditioned suggestions from a single cheap-model pass")}
             {result.search.used ? ', grounded in the search evidence gathered above' : ''}.
           </p>
         </Card>
@@ -1492,6 +1503,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
 }
 
 function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rationale: string | null }) {
+  const { t } = useI18n();
   const typeBadge = h.kind === 'product' ? (
     <span className={`px-1.5 py-0.5 rounded border text-xs ${
       h.product?.confidence === 'confirmed'
@@ -1506,7 +1518,7 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
   ) : h.kind === 'unknown_product' ? (
     <span className="px-1.5 py-0.5 rounded border text-xs bg-surface-2 text-content-high border-[var(--hairline)]"
           title={h.product?.hint ?? 'Unknown product'}>
-      unclassified
+      {t("unclassified")}
     </span>
   ) : (
     <span className="text-xs text-muted-foreground">{h.gics ?? h.sector ?? '—'}</span>
@@ -1552,6 +1564,7 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
   onRefresh: () => Promise<void>;
   onBuildOn: (id: string, category: string) => void;
 }) {
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   if (selectedId) {
@@ -1570,21 +1583,21 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-muted-foreground" />
-          <div className="text-sm font-semibold">Scenario memory</div>
+          <div className="text-sm font-semibold">{t("Scenario memory")}</div>
           <span className="text-xs text-muted-foreground">
             shared by everyone — open one to compare it against your portfolio,
             check its assumptions, or build on it
           </span>
         </div>
         <Button variant="outline" size="sm" onClick={() => void onRefresh()} className="gap-1.5">
-          <RefreshCw size={13} /> Refresh
+          <RefreshCw size={13} /> {t('Refresh')}
         </Button>
       </div>
 
       {entries === null ? (
         <div className="mt-3 p-4 rounded-md border border-border text-sm text-muted-foreground flex items-center justify-between gap-3 flex-wrap">
-          <span>Couldn&apos;t load the scenario library.</span>
-          <Button variant="outline" size="sm" onClick={() => void onRefresh()}>Retry</Button>
+          <span>{t("Couldn't load the scenario library.")}</span>
+          <Button variant="outline" size="sm" onClick={() => void onRefresh()}>{t("Retry")}</Button>
         </div>
       ) : entries.length === 0 ? (
         <p className="mt-3 text-xs text-muted-foreground">
@@ -1638,7 +1651,7 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
               </div>
               <div>
                 <Button variant="outline" size="sm" onClick={() => setSelectedId(e.scenario_id)}>
-                  Open scenario
+                  {t("Open scenario")}
                 </Button>
               </div>
             </div>
@@ -1655,6 +1668,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
   onOpen: (id: string) => void;
   onBuildOn: (id: string, category: string) => void;
 }) {
+  const { t } = useI18n();
   const [detail, setDetail] = useState<WhatIfScenarioDetail | null>(null);
   const [busy, setBusy] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -1754,7 +1768,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
           <span>{err ?? 'Scenario not found.'}</span>
         </div>
-        <Button variant="outline" size="sm" onClick={onBack} className="mt-3">Back to library</Button>
+        <Button variant="outline" size="sm" onClick={onBack} className="mt-3">{t("Back to library")}</Button>
       </Card>
     );
   }
@@ -1769,7 +1783,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={onBack} className="text-muted-foreground hover:text-foreground" title="Back to library">
+              <button onClick={onBack} className="text-muted-foreground hover:text-foreground" title={t("Back to library")}>
                 <X size={16} />
               </button>
               <span className="text-sm font-semibold">{detail.category}</span>
@@ -1794,7 +1808,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <button
                 onClick={() => onOpen(detail.parent!.scenario_id)}
                 className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-xs hover:bg-brand/10"
-                title="Open the scenario this one was built on"
+                title={t("Open the scenario this one was built on")}
               >
                 <GitFork size={12} />
                 Built on: {detail.parent.category} ({detail.parent.created_by_name ?? 'anonymous'})
@@ -1809,21 +1823,21 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
         {/* Author headline tile */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Author&apos;s portfolio est. impact</div>
+            <div className="text-xs text-muted-foreground">{t("Author's portfolio est. impact")}</div>
             <div className="text-lg font-semibold">
               <RetText value={skel?.portfolio_est_impact_pct ?? null} />
             </div>
-            <div className="text-xs text-muted-foreground">cost-basis weighted</div>
+            <div className="text-xs text-muted-foreground">{t("cost-basis weighted")}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Assumptions tracked</div>
+            <div className="text-xs text-muted-foreground">{t("Assumptions tracked")}</div>
             <div className="text-lg font-semibold tabular-nums">{detail.assumptions.length}</div>
-            <div className="text-xs text-muted-foreground">verifiable datapoints</div>
+            <div className="text-xs text-muted-foreground">{t("verifiable datapoints")}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-xs text-muted-foreground">Community notes</div>
+            <div className="text-xs text-muted-foreground">{t("Community notes")}</div>
             <div className="text-lg font-semibold tabular-nums">{detail.notes.length}</div>
-            <div className="text-xs text-muted-foreground">append your own below</div>
+            <div className="text-xs text-muted-foreground">{t("append your own below")}</div>
           </div>
         </div>
       </Card>
@@ -1831,11 +1845,11 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
       {/* Narrative (author's run result) */}
       {llm && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-2">Scenario narrative</div>
+          <div className="text-sm font-semibold mb-2">{t("Scenario narrative")}</div>
           <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
           <div className="grid md:grid-cols-2 gap-3 mt-3">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Most affected</div>
+              <div className="text-xs text-muted-foreground mb-1">{t("Most affected")}</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
@@ -1843,7 +1857,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="text-xs text-muted-foreground mb-1">{t("Hedged / holds up")}</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-xs">{s}</span>
@@ -1873,7 +1887,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
       <Card className="p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-sm font-semibold">Compare to my portfolio</div>
+            <div className="text-sm font-semibold">{t("Compare to my portfolio")}</div>
             <p className="text-xs text-muted-foreground max-w-xl">
               Re-runs the scenario&apos;s deterministic skeleton against YOUR holdings — no LLM,
               no re-simulation of the narrative. Sensitivities show how each assumption,
@@ -1894,13 +1908,13 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-2 gap-3 max-w-md">
               <div className="p-2.5 rounded-md bg-muted/40">
-                <div className="text-xs text-muted-foreground">Your est. impact</div>
+                <div className="text-xs text-muted-foreground">{t("Your est. impact")}</div>
                 <div className="text-lg font-semibold">
                   <RetText value={compare.skeleton.portfolio_est_impact_pct} />
                 </div>
               </div>
               <div className="p-2.5 rounded-md bg-muted/40">
-                <div className="text-xs text-muted-foreground">Coverage</div>
+                <div className="text-xs text-muted-foreground">{t("Coverage")}</div>
                 <div className="text-lg font-semibold tabular-nums">
                   {compare.skeleton.covered_weight_pct != null
                     ? `${fmtNum(compare.skeleton.covered_weight_pct, 1)}%` : '—'}
@@ -1912,11 +1926,11 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Holding</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="text-right">Est. impact</TableHead>
-                    <TableHead className="text-right">Time-decay drag</TableHead>
-                    <TableHead>Rationale</TableHead>
+                    <TableHead>{t("Holding")}</TableHead>
+                    <TableHead>{t("Type")}</TableHead>
+                    <TableHead className="text-right">{t("Est. impact")}</TableHead>
+                    <TableHead className="text-right">{t("Time-decay drag")}</TableHead>
+                    <TableHead>{t("Rationale")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1929,7 +1943,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
 
             {compare.assumption_sensitivities.length > 0 && (
               <div>
-                <div className="text-xs font-semibold mb-1.5">Assumption sensitivity on your portfolio</div>
+                <div className="text-xs font-semibold mb-1.5">{t("Assumption sensitivity on your portfolio")}</div>
                 <div className="space-y-1">
                   {compare.assumption_sensitivities.map(s => (
                     <div key={s.assumption_id} className="flex items-center gap-2 flex-wrap text-xs px-2 py-1.5 rounded bg-muted/30">
@@ -1943,7 +1957,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                           </span>
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">no portfolio linkage</span>
+                        <span className="text-muted-foreground">{t("no portfolio linkage")}</span>
                       )}
                       {s.affected_tickers.length > 0 && (
                         <span className="text-muted-foreground">· {s.affected_tickers.join(', ')}</span>
@@ -1963,7 +1977,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
       {/* Assumptions ledger */}
       {detail.assumptions.length > 0 && (
         <Card className="p-4">
-          <div className="text-sm font-semibold mb-1">Assumptions to watch</div>
+          <div className="text-sm font-semibold mb-1">{t("Assumptions to watch")}</div>
           <p className="text-xs text-muted-foreground mb-3">
             Anyone can verify whether an assumption is holding true — market data checks a
             deterministic FMP reading; research check runs one web-search sweep. Verdicts are
@@ -2001,7 +2015,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                       disabled={!!inFlight}
                       onClick={() => void runCheck(a, 'market_data')}
                       className="gap-1 text-xs"
-                      title="Deterministic FMP reading (rates / inflation / sector ETF) judged against the watch-point"
+                      title={t("Deterministic FMP reading (rates / inflation / sector ETF) judged against the watch-point")}
                     >
                       {inFlight === 'market_data' ? <Loader2 size={12} className="animate-spin" /> : null}
                       Market data
@@ -2011,7 +2025,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
                       disabled={!!inFlight}
                       onClick={() => void runCheck(a, 'deep_research')}
                       className="gap-1 text-xs"
-                      title="One web-research sweep (qwen) judging the latest evidence"
+                      title={t("One web-research sweep (qwen) judging the latest evidence")}
                     >
                       {inFlight === 'deep_research' ? <Loader2 size={12} className="animate-spin" /> : null}
                       Research check
@@ -2051,9 +2065,9 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
 
       {/* Community notes */}
       <Card className="p-4">
-        <div className="text-sm font-semibold mb-2">Community notes</div>
+        <div className="text-sm font-semibold mb-2">{t("Community notes")}</div>
         {detail.notes.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No notes yet — add the first observation below.</p>
+          <p className="text-xs text-muted-foreground">{t("No notes yet — add the first observation below.")}</p>
         ) : (
           <div className="space-y-2 mb-3">
             {detail.notes.map(n => (
@@ -2071,7 +2085,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
             rows={2}
-            placeholder="Add an observation, datapoint or update for everyone tracking this scenario…"
+            placeholder={t("Add an observation, datapoint or update for everyone tracking this scenario…")}
             className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs"
           />
           <Button onClick={() => void submitNote()} disabled={noteBusy || noteText.trim().length === 0} className="gap-1.5">

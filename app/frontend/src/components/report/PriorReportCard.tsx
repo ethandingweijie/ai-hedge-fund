@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { currencySymbol } from '@/lib/utils';
 import type { FreshnessDelta, PriorRecap } from '@/lib/reportTypes';
 import { actionTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 interface Props {
   prior: PriorRecap | undefined;
@@ -25,11 +26,12 @@ function fmtNum(v: number | null | undefined, sym: string): string {
 
 
 export function PriorReportCard({ prior, delta, ticker }: Props) {
+  const { t } = useI18n();
   if (!prior) return null;
 
   const sym = currencySymbol(ticker);
   const rj = prior.recap_json ?? {};
-  const ageDays = prior.age_days != null ? `${prior.age_days.toFixed(1)}d old` : '';
+  const ageDays = prior.age_days != null ? t('{d}d old', { d: prior.age_days.toFixed(1) }) : '';
   const runDate = prior.run_at ? prior.run_at.slice(0, 10) : '';
   const actionColor = actionTone(prior.final_action, 'text');
 
@@ -40,7 +42,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
     <Card className="p-5">
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-3">
         <div className="text-[15px] font-semibold text-foreground">
-          Since last report
+          {t('Since last report')}
         </div>
         <div className="text-xs text-muted-foreground">
           {runDate}{runDate && ageDays ? ' · ' : ''}{ageDays}
@@ -50,11 +52,11 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
       {/* Prior decision summary */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-2">
         <span className={`font-bold ${actionColor}`}>
-          {prior.final_action ?? 'N/A'}
+          {prior.final_action ? t(prior.final_action.toUpperCase()) : 'N/A'}
         </span>
         {rj.price_target != null && (
           <span className="text-muted-foreground">
-            PT {fmtNum(rj.price_target, sym)}
+            {t('PT')} {fmtNum(rj.price_target, sym)}
           </span>
         )}
         {prior.price_at_run != null && (
@@ -64,11 +66,11 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
         )}
         {rj.dcf_base_iv != null && (
           <span className="text-muted-foreground">
-            DCF base {fmtNum(rj.dcf_base_iv, sym)}
+            {t('DCF base')} {fmtNum(rj.dcf_base_iv, sym)}
           </span>
         )}
         {rj.time_horizon && (
-          <span className="text-muted-foreground">· {rj.time_horizon}</span>
+          <span className="text-muted-foreground">· {t(rj.time_horizon)}</span>
         )}
       </div>
 
@@ -84,7 +86,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
         {material === true && (
           <>
             <div className="text-xs font-semibold text-warning mb-1.5">
-              Material developments since then
+              {t('Material developments since then')}
             </div>
             {events.length > 0 && (
               <ul className="space-y-1 mb-1.5">
@@ -92,7 +94,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
                   <li key={i} className="text-[12px] text-foreground/80 flex gap-2">
                     <span className="text-warning shrink-0">•</span>
                     <span>
-                      {e.headline || '(untitled event)'}
+                      {e.headline || t('(untitled event)')}
                       {e.date ? <span className="text-muted-foreground"> ({e.date})</span> : null}
                       {e.relevance ? (
                         <span className="text-muted-foreground"> — {e.relevance}</span>
@@ -106,12 +108,12 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
         )}
         {material === false && (
           <div className="text-xs font-semibold text-content-high mb-1.5">
-            No material change — prior report still current
+            {t('No material change — prior report still current')}
           </div>
         )}
         {material == null && delta && (
           <div className="text-xs font-semibold text-muted-foreground mb-1.5">
-            Freshness check unavailable
+            {t('Freshness check unavailable')}
           </div>
         )}
         {delta?.verdict && (

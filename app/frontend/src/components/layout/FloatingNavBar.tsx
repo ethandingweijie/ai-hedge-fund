@@ -21,6 +21,7 @@ import { Filter, Lightbulb, Microscope, Wallet, History } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { useActiveRun } from '@/contexts/active-run-context';
+import { useI18n } from '@/i18n';
 
 const ITEMS = [
   { label: 'Screener',  icon: Filter,     path: '/screener' },
@@ -31,6 +32,7 @@ const ITEMS = [
 ];
 
 export function FloatingNavBar() {
+  const { t } = useI18n();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
@@ -77,7 +79,7 @@ export function FloatingNavBar() {
                   </span>
                 )}
               </span>
-              <span className={`text-xs leading-none ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+              <span className={`text-xs leading-none ${active ? 'font-semibold' : 'font-medium'}`}>{t(label)}</span>
             </button>
           );
         })}

@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { EquitableMark } from '@/components/brand/EquitableMark';
+import { useI18n } from '@/i18n';
 
 declare global {
   interface Window {
@@ -39,6 +40,7 @@ function Check({ width = 12, height = 12 }: { width?: number; height?: number })
 }
 
 export function LoginPage() {
+  const { t } = useI18n();
   const { loginWithGoogle, loginWithApple, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -274,16 +276,16 @@ export function LoginPage() {
           <div className="flex items-center gap-2.5 mb-10">
             <EquitableMark size={28} />
             <span className="text-[17px] font-semibold tracking-tight text-foreground">
-              Equitable
+              {t("Equitable")}
             </span>
           </div>
 
           {/* Heading */}
           <h1 className="text-[28px] leading-[1.1] font-semibold tracking-tight text-foreground">
-            Sign in
+            {t("Sign in")}
           </h1>
           <p className="text-[14px] text-muted-foreground mt-2">
-            Investment research, on every market that matters.
+            {t("Investment research, on every market that matters.")}
           </p>
 
           {/* Error */}
@@ -308,7 +310,7 @@ export function LoginPage() {
               />
             ) : (
               <div className="w-full h-10 rounded-lg border border-border bg-card text-[14px] font-medium text-muted-foreground/70 flex items-center justify-center gap-2.5 select-none">
-                Google (configure VITE_GOOGLE_CLIENT_ID)
+                {t("Google (configure VITE_GOOGLE_CLIENT_ID)")}
               </div>
             )}
 
@@ -339,7 +341,7 @@ export function LoginPage() {
           <div className="mt-8 flex items-center gap-3">
             <Divider className="flex-1" />
             <span className="text-xs text-muted-foreground/70 uppercase tracking-[0.1em]">
-              US · HK · SGX
+              {t("US · HK · SGX")}
             </span>
             <Divider className="flex-1" />
           </div>

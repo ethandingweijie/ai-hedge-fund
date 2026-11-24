@@ -16,6 +16,7 @@ import { GradeChip } from '@/components/v2/shared';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { gradeTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 // ── Grade pill ────────────────────────────────────────────────────────────────
 function GradePill({ grade }: { grade?: string }) {
@@ -31,6 +32,7 @@ function GradePill({ grade }: { grade?: string }) {
 const VGPM_DIMS = ['valuation', 'growth', 'profitability', 'momentum'] as const;
 
 export function WatchlistPage() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
@@ -207,7 +209,7 @@ export function WatchlistPage() {
   if (mode === 'mobile') {
     return (
       <div className="min-h-full flex flex-col bg-background ui-flat">
-        <TabHero title="Watchlist" />
+        <TabHero title={t("Watchlist")} />
 
         <div className="px-4 py-3 space-y-3">
           {/* Add ticker */}
@@ -217,7 +219,7 @@ export function WatchlistPage() {
                 value={addInput}
                 onChange={e => handleInputChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
-                placeholder="Search ticker or company…"
+                placeholder={t("Search ticker or company…")}
                 className="w-full h-11 rounded-lg bg-muted/60 border border-border px-4 text-[13px] focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground"
                 disabled={adding}
                 autoComplete="off"
@@ -258,9 +260,9 @@ export function WatchlistPage() {
 
           {/* Watchlist cards */}
           {loading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Loading watchlist...</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">{t("Loading watchlist...")}</div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">No tickers yet.</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">{t("No tickers yet.")}</div>
           ) : (
             <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
               {items.map((item, i) => {
@@ -328,7 +330,7 @@ export function WatchlistPage() {
   return (
     <>
     <TabHero
-      title="Watchlist"
+      title={t("Watchlist")}
       actions={lastRefreshed
         ? <span className="text-xs text-current opacity-70 whitespace-nowrap">Prices updated {lastRefreshed.toLocaleTimeString()}</span>
         : undefined}
@@ -344,7 +346,7 @@ export function WatchlistPage() {
                     value={addInput}
                     onChange={e => handleInputChange(e.target.value)}
                     onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
-                    placeholder="Search ticker or company…"
+                    placeholder={t("Search ticker or company…")}
                     className="h-9 w-72 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     disabled={adding}
                     autoComplete="off"
@@ -378,7 +380,7 @@ export function WatchlistPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    Add
+                    {t("Add")}
                   </>
                 )}
               </Button>
@@ -402,26 +404,26 @@ export function WatchlistPage() {
 
           {/* Table */}
           {loading ? (
-            <div className="text-sm text-muted-foreground animate-pulse">Loading watchlist…</div>
+            <div className="text-sm text-muted-foreground animate-pulse">{t("Loading watchlist…")}</div>
           ) : items.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground text-sm">
-              No tickers yet.
+              {t("No tickers yet.")}
             </Card>
           ) : (
             <div className="rounded border overflow-x-auto bg-card [&_table]:bg-card [&_tr]:bg-card [&_td]:bg-card [&_th]:bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Ticker</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">% Change</TableHead>
-                    <TableHead className="text-center">Valuation</TableHead>
-                    <TableHead className="text-center">Growth</TableHead>
-                    <TableHead className="text-center">Profitability</TableHead>
-                    <TableHead className="text-center">Momentum</TableHead>
-                    <TableHead className="text-center">Score</TableHead>
-                    <TableHead className="text-right text-muted-foreground text-xs">Added</TableHead>
+                    <TableHead>{t("Ticker")}</TableHead>
+                    <TableHead>{t("Company")}</TableHead>
+                    <TableHead className="text-right">{t("Price")}</TableHead>
+                    <TableHead className="text-right">{t("% Change")}</TableHead>
+                    <TableHead className="text-center">{t("Valuation")}</TableHead>
+                    <TableHead className="text-center">{t("Growth")}</TableHead>
+                    <TableHead className="text-center">{t("Profitability")}</TableHead>
+                    <TableHead className="text-center">{t("Momentum")}</TableHead>
+                    <TableHead className="text-center">{t("Score")}</TableHead>
+                    <TableHead className="text-right text-muted-foreground text-xs">{t("Added")}</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
                 </TableHeader>
@@ -484,7 +486,7 @@ export function WatchlistPage() {
                         <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            title="Agentic analysis"
+                            title={t("Agentic analysis")}
                             onClick={() => {
                               sessionStorage.setItem('watchlist_analyze', item.ticker);
                               navigate('/report');

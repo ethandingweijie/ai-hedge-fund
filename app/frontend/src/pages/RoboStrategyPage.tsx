@@ -32,6 +32,7 @@ import {
   type RoboHolding, type RoboPortfolio, type RoboQuestionnaire,
   type RoboRiskTolerance, type RoboTimeHorizon,
 } from '@/lib/api';
+import { useI18n } from '@/i18n';
 
 type RoboView = 'templates' | 'questionnaire' | 'results';
 
@@ -124,6 +125,7 @@ function ChipButton({
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function RoboStrategyPage() {
+  const { t } = useI18n();
   const { mode: layoutMode } = useLayoutMode();
 
   const [answers, setAnswers] = useState<RoboQuestionnaire>(DEFAULT_ANSWERS);
@@ -193,8 +195,8 @@ export function RoboStrategyPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">Strategy templates</h2>
-          <p className="text-[14px] text-muted-foreground mt-1">Start from a preset, then make it yours.</p>
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">{t("Strategy templates")}</h2>
+          <p className="text-[14px] text-muted-foreground mt-1">{t("Start from a preset, then make it yours.")}</p>
         </div>
         <button
           type="button"
@@ -202,7 +204,7 @@ export function RoboStrategyPage() {
           className="h-11 px-5 rounded-full bg-foreground text-background text-[14px] font-semibold hover:opacity-90 flex items-center gap-1.5 shrink-0"
         >
           <Sparkles size={15} />
-          Build your own
+          {t("Build your own")}
         </button>
       </div>
 
@@ -223,7 +225,7 @@ export function RoboStrategyPage() {
         className="h-11 text-[14px] font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5"
       >
         <ArrowLeft size={15} />
-        Back to strategies
+        {t("Back to strategies")}
       </button>
       {activeTemplateName && (
         <p className="text-[14px] text-muted-foreground -mt-2">
@@ -233,7 +235,7 @@ export function RoboStrategyPage() {
       <Accordion type="multiple" defaultValue={['risk', 'horizon', 'sectors', 'geography', 'amount']}
         className="border-t border-border">
         <AccordionItem value="risk">
-          <AccordionTrigger className="text-[17px] font-semibold">Risk tolerance</AccordionTrigger>
+          <AccordionTrigger className="text-[17px] font-semibold">{t("Risk tolerance")}</AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {RISK_OPTIONS.map((opt) => (
@@ -251,7 +253,7 @@ export function RoboStrategyPage() {
         </AccordionItem>
 
         <AccordionItem value="horizon">
-          <AccordionTrigger className="text-[17px] font-semibold">Time horizon</AccordionTrigger>
+          <AccordionTrigger className="text-[17px] font-semibold">{t("Time horizon")}</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-wrap gap-2">
               {HORIZON_OPTIONS.map((opt) => (
@@ -270,7 +272,7 @@ export function RoboStrategyPage() {
         <AccordionItem value="sectors">
           <AccordionTrigger className="text-[17px] font-semibold">
             <span className="flex items-center gap-2">
-              Sector preferences
+              {t("Sector preferences")}
               <span className={`text-xs font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {sectorTotal}%
               </span>
@@ -293,7 +295,7 @@ export function RoboStrategyPage() {
         <AccordionItem value="geography">
           <AccordionTrigger className="text-[17px] font-semibold">
             <span className="flex items-center gap-2">
-              Geography preferences
+              {t("Geography preferences")}
               <span className={`text-xs font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {geoTotal}%
               </span>
@@ -320,7 +322,7 @@ export function RoboStrategyPage() {
         </AccordionItem>
 
         <AccordionItem value="amount">
-          <AccordionTrigger className="text-[17px] font-semibold">Investment amount</AccordionTrigger>
+          <AccordionTrigger className="text-[17px] font-semibold">{t("Investment amount")}</AccordionTrigger>
           <AccordionContent>
             <div className="relative max-w-xs">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -364,17 +366,17 @@ export function RoboStrategyPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
         <div>
-          <div className="text-sm text-muted-foreground">Total investment</div>
+          <div className="text-sm text-muted-foreground">{t("Total investment")}</div>
           <div className="mt-1 text-[40px] md:text-[48px] font-bold tracking-tight leading-none tabular-nums text-foreground">
             ${portfolio.total_investment.toLocaleString()}
           </div>
         </div>
         <div>
-          <div className="text-sm text-muted-foreground">Holdings</div>
+          <div className="text-sm text-muted-foreground">{t("Holdings")}</div>
           <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{activeItems.length}</div>
         </div>
         <div>
-          <div className="text-sm text-muted-foreground">Sectors</div>
+          <div className="text-sm text-muted-foreground">{t("Sectors")}</div>
           <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{sectorCount}</div>
         </div>
       </div>
@@ -394,14 +396,14 @@ export function RoboStrategyPage() {
           onClick={() => setView('questionnaire')}
           className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted"
         >
-          Retake questionnaire
+          {t("Retake questionnaire")}
         </button>
         <button
           type="button"
           onClick={() => setView('templates')}
           className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted"
         >
-          Browse strategies
+          {t("Browse strategies")}
         </button>
         <button
           type="button"
@@ -410,14 +412,14 @@ export function RoboStrategyPage() {
           className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted disabled:opacity-40 flex items-center gap-1.5 md:ml-auto"
         >
           <Download size={14} />
-          Export CSV
+          {t("Export CSV")}
         </button>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'etf' | 'stocks')}>
         <TabsList>
-          <TabsTrigger value="etf">Diversified ETFs</TabsTrigger>
-          <TabsTrigger value="stocks">Individual Stocks</TabsTrigger>
+          <TabsTrigger value="etf">{t("Diversified ETFs")}</TabsTrigger>
+          <TabsTrigger value="stocks">{t("Individual Stocks")}</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -443,7 +445,7 @@ export function RoboStrategyPage() {
   if (layoutMode === 'mobile') {
     return (
       <div className="min-h-full flex flex-col bg-background ui-flat">
-        <TabHero title="Robo Strategy" />
+        <TabHero title={t("Robo Strategy")} />
         <div className="px-4 py-3">{body}</div>
       </div>
     );
@@ -451,7 +453,7 @@ export function RoboStrategyPage() {
 
   return (
     <>
-      <TabHero title="Robo Strategy" />
+      <TabHero title={t("Robo Strategy")} />
       <PageContainer size="wide" flush className="py-5 md:py-6">
         {body}
       </PageContainer>

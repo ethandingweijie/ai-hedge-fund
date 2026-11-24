@@ -6,6 +6,7 @@
  */
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, type Theme } from '@/contexts/theme-context';
+import { useI18n } from '@/i18n';
 
 const OPTIONS: { value: Theme; icon: typeof Sun; label: string }[] = [
   { value: 'light', icon: Sun,     label: 'Light' },
@@ -14,6 +15,7 @@ const OPTIONS: { value: Theme; icon: typeof Sun; label: string }[] = [
 ];
 
 export function ThemeToggle() {
+  const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   return (
     <div className="flex gap-1.5">
@@ -25,7 +27,7 @@ export function ThemeToggle() {
             ${theme === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
         >
           <Icon size={14} />
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>

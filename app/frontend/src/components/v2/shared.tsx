@@ -10,6 +10,7 @@
 
 import React, { useRef, useState } from 'react';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
+import { useI18n } from '@/i18n';
 
 // Resolves through the --brand token, so it tracks the theme (cobalt
 // #2563EB light / #3B82F6 dark) and stays in step with `text-brand`.
@@ -86,9 +87,10 @@ export const Divider = ({ className = '' }: { className?: string }) =>
 
 
 export function ActionPill({ action, size = 'sm' }: { action?: string | null; size?: 'sm' | 'lg' }) {
+  const { t } = useI18n();
   const base = actionTone(action);
   const sz = size === 'lg' ? 'text-xs px-2.5 py-1' : 'text-xs px-1.5 py-0.5';
-  return <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`}>{action || '—'}</span>;
+  return <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`}>{action ? t(action.toUpperCase()) : '—'}</span>;
 }
 
 
@@ -158,6 +160,7 @@ export function SwipeRow({
   children: React.ReactNode;
   className?: string;
 }) {
+  const { t } = useI18n();
   const [dx, setDx] = useState(0);
   const [open, setOpen] = useState(false);
   const start = useRef<number | null>(null);
@@ -212,10 +215,10 @@ export function SwipeRow({
             }}
             style={{ backgroundColor: a.color, color: a.textColor ?? '#fff', width: 64 }}
             className="flex flex-col items-center justify-center gap-0.5 text-white active:opacity-85 transition-opacity"
-            aria-label={a.label}
+            aria-label={a.label ? t(a.label) : undefined}
           >
             {a.icon}
-            {a.label && <span className="text-xs font-medium tracking-wide">{a.label}</span>}
+            {a.label && <span className="text-xs font-medium tracking-wide">{t(a.label)}</span>}
           </button>
         ))}
       </div>

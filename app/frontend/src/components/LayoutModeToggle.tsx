@@ -7,6 +7,7 @@
  */
 import { Smartphone, Monitor } from 'lucide-react';
 import { useLayoutMode, type LayoutMode } from '@/contexts/layout-mode-context';
+import { useI18n } from '@/i18n';
 
 const OPTIONS: { value: LayoutMode; icon: typeof Smartphone; label: string }[] = [
   { value: 'mobile',  icon: Smartphone, label: 'Mobile'  },
@@ -14,6 +15,7 @@ const OPTIONS: { value: LayoutMode; icon: typeof Smartphone; label: string }[] =
 ];
 
 export function LayoutModeToggle({ onChange }: { onChange?: () => void }) {
+  const { t } = useI18n();
   const { mode, setMode } = useLayoutMode();
   return (
     <div className="flex gap-1.5">
@@ -25,7 +27,7 @@ export function LayoutModeToggle({ onChange }: { onChange?: () => void }) {
             ${mode === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
         >
           <Icon size={14} />
-          {label}
+          {t(label)}
         </button>
       ))}
     </div>
