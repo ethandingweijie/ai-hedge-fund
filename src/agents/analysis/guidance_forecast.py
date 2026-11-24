@@ -488,7 +488,13 @@ def _eps_margin_plausible(ebit_implied: float, rev: float, hist: dict) -> bool:
     h = hist.get("ebit_margin")
     if not rev or not isinstance(h, (int, float)):
         return True
-    return ebit_implied / rev <= max(2.0 * h, h + 0.20)
+    m = ebit_implied / rev
+    # 2026-11-25 (V): the bound is two-sided -- a guided EPS on the wrong basis can imply a collapse as easily as a
+    # boom (V: 1.8% against 62.9% trailing priced the DCF at 6.6). Below half the trailing margin AND more than 20
+    # points under it is off the model's basis too.
+    if h > 0 and m < min(0.5 * h, h - 0.20):
+        return False
+    return m <= max(2.0 * h, h + 0.20)
 
 
 # ── the forecast ──────────────────────────────────────────────────────────────

@@ -373,3 +373,14 @@ def test_gross_profit_follows_the_forecast_ebit_so_ebit_never_exceeds_it():
            for i, (gp, e) in enumerate([(40.0, 10.0), (20.0, -10.0), (35.0, 5.0), (60.0, 30.0)])}
     a = ts.assumptions_from_history(raw, {})
     assert a["opex_ex_da_ratio"]["value"] == pytest.approx(25.0 / 100.0)          # median of 25, 25, 25, 25
+
+
+def test_an_eps_implied_margin_collapse_is_off_basis_too():
+    """2026-11-25 (V prod): guided EPS implied a 1.8% EBIT margin against 62.9% trailing; the bound is two-sided."""
+    from src.agents.analysis.guidance_forecast import _eps_margin_plausible
+    hist = {"ebit_margin": 0.629}
+    assert not _eps_margin_plausible(0.018 * 100.0, 100.0, hist)
+    assert _eps_margin_plausible(0.55 * 100.0, 100.0, hist)
+    assert not _eps_margin_plausible(1.40 * 100.0, 100.0, hist)
+    thin = {"ebit_margin": 0.04}                                   # a thin-margin name may halve without being off-basis
+    assert _eps_margin_plausible(0.015 * 100.0, 100.0, thin)
