@@ -33,7 +33,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden md:block rounded-lg border border-border overflow-x-auto bg-card">
+      <div className="hidden md:block border-t border-border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -92,7 +92,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
                     <TableRow>
                       <TableCell colSpan={isEtf ? 8 : 7} className="bg-muted/30 py-2.5">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+                          <span className="text-xs font-medium text-muted-foreground">
                             Top holdings
                           </span>
                           {item.topHoldings!.map((h, i) => (
@@ -116,7 +116,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
         {items.map((item) => {
           const hasHoldings = isEtf && !!item.topHoldings?.length;
           return (
-            <div key={item.ticker} className="rounded-lg border border-border bg-card p-3">
+            <div key={item.ticker} className="border-b border-border py-3">
               <button
                 type="button"
                 className="w-full text-left"
@@ -149,7 +149,7 @@ export function HoldingsTable({ items, mode }: HoldingsTableProps) {
               </button>
               {expanded === item.ticker && hasHoldings && (
                 <div className="mt-2 pt-2 border-t border-border/60 flex flex-wrap gap-x-2 gap-y-1">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70 w-full">
+                  <span className="text-xs font-medium text-muted-foreground w-full">
                     Top holdings
                   </span>
                   {item.topHoldings!.map((h, i) => (

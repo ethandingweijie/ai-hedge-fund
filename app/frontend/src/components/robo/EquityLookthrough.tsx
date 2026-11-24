@@ -56,18 +56,18 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
     .sort((a, b) => a[1] - b[1]);
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-[13px] font-semibold text-foreground">
+    <div className="border-t border-border">
+      <div className="py-4">
+        <h3 className="text-[17px] font-semibold text-foreground">
           Equity distribution
         </h3>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="text-[13px] text-muted-foreground mt-0.5">
           The companies your funds hold, aggregated across the plan.
         </p>
       </div>
 
       {/* Accounting strip — resolved / uncovered / non-equity sum to the plan */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 pb-4 border-b border-border">
         {[
           { label: 'Companies', value: String(position_count) },
           { label: 'Resolved', value: `${resolved_pct.toFixed(1)}%` },
@@ -78,15 +78,15 @@ export function EquityLookthrough({ lookthrough, totalInvestment }: Props) {
             hint: `${non_equity_pct.toFixed(1)}% bonds/commodities · ${uncovered_pct.toFixed(1)}% beyond stored holdings`,
           },
         ].map((s) => (
-          <div key={s.label} className="bg-card px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+          <div key={s.label}>
+            <div className="text-xs font-medium text-muted-foreground">
               {s.label}
             </div>
-            <div className="text-[15px] font-semibold text-foreground tabular-nums mt-0.5">
+            <div className="text-[19px] font-semibold text-foreground tabular-nums mt-0.5">
               {s.value}
             </div>
             {s.hint && (
-              <div className="text-xs text-muted-foreground/80 mt-0.5">{s.hint}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{s.hint}</div>
             )}
           </div>
         ))}

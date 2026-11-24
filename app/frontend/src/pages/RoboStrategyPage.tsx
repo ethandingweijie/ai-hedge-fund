@@ -109,10 +109,11 @@ function ChipButton({
     <button
       type="button"
       onClick={onClick}
-      className={`px-3.5 py-2.5 text-left rounded-lg border transition-colors ${
+      aria-pressed={selected}
+      className={`min-h-[44px] px-4 py-2.5 text-left rounded-2xl border transition-colors ${
         selected
-          ? 'bg-brand/10 border-brand/25 text-brand'
-          : 'bg-card border-border text-muted-foreground active:bg-muted/60'
+          ? 'bg-foreground border-transparent text-background'
+          : 'bg-transparent border-border text-foreground hover:bg-muted/60'
       }`}
     >
       {children}
@@ -192,22 +193,20 @@ export function RoboStrategyPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-[15px] font-semibold text-foreground">Popular Strategy Templates</h2>
-          <p className="text-[12px] text-muted-foreground mt-0.5">
-            Pick a preset allocation to start from, then customize it to your preferences.
-          </p>
+          <h2 className="text-[22px] font-semibold tracking-tight text-foreground">Strategy templates</h2>
+          <p className="text-[14px] text-muted-foreground mt-1">Start from a preset, then make it yours.</p>
         </div>
         <button
           type="button"
           onClick={handleBuildOwn}
-          className="h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted flex items-center gap-1.5 shrink-0"
+          className="h-11 px-5 rounded-full bg-foreground text-background text-[14px] font-semibold hover:opacity-90 flex items-center gap-1.5 shrink-0"
         >
-          <Sparkles size={14} />
-          Build Your Own
+          <Sparkles size={15} />
+          Build your own
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="flex flex-col divide-y divide-border border-t border-border">
         {STRATEGY_TEMPLATES.map((template) => (
           <TemplateCard key={template.id} template={template} onSelect={() => handleSelectTemplate(template)} />
         ))}
@@ -221,20 +220,20 @@ export function RoboStrategyPage() {
       <button
         type="button"
         onClick={() => setView('templates')}
-        className="text-[12px] font-medium text-muted-foreground hover:text-foreground flex items-center gap-1"
+        className="h-11 text-[14px] font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5"
       >
-        <ArrowLeft size={13} />
-        Back to Strategies
+        <ArrowLeft size={15} />
+        Back to strategies
       </button>
       {activeTemplateName && (
-        <p className="text-[12px] text-muted-foreground -mt-2">
+        <p className="text-[14px] text-muted-foreground -mt-2">
           Starting from <span className="font-semibold text-foreground">{activeTemplateName}</span> — adjust below, then generate.
         </p>
       )}
       <Accordion type="multiple" defaultValue={['risk', 'horizon', 'sectors', 'geography', 'amount']}
-        className="rounded-lg border border-border bg-card overflow-hidden">
-        <AccordionItem value="risk" className="px-4">
-          <AccordionTrigger className="text-[14px] font-semibold">Risk Tolerance</AccordionTrigger>
+        className="border-t border-border">
+        <AccordionItem value="risk">
+          <AccordionTrigger className="text-[17px] font-semibold">Risk tolerance</AccordionTrigger>
           <AccordionContent>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {RISK_OPTIONS.map((opt) => (
@@ -251,8 +250,8 @@ export function RoboStrategyPage() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="horizon" className="px-4">
-          <AccordionTrigger className="text-[14px] font-semibold">Time Horizon</AccordionTrigger>
+        <AccordionItem value="horizon">
+          <AccordionTrigger className="text-[17px] font-semibold">Time horizon</AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-wrap gap-2">
               {HORIZON_OPTIONS.map((opt) => (
@@ -268,10 +267,10 @@ export function RoboStrategyPage() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="sectors" className="px-4">
-          <AccordionTrigger className="text-[14px] font-semibold">
+        <AccordionItem value="sectors">
+          <AccordionTrigger className="text-[17px] font-semibold">
             <span className="flex items-center gap-2">
-              Sector Preferences
+              Sector preferences
               <span className={`text-xs font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {sectorTotal}%
               </span>
@@ -291,10 +290,10 @@ export function RoboStrategyPage() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="geography" className="px-4">
-          <AccordionTrigger className="text-[14px] font-semibold">
+        <AccordionItem value="geography">
+          <AccordionTrigger className="text-[17px] font-semibold">
             <span className="flex items-center gap-2">
-              Geography Preferences
+              Geography preferences
               <span className={`text-xs font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {geoTotal}%
               </span>
@@ -311,7 +310,7 @@ export function RoboStrategyPage() {
                 />
               ))}
             </div>
-            <p className="text-xs text-muted-foreground/80 italic mt-2 leading-relaxed">
+            <p className="text-[13px] text-muted-foreground mt-2 leading-relaxed">
               In Individual Stocks mode, Emerging Markets exposure comes from our Hong Kong screener
               universe and Asia-Pacific from Singapore; Europe has no individual-stock coverage yet.
               Diversified ETFs mode has full coverage across all four regions, including dedicated
@@ -320,8 +319,8 @@ export function RoboStrategyPage() {
           </AccordionContent>
         </AccordionItem>
 
-        <AccordionItem value="amount" className="px-4 border-b-0">
-          <AccordionTrigger className="text-[14px] font-semibold">Investment Amount</AccordionTrigger>
+        <AccordionItem value="amount">
+          <AccordionTrigger className="text-[17px] font-semibold">Investment amount</AccordionTrigger>
           <AccordionContent>
             <div className="relative max-w-xs">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -334,7 +333,7 @@ export function RoboStrategyPage() {
                   setAnswers((prev) => ({ ...prev, investment_amount: raw ? Number(raw) : 0 }));
                 }}
                 placeholder="10,000"
-                className="w-full h-10 pl-7 pr-3 rounded-lg bg-muted/60 border border-border text-[14px] font-mono focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 text-foreground"
+                className="w-full h-11 pl-7 pr-3 rounded-lg bg-transparent border border-border text-[14px] font-mono focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 text-foreground"
               />
             </div>
           </AccordionContent>
@@ -348,7 +347,7 @@ export function RoboStrategyPage() {
         className="w-full h-12 rounded-full bg-primary text-primary-foreground text-[14px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
       >
         {generating ? <Loader2 size={16} className="animate-spin" /> : <Wallet size={16} />}
-        {generating ? 'Generating…' : 'Generate Portfolio'}
+        {generating ? 'Generating…' : 'Generate portfolio'}
       </button>
       {!canGenerate && (
         <p className="text-[12px] text-muted-foreground text-center">
@@ -363,20 +362,20 @@ export function RoboStrategyPage() {
   // ── Results view ─────────────────────────────────────────────────────────────
   const resultsView = portfolio && (
     <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Total Investment</div>
-          <div className="text-[18px] font-bold font-mono text-foreground mt-1">
+      <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
+        <div>
+          <div className="text-sm text-muted-foreground">Total investment</div>
+          <div className="mt-1 text-[40px] md:text-[48px] font-bold tracking-tight leading-none tabular-nums text-foreground">
             ${portfolio.total_investment.toLocaleString()}
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Holdings</div>
-          <div className="text-[18px] font-bold font-mono text-foreground mt-1">{activeItems.length}</div>
+        <div>
+          <div className="text-sm text-muted-foreground">Holdings</div>
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{activeItems.length}</div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70">Sectors</div>
-          <div className="text-[18px] font-bold font-mono text-foreground mt-1">{sectorCount}</div>
+        <div>
+          <div className="text-sm text-muted-foreground">Sectors</div>
+          <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{sectorCount}</div>
         </div>
       </div>
 
@@ -385,7 +384,7 @@ export function RoboStrategyPage() {
           type="button"
           onClick={handleGenerate}
           disabled={generating}
-          className="h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-50 flex items-center gap-1.5"
+          className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted disabled:opacity-50 flex items-center gap-1.5"
         >
           {generating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           Regenerate
@@ -393,22 +392,22 @@ export function RoboStrategyPage() {
         <button
           type="button"
           onClick={() => setView('questionnaire')}
-          className="h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted"
+          className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted"
         >
-          Retake Questionnaire
+          Retake questionnaire
         </button>
         <button
           type="button"
           onClick={() => setView('templates')}
-          className="h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted"
+          className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted"
         >
-          Browse Strategies
+          Browse strategies
         </button>
         <button
           type="button"
           onClick={() => exportCsv(activeItems, activeTab)}
           disabled={activeItems.length === 0}
-          className="h-9 px-4 rounded-full border border-border bg-card text-[13px] font-medium text-foreground hover:bg-muted disabled:opacity-40 flex items-center gap-1.5 md:ml-auto"
+          className="h-11 px-5 rounded-full border border-border bg-transparent text-[14px] font-medium text-foreground hover:bg-muted disabled:opacity-40 flex items-center gap-1.5 md:ml-auto"
         >
           <Download size={14} />
           Export CSV
@@ -443,7 +442,7 @@ export function RoboStrategyPage() {
 
   if (layoutMode === 'mobile') {
     return (
-      <div className="min-h-full flex flex-col bg-background">
+      <div className="min-h-full flex flex-col bg-background ui-flat">
         <TabHero title="Robo Strategy" />
         <div className="px-4 py-3">{body}</div>
       </div>

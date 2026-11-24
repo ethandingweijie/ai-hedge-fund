@@ -1,14 +1,19 @@
 /**
  * TemplateCard.tsx
  * ==================
- * A single "Browse Strategies" template card — icon, risk-level pill, title,
- * description, tag chips, and a Stocks/Bonds/Horizon stat footer. Risk pill
- * color is the primary visual cue for how aggressive a strategy is: red for
- * aggressive, green for moderate, yellow/amber for conservative (NOT green —
- * conservative and moderate must read as visually distinct at a glance).
+ * One "Browse strategies" template, drawn as a list row (owner, 2026-11-25:
+ * align Robo with the flat, list-first design language — no boxed cards).
+ *
+ *   [icon]  Name  [risk pill]                    [stocks|bonds bar]   >
+ *           One-line description                  70% stocks · 25% bonds
+ *           Tag · Tag · Tag                       7-15 years
+ *
+ * Risk pill follows the app's pill scale rather than traffic-light colours
+ * (green/red stay reserved for price change): Moderate = accent fill,
+ * Aggressive = inverted fill, Conservative = outline.
  */
 import {
-  BarChart3, Banknote, Cpu, Shield, HeartPulse, Leaf, Globe, DollarSign, Bot, Earth,
+  BarChart3, Banknote, Cpu, Shield, HeartPulse, Leaf, Globe, DollarSign, Bot, Earth, ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
 import type { StrategyTemplate } from '@/data/roboStrategyTemplates';
@@ -24,59 +29,64 @@ const RISK_LABEL: Record<StrategyTemplate['riskLevel'], string> = {
 };
 
 const RISK_PILL: Record<StrategyTemplate['riskLevel'], string> = {
-  conservative: 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
+  conservative: 'border border-border text-foreground',
   moderate: 'bg-brand text-brand-foreground',
-  aggressive: 'bg-surface-2 text-content-high',
+  aggressive: 'bg-foreground text-background',
 };
+
+function AllocationBar({ stocks, bonds }: { stocks: number; bonds: number }) {
+  const other = Math.max(0, 100 - stocks - bonds);
+  return (
+    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+      <div className="bg-foreground" style={{ width: `${stocks}%` }} />
+      <div className="bg-muted-foreground/50" style={{ width: `${bonds}%` }} />
+      {other > 0 && <div className="bg-transparent" style={{ width: `${other}%` }} />}
+    </div>
+  );
+}
 
 export function TemplateCard({ template, onSelect }: { template: StrategyTemplate; onSelect: () => void }) {
   const Icon = ICONS[template.icon] ?? BarChart3;
   const { stocks, bonds } = template.assetAllocation;
+  const mix = `${stocks}% stocks · ${bonds}% bonds`;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="text-left rounded-xl border border-border bg-card p-6 hover:border-brand/40 hover:shadow-sm transition-all flex flex-col gap-4"
+      className="group w-full text-left py-5 -mx-3 px-3 md:-mx-4 md:px-4 rounded-xl [@media(hover:hover)]:hover:bg-muted/40 transition-colors flex items-center gap-4"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-          <Icon size={22} className="text-primary" />
-        </div>
-        <span className={`text-[12px] font-semibold px-3 py-1.5 rounded-full shrink-0 ${RISK_PILL[template.riskLevel]}`}>
-          {RISK_LABEL[template.riskLevel]}
-        </span>
+      <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center shrink-0 self-start">
+        <Icon size={19} className="text-foreground" />
       </div>
 
-      <div>
-        <div className="text-[20px] font-bold text-foreground">{template.name}</div>
-        <p className="text-[13.5px] text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[17px] md:text-[19px] font-semibold text-foreground">{template.name}</span>
+          <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-xs font-semibold ${RISK_PILL[template.riskLevel]}`}>
+            {RISK_LABEL[template.riskLevel]}
+          </span>
+        </div>
+        <p className="mt-1 text-[14px] text-muted-foreground leading-relaxed line-clamp-2 md:line-clamp-1">
           {template.description}
         </p>
+        <p className="mt-1 text-[13px] text-muted-foreground">{template.tags.join(' · ')}</p>
+        {/* Phone: the allocation sits under the text instead of in a right column. */}
+        <div className="mt-3 md:hidden">
+          <AllocationBar stocks={stocks} bonds={bonds} />
+          <p className="mt-1.5 text-[13px] text-foreground tabular-nums">
+            {mix} <span className="text-muted-foreground">· {template.timeHorizon}</span>
+          </p>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {template.tags.map((tag) => (
-          <span key={tag} className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground">
-            {tag}
-          </span>
-        ))}
+      <div className="hidden md:block w-52 shrink-0">
+        <AllocationBar stocks={stocks} bonds={bonds} />
+        <p className="mt-2 text-[14px] font-medium text-foreground tabular-nums">{mix}</p>
+        <p className="text-[13px] text-muted-foreground">{template.timeHorizon}</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 bg-muted/60 rounded-lg py-3 mt-auto">
-        <div className="text-center">
-          <div className="text-[16px] font-bold font-mono text-foreground">{stocks}%</div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Stocks</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[16px] font-bold font-mono text-foreground">{bonds}%</div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Bonds</div>
-        </div>
-        <div className="text-center">
-          <div className="text-[14px] font-semibold text-foreground">{template.timeHorizon}</div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground/70 mt-0.5">Horizon</div>
-        </div>
-      </div>
+      <ChevronRight size={18} className="shrink-0 text-muted-foreground group-hover:text-foreground" />
     </button>
   );
 }

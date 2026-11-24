@@ -323,7 +323,7 @@ export function ResearchIdeasPage() {
                 }}
                 className={
                   `w-full text-left ${sz.pad} group cursor-pointer relative transition-colors`
-                  + ' hover:bg-muted/40 -mx-3 px-3 rounded-xl md:-mx-4 md:px-4'
+                  + ' [@media(hover:hover)]:hover:bg-muted/40 -mx-3 px-3 rounded-xl md:-mx-4 md:px-4'
                   + (isAi ? ' pb-9 mb-2' : '')
                 }
               >

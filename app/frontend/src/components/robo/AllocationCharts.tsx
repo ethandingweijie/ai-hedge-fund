@@ -34,14 +34,14 @@ function toPieData(breakdown: Record<string, number>) {
 function MiniPie({ title, data }: { title: string; data: { name: string; value: number }[] }) {
   if (data.length === 0) {
     return (
-      <div className="flex-1 min-w-[220px] rounded-lg border border-border bg-card p-4 flex items-center justify-center text-[12px] text-muted-foreground">
+      <div className="flex-1 min-w-[220px] border-t border-border pt-4 flex items-center justify-center text-[12px] text-muted-foreground">
         No {title.toLowerCase()} data
       </div>
     );
   }
   return (
-    <div className="flex-1 min-w-[220px] rounded-lg border border-border bg-card p-4">
-      <div className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground/70 mb-2">{title}</div>
+    <div className="flex-1 min-w-[220px] border-t border-border pt-4">
+      <div className="text-[15px] font-semibold text-foreground mb-2">{title}</div>
       <div className="h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
