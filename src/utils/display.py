@@ -468,7 +468,8 @@ def print_advanced_output(result: dict, show_reasoning: bool = False) -> None:
         ]
         trap_detail = (
             "\n".join(_wrap(flag, 62) for flag in trap_flags)
-            if trap_flags else "All checks GREEN"
+            if trap_flags else ("Not assessed" if str(trap.get("overall_verdict") or "").endswith("NOT ASSESSED")
+                                else "All checks GREEN")
         )
 
         # Power Law: wrap interpretation to fixed width; append dim scores on final line

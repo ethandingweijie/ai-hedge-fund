@@ -214,6 +214,7 @@ def _build_styles():
     _add("TrapRED",   fontName="Helvetica-Bold", fontSize=8, textColor=C_RED)
     _add("TrapAMBER", fontName="Helvetica-Bold", fontSize=8, textColor=C_AMBER)
     _add("TrapGREEN", fontName="Helvetica-Bold", fontSize=8, textColor=C_GREEN)
+    _add("TrapNA",    fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#555555"))
     return base
 
 
@@ -236,7 +237,7 @@ _SIG_STYLE_MAP = {
     "BUY": "SigBUY", "SELL": "SigSELL", "SHORT": "SigSHORT",
     "HOLD": "SigHOLD", "COVER": "SigCOVER",
 }
-_TRAP_STYLE_MAP = {"RED": "TrapRED", "AMBER": "TrapAMBER", "GREEN": "TrapGREEN"}
+_TRAP_STYLE_MAP = {"RED": "TrapRED", "AMBER": "TrapAMBER", "GREEN": "TrapGREEN", "NOT ASSESSED": "TrapNA"}
 
 _TRAP_CHECKS = [
     "dividend_sustainability",
@@ -1885,7 +1886,7 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
         ("Fair value (IV)", _money(iv), "blended intrinsic value"),
         ("Price", _money(price), _strip(str(rv.get("price_as_of") or ""))),
         ("Weight", f"{float(weight):.1%}" if isinstance(weight, (int, float)) else "—",
-         _strip(decision.get("time_horizon", "")).title()),
+         "12-month horizon"),
     ]
     cw = width / len(cells)
     row = [[Paragraph(f'<font size="6.5" color="#555555">{a}</font><br/>'
@@ -2505,6 +2506,7 @@ def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
     out = [Paragraph(
         f"12-month target = price + capture × (intrinsic value − price). "
         f"Price {_money(spot)}; capture {float(cap):.0%} of the gap to fair value over 12 months."
+        + (f" Why {float(cap):.0%}: {_strip(str(pb.get('capture_reason')))}." if pb.get("capture_reason") else "")
         if isinstance(cap, (int, float)) else _strip(pb.get("rule") or ""), styles["RptBody"]), Spacer(1, 3)]
     hdr = [Paragraph(_wh(x), styles["RptLabel"])
            for x in ("Scenario", "Probability", "Intrinsic value", "Gap to price", "12m target", "vs price")]
@@ -2534,6 +2536,78 @@ def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
     return out
 
 
+#: Owner, 2026-11-25: the rating and target are 12-month calls; the writer's "medium" is not a horizon.
+_HORIZON = "12 months"
+
+
+def _disclosures_for(result: dict, ticker: str) -> dict:
+    """data.report_disclosures[ticker] when the run published it, else built now (older runs)."""
+    d = (result.get("report_disclosures") or {}).get(ticker)
+    if isinstance(d, dict) and d and "error" not in d:
+        return d
+    try:
+        from src.utils.report_disclosures import build_report_disclosures
+        return build_report_disclosures(result, ticker)
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
+def _methodology_and_street_block(disc: dict, styles) -> list:
+    """Page 1, under the scenarios: how the target is set, and why it sits outside the Street range."""
+    out: list = []
+    tm = (disc.get("target_methodology") or {}).get("text")
+    if tm:
+        out.append(Paragraph(f"<b>Target methodology.</b> {_strip(tm)}", styles["RptBody"]))
+        out.append(Spacer(1, 3))
+    vc = disc.get("vs_consensus") or {}
+    if vc.get("applies") and vc.get("text"):
+        out.append(Paragraph(f"<b>Versus the Street.</b> {_strip(vc['text'])}", styles["RptBody"]))
+        out.append(Spacer(1, 3))
+    return out
+
+
+def _risks_to_rating_block(decision: dict, styles, width: float) -> list:
+    risks = [r for r in (decision.get("risks_to_rating") or []) if r]
+    if not risks:
+        return []
+    out = _section_header("RISKS TO RATING", width)
+    for r in risks:
+        out.append(Paragraph(_strip(str(r)), styles["RptBullet"], bulletText="•"))
+    return out
+
+
+def _disclosures_section(ticker: str, disc: dict, styles, page_w: float, multi: bool) -> list:
+    """Last section: data limitations for this run, then the standing disclosures."""
+    out: list = []
+    if multi:
+        out.append(Paragraph(f"Ticker: {ticker}", styles["RptSubsection"]))
+    lim = disc.get("data_limitations") or []
+    out.append(Paragraph("Data limitations", styles["RptSubsection"]))
+    if lim:
+        for x in lim:
+            out.append(Paragraph(_strip(str(x)), styles["RptBullet"], bulletText="•"))
+    else:
+        out.append(Paragraph("No data limitations were recorded for this report.", styles["RptBody"]))
+    out.append(Spacer(1, 4))
+    out.append(Paragraph("Disclosures", styles["RptSubsection"]))
+    bm = disc.get("benchmark") or {}
+    rows = [("Horizon", disc.get("horizon") or _HORIZON),
+            ("Rating definition", disc.get("rating_definition")),
+            ("Benchmark", (f"{bm.get('name')}: expected 12-month return "
+                           f"{float(bm['expected_return']):.1%} ({bm.get('basis') or 'market cost of equity'})")
+             if bm.get("name") and isinstance(bm.get("expected_return"), (int, float)) else None),
+            ("Rating mapping", disc.get("regulatory_mapping")),
+            ("AI-generated text", disc.get("ai_disclosure")),
+            ("Data sources", "; ".join(disc.get("data_sources") or []) or None),
+            ("Data as of", disc.get("as_of")),
+            ("Limitations", " ".join(disc.get("limitations") or []) or None)]
+    out.append(_block_table([[Paragraph(a, styles["RptLabel"]), Paragraph(_strip(str(b)), styles["RptBody"])]
+                             for a, b in rows if b],
+                            [page_w * 0.22, page_w * 0.78], styles, header=False))
+    out.append(Spacer(1, 6))
+    return out
+
+
 def _decision_section(decision: dict, scen: dict, dcf_t: dict, styles, page_w: float) -> list:
     """Final section: the trade and the rating, as decided."""
     rv = decision.get("research_view") or {}
@@ -2555,7 +2629,7 @@ def _decision_section(decision: dict, scen: dict, dcf_t: dict, styles, page_w: f
         ("Position weight", f"{float(w):.1%}" if isinstance(w, (int, float)) else "—"),
         ("Entry range", entry),
         ("Stop loss", _money(decision.get("stop_loss"))),
-        ("Time horizon", _strip(decision.get("time_horizon", "—")).title()),
+        ("Time horizon", _HORIZON),
     ]
     tsr = rv.get("tsr_12m")
     if isinstance(tsr, (int, float)):
@@ -3011,7 +3085,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         _up    = ((_tgt - _price) / _price * 100
                   if isinstance(_tgt, (int, float)) and isinstance(_price, (int, float)) and _price else None)
         _up_s  = _pct_s(_up) if _up is not None else _dash
-        _hz    = _strip(_dec.get("time_horizon", _dash)).title()
+        _hz    = _HORIZON
         _title = [
             Paragraph(f"{_company_label(_t, raw_financials)} ({_t})", styles["RptTitle"]),
             Paragraph(
@@ -3020,11 +3094,14 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
                 styles["RptPriceLine"]),
         ]
         _w = left_w if _single else page_w
+        _disc_t = _disclosures_for(result, _t)
         _main = (_section_header("INVESTMENT DECISION", _w)
                  + _decision_block(_dec, _scn, _dcf_t, styles, _w)
                  + [Spacer(1, 6)]
                  + _section_header("SCENARIO ANALYSIS", _w)
-                 + _scenario_block(_scn, _dcf_t, styles, _w))
+                 + _scenario_block(_scn, _dcf_t, styles, _w)
+                 + _methodology_and_street_block(_disc_t, styles)
+                 + _risks_to_rating_block(_dec, styles, _w))
         if _single:
             story += _title + [FrameBreak()] + _side_column(_t, side_w) + [FrameBreak()]
             story += [NextPageTemplate("body")] + _main
@@ -3287,6 +3364,12 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
                                        (result.get("dcf_range") or {}).get(ticker, {}),
                                        styles, page_w))
         story.append(Spacer(1, 6))
+
+    # Owner, 2026-11-25 (CFA audit): data limitations and the standing disclosures.
+    story.extend(_section_header("SECTION 5 \u2014 DATA LIMITATIONS AND DISCLOSURES", page_w))
+    for ticker in decisions:
+        story.extend(_disclosures_section(ticker, _disclosures_for(result, ticker), styles, page_w,
+                                          len(decisions) > 1))
 
     # ── Build PDF with running headers + page numbers (item E) ───────────────
     # Header text is captured in closure; _NumberedCanvas draws on every page.

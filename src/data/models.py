@@ -358,7 +358,8 @@ class PowerLawOutput(BaseModel):
 
 
 class ValueTrapCheck(BaseModel):
-    status: Literal["RED", "AMBER", "GREEN"]
+    #: NOT ASSESSED = the check did not run or the model gave no verdict (owner, 2026-11-25).
+    status: Literal["RED", "AMBER", "GREEN", "NOT ASSESSED"]
     evidence: str
 
     @field_validator("status", mode="before")
@@ -373,7 +374,8 @@ class ValueTrapCheck(BaseModel):
             "RED FLAG": "RED", "HIGH": "RED", "FLAG": "RED",
             "CLEAR": "GREEN", "OK": "GREEN", "PASS": "GREEN",
             "LOW": "GREEN", "NONE": "GREEN",
-            "N/A": "GREEN", "NA": "GREEN", "UNKNOWN": "GREEN",
+            "N/A": "NOT ASSESSED", "NA": "NOT ASSESSED", "UNKNOWN": "NOT ASSESSED",
+            "NOT_ASSESSED": "NOT ASSESSED", "NOT ASSESSED": "NOT ASSESSED",
         }
         return _MAP.get(v.strip().upper(), v.strip().upper())
 
@@ -384,7 +386,7 @@ class ValueTrapOutput(BaseModel):
     earnings_cashflow_mismatch: ValueTrapCheck
     insider_behaviour: ValueTrapCheck
     balance_sheet_deterioration: ValueTrapCheck
-    overall_verdict: Literal["TRAP RISK HIGH", "TRAP RISK MEDIUM", "TRAP RISK LOW"]
+    overall_verdict: Literal["TRAP RISK HIGH", "TRAP RISK MEDIUM", "TRAP RISK LOW", "TRAP RISK NOT ASSESSED"]
 
     @field_validator("overall_verdict", mode="before")
     @classmethod
@@ -393,6 +395,8 @@ class ValueTrapOutput(BaseModel):
         if not isinstance(v, str):
             return v
         u = v.strip().upper()
+        if "NOT ASSESS" in u or "NOT_ASSESS" in u:
+            return "TRAP RISK NOT ASSESSED"
         if "HIGH" in u:
             return "TRAP RISK HIGH"
         if "MED" in u:

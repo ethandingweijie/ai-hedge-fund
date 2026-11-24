@@ -1717,8 +1717,19 @@ def run_advanced_pipeline(
             for _t, _v in (state["data"].get("dcf_range") or {}).items()
         }
 
+        # Owner, 2026-11-25 (CFA audit): disclosures, target methodology, the Street
+        # comparison and the data limitations, per ticker -- read by the PDF and the web.
+        try:
+            from src.utils.report_disclosures import build_all as _build_disclosures
+            _report_disclosures = _build_disclosures(
+                {**state["data"], "decisions": decisions, "dcf_range": _dcf_range_out, "model_name": model_name})
+        except Exception as _rd_exc:                       # noqa: BLE001
+            _report_disclosures = {}
+            print(f"  [disclosures] skipped: {type(_rd_exc).__name__}: {_rd_exc}")
+
         return {
             "decisions":          decisions,
+            "report_disclosures": _report_disclosures,
             "analyst_signals":    state["data"]["analyst_signals"],
             "macro_regime":       state["data"].get("macro_regime"),
             "sector":             state["data"].get("sector"),
@@ -1773,6 +1784,7 @@ def run_advanced_pipeline(
             "research_financial_divergences": state["data"].get("research_financial_divergences", {}),
             # C4 — primary ticker below the live-search floor
             "research_degraded":  state["data"].get("research_degraded", False),
+            "research_degraded_reasons": state["data"].get("research_degraded_reasons", []),
             # Citation registry + footnotes (deep_research → specialist → PDF)
             "citation_registry":  state["data"].get("citation_registry", []),
             "industry_footnotes": state["data"].get("industry_footnotes", []),

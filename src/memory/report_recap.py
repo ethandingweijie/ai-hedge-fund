@@ -262,6 +262,12 @@ def extract_structured(run_payload: dict, ticker: str) -> dict:
         "power_law_score":  _fnum(power_law.get("total_score")),
         "value_trap_verdict": trap.get("overall_verdict"),
         "ev_upside_pct":    _fnum(scenario.get("upside_pct")),
+        # Owner, 2026-11-25: what the next report's change attribution decomposes against
+        # (target = spot + capture x (IV - spot)); without them the capture is read from text.
+        "rating_label":     decision.get("rating_label"),
+        "blended_iv":       _fnum((scenario.get("reconciliation") or {}).get("blended_iv")),
+        "capture":          _fnum((dcf.get("pt_bridge") or {}).get("capture")),
+        "capture_reason":   (dcf.get("pt_bridge") or {}).get("capture_reason"),
     }
 
 
