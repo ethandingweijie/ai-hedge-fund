@@ -70,7 +70,8 @@ import { NewsPanel } from '@/components/report/NewsPanel';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
-import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
+import { Delta, BRAND } from '@/components/v2/shared';
+import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBlock';
 import { Markdown } from '@/components/report/shared/Markdown';
@@ -193,84 +194,56 @@ export function V2ReportView({
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-background">
-      {/* Ticker header — offset from top so it clears the iOS status bar.
-          The avatar menu button is a fixed top-right button (in MobileTopBar);
-          we leave a top gutter so the ticker row sits just below it. */}
+    <div className="min-h-full flex flex-col bg-background report-flat">
+      {/* Ticker header + tab strip, one sticky block so the tabs can never
+          drift from the header's real height. Offset from the top so it
+          clears the iOS status bar and the fixed avatar button (MobileTopBar,
+          top-right) -- the right edge of the first row is left empty for it. */}
       <div
-        className="sticky z-20 bg-background/95 backdrop-blur border-b border-border/60 px-5 pb-3"
+        className="sticky z-20 bg-background/95 backdrop-blur border-b border-border/60"
         style={{ top: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="px-5 pb-2 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <span
-                className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
-                style={{ letterSpacing: '-0.02em' }}
-              >
+            <div className="flex items-baseline gap-2 min-w-0">
+              <span className="text-[22px] font-bold tracking-tight text-foreground leading-none" style={{ letterSpacing: '-0.02em' }}>
                 {ticker || '—'}
               </span>
-              {companyName && (
-                <span className="text-[13px] text-muted-foreground truncate leading-none">
-                  {companyName}
+              {livePrice != null && (
+                <span className="text-[15px] font-semibold tabular-nums text-foreground/80 leading-none">
+                  {currencySymbol(ticker)}{livePrice.toFixed(2)}
                 </span>
+              )}
+              {priceChangePct != null && (
+                <span className="text-[13px] leading-none"><Delta v={priceChangePct} /></span>
               )}
             </div>
-            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-              {sector && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
-                  {sector}
-                </span>
-              )}
-              {regime?.risk_appetite && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
-                  {regime.risk_appetite}{regime.volatility_regime ? ` · ${regime.volatility_regime} vol` : ''}
-                </span>
-              )}
-            </div>
+            <p className="mt-1.5 text-[13px] text-muted-foreground truncate">
+              {[companyName, sector].filter(Boolean).join(' · ')}
+            </p>
           </div>
-          <div className="flex items-start gap-2 shrink-0">
-            {ticker && (
-              <Link
-                to={`/discuss/${ticker}`}
-                title={`Discuss ${ticker}`}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-brand text-white active:bg-brand/90 shrink-0"
-              >
-                <MessageSquare size={15} />
-              </Link>
-            )}
-            {livePrice != null && (
-              <div className="text-right shrink-0">
-                <div
-                  className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
-                  style={{ letterSpacing: '-0.02em' }}
-                >
-                  ${livePrice.toFixed(2)}
-                </div>
-                {priceChangePct != null && (
-                  <div className="mt-1.5 text-[12px]">
-                    <Delta v={priceChangePct} />
-                    <span className="text-muted-foreground/70 font-normal ml-1">1Y</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          {ticker && (
+            <Link
+              to={`/discuss/${ticker}`}
+              title={`Discuss ${ticker}`}
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-brand text-white text-[13px] font-semibold active:bg-brand/90 shrink-0"
+            >
+              <MessageSquare size={14} />
+              Discuss
+            </Link>
+          )}
         </div>
-      </div>
 
-      {/* Tab strip */}
-      <div className="sticky z-10 bg-background border-b border-border/60"
-           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 120px)' }}>
+        {/* Tab strip */}
         <div className="px-3 flex items-center gap-1 overflow-x-auto phone-scroll">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`h-10 px-2.5 text-[12px] font-medium border-b-[2px] -mb-px transition-colors shrink-0 flex items-center gap-1
+              className={`h-11 px-2.5 text-[14px] border-b-[2px] -mb-px transition-colors shrink-0 flex items-center gap-1
                 ${tab === t.id
-                  ? 'text-foreground border-brand'
-                  : 'text-muted-foreground border-transparent active:text-foreground'}`}
+                  ? 'text-foreground font-semibold border-foreground'
+                  : 'text-muted-foreground font-medium border-transparent active:text-foreground'}`}
             >
               {t.label}
               {t.id === 'summary' && isRunning && (
@@ -312,7 +285,7 @@ export function V2ReportView({
 
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} prior={priorRecap} delta={freshnessDelta} />}
+        {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} prior={priorRecap} delta={freshnessDelta} regime={regime} runPrice={scenarioAnalysis?.current_price} />}
         {/* Persisted chain-of-thought trail (data.progress_log). Mounted here as
             well as in ReportViewPage: the desktop JSX is bypassed on this path,
             so a card added only there is invisible on mobile. */}
@@ -421,19 +394,21 @@ function vgpmTooltip(label: string, dim?: { score?: number; subs?: string[] }): 
   return [`${label}: ${dim.score}/100`, ...(dim.subs ?? [])].join('\n');
 }
 
-function LoadingGradeChip({ label }: { label: string }) {
+
+/** Sentence-case section title for the flat mobile Summary. */
+function MobileSectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>
-      <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md bg-muted/60">
-        <LoadingSpinner size={10} />
-      </span>
+    <div className="flex items-center justify-between gap-3 pb-2.5 mb-4 border-b border-border">
+      <h2 className="text-[20px] font-semibold tracking-tight text-foreground">{children}</h2>
+      {right}
     </div>
   );
 }
 
+const capWord = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+
 function SummaryBody({
-  ticker, stockMetrics, decision, vgpm, isRunning, prior, delta,
+  ticker, stockMetrics, decision, vgpm, isRunning, prior, delta, regime, runPrice,
 }: {
   ticker: string;
   stockMetrics: Record<string, number | undefined> | null;
@@ -442,112 +417,131 @@ function SummaryBody({
   isRunning: boolean;
   prior: PriorRecap | undefined;
   delta: FreshnessDelta | undefined;
+  regime: MacroRegime | undefined;
+  /** Price at run time; upside is measured from it (same basis as desktop). */
+  runPrice: number | undefined;
 }) {
+  const sym = currencySymbol(ticker);
+  const target = typeof decision?.price_target === 'number' && decision.price_target > 0 ? decision.price_target : null;
+  const upside = target != null && runPrice ? (target / runPrice - 1) * 100 : null;
+  const position = typeof decision?.position_size_pct === 'number' ? decision.position_size_pct * 100 : null;
+  const grades = [
+    { key: 'valuation', label: 'Value' },
+    { key: 'growth', label: 'Growth' },
+    { key: 'profitability', label: 'Profit' },
+    { key: 'momentum', label: 'Momentum' },
+  ] as const;
+
   return (
-    <div className="px-4 pt-5 pb-10 space-y-5">
-      {/* Stock chart card */}
+    <div className="pb-12">
+      {/* Price + chart -- chart first, verdict below (owner, 2026-11-24) */}
       {ticker && <V2StockChart ticker={ticker} />}
 
-      {/* Key financial metrics card */}
-      {ticker && (
-        stockMetrics ? <V2KeyStats metrics={stockMetrics} /> : <LoadingCard label="Key Stats" minH={140} />
-      )}
-
-      {/* Portfolio Manager hero card — loading skeleton while pipeline runs */}
-      {decision ? (
-        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
-            Portfolio Manager
-          </div>
-          {/* Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured. */}
-          {decision.headline && (
-            <p className="mb-3 border-l-4 border-foreground pl-3 text-[17px] font-bold leading-snug tracking-tight text-foreground">
-              {String(decision.headline)}
-            </p>
-          )}
-          {decision.price_target_override ? (
-            <p className="mb-3 text-[11px] text-muted-foreground">
-              {decision.pm_regenerated_at
-                ? 'PM rationale and headline rewritten on your estimate override.'
-                : 'Figures reflect your estimate override; the PM text was written before it. Rewrite it from the Valuation tab.'}
-            </p>
-          ) : null}
-          {decision.research_view ? (
-            /* Rated runs lead with the research rating and its disclosure
-               checklist; shared with the desktop header. */
-            <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact />
+      <div className="px-5 pt-8 space-y-10">
+        {/* ── Our verdict ── loading line while the pipeline runs */}
+        <section>
+          <MobileSectionTitle
+            right={decision && !decision.research_view
+              ? <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(decision.action)}`}>
+                  {capWord(String(decision.action ?? '').toLowerCase()) || '—'}
+                </span>
+              : undefined}
+          >
+            Our verdict
+          </MobileSectionTitle>
+          {!decision ? (
+            <div className="flex items-center gap-2.5 py-2 text-muted-foreground">
+              <LoadingSpinner size={16} />
+              <span className="text-[14px]">{isRunning ? 'Research and valuation running…' : 'Waiting for decision'}</span>
+            </div>
           ) : (
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <ActionPill action={decision.action} size="lg" />
-            </div>
+            <>
+              {decision.research_view ? (
+                /* Rated runs lead with the research rating and its disclosure
+                   checklist; shared with the desktop hero. */
+                <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact />
+              ) : (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+                  {target != null && <MobileFigure label="12-month target" value={`${sym}${target.toFixed(2)}`} />}
+                  {upside != null && (
+                    <MobileFigure
+                      label="Upside"
+                      value={`${upside >= 0 ? '+' : '−'}${Math.abs(upside).toFixed(0)}%`}
+                      className={upside >= 0 ? 'text-gain' : 'text-loss'}
+                    />
+                  )}
+                  {position != null && <MobileFigure label="Position" value={`${position.toFixed(1)}%`} />}
+                  {regime?.risk_appetite && (
+                    <MobileFigure label="Regime" value={capWord(regime.risk_appetite)}
+                      sub={regime.volatility_regime ? `${regime.volatility_regime} vol` : undefined} />
+                  )}
+                </div>
+              )}
+              {/* Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured. */}
+              {decision.headline && (
+                <p className="mt-6 text-[19px] font-semibold leading-snug tracking-tight text-foreground">
+                  {String(decision.headline)}
+                </p>
+              )}
+              {decision.rationale && (
+                /* Shared with the desktop path via RationaleBlock so the two
+                   render paths cannot drift apart again. */
+                <RationaleBlock
+                  text={String(decision.rationale)}
+                  className="mt-3"
+                  itemClassName="text-[16px] text-foreground/80 leading-relaxed"
+                />
+              )}
+              {decision.price_target_override ? (
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                  {decision.pm_regenerated_at
+                    ? 'Thesis and headline were rewritten on your estimate override.'
+                    : 'Figures reflect your estimate override; the thesis was written before it. Rewrite it from the Valuation tab.'}
+                </p>
+              ) : null}
+            </>
           )}
-          {/* Portfolio weight (position size). The PM's `confidence` field is
-              deliberately NOT shown — it was misread as a probability/quality
-              signal when the meaningful number here is the recommended
-              portfolio weight. Labelled "weight" to remove that ambiguity. */}
-          {typeof decision.position_size_pct === 'number' && (
-            <div className="mt-3 text-[15px] font-semibold tabular-nums text-foreground">
-              {(decision.position_size_pct * 100).toFixed(1)}%
-              <span className="ml-1 text-[11px] font-normal text-muted-foreground">weight</span>
-            </div>
-          )}
-          {!decision.research_view && typeof decision.price_target === 'number' && (
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-[11px] text-muted-foreground">Target</span>
-              <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                {currencySymbol(ticker)}{decision.price_target.toFixed(2)}
-              </span>
-            </div>
-          )}
-          {decision.rationale && (
-            /* Shared with the desktop path via RationaleBlock so the two
-               render paths cannot drift apart again. */
-            <RationaleBlock
-              text={String(decision.rationale)}
-              className="mt-3"
-              itemClassName="text-[12.5px] text-foreground/80 leading-relaxed"
-            />
-          )}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
-            Portfolio Manager
-          </div>
-          <div className="flex items-center gap-2.5 py-2 text-muted-foreground/70">
-            <LoadingSpinner size={16} />
-            <span className="text-[12px]">
-              {isRunning ? 'Research & valuation running…' : 'Waiting for decision'}
-            </span>
-          </div>
-        </div>
-      )}
+        </section>
 
-      {/* M1 recency — what the last report said + what changed since.
-          Renders nothing on first-ever runs for this ticker. */}
-      <PriorReportCard prior={prior} delta={delta} ticker={ticker} />
+        {/* M1 recency — what the last report said + what changed since.
+            Renders nothing on first-ever runs for this ticker. */}
+        <PriorReportCard prior={prior} delta={delta} ticker={ticker} />
 
-      {/* VGPM scorecard — always rendered, with spinners per grade until ready */}
-      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
-          VGPM Scorecard
-          {!vgpm && isRunning && <span className="ml-2 text-muted-foreground/70 normal-case font-normal tracking-normal">· computing…</span>}
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {vgpm?.valuation?.grade
-            ? <GradeChip grade={vgpm.valuation.grade} label="Valuation" tooltip={vgpmTooltip('Valuation', vgpm.valuation)} />
-            : <LoadingGradeChip label="Valuation" />}
-          {vgpm?.growth?.grade
-            ? <GradeChip grade={vgpm.growth.grade} label="Growth" tooltip={vgpmTooltip('Growth', vgpm.growth)} />
-            : <LoadingGradeChip label="Growth" />}
-          {vgpm?.profitability?.grade
-            ? <GradeChip grade={vgpm.profitability.grade} label="Profit." tooltip={vgpmTooltip('Profitability', vgpm.profitability)} />
-            : <LoadingGradeChip label="Profit." />}
-          {vgpm?.momentum?.grade
-            ? <GradeChip grade={vgpm.momentum.grade} label="Momentum" tooltip={vgpmTooltip('Momentum', vgpm.momentum)} />
-            : <LoadingGradeChip label="Momentum" />}
-        </div>
+        {/* ── Key statistics ── */}
+        {ticker && (
+          stockMetrics ? <V2KeyStats metrics={stockMetrics} ticker={ticker} /> : <LoadingCard label="Key statistics" minH={140} />
+        )}
+
+        {/* ── Grades ── spinners per grade while the run computes them */}
+        <section>
+          <MobileSectionTitle>Grades</MobileSectionTitle>
+          <div className="grid grid-cols-4 gap-3">
+            {grades.map(({ key, label }) => {
+              const dim = vgpm?.[key];
+              return (
+                <div key={key} title={vgpmTooltip(label, dim)}>
+                  {dim?.grade
+                    ? <p className={`text-[28px] font-bold leading-none ${gradeTone(dim.grade, 'text')}`}>{dim.grade}</p>
+                    : <div className="h-7 flex items-center">{isRunning ? <LoadingSpinner size={14} /> : <span className="text-muted-foreground">—</span>}</div>}
+                  <p className="mt-1.5 text-[12px] text-muted-foreground">{label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function MobileFigure({ label, value, sub, className = 'text-foreground' }: {
+  label: string; value: string; sub?: string; className?: string;
+}) {
+  return (
+    <div>
+      <p className="text-[13px] text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-[22px] font-semibold tabular-nums tracking-tight ${className}`}>{value}</p>
+      {sub && <p className="text-[12px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -1258,7 +1252,7 @@ function FinancialsBody({
 
       {/* Financial Metric / Key Stats card — same as Summary tab */}
       {stockMetrics ? (
-        <V2KeyStats metrics={stockMetrics} />
+        <V2KeyStats metrics={stockMetrics} ticker={ticker} />
       ) : (
         <LoadingCard label="Financial Metrics" minH={200} />
       )}
@@ -1425,7 +1419,19 @@ const V2_TIMEFRAMES: { label: string; period: '1d' | '5d' | '1mo' | '3mo' | '1y'
   { label: '5Y', period: '5y' },
 ];
 
+const V2_PERIOD_LABEL: Record<string, string> = {
+  '1D': 'Today', '1W': 'Past week', '1M': 'Past month', '3M': 'Past 3 months',
+  '1Y': 'Past year', '3Y': 'Past 3 years', '5Y': 'Past 5 years',
+};
+
+/**
+ * Mobile price hero: big price, period change, full-bleed line chart with a
+ * dotted start-of-period baseline, underlined range tabs. The line takes the
+ * gain/loss colour of the selected period (price change is the one thing
+ * green/red are for). Drag across the chart to read past closes.
+ */
 function V2StockChart({ ticker }: { ticker: string }) {
+  const sym = currencySymbol(ticker);
   const [tfIdx, setTfIdx] = useState(4); // default 1Y
   const [history, setHistory] = useState<{ date: string; close: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1444,152 +1450,129 @@ function V2StockChart({ ticker }: { ticker: string }) {
   const points = history.map(h => h.close);
   const min = points.length ? Math.min(...points) : 0;
   const max = points.length ? Math.max(...points) : 1;
-  const w = 400, h = 180;
-  const padT = 14, padB = 22, padL = 38, padR = 12;
-  const chartW = w - padL - padR;
+  const w = 400, h = 200;
+  const padT = 10, padB = 10;
   const chartH = h - padT - padB;
-  const xFor = (i: number) => padL + (i / Math.max(1, points.length - 1)) * chartW;
+  const xFor = (i: number) => (i / Math.max(1, points.length - 1)) * w;
   const yFor = (p: number) => padT + chartH * (1 - (p - min) / Math.max(0.0001, max - min));
   const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + `${xFor(i).toFixed(2)},${yFor(p).toFixed(2)}`).join(' ');
-  const areaD = points.length
-    ? `${pathD} L ${xFor(points.length - 1).toFixed(2)},${padT + chartH} L ${xFor(0).toFixed(2)},${padT + chartH} Z`
-    : '';
 
-  const yTicks = 4;
-  const yVals = Array.from({ length: yTicks + 1 }, (_, i) => min + (max - min) * (i / yTicks));
-
-  const periodDelta = points.length > 1 ? ((points[points.length - 1] - points[0]) / points[0]) * 100 : 0;
+  const firstPrice = points[0];
   const displayIdx = hoverIdx ?? Math.max(0, points.length - 1);
-  const displayPrice = points[displayIdx] ?? 0;
-  const displayDateLabel = (() => {
-    const d = history[displayIdx]?.date;
-    if (!d) return tf.label;
-    try {
-      return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    } catch { return tf.label; }
-  })();
+  const displayPrice = points[displayIdx];
+  const change = firstPrice != null && displayPrice != null ? displayPrice - firstPrice : null;
+  const changePct = change != null && firstPrice ? (change / firstPrice) * 100 : null;
+  const up = (change ?? 0) >= 0;
+  const displayLabel = hoverIdx != null && history[hoverIdx]?.date
+    ? new Date(history[hoverIdx].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : V2_PERIOD_LABEL[tf.label] ?? tf.label;
 
   const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const xInSvg = ((e.clientX - rect.left) / rect.width) * w;
-    const ratio = Math.max(0, Math.min(1, (xInSvg - padL) / chartW));
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     setHoverIdx(Math.round(ratio * Math.max(0, points.length - 1)));
   };
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-      <div className="flex items-baseline justify-between mb-3">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-            {hoverIdx != null ? displayDateLabel : `Price · ${tf.label}`}
-          </div>
-          <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-[22px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
-              ${displayPrice.toFixed(2)}
-            </span>
-            <span className={`text-[12px] font-medium tabular-nums ${periodDelta >= 0 ? 'text-gain' : 'text-loss'}`}>
-              {periodDelta >= 0 ? '+' : ''}{periodDelta.toFixed(2)}%
-            </span>
-          </div>
-        </div>
+    <section className="pt-5">
+      <div className="px-5">
+        <p className="text-[40px] font-bold tracking-tight tabular-nums leading-none text-foreground" style={{ letterSpacing: '-0.03em' }}>
+          {displayPrice != null ? `${sym}${displayPrice.toFixed(2)}` : '—'}
+        </p>
+        {change != null && changePct != null && (
+          <p className={`mt-2 text-[15px] font-medium tabular-nums ${up ? 'text-gain' : 'text-loss'}`}>
+            {up ? '+' : '−'}{sym}{Math.abs(change).toFixed(2)} ({up ? '+' : '−'}{Math.abs(changePct).toFixed(2)}%)
+            <span className="ml-1.5 font-normal text-muted-foreground">{displayLabel}</span>
+          </p>
+        )}
       </div>
 
-      {/* Timeframe pills */}
-      <div className="flex items-center gap-1 mb-3 overflow-x-auto phone-scroll">
+      <div className="mt-4 h-[200px]">
+        {loading ? (
+          <div className="h-full flex items-center justify-center gap-2 text-muted-foreground">
+            <LoadingSpinner size={14} /><span className="text-[13px]">Loading chart…</span>
+          </div>
+        ) : points.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-[13px] text-muted-foreground">
+            No price data available
+          </div>
+        ) : (
+          <svg
+            viewBox={`0 0 ${w} ${h}`}
+            className={`w-full h-full touch-none select-none ${up ? 'text-gain' : 'text-loss'}`}
+            onPointerMove={handleMove}
+            onPointerLeave={() => setHoverIdx(null)}
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={`${ticker} price, ${displayLabel}`}
+          >
+            {firstPrice != null && (
+              <line x1={0} y1={yFor(firstPrice)} x2={w} y2={yFor(firstPrice)}
+                    className="text-muted-foreground" stroke="currentColor" strokeOpacity={0.6}
+                    strokeWidth={1} strokeDasharray="2 5" vectorEffect="non-scaling-stroke" />
+            )}
+            <path d={pathD} fill="none" stroke="currentColor" strokeWidth={2}
+                  strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {hoverIdx != null && points[hoverIdx] != null && (
+              <g>
+                <line x1={xFor(hoverIdx)} y1={0} x2={xFor(hoverIdx)} y2={h}
+                      className="text-muted-foreground" stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                <circle cx={xFor(hoverIdx)} cy={yFor(points[hoverIdx])} r={4} fill="currentColor" />
+              </g>
+            )}
+          </svg>
+        )}
+      </div>
+
+      <div className="mt-1 px-3 flex justify-between border-b border-border">
         {V2_TIMEFRAMES.map((t, i) => (
           <button
             key={t.label}
             onClick={() => { setTfIdx(i); setHoverIdx(null); }}
-            className={`h-7 px-3 text-[11px] font-semibold rounded-full transition-colors shrink-0
-              ${tfIdx === i
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted/60 text-muted-foreground active:bg-muted'}`}
+            aria-pressed={tfIdx === i}
+            className={`h-11 min-w-[44px] px-1.5 -mb-px text-[13px] font-semibold border-b-2 transition-colors ${
+              tfIdx === i
+                ? (up ? 'text-gain border-gain' : 'text-loss border-loss')
+                : 'text-muted-foreground border-transparent active:text-foreground'
+            }`}
           >
             {t.label}
           </button>
         ))}
       </div>
-
-      {loading ? (
-        <div className="h-[180px] flex items-center justify-center gap-2 text-muted-foreground/70">
-          <LoadingSpinner size={14} /><span className="text-[12px]">Loading chart…</span>
-        </div>
-      ) : points.length === 0 ? (
-        <div className="h-[180px] flex items-center justify-center text-[12px] text-muted-foreground/70">
-          No price data available
-        </div>
-      ) : (
-        <svg
-          viewBox={`0 0 ${w} ${h}`}
-          className="w-full touch-none select-none"
-          onPointerMove={handleMove}
-          onPointerLeave={() => setHoverIdx(null)}
-          preserveAspectRatio="none"
-          style={{ height: 180 }}
-        >
-          <defs>
-            <linearGradient id="v2-stock-g" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%"   stopColor={BRAND} stopOpacity="0.22"/>
-              <stop offset="100%" stopColor={BRAND} stopOpacity="0"/>
-            </linearGradient>
-          </defs>
-          <g className="text-border/70">
-            {yVals.map((v, i) => (
-              <line key={i} x1={padL} y1={yFor(v)} x2={w - padR} y2={yFor(v)}
-                    stroke="currentColor" strokeWidth={0.6} strokeDasharray="2,3"/>
-            ))}
-          </g>
-          <g className="fill-muted-foreground/70">
-            {yVals.map((v, i) => (
-              <text key={i} x={padL - 4} y={yFor(v) + 3} textAnchor="end" fontSize={9}>${v.toFixed(0)}</text>
-            ))}
-          </g>
-          <path d={areaD} fill="url(#v2-stock-g)"/>
-          <path d={pathD} fill="none" stroke={BRAND} strokeWidth={1.4} strokeLinejoin="round" strokeLinecap="round"/>
-          {hoverIdx != null && points[hoverIdx] != null && (
-            <g>
-              <line x1={xFor(hoverIdx)} y1={padT} x2={xFor(hoverIdx)} y2={padT + chartH}
-                    className="text-muted-foreground/70" stroke="currentColor" strokeWidth={0.8}/>
-              <circle cx={xFor(hoverIdx)} cy={yFor(points[hoverIdx])} r={3.5} fill={BRAND}
-                      className="stroke-card" strokeWidth={1.5}/>
-            </g>
-          )}
-        </svg>
-      )}
-    </div>
+    </section>
   );
 }
 
-/* ───────── V2 Key Stats (zinc card, 2-col grid) ───────── */
-function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }) {
-  // Signed money formatter — used for Net Cash where negative (net debt) is
-  // meaningful. Market cap / revenue / FCF are non-signed and render via
-  // `fmtMoney` (absolute value, with a minus prefix when negative).
+/* ───────── V2 Key Stats (flat, label above value, 2-col grid) ───────── */
+function V2KeyStats({ metrics, ticker }: { metrics: Record<string, number | undefined>; ticker: string }) {
+  const sym = currencySymbol(ticker);
+  // Sign before the currency symbol: "−S$631M", never "S$-631M".
   const fmtMoney = (v: number | undefined) => {
-    if (v == null) return '—';
-    const sign = v < 0 ? '-' : '';
+    if (v == null) return null;
+    const sign = v < 0 ? '−' : '';
     const abs = Math.abs(v);
-    if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1)}T`;
-    if (abs >= 1e9)  return `${sign}$${(abs / 1e9).toFixed(1)}B`;
-    if (abs >= 1e6)  return `${sign}$${(abs / 1e6).toFixed(0)}M`;
-    return `${sign}$${abs.toLocaleString()}`;
+    if (abs >= 1e12) return `${sign}${sym}${(abs / 1e12).toFixed(1)}T`;
+    if (abs >= 1e9)  return `${sign}${sym}${(abs / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6)  return `${sign}${sym}${(abs / 1e6).toFixed(0)}M`;
+    return `${sign}${sym}${abs.toLocaleString()}`;
   };
   const fmtPct = (v: number | undefined) => {
-    if (v == null) return '—';
+    if (v == null) return null;
     const pct = v * 100;
-    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+    return `${pct < 0 ? '−' : ''}${Math.abs(pct).toFixed(1)}%`;
   };
-  const fmtMult = (v: number | undefined) => v == null ? '—' : `${v.toFixed(1)}×`;
-  // Per-share price — 52wk/day high/low are raw dollar levels, not aggregates
+  const fmtMult = (v: number | undefined) => v == null ? null : `${v.toFixed(1)}×`;
+  // Per-share price — 52wk/day high/low are raw levels, not aggregates
   const fmtPrice = (v: number | undefined) => {
-    if (v == null) return '—';
-    return `$${v.toLocaleString(undefined, {
+    if (v == null) return null;
+    return `${sym}${v.toLocaleString(undefined, {
       minimumFractionDigits: v < 10 ? 2 : 0,
       maximumFractionDigits: v < 10 ? 2 : 0,
     })}`;
   };
   const fmtVolume = (v: number | undefined) => {
-    if (v == null) return '—';
+    if (v == null) return null;
     const abs = Math.abs(v);
     if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
     if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
@@ -1597,56 +1580,46 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
     return v.toLocaleString();
   };
 
-  // 20-cell grid (extended from 14 — see app/backend/routes/analysis.py
-  // get_stock_data for the new P/B, EPS, Div Yield, Day High/Low, Volume
-  // fields). Same field set/order as desktop's StockPanel for consistency.
-  // For US tickers, valuation + profitability rows prefer FMP TTM values
-  // (/key-metrics-ttm + /ratios-ttm) over yfinance info which can lag by a
-  // quarter. ROIC falls back to ROA if neither FMP nor HK path provided a
-  // value (handled backend-side).
-  const rows: { k: string; v: string }[] = [
-    { k: 'Market cap', v: fmtMoney(metrics.market_cap) },
-    { k: 'Rev TTM',    v: fmtMoney(metrics.revenue) },
-    { k: 'FCF',        v: fmtMoney(metrics.free_cash_flow) },
-    { k: 'Net margin', v: fmtPct(metrics.net_margin) },
-    { k: 'P/E',        v: fmtMult(metrics.pe_ratio) },
-    { k: 'P/S',        v: fmtMult(metrics.price_to_sales) },
-    { k: 'P/B',        v: fmtMult(metrics.price_to_book) },
-    { k: 'EV/EBITDA',  v: fmtMult(metrics.ev_to_ebitda) },
-    { k: 'Rev growth', v: fmtPct(metrics.revenue_growth) },
-    { k: 'EPS ttm',    v: fmtPrice(metrics.eps_ttm) },
-    { k: 'ROE',        v: fmtPct(metrics.return_on_equity) },
-    { k: 'ROIC',       v: fmtPct(metrics.return_on_invested_capital ?? metrics.return_on_assets) },
-    { k: 'FCF yield',  v: fmtPct(metrics.free_cash_flow_yield) },
-    { k: 'Div yield',  v: fmtPct(metrics.dividend_yield) },
-    { k: 'Net cash',   v: fmtMoney(metrics.net_cash) },
-    { k: '52wk high',  v: fmtPrice(metrics.fifty_two_week_high) },
-    { k: '52wk low',   v: fmtPrice(metrics.fifty_two_week_low) },
-    { k: 'Day high',   v: fmtPrice(metrics.day_high) },
-    { k: 'Day low',    v: fmtPrice(metrics.day_low) },
-    { k: 'Volume',     v: fmtVolume(metrics.volume) },
+  // Same field set/order as the desktop hero (StockPanel METRICS). For US
+  // tickers the valuation + profitability rows prefer FMP TTM values; ROIC
+  // falls back to ROA when neither FMP nor the HK path provided one. Fields
+  // with no value are left out rather than shown as "—".
+  const rows: { k: string; v: string | null }[] = [
+    { k: 'Market cap',       v: fmtMoney(metrics.market_cap) },
+    { k: 'Revenue (TTM)',    v: fmtMoney(metrics.revenue) },
+    { k: 'Free cash flow',   v: fmtMoney(metrics.free_cash_flow) },
+    { k: 'Net margin',       v: fmtPct(metrics.net_margin) },
+    { k: 'P/E',              v: fmtMult(metrics.pe_ratio) },
+    { k: 'P/S',              v: fmtMult(metrics.price_to_sales) },
+    { k: 'P/B',              v: fmtMult(metrics.price_to_book) },
+    { k: 'EV / EBITDA',      v: fmtMult(metrics.ev_to_ebitda) },
+    { k: 'Revenue growth',   v: fmtPct(metrics.revenue_growth) },
+    { k: 'EPS (TTM)',        v: fmtPrice(metrics.eps_ttm) },
+    { k: 'Return on equity', v: fmtPct(metrics.return_on_equity) },
+    { k: 'ROIC',             v: fmtPct(metrics.return_on_invested_capital ?? metrics.return_on_assets) },
+    { k: 'FCF yield',        v: fmtPct(metrics.free_cash_flow_yield) },
+    { k: 'Dividend yield',   v: fmtPct(metrics.dividend_yield) },
+    { k: 'Net cash',         v: fmtMoney(metrics.net_cash) },
+    { k: '52-week high',     v: fmtPrice(metrics.fifty_two_week_high) },
+    { k: '52-week low',      v: fmtPrice(metrics.fifty_two_week_low) },
+    { k: 'Day high',         v: fmtPrice(metrics.day_high) },
+    { k: 'Day low',          v: fmtPrice(metrics.day_low) },
+    { k: 'Volume',           v: fmtVolume(metrics.volume) },
   ];
+  const shown = rows.filter((r): r is { k: string; v: string } => r.v != null);
+  if (shown.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
-        Key Stats
-      </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
-        {rows.map((r) => (
-          <div key={r.k} className="flex items-baseline justify-between">
-            <span className="text-[11.5px] text-muted-foreground">{r.k}</span>
-            <span className={`text-[13px] font-semibold tabular-nums ${
-              r.v.startsWith('+') ? 'text-brand'
-              : r.v.startsWith('-') && r.v !== '—' ? 'text-content-high'
-              : 'text-foreground'
-            }`}>
-              {r.v}
-            </span>
+    <section>
+      <MobileSectionTitle>Key statistics</MobileSectionTitle>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
+        {shown.map((r) => (
+          <div key={r.k}>
+            <dt className="text-[13px] text-muted-foreground">{r.k}</dt>
+            <dd className="mt-0.5 text-[17px] font-semibold tabular-nums text-foreground">{r.v}</dd>
           </div>
         ))}
-      </div>
-    </div>
+      </dl>
+    </section>
   );
 }
-

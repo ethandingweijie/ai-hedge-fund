@@ -24,7 +24,8 @@ import { ChainOfThought } from '@/components/report/ChainOfThought';
 import type { ProgressEvent } from '@/lib/reportTypes';
 
 // ── Report section components ────────────────────────────────────────────────
-import { ReportHeader }        from '@/components/report/ReportHeader';
+import { ReportHero }          from '@/components/report/ReportHero';
+import { SectionAnchor }       from '@/components/report/SectionAnchor';
 import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
@@ -46,7 +47,6 @@ import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { sotpFor } from '@/lib/sotpBreakdown';
 import { GuidanceEstimatesPanel } from '@/components/report/GuidanceEstimatesPanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
-import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
 import { NewsPanel }           from '@/components/report/NewsPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
@@ -167,20 +167,6 @@ function formatTimeAgo(iso: string): string {
   }
 }
 
-function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?: React.ReactNode }) {
-  return (
-    <div id={id} className="scroll-mt-28">
-      <div className="flex items-center gap-3 mb-4 pt-8">
-        <div className="h-px w-6 bg-border shrink-0" />
-        <span className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/40 whitespace-nowrap flex items-center gap-1.5">
-          {label}
-          {badge}
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-    </div>
-  );
-}
 
 /**
  * Small green-check badge shown on a SectionAnchor once every phase that
@@ -1140,7 +1126,7 @@ export function ReportPage() {
   // Toaster is now mounted once at App.tsx root so toasts from every page
   // (Screener, History, Report, etc.) render consistently.
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background report-flat">
       {/* ── Top running bar ─────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-background/98 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-5 flex items-center gap-5">
@@ -1201,15 +1187,15 @@ export function ReportPage() {
 
         {/* ── Section nav ───────────────────────────────────────────────────── */}
         <div className="max-w-6xl mx-auto px-4 md:px-8">
-          <div className="flex items-center justify-center gap-2 py-1.5 border-t border-border/30">
+          <div className="flex items-center gap-7 overflow-x-auto border-t border-border/30">
             {SECTIONS.map(s => (
               <button
                 key={s.id}
                 onClick={() => scrollToSection(s.id)}
-                className={`text-[15px] px-4 h-8 rounded-md shrink-0 transition-colors font-medium ${
+                className={`h-11 -mb-px border-b-2 shrink-0 text-[15px] transition-colors ${
                   activeSection === s.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'border-foreground text-foreground font-semibold'
+                    : 'border-transparent text-muted-foreground font-medium hover:text-foreground'
                 }`}
               >
                 {s.label}
@@ -1289,8 +1275,8 @@ export function ReportPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[liveTicker]}
           ticker={liveTicker}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
-          <ReportHeader
+        <div className="pt-4">
+          <ReportHero
             ticker={liveTicker}
             runAt={liveResult?.run_at ?? runStartedAt.current}
             modelName={liveResult?.model_name ?? model}
@@ -1301,7 +1287,6 @@ export function ReportPage() {
             subSector={subSector}
             vgpm={vgpm}
           />
-          <StockPanel ticker={liveTicker} />
         </div>
 
         {/* ── Valuation ───────────────────────────────────────────────────── */}

@@ -8,7 +8,8 @@ import { useLayoutMode } from '@/contexts/layout-mode-context';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 import { V2ReportView } from '@/components/v2/V2ReportView';
 
-import { ReportHeader } from '@/components/report/ReportHeader';
+import { ReportHero } from '@/components/report/ReportHero';
+import { SectionAnchor } from '@/components/report/SectionAnchor';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
@@ -34,7 +35,6 @@ import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel } from '@/components/report/IndustryBriefPanel';
 import type { CitationRegistryEntry } from '@/lib/reportTypes';
-import { StockPanel } from '@/components/report/StockPanel';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
@@ -75,21 +75,6 @@ function scrollTo(id: string) {
  */
 const CARD_GRID =
   'grid gap-5 items-start [grid-template-columns:repeat(auto-fit,minmax(420px,1fr))]';
-
-function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?: React.ReactNode }) {
-  return (
-    <div id={id} className="scroll-mt-28">
-      <div className="flex items-center gap-3 mb-6 pt-12">
-        <div className="h-px w-6 bg-border shrink-0" />
-        <span className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/40 whitespace-nowrap flex items-center gap-1.5">
-          {label}
-          {badge}
-        </span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-    </div>
-  );
-}
 
 export function ReportViewPage() {
   const { runId } = useParams<{ runId: string }>();
@@ -252,19 +237,19 @@ export function ReportViewPage() {
   ) : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* ── Sticky section nav ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b">
+    <div className="min-h-screen bg-background report-flat">
+      {/* ── Sticky section nav: text tabs, underline on the active one ─────── */}
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
-          <div className="flex items-center justify-center gap-2 py-2">
+          <div className="flex items-center gap-7 overflow-x-auto">
             {SECTIONS.map(s => (
               <button
                 key={s.id}
                 onClick={() => scrollTo(s.id)}
-                className={`text-[15px] px-4 h-8 rounded-md shrink-0 transition-colors font-medium
+                className={`h-12 -mb-px border-b-2 shrink-0 text-[15px] transition-colors
                   ${activeSection === s.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    ? 'border-foreground text-foreground font-semibold'
+                    : 'border-transparent text-muted-foreground font-medium hover:text-foreground'
                   }`}
               >
                 {s.label}
@@ -275,7 +260,7 @@ export function ReportViewPage() {
       </div>
 
       {/* ── Page content ───────────────────────────────────────────────────── */}
-      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-4 md:pt-8 pb-12 md:pb-16 space-y-6">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-8 md:pt-10 pb-12 md:pb-16 space-y-6">
 
         {/* ── Summary ────────────────────────────────────────────────────── */}
         <div id="summary" className="scroll-mt-28" />
@@ -284,20 +269,17 @@ export function ReportViewPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[ticker]}
           ticker={ticker}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-stretch">
-          <ReportHeader
-            ticker={ticker}
-            runAt={result.run_at}
-            modelName={result.model_name}
-            decision={decision}
-            regime={regime}
-            currentPrice={currentPrice}
-            sector={sector}
-            subSector={subSector}
-            vgpm={vgpm}
-          />
-          <StockPanel ticker={ticker} />
-        </div>
+        <ReportHero
+          ticker={ticker}
+          runAt={result.run_at}
+          modelName={result.model_name}
+          decision={decision}
+          regime={regime}
+          currentPrice={currentPrice}
+          sector={sector}
+          subSector={subSector}
+          vgpm={vgpm}
+        />
 
         {/* ── M1 recency — what the last report said + what changed since ── */}
         {/* Chain-of-thought trail persisted with the run (data.progress_log,

@@ -618,3 +618,14 @@ html, body {
     font-size: 18px;
   }
 }
+/* ── Flat report surfaces ────────────────────────────────────────────────
+   Inside a report (desktop ReportViewPage/ReportPage and the mobile
+   V2ReportView) cards drop their filled grey panel and drop-shadow and keep
+   only the hairline border, so sections read as one calm page instead of a
+   stack of boxes. Scoped by the `report-flat` wrapper class so other pages
+   are untouched. Two-class selectors outrank the single-class Tailwind
+   utilities they override. */
+.report-flat .bg-card {
+  background-color: transparent;
+  box-shadow: none;
+}
