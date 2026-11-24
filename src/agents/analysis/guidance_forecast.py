@@ -477,8 +477,17 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
                                 f"({out['margin_T_guided']:.1%}, not {mT:.1%})")
     if ni_T_from_eps is not None and ebit_T is None:
         # back-solve the EBIT the EPS needs at the history's tax and interest
-        out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest
-        out["margin_T_implied"] = out["ebit_T_implied"] / revT if revT else None
+        _ebit_eps = ni_T_from_eps / (1.0 - tax) + interest
+        if _eps_margin_plausible(_ebit_eps, revT, hist):
+            out["ebit_T_implied"] = _ebit_eps
+            out["margin_T_implied"] = _ebit_eps / revT if revT else None
+        else:
+            # 2026-11-25 (V prod): EPS growth (11.5%) read as an EPS level ($0.115) implied a 1.8% EBIT margin against
+            # 62.9% trailing and priced the DCF at 6.6. Off the model's basis: the margin holds history.
+            out["eps_margin_implausible"] = (_ebit_eps / revT) if revT else None
+            out["flags"].append(f"Guided EPS {epsT:,.3f} implies an EBIT margin of {out['eps_margin_implausible']:.1%} against "
+                                f"{float(hist.get('ebit_margin') or 0.0):.1%} trailing: not on the model's basis (a growth rate "
+                                "read as a level, units, ADS or currency), so it does not set the margin")
     return out
 
 

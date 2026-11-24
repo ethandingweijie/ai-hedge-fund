@@ -384,3 +384,20 @@ def test_an_eps_implied_margin_collapse_is_off_basis_too():
     assert not _eps_margin_plausible(1.40 * 100.0, 100.0, hist)
     thin = {"ebit_margin": 0.04}                                   # a thin-margin name may halve without being off-basis
     assert _eps_margin_plausible(0.015 * 100.0, 100.0, thin)
+
+
+def test_an_eps_growth_rate_read_as_a_level_does_not_set_the_margin():
+    """2026-11-25 (V prod): eps_fy2 0.105 (a growth rate) back-solved a 1.8% EBIT margin with no guided margin."""
+    import importlib.util
+    from pathlib import Path
+    from src.agents.analysis import guidance_forecast as gf
+    spec = importlib.util.spec_from_file_location("_gft", Path(__file__).resolve().parent / "test_guidance_forecast.py")
+    gft = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gft)
+    blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "MEDIUM",
+           "estimates": {"base": {"revenue_growth_fy1": 0.05, "revenue_growth_fy2": 0.05, "eps_fy1": 0.115, "eps_fy2": 0.105}}}
+    hist = gf.history_ratios(gft._SERIES, gf.load_cfg())
+    hist = {**hist, "ebit_margin": 0.63, "ebit": 0.63 * hist["revenue"]}              # a V-like franchise margin
+    fc = gf.build_forecast(blk, scenario="base", series=gft._SERIES, profile_name="Payment Networks", sector="Financials", wacc=0.08,
+                           tgr=0.025, shares=52e6, net_debt=1e9, spot=190.0, peer_ev_ebitda=9.0, market_growth=0.04, hist=hist)
+    assert fc["margin_target"] == pytest.approx(0.63) and any("not on the model's basis" in f for f in fc["flags"])
