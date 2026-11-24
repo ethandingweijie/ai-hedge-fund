@@ -17,7 +17,7 @@ import {
   getWhatIfLibrary, getWhatIfScenario, addWhatIfNote,
   compareWhatIfToHoldings, startAssumptionCheck,
   ALL_SECTOR_ETFS,
-  type PortfolioDashboard, type ReplayEventMeta, type ReplayEventResult,
+  type PortfolioDashboard, type HoldingRow, type ReplayEventMeta, type ReplayEventResult,
   type ReplayResult, type ReplaySectorPerf,
   type WhatIfMeta, type WhatIfResult, type WhatIfHoldingSkeleton,
   type WhatIfLibraryEntry, type WhatIfScenarioDetail, type WhatIfCompareResult,
@@ -27,6 +27,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { toast } from 'sonner';
 import { actionTone } from '@/lib/semanticColors';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 
 // ── small presentational helpers ────────────────────────────────────────────
 
@@ -110,6 +111,8 @@ function matchChip(matches: number): string {
 type PortfolioTab = 'positions' | 'replay' | 'regime' | 'whatif';
 
 export function PortfolioPage() {
+  const { mode } = useLayoutMode();
+  const isMobile = mode === 'mobile';
   const [dash, setDash] = useState<PortfolioDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -321,7 +324,10 @@ export function PortfolioPage() {
       )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as PortfolioTab)} className="mt-4">
-        <TabsList className="h-auto flex-wrap justify-start">
+        <TabsList className={isMobile
+          // One scrollable row on a phone instead of two wrapped rows.
+          ? 'flex-nowrap justify-start overflow-x-auto -mx-4 px-4 w-[calc(100%+2rem)] [&>*]:shrink-0 [scrollbar-width:none]'
+          : 'h-auto flex-wrap justify-start'}>
           <TabsTrigger value="positions">Positions &amp; indicators</TabsTrigger>
           <TabsTrigger value="replay">Crisis replay</TabsTrigger>
           <TabsTrigger value="regime">Regime then vs now</TabsTrigger>
@@ -406,7 +412,16 @@ export function PortfolioPage() {
             </div>
           </Card>
 
-          {/* Holdings table */}
+          {/* Holdings: a tappable list on mobile (the 13-column table was
+              crushed at phone width), the full table on desktop. */}
+          {isMobile ? (
+            <MobileHoldings
+              holdings={dash?.holdings ?? null}
+              loading={loading}
+              removingId={removingId}
+              onDelete={(id, t) => void onDelete(id, t)}
+            />
+          ) : (
           <Card className="mt-4 overflow-x-auto">
             <Table>
               <TableHeader>
@@ -493,6 +508,7 @@ export function PortfolioPage() {
               </TableBody>
             </Table>
           </Card>
+          )}
 
           {/* Sector exposure */}
           {dash && Object.keys(dash.sector_exposure).length > 0 && (
@@ -574,6 +590,121 @@ export function PortfolioPage() {
         </TabsContent>
       </Tabs>
     </PageContainer>
+  );
+}
+
+// ── Mobile holdings list ────────────────────────────────────────────────────
+
+function ratingLabel(decision: string): string {
+  const d = decision.replace(/_/g, ' ').toLowerCase();
+  return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
+/**
+ * One row per holding: ticker, rating and size on the left, value and return
+ * on the right. Tapping a row opens its detail (price, weight, fair values,
+ * upside, sector, run age, notes) and the remove button.
+ */
+function MobileHoldings({ holdings, loading, removingId, onDelete }: {
+  holdings: HoldingRow[] | null;
+  loading: boolean;
+  removingId: number | null;
+  onDelete: (id: number, ticker: string) => void;
+}) {
+  const [openId, setOpenId] = useState<number | null>(null);
+
+  if (loading && !holdings) {
+    return <p className="mt-6 text-center text-sm text-muted-foreground">Loading portfolio…</p>;
+  }
+  if (!holdings || holdings.length === 0) {
+    return <p className="mt-6 text-center text-sm text-muted-foreground">No positions yet.</p>;
+  }
+
+  return (
+    <div className="mt-4 border-t border-border">
+      {holdings.map((h) => {
+        const sig = h.signals ?? null;
+        const decision = sig?.decision ?? null;
+        const open = openId === h.id;
+        const ivs = sig && (sig.iv_bear ?? sig.iv_base ?? sig.iv_bull)
+          ? `${fmtNum(sig.iv_bear ?? null, 0)} / ${fmtNum(sig.iv_base ?? null, 0)} / ${fmtNum(sig.iv_bull ?? null, 0)}`
+          : null;
+        return (
+          <div key={h.id} className="border-b border-border">
+            <button
+              type="button"
+              onClick={() => setOpenId(open ? null : h.id)}
+              aria-expanded={open}
+              className="w-full min-h-[68px] py-3 flex items-center justify-between gap-3 text-left"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[17px] font-semibold text-foreground">{h.ticker}</span>
+                  {decision && (
+                    <span className={`inline-flex items-center h-5 px-2 rounded-full text-[11px] font-semibold ${actionTone(decision)}`}>
+                      {ratingLabel(decision)}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 text-[13px] text-muted-foreground tabular-nums truncate">
+                  {fmtNum(h.quantity, 0)} @ {fmtMoney(h.avg_cost, h.currency)}
+                  {h.weight_pct != null && ` · ${fmtNum(h.weight_pct, 1)}%`}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[16px] font-semibold tabular-nums text-foreground">
+                  {fmtMoney(h.market_value, h.currency)}
+                </div>
+                <div className="mt-0.5 text-[13px]">
+                  <PnlText value={h.unrealized_pnl} pct={h.pnl_pct} ccy={h.currency} />
+                </div>
+              </div>
+            </button>
+
+            {open && (
+              <div className="pb-4 -mt-1">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+                  <MobileStat label="Price" value={fmtMoney(h.price ?? null, h.currency)} />
+                  {h.currency && h.currency !== 'USD' && h.market_value_usd != null && (
+                    <MobileStat label="Value in US$" value={fmtMoney(h.market_value_usd, 'USD_MIXED')} />
+                  )}
+                  {ivs && <MobileStat label="Fair value (bear / base / bull)" value={ivs} wide />}
+                  {h.iv_upside_pct != null && (
+                    <MobileStat
+                      label="Upside"
+                      value={`${h.iv_upside_pct >= 0 ? '+' : ''}${fmtNum(h.iv_upside_pct, 1)}%`}
+                      valueClass={h.iv_upside_pct >= 0 ? 'text-gain' : 'text-loss'}
+                    />
+                  )}
+                  {sig?.sector && <MobileStat label="Sector" value={sig.sector} />}
+                  {sig?.run_at && <MobileStat label="Last analysed" value={ageLabel(sig.run_at)} />}
+                </dl>
+                {h.notes && <p className="mt-3 text-[13px] text-muted-foreground">{h.notes}</p>}
+                <button
+                  type="button"
+                  onClick={() => onDelete(h.id, h.ticker)}
+                  disabled={removingId === h.id}
+                  className="mt-3 inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border text-[13px] font-medium text-foreground disabled:opacity-50"
+                >
+                  <Trash2 size={14} /> {removingId === h.id ? 'Removing…' : `Remove ${h.ticker}`}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileStat({ label, value, valueClass = 'text-foreground', wide = false }: {
+  label: string; value: string; valueClass?: string; wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'col-span-2' : undefined}>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={`mt-0.5 font-semibold tabular-nums ${valueClass}`}>{value}</dd>
+    </div>
   );
 }
 
