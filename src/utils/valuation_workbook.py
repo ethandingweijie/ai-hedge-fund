@@ -18,12 +18,18 @@ Formatting standard (owner-specified, 2026-09-19):
   * Period headers are DATE() formulas formatted as fiscal years.
   * No circular references: the engine's valuation has none to model.
 
-Scope, deliberately: the engine values a company from revenue growth x FCF
-margin (DCF) and peer multiples; it does not forecast a three-statement
-model. The IS/BS/CFS tabs therefore show the reported history in full, and
-only the lines the engine actually projects (revenue, FCF) carry forecasts,
-linked from the DCF. Balancing-plug forecasts would put numbers in the
-workbook that the valuation never used.
+Scope: the engine values a company from revenue growth x FCF margin (DCF) and
+peer multiples. Where the run carries a three-statement forecast it is on the
+Model tab (live formulas) and the statements' forecast columns link to it; its
+FCF is reconciled to the DCF's (shown, not forced).
+
+Audit 2026-11-25 (CFA / FAST): a Checks tab lists every check with a master
+flag on Cover and Summary; peer multiples link to Comps; an unweighted DCF is
+built as a labelled shadow; money is in millions throughout; engine outputs
+(purple) and reference values (grey) are told apart from inputs (blue); each
+Assumptions value carries its source and as-of date; Target carries
+sensitivities. The DCF terminal value is the value-driver form (owner,
+2026-11-25) when the trace records it, else the Gordon form the run used.
 """
 from __future__ import annotations
 
@@ -39,7 +45,12 @@ from openpyxl.utils import get_column_letter
 SCENARIOS = ("bear", "base", "bull")
 
 BLUE, BLACK, GREEN = "FF0000FF", "FF000000", "FF008000"   # ARGB, opaque
+# Audit 2026-11-25: an engine OUTPUT recorded in the run (a per-year margin path the engine computed) is not an
+# assumption to flex -- purple, not input blue; a recorded constant no formula reads is a reference value -- grey.
+ENGINE, GREY = "FF7030A0", "FF808080"
 _HDR_FILL = PatternFill("solid", fgColor="D9E1F2")
+_OK_FILL = PatternFill("solid", fgColor="E2EFDA")
+_FAIL_FILL = PatternFill("solid", fgColor="F8CBAD")
 _SEC_FILL = PatternFill("solid", fgColor="F2F2F2")
 _NOTE = Font(italic=True, color="595959")
 
@@ -74,7 +85,9 @@ _GAP_LINES = (
     ("stock_based_compensation", "Stock-based compensation", "Medium"),
 )
 
-#: Gaps between the engine and a full institutional three-statement model.
+#: Gaps between the engine and a full institutional three-statement model -- the claims for a run with NO
+#: three-statement build. Audit 2026-11-25 (item 6): Data Gaps now generates its structural lines from what was
+#: built (`_Book._structural_gaps`); this list is the no-model fallback only.
 _STRUCTURAL_GAPS = [
     ("Model architecture", "IS forecast is consensus, not modelled line by line",
      "Forecast IS lines are FMP analyst consensus (revenue, EBITDA, EBIT, net income, EPS); "
@@ -110,6 +123,68 @@ def _parse_date(v: Any) -> Optional[date]:
         return datetime.fromisoformat(str(v)[:10]).date()
     except (TypeError, ValueError):
         return None
+
+
+_SECTIONS: dict[int, list] = {}      # id(worksheet) -> [(row, section title)]
+
+#: Readable names for snake_case payload keys (Valuation paths, Backtest).
+_ACRONYMS = {"pv": "PV", "fcf": "FCF", "ev": "EV", "iv": "IV", "wacc": "WACC", "cagr": "CAGR", "npv": "NPV",
+             "ppa": "PPA", "mw": "MW", "mwh": "MWh", "eps": "EPS", "ebitda": "EBITDA", "ebit": "EBIT", "yoy": "YoY",
+             "ntm": "NTM", "usd": "USD", "pct": "%", "t1": "T-1", "fy": "FY", "capex": "Capex", "opex": "Opex",
+             "roic": "ROIC", "irr": "IRR", "tv": "TV", "dcf": "DCF", "id": "ID", "lcoe": "LCOE", "cf": "CF"}
+
+
+def _humanize(key: Any) -> str:
+    """'model_error_pct' -> 'Model error %'; 'forward.price_date' -> 'Forward: price date'."""
+    s = str(key)
+    if "." in s:
+        head, tail = s.split(".", 1)
+        return f"{_humanize(head)}: {_humanize(tail)[:1].lower() + _humanize(tail)[1:]}"
+    words = [w for w in s.replace("-", "_").split("_") if w]
+    out = [_ACRONYMS.get(w.lower(), w) for w in words]
+    if out and out[0] == out[0].lower():
+        out[0] = out[0][:1].upper() + out[0][1:]
+    return " ".join(out)
+
+
+#: A 2-4 line note at the top of each tab: what it does and how to read it (FAST: every sheet states its purpose).
+_METHOD_NOTES = {
+    "Summary": "Headline outputs. Column B is the run's engine value (static); column C links to the tab that rebuilds it. "
+               "The master check flag reads the Checks tab: ALL OK means every rebuilt figure ties to the engine.",
+    "Checks": "One row per check in the workbook. Tie-out checks compare a rebuilt figure with the engine's (0 = ties within one "
+              "rounding unit); integrity checks test the model itself (balance, cash, invariants). The master flag feeds Cover and Summary.",
+    "Assumptions": "Every driver and constant, with its source and as-of date. Blue = input; purple = engine output recorded in the run "
+                   "(not a lever); grey = reference value no formula reads. Money in millions of the valuation currency.",
+    "IS": "Reported income statement in millions (FMP). Forecast columns link to the Model tab; the DCF revenue path and consensus sit "
+          "below for comparison.",
+    "BS": "Reported balance sheet in millions; 'Other' lines are the reported total less the named lines. Forecast columns link to the Model tab.",
+    "CFS": "Reported cash flow in millions; net income and D&A link to the IS. Free cash flow and owner earnings (FCF − SBC) are the DCF basis.",
+    "Model": "Three-statement forecast on the agent's estimates: assumptions (blue) drive IS → schedules → CF → BS. The reconciliation "
+             "suite and the invariants must read OK; the Model-vs-DCF FCF line shows the basis gap, not forced to zero.",
+    "WACC": "Discount-rate build: table rate by sector/profile + premia/overlays, then the adjustments the engine applied. "
+            "The CAPM line is a cross-check, not the rate used.",
+    "DCF": "Revenue × FCF margin per year, discounted at the WACC with mid-window timing; terminal value by Gordon growth. "
+           "Money in millions; value per share = equity ÷ diluted shares (millions). Check = rebuilt − engine.",
+    "Multiples": "Each relative-valuation leg: metric × (peer multiple from Comps × scenario band × growth premium × other adjustments) "
+                 "→ EV → equity → per share. Net debt and shares link to Assumptions. Money in millions.",
+    "Comps": "The peer basket behind every peer multiple: members and values where the run froze them, the median, and the engine's "
+             "figure. Through-cycle (dynamic) multiples show their source; members are not recorded for them.",
+    "SOTP": "Segment values (metric × multiple) flexed per scenario, plus associates and net cash, less minorities and the holdco "
+            "discount. Money in millions of the SOTP currency.",
+    "Blend": "Intrinsic value = Σ (effective weight × leg value) × calibration, per scenario. Leg values link to the tab that rebuilds them.",
+    "Target": "12-month target = spot + capture × (IV − spot) per scenario, probability-weighted. Sensitivities below flex the anchor "
+              "leg's peer multiple and metric, the capture and the scenario probabilities, and (cyclicals) the margin.",
+    "Backtest": "Today's methodology on the previous fiscal year (T-1) against the price then; the gate ledger; the run's flags and the "
+                "WACC the valuation used.",
+    "Data Gaps": "Generated from this build: what the data or the engine could not supply, and what the model does not do. "
+                 "Lines about the run come first.",
+    "Guidance": "Management guidance as stated, consensus, the agent's bear/base/bull estimates and the growth path the base DCF ran on.",
+    "Family": "The profile's report family: what the write-up must state, and the checklist computed from this run.",
+    "Banks": "Justified P/B = (ROE − g) / (CoE − g), bounded by the engine's floor and cap, × book value per share.",
+    "Pipeline": "Each drug asset: peak sales × economics × probability of success, discounted (rNPV). Totals tie to the engine.",
+    "Products": "Revenue by product and the cost build at historical ratios, tied to the forecast the DCF runs on.",
+    "Valuation paths": "The year-by-year cash path each overlay leg (PPA project finance, depleting asset) discounts, as the engine recorded it.",
+}
 
 
 class _Sheet:
@@ -163,6 +238,8 @@ class _Sheet:
         for c in range(1, width + 1):
             self.ws.cell(row=r, column=c).fill = _SEC_FILL
         self.ws.cell(row=r, column=1, value=text).font = Font(bold=True)
+        # the Checks tab names each check by the section it sits in
+        _SECTIONS.setdefault(id(self.ws), []).append((r, str(text)))
 
     def widths(self, w: dict):
         for col, width in w.items():
@@ -183,6 +260,18 @@ def _driver(tr: dict, key: str) -> Any:
         return 0.5 if (tr.get("timing") or {}).get("flow_fractions") else 1.0
     if key == "roll_forward_years":
         return (tr.get("timing") or {}).get("roll_forward_years") or 0.0
+    if key == "terminal_vd":
+        # Owner, 2026-11-25: a trace that records the value-driver terminal inputs was priced with it
+        return (1.0 if any(k in tr for k in ("terminal_nopat_ratio", "terminal_ronic_spread"))
+                or tr.get("terminal_formula") == "value_driver" else 0.0) if tr else None
+    if key == "terminal_nopat_ratio":
+        v = tr.get(key)
+        if v is None:
+            v = (((tr.get("guidance_forecast") or {}).get("terminal") or {}).get("nopat_to_ufcf"))
+        return float(v) if isinstance(v, (int, float)) and v > 0 else (1.0 if tr else None)
+    if key == "terminal_ronic_spread":
+        v = tr.get(key)
+        return float(v) if isinstance(v, (int, float)) else (0.0 if tr else None)
     if key == "terminal_loe_multiplier":                   # plan I14: 1 when no LOE input priced
         v = tr.get(key)
         return float(v) if isinstance(v, (int, float)) else (1.0 if tr else None)
@@ -193,7 +282,16 @@ def _driver(tr: dict, key: str) -> Any:
 
 
 _DCF_DRIVER_KEYS = ("revenue_base", "fcf_margin_base", "margin_delta_absolute", "fcf_floor",
-                    "tgr", "net_debt", "shares", "wacc")
+                    "tgr", "net_debt", "shares", "wacc", "terminal_nopat_ratio", "terminal_ronic_spread")
+
+
+_MILLION_KEYS = ("revenue_base", "net_debt", "shares")
+
+
+def _scaled(key: str, v: Any) -> Optional[float]:
+    """Audit 2026-11-25 (item 5): money and share counts in millions on every tab."""
+    f = _num(v)
+    return (f / 1e6) if (f is not None and key in _MILLION_KEYS) else f
 
 
 def _close(a: Any, b: Any) -> bool:
@@ -246,6 +344,13 @@ class _Book:
         self.target_cell: Optional[str] = None
         self.tabs: list[tuple[str, str]] = []
         self.statements: Optional[dict] = None
+        self.src: dict[str, tuple] = {}                # assumption name -> (source, as of)
+        self.integrity: list[tuple] = []               # (area, description, ref or literal) -- model honesty checks
+        self.info_checks: list[tuple] = []             # (area, description, ref) -- shown on Checks, outside the master flag
+        self.peer_cell: dict[tuple, str] = {}          # (source key, value) -> Comps cell holding the peer multiple
+        self.leg_meta: dict[tuple, dict] = {}          # (scenario, leg) -> {"kind", "row"} on Multiples
+        self.blend_w: dict[tuple, str] = {}            # (scenario, leg) -> Blend weight cell
+        self.blend_raw: dict[str, str] = {}            # scenario -> Blend sum before calibration
 
     def scen(self, s: str) -> dict:
         return self.dr.get(s) or {}
@@ -309,7 +414,24 @@ class _Book:
                        f"(reported); street {_f(_sci.get('eps_street_adjusted'))} ({_sci.get('street_analysts')} analysts, adjusted; "
                        f"adjusted / reported {_num(_sci.get('adjusted_reported_ratio')) or 1.0:.2f}). Action: {_sci.get('note')}. "
                        f"Check after: {_sci.get('check_after')}.")
+        # Audit 2026-11-25: a three-statement build that failed its reconciliation is said on the front page, not
+        # only in a static table on the Model tab.
+        _th = self.dr.get("three_statements") or {}
+        _rc = (_th.get("reconciliation") or {}) if isinstance(_th, dict) else {}
+        if _rc.get("failures") or (_rc and _rc.get("ok") is False):
+            _f = _rc.get("failures") or []
+            out.append("THREE-STATEMENT MODEL FAILED its reconciliation suite ("
+                       + ("; ".join(f"{x.get('year')} #{x.get('id')} {x.get('name')}" for x in _f[:4]) or "see the Model tab")
+                       + (f"; +{len(_f) - 4} more" if len(_f) > 4 else "")
+                       + ")" + (f": {_th.get('skipped')}" if _th.get("skipped") else "")
+                       + ". The Model tab's forecast is not used for any figure here; trace before relying on it.")
         return out
+
+    def dcf_present(self) -> bool:
+        """Audit 2026-11-25: a DCF projection was recorded (weighted or not). An unweighted one is built as a
+        labelled shadow so DCF-specific failures stay traceable."""
+        return any(((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") for s in SCENARIOS) \
+            or self.dcf_weighted()
 
     def _net_debt_label(self) -> str:
         """Owner, 2026-10-04 (plan 1A.3): the valuation's net debt with the basis the engine recorded --
@@ -357,8 +479,11 @@ class _Book:
         self.cash_flow()
         self.wacc_tab()
         self.dcf_tab()
-        self.multiples_tab()
+        self._model_fcf_reconciliation()
+        # Audit 2026-11-25: Comps is built first so each leg's peer multiple on Multiples links to the Comps cell
+        # it came from; the tab is moved back behind Multiples below.
         self.comps_tab()
+        self.multiples_tab()
         # Owner, 2026-10-07: every drug-developer valuation carries a Pipeline tab -- the assets, phase, peak sales
         # and probability of success the rNPV priced (the frontend's pipeline card, in the workbook).
         if self._has_pipeline():
@@ -385,19 +510,170 @@ class _Book:
         self.backtest_tab()
         self.gaps_tab()
         self.summary_tab(summary)
+        self.checks_tab()
+        # the explicit order: Model directly after CFS, Multiples before Comps, Checks after Summary
+        for _name, _after in (("Model", "CFS"), ("Multiples", "WACC" if "DCF" not in self.wb.sheetnames else "DCF"),
+                              ("Checks", "Summary")):
+            self._move_after(_name, _after)
+        self._mark_reference_inputs()
+        self._methodology_notes()
         self.cover_tab(cover)
-        if "Model" in self.wb.sheetnames and "CFS" in self.wb.sheetnames:
-            _ws = self.wb["Model"]
-            _sheets = self.wb._sheets                      # the explicit order: Model directly after CFS
-            _sheets.remove(_ws)
-            _sheets.insert(_sheets.index(self.wb["CFS"]) + 1, _ws)
-            _mt = next((t for t in self.tabs if t[0] == "Model"), None)
-            if _mt:
-                self.tabs.remove(_mt)
-                self.tabs.insert(next(i for i, t in enumerate(self.tabs) if t[0] == "CFS") + 1, _mt)
+        for ws in self.wb.worksheets:
+            _SECTIONS.pop(id(ws), None)
         buf = io.BytesIO()
         self.wb.save(buf)
         return buf.getvalue()
+
+    def _move_after(self, name: str, after: str) -> None:
+        if name not in self.wb.sheetnames or after not in self.wb.sheetnames:
+            return
+        _ws = self.wb[name]
+        _sheets = self.wb._sheets
+        _sheets.remove(_ws)
+        _sheets.insert(_sheets.index(self.wb[after]) + 1, _ws)
+        _t = next((t for t in self.tabs if t[0] == name), None)
+        if _t and any(t[0] == after for t in self.tabs):
+            self.tabs.remove(_t)
+            self.tabs.insert(next(i for i, t in enumerate(self.tabs) if t[0] == after) + 1, _t)
+
+    # ── Checks (audit 2026-11-25) ───────────────────────────────────────────
+    def _scan_checks(self) -> list[tuple]:
+        """Every tie-out check cell in the workbook: a cell labelled Check… (each formula cell to its right),
+        the Target status cells and the Multiples Check column -- the cells scripts/workbook_tieout.py reads."""
+        out = []
+        for ws in self.wb.worksheets:
+            if ws.title in ("Checks", "Cover"):
+                continue
+            secs = sorted(_SECTIONS.get(id(ws), []))
+            for row in ws.iter_rows():
+                for c in row:
+                    v = c.value
+                    if not isinstance(v, str):
+                        continue
+                    def _ctx(r_: int) -> str:
+                        s_ = [t for rr, t in secs if rr <= r_]
+                        return s_[-1] if s_ else ""
+                    if v.strip().startswith("Check"):
+                        for cc in row[c.column:]:
+                            if isinstance(cc.value, str) and cc.value.startswith("="):
+                                hdr = ""
+                                if ws.title in ("Products",):
+                                    hdr = f" ({get_column_letter(cc.column)})"
+                                out.append((ws.title, _ctx(c.row), v.strip() + hdr, cc.coordinate))
+                                if ws.title not in ("Products",):
+                                    break
+                    elif (v.startswith("=IF(ABS(") or v.startswith("=IF(ROUND(ABS(")) and '"REVIEW"' in v:
+                        lab = ws.cell(row=c.row, column=1).value
+                        out.append((ws.title, _ctx(c.row), f"Target tie-out: {lab}", c.coordinate))
+                    elif ws.title == "Multiples" and c.column == 17 and v.startswith("=") and c.row > 4:
+                        out.append((ws.title, "Relative valuation legs",
+                                    f"{ws.cell(row=c.row, column=1).value} — {ws.cell(row=c.row, column=2).value}: rebuilt − engine",
+                                    c.coordinate))
+        return out
+
+    def checks_tab(self) -> None:
+        """One row per check across the workbook, each with its status, and the master flag (C4) that Cover and
+        Summary show. Tie-out checks (rebuilt − engine) and integrity checks (the model's own consistency) are
+        counted apart; information rows (a reconciliation shown, not forced) sit below, outside the flag."""
+        sh = self.sheet("Checks", "Every check in the workbook with its status; master OK/FAIL flag")
+        sh.title("Checks", "Tie-out: a rebuilt figure against the engine's (0 within one rounding unit). Integrity: the "
+                           "model's own consistency (balance, cash, invariants).")
+        A = self.A
+        tie = self._scan_checks()
+        r = 8
+        sh.header(r, ["Kind", "Tab", "Section", "Check", "Value", "Status", "Go to"]); r += 1
+        first = r
+
+        def status(ref: str) -> str:
+            return (f'=IFERROR(IF(ISNUMBER({ref}),IF(ROUND(ABS({ref}),{A["dp_check"]})<={A["tol"]},"OK","FAIL"),'
+                    f'IF(OR({ref}="OK",{ref}="ALL OK",{ref}="n/a",{ref}=""),"OK","FAIL")),"FAIL")')
+
+        def row(kind: str, tab: str, sec: str, desc: str, ref: Any) -> None:
+            nonlocal r
+            sh.put(r, 1, kind).font = Font(color=BLACK)
+            sh.put(r, 2, tab).font = Font(color=BLACK)
+            sh.put(r, 3, (sec or "")[:90]).font = Font(color=BLACK)
+            sh.put(r, 4, str(desc)[:200]).font = Font(color=BLACK)
+            if isinstance(ref, str) and "!" in ref:
+                sh.put(r, 5, "=" + ref, NUM)
+                c = sh.ws.cell(row=r, column=7, value=ref.replace("$", ""))
+                c.hyperlink = "#" + ref.replace("$", "")
+                c.font = Font(color=BLUE, underline="single")
+            else:
+                sh.put(r, 5, ref).font = Font(color=BLUE)
+            sh.put(r, 6, status(f"E{r}") if kind != "Information" else "info")
+            r += 1
+
+        for tab, sec, desc, cell in tie:
+            row("Tie-out", tab, sec, desc, _ref(tab, int("".join(ch for ch in cell if ch.isdigit())),
+                                                 _col("".join(ch for ch in cell if ch.isalpha()))))
+        for area, desc, ref in self.integrity:
+            tab = ref.split("!")[0].strip("'") if isinstance(ref, str) and "!" in ref else area
+            row("Integrity", tab, area, desc, ref)
+        last = r - 1
+        if last < first:
+            sh.note(r, 1, "No checks were built for this run."); r += 1
+        rng = f"F{first}:F{max(first, last)}"
+        kinds = f"A{first}:A{max(first, last)}"
+        sh.label(4, 1, "Master flag", bold=True)
+        sh.put(4, 3, f'=IF(COUNTIF({rng},"FAIL")=0,"ALL OK","FAIL")', bold=True)
+        sh.label(5, 1, "Tie-out checks failing (rebuilt − engine)")
+        sh.put(5, 3, f'=COUNTIFS({kinds},"Tie-out",{rng},"FAIL")', "0")
+        sh.label(6, 1, "Integrity checks failing (model consistency)")
+        sh.put(6, 3, f'=COUNTIFS({kinds},"Integrity",{rng},"FAIL")', "0")
+        sh.put(4, 4, f"=COUNTA({kinds})", "0")
+        sh.note(4, 5, "checks in the workbook")
+        self.master_flag = "'Checks'!$C$4"
+        if self.info_checks:
+            r += 1
+            sh.section(r, "Information: reconciliations shown, not forced (outside the master flag)", 7); r += 1
+            for area, desc, ref in self.info_checks:
+                row("Information", area, "", desc, ref)
+        sh.widths({"A": 11, "B": 12, "C": 40, "D": 60, "E": 14, "F": 9, "G": 22})
+        sh.ws.freeze_panes = "A9"
+
+    # ── finishing passes ────────────────────────────────────────────────────
+    def _mark_reference_inputs(self) -> None:
+        """Audit 2026-11-25 (dead inputs): an Assumptions value no formula in the workbook reads is a reference value
+        -- grey, said so beside it -- not a blue input that looks like a lever."""
+        text = []
+        for ws in self.wb.worksheets:
+            for row in ws.iter_rows():
+                for c in row:
+                    if isinstance(c.value, str) and c.value.startswith("="):
+                        text.append(c.value.replace("$", ""))
+        blob = "\n".join(text)
+        if "Assumptions" not in self.wb.sheetnames:
+            return
+        ws = self.wb["Assumptions"]
+        dead_rows: dict[int, int] = {}
+        for name, ref in self.A.items():
+            if not ref or not str(ref).startswith("'Assumptions'!"):
+                continue
+            cell = str(ref).split("!")[1].replace("$", "")
+            plain = f"'Assumptions'!{cell}"
+            if plain in blob:
+                continue
+            c = ws[cell]
+            if c.value is None or (isinstance(c.value, str) and not c.value.startswith("=")):
+                continue
+            c.font = Font(color=GREY, italic=True)
+            dead_rows[c.row] = dead_rows.get(c.row, 0) + 1
+        for rr in dead_rows:
+            n = ws.cell(row=rr, column=8)
+            if n.value is None:
+                n.value = "Reference value: no formula reads it (shown for the record, not a lever)"
+                n.font = _NOTE
+
+    def _methodology_notes(self) -> None:
+        for ws in self.wb.worksheets:
+            note = _METHOD_NOTES.get(ws.title)
+            if not note:
+                continue
+            c = ws.cell(row=3, column=1)
+            c.value = note if c.value in (None, "") else f"{note} | {c.value}"
+            c.font = _NOTE
+            c.alignment = Alignment(wrap_text=False)
 
     def _overlay_paths(self) -> list:
         out = []
@@ -410,18 +686,17 @@ class _Book:
 
     def paths_tab(self) -> None:
         sh = self.sheet("Valuation paths", "The year-by-year path each overlay leg values (PPA project finance, depleting asset)")
-        r = 1
-        sh.label(r, 1, "Valuation paths: the cash path each overlay leg discounts", bold=True)
-        r += 2
+        sh.title("Valuation paths", "The cash path each overlay leg discounts, as the engine recorded it (money as recorded).")
+        r = 4
         for s_, name, tr in self._overlay_paths():
             rows = [x for x in tr.get("rows") or [] if isinstance(x, dict)]
             if not rows:
                 continue
             cols = [k for k in rows[0].keys()]
-            sh.label(r, 1, f"{name} -- {s_}", bold=True)
+            sh.section(r, f"{name} -- {s_}", max(4, len(cols)))
             r += 1
-            for j, k in enumerate(cols):
-                sh.label(r, 1 + j, k, bold=True)
+            # audit 2026-11-25: readable headers, not the payload's snake_case keys
+            sh.header(r, [_humanize(k) for k in cols])
             r += 1
             for row in rows:
                 for j, k in enumerate(cols):
@@ -703,74 +978,138 @@ class _Book:
                 c.number_format = "yyyy-mm-dd"
             c.font = Font(color=BLACK)
         r = 4 + len(rows) + 1
+        # Audit 2026-11-25: the workbook's master check flag, on the front page, linked to the Checks tab.
+        if getattr(self, "master_flag", None):
+            sh.label(r, 1, "Master check flag (Checks tab)", bold=True)
+            sh.put(r, 2, "=" + self.master_flag, bold=True)
+            c = sh.ws.cell(row=r, column=3, value="open Checks")
+            c.hyperlink = "#'Checks'!A1"
+            c.font = Font(color=BLUE, underline="single")
+            r += 2
         sh.section(r, "Colour code", 4)
         sh.ws.cell(row=r + 1, column=1, value="Blue: hardcoded input / historical actual").font = Font(color=BLUE)
         sh.ws.cell(row=r + 2, column=1, value="Black: formula within this tab").font = Font(color=BLACK)
         sh.ws.cell(row=r + 3, column=1, value="Green: formula linking another tab").font = Font(color=GREEN)
-        r += 5
-        sh.section(r, "Contents", 4)
+        sh.ws.cell(row=r + 4, column=1, value="Purple: engine output recorded in the run (not a lever)").font = Font(color=ENGINE)
+        sh.ws.cell(row=r + 5, column=1, value="Grey: reference value no formula reads").font = Font(color=GREY, italic=True)
+        r += 7
+        sh.section(r, "Contents (click a tab name)", 4)
         for i, (name, desc) in enumerate(self.tabs):
             c = sh.ws.cell(row=r + 1 + i, column=1, value=name)
             c.hyperlink = f"#'{name}'!A1"
             c.font = Font(color=BLUE, underline="single")
             sh.ws.cell(row=r + 1 + i, column=2, value=desc)
+        _model = "Model" in self.wb.sheetnames and self.model_kind
         sh.note(r + 2 + len(self.tabs), 1,
-                "Each supporting tab rebuilds the engine's figures from recorded inputs; every "
-                "'Check' should read 0. The engine does not forecast a three-statement model: "
-                "statement tabs show reported history, with forecasts only for the lines the "
-                "valuation projects (revenue, FCF).")
-        sh.widths({"A": 30, "B": 80})
+                "Each supporting tab rebuilds the engine's figures from recorded inputs; every tie-out check should "
+                "read 0 and the Checks tab collects them all. "
+                + ("The Model tab carries the three-statement forecast (IS, schedules, CF, BS); the statement tabs' "
+                   "forecast columns link to it." if _model else
+                   "No three-statement forecast was built for this run: statement tabs show reported history, with "
+                   "forecasts only for the lines the valuation projects (revenue, FCF)."))
+        sh.widths({"A": 34, "B": 80, "C": 14})
 
     # ── Assumptions ─────────────────────────────────────────────────────────
     def assumptions(self) -> None:
         sh = self.sheet("Assumptions", "Drivers and constants: FX, discount rate inputs, growth, margins, "
                                        "scenario weights, engine constants")
-        sh.title("Assumptions & Drivers", "Every hardcoded driver lives here; all tabs reference these cells.")
+        sh.title("Assumptions & Drivers", "Every hardcoded driver lives here; all tabs reference these cells. Money in "
+                                          f"{self.ccy} millions; shares in millions; per-share figures in {self.ccy}.")
         r = 4
+        pb = self.dr.get("pt_bridge") or {}
+        fu = self.dr.get("financials_used") or {}
+        _nb = fu.get("net_debt_basis") or {}
+        _run_day = str(self.run.get("run_at") or self.data.get("end_date") or "")[:10]
+        _tm0 = ((self.scen("base").get("leg_inputs") or {}).get("DCF") or {}).get("timing") or {}
+        _bs_day = _nb.get("balance_sheet_date") or fu.get("balance_sheet_period") or _tm0.get("balance_sheet_date") or ""
+        _fy0 = _tm0.get("fy0_end") or ""
+        # Audit 2026-11-25 (item 7): every value carries its source and as-of date.
+        sh.header(r, ["Assumption", "", "Value", "", "", "Source", "As of", "Note"]); r += 1
 
-        def add(name: str, label: str, value: Any, fmt: Optional[str] = None) -> None:
+        def add(name: str, label: str, value: Any, fmt: Optional[str] = None,
+                src: str = "", asof: str = "") -> None:
             nonlocal r
             sh.label(r, 1, label, indent=1)
             sh.put(r, 3, value, fmt)
             self.A[name] = _ref("Assumptions", r, 3)
+            sh.put(r, 6, src).font = Font(color=BLACK)
+            sh.put(r, 7, asof).font = Font(color=BLACK)
             r += 1
 
-        pb = self.dr.get("pt_bridge") or {}
-        fu = self.dr.get("financials_used") or {}
-        sh.section(r, "General", 6); r += 1
-        add("spot", f"Share price at valuation ({self.ccy})", _num(pb.get("spot")) or self._spot(), NUM)
+        def srcs(row: int, src: str, asof: str) -> None:
+            sh.put(row, 6, src).font = Font(color=BLACK)
+            sh.put(row, 7, asof).font = Font(color=BLACK)
+
+        sh.section(r, "General", 8); r += 1
+        add("spot", f"Share price at valuation ({self.ccy})", _num(pb.get("spot")) or self._spot(), NUM,
+            "Market quote at the run (pt_bridge.spot)", _run_day)
         add("fx", f"FX: statement currency ({fu.get('source_currency') or self.ccy}) → {self.ccy}",
-            _num(fu.get("fx_rate")) or 1.0, "0.0000")
-        add("unit", "Statement unit divisor (millions)", 1_000_000, BIG)
+            _num(fu.get("fx_rate")) or 1.0, "0.0000", f"Engine FX ({fu.get('source') or 'financials_used'})", _run_day)
+        # Audit 2026-11-25 (item 5): the net debt and share count every EV leg used, once, in millions; the
+        # Multiples tab and the Summary's net-debt check link here instead of carrying typed copies.
+        _li_b = self.scen("base").get("leg_inputs") or {}
+        _nd_used = next((_num(tr.get("net_debt")) for tr in _li_b.values()
+                         if isinstance(tr, dict) and _num(tr.get("net_debt")) is not None), None)
+        _sh_used = next((_num(tr.get("shares")) for tr in _li_b.values()
+                         if isinstance(tr, dict) and _num(tr.get("shares"))), None)
+        self._nd_used_v, self._sh_used_v = _nd_used, _sh_used
+        if _nd_used is not None:
+            add("nd_used", f"Net debt used by the valuation legs ({self.ccy} millions; negative = net cash)",
+                _nd_used / 1e6, MIL, "Engine leg trace: " + (_nb.get("accounting_basis") or "") + " "
+                + (f"leases {_nb.get('leases')}" if _nb.get("leases") else "feed net debt"), _bs_day)
+        if _sh_used:
+            add("shares_used", "Diluted shares used by the valuation legs (millions)", _sh_used / 1e6, MIL,
+                f"Engine leg trace ({self.dr.get('shares_source') or 'diluted shares'})", _bs_day or _fy0)
         r += 1
 
-        sh.section(r, "Terminal value and margins", 6); r += 1
-        add("margin_cap", "FCF margin cap (engine)", _ENGINE_MARGIN_CAP, PCT)
-        add("tv_guard", "Terminal spread guard: WACC ≥ g + (engine)", _TV_SPREAD_GUARD, PCT2)
+        sh.section(r, "Terminal value and margins", 8); r += 1
+        add("margin_cap", "FCF margin cap (engine constant; already applied inside the per-year margin path)",
+            _ENGINE_MARGIN_CAP, PCT, "Engine constant (dcf_agent._FCF_MARGIN_CAP)", "")
+        add("tv_guard", "Terminal spread guard: WACC ≥ g + (engine)", _TV_SPREAD_GUARD, PCT2,
+            "Engine constant (_project_dcf)", "")
         r += 1
 
         self.dcf_variants: dict[str, dict[str, dict]] = {}
-        # Owner, 2026-10-04 (decision D1): a DCF the blend does not weight is not an output. Its
-        # drivers and its tab are left out; the Summary states, in one line, that it was excluded.
-        if self.dcf_weighted():
-            sh.section(r, "Scenario drivers", 8); r += 1
-            sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
-            drivers = [("revenue_base", "Revenue base (last actual, valuation currency)", BIG),
+        # Owner, 2026-10-04 (decision D1) said a DCF the blend does not weight is not an output. Audit 2026-11-25
+        # (item 3): it is still built -- labelled a shadow, weight 0 -- so a DCF-specific failure stays traceable.
+        if self.dcf_present():
+            sh.section(r, "Scenario drivers" + ("" if self.dcf_weighted() else
+                                                " -- SHADOW DCF (weight 0, not in the blend)"), 8); r += 1
+            sh.header(r, ["Driver", "", "Bear", "Base", "Bull", "Source", "As of"]); r += 1
+            drivers = [("revenue_base", f"Revenue base (last actual, {self.ccy} millions)", MIL),
                        ("fcf_margin_base", "FCF margin base (unlevered owner earnings = owner-earnings FCF + after-tax interest; levered owner earnings for banks, insurers, fee financials other than payment networks, and property)", PCT2),
                        ("margin_delta_absolute", "Scenario margin change (absolute)", PCT2),
                        ("fcf_floor", "FCF margin floor", PCT2),
                        ("tgr", "Terminal growth", PCT2),
-                       ("net_debt", "Net debt (valuation currency)", BIG),
-                       ("shares", "Shares outstanding", BIG),
+                       ("net_debt", f"Net debt ({self.ccy} millions)", MIL),
+                       ("shares", "Diluted shares (millions)", MIL),
                        ("disc_point", "Discount point within each year's cash-flow window (0.5 = mid-year; 1 = year end)", "0.00"),
                        ("roll_forward_years", "Years from the balance-sheet date to the valuation date (value carried at the year-1 rate)", "0.0000"),
-                       ("terminal_loe_multiplier", "Terminal value kept after loss of exclusivity beyond the horizon (1 = no LOE input)", "0.0000")]
+                       ("terminal_loe_multiplier", "Terminal value kept after loss of exclusivity beyond the horizon (1 = no LOE input)", "0.0000"),
+                       # Owner, 2026-11-25: the value-driver terminal value (see the DCF tab)
+                       ("terminal_vd", "Value-driver terminal value applies (1 = TV × (1 − g/RONIC); 0 = Gordon, a run priced before 2026-11-25)", "0"),
+                       ("terminal_nopat_ratio", "Terminal NOPAT / UFCF ratio (guidance forecast; 1 when absent)", "0.0000"),
+                       ("terminal_ronic_spread", "RONIC spread over the terminal WACC (owner; 0 = growth earns its cost of capital)", PCT2)]
+            _dsrc = {"revenue_base": ("Engine DCF trace: last filed fiscal year (FMP)", _fy0),
+                     "fcf_margin_base": ("Engine DCF trace: trailing owner-earnings margin (FMP)", _fy0),
+                     "margin_delta_absolute": ("Engine scenario rule (dcf_agent)", ""),
+                     "fcf_floor": ("Engine profile constant", ""),
+                     "tgr": ("Engine profile / market terminal growth", ""),
+                     "net_debt": ("Engine DCF trace: " + (_nb.get("accounting_basis") or "feed") + " balance sheet", _bs_day),
+                     "shares": (f"Engine DCF trace ({self.dr.get('shares_source') or 'diluted shares'})", _bs_day or _fy0),
+                     "disc_point": ("Engine timing (dated trace = mid-window)", ""),
+                     "roll_forward_years": ("Engine timing: balance-sheet date to valuation date", _run_day),
+                     "terminal_loe_multiplier": ("Engine LOE input (1 = none)", ""),
+                     "terminal_vd": ("Engine DCF trace: value-driver terminal recorded", ""),
+                     "terminal_nopat_ratio": ("Guidance forecast terminal.nopat_to_ufcf", _fy0),
+                     "terminal_ronic_spread": ("Owner constant (engine default 0)", "")}
             for key, lab, fmt in drivers:
                 sh.label(r, 1, lab, indent=1)
                 for j, s in enumerate(SCENARIOS):
                     tr = (self.scen(s).get("leg_inputs") or {}).get("DCF") or {}
-                    sh.put(r, 3 + j, _num(_driver(tr, key)) if tr else None, fmt)
+                    sh.put(r, 3 + j, _scaled(key, _driver(tr, key)) if tr else None, fmt)
                     self.A[f"{key}:{s}"] = _ref("Assumptions", r, 3 + j)
+                srcs(r, *_dsrc.get(key, ("Engine DCF trace", "")))
                 r += 1
             _tm = ((self.scen("base").get("leg_inputs") or {}).get("DCF") or {}).get("timing") or {}
             if _tm:
@@ -778,7 +1117,8 @@ class _Book:
                               f"{_tm.get('balance_sheet_date')}, so each projection year counts only its flows after that "
                               f"date; valued {_tm.get('valuation_date')}.")
                 r += 1
-            sh.label(r, 1, "Revenue growth by projection year", bold=True); r += 1
+            sh.label(r, 1, "Revenue growth by projection year", bold=True)
+            srcs(r, "Engine projection path (guidance channel / fade / engine schedule)", _fy0); r += 1
             sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
             for t in range(10):
                 sh.label(r, 1, f"Year {t + 1}", indent=1)
@@ -790,15 +1130,21 @@ class _Book:
             # Owner, 2026-10-04 (plan 1A.1): the margin the engine projected, year by year. A guidance forecast,
             # an FCF-guidance fade or a turnaround path sets it per year; rebuilding a flat base + change put a
             # different projection in the workbook from the one the engine valued (09618.HK 229.44 vs 157.14).
-            sh.label(r, 1, "FCF margin by projection year (as projected: guidance path, fade, floor and cap applied)", bold=True); r += 1
+            # Audit 2026-11-25 (item 4): these are the engine's OUTPUT (base + scenario change, fade, floor and cap
+            # already applied), recorded so the DCF ties -- purple, not input blue; flexing one does not re-run the rule.
+            sh.label(r, 1, "FCF margin by projection year (ENGINE OUTPUT as projected: guidance path, fade, floor and cap applied)", bold=True)
+            srcs(r, "Engine projection path (projection_rows.fcf_margin)", _fy0); r += 1
             sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
             for t in range(10):
                 sh.label(r, 1, f"Year {t + 1}", indent=1)
                 for j, s in enumerate(SCENARIOS):
                     rows = ((self.scen(s).get("leg_inputs") or {}).get("DCF") or {}).get("projection_rows") or []
-                    sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")) if t < len(rows) else None, PCT2)
+                    sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")) if t < len(rows) else None, PCT2).font = Font(color=ENGINE)
                     self.A[f"m{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
                 r += 1
+            sh.note(r, 1, "Purple = engine output. The base margin, scenario change, floor and cap above are the rule's "
+                          "inputs, shown for reference; the path is not rebuilt from them in the workbook because the "
+                          "guidance channel and fade set it year by year."); r += 1
             sh.label(r, 1, "Share of each projection year's cash flow after the balance-sheet date", bold=True); r += 1
             sh.header(r, ["Year", "", "Bear", "Base", "Bull"]); r += 1
             for t in range(10):
@@ -849,7 +1195,7 @@ class _Book:
                         tr = own.get(s_)
                         if tr is None:
                             continue
-                        sh.put(r, 3 + j, _num(_driver(tr, key)), fmt)
+                        sh.put(r, 3 + j, _scaled(key, _driver(tr, key)), fmt)
                         self.A[f"{key}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
                     r += 1
                 n_max = max(len(tr.get("projection_rows") or []) for tr in own.values())
@@ -866,7 +1212,7 @@ class _Book:
                     for j, s_ in enumerate(SCENARIOS):
                         rows = (own.get(s_) or {}).get("projection_rows") or []
                         if t < len(rows):
-                            sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")), PCT2)
+                            sh.put(r, 3 + j, _num(rows[t].get("fcf_margin")), PCT2).font = Font(color=ENGINE)
                             self.A[f"m{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
                     r += 1
                 for t in range(n_max):
@@ -888,39 +1234,61 @@ class _Book:
                                 self.A[f"w{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
                         r += 1
                 r += 1
-        sh.section(r, "Target and blend", 6); r += 1
+        sh.section(r, "Target and blend", 8); r += 1
         # Owner, 2026-10-04 (plan 1A.4): the rate is stated with the rule that set it.
         add("capture", "Share of the IV gap closed in 12 months (capture)"
             + (f" — {pb.get('capture_reason')}" if pb.get("capture_reason") else
                f" — source: {pb.get('capture_source')}" if pb.get("capture_source") else ""),
-            _num(pb.get("capture")), PCT)
+            _num(pb.get("capture")), PCT, "Engine target rule" + (f" ({pb.get('capture_source')})" if pb.get("capture_source") else ""),
+            _run_day)
         sa = (self.data.get("scenario_analysis") or {}).get(self.ticker) or {}
         for s in SCENARIOS:
-            add(f"prob:{s}", f"Scenario probability — {s}", _num((sa.get(s) or {}).get("probability")), PCT)
-        add("dp", "Published rounding (decimal places) for IV and targets", 2, "0")
-        add("dp_ggm", "GGM value rounding (decimal places, engine)", 4, "0")
-        add("tol", "Reconciliation tolerance (one rounding unit)", 0.01, NUM)
-        add("dp_check", "Check precision (decimal places; floating-point residue below it reads zero)", 6, "0")
-        add("dp_comps", "Recorded peer-median precision (decimal places, engine)", 4, "0")
+            add(f"prob:{s}", f"Scenario probability — {s}", _num((sa.get(s) or {}).get("probability")), PCT,
+                "Scenario analysis (run)", _run_day)
+        add("dp", "Published rounding (decimal places) for IV and targets", 2, "0", "Engine publishing rule")
+        add("dp_ggm", "GGM value rounding (decimal places, engine)", 4, "0", "Engine constant (_compute_ggm_pb)")
+        add("tol", "Reconciliation tolerance (one rounding unit)", 0.01, NUM, "Workbook standard")
+        add("dp_check", "Check precision (decimal places; floating-point residue below it reads zero)", 6, "0", "Workbook standard")
+        add("dp_comps", "Recorded peer-median precision (decimal places, engine)", 4, "0", "Engine comps store")
+        _cal = self.dr.get("calibration") or {}
         add("calibration", "Calibration multiplier (market bias correction)",
-            _num((self.dr.get("calibration") or {}).get("iv_multiplier")) or 1.0, "0.0000")
+            _num(_cal.get("iv_multiplier")) or 1.0, "0.0000",
+            "Engine calibration" + (f" ({_cal.get('source') or _cal.get('basis')})" if (_cal.get("source") or _cal.get("basis")) else ""),
+            _run_day)
         r += 1
-        sh.section(r, "Discount-rate constants", 6); r += 1
-        bb = (self.dr.get("wacc_build") or {}).get("base_breakdown") or {}
+        sh.section(r, "Discount-rate constants", 8); r += 1
+        _wb = self.dr.get("wacc_build") or {}
+        bb = _wb.get("base_breakdown") or {}
         add("lev_threshold", "Leverage premium threshold (leverage as on the WACC tab)",
-            _num(bb.get("leverage_threshold")) or 1.5, "0.00\"x\"")
+            _num(bb.get("leverage_threshold")) or 1.5, "0.00\"x\"", f"Engine WACC table ({bb.get('table') or 'sector table'})")
         add("lev_slope", "Leverage premium per 1.0x above threshold",
-            _num(bb.get("leverage_slope")) or 0.01, PCT2)
-        add("rf", "Risk-free rate (Damodaran Jan 2026; CAPM cross-check)", 0.0395, PCT2)
-        add("erp", "Equity risk premium (Damodaran Jan 2026; CAPM cross-check)", 0.0446, PCT2)
-        add("beta", "Beta (FMP profile; CAPM cross-check)", _num((self.statements or {}).get("beta")), "0.00")
+            _num(bb.get("leverage_slope")) or 0.01, PCT2, f"Engine WACC table ({bb.get('table') or 'sector table'})")
+        _capm = _wb.get("capm") or {}
+        add("rf", "Risk-free rate (Damodaran Jan 2026; CAPM cross-check)", _num(_capm.get("rf")) or 0.0395, PCT2,
+            "Damodaran (engine CAPM check)", "2026-01")
+        add("erp", "Equity risk premium (Damodaran Jan 2026; CAPM cross-check)", _num(_capm.get("erp")) or 0.0446, PCT2,
+            "Damodaran (engine CAPM check)", "2026-01")
+        # Audit 2026-11-25 (item 7): the beta the engine's own CAPM check used when the statements loader gave none --
+        # the WACC tab's CAPM cross-check read #N/A on every export without statements.
+        _beta_st = _num((self.statements or {}).get("beta"))
+        _beta = _beta_st if _beta_st is not None else _num(_capm.get("beta"))
+        add("beta", "Beta (CAPM cross-check)", _beta, "0.00",
+            "FMP profile (statements)" if _beta_st is not None else
+            ("FMP beta as recorded by the engine's CAPM check (wacc_build.capm)" if _beta is not None else "not available"),
+            _run_day)
         r += 1
-        sh.section(r, "Sensitivity and bank-model constants", 6); r += 1
-        add("sens_w", "Sensitivity step: WACC", 0.01, PCT2)
-        add("sens_g", "Sensitivity step: terminal growth", 0.005, PCT2)
-        add("pb_floor", "Justified P/B floor (engine)", _PB_FLOOR, MULT)
-        add("pb_cap", "Justified P/B cap (engine)", _PB_CAP, MULT)
-        sh.widths({"A": 58, "B": 2, "C": 16, "D": 16, "E": 16})
+        sh.section(r, "Sensitivity, model-invariant and bank-model constants", 8); r += 1
+        add("sens_w", "Sensitivity step: WACC", 0.01, PCT2, "Workbook standard")
+        add("sens_g", "Sensitivity step: terminal growth", 0.005, PCT2, "Workbook standard")
+        add("sens_m", "Sensitivity step: peer multiple, metric, margin (relative)", 0.10, PCT, "Workbook standard")
+        add("sens_c", "Sensitivity step: capture (absolute)", 0.10, PCT, "Workbook standard")
+        add("sens_p", "Sensitivity step: probability moved from bear to bull (absolute)", 0.05, PCT, "Workbook standard")
+        add("gm_band", "Model invariant: forecast gross margin within this many points of the last filed year", 0.10, PCT,
+            "Audit standard (2026-11-25)")
+        add("pb_floor", "Justified P/B floor (engine)", _PB_FLOOR, MULT, "Engine constant (_compute_ggm_pb)")
+        add("pb_cap", "Justified P/B cap (engine)", _PB_CAP, MULT, "Engine constant (_compute_ggm_pb)")
+        sh.widths({"A": 58, "B": 2, "C": 16, "D": 16, "E": 16, "F": 44, "G": 12, "H": 50})
+        sh.ws.freeze_panes = "C5"
 
     def _spot(self) -> Optional[float]:
         rec = ((self.data.get("scenario_analysis") or {}).get(self.ticker) or {}).get("reconciliation") or {}
@@ -966,7 +1334,6 @@ class _Book:
         last = self._period_headers(sh, 4, rows, n_fc)
         c0 = 3
         r = 6
-        U = self.A["unit"]
         # Owner, 2026-10-03 (Anta): FY+1E..FY+5E are filled on the reported rows themselves -- inputs
         # link to the Model tab, the tab's own formulas extend across the forecast columns.
         _fc_cols = list(range(last + 1, last + 1 + n_fc)) if self.model_rows else []
@@ -1421,26 +1788,47 @@ class _Book:
             r += 1
         r += 1
         sh.section(r, "Cost of debt detail (hybrid model)", 4); r += 1
-        for lab, key, fmt in (("Live cost of debt", "rd_live", PCT2), ("Baseline cost of debt", "rd_baseline", PCT2),
-                              ("Debt / (debt + equity)", "dv_ratio", PCT),
-                              (("Rating priced (agency)" if b.get("agency_rating_note") and "Cost of debt on the agency rating" in str(b.get("agency_rating_note"))
-                                else "Synthetic rating (from interest cover; sets only the live-spread overlay, not an agency rating)"), "rating", None),
-                              ("Agency rating", "agency_rating_note", None),
+        # Audit 2026-11-25 (item 7): the label said "Rating priced (agency)" beside the SYNTHETIC rating field (AAA from
+        # interest cover) while the agency note said BBB+. The agency rating priced is read from the note; the
+        # synthetic one is named as what it is.
+        import re as _re
+        _note = str(b.get("agency_rating_note") or "")
+        _m = _re.search(r"agency rating ([A-D][A-Za-z]*[+\-]?\d?)", _note)
+        _agency_priced = bool(_m) and "Cost of debt on the agency rating" in _note
+        _rows = [("Live cost of debt", "rd_live", PCT2), ("Baseline cost of debt", "rd_baseline", PCT2),
+                 ("Debt / (debt + equity)", "dv_ratio", PCT)]
+        for lab, key, fmt in _rows:
+            if b.get(key) is None:
+                continue
+            sh.label(r, 1, lab, indent=1)
+            v = b.get(key)
+            sh.put(r, 3, _num(v) if fmt and _num(v) is not None else v, fmt)
+            r += 1
+        if _agency_priced:
+            sh.label(r, 1, "Rating priced (agency)", indent=1)
+            sh.put(r, 3, _m.group(1)).font = Font(color=BLACK); r += 1
+        if b.get("rating") is not None:
+            sh.label(r, 1, "Synthetic rating (from interest cover" + ("; NOT priced -- the agency rating above is"
+                           if _agency_priced else "; sets only the live-spread overlay, not an agency rating") + ")", indent=1)
+            sh.put(r, 3, b.get("rating")).font = Font(color=BLACK); r += 1
+        for lab, key, fmt in (("Agency rating (verification note)", "agency_rating_note", None),
                               ("Credit spread source", "source", None), ("Leverage (net debt / equity)", "leverage", "0.00"),
                               ("Macro regime", "macro_regime", None)):
             if b.get(key) is None:
                 continue
             sh.label(r, 1, lab, indent=1)
             v = b.get(key)
-            c = sh.put(r, 3, _num(v) if fmt and _num(v) is not None else v, fmt)
+            sh.put(r, 3, _num(v) if fmt and _num(v) is not None else v, fmt)
             r += 1
         sh.widths({"A": 48, "B": 2, "C": 14})
 
     # ── DCF ─────────────────────────────────────────────────────────────────
     def dcf_tab(self) -> None:
         self.dcf_excluded: Optional[str] = None
-        if not self.dcf_weighted():
-            # Owner, 2026-10-04 (D1): no tab for a DCF the blend does not weight -- one Summary line.
+        self.dcf_shadow = not self.dcf_weighted()
+        if self.dcf_shadow:
+            # Owner, 2026-10-04 (D1): a DCF the blend does not weight is not an output -- one Summary line says so.
+            # Audit 2026-11-25 (item 3): it is still built, as a labelled shadow, so a DCF-specific failure is traceable.
             _li = (self.scen("base").get("leg_inputs") or {})
             _dv = (_li.get("DCF") or {}).get("value")
             _iv = self.scen("base").get("intrinsic_value")
@@ -1452,11 +1840,17 @@ class _Book:
                     + (f"{float(_dv):,.2f}" if isinstance(_dv, (int, float)) else "no value")
                     + " a share against the blended intrinsic value "
                     + (f"{float(_iv):,.2f}" if isinstance(_iv, (int, float)) else "n/a")
-                    + "; it is not an input to the target and is not shown.")
-            return
-        sh = self.sheet("DCF", "Discounted cash flow per scenario, terminal value, sensitivity")
-        sh.title("DCF valuation", "Revenue × FCF margin, discounted; drivers from Assumptions, WACC from the "
-                                  "WACC tab.")
+                    + "; it is not an input to the target"
+                    + ("; shown on the DCF tab as a shadow (weight 0)." if self.dcf_present() else "."))
+            if not self.dcf_present():
+                return
+        sh = self.sheet("DCF", ("SHADOW DCF -- weight 0, not in the blend; " if self.dcf_shadow else "")
+                        + "Discounted cash flow per scenario, terminal value, sensitivity")
+        sh.title("Shadow DCF -- weight 0, not in the blend" if self.dcf_shadow else "DCF valuation",
+                 ("Computed by the engine and rebuilt here so its figures stay traceable; it carries no weight in the "
+                  "intrinsic value or the target. " if self.dcf_shadow else "")
+                 + f"Revenue × FCF margin, discounted; drivers from Assumptions, WACC from the WACC tab. Money in "
+                   f"{self.ccy} millions; per-share values in {self.ccy}.")
         r = 4
         for s in SCENARIOS:
             tr = (self.scen(s).get("leg_inputs") or {}).get("DCF")
@@ -1476,12 +1870,16 @@ class _Book:
         if r == 4:
             sh.note(4, 1, "No DCF projection recorded for this run.")
         sh.widths({"A": 42, "B": 14, **{get_column_letter(c): 13 for c in range(3, 14)}})
+        sh.ws.freeze_panes = "C4"
 
     def _dcf_block(self, sh: _Sheet, r: int, s: str, tr: dict, sfx: str = "", leg: str = "DCF") -> int:
         """One scenario's projection. `sfx` selects a DCF-family leg's own drivers."""
         A = self.A
         core = not sfx
-        sh.section(r, f"{s.upper()} scenario" + ("" if core else f" — {leg}"), 13); r += 1
+        _shadow = core and getattr(self, "dcf_shadow", False)
+        sh.section(r, f"{s.upper()} scenario" + ("" if core else f" — {leg}")
+                   + (" — SHADOW (weight 0, not in the blend)" if _shadow else "")
+                   + f" — {self.ccy} millions", 13); r += 1
         rows = tr.get("projection_rows") or []
         n = len(rows)
         c0 = 3
@@ -1521,7 +1919,7 @@ class _Book:
         for t in range(n):
             L = get_column_letter(c0 + t)
             prev = A[f"revenue_base:{s}{sfx}"] if t == 0 else f"{get_column_letter(c0 + t - 1)}{r}"
-            sh.put(r, c0 + t, f"={prev}*(1+{L}{gr})", BIG)
+            sh.put(r, c0 + t, f"={prev}*(1+{L}{gr})", MIL)
         r += 1
         # Owner, 2026-10-04 (plan 1A.1 / D2): the margin path the engine projected, the share of each year
         # still to come after the balance-sheet date, and mid-window discounting -- the same arithmetic as
@@ -1537,7 +1935,7 @@ class _Book:
         sh.label(r, 1, "Free cash flow (revenue × margin × share)"); fr = r
         for t in range(n):
             L = get_column_letter(c0 + t)
-            sh.put(r, c0 + t, f"={L}{rv}*{L}{mr}*{L}{fsr}", BIG)
+            sh.put(r, c0 + t, f"={L}{rv}*{L}{mr}*{L}{fsr}", MIL)
         r += 1
         pt = A[f"disc_point:{s}{sfx}"]
         sh.label(r, 1, "Discount factor, end of the year's window"); der = r
@@ -1561,47 +1959,77 @@ class _Book:
         sh.label(r, 1, "PV of FCF (at the balance-sheet date)"); pvr = r
         for t in range(n):
             L = get_column_letter(c0 + t)
-            sh.put(r, c0 + t, f"={L}{fr}*{L}{dfr}", BIG)
+            sh.put(r, c0 + t, f"={L}{fr}*{L}{dfr}", MIL)
         r += 2
         F, Lc = get_column_letter(c0), get_column_letter(c0 + n - 1)
         tg, nd, shs = A[f"tgr:{s}{sfx}"], A[f"net_debt:{s}{sfx}"], A[f"shares:{s}{sfx}"]
         roll = A[f"roll_forward_years:{s}{sfx}"]
         out = r
-        lines = [
-            ("Sum of PV of FCF (balance-sheet date)", f"=SUM({F}{pvr}:{Lc}{pvr})", BIG),                 # 0
-            ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),  # 1
-            ("Terminal value (final full year × (1 + g) × LOE multiplier)", f"=IFERROR({Lc}{rv}*{Lc}{mr}*(1+{tg})/(B{out + 1}-{tg}),0)*{A[f'terminal_loe_multiplier:{s}{sfx}']}", BIG),  # 2
-            ("PV of terminal value (balance-sheet date)", f"=B{out + 2}*{Lc}{der}", BIG),                 # 3
-            ("Carry to the valuation date: (1 + year-1 rate) ^ years", f"=(1+{F}{wr})^{roll}", "0.0000"),  # 4
-            ("PV of FCF (valuation date)", f"=B{out}*B{out + 4}", BIG),                                 # 5
-            ("PV of terminal value (valuation date)", f"=B{out + 3}*B{out + 4}", BIG),                  # 6
-            ("Enterprise value", f"=B{out + 5}+B{out + 6}", BIG),                                      # 7
-            ("Less: net debt (plus net cash when negative)", f"=-{nd}", BIG),                           # 8
+        # Owner, 2026-11-25 (CFA audit, engine change in `_project_dcf`): the value-driver terminal value,
+        #   TV = FCF_T × NOPAT/UFCF ratio × (1 + g) × (1 − g / RONIC) / (WACC_T − g) × LOE multiplier,
+        #   RONIC = WACC_T + spread (spread 0 by default: growth earns its cost of capital, adds no value).
+        # A run priced before the change (no value-driver record in its trace) carries flag 0 and the Gordon form,
+        # so its Check still ties.
+        vd, npr, rsp = (A[f"terminal_vd:{s}{sfx}"], A[f"terminal_nopat_ratio:{s}{sfx}"],
+                        A[f"terminal_ronic_spread:{s}{sfx}"])
+        K = {k: out + i for i, k in enumerate((
+            "pv_sum", "tw", "ronic", "ratio", "reinv", "fcf_t1", "tv", "pv_tv_bs", "carry", "pv_fcf", "pv_tv", "ev", "nd",
+            "mi", "pe", "eq", "iv", "eng", "chk", "tv_share", "tv_fcf"))}
+        lines = {
+            "pv_sum": ("Sum of PV of FCF (balance-sheet date)", f"=SUM({F}{pvr}:{Lc}{pvr})", MIL),
+            "tw": ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),
+            "ronic": ("RONIC: return on new invested capital = terminal WACC + spread (Assumptions)", f"=B{K['tw']}+{rsp}", PCT2),
+            "ratio": ("NOPAT / UFCF ratio applied to the final year (1 when absent or under the Gordon form)",
+                      f"=IF({vd}=1,IF(N({npr})>0,{npr},1),1)", "0.0000"),
+            "reinv": ("Reinvestment factor 1 − g / RONIC (1 under the Gordon form)",
+                      f"=IF({vd}=1,IF(B{K['ronic']}>0,IFERROR(1-{tg}/B{K['ronic']},1),1),1)", "0.0000"),
+            "fcf_t1": ("Terminal cash flow: final full year × ratio × (1 + g) × reinvestment factor",
+                       f"={Lc}{rv}*{Lc}{mr}*B{K['ratio']}*(1+{tg})*B{K['reinv']}", MIL),
+            "tv": ("Terminal value = terminal cash flow / (WACC − g) × LOE multiplier",
+                   f"=IFERROR(B{K['fcf_t1']}/(B{K['tw']}-{tg}),0)*{A[f'terminal_loe_multiplier:{s}{sfx}']}", MIL),
+            "pv_tv_bs": ("PV of terminal value (balance-sheet date)", f"=B{K['tv']}*{Lc}{der}", MIL),
+            "carry": ("Carry to the valuation date: (1 + year-1 rate) ^ years", f"=(1+{F}{wr})^{roll}", "0.0000"),
+            "pv_fcf": ("PV of FCF (valuation date)", f"=B{K['pv_sum']}*B{K['carry']}", MIL),
+            "pv_tv": ("PV of terminal value (valuation date)", f"=B{K['pv_tv_bs']}*B{K['carry']}", MIL),
+            "ev": ("Enterprise value", f"=B{K['pv_fcf']}+B{K['pv_tv']}", MIL),
+            "nd": ("Less: net debt (plus net cash when negative)", f"=-{nd}", MIL),
             # Owner, 2026-10-03 (Alibaba review, section 1): the engine deducts minority interest and
             # preferred equity in the DCF bridge.
-            ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0), BIG),             # 9
-            ("Less: preferred equity", -(_num(tr.get("preferred_equity")) or 0.0), BIG),               # 10
-            ("Equity value", f"=B{out + 7}+B{out + 8}+B{out + 9}+B{out + 10}", BIG),                   # 11
-            ("Intrinsic value per share", f"=IFERROR(B{out + 11}/{shs},0)", NUM),                      # 12
-            ("Engine value", _num(tr.get("value")), NUM),                                              # 13
-            ("Check", f"=B{out + 12}-B{out + 13}", NUM),                                               # 14
-            ("Terminal value share of EV", f"=IFERROR(B{out + 6}/B{out + 7},0)", PCT),                 # 15
-        ]
-        for i, (lab, v, fmt) in enumerate(lines):
-            sh.label(out + i, 1, lab, bold=lab in ("Intrinsic value per share", "Enterprise value"))
-            sh.put(out + i, 2, v, fmt, bold=lab == "Intrinsic value per share")
+            "mi": ("Less: minority interest", -(_num(tr.get("minority_interest")) or 0.0) / 1e6, MIL),
+            "pe": ("Less: preferred equity", -(_num(tr.get("preferred_equity")) or 0.0) / 1e6, MIL),
+            "eq": ("Equity value", f"=B{K['ev']}+B{K['nd']}+B{K['mi']}+B{K['pe']}", MIL),
+            "iv": ("Intrinsic value per share", f"=IFERROR(B{K['eq']}/{shs},0)", NUM),
+            "eng": ("Engine value", _num(tr.get("value")), NUM),
+            "chk": ("Check", f"=B{K['iv']}-B{K['eng']}", NUM),
+            "tv_share": ("Terminal value share of EV", f"=IFERROR(B{K['pv_tv']}/B{K['ev']},0)", PCT),
+            "tv_fcf": ("Implied terminal multiple: TV / final-year FCF (cross-check)", f"=IFERROR(B{K['tv']}/({Lc}{rv}*{Lc}{mr}),0)", "0.0\"x\""),
+        }
+        for key, row in K.items():
+            lab, v, fmt = lines[key]
+            sh.label(row, 1, lab, bold=key in ("ev", "iv"))
+            sh.put(row, 2, v, fmt, bold=key == "iv")
+        _end = out + len(K)
+        # The peer exit multiple is a disclosed cross-check only: the E20 terminal clamp is no longer applied.
+        _term = ((tr.get("guidance_forecast") or {}).get("terminal") or {})
+        if core and (_term.get("implied_exit_ev_ebitda") is not None or _term.get("peer_ev_ebitda_median") is not None):
+            sh.label(_end, 1, "Cross-check only (not applied; the E20 exit-multiple clamp is retired): implied exit EV/EBITDA")
+            sh.put(_end, 2, _num(_term.get("implied_exit_ev_ebitda")), "0.0\"x\"")
+            sh.label(_end + 1, 1, "Cross-check only: peer EV/EBITDA median")
+            sh.put(_end + 1, 2, _num(_term.get("peer_ev_ebitda_median")), "0.0\"x\"")
+            _end += 2
         if not core:
-            self.leg_cell[(s, leg)] = _ref("DCF", out + 12, 2)
-            return out + len(lines)
-        self.dcf[s] = {"iv": _ref("DCF", out + 12, 2), "pv_fcf": _ref("DCF", out + 5, 2),
-                       "pv_tv": _ref("DCF", out + 6, 2), "ev": _ref("DCF", out + 7, 2),
-                       "nd": _ref("DCF", out + 8, 2), "mi": _ref("DCF", out + 9, 2), "pe": _ref("DCF", out + 10, 2),
-                       "eq": _ref("DCF", out + 11, 2),
-                       "fcf_row": fr, "rev_row": rv, "c0": c0, "n": n}
+            self.leg_cell[(s, leg)] = _ref("DCF", K["iv"], 2)
+            return _end
+        self.dcf[s] = {"iv": _ref("DCF", K["iv"], 2), "pv_fcf": _ref("DCF", K["pv_fcf"], 2),
+                       "pv_tv": _ref("DCF", K["pv_tv"], 2), "ev": _ref("DCF", K["ev"], 2),
+                       "nd": _ref("DCF", K["nd"], 2), "mi": _ref("DCF", K["mi"], 2), "pe": _ref("DCF", K["pe"], 2),
+                       "eq": _ref("DCF", K["eq"], 2),
+                       "fcf_row": fr, "rev_row": rv, "c0": c0, "n": n, "margin_row": mr, "ev_raw": K["ev"],
+                       "shares": shs}
         self.leg_cell[(s, "DCF")] = self.dcf[s]["iv"]
         if s == "base" and getattr(self, "_is_sheet", None) is not None:
             self._link_is_forecast(s)
-        r = out + len(lines) + 1
+        r = _end + 1
         # REGN review (2026-10-07): why the perpetuity grows after years of decline.
         _tlm = _num(tr.get("terminal_loe_multiplier"))
         if _tlm is not None and _tlm < 0.9999:
@@ -1622,15 +2050,19 @@ class _Book:
             sh.put(r, 2 + j, f"={tg}+({k})*{A['sens_g']}", PCT2, bold=True)
         top = r
         t_end = f"SUM(${F}${fsr}:${Lc}${fsr})"
-        bridge = f"-{nd}+$B${out + 9}+$B${out + 10}"
+        bridge = f"-{nd}+$B${K['mi']}+$B${K['pe']}"
+        loe = A[f"terminal_loe_multiplier:{s}{sfx}"]
         for i, k in enumerate((-2, -1, 0, 1, 2)):
             rr = r + 1 + i
             sh.put(rr, 1, f"={center_w}+({k})*{A['sens_w']}", PCT2, bold=True)
             for j in range(5):
                 gc = f"{get_column_letter(2 + j)}${top}"
                 wc = f"$A{rr}"
+                # the same value-driver terminal value as above, at the flexed WACC and growth (RONIC = WACC + spread)
+                _rf = f"IF({vd}=1,IF({wc}+{rsp}>0,1-{gc}/({wc}+{rsp}),1),1)"
                 f = (f"=IFERROR(IF({wc}<={gc},NA(),((SUMPRODUCT(${F}${fr}:${Lc}${fr}/(1+{wc})^${F}${tpr}:${Lc}${tpr})"
-                     f"+${Lc}${rv}*${Lc}${mr}*(1+{gc})/({wc}-{gc})/(1+{wc})^{t_end})*(1+{wc})^{roll}{bridge})/{shs}),NA())")
+                     f"+${Lc}${rv}*${Lc}${mr}*$B${K['ratio']}*(1+{gc})*{_rf}/({wc}-{gc})*{loe}/(1+{wc})^{t_end})"
+                     f"*(1+{wc})^{roll}{bridge})/{shs}),NA())")
                 sh.put(rr, 2 + j, f, NUM)
         return r + 6
 
@@ -1640,7 +2072,8 @@ class _Book:
         for t in range(5):
             c = last + 1 + t
             src = get_column_letter(d["c0"] + t)
-            sh.put(rev, c, f"=IFERROR('DCF'!{src}{d['rev_row']}/{self.A['unit']}/{self.A['fx']},\"\")", MIL)
+            # the DCF is in millions of the valuation currency; the statements are in millions of the filing's
+            sh.put(rev, c, f"=IFERROR('DCF'!{src}{d['rev_row']}/{self.A['fx']},\"\")", MIL)
         sh.note(3, 1, "Forecast (E) columns: FMP consensus as published, and the DCF base-case "
                       "revenue path the valuation uses, with the variance between them.")
 
@@ -1649,10 +2082,26 @@ class _Book:
         sh = self.sheet("Multiples", "Each valuation leg: metric × multiple → EV → equity → per share")
         sh.title("Relative valuation legs", "Multiple = peer multiple × scenario band × growth premium × "
                                             "other adjustments (named). Check = rebuilt − engine.")
-        cols = ["Scenario", "Leg", "Metric", "Metric value", "Peer multiple", "Scenario band",
-                "Growth premium", "Other adj.", "Multiple", "Enterprise value", "Net debt",
-                "Minority + preferred", "Equity value", "Shares", "Value per share", "Engine value",
-                "Check", "Notes"]
+        # Audit 2026-11-25 (item 5): units in the headers; money in millions, per-share in the trading currency.
+        cols = ["Scenario", "Leg", "Metric", f"Metric value ({self.ccy} m; per share for equity legs)",
+                "Peer multiple (Comps)", "Scenario band", "Growth premium", "Other adj.", "Multiple",
+                f"Enterprise value ({self.ccy} m)", f"Net debt ({self.ccy} m)", f"Minority + preferred ({self.ccy} m)",
+                f"Equity value ({self.ccy} m)", "Diluted shares (m)", f"Value per share ({self.ccy})",
+                f"Engine value ({self.ccy})", "Check", "Notes"]
+        A = self.A
+
+        def _peer(rr: int, tr: dict, typed: Optional[float], fmt: str) -> None:
+            ref = self.peer_cell.get(self._peer_key(tr) or ())
+            sh.put(rr, 5, ("=" + ref) if ref else typed, fmt)
+
+        def _nd_sh(rr: int, tr: dict) -> None:
+            nd, shs = _mil(tr.get("net_debt")), _mil(tr.get("shares"))
+            _ndu = getattr(self, "_nd_used_v", None)
+            _shu = getattr(self, "_sh_used_v", None)
+            sh.put(rr, 11, ("=" + A["nd_used"]) if (A.get("nd_used") and nd is not None and _ndu is not None
+                                                     and _close(nd, _ndu / 1e6)) else nd, MIL)
+            sh.put(rr, 14, ("=" + A["shares_used"]) if (A.get("shares_used") and shs is not None and _shu
+                                                         and _close(shs, _shu / 1e6)) else shs, MIL)
         sh.header(4, cols)
         r = 5
         recorded = False
@@ -1684,34 +2133,37 @@ class _Book:
                     notes = f"peer multiple: {parts['peer_source']}" + (f"; {notes}" if notes else "")
                 done = True
                 if kind == "ev_multiple":
-                    sh.put(r, 3, tr.get("metric")).font = Font(color=BLACK)
+                    sh.put(r, 3, (tr.get("metric") or "") + f" ({self.ccy} m)").font = Font(color=BLACK)
                     sh.put(r, 4, _mil(tr.get("metric_value")), MIL)
-                    sh.put(r, 5, _num(parts.get("peer_multiple")), MULT)
+                    _peer(r, tr, _num(parts.get("peer_multiple")), MULT)
                     sh.put(r, 6, _num(parts.get("scenario_band", 1.0)) or 1.0, "0.00")
                     sh.put(r, 7, _num(parts.get("growth_premium", 1.0)) or 1.0, "0.000")
                     sh.put(r, 8, oprod, "0.000")
                     sh.put(r, 9, f"=E{r}*F{r}*G{r}*H{r}", MULT)
                     sh.put(r, 10, f"=D{r}*I{r}", MIL)
-                    sh.put(r, 11, _mil(tr.get("net_debt")), MIL)
                     # Minority interest AND preferred equity: the engine's one bridge deducts both (V: $514m).
                     sh.put(r, 12, _mil((_num(tr.get("minority_interest")) or 0.0) + (_num(tr.get("preferred_equity")) or 0.0)), MIL)
                     sh.put(r, 13, f"=J{r}-K{r}-L{r}", MIL)
-                    sh.put(r, 14, _mil(tr.get("shares")), MIL)
+                    _nd_sh(r, tr)
                     sh.put(r, 15, f"=IFERROR(MAX(M{r}/N{r},0),0)", NUM)
                     notes = "values in millions; " + notes
                 elif kind == "equity_multiple":
-                    sh.put(r, 3, (tr.get("metric") or "") + ", per share").font = Font(color=BLACK)
+                    # Audit 2026-11-25 (item 5): the cell holds a per-share figure; a metric recorded as "Net income
+                    # (...)" is labelled as the EPS it is.
+                    _met = str(tr.get("metric") or "")
+                    sh.put(r, 3, (f"EPS: {_met} ÷ diluted shares" if _met.lower().startswith("net income")
+                                  else _met if "per share" in _met.lower() else f"{_met}, per share") + f" ({self.ccy})").font = Font(color=BLACK)
                     sh.put(r, 4, _num(tr.get("per_share_metric")), NUM)
-                    sh.put(r, 5, _num(parts.get("peer_multiple")), MULT)
+                    _peer(r, tr, _num(parts.get("peer_multiple")), MULT)
                     sh.put(r, 6, _num(parts.get("scenario_band", 1.0)) or 1.0, "0.00")
                     sh.put(r, 7, _num(parts.get("growth_premium", 1.0)) or 1.0, "0.000")
                     sh.put(r, 8, oprod, "0.000")
                     sh.put(r, 9, f"=E{r}*F{r}*G{r}*H{r}", MULT)
                     sh.put(r, 15, f"=D{r}*I{r}", NUM)
                 elif kind == "yield":
-                    sh.put(r, 3, (tr.get("metric") or "") + ", per share").font = Font(color=BLACK)
+                    sh.put(r, 3, (tr.get("metric") or "") + f", per share ({self.ccy})").font = Font(color=BLACK)
                     sh.put(r, 4, _num(tr.get("per_share_metric")), NUM)
-                    sh.put(r, 5, _num(parts.get("peer_fcf_yield")), PCT2)
+                    _peer(r, tr, _num(parts.get("peer_fcf_yield")), PCT2)
                     sh.put(r, 6, _num(parts.get("scenario_band", 1.0)) or 1.0, "0.00")
                     sh.put(r, 7, _num(parts.get("growth_premium", 1.0)) or 1.0, "0.000")
                     sh.put(r, 9, f"=IFERROR(E{r}/(F{r}*G{r}),0)", PCT2)
@@ -1724,11 +2176,10 @@ class _Book:
                     sh.put(r, 8, 1 - (_num(tr.get("tax_rate")) or 0.0), "0.000")
                     sh.put(r, 9, _num(tr.get("capitalisation_rate")), PCT2)
                     sh.put(r, 10, f"=IFERROR(D{r}*F{r}*H{r}/I{r},0)", MIL)
-                    sh.put(r, 11, _mil(tr.get("net_debt")), MIL)
                     # Minority interest AND preferred equity: the engine's one bridge deducts both (V: $514m).
                     sh.put(r, 12, _mil((_num(tr.get("minority_interest")) or 0.0) + (_num(tr.get("preferred_equity")) or 0.0)), MIL)
                     sh.put(r, 13, f"=J{r}-K{r}-L{r}", MIL)
-                    sh.put(r, 14, _mil(tr.get("shares")), MIL)
+                    _nd_sh(r, tr)
                     sh.put(r, 15, f"=IFERROR(MAX(M{r}/N{r},0),0)", NUM)
                     notes = "earnings power: EBIT × band × (1 − tax) capitalised at WACC; values in millions"
                 else:
@@ -1738,6 +2189,7 @@ class _Book:
                 if done:
                     sh.put(r, 17, f"=O{r}-P{r}", NUM)
                     self.leg_cell[(s, leg)] = _ref("Multiples", r, 15)
+                    self.leg_meta[(s, leg)] = {"kind": kind, "row": r}
                 else:
                     self.leg_cell.setdefault((s, leg), _ref("Multiples", r, 16))
                     if tr:
@@ -1752,8 +2204,33 @@ class _Book:
         sh.ws.freeze_panes = "C5"
 
     # ── Comps ───────────────────────────────────────────────────────────────
+    def _peer_key(self, tr: dict) -> Optional[tuple]:
+        """The Comps basket a leg's peer multiple came from: (field or source label, value). Audit 2026-11-25
+        (item 2): the leg's peer multiple links to that cell, not a typed copy."""
+        import re as _re
+        if not isinstance(tr, dict) or tr.get("kind") not in ("ev_multiple", "equity_multiple", "yield"):
+            return None
+        parts = tr.get("multiple_parts") or {}
+        pv = _num(parts.get("peer_fcf_yield") if tr.get("kind") == "yield" else parts.get("peer_multiple"))
+        if pv is None:
+            return None
+        fields = (self.dr.get("multiples_used") or {}).get("fields") or {}
+        src = str(parts.get("peer_source") or "")
+        m = _re.search(r"peer median (\w+)", src)
+        if m and m.group(1) in fields and _close(_num((fields[m.group(1)] or {}).get("value")), pv):
+            return (m.group(1), round(pv, 8))
+        if not src or not _re.search(r"through-cycle|dynamic|static", src):
+            if tr.get("kind") == "yield" and _close(_num((fields.get("fcf_yield") or {}).get("value")), pv):
+                return ("fcf_yield", round(pv, 8))
+            for f in ("pe", "ev_ebitda", "pb", "ev_revenue", "ev_ocf", "ev_ebit", "pe_ntm", "ev_ebitda_ntm", "ev_revenue_ntm"):
+                if f in fields and _close(_num((fields[f] or {}).get("value")), pv):
+                    return (f, round(pv, 8))
+        return (src or "source not recorded", round(pv, 8))
+
     def comps_tab(self) -> None:
-        sh = self.sheet("Comps", "Named peer baskets behind each peer multiple")
+        import statistics
+        import re as _re
+        sh = self.sheet("Comps", "Named peer baskets behind each peer multiple, incl. the through-cycle legs' sources")
         mu = self.dr.get("multiples_used") or {}
         sh.title("Comparable companies", f"Comps market {mu.get('comp_market')}; medians over in-band members "
                                          "(plausibility band). Engine median shown for the check.")
@@ -1761,15 +2238,27 @@ class _Book:
         # ones -- the Forward P/E leg prices the peers' NTM P/E (16.7x), not the trailing P/E (24.8x).
         labels = {"ev_ebitda": "EV/EBITDA (trailing)", "pe": "P/E (trailing)", "ev_revenue": "EV/Revenue (trailing)",
                   "pb": "P/B", "fcf_yield": "FCF yield", "pe_ntm": "P/E (NTM) -- Forward P/E leg",
-                  "ev_ebitda_ntm": "EV/EBITDA (NTM) -- Forward EV/EBITDA leg", "ev_revenue_ntm": "EV/Revenue (NTM)"}
+                  "ev_ebitda_ntm": "EV/EBITDA (NTM) -- Forward EV/EBITDA leg", "ev_revenue_ntm": "EV/Revenue (NTM)",
+                  "ev_ocf": "EV/OCF (trailing)", "ev_ebit": "EV/EBIT (trailing)"}
+        # which weighted legs price off which basket
+        uses: dict[tuple, set] = {}
+        for s in SCENARIOS:
+            for leg, tr in (self.scen(s).get("leg_inputs") or {}).items():
+                if self.in_blend(leg):
+                    k = self._peer_key(tr)
+                    if k:
+                        uses.setdefault(k, set()).add(leg)
         r = 4
         self.comps_summary: list[tuple[str, Any, str]] = []
+        field_cell: dict[str, str] = {}
         for field, info in (mu.get("fields") or {}).items():
             if field not in labels:
                 continue
             lab = labels[field]
+            _legs = sorted({l for k, ls in uses.items() if k[0] == field for l in ls})
             sh.section(r, f"{lab}: {info.get('basis')} / cohort {info.get('cohort')}"
-                          + (f" — {info.get('exchange')} '{info.get('key')}'" if info.get("key") else ""), 7)
+                          + (f" — {info.get('exchange')} '{info.get('key')}'" if info.get("key") else "")
+                          + (f" — used by {', '.join(_legs)}" if _legs else ""), 7)
             r += 1
             members = []
             # Plan EN8 (2026-10-04): the members and values the engine's median was taken over, frozen
@@ -1785,7 +2274,6 @@ class _Book:
                                                 info.get("key"), info.get("cohort") or "all")
                 except Exception:  # noqa: BLE001
                     members = []
-            eng_row = None
             if members:
                 if info.get("excluded_no_market_cap"):
                     sh.note(r, 1, "Excluded (no market cap in the feed): " + ", ".join(info["excluded_no_market_cap"]))
@@ -1797,6 +2285,7 @@ class _Book:
                 except Exception:                          # noqa: BLE001
                     _subj_sym = lambda x: str(x or "").upper()   # noqa: E731
                 _me = _subj_sym(self.ticker)
+                _vals = []
                 for m in members:
                     r += 1
                     mv = (m.get("metrics") or {}).get(field) or {}
@@ -1806,19 +2295,25 @@ class _Book:
                     sh.put(r, 2, (m.get("name") or "") + (" (the valued company: not its own peer)" if _is_me else "")).font = Font(color=BLACK)
                     sh.put(r, 3, _mil(m.get("market_cap")), MIL)
                     sh.put(r, 4, _num(mv.get("value")), "0.00")
-                    sh.put(r, 5, "yes" if (mv.get("in_band") and not _is_me) else "no").font = Font(color=BLUE)
+                    _in = bool(mv.get("in_band") and not _is_me)
+                    sh.put(r, 5, "yes" if _in else "no").font = Font(color=BLUE)
                     sh.put(r, 6, f'=IF(E{r}="yes",D{r},"")', "0.00")
+                    if _in and _num(mv.get("value")) is not None:
+                        _vals.append(_num(mv.get("value")))
                 last = r
                 r += 1
                 sh.label(r, 5, "Median", bold=True)
-                sh.put(r, 6, f"=MEDIAN(F{first}:F{last})", "0.0000", bold=True)
+                sh.put(r, 6, f"=MEDIAN(F{first}:F{last})", "0.0000", bold=True); _med = r
+                r += 1
+                sh.label(r, 5, "Median, engine precision", bold=True)
+                sh.put(r, 6, f"=ROUND(F{_med},{self.A['dp_comps']})", "0.0000", bold=True); _rnd = r
                 r += 1
                 sh.label(r, 5, "Engine")
                 sh.put(r, 6, _num(info.get("value")), "0.0000")
                 eng_row = r
                 r += 1
                 sh.label(r, 5, "Check")
-                sh.put(r, 6, f"=ROUND(F{r - 2},{self.A['dp_comps']})-F{r - 1}", "0.0000")
+                sh.put(r, 6, f"=F{_rnd}-F{eng_row}", "0.0000")
                 # Members come from the latest weekly refresh, not frozen with the
                 # run: a refresh after the valuation date can move the basket.
                 asof = max((str(m.get("computed_at") or "")[:10] for m in members), default="")
@@ -1826,7 +2321,12 @@ class _Book:
                 sh.note(r, 7, f"members as of refresh {asof or 'unknown'}; run valued {run_day or 'unknown'}"
                               + ("; basket refreshed after the run, so a non-zero check is basket drift"
                                  if asof and run_day and asof > run_day else ""))
-                self.comps_summary.append((lab, _ref("Comps", r - 2, 6), f"{len(members)} named peers"))
+                # the legs link to the basket's own median when it reproduces the engine's; else to the engine cell
+                _ties = bool(_vals) and _num(info.get("value")) is not None and \
+                    abs(round(statistics.median(_vals), 4) - float(info.get("value"))) < 1e-9
+                field_cell[field] = _ref("Comps", _rnd if _ties else eng_row, 6)
+                self.comps_summary.append((lab, _ref("Comps", _rnd, 6), f"{len(members)} named peers",
+                                           _num(info.get("value"))))
             else:
                 sh.note(r, 1, "static/dynamic table: no named peer set" if info.get("basis") in
                         ("static", "dynamic", "unknown") else
@@ -1834,9 +2334,42 @@ class _Book:
                 r += 1
                 sh.label(r, 5, "Engine")
                 sh.put(r, 6, _num(info.get("value")), "0.0000")
-                self.comps_summary.append((lab, _ref("Comps", r, 6), f"{info.get('basis')}"))
+                field_cell[field] = _ref("Comps", r, 6)
+                self.comps_summary.append((lab, _ref("Comps", r, 6), f"{info.get('basis')}", _num(info.get("value"))))
             r += 2
-        sh.widths({"A": 14, "B": 42, "C": 16, "D": 12, "E": 10, "F": 14})
+        for k in uses:
+            if k[0] in field_cell:
+                self.peer_cell[k] = field_cell[k[0]]
+        # Audit 2026-11-25 (item 2): the baskets behind the legs whose peer multiple is not one of the fields above --
+        # the through-cycle legs (dynamic pe_norm / ev_ebitda_norm medians) and any other recorded source. The run
+        # records the median and its source, not the members: said so, and the figure is the input it is.
+        _trail = {"pe_norm": "pe", "ev_ebitda_norm": "ev_ebitda", "ev_ebit_norm": "ev_ebit", "ev_revenue_norm": "ev_revenue"}
+        for k, legs in uses.items():
+            if k in self.peer_cell:
+                continue
+            src, val = k
+            m = _re.search(r"through-cycle (\w+)", src)
+            name = m.group(1) if m else None
+            title = (f"Through-cycle {name} -- " if name else "Leg peer multiple -- ") + ", ".join(sorted(legs))
+            sh.section(r, title, 7); r += 1
+            sh.label(r, 1, "Source (as recorded)"); sh.put(r, 2, src).font = Font(color=BLACK); r += 1
+            sh.note(r, 1, "Members unavailable: the run records this median and its source, not the constituent peers "
+                          "or their values" + ("; the through-cycle median is the peers' multiple on mid-cycle earnings."
+                                               if name else "."))
+            r += 1
+            sh.label(r, 5, "Peer multiple (as recorded)", bold=True)
+            sh.put(r, 6, val, "0.0000", bold=True); _vr = r; r += 1
+            self.peer_cell[k] = _ref("Comps", _vr, 6)
+            _tf = _trail.get(name or "")
+            if _tf and _tf in field_cell:
+                sh.label(r, 5, "Same industry, trailing median (above)")
+                sh.put(r, 6, "=" + field_cell[_tf], "0.0000"); r += 1
+                sh.label(r, 5, "Through-cycle ÷ trailing")
+                sh.put(r, 6, f"=IFERROR(F{_vr}/F{r - 1},0)", "0.00\"x\""); r += 1
+            self.comps_summary.append(((f"{name} (through-cycle)" if name else f"Peer multiple: {', '.join(sorted(legs))}"),
+                                       _ref("Comps", _vr, 6), "members not recorded: " + (src or "no source"), val))
+            r += 1
+        sh.widths({"A": 22, "B": 42, "C": 16, "D": 12, "E": 28, "F": 14})
 
     # ── SOTP ────────────────────────────────────────────────────────────────
     def sotp_tab(self) -> None:
@@ -1869,7 +2402,14 @@ class _Book:
                 r += 1
                 seg = r
                 sh.label(r, 1, "Segment value", bold=True)
-                sh.put(r, 7, f"=SUM(G{first}:G{last})", MIL, bold=True); r += 1
+                if last >= first:
+                    sh.put(r, 7, f"=SUM(G{first}:G{last})", MIL, bold=True)
+                else:
+                    # Audit 2026-11-25: no segment rows recorded -- the empty range G{first}:G{first-1} included this
+                    # cell itself (a circular reference). The engine's segment value is carried as the input it is.
+                    sh.put(r, 7, _mil(t.get("segment_value")) or 0.0, MIL, bold=True)
+                    sh.note(r, 8, "no segment rows recorded in the run: the engine's segment total, as an input")
+                r += 1
                 sh.label(r, 1, "Associates and investments")
                 sh.put(r, 7, _mil(t.get("associates")), MIL); asso = r; r += 1
                 sh.label(r, 1, "Net cash")
@@ -2091,6 +2631,12 @@ class _Book:
                 _rc = th.get("reconciliation") or {}
                 if _rc.get("failures"):
                     rr = 4
+                    # Audit 2026-11-25 (item 6): the failure feeds the Checks tab and the master flag.
+                    sh.label(rr, 1, "Engine suite result", bold=True)
+                    sh.put(rr, 3, "FAIL").font = Font(bold=True, color=BLACK)
+                    self.integrity.append(("Model", f"Three-statement build failed its reconciliation suite "
+                                                    f"({len(_rc['failures'])} assertion(s)); not built", _ref("Model", rr, 3)))
+                    rr += 2
                     sh.header(rr, ["Year", "Assertion", "Left-hand side", "Right-hand side", "Difference"]); rr += 1
                     for f in _rc["failures"]:
                         sh.put(rr, 1, f["year"]); sh.put(rr, 2, f"#{f['id']} {f['name']}"); sh.put(rr, 3, _mil(f["lhs"]), MIL); sh.put(rr, 4, _mil(f["rhs"]), MIL); sh.put(rr, 5, _mil(f["diff"]), MIL); rr += 1
@@ -2127,6 +2673,9 @@ class _Book:
         sh.section(r, "Assumptions (per year)", C0 + n); r += 1
         arow("g", "Revenue growth", IS["growth"], PCT)
         arow("gm", "Gross margin (blank = no COGS line filed)", IS.get("gross_margin") or [None] * n, PCT)
+        _rev0, _cogs0 = _num(op.get("revenue")), _num(op.get("cost_of_revenue"))
+        if _rev0 and _cogs0:
+            sh.put(A["gm"], C0, 1.0 - abs(_cogs0) / _rev0, PCT).font = Font(color=BLUE)          # as filed
         arow("em", "EBIT margin", IS["ebit_margin"], PCT)
         arow("da", "Depreciation & amortisation", [-x for x in IS["da"]], MIL, 1e-6)
         # Plan E1 (owner, 2026-10-07): of which amortisation of acquired intangibles -- it runs off goodwill &
@@ -2268,8 +2817,23 @@ class _Book:
              lambda L, P: OK(f"{L}{R['cf_nwc']}+(({L}{R['sti']}+{L}{R['bs_ar']}+{L}{R['bs_inv']}+{L}{R['bs_oca']})-({P}{R['sti']}+{P}{R['bs_ar']}+{P}{R['bs_inv']}+{P}{R['bs_oca']})"
                              f"-(({L}{R['bs_ap']}+{L}{R['ocl']})-({P}{R['bs_ap']}+{P}{R['ocl']})))"), fmt=None, typ="Check")
         frow("call", "Suite result", lambda L, P: f'=IF(COUNTIF({L}{R["c1"]}:{L}{R["c5"]},"FAIL")=0,"ALL OK","FAIL — do not use the valuation outputs until traced")', fmt=None, bold=True, typ="Check")
+        # Audit 2026-11-25 (item 6): invariants a forecast must respect -- a gross margin below the EBIT margin, or one
+        # far from the last filed year, is a defect in the inputs, not a forecast.
+        frow("inv1", "Invariant: gross margin ≥ EBIT margin", lambda L, P:
+             f'=IF({L}{A["gm"]}="","n/a",IF({L}{A["gm"]}>={L}{A["em"]},"OK","FAIL"))', fmt=None, typ="Invariant")
+        frow("inv2", f"Invariant: gross margin within the Assumptions band of {op.get('fy_label')}A", lambda L, P:
+             f'=IF(OR({L}{A["gm"]}="",${OC}${A["gm"]}=""),"n/a",IF(ROUND(ABS({L}{A["gm"]}-${OC}${A["gm"]}),{self.A["dp_check"]})<={self.A["gm_band"]},"OK","FAIL"))',
+             fmt=None, typ="Invariant")
+        for i, L in enumerate(cols):
+            self.integrity.append(("Model", f"{labels[i]}: reconciliation suite (balance, cash, retained earnings, PP&E, NWC)",
+                                   _ref("Model", R["call"], C0 + 1 + i)))
+            self.integrity.append(("Model", f"{labels[i]}: gross margin ≥ EBIT margin", _ref("Model", R["inv1"], C0 + 1 + i)))
+            self.integrity.append(("Model", f"{labels[i]}: gross margin within the band of the last filed year",
+                                   _ref("Model", R["inv2"], C0 + 1 + i)))
         _rc = th.get("reconciliation") or {}
-        sh.label(r, 1, "Engine suite (Python build): " + ("ALL OK on every forecast column" if _rc.get("ok") else "FAILED — " + "; ".join(f"{f['year']} #{f['id']}" for f in _rc.get("failures") or [])), bold=True); r += 1
+        sh.label(r, 1, "Engine suite (Python build): " + ("ALL OK on every forecast column" if _rc.get("ok") else "FAILED — " + "; ".join(f"{f['year']} #{f['id']}" for f in _rc.get("failures") or [])), bold=True)
+        sh.put(r, C0, "ALL OK" if _rc.get("ok") or not _rc else "FAIL").font = Font(color=BLACK, bold=True)
+        self.integrity.append(("Model", "Engine suite (Python build)", _ref("Model", r, C0))); r += 1
         # resolve the forward references written as {name} placeholders
         for row in sh.ws.iter_rows(min_row=1, max_row=r, min_col=C0 + 1, max_col=C0 + n):
             for cell in row:
@@ -2284,6 +2848,8 @@ class _Book:
             sh.label(r, 1, note); r += 1
         sh.label(r, 1, "Engine check (Python build): balance gaps " + ", ".join(f"{c['year']} {c['balance_gap']:,.0f}" for c in th.get("checks") or [])
                        + "; revolver draws in " + (", ".join(c["year"] for c in (th.get("checks") or []) if c.get("revolver_draw")) or "none") + ".")
+        r += 2
+        self._model_end = (sh, r, C0, cols, labels, R)
         sh.widths({"A": 58, "B": 9, **{get_column_letter(c): 14 for c in range(C0, C0 + n + 1)}})
         sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
 
@@ -2374,7 +2940,11 @@ class _Book:
             for i, ok in enumerate(oks[:n]):
                 sh.put(r, C0 + 1 + i, "OK" if ok else "FAIL").font = Font(color=BLACK, bold=not ok)
             r += 1
-        sh.label(r, 1, "Suite result: " + ("ALL OK on every forecast column" if rc.get("ok") else "FAILED"), bold=True); r += 2
+        sh.label(r, 1, "Suite result: " + ("ALL OK on every forecast column" if rc.get("ok") else "FAILED"), bold=True)
+        if rc:
+            sh.put(r, C0, "ALL OK" if rc.get("ok") else "FAIL").font = Font(color=BLACK, bold=True)
+            self.integrity.append(("Model", f"{kind} model reconciliation suite (engine build)", _ref("Model", r, C0)))
+        r += 2
         for c in th.get("checks") or []:
             if c.get("roe_over_coe") is not None:
                 sh.label(r, 1, f"{c['year']}: ROE {c['roe']:.1%} vs cost of equity {c['coe']:.1%} ({c['roe_over_coe'] * 1e4:+,.0f} bp)"
@@ -2387,6 +2957,45 @@ class _Book:
         sh.widths({"A": 52, "B": 14, "C": 44, "D": 40, **{get_column_letter(c): 14 for c in range(C0 + 1, C0 + n + 1)}})
         sh.ws.freeze_panes = f"{get_column_letter(C0)}5"
         self.model_rows, self.model_cols, self.model_kind = _R, [get_column_letter(C0 + 1 + i) for i in range(n)], kind
+
+    def _model_fcf_reconciliation(self) -> None:
+        """Audit 2026-11-25 (item 6): the Model's free cash flow beside the DCF's, year by year -- the difference shown,
+        not forced. The DCF prices unlevered owner earnings (revenue × FCF margin, full year); the Model's FCF is
+        CFO − capex, after interest and with SBC added back, in the statement currency."""
+        end = getattr(self, "_model_end", None)
+        d = self.dcf.get("base")
+        if not end or not d:
+            return
+        sh, r, C0, cols, labels, R = end
+        n = min(len(cols), d["n"])
+        sh.section(r, "6. Reconciliation: Model FCF vs DCF FCF (difference shown, not forced)", C0 + len(cols)); r += 1
+        sh.label(r, 1, "Model free cash flow (CFO − capex)"); sh.label(r, 2, "Link")
+        for i in range(n):
+            sh.put(r, C0 + 1 + i, f"={cols[i]}{R['fcf']}", MIL)
+        _m = r; r += 1
+        sh.label(r, 1, "DCF free cash flow, full year (revenue × FCF margin ÷ FX to the statement currency)"
+                       + (" -- SHADOW DCF" if getattr(self, "dcf_shadow", False) else ""))
+        sh.label(r, 2, "Link")
+        for i in range(n):
+            L = get_column_letter(d["c0"] + i)
+            sh.put(r, C0 + 1 + i, f"=IFERROR('DCF'!{L}{d['rev_row']}*'DCF'!{L}{d['margin_row']}/{self.A['fx']},0)", MIL)
+        _d = r; r += 1
+        sh.label(r, 1, "Difference: Model − DCF (basis: interest, SBC, working-capital and capex paths)", bold=True)
+        sh.label(r, 2, "Memo")
+        for i in range(n):
+            L = cols[i]
+            sh.put(r, C0 + 1 + i, f"={L}{_m}-{L}{_d}", MIL, bold=True)
+            self.info_checks.append(("Model", f"{labels[i]}: Model FCF − DCF FCF ({self.ccy} m; shown, not forced)",
+                                     _ref("Model", r, C0 + 1 + i)))
+        r += 1
+        sh.label(r, 1, "Difference as % of DCF FCF"); sh.label(r, 2, "Memo")
+        for i in range(n):
+            L = cols[i]
+            sh.put(r, C0 + 1 + i, f"=IFERROR({L}{r - 1}/ABS({L}{_d}),0)", PCT)
+        r += 1
+        sh.note(r, 1, "Not forced to zero: the DCF values unlevered owner earnings (after SBC, before interest) on its "
+                      "own margin path; the Model's FCF is levered and adds SBC back. A large, persistent gap means the "
+                      "two forecasts tell different stories -- read the valuation with it.")
 
     def _model_link(self, sh: _Sheet, r: int, key: str, first_fc_col: int, fmt: str = MIL) -> bool:
         """FY+1E..FY+5E cells of row `r` linked to the Model tab's `key` row. False when the model has no such row."""
@@ -2510,12 +3119,14 @@ class _Book:
                     self.blend_unlinked.add(key)
                 sh.put(r, 6, f"=D{r}*E{r}", NUM)
                 self.leg_range.setdefault(key, {})[s] = f"'Blend'!$E${r}"
+                self.blend_w[(s, key)] = f"'Blend'!$D${r}"
             last = r
             r += 1
             sh.label(r, 1, "Weights (check = 1)")
             sh.put(r, 4, f"=SUM(D{first}:D{last})", "0.0000")
             sh.label(r, 5, "Blend", bold=True)
             sh.put(r, 6, f"=SUM(F{first}:F{last})", NUM, bold=True)
+            self.blend_raw[s] = f"'Blend'!$F${r}"
             r += 1
             sh.label(r, 5, "× Calibration")
             sh.put(r, 6, "=" + self.A["calibration"], "0.0000")
@@ -2580,7 +3191,88 @@ class _Book:
             sh.note(18, 1, f"Unrated — {(self.dr.get('rating_state') or {}).get('reason') or ''}: no target is published.")
         elif not pb:
             sh.note(18, 1, "Run predates the unified target rule: engine targets shown.")
-        sh.widths({"A": 30, "B": 16, "C": 14, "D": 14, "E": 10, "F": 12})
+        if pb and "base" in self.blend_raw:
+            self._target_sensitivities(sh, 20)
+        sh.widths({"A": 30, "B": 16, "C": 14, "D": 14, "E": 10, "F": 12, "G": 14, "H": 14})
+
+    def _leg_value_at(self, s: str, leg: str, a: str) -> Optional[str]:
+        """Formula for a leg's per-share value with its metric × multiple scaled by the factor expression `a`."""
+        meta = self.leg_meta.get((s, leg))
+        if meta:
+            r = meta["row"]
+            if meta["kind"] in ("ev_multiple", "capitalised_earnings"):
+                return f"MAX(('Multiples'!$J${r}*{a}-'Multiples'!$K${r}-'Multiples'!$L${r})/'Multiples'!$N${r},0)"
+            return f"'Multiples'!$O${r}*{a}"
+        d = self.dcf.get(s)
+        if leg == "DCF" and d and not getattr(self, "dcf_shadow", False):
+            # EV is linear in the margin path: FCF and the terminal value both scale with it
+            return f"IFERROR(({d['ev']}*{a}+{d['nd']}+{d['mi']}+{d['pe']})/{d['shares']},0)"
+        return None
+
+    def _target_sensitivities(self, sh: _Sheet, r: int) -> None:
+        """Audit 2026-11-25 (item 8): the target against the anchor leg's peer multiple × metric, against capture ×
+        scenario probabilities, and -- for a cyclical profile -- against the margin (±20%)."""
+        A = self.A
+        steps = (-2, -1, 0, 1, 2)
+        spot, cap, cal, raw = A["spot"], A["capture"], A["calibration"], self.blend_raw["base"]
+        legs = [(k, w) for (s_, k), w in self.blend_w.items() if s_ == "base"]
+        anchor = self.dr.get("anchor_method")
+        mult_legs = [k for k, _ in legs if (("base", k) in self.leg_meta)]
+        if mult_legs:
+            leg = anchor if anchor in mult_legs else max(mult_legs, key=lambda k: _num(
+                next((e.get("weight") for e in self.scen("base").get("effective_weights") or [] if e.get("value_key") == k), 0)) or 0)
+            w, old = self.blend_w[("base", leg)], self.leg_cell[("base", leg)]
+            sh.section(r, f"Sensitivity: base target vs the {leg} leg's peer multiple (rows) × its metric (columns)", 8); r += 1
+            sh.note(r, 1, "The leg is re-priced at the flexed multiple and metric; the other legs are held. "
+                          "Centre = the base target before publishing rounding."); r += 1
+            sh.label(r, 1, "Multiple factor \\ metric factor")
+            for j, k in enumerate(steps):
+                sh.put(r, 2 + j, f"=1+({k})*{A['sens_m']}", PCT, bold=True)
+            top = r
+            for i, k in enumerate(steps):
+                rr = r + 1 + i
+                sh.put(rr, 1, f"=1+({k})*{A['sens_m']}", PCT, bold=True)
+                for j in range(5):
+                    fac = f"$A{rr}*{get_column_letter(2 + j)}${top}"
+                    val = self._leg_value_at("base", leg, fac)
+                    sh.put(rr, 2 + j, f"=IFERROR({spot}+{cap}*(({raw}+{w}*({val}-{old}))*{cal}-{spot}),NA())", NUM)
+            r += 7
+        # capture × probability
+        sh.section(r, "Sensitivity: probability-weighted target vs capture (rows) × probability moved from bear to bull (columns)", 8); r += 1
+        sh.label(r, 1, "Capture \\ bear → bull shift")
+        for j, k in enumerate(steps):
+            sh.put(r, 2 + j, f"=({k})*{A['sens_p']}", PCT, bold=True)
+        top = r
+        for i, k in enumerate(steps):
+            rr = r + 1 + i
+            sh.put(rr, 1, f"=MAX(0,MIN(1,{cap}+({k})*{A['sens_c']}))", PCT, bold=True)
+            for j in range(5):
+                d = f"{get_column_letter(2 + j)}${top}"
+                pb_, pu = f"MAX($F$5-{d},0)", f"MAX($F$7+{d},0)"
+                sh.put(rr, 2 + j, f"=IFERROR({spot}+$A{rr}*(($B$5*{pb_}+$B$6*$F$6+$B$7*{pu})/({pb_}+$F$6+{pu})-{spot}),0)", NUM)
+        r += 7
+        cyc = self.dr.get("cycle") or {}
+        if cyc.get("cyclical"):
+            cols = [(k, self._leg_value_at("base", k, "$A{rr}")) for k, _ in legs]
+            cols = [(k, f) for k, f in cols if f]
+            sh.section(r, "Cyclical: margin ±20% -- each leg's metric (normalised earnings, EBITDA, the DCF's margin path) "
+                          "scaled, other legs held", 8); r += 1
+            sh.header(r, ["Margin factor"] + [f"{k} (per share)" for k, _ in cols] + ["Intrinsic value (base)", "Base target"])
+            top = r
+            for i, k in enumerate(steps):
+                rr = r + 1 + i
+                sh.put(rr, 1, f"=1+({k})*{A['sens_m']}", PCT, bold=True)
+                deltas = []
+                for j, (leg, f) in enumerate(cols):
+                    sh.put(rr, 2 + j, "=IFERROR(" + f.format(rr=rr) + ",NA())", NUM)
+                    deltas.append(f"{self.blend_w[('base', leg)]}*({get_column_letter(2 + j)}{rr}-{self.leg_cell[('base', leg)]})")
+                c_iv = 2 + len(cols)
+                sh.put(rr, c_iv, f"=({raw}+{'+'.join(deltas) or '0'})*{cal}", NUM)
+                sh.put(rr, c_iv + 1, f"={spot}+{cap}*({get_column_letter(c_iv)}{rr}-{spot})", NUM)
+            r = top + 7
+            sh.note(r, 1, f"Cycle position {cyc.get('position') or 'n/a'}; mid-cycle margin {(_num(cyc.get('mid_cycle_margin')) or 0):.1%} "
+                          f"against the latest {(_num(cyc.get('latest_margin')) or 0):.1%}. Net income is scaled in proportion "
+                          "(interest and tax held as a share), an approximation for the P/E legs.")
 
     # ── Backtest & flags ────────────────────────────────────────────────────
     def backtest_tab(self) -> None:
@@ -2592,7 +3284,7 @@ class _Book:
         for k, v in list(rec.items()) + [(f"forward.{k}", v) for k, v in (rec.get("forward") or {}).items()]:
             if k == "forward":
                 continue
-            sh.label(r, 1, k, indent=1)
+            sh.label(r, 1, _humanize(k), indent=1)                 # audit 2026-11-25: readable, not snake_case
             c = sh.put(r, 2, v if not isinstance(v, (dict, list)) else str(v))
             if not isinstance(v, (int, float)) or isinstance(v, bool):
                 c.font = Font(color=BLACK)
@@ -2601,7 +3293,7 @@ class _Book:
         sh.put(r, 2, self.dr.get("calibration_note")).font = Font(color=BLACK)
         r += 2
         sh.section(r, "Gate ledger", 5); r += 1
-        sh.header(r, ["Gate", "Metric", "Without", "With", "Applied"])
+        sh.header(r, ["Gate", "Metric", "Without the gate (path A)", "With the gate (path B)", "Applied"])
         for g in self.dr.get("gate_evaluations") or []:
             r += 1
             for j, k in enumerate(("gate_id", "metric", "raw_input_path_a", "gated_output_path_b", "applied")):
@@ -2620,7 +3312,10 @@ class _Book:
         # overlay; the rate the valuation used is stated with its parts.
         _wb_ = self.dr.get("wacc_build") or {}
         _bb_ = _wb_.get("base_breakdown") or {}
-        if isinstance(self.dr.get("wacc"), (int, float)):
+        # Audit 2026-11-25 (item 7): the rate actually used -- the DCF trace's, the build's final rate, else the record.
+        _used = next((v for v in (_num(((self.scen("base").get("leg_inputs") or {}).get("DCF") or {}).get("wacc")),
+                                  _num(_wb_.get("wacc_final")), _num(self.dr.get("wacc"))) if v is not None), None)
+        if _used is not None:
             r += 2
             _ov_ = _num(_bb_.get("macro_overlay"))
             # Owner, 2026-10-04 (plan 1D.3): the same parts, in the same order, as the WACC tab -- the
@@ -2636,8 +3331,12 @@ class _Book:
                       ("contracted-revenue discount", _num(_wb_.get("contracted_revenue_discount")))]
             _txt = " ".join(f"{'+' if v >= 0 else '−'} {lab} {abs(v):.2%}" for lab, v in _parts
                             if isinstance(v, (int, float)) and abs(v) > 1e-9).lstrip("+ ")
+            _rec_w = _num(self.dr.get("wacc"))
             sh.ws.cell(row=r, column=1, value=(
-                f"WACC used by the valuation {float(self.dr['wacc']):.2%}"
+                f"WACC used by the valuation {float(_used):.2%}"
+                + (f" (the run's headline record reads {_rec_w:.2%})" if _rec_w is not None and abs(_rec_w - _used) > 5e-5 else "")
+                + (f"; WACC tab 'WACC used' {_num(_wb_.get('wacc_final')):.2%}" if _num(_wb_.get("wacc_final")) is not None
+                   and abs(_num(_wb_.get("wacc_final")) - _used) > 5e-5 else "")
                 + (f" = build {float(_wb_['wacc']):.2%}" if isinstance(_wb_.get("wacc"), (int, float)) else "")
                 + (f" + macro-regime overlay {_ov_:+.2%}" if _ov_ is not None else "")
                 + (f" ({_bb_.get('macro_regime')} regime)" if _bb_.get("macro_regime") else "") + "; parts, as on the WACC tab: "
@@ -2646,11 +3345,39 @@ class _Book:
         sh.widths({"A": 60, "B": 50, "C": 16, "D": 16, "E": 10})
 
     # ── Data gaps ───────────────────────────────────────────────────────────
+    def _structural_gaps(self) -> list[tuple]:
+        """What the model does not do, from what this build actually contains (audit 2026-11-25, item 6): the old
+        static list claimed "no balance-sheet forecast" and "no schedules" on workbooks whose Model tab had both."""
+        out = []
+        kind = getattr(self, "model_kind", None)
+        th = self.dr.get("three_statements") or {}
+        if kind == "operating":
+            out.append(("Model architecture", "Three-statement forecast built (Model tab): IS, working-capital, PP&E and "
+                        "debt schedules, CF and BS, live formulas", "The DCF still projects revenue × FCF margin on its own "
+                        "path; the Model's FCF is reconciled to it (shown, not forced)", "Info"))
+            out.append(("Circularity", "None: interest is charged on opening balances", "No iterative calculation needed", "Info"))
+        elif kind in ("bank", "insurer"):
+            out.append(("Model architecture", f"{kind.capitalize()} earnings-and-capital model built (Model tab) as the "
+                        "engine computed it (values, not live formulas)", "Change a driver in the engine, not the workbook",
+                        "Low"))
+        else:
+            why = th.get("skipped") if isinstance(th, dict) else None
+            out.extend([("Model architecture", "No balance-sheet or cash-flow forecast: no three-statement model on this run"
+                         + (f" ({why})" if why else ""),
+                         "Statements are historical only; the IS forecast block shows FMP consensus; net debt is held at "
+                         "the latest reported figure", "Structural"),
+                        ("Supporting schedules", "No working-capital, PP&E/depreciation or debt/interest schedules",
+                         "Reinvestment is implicit in the FCF margin", "Structural")])
+        out.append(_STRUCTURAL_GAPS[3])                     # WACC: table-driven, CAPM as a cross-check
+        if not getattr(self, "dcf_weighted", lambda: True)():
+            out.append(("DCF", "The DCF carries no weight in the blend", "Shown as a shadow on the DCF tab, outside "
+                        "the intrinsic value and the target", "Info"))
+        return out
+
     def gaps_tab(self) -> None:
         sh = self.sheet("Data Gaps", "What the institutional format asks for that this run's data "
                                      "or the engine does not provide")
-        sh.title("Data gaps", "Detected for this run, then structural gaps between the engine and a "
-                              "full three-statement model.")
+        sh.title("Data gaps", "Detected for this run, then what this build does and does not model.")
         gaps = []
         rows = self._stmt_rows()
         if not rows:
@@ -2714,7 +3441,7 @@ class _Book:
         if not self.dr.get("wacc_build"):
             gaps.append(("WACC", "Discount-rate build not recorded (run predates it)",
                          "DCF uses the published per-year rates as inputs", "Medium"))
-        for lab, _ref_, basis in getattr(self, "comps_summary", []):
+        for lab, _ref_, basis, *_ in getattr(self, "comps_summary", []):
             if "named peers" not in basis:
                 gaps.append(("Comps", f"{lab}: no named peer members ({basis})",
                              "Peer median shown without its constituents", "Low"))
@@ -2749,7 +3476,7 @@ class _Book:
                 run_gaps.append(("This run", str(f)[:400], "Engine flag", "Medium"))
         sh.header(4, ["Area", "Gap", "Impact", "Severity"])
         r = 5
-        for area, gap, impact, sev in run_gaps + gaps + _STRUCTURAL_GAPS:
+        for area, gap, impact, sev in run_gaps + gaps + self._structural_gaps():
             for j, v in enumerate((area, gap, impact, sev)):
                 c = sh.ws.cell(row=r, column=1 + j, value=v)
                 c.alignment = Alignment(wrap_text=True, vertical="top")
@@ -2822,6 +3549,14 @@ class _Book:
             r += 1
         sh.label(r, 1, "Profile / anchor")
         sh.put(r, 2, f"{self.dr.get('profile')} / {self.dr.get('anchor_method')}").font = Font(color=BLACK)
+        r += 1
+        # Audit 2026-11-25 (item 1): the master check flag, linked to the Checks tab (written there last).
+        sh.label(r, 1, "Master check flag (every check in the workbook; Checks tab)", bold=True)
+        sh.put(r, 3, "='Checks'!$C$4", bold=True)
+        sh.put(r, 4, "='Checks'!$C$5", "0")
+        sh.note(r, 5, "tie-out failures")
+        sh.put(r, 6, "='Checks'!$C$6", "0")
+        sh.note(r, 7, "integrity failures")
         r += 1
         for _line in self.front_page_flags():
             sh.label(r, 1, _line, bold=True); r += 1
@@ -2901,17 +3636,20 @@ class _Book:
         if not d and getattr(self, "dcf_excluded", None):
             pass                         # D1: stated once, in the headline flags above
         else:
-            sh.section(r, "DCF summary (base)", 6); r += 1
+            sh.section(r, ("Shadow DCF summary (base) -- weight 0, NOT in the blend or the target"
+                           if getattr(self, "dcf_shadow", False) else "DCF summary (base)")
+                       + f" -- {self.ccy} millions", 6); r += 1
         if d:
             # static engine values from the DCF leg trace (per-share PVs times the share count)
             _li = ((self.dr.get("base") or {}).get("leg_inputs") or {}).get("DCF") or {}
-            _sh_n = _li.get("shares") if isinstance(_li.get("shares"), (int, float)) and _li.get("shares") else None
+            # audit 2026-11-25 (item 5): in millions, as the DCF tab
+            _sh_n = (_li.get("shares") / 1e6) if isinstance(_li.get("shares"), (int, float)) and _li.get("shares") else None
             _pvf = (_li.get("pv_fcf_per_share") or 0.0) * _sh_n if _sh_n and isinstance(_li.get("pv_fcf_per_share"), (int, float)) else None
             _pvt = (_li.get("pv_tv_per_share") or 0.0) * _sh_n if _sh_n and isinstance(_li.get("pv_tv_per_share"), (int, float)) else None
             _ev = (_pvf + _pvt) if (_pvf is not None and _pvt is not None) else None
-            _nd = _li.get("net_debt") if isinstance(_li.get("net_debt"), (int, float)) else None
-            _mi = float(_li.get("minority_interest") or 0.0) if isinstance(_li.get("minority_interest"), (int, float)) else 0.0
-            _pe = float(_li.get("preferred_equity") or 0.0) if isinstance(_li.get("preferred_equity"), (int, float)) else 0.0
+            _nd = _li.get("net_debt") / 1e6 if isinstance(_li.get("net_debt"), (int, float)) else None
+            _mi = float(_li.get("minority_interest") or 0.0) / 1e6 if isinstance(_li.get("minority_interest"), (int, float)) else 0.0
+            _pe = float(_li.get("preferred_equity") or 0.0) / 1e6 if isinstance(_li.get("preferred_equity"), (int, float)) else 0.0
             _eq = (_ev - _nd - _mi - _pe) if (_ev is not None and _nd is not None) else None
             # Owner, 2026-10-03 (Alibaba review): the static column carries the SAME sign as the linked
             # "Less:" cells (the engine column had shown +189bn against the link's -189bn).
@@ -2925,8 +3663,8 @@ class _Book:
                              ("DCF value per share", "iv")):
                 sh.label(r, 1, lab, indent=1)
                 if isinstance(_static.get(key), (int, float)):
-                    sh.put(r, 2, float(_static[key]), NUM if key == "iv" else BIG).font = Font(color=BLUE)
-                sh.put(r, 3, "=" + d[key], NUM if key == "iv" else BIG)
+                    sh.put(r, 2, float(_static[key]), NUM if key == "iv" else MIL).font = Font(color=BLUE)
+                sh.put(r, 3, "=" + d[key], NUM if key == "iv" else MIL)
                 r += 1
         elif not getattr(self, "dcf_excluded", None):
             sh.note(r, 1, "No DCF leg recorded for this run."); r += 1
@@ -2978,8 +3716,10 @@ class _Book:
                     _fxv = 1.0
                 sh.label(r, 1, f"× FX to {self.ccy}", indent=1); sh.put(r, 2, _fxv, "0.0000"); _bf = r; r += 1
                 if _v_nd is not None:
+                    # Audit 2026-11-25 (item 1): the net debt used is linked (Assumptions), not typed into the formula.
                     sh.label(r, 1, "Check: bridge × FX − net debt used (should be ~0)", indent=1)
-                    sh.put(r, 2, f"=B{_bs}*B{_bf}-{_v_nd / 1e6}", MIL); r += 1
+                    _ndu = A.get("nd_used")
+                    sh.put(r, 2, f"=B{_bs}*B{_bf}-{_ndu}" if _ndu else f"=B{_bs}*B{_bf}-{_v_nd / 1e6}", MIL); r += 1
             sh.note(r, 1, "They differ by date (annual vs latest quarter), by what counts as cash (short-term and, for a biotech, "
                           "long-term marketable securities; regulated or float cash), by leases, and by currency; only the "
                           "first prices the valuation. The Model tab's net debt is a PROJECTION (cash builds over the "
@@ -2994,12 +3734,8 @@ class _Book:
                 sh.label(r, 1, lab, indent=1); sh.put(r, 2, _num(v), fmt); r += 1
             r += 1
         sh.section(r, "Comps (peer multiples used)", 6); r += 1
-        _mu = ((self.dr.get("multiples_used") or {}).get("fields") or {})
-        _mu_key = {"EV/EBITDA": "ev_ebitda", "P/E": "pe", "EV/Revenue": "ev_revenue", "P/B": "pb",
-                   "P/BV": "pb", "FCF yield": "fcf_yield", "FCF Yield": "fcf_yield", "EV/EBIT": "ev_ebit"}
-        for lab, ref, basis in getattr(self, "comps_summary", []):
+        for lab, ref, basis, _v in getattr(self, "comps_summary", []):
             sh.label(r, 1, lab, indent=1)
-            _v = (_mu.get(_mu_key.get(str(lab).strip(), "")) or {}).get("value")
             if isinstance(_v, (int, float)):
                 sh.put(r, 2, float(_v), "0.00").font = Font(color=BLUE)
             sh.put(r, 3, "=" + ref, "0.00")

@@ -4,6 +4,7 @@ Full numerical reconciliation (every Check = 0 after evaluating the formulas)
 was verified on 14 golden fixtures and a live 09618.HK run with a formula
 engine; these tests pin the structure that makes that reconciliation hold.
 """
+import inspect
 import io
 import re
 
@@ -14,16 +15,20 @@ from src.agents.analysis import dcf_agent as d
 from src.utils.valuation_workbook import build_workbook
 
 BLUE, BLACK, GREEN = "FF0000FF", "FF000000", "FF008000"
+ENGINE, GREY = "FF7030A0", "FF808080"   # audit 2026-11-25: engine output recorded in the run; reference value
 
 
 def _dcf_trace(g=0.10, margin=0.20, wacc=0.09, tgr=0.03, nd=100.0, sh=10.0):
     sched = d._decayed_growth_schedule(g, "Hyper-Growth Platform")
     iv, pv_f, pv_t, rows = d._project_dcf(1_000.0, margin, g, 0.0, wacc, tgr, -0.05, nd, sh,
                                           growth_schedule=sched, margin_delta_absolute=0.0)
+    # Owner, 2026-11-25: an engine that prices the value-driver terminal value records its inputs in the trace
+    _vd = ({"terminal_nopat_ratio": None, "terminal_ronic_spread": 0.0}
+           if "terminal_ronic_spread" in inspect.signature(d._project_dcf).parameters else {})
     return {"kind": "dcf", "value": iv, "revenue_base": 1_000.0, "fcf_margin_base": margin,
             "growth_base": g, "growth_schedule": sched, "margin_delta_absolute": 0.0, "wacc": wacc,
             "wacc_schedule": None, "tgr": tgr, "fcf_floor": -0.05, "net_debt": nd, "shares": sh,
-            "pv_fcf_per_share": pv_f, "pv_tv_per_share": pv_t, "projection_rows": rows}
+            "pv_fcf_per_share": pv_f, "pv_tv_per_share": pv_t, "projection_rows": rows, **_vd}
 
 
 def _run():
@@ -93,7 +98,7 @@ def wb():
 
 
 def test_tab_architecture(wb):
-    assert wb.sheetnames[:6] == ["Cover", "Summary", "Assumptions", "IS", "BS", "CFS"]
+    assert wb.sheetnames[:7] == ["Cover", "Summary", "Checks", "Assumptions", "IS", "BS", "CFS"]
     for tab in ("WACC", "DCF", "Multiples", "Comps", "Blend", "Target", "Backtest", "Data Gaps"):
         assert tab in wb.sheetnames
 
@@ -115,8 +120,10 @@ def test_colour_code_follows_cell_content(wb):
                     assert color == want, (ws.title, c.coordinate, v, color)
                     seen["link" if want == GREEN else "formula"] += 1
                 elif isinstance(v, (int, float)) and not isinstance(v, bool):
-                    assert color == BLUE, (ws.title, c.coordinate, v, color)
-                    seen["input"] += 1
+                    # a constant is an input (blue), an engine output recorded in the run (purple) or a reference
+                    # value no formula reads (grey) -- never black
+                    assert color in (BLUE, ENGINE, GREY), (ws.title, c.coordinate, v, color)
+                    seen["input"] += color == BLUE
     assert all(n > 0 for n in seen.values()), seen
 
 

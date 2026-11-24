@@ -6,6 +6,10 @@ each Check cell against the engine (plan 2026-10, Phase 0 step 5).
 RUN.json is {"run_id", "run_at", "data": {...}} -- the web_runs payload. Without --statements
 the IS/BS/CFS tabs are left empty (no FMP calls); the valuation tabs do not depend on them.
 A Check passes when |value| <= 0.01 (one published rounding unit). Exit status 1 when any fails.
+
+The workbook's own Checks tab (audit 2026-11-25) collects these tie-out checks plus the model's integrity
+checks under a master flag; it is not re-counted here, but its flag is printed and must agree with this
+script's verdict on the tie-out checks (a disagreement is reported as a failure).
 """
 from __future__ import annotations
 
@@ -48,6 +52,9 @@ def _checks(xlsx_path: str) -> list[tuple[str, str, object]]:
     model = formulas.ExcelModel().loads(xlsx_path).finish()
     sol = {k.upper(): v for k, v in model.calculate().items()}
     name = Path(xlsx_path).name.upper()
+    targets = [(s, c) for s, c in targets if s != "Checks"]
+    if "Checks" in wb.sheetnames:
+        targets.extend([("Checks", "C4"), ("Checks", "C5"), ("Checks", "C6")])
     out = []
     for sheet, cell in targets:
         key = f"'[{name}]{sheet.upper()}'!{cell}".upper()
@@ -74,9 +81,12 @@ def tieout(run_path: str, statements: bool = False, keep: str | None = None) -> 
             loaders = {"load_members": _members, "load_statements": load_statements}
         blob = build_workbook(run, ticker, **loaders)
         d = keep or tempfile.mkdtemp()
+        os.makedirs(d, exist_ok=True)
         path = os.path.join(d, f"{ticker.replace('.', '_')}_tieout.xlsx")
         Path(path).write_bytes(blob)
         rows = _checks(path)
+        master = {c: v for s, c, v in rows if s == "Checks"}
+        rows = [x for x in rows if x[0] != "Checks"]
         bad = []
         for sheet, cell, v in rows:
             ok = (isinstance(v, str) and v.strip() in ("OK", "ALL OK")) or (
@@ -87,6 +97,13 @@ def tieout(run_path: str, statements: bool = False, keep: str | None = None) -> 
         print(f"{ticker}: {len(rows) - len(bad)}/{len(rows)} checks pass  ({path})")
         for sheet, cell, v in bad:
             print(f"   FAIL {sheet}!{cell} = {v}")
+        if master:
+            tie_fail = master.get("C5")
+            agrees = isinstance(tie_fail, (int, float)) and int(tie_fail) == len(bad)
+            print(f"   Checks tab master flag: {master.get('C4')} (tie-out failing {tie_fail}, integrity failing "
+                  f"{master.get('C6')}){'' if agrees else ' -- DISAGREES with this tie-out'}")
+            if not agrees:
+                fails += 1
     return fails
 
 
