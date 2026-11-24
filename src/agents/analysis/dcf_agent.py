@@ -4971,6 +4971,44 @@ def _guidance_scope_checks(est: Optional[dict], revenue_last: Optional[float], f
     return out
 
 
+_EPS_ONLY_MIN_ANALYSTS = 5
+
+
+def _fill_revenue_from_consensus(block: Optional[dict], forward_consensus: Optional[dict], revenue_base: Optional[float],
+                                 flags: Optional[list] = None) -> Optional[dict]:
+    """An EPS-only guidance block with FY+1 / FY+2 revenue growth from consensus (owner, 2026-11-24); the block
+    unchanged when it already has revenue growth, has no EPS, or consensus covers revenue with too few analysts."""
+    est = (block or {}).get("estimates") or {}
+    base = est.get("base") or {}
+    if (not block or base.get("revenue_growth_fy1") is not None or not isinstance(base.get("eps_fy1"), (int, float))
+            or not isinstance(revenue_base, (int, float)) or revenue_base <= 0):
+        return block
+    n_an = (forward_consensus or {}).get("analyst_count_revenue") or 0
+    rev12 = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {})
+    if n_an < _EPS_ONLY_MIN_ANALYSTS or not rev12:
+        return block
+    import copy as _copy
+    out = _copy.deepcopy(block)
+    for sc in ("bear", "base", "bull"):
+        r1, r2 = rev12.get(sc) or rev12.get("base") or (None, None)
+        if not (isinstance(r1, (int, float)) and r1 > 0):
+            continue
+        row = out.setdefault("estimates", {}).setdefault(sc, {})
+        row["revenue_growth_fy1"] = float(r1) / float(revenue_base) - 1.0
+        if isinstance(r2, (int, float)) and r2 > 0:
+            row["revenue_growth_fy2"] = float(r2) / float(r1) - 1.0
+    g = (out["estimates"].get("base") or {})
+    if g.get("revenue_growth_fy1") is None:
+        return block
+    out["_revenue_from_consensus"] = int(n_an)
+    if flags is not None:
+        flags.append(f"Guidance is EPS-only: FY+1 / FY+2 revenue growth from consensus ({n_an} analysts) -- "
+                     f"base {g['revenue_growth_fy1']:+.1%}"
+                     + (f" / {g['revenue_growth_fy2']:+.1%}" if g.get("revenue_growth_fy2") is not None else "")
+                     + "; EPS stays the guidance's")
+    return out
+
+
 def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict],
                                 scope_checks: Optional[list] = None, not_applied: Optional[str] = None) -> Optional[dict]:
     """What the report shows: the research block plus how (or why not) the DCF used it."""
@@ -4979,6 +5017,8 @@ def _guidance_estimates_payload(est: Optional[dict], applied: Optional[dict],
     out = {k: v for k, v in est.items() if not k.startswith("_")}
     out["scope_checks"] = list(scope_checks or [])
     out["model"] = est.get("_model")
+    if est.get("_revenue_from_consensus"):
+        out["revenue_source"] = f"consensus ({est['_revenue_from_consensus']} analysts); the guidance is EPS-only"
     # Owner, 2026-10-04 (plan 1F.5): grade the guidance's sources. A filing, results release or the
     # company's own IR is primary; a data aggregator or market-research vendor (TIKR, Mordor) is
     # secondary and is named as such, so a reader can see which estimates rest on whom.
@@ -14799,6 +14839,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     + "; revoke on the Model Accuracy page to return to the research's estimates")
         except Exception:                                  # noqa: BLE001
             _eo_carry = None
+        # ── EPS-only guidance (owner, 2026-11-24; NEE) ────────────────────────────────────────────
+        # A company that guides EPS but not revenue kept no block at all: no guidance forecast, no forward
+        # statements. Its FY+1 / FY+2 revenue growth comes from consensus (5+ analysts, per scenario); EPS stays
+        # the research's. Without that coverage the block cannot build a forecast and the run is as before.
+        try:
+            _guid_est = _fill_revenue_from_consensus(_guid_est, forward_consensus, revenue_base, ticker_forward_flags)
+        except Exception:                                  # noqa: BLE001
+            pass
         # ── Guided-margin sanity (owner, 2026-10-04, Visa review) ─────────────────────────────────
         # A guided EBITDA margin that sits more than _GUIDED_MARGIN_TOLERANCE from BOTH the company's own
         # latest margin and consensus is an extraction error, not guidance (Visa: "~50% EBITDA margin" --

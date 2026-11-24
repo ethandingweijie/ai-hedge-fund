@@ -1258,7 +1258,9 @@ def _normalize_guidance_estimates(parsed: dict) -> dict:
         if all(v is not None for v in vals):
             for sc, v in zip(_GUIDANCE_SCENARIOS, sorted(vals)):
                 est[sc][f] = v
-    if est["base"].get("revenue_growth_fy1") is None:
+    # Owner, 2026-11-24 (NEE): an EPS-only guider (utilities guide EPS and capex, not revenue) keeps its block; the
+    # DCF agent fills FY+1 / FY+2 revenue growth from consensus. Neither revenue growth nor EPS: nothing to channel.
+    if est["base"].get("revenue_growth_fy1") is None and est["base"].get("eps_fy1") is None:
         return {}
     g_in = parsed.get("guidance") if isinstance(parsed.get("guidance"), dict) else {}
     guidance = {

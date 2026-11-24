@@ -195,3 +195,74 @@ def test_a_plausible_eps_implied_margin_still_replaces_a_conflicting_guided_marg
     assert gfm._eps_margin_plausible(0.50 * 100, 100, {}) is True                           # no trailing margin, no bound
     assert gfm._eps_margin_plausible(0.115 * 100, 100, {"ebit_margin": 0.114}) is True     # BSL.SI: the EPS sits on its own margin
     assert gfm._eps_margin_plausible(0.125 * 100, 100, {"ebit_margin": 0.056}) is True     # 01801.HK: a biotech turning profitable
+
+
+# ── owner, 2026-11-24 (a): a forecast pays at most what it earns (BX) ─────────────────────────────────
+
+def _payer(div_fy24, div_fy25):
+    raw = copy.deepcopy(RAW)
+    raw["FY2024"]["dividends_and_distributions"] = div_fy24
+    raw["FY2025"]["dividends_and_distributions"] = div_fy25
+    return raw
+
+
+def test_a_payout_above_net_income_is_capped_at_one_hundred_percent_and_says_so():
+    raw = _payer(-2.6e9, -1.5e9)                                      # 200% of net income each year: BX's shape
+    a = ts.assumptions_from_history(raw, spot=190.0)
+    assert a["payout_ratio"]["value"] == pytest.approx(1.0)
+    assert "capped at 100%" in a["payout_ratio"]["source"] and "200%" in a["payout_ratio"]["source"]
+    out = ts.build(_tst._fc(), ts.opening_from_raw(raw), a)
+    assert out["fy_labels"] and out["reconciliation"]["ok"] is True
+    ni, div = out["income"]["net_income"], out["cashflow"]["dividends"]
+    assert all(-dv <= n + 1e-6 for n, dv in zip(ni, div))           # dividends never exceed net income
+
+
+def test_a_payout_under_net_income_is_untouched():
+    raw = _payer(-0.65e9, -0.375e9)                                   # 50%
+    a = ts.assumptions_from_history(raw, spot=190.0)
+    assert a["payout_ratio"]["value"] == pytest.approx(0.5) and a["payout_ratio"]["source"] == "history"
+
+
+# ── owner, 2026-11-24 (a): an EPS-only guider keeps its block; revenue growth comes from consensus (NEE) ─
+
+def _eps_only():
+    return {"confidence": "HIGH", "fiscal_year_1": "FY2026",
+            "estimates": {"bear": {"eps_fy1": 3.85}, "base": {"eps_fy1": 3.97}, "bull": {"eps_fy1": 4.15}}}
+
+
+def _cons(n=12):
+    return {"analyst_count_revenue": n,
+            "_fy1_fy2": {"revenue": {"bear": (26.0e9, 27.5e9), "base": (27.0e9, 29.0e9), "bull": (28.0e9, 30.5e9)}}}
+
+
+def test_the_extractor_keeps_an_eps_only_block():
+    out = dr._normalize_guidance_estimates({"estimates": {"base": {"eps_fy1": 3.97}, "bear": {"eps_fy1": 3.85}, "bull": {"eps_fy1": 4.15}},
+                                            "confidence": "HIGH"})
+    assert out and out["estimates"]["base"]["eps_fy1"] == 3.97 and out["estimates"]["base"]["revenue_growth_fy1"] is None
+    assert dr._normalize_guidance_estimates({"estimates": {"base": {}}}) == {}          # nothing to channel
+
+
+def test_revenue_growth_is_filled_from_consensus_per_scenario_and_flagged():
+    flags = []
+    out = d._fill_revenue_from_consensus(_eps_only(), _cons(), 25.0e9, flags)
+    est = out["estimates"]
+    assert est["base"]["revenue_growth_fy1"] == pytest.approx(0.08) and est["base"]["revenue_growth_fy2"] == pytest.approx(29 / 27 - 1)
+    assert est["bear"]["revenue_growth_fy1"] == pytest.approx(0.04) and est["bull"]["revenue_growth_fy1"] == pytest.approx(0.12)
+    assert est["base"]["eps_fy1"] == 3.97                                                # EPS stays the guidance's
+    assert out["_revenue_from_consensus"] == 12 and flags and "EPS-only" in flags[0] and "12 analysts" in flags[0]
+    pay = d._guidance_estimates_payload(out, None)
+    assert pay["revenue_source"].startswith("consensus (12 analysts)")
+
+
+def test_thin_coverage_or_a_revenue_guider_leaves_the_block_alone():
+    blk = _eps_only()
+    assert d._fill_revenue_from_consensus(blk, _cons(n=4), 25.0e9, []) is blk           # under 5 analysts
+    guided = {**_eps_only(), "estimates": {"base": {"revenue_growth_fy1": 0.05, "eps_fy1": 3.97}}}
+    assert d._fill_revenue_from_consensus(guided, _cons(), 25.0e9, []) is guided         # the company guides revenue
+    assert d._fill_revenue_from_consensus(None, _cons(), 25.0e9, []) is None
+
+
+def test_the_filled_block_builds_a_forecast():
+    blk = d._fill_revenue_from_consensus(_eps_only(), _cons(), 38e9, [])
+    fc = gfm.build_forecast(blk, **_kw())
+    assert fc and len(fc["rows"]) == 10

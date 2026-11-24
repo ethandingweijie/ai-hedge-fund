@@ -107,7 +107,12 @@ def test_a_developer_prices_on_the_solvent_peers_around_its_own_book_multiple():
         assert not (set(pb["members"]) & set(pb["excluded_loss_makers"]))
         own = float(pb["key"].split("own ")[1].rstrip("x)"))
         assert abs(pb["value"] - own) <= 0.15 + 1e-9                # the cluster median sits inside the band around the name's own
-    assert rc.developer_cluster_multiples("HKSE", "ZZZZ.HK") in ({}, ) or rc.developer_cluster_multiples("HKSE", "ZZZZ.HK").get("_withheld") is None
+    unknown = rc.developer_cluster_multiples("HKSE", "ZZZZ.HK")
+    store_has_solvent = bool(r) and not r.get("_withheld")
+    if store_has_solvent:                                           # an unknown subject reads the same solvent cluster
+        assert unknown in ({}, ) or unknown.get("_withheld") is None
+    else:                                                           # a local store gone stale has no solvent developer at all
+        assert unknown in ({}, ) or (unknown.get("_withheld") or {}).get("reason") == "no solvent name in the developer basket"
     # the contagion invariant: no solvent name -> withheld, and the P/B leg reads it
     assert rc.developer_cluster_multiples("HKSE", "00688.HK", labels=("No Such Label",)) == {"_withheld": {"reason": "no solvent name in the developer basket", "basket": ["No Such Label"], "members": 0}}
     assert 'if method_name == "P/BV" and isinstance(peer, dict) and peer.get("_pb_withheld"):' in inspect.getsource(d._compute_method_value)

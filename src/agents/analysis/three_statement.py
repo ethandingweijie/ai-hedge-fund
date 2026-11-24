@@ -29,7 +29,9 @@ OPENING_ROUNDING_TOLERANCE = 1e-6
 DEFAULTS = {
     "interest_rate_bounds": (0.005, 0.15),
     "interest_income_rate_bounds": (0.0, 0.06),
-    "payout_bounds": (0.0, 1.5),
+    # Owner, 2026-11-24 (BX): a forecast pays at most what it earns. BX's 150% (distributable earnings above GAAP
+    # net income, the partners' share unmodelled) drew ~$14bn of revolver over five years to fund dividends.
+    "payout_bounds": (0.0, 1.0),
     "sbc_pct_bounds": (0.0, 0.25),
     "gross_margin_bounds": (0.0, 0.98),
     "days_bounds": (0.0, 365.0),
@@ -136,8 +138,10 @@ def assumptions_from_history(raw_financials: Optional[dict], hist: Optional[dict
                                 for r in rows if ((_f(r.get("cash_and_equivalents")) or 0.0) + (_f(r.get("short_term_investments")) or 0.0)) > 0 and _f(r.get("interest_income")) is not None],
                                *cfg["interest_income_rate_bounds"], 0.0)
     put("interest_income_rate", iir, src, "interest income on opening cash and investments")
-    po, src = _bounded_median([abs(_f(r.get("dividends_and_distributions")) or 0.0) / _f(r["net_income"]) for r in rows if _f(r.get("net_income")) and _f(r["net_income"]) > 0 and _f(r.get("dividends_and_distributions")) is not None],
-                              *cfg["payout_bounds"], 0.0)
+    po_hist = [abs(_f(r.get("dividends_and_distributions")) or 0.0) / _f(r["net_income"]) for r in rows if _f(r.get("net_income")) and _f(r["net_income"]) > 0 and _f(r.get("dividends_and_distributions")) is not None]
+    po, src = _bounded_median(po_hist, *cfg["payout_bounds"], 0.0)
+    if po_hist and median(po_hist) > cfg["payout_bounds"][1]:
+        src = f"history {median(po_hist):.0%} of net income, capped at {cfg['payout_bounds'][1]:.0%}"
     put("payout_ratio", po, src, "dividends in financing cash flow and the equity roll")
     bb_vals = [abs(_f(r.get("share_buyback")) or 0.0) for r in rows if _f(r.get("share_buyback")) is not None]
     bb = median(bb_vals) if bb_vals else ((hist or {}).get("buyback_median") or 0.0)

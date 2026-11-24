@@ -2906,7 +2906,10 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     assert "02020.HK" in missing and "02888.HK" in missing
 
     assert statement_to_hkd(100.0, "02020") == statement_to_hkd(100.0, "00700")
-    assert statement_to_hkd(100.0, "02020") == pytest.approx(116.89, abs=0.6)
+    # 2026-11-24: the rate is live (116.89 pinned, 117.56 a month on); the conversion follows it, within a sane band.
+    from src.tools.hk.currency import cny_to_hkd_rate
+    assert statement_to_hkd(100.0, "02020") == pytest.approx(100.0 * cny_to_hkd_rate())
+    assert 100.0 < statement_to_hkd(100.0, "02020") < 130.0
 
     snap = json.load(open("tests/golden/snapshots.json", encoding="utf-8"))
     proj = snap["02888_HK"]["projection"]
