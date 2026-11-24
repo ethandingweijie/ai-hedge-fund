@@ -494,11 +494,17 @@ def developer_cluster_multiples(exchange: str, ticker: str, *, band: float = DEV
             if cell.get("in_band") and isinstance(cell.get("value"), (int, float)):
                 vals.append(float(cell["value"])); used.append(_canon(s))
                 named.append({"symbol": _canon(s), "value": float(cell["value"])})
-        if len(vals) < DEVELOPER_CLUSTER_MIN:
+        kept, trimmed = robust_trim(field, list(zip(used, vals)))       # owner, 2026-11-25: every median screened
+        if len(kept) < DEVELOPER_CLUSTER_MIN:
             continue
+        _kept_syms = {s_ for s_, _ in kept}
+        used = [s_ for s_ in used if s_ in _kept_syms]
+        named = [n_ for n_ in named if n_["symbol"] in _kept_syms]
+        vals = [v_ for _, v_ in kept]
         out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all", "peer_count": len(vals),
                       "key": key, "exchange": exchange, "members": used, "members_used": named, "subject_excluded": True,
-                      "excluded_loss_makers": sorted(_canon(s) for s in members if s not in solvent)}
+                      "excluded_loss_makers": sorted(_canon(s) for s in members if s not in solvent),
+                      **({"members_trimmed": [{"symbol": s_, "value": v_} for s_, v_ in trimmed]} if trimmed else {})}
     return out
 
 
@@ -642,16 +648,24 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
     if _self_removed:
         floor = max(3, floor - 1)
     for field in FIELDS:
-        vals, used = [], []
+        cand = []
         for sym, m in metrics.items():
             cell = (m.get(field) or {})
             v = cell.get("value")
             if cell.get("in_band") and isinstance(v, (int, float)):
-                vals.append(float(v))
-                used.append(sym)
-        if len(vals) < floor:
+                cand.append(sym)
+        if len(cand) < floor:
             continue
-        out[field] = {"value": round(statistics.median(vals), 6), "basis": "profile", "cohort": "all",
+        # Owner, 2026-11-25: the curated basket is screened exactly like a label (market-cap sanity, MAD trim)
+        # and must still clear its floor after the screen.
+        sm = screened_median(field, cand, floor, value_of=lambda s_: metrics[s_][field]["value"],
+                             symbol_of=lambda s_: s_, mcap_of=lambda s_: (ident.get(s_) or {}).get("market_cap"),
+                             metrics_of=lambda s_: metrics.get(s_))
+        if "value" not in sm:
+            continue
+        used = [s_ for s_, _ in sm["kept"]]
+        vals = [v_ for _, v_ in sm["kept"]]
+        out[field] = {"value": round(sm["value"], 6), "basis": "profile", "cohort": "all",
                       "peer_count": len(vals), "key": key, "exchange": exchange, "members": used,
                       # REGN review (2026-10-07): the named members and values the median was taken over, so a
                       # curated basket is as auditable as an industry one ("no named peers" on every multiple).
@@ -659,7 +673,10 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
                                         "market_cap": (ident.get(sym) or {}).get("market_cap"), "value": v_}
                                        for sym, v_ in zip(used, vals)],
                       **({"subject_excluded": True} if _self_removed else {}),
-                      **({"excluded_loss_makers": excluded} if exclude_loss_makers else {})}
+                      **({"excluded_loss_makers": excluded} if exclude_loss_makers else {}),
+                      **({"members_trimmed": [{"symbol": s_, "value": v_} for s_, v_ in sm["trimmed"]]}
+                         if sm["trimmed"] else {}),
+                      **({"excluded_mcap_mismatch": list(sm["mcap_mismatch"])} if sm["mcap_mismatch"] else {})}
     return out
 
 
@@ -1041,6 +1058,8 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))
         out["ev_ocf"] = _safe_float(row.get("evToOperatingCashFlowTTM"))
         out["roic"] = _safe_float(row.get("returnOnInvestedCapitalTTM"))
+        # the cap the EV and price multiples were computed on (owner, 2026-11-25: market-cap sanity check)
+        out["mcap_multiples"] = _safe_float(row.get("marketCap"))
 
     rt = _fmp_get(f"{_STABLE}/ratios-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(rt, list) and rt:
@@ -1107,6 +1126,102 @@ def _clean(field: str, values: list[Optional[float]]) -> list[float]:
     return out
 
 
+# ── Robust outlier screen (owner, 2026-11-25: CFA-grade relative valuation) ──
+#
+# The plausibility bands above admit a P/E to 200x and an EV/EBITDA to 100x, so
+# they only remove readings that are not multiples at all. Inside the band a
+# single member can still sit an order of magnitude off its peers -- Stellantis'
+# 156.5x P/E in a five-name auto basket, Texas Pacific Land's 21.7x EV/EBITDA
+# among E&Ps at 5x -- and with five to nine members one such reading moves the
+# median by a whole seat. Every basket median is therefore screened before it is
+# taken: median +/- TRIM_MAD_K scaled MADs, on the log of the multiple (a 3x
+# premium and a 3x discount are the same distance from the median) and on the
+# raw value for the fields that can be negative (growth, ROIC). A basket under
+# TRIM_MIN_N is not screened (a MAD over four points describes the four points),
+# and a basket whose MAD is zero is left alone. The fence has a floor -- a member
+# within 2x of the median (10pp for growth / ROIC) is never trimmed -- because the
+# MAD of a tight five-name basket is small enough to trim ordinary dispersion, and
+# a trim that costs a seat sends the field down the ladder to a worse basket.
+# Trimmed members are named on the row.
+TRIM_MIN_N = 5
+TRIM_MAD_K = 3.0
+_MAD_SCALE = 1.4826                      # MAD -> sigma under normality
+_TRIM_MIN_FENCE_LOG = math.log(2.0)      # never trim within 2x of the median
+_TRIM_MIN_FENCE_ABS = 0.10               # growth / ROIC: never trim within 10pp of the median
+_LINEAR_FIELDS = frozenset({"growth_avg", "roic"})
+
+#: A member whose multiples were computed on a market cap more than this far from
+#: its screener market cap (price x shares) is a data error, not a peer: FMP's
+#: TTM ratios for Stellantis read P/B 0.15x and EV/Revenue 0.24x against a book
+#: and revenue the screener cap does not support.
+MCAP_SANITY_RATIO = 3.0
+
+
+def robust_trim(field: str, pairs: list) -> tuple[list, list]:
+    """(kept, trimmed) for [(member, value), ...] under the MAD screen above."""
+    pairs = list(pairs)
+    if len(pairs) < TRIM_MIN_N:
+        return pairs, []
+    vals = [float(v) for _, v in pairs]
+    use_log = field not in _LINEAR_FIELDS and all(v > 0 for v in vals)
+    xs = [math.log(v) for v in vals] if use_log else vals
+    med = statistics.median(xs)
+    mad = statistics.median(abs(x - med) for x in xs)
+    if mad <= 0:
+        return pairs, []
+    fence = TRIM_MAD_K * _MAD_SCALE * mad
+    fence = max(fence, _TRIM_MIN_FENCE_LOG if use_log else _TRIM_MIN_FENCE_ABS)
+    kept, trimmed = [], []
+    for p, x in zip(pairs, xs):
+        (trimmed if abs(x - med) > fence else kept).append(p)
+    return kept, trimmed
+
+
+def _multiples_mcap(metrics: Optional[dict]) -> Optional[float]:
+    """The market cap a member's multiples were computed on (key-metrics TTM), raw or stored form."""
+    v = (metrics or {}).get("_mcap_multiples")
+    if isinstance(v, dict):
+        v = v.get("value")
+    if v is None:
+        v = (metrics or {}).get("mcap_multiples")
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f > 0 and not math.isnan(f) else None
+
+
+def mcap_mismatch(market_cap: Optional[float], metrics: Optional[dict]) -> bool:
+    """True when both caps exist and differ by more than MCAP_SANITY_RATIO."""
+    m2 = _multiples_mcap(metrics)
+    try:
+        m1 = float(market_cap) if market_cap is not None else None
+    except (TypeError, ValueError):
+        m1 = None
+    if not (m1 and m1 > 0 and m2):
+        return False
+    return max(m1 / m2, m2 / m1) > MCAP_SANITY_RATIO
+
+
+def screened_median(field: str, members: list, floor: int, *, value_of, symbol_of,
+                    mcap_of=None, metrics_of=None) -> dict:
+    """The shared screen behind every basket median: market-cap sanity, then the MAD trim, then the floor.
+
+    Returns {"value", "kept", "trimmed", "mcap_mismatch"} or {"short": n} when fewer than `floor` survive."""
+    mism = []
+    pool = []
+    for m in members:
+        if mcap_of is not None and metrics_of is not None and mcap_mismatch(mcap_of(m), metrics_of(m)):
+            mism.append(m)
+            continue
+        pool.append((m, float(value_of(m))))
+    kept, trimmed = robust_trim(field, pool)
+    if len(kept) < max(floor, 1):
+        return {"short": len(kept), "trimmed": trimmed, "mcap_mismatch": mism}
+    return {"value": statistics.median(v for _, v in kept), "kept": kept, "trimmed": trimmed,
+            "mcap_mismatch": mism}
+
+
 def split_cohorts(members: list[dict]) -> dict[str, list[dict]]:
     """{"all": every member, "large": the upper half by market cap}.
 
@@ -1131,17 +1246,26 @@ def compute_medians(baskets: dict[str, list[dict]], metrics: dict[str, dict],
             # target's own market cap against this to pick its cohort.
             floor_mcap = min((m.get("market_cap") or 0.0) for m in group) if group else 0.0
             for field in FIELDS:
-                vals = _clean(field, [metrics.get(m["symbol"], {}).get(field)
-                                      for m in group])
-                if len(vals) < min_peers:
+                # Owner, 2026-11-25: the stored median is screened like every read-time median (market-cap
+                # sanity, MAD trim), so the label row a caller falls back to carries no outlier either.
+                _ok = {m["symbol"]: _clean(field, [metrics.get(m["symbol"], {}).get(field)]) for m in group}
+                cand = [m for m in group if _ok[m["symbol"]]]
+                if len(cand) < min_peers:
+                    continue
+                sm = screened_median(field, cand, min_peers,
+                                     value_of=lambda m_: _ok[m_["symbol"]][0],
+                                     symbol_of=lambda m_: m_["symbol"],
+                                     mcap_of=lambda m_: m_.get("market_cap"),
+                                     metrics_of=lambda m_: metrics.get(m_["symbol"]) or {})
+                if "value" not in sm:
                     continue
                 rows.append({
                     "level": level,
                     "key": key,
                     "cohort": cohort,
                     "field": field,
-                    "value": round(statistics.median(vals), 6),
-                    "peer_count": len(vals),
+                    "value": round(sm["value"], 6),
+                    "peer_count": len(sm["kept"]),
                     "min_market_cap": float(floor_mcap),
                 })
     return rows
@@ -1361,6 +1485,9 @@ def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
                     vals[field] = {"value": f,
                                    "in_band": f is not None and not math.isnan(f)
                                    and lo <= f <= hi}
+                # not a multiple (never in band): the cap the multiples were computed on, for mcap_mismatch
+                if _multiples_mcap(mm):
+                    vals["_mcap_multiples"] = {"value": _multiples_mcap(mm), "in_band": False}
                 rows.append({"level": level, "key": key, "cohort": cohort,
                              "symbol": m["symbol"], "name": m.get("name"),
                              "market_cap": m.get("market_cap"), "metrics": vals})
@@ -1512,14 +1639,18 @@ def get_regional_multiples(
     market_cap: Optional[float] = None,
     max_age_days: float = MAX_AGE_DAYS,
     exclude_symbol: Optional[str] = None,
+    *,
+    block_sector: bool = False,
+    anchor_field: Optional[str] = None,
+    diagnostics: Optional[dict] = None,
 ) -> dict[str, dict]:
-    """Live comps for one stock, resolved field by field.
+    """Live comps for one stock.
 
-    Returns {field: {value, basis, cohort, peer_count}}. Fields with no
-    qualifying comp set are simply absent — the caller keeps its static
+    Returns {field: {value, basis, cohort, peer_count, ...}}. Fields with no
+    qualifying comp set are simply absent -- the caller keeps its static
     value for those, and can tell the difference.
 
-    Rungs, tried in order and applied per field:
+    Rungs, in ladder order:
 
         industry / large   (only when the target is itself a large name)
         industry / all
@@ -1531,9 +1662,34 @@ def get_regional_multiples(
     Passing `market_cap` is what unlocks the "large" rungs. Without it the
     caller gets whole-grouping medians, which for a mega-cap on HKEX can be
     a comp set two orders of magnitude smaller than the target.
+
+    Owner, 2026-11-25 (relative-valuation mechanics):
+
+      * ONE PEER SET. `anchor_field` (the profile's anchor multiple) is resolved
+        first, and every other field tries the anchor's rung before the rest of
+        the ladder -- so P/E and EV/EBITDA are not taken over two different
+        baskets because one cohort happened to be a seat short. Fields still
+        fall down the ladder when the anchor's basket has no reading at all.
+      * NEVER THE SUBJECT. When the named members are on record the median is
+        re-taken without the valued company (and without feed errors); if fewer
+        than the rung's floor remain, that rung does not price the field and the
+        ladder moves on. The stored median (which includes the subject) is never
+        used in its place.
+      * SCREENED. The same MAD trim and market-cap sanity check as every other
+        basket (`screened_median`); trimmed members are named, and the floor
+        applies after the screen.
+      * `block_sector`: the whole-sector rung is refused (cyclical and industrial
+        profiles -- an auto OEM priced on Amazon, Home Depot and McDonald's is
+        not a comparable). A field with no industry or family reading is
+        dropped rather than resolved there, and the reason is recorded.
+
+    `diagnostics`, when a dict is passed, receives {"dropped": {field: [reasons]},
+    "anchor": {...}} so the caller can flag what was refused.
     """
     resolved: dict[str, dict] = {}
     _members_seen: dict[tuple, list] = {}
+    _rows_seen: dict[tuple, dict] = {}
+    reasons: dict[str, list] = {}
 
     rungs: list[tuple[str, str, str, int]] = []
     if market_cap:
@@ -1547,65 +1703,113 @@ def get_regional_multiples(
     if market_cap:
         rungs.append(("sector", sector or "", "large", MIN_SECTOR_PEERS))
     rungs.append(("sector", sector or "", "all", MIN_SECTOR_PEERS))
+    rungs = [r for r in rungs if r[1]]
+    _subj = subject_symbol(exclude_symbol) if exclude_symbol else None
 
-    for level, key, cohort, floor in rungs:
-        if not key:
-            continue
-        for field, row in load_comps(exchange, level, key, cohort,
-                                     max_age_days).items():
-            # Only the multiples this module computes. A row under any other
-            # field name (e.g. the `<field>__p25` quartile rows written for a
-            # since-retired 12m premium) is not a multiple and is ignored.
-            if field not in FIELDS:
-                continue
-            if field in resolved or row["peer_count"] < floor:
-                continue
-            # A "large" cohort only applies to a target that belongs in it.
-            if cohort == "large" and market_cap:
-                if float(market_cap) < row.get("min_market_cap", 0.0):
-                    continue
-            resolved[field] = {
-                "value": row["value"],
-                "basis": level,
-                "cohort": cohort,
-                "peer_count": row["peer_count"],
-                # The basket's identity, so its named members can be listed.
-                "key": key,
-                "exchange": exchange,
-            }
-            # Owner, 2026-10-04 (plan 1F.3 / EN8): the median is re-taken over the named in-band members
-            # without (a) the valued company -- not its own peer -- and (b) any member with no market
-            # cap (a feed error: UNH and CVS read $0m in Molina's basket), and the members and values it
-            # was taken over are frozen into the run, so the workbook's Comps check cannot drift when
-            # the weekly refresh rewrites the basket. Too few left -> the stored figure stands.
-            _mk = (level, key, cohort)
-            if _mk not in _members_seen:
-                try:
-                    _members_seen[_mk] = load_members(exchange, level, key, cohort)
-                except Exception:                          # noqa: BLE001
-                    _members_seen[_mk] = []
-            _mem = _members_seen[_mk]
-            if _mem:
-                _subj = subject_symbol(exclude_symbol) if exclude_symbol else None
-                _cell = lambda m_: ((m_.get("metrics") or {}).get(field) or {})        # noqa: E731
-                _inband = [m_ for m_ in _mem if _cell(m_).get("in_band") and _cell(m_).get("value") is not None]
-                _keep = [m_ for m_ in _inband
-                         if subject_symbol(m_.get("symbol")) != _subj and (m_.get("market_cap") or 0) > 0]
-                _dropped_self = any(subject_symbol(m_.get("symbol")) == _subj for m_ in _inband) if _subj else False
-                _dropped_mcap = [m_.get("symbol") for m_ in _inband if not (m_.get("market_cap") or 0) > 0]
-                if (_dropped_self or _dropped_mcap) and len(_keep) >= floor:
-                    resolved[field].update(value=round(statistics.median(float(_cell(m_)["value"]) for m_ in _keep), 4),
-                                           peer_count=len(_keep), value_with_subject=row["value"])
-                    if _dropped_self:
-                        resolved[field]["subject_excluded"] = True
-                    if _dropped_mcap:
-                        resolved[field]["excluded_no_market_cap"] = _dropped_mcap
-                elif _dropped_self:
-                    resolved[field]["subject_excluded"] = False
-                _frozen = _keep if (_dropped_self or _dropped_mcap) and len(_keep) >= floor else _inband
-                resolved[field]["members_used"] = [
-                    {"symbol": m_.get("symbol"), "name": m_.get("name"), "market_cap": m_.get("market_cap"),
-                     "value": float(_cell(m_)["value"])} for m_ in _frozen]
+    def _note(field: str, msg: str) -> None:
+        lst = reasons.setdefault(field, [])
+        if msg not in lst:
+            lst.append(msg)
+
+    def _rows(rung) -> dict:
+        if rung not in _rows_seen:
+            level, key, cohort, _f = rung
+            _rows_seen[rung] = {f: r for f, r in load_comps(exchange, level, key, cohort, max_age_days).items()
+                                # Only the multiples this module computes (e.g. not the retired
+                                # `<field>__p25` quartile rows).
+                                if f in FIELDS}
+        return _rows_seen[rung]
+
+    def _members(rung) -> list:
+        mk = rung[:3]
+        if mk not in _members_seen:
+            try:
+                _members_seen[mk] = load_members(exchange, *mk)
+            except Exception:                              # noqa: BLE001
+                _members_seen[mk] = []
+        return _members_seen[mk]
+
+    def _resolve(field: str, rung) -> Optional[dict]:
+        level, key, cohort, floor = rung
+        row = _rows(rung).get(field)
+        if row is None:
+            return None
+        if level == "sector" and block_sector:
+            _note(field, f"sector rung refused for this profile ({key}, {cohort})")
+            return None
+        if row["peer_count"] < floor:
+            return None
+        # A "large" cohort only applies to a target that belongs in it.
+        if cohort == "large" and market_cap and float(market_cap) < row.get("min_market_cap", 0.0):
+            return None
+        out = {"value": row["value"], "basis": level, "cohort": cohort, "peer_count": row["peer_count"],
+               # The basket's identity, so its named members can be listed.
+               "key": key, "exchange": exchange,
+               # the stored label median of this rung, so a through-cycle multiple can be re-based onto the
+               # screened basket (dcf_agent._dynamic_norm_multiple)
+               "label_value": row["value"]}
+        # Owner, 2026-10-04 (plan 1F.3 / EN8) and 2026-11-25: the median is re-taken over the named in-band
+        # members without the valued company, without feed errors (no market cap, or multiples computed on a
+        # cap 3x off the screener's) and without MAD outliers, and the members and values it was taken over
+        # are frozen into the run. Too few left -> this rung does not price the field.
+        mem = _members(rung)
+        if not mem:
+            return out
+        _cell = lambda m_: ((m_.get("metrics") or {}).get(field) or {})        # noqa: E731
+        inband = [m_ for m_ in mem if _cell(m_).get("in_band") and _cell(m_).get("value") is not None]
+        self_rows = [m_ for m_ in inband if _subj and subject_symbol(m_.get("symbol")) == _subj]
+        no_mcap = [m_ for m_ in inband if not (m_.get("market_cap") or 0) > 0]
+        base = [m_ for m_ in inband if m_ not in self_rows and m_ not in no_mcap]
+        sm = screened_median(field, base, 0, value_of=lambda m_: float(_cell(m_)["value"]),
+                             symbol_of=lambda m_: m_.get("symbol"), mcap_of=lambda m_: m_.get("market_cap"),
+                             metrics_of=lambda m_: m_.get("metrics"))
+        kept = [m_ for m_, _ in sm.get("kept") or []]
+        changed = bool(self_rows or no_mcap or sm.get("trimmed") or sm.get("mcap_mismatch"))
+        if changed:
+            if len(kept) < floor:
+                why = []
+                if self_rows:
+                    why.append("the subject")
+                if no_mcap or sm.get("mcap_mismatch"):
+                    why.append("feed errors")
+                if sm.get("trimmed"):
+                    why.append("outliers")
+                _note(field, f"{level}/{cohort} {key}: {len(kept)} peers left after excluding "
+                             f"{' and '.join(why)} (floor {floor})")
+                return None
+            out.update(value=round(statistics.median(float(_cell(m_)["value"]) for m_ in kept), 4),
+                       peer_count=len(kept), value_with_subject=row["value"])
+            if self_rows:
+                out["subject_excluded"] = True
+            if no_mcap:
+                out["excluded_no_market_cap"] = [m_.get("symbol") for m_ in no_mcap]
+            if sm.get("mcap_mismatch"):
+                out["excluded_mcap_mismatch"] = [m_.get("symbol") for m_ in sm["mcap_mismatch"]]
+            if sm.get("trimmed"):
+                out["members_trimmed"] = [{"symbol": m_.get("symbol"), "name": m_.get("name"), "value": v_}
+                                          for m_, v_ in sm["trimmed"]]
+        frozen = kept if changed else inband
+        out["members_used"] = [{"symbol": m_.get("symbol"), "name": m_.get("name"), "market_cap": m_.get("market_cap"),
+                                "value": float(_cell(m_)["value"])} for m_ in frozen]
+        return out
+
+    anchor = anchor_field if anchor_field in FIELDS else None
+    anchor_rung = next((r for r in rungs if _resolve(anchor, r)), None) if anchor else None
+    order = ([anchor_rung] if anchor_rung else []) + [r for r in rungs if r != anchor_rung]
+    for field in FIELDS:
+        for rung in order:
+            got = _resolve(field, rung)
+            if got:
+                if anchor_rung and rung != anchor_rung:
+                    got["off_anchor_basket"] = True
+                resolved[field] = got
+                break
+    dropped = {f: r for f, r in reasons.items() if f not in resolved}
+    if isinstance(diagnostics, dict):
+        diagnostics["dropped"] = dropped
+        if anchor_rung:
+            diagnostics["anchor"] = {"field": anchor, "basis": anchor_rung[0], "key": anchor_rung[1],
+                                     "cohort": anchor_rung[2]}
     # Aging out is the failure mode this module exists to prevent, and it is
     # the one that hides best: every field simply goes missing, the caller
     # keeps its static table, and an HK stock is quietly valued on US
