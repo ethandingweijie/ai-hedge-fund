@@ -308,7 +308,7 @@ def test_the_pdf_prints_the_horizon_disclosures_methodology_street_and_risks(tmp
     finally:
         pdf_report._fetch_company_name = orig
     text = " ".join("\n".join(p.get_text() for p in fitz.open(path)).split())
-    assert "Horizon: 12 months" in text and "Medium" not in text
+    assert "Horizon: 12 months" in text and "Horizon: Medium" not in text   # "Medium" may be a cited source's name
     assert "Target methodology. 12-month target = price + 50% × (intrinsic value − price)" in text
     assert "Versus the Street. Our 12-month target of US$846 is below the Street range" in text
     assert "RISKS TO RATING" in text and "Downside risk: bear case." in text

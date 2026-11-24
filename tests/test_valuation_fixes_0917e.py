@@ -95,7 +95,14 @@ the 9 reported to the owner when this was scoped, a miscount made by
 string-matching `bull:` inside multi-line `forward_flags` prose; FCX's 12m band
 fires for the first time and MELI's bear floor moves.
 """
+
 from __future__ import annotations
+import pytest
+# Owner, 2026-11-25 (CFA audit): Gate B no longer acts -- the value-driver terminal value prices growth at
+# RONIC = WACC, so a weak forward ROIC adds nothing and never zeroes growth. These tests pinned the golden baseline's
+# Gate B footprint after the 2026-09-17 fix; that footprint no longer exists. Kept as the record of the fix.
+pytestmark = pytest.mark.skip(reason="superseded 2026-11-25: Gate B no longer zeroes terminal growth (value-driver TV)")
+
 
 import inspect
 import json
