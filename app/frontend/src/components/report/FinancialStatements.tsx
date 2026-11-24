@@ -166,7 +166,7 @@ export function FinancialStatements({
           <thead>
             {forecast.length > 0 && (
               <tr>
-                <th className="sticky left-0 z-10 bg-card" />
+                <th className="sticky left-0 z-10 bg-background" />
                 <th colSpan={periods.length}
                   className={`text-right font-medium px-3 pt-2 text-xs uppercase tracking-wide ${emphasisTone('ghost')}`}>
                   Reported
@@ -178,7 +178,7 @@ export function FinancialStatements({
               </tr>
             )}
             <tr className="border-b border-border">
-              <th className={`sticky left-0 z-10 bg-card text-left font-medium px-3 py-2 ${emphasisTone('muted')}`}>
+              <th className={`sticky left-0 z-10 bg-background after:pointer-events-none after:absolute after:inset-y-0 after:-right-4 after:w-4 after:bg-gradient-to-r after:from-background after:to-transparent text-left font-medium px-3 py-2 ${emphasisTone('muted')}`}>
                 {stmt.title}
               </th>
               {columns.map((p, i) => (
@@ -204,12 +204,12 @@ export function FinancialStatements({
               >
                 <td
                   className={[
-                    'sticky left-0 z-10 bg-card px-3 py-1.5 whitespace-nowrap',
+                    'sticky left-0 z-10 bg-background px-3 py-1.5 whitespace-nowrap after:pointer-events-none after:absolute after:inset-y-0 after:-right-4 after:w-4 after:bg-gradient-to-r after:from-background after:to-transparent',
                     row.indent ? 'pl-7' : '',
                     row.emphasis ? 'font-medium text-foreground' : emphasisTone('medium'),
                   ].join(' ')}
                 >
-                  {row.label}
+                  <span title={row.label} className="block max-w-[9.5rem] truncate sm:max-w-none">{row.label}</span>
                 </td>
                 {columns.map((p, i) => {
                   const g = row.growth?.[p] ?? null;
