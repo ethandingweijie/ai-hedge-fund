@@ -93,7 +93,7 @@ export function DiscussPage() {
             placeholder="Search ticker or company..."
             maxLength={20}
             autoFocus
-            className="w-full h-12 pl-10 pr-4 text-sm rounded-full bg-card border border-border focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
+            className="w-full h-12 pl-10 pr-4 text-[16px] rounded-full bg-card border border-border focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
           />
           {showSugg && suggestions.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto z-20">
@@ -115,39 +115,37 @@ export function DiscussPage() {
             </div>
           )}
         </form>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Every ticker has its own thread — post, reply, and like with other users.
-        </p>
       </div>
 
       <div className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-          Active Discussions
+        <h2 className="text-[22px] font-semibold tracking-tight text-foreground pb-3 border-b border-border">
+          Active discussions
         </h2>
         {activeLoading && (
           <p className="text-sm text-muted-foreground">Loading...</p>
         )}
         {!activeLoading && activeTickers.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No discussions yet — search a ticker above and be the first to start one.
-          </p>
+          <p className="py-6 text-[15px] text-muted-foreground">No discussions yet. Search a ticker to start one.</p>
         )}
         {!activeLoading && activeTickers.length > 0 && (
-          <div className="space-y-2">
+          <div className="flex flex-col divide-y divide-border">
             {activeTickers.map((t) => (
               <button
                 key={t.ticker}
                 onClick={() => goToTicker(t.ticker)}
-                className="w-full flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left hover:border-brand/50 hover:bg-muted/40 transition-colors"
+                className="w-full flex items-center gap-3 py-4 -mx-3 px-3 rounded-xl text-left [@media(hover:hover)]:hover:bg-muted/40 transition-colors"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-mono font-bold text-sm text-foreground shrink-0">{t.ticker}</span>
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                    <MessageCircle size={12} />
-                    {t.message_count}
+                <span className="w-11 h-11 rounded-full bg-foreground text-background flex items-center justify-center text-[11px] font-bold shrink-0">
+                  {t.ticker.slice(0, 4)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[17px] font-semibold text-foreground">{t.ticker}</span>
+                  <span className="flex items-center gap-1 text-[13px] text-muted-foreground">
+                    <MessageCircle size={13} />
+                    {t.message_count} message{t.message_count === 1 ? '' : 's'}
                   </span>
-                </div>
-                <span className="text-xs text-muted-foreground shrink-0">{timeAgo(t.last_activity_at)}</span>
+                </span>
+                <span className="text-[13px] text-muted-foreground shrink-0">{timeAgo(t.last_activity_at)}</span>
               </button>
             ))}
           </div>
