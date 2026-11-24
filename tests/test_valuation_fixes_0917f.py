@@ -78,6 +78,12 @@ unattributable.
 """
 from __future__ import annotations
 
+import pytest
+
+# Owner, 2026-11-25 (CFA audit): Gate B no longer acts or prints its ROIC verdict -- the value-driver terminal value
+# prices growth at RONIC = WACC. These tests pinned Gate B's persisted ROIC and prose; kept as the record of that fix.
+_superseded = pytest.mark.skip(reason="superseded 2026-11-25: Gate B no longer zeroes terminal growth (value-driver TV)")
+
 import inspect
 import json
 import os
@@ -229,6 +235,7 @@ def test_roic_source_only_ever_takes_one_of_the_three_chain_values():
 # ══════════════════════════════════════════════════════════════════════════════
 
 
+@_superseded
 @pytest.mark.parametrize("name", _STILL_FIRES)
 def test_the_persisted_bear_roic_is_the_one_gate_b_printed(name):
     """The whole point of persisting it. Tolerance is half a display digit, not
@@ -243,6 +250,7 @@ def test_the_persisted_bear_roic_is_the_one_gate_b_printed(name):
     assert abs(prose[0] - round(field * 100, 1)) <= 0.05, (name, prose, field)
 
 
+@_superseded
 @pytest.mark.parametrize("name", _STILL_FIRES)
 def test_the_persisted_provenance_is_the_one_gate_b_printed(name):
     prose = _gate_b_bear(name)
@@ -250,6 +258,7 @@ def test_the_persisted_provenance_is_the_one_gate_b_printed(name):
     assert _proj(name)["scenarios.bear.roic_source"] == prose[1]
 
 
+@_superseded
 def test_the_field_and_the_prose_never_disagree_about_whether_the_gate_fired():
     """A Gate B flag exists exactly where the persisted ROIC is at or below WACC,
     and nowhere else. This is the contradiction that would have caught the `× 10`
@@ -264,6 +273,7 @@ def test_the_field_and_the_prose_never_disagree_about_whether_the_gate_fired():
             assert fired == (roic <= wacc), (name, roic, wacc, fired)
 
 
+@_superseded
 def test_terminal_growth_survives_bear_exactly_where_the_roic_clears_wacc():
     """`tgr` is the gate's output; `forward_roic` and `wacc` are its inputs. All
     three are now in the same document, so the relationship is checkable rather
@@ -670,6 +680,7 @@ def test_the_projected_roic_rises_monotonically_across_the_scenarios(name):
     assert r[0] < r[1] < r[2], (name, r)
 
 
+@_superseded
 def test_the_quality_gate_saturates_in_bear_for_the_four_names_above_twice_wacc():
     """`_quality = min(1.0, (forward_roic - wacc) / wacc)` is pinned at 1.0 for any
     ROIC >= 2× WACC. These four are already saturated in the BEAR scenario — AAPL
@@ -880,7 +891,8 @@ def test_the_two_cohorts_item_3a_moved_moved_to_the_numbers_measured(name, expec
         # item 3a's move (0.0625 -> 0.1359 on 9 large-cohort peers) stays as history.
         p = _proj(name)
         for s in _SCENARIOS:
-            assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(0.107, abs=5e-5), s   # 0.0877 with itself in its basket (Phase 1, plan 1F.3)
+            # 2026-11-25 (CFA audit): the peers' growth is read forward (NTM revenue growth), 0.0875; trailing it was 0.107
+            assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(0.0875, abs=5e-5), s
             assert _basis(name, s)["basis"] == "profile" and _basis(name, s)["key"] == "China Internet Platform", s
         return
     p = _proj(name)

@@ -17829,6 +17829,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "revenue_base": revenue_base, "fcf_margin_base": fcf_margin_base,
                 "growth_base": g, "growth_schedule": _growth_schedule,
                 "terminal_loe_multiplier": _loe_tv_mult,
+                # Owner, 2026-11-25: the value-driver terminal value's inputs, so the workbook rebuilds it exactly.
+                "terminal_nopat_ratio": _dcf_projection.get("terminal_nopat_ratio"), "terminal_ronic_spread": 0.0,
+                "terminal_formula": "value_driver" if _switch_on("VALUE_DRIVER_TV") else "gordon",
                 "margin_delta_absolute": md_abs, "wacc": wacc,
                 "wacc_schedule": _wacc_schedule, "tgr": tgr, "fcf_floor": fcf_floor,
                 "net_debt": float(net_debt or 0.0), "shares": shares,

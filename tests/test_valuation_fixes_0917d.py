@@ -646,7 +646,9 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
         # V again 2026-10-05: the owner-accepted as-converted count (1,880m) is the divisor.
         # V again 2026-10-10 (cross-sector audit batch A): the Payment Networks basket now prices on the values
         # recorded into the golden fixture (frozen store), not the local store; relationship unchanged.
-        "V":    {"bear": 195.3, "base": 279.44, "bull": 350.72},
+        # V again 2026-11-25 (CFA audit): the peers' growth is read forward (NTM), so the premium on the leg moves
+        # with it (base 279.44 -> 309.34, the ratio of the premiums); relationship unchanged.
+        "V":    {"bear": 195.27, "base": 309.34, "bull": 388.1},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

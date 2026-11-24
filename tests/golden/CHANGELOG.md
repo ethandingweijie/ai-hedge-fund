@@ -1874,3 +1874,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-25 (CFA audit decisions): firm CAPM (Damodaran Jan-2026 unlevered industry betas relevered at firm D/E, rf 4.94%, ERP 4.41%; regime/research/insider overlays out), value-driver terminal value (RONIC = WACC; peer exit clamp now a check; g capped at rf), full SBC expense. Attribution AAPL 195.07->145.70 (CAPM -24.7, TV -8.7, SBC -3.8); V 336.77->304.05; BABA 99.49->72.65; COST 503.62->457.65; MELI 4596->3961; 09988.HK 104.76->80.73; banks/REITs unchanged
 
+## 2026-11-24T17:16:23+00:00
+
+- regenerated at HEAD: `9639be15`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-25 (CFA audit, relative valuation): no growth premium on through-cycle (norm / mid-cycle) legs or on cyclical profiles (02888.HK 294.91->298.15 and D05.SI 46.75->47.98: the 0.85 discount came off P/E (norm); SCHW 71.80->70.03); peers' growth read forward (NTM) not trailing (V 304.05->311.08: peer growth 7.1% vs 11.7%); AAPL / FCX / BABA / 09988.HK base unchanged
+
