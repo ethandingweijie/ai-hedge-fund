@@ -719,12 +719,64 @@ def current_multiple(exchange: str, level: str, key: str, field: str) -> Optiona
     try:
         _ensure_dm_tables()
         row = _dm_db().query_one(
-            "SELECT multiple, effective_at, source, pinned, baseline, band_lo, band_hi "
+            "SELECT multiple, effective_at, source, pinned, baseline, band_lo, band_hi, market_now "
             "FROM dynamic_multiples WHERE exchange = ? AND level = ? AND key = ? AND field = ?",
             [exchange, level, key, field])
         return dict(row) if row else None
     except Exception:                                          # noqa: BLE001
         return None
+
+
+def basket_through_cycle(exchange: str, level: str, key: str, norm_field: str,
+                         basis: dict, trailing_value: Optional[float]) -> Optional[dict]:
+    """The through-cycle multiple for the SCREENED basket a trailing field resolved to (owner, 2026-11-25, item 4).
+
+    The table's multiple is fitted on the whole label -- the valued company and its outliers included. It is
+    re-based onto the basket the trailing median was actually taken over (subject excluded, MAD-trimmed):
+
+      1. per member, when the members store carries the members' own through-cycle readings: the screened
+         members' median over the label's latest through-cycle reading (``market_now``);
+      2. otherwise by the trailing ratio: the screened basket's trailing median over the label's stored
+         trailing median (``label_value``), which is what the screen moved.
+
+    Unchanged when neither applies (no members on record, or the screen moved nothing). Level must be an
+    industry or family label -- a sector-level multiple is refused by the caller. Returns
+    {multiple, source, effective_at, label_multiple, rebase, members} or None when there is no multiple."""
+    if level != "industry":
+        return None
+    row = current_multiple(exchange, level, key, norm_field)
+    if not row or not isinstance(row.get("multiple"), (int, float)) or row["multiple"] <= 0:
+        return None
+    label_mult = float(row["multiple"])
+    mult, rebase = label_mult, None
+    members = [m.get("symbol") for m in ((basis or {}).get("members_used") or []) if m.get("symbol")]
+    try:
+        from src.data import regional_comps as rc
+        if members:
+            vals = rc.basket_field_values(exchange, tuple(members), norm_field)
+            kept, trimmed = rc.robust_trim(norm_field, [(i, v) for i, v in enumerate(vals)])
+            now = row.get("market_now")
+            if len(kept) >= rc.MIN_INDUSTRY_PEERS and isinstance(now, (int, float)) and now > 0:
+                med = statistics.median(v for _, v in kept)
+                rebase = {"method": "member through-cycle readings", "basket_median": med, "label_now": float(now),
+                          "factor": med / float(now), "n": len(kept), "trimmed": len(trimmed)}
+        if rebase is None:
+            lv = (basis or {}).get("label_value")
+            if (isinstance(lv, (int, float)) and lv > 0 and isinstance(trailing_value, (int, float))
+                    and trailing_value > 0 and abs(float(trailing_value) / float(lv) - 1.0) > 1e-6):
+                rebase = {"method": "trailing ratio", "basket_trailing": float(trailing_value),
+                          "label_trailing": float(lv), "factor": float(trailing_value) / float(lv)}
+    except Exception:                                          # noqa: BLE001
+        rebase = None
+    if rebase:
+        mult = label_mult * rebase["factor"]
+    src = (f"dynamic through-cycle {norm_field} ({exchange} {level}: {key}; "
+           f"{'owner-pinned' if row.get('pinned') else 'auto'} {str(row.get('effective_at') or '')[:10]})")
+    if rebase:
+        src += (f" re-based x{rebase['factor']:.3f} onto the subject-excluded, screened basket "
+                f"({rebase['method']}; label {label_mult:.2f}x)")
+    return {"multiple": mult, "source": src, "effective_at": row.get("effective_at"),
+            "label_multiple": label_mult, "rebase": rebase, "members": members}
 
 
 def _baskets_with_history(exchange: str) -> list[tuple[str, str]]:

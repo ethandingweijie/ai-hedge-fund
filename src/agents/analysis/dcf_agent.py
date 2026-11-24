@@ -408,6 +408,45 @@ def _depletion_profile(entry: dict, years_cap: Optional[int] = None) -> Optional
     return out
 
 
+#: Owner, 2026-11-25 (item 7): trailing EPS above this multiple of NTM consensus EPS is treated as carrying
+#: non-recurring income (Boeing: TTM net income $2.235bn on the Jeppesen disposal gain vs NTM EPS $0.84).
+_TRAILING_PE_NONRECURRING_MULTIPLE = 2.0
+
+
+def _trailing_pe_earnings(most_recent: dict, net_income: Optional[float], shares: float,
+                          forward_consensus: Optional[dict]) -> tuple[Optional[float], str, Optional[dict]]:
+    """(earnings, label, flag) for the trailing P/E leg.
+
+    `net_income` is already core earnings when the non-operating gap logic stripped a one-off (`_core_earnings`).
+    When trailing EPS still exceeds _TRAILING_PE_NONRECURRING_MULTIPLE x NTM consensus EPS (or consensus expects a
+    loss), the trailing figure is not recurring: the leg prices the five-year normalised (core) net income instead,
+    and declines when that is not positive. The flag says which applied."""
+    _rep = most_recent.get("net_income")
+    _core_used = (most_recent.get("net_income_core") is not None and isinstance(_rep, (int, float))
+                  and net_income is not None and abs(float(net_income) - float(_rep)) > 1e-6)
+    label = "Net income (TTM, core: non-recurring item stripped)" if _core_used else "Net income (TTM)"
+    flag = ({"basis": "core", "reported_net_income": float(_rep), "core_net_income": float(net_income)}
+            if _core_used else None)
+    try:
+        ntm = ((forward_consensus or {}).get("eps") or {}).get("base")
+        if net_income is None or not shares or shares <= 0 or not isinstance(ntm, (int, float)):
+            return net_income, label, flag
+        eps_ttm = float(net_income) / float(shares)
+        if eps_ttm <= 0 or eps_ttm <= _TRAILING_PE_NONRECURRING_MULTIPLE * max(float(ntm), 0.0):
+            return net_income, label, flag
+        norm = most_recent.get("normalized_net_income")
+        flag = {"basis": "normalised", "trailing_eps": eps_ttm, "ntm_eps": float(ntm),
+                "threshold": _TRAILING_PE_NONRECURRING_MULTIPLE,
+                "normalised_net_income": float(norm) if isinstance(norm, (int, float)) else None,
+                "reason": (f"trailing EPS {eps_ttm:.2f} exceeds {_TRAILING_PE_NONRECURRING_MULTIPLE:g}x NTM consensus "
+                           f"EPS {float(ntm):.2f}: trailing income carries non-recurring items")}
+        if isinstance(norm, (int, float)) and norm > 0:
+            return float(norm), "Net income (5y normalised core; trailing carries non-recurring income)", flag
+        return None, "Net income (no recurring earnings: normalised core not positive)", flag
+    except Exception:                                      # noqa: BLE001
+        return net_income, label, flag
+
+
 def _franchise_loe_entry(ticker: str) -> dict:
     """The owner-accepted franchise LOE input for a ticker (valuation_constants.franchise_loe), else {}."""
     try:
@@ -2960,17 +2999,24 @@ def _classify_energy_segment(name: str, member: str = "") -> Optional[str]:
 
 def _dynamic_norm_multiple(peer: dict, live_field: str, ticker: Optional[str],
                            leg: str) -> tuple[Optional[float], Optional[str]]:
-    """The industry's through-cycle multiple for a normalised leg, or (None, None).
+    """The through-cycle multiple for a normalised leg, or (None, None).
 
     Owner decision 2026-09-21: the normalised legs price through-cycle earnings,
     so they take the basket's through-cycle multiple -- updated automatically
     each quarter -- instead of the trailing peer median, which is the wrong
-    basis for normalised earnings (the refining audit's finding). The basket is
-    the one the live peer multiple itself resolved from, read off its recorded
-    provenance, so the dynamic multiple and the peer set can never disagree
-    about which industry this is. Falls back to the peer median whenever there
-    is no dynamic multiple, and records every use so the Model Accuracy log can
-    show the multiple actually reached a valuation.
+    basis for normalised earnings (the refining audit's finding).
+
+    Owner, 2026-11-25 (relative-valuation mechanics, item 4): the through-cycle
+    multiple is a property of the SAME peer set the trailing field resolved to.
+    The dynamic engine fits it on the whole FMP label (the valued company and its
+    outliers included -- MU's 41.97x "Semiconductors" P/E), so it is re-based onto
+    the subject-excluded, screened basket the trailing median was taken over
+    (`dynamic_multiples.basket_through_cycle`; the members are recorded on the
+    trace). A SECTOR-level through-cycle multiple is refused outright -- the GM
+    baseline priced normalised auto earnings on the Consumer Cyclical sector at
+    30.69x -- and the leg takes the trailing basket median of the same field,
+    flagged. Falls back to the peer median whenever there is no dynamic multiple,
+    and records every use so the Model Accuracy log can show it reached a valuation.
     """
     try:
         from src.data import dynamic_multiples as _dm
@@ -2979,18 +3025,23 @@ def _dynamic_norm_multiple(peer: dict, live_field: str, ticker: Optional[str],
         b = ((peer or {}).get("_comp_basis") or {}).get(live_field) or {}
         key, ex, level = b.get("key"), b.get("exchange"), b.get("basis")
         norm_field = _dm.LIVE_TO_NORM.get(live_field)
-        if not (key and ex and norm_field and level in ("industry", "sector")):
+        if not (key and ex and norm_field):
             return None, None
-        row = _dm.current_multiple(ex, level, key, norm_field)
-        if not row or not isinstance(row.get("multiple"), (int, float)) or row["multiple"] <= 0:
+        if level == "sector":
+            _tv = (peer or {}).get(live_field)
+            if isinstance(_tv, (int, float)) and _tv > 0:
+                return float(_tv), (f"peer median {live_field} (trailing; sector-level through-cycle multiple "
+                                    f"refused: {ex} sector {key})")
+            return None, None
+        if level != "industry":
+            return None, None
+        res = _dm.basket_through_cycle(ex, level, key, norm_field, b, (peer or {}).get(live_field))
+        if not res:
             return None, None
         if ticker:
-            _dm.record_usage(ticker, leg, ex, level, key, norm_field,
-                             float(row["multiple"]), row.get("effective_at"))
-        src = (f"dynamic through-cycle {norm_field} ({ex} {level}: {key}; "
-               f"{'owner-pinned' if row.get('pinned') else 'auto'} "
-               f"{str(row.get('effective_at') or '')[:10]})")
-        return float(row["multiple"]), src
+            _dm.record_usage(ticker, leg, ex, level, key, norm_field, float(res["multiple"]), res.get("effective_at"))
+        _leg_trace(through_cycle_basket={k: v for k, v in res.items() if k not in ("source",)})
+        return float(res["multiple"]), res["source"]
     except Exception:                                          # noqa: BLE001
         return None, None
 
@@ -8227,7 +8278,15 @@ def _compute_method_value(
     before reaching here by the caller — so this function only sees implementable
     method names or proxy names.
     """
+    # Owner, 2026-11-25 (relative-valuation mechanics, item 3): the growth premium compares the company's
+    # FORWARD growth with its peers'. A normalised / through-cycle leg prices mid-cycle earnings on a
+    # mid-cycle multiple, and a cyclical profile's growth is the cycle itself -- VLO took x1.30 on EV/EBITDA
+    # (norm), P/E (norm), P/BV and FCF yield because a refining recovery beat the peers' trailing 3y decline;
+    # COP x1.20. Neither carries a premium; the forward-growth adjustment is withheld with it.
     _cmv_args = dict(locals())                 # Wave 9: the backlog-gated multiple re-dispatches EV/EBITDA
+    _gp_withheld = _growth_premium_withheld(method_name, profile_name)
+    if _gp_withheld:
+        growth_premium = 1.0
     if method_name == "Backlog-Gated EV/EBITDA":
         _bg_base = _compute_method_value(**{**_cmv_args, "method_name": "EV/EBITDA"})
         if _bg_base is None:
@@ -8263,6 +8322,9 @@ def _compute_method_value(
             return _ppa_out["value"] if _ppa_out["value"] > 0 else None
     peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
                                      ticker=ticker, market_cap=market_cap)
+    if _gp_withheld:
+        peer = {**peer, "_growth_premium_withheld": _gp_withheld}
+        _leg_trace(growth_premium_withheld=_gp_withheld)
     # Owner-set discount on PEER multiples for one ticker (valuation_constants
     # `ticker_multiple_discounts`), 1.0 for everyone else. Applied where the
     # multiple is applied and recorded as its own part, so the peer median a
@@ -8527,19 +8589,31 @@ def _compute_method_value(
                        shares=float(shares), value=_v)
             return _v
     if method_name == _DEPLETING_DCF:
-        iv, _pv_f, _pv_t, _rows_d = _project_dcf(
-            revenue_base, fcf_margin_base, growth_base, 0.0,
-            wacc, 0.0, fcf_floor, net_debt, shares,
-            years=_DEPLETING_HORIZON_YEARS,
-            include_terminal=False,
-            minority_interest=_minority_interest(most_recent),
-            preferred_equity=_preferred_equity(most_recent),
-        )
-        # Cross-sector audit E7 (2026-10-10): the path this leg values is traced, so the workbook shows it (it valued a
-        # 15-year run with no trace at all -- a path no tab displayed).
-        _leg_trace(kind="depleting_dcf", rows=_rows_d, years=_DEPLETING_HORIZON_YEARS, growth_base=float(growth_base),
-                   fcf_margin_base=float(fcf_margin_base), wacc=float(wacc), net_debt=float(net_debt or 0.0),
-                   shares=float(shares), pv_fcf_per_share=float(_pv_f), value=iv)
+        # Owner, 2026-11-25 (relative-valuation mechanics, item 5): without an accepted reserves entry the leg
+        # used to grow revenue at the DCF's growth_base for 15 years -- COP +11.5% a year, a $199 leg at 25%
+        # weight -- the opposite of a depleting asset. It now runs a DECLINING production index (oil & gas 5%
+        # a year, mining 3%) at a flat mid-cycle FCF margin, price held at today's realised level, no terminal
+        # value; growth_base never enters. Flagged as unanchored until reserves are accepted.
+        if shares <= 0:
+            return None
+        _decl = _depletion_default_decline(profile_name)
+        _m = max(float(fcf_margin_base), float(fcf_floor))
+        _rows_d, _pv = [], 0.0
+        for t in range(1, _DEPLETING_HORIZON_YEARS + 1):
+            _q = (1.0 - _decl) ** t
+            _rev_t = float(revenue_base) * _q
+            _fcf = _rev_t * _m
+            _pv += _fcf / (1.0 + float(wacc)) ** t
+            _rows_d.append({"year": t, "production_index": _q, "revenue": _rev_t, "fcf": _fcf})
+        _mi, _pf = _minority_interest(most_recent), _preferred_equity(most_recent)
+        iv = (_pv - float(net_debt or 0.0) - float(_mi or 0.0) - float(_pf or 0.0)) / shares
+        # Cross-sector audit E7 (2026-10-10): the path this leg values is traced, so the workbook shows it.
+        _leg_trace(kind="depleting_dcf", rows=_rows_d, years=_DEPLETING_HORIZON_YEARS,
+                   reserves_basis=(f"UNANCHORED: no accepted reserves entry -- default production decline "
+                                   f"{_decl:.0%}/yr at a flat FCF margin (growth_base not used)"),
+                   decline_rate=_decl, fcf_margin_base=_m, wacc=float(wacc), net_debt=float(net_debt or 0.0),
+                   minority_interest=_mi, preferred_equity=_pf,
+                   shares=float(shares), pv_fcf_per_share=float(_pv / shares), value=iv)
         return iv
 
     # ── EPV (Earnings Power Value) ─────────────────────────────────────────
@@ -9138,10 +9212,13 @@ def _compute_method_value(
     # source. For the TRUE cycle-normalized path use "P/E (norm)" below.
     if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:
         mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount * _own_disc
-        eps = (net_income / shares) if (net_income is not None and shares > 0) else None
+        _pe_ni, _pe_label, _pe_flag = _trailing_pe_earnings(most_recent, net_income, shares, forward_consensus)
+        eps = (_pe_ni / shares) if (_pe_ni is not None and shares > 0) else None
+        if _pe_flag:
+            _leg_trace(non_recurring_income=_pe_flag)
         if eps and eps > 0:
-            _leg_trace(kind="equity_multiple", metric="Net income (TTM)",
-                       metric_value=float(net_income), shares=float(shares),
+            _leg_trace(kind="equity_multiple", metric=_pe_label,
+                       metric_value=float(_pe_ni), shares=float(shares),
                        per_share_metric=float(eps), multiple=float(mult),
                        multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
                                        "peer_source": "peer median pe", "scenario_band": sm,
@@ -10590,6 +10667,47 @@ _FWD_GROWTH_BOUNDS = (0.85, 1.30)   # the owner's growth-premium band (Wave 7), 
 _EV_REV_MARGIN_BOUNDS = (0.25, 1.25)
 
 
+#: Method-name fragments that mark a normalised / through-cycle leg (owner, 2026-11-25, item 3).
+_THROUGH_CYCLE_LEG_TOKENS = ("(norm)", "norm ", "normalized", "normalised", "mid-cycle", "cycle median", "through-cycle")
+
+
+def _growth_premium_withheld(method_name: str, profile_name: str) -> Optional[str]:
+    """Why a leg carries no growth premium, or None when it does (owner, 2026-11-25, item 3)."""
+    if profile_name in _CYCLICAL_PROFILES:
+        return f"cyclical profile ({profile_name}): growth is the cycle, not a premium"
+    n = f"{(method_name or '').lower()} "
+    if any(t in n for t in _THROUGH_CYCLE_LEG_TOKENS):
+        return "through-cycle leg: a mid-cycle multiple on mid-cycle earnings carries no growth premium"
+    return None
+
+
+def _peer_forward_growth(peer: dict) -> tuple[Optional[float], str]:
+    """The peers' FORWARD revenue growth, read off the same basket's TTM and NTM EV/Revenue (owner, 2026-11-25,
+    item 3: forward against forward). EV/Revenue(TTM) / EV/Revenue(NTM) - 1 is NTM over TTM revenue on one EV.
+    Per member where both readings are named (median of the member ratios), else the two medians' ratio when both
+    come from one live basket. (None, reason) when the basket has no NTM revenue multiple."""
+    cb = (peer or {}).get("_comp_basis") or {}
+    a, b = cb.get("ev_revenue") or {}, cb.get("ev_revenue_ntm") or {}
+    try:
+        ma = {m.get("symbol"): m.get("value") for m in (a.get("members_used") or [])}
+        mb = {m.get("symbol"): m.get("value") for m in (b.get("members_used") or [])}
+        gs = [float(ma[k]) / float(mb[k]) - 1.0 for k in ma
+              if k in mb and isinstance(ma[k], (int, float)) and isinstance(mb[k], (int, float)) and mb[k] > 0 and ma[k] > 0]
+        if len(gs) >= 3:
+            g = statistics.median(gs)
+            return max(-0.60, min(2.00, g)), f"peers' NTM revenue growth (TTM / NTM EV/Revenue, {len(gs)} members)"
+        live = ("industry", "profile", "sector")
+        va, vb = (peer or {}).get("ev_revenue"), (peer or {}).get("ev_revenue_ntm")
+        if (a.get("basis") in live and b.get("basis") in live and a.get("key") == b.get("key")
+                and a.get("cohort") == b.get("cohort") and isinstance(va, (int, float)) and isinstance(vb, (int, float))
+                and va > 0 and vb > 0):
+            return max(-0.60, min(2.00, float(va) / float(vb) - 1.0)), \
+                f"peers' NTM revenue growth (TTM / NTM EV/Revenue medians, {a.get('key')})"
+    except Exception:                                      # noqa: BLE001
+        pass
+    return None, "no NTM peer revenue multiple"
+
+
 def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict,
                                forecast_cagr: Optional[float] = None) -> tuple[Optional[float], str]:
     """Plan E23: ((1 + company forward revenue growth) / (1 + peer revenue growth)) ** _FWD_GROWTH_YEARS,
@@ -10599,6 +10717,9 @@ def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict,
     Plan E7 (owner, 2026-10-07; GILD review): a PREMIUM is capped at 1.0 when the model's own five-year revenue path
     grows no faster than the peers -- a multiple must not pay for growth the DCF says does not come (GILD: x1.14 on
     the P/E while the forecast falls in years 6-9)."""
+    _wh = (peer or {}).get("_growth_premium_withheld")
+    if _wh:
+        return 1.0, f"no growth premium -- {_wh}"
     f, note = _forward_growth_adjustment_raw(forward_consensus, peer)
     try:
         pg = peer.get("growth_avg")
@@ -10614,13 +10735,17 @@ def _forward_growth_adjustment(forward_consensus: Optional[dict], peer: dict,
 def _forward_growth_adjustment_raw(forward_consensus: Optional[dict], peer: dict) -> tuple[Optional[float], str]:
     try:
         v1, v2 = (((forward_consensus or {}).get("_fy1_fy2") or {}).get("revenue") or {}).get("base") or (None, None)
-        pg = peer.get("growth_avg")
+        # owner, 2026-11-25 (item 3): the peers' forward growth where the basket carries it, else trailing 3y
+        pg, _pg_src = _peer_forward_growth(peer)
+        _pg_lab = "peers' NTM"
+        if pg is None:
+            pg, _pg_lab = peer.get("growth_avg"), "peers' trailing 3y"
         if not (isinstance(v1, (int, float)) and isinstance(v2, (int, float)) and v1 > 0 and isinstance(pg, (int, float))):
             return None, "no consensus FY+2 revenue or peer growth"
         cg = float(v2) / float(v1) - 1.0
         raw = ((1.0 + cg) / (1.0 + float(pg))) ** _FWD_GROWTH_YEARS
         f = max(_FWD_GROWTH_BOUNDS[0], min(_FWD_GROWTH_BOUNDS[1], raw))
-        return f, (f"forward revenue growth {cg:+.1%} vs peers {float(pg):+.1%} over {_FWD_GROWTH_YEARS}y "
+        return f, (f"forward revenue growth {cg:+.1%} vs {_pg_lab} {float(pg):+.1%}, compounded {_FWD_GROWTH_YEARS}y "
                    f"-> {raw:.2f}x" + (f", held at {f:.2f}x" if f != raw else ""))
     except Exception:  # noqa: BLE001
         return None, "growth adjustment unavailable"
@@ -10770,6 +10895,14 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
 
 _DEPLETING_DCF = "Depleting Asset DCF (Finite Life, No TV)"
 _DEPLETING_HORIZON_YEARS = 15
+#: Owner, 2026-11-25 (item 5): the default production decline of an unanchored depleting DCF (no accepted reserves).
+_DEPLETING_DEFAULT_DECLINE = {"oil_gas": 0.05, "mining": 0.03}
+_OIL_GAS_DEPLETING_PROFILES = frozenset({"Upstream Oil & Gas", "Integrated Oil & Gas"})
+
+
+def _depletion_default_decline(profile_name: str) -> float:
+    """5%/yr for an oil & gas producer, 3%/yr for a miner (coal included)."""
+    return _DEPLETING_DEFAULT_DECLINE["oil_gas" if profile_name in _OIL_GAS_DEPLETING_PROFILES else "mining"]
 
 _DCF_PROJECTION_FAMILY: frozenset[str] = frozenset(_DCF_FAMILY_NAMES)
 
@@ -16822,8 +16955,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if (any(m.get("name") == _DEPLETING_DCF and (m.get("weight") or 0) > 0 for m in _pe_norm_methods)
                 and not _owner_registry("reserves", ticker)):
             ticker_forward_flags.append(
-                "FLAG_DEPLETION_UNANCHORED: the depleting-asset DCF runs a flat 15 years with no decline curve -- accept a "
-                "reserves entry (2P reserves, production) for the reserve-life horizon and plateau / decline profile")
+                f"FLAG_DEPLETION_UNANCHORED: no accepted reserves -- the depleting-asset DCF runs 15 years on a default "
+                f"{_depletion_default_decline(profile_name):.0%}/yr production decline at a flat FCF margin; accept a "
+                f"reserves entry (2P reserves, production) for the reserve-life horizon and plateau / decline profile")
         try:
             if any(m.get("name") == "PPA-backed DCF" for m in _pe_norm_methods):
                 from src.data import industry_inputs as _ii_p
@@ -18032,6 +18166,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                                          market_cap=resolved_mcap)
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 _sector_g_avg_basis = (_peer_for_gp.get("_comp_basis") or {}).get("growth_avg")
+                # Owner, 2026-11-25 (item 3): `g` is the DCF's FORWARD growth, so it is compared with the peers'
+                # forward growth where the basket carries an NTM revenue multiple, not their trailing 3y.
+                _pfg, _pfg_note = _peer_forward_growth(_peer_for_gp)
+                if _pfg is not None:
+                    _sector_g_avg = _pfg
+                    _sector_g_avg_basis = {**(_sector_g_avg_basis or {}), "forward_growth": _pfg_note}
                 _gp_raw_growth = (
                     1.0 + _GROWTH_SPREAD_K * (g - _sector_g_avg)
                     if isinstance(_sector_g_avg, (int, float)) else 1.0
@@ -18088,6 +18228,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     growth_premium = max(0.85, min(1.30, _gp_raw))
                 else:
                     growth_premium = max(0.85, min(1.30, _gp_raw))   # Wave 7: the tech-growth band for every profile
+                # Owner, 2026-11-25 (item 3): no growth premium on any leg of a cyclical profile.
+                if profile_name in _CYCLICAL_PROFILES and growth_premium != 1.0:
+                    if scenario == "base":
+                        forward_flags.append(
+                            f"Growth premium withheld: {profile_name} is a cyclical profile (x{growth_premium:.2f} "
+                            f"not applied; forward growth here is the cycle, not a premium)")
+                    growth_premium = 1.0
 
                 # ── SBC Dilution Override ─────────────────────────────────
                 # If UNFUNDED stock comp (SBC not offset by buybacks) exceeds

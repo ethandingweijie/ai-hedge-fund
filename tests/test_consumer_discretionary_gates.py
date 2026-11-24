@@ -1358,7 +1358,10 @@ def test_pe_premium_and_pe_share_the_trailing_branch():
     assert "For the TRUE cycle-normalized path use" in src
     # The trailing branch multiplies TTM net income; the normalized branch reads
     # the normalized figure. One reader each, so the two cannot be conflated.
-    assert 'eps = (net_income / shares) if (net_income is not None and shares > 0) else None' in src
+    # 2026-11-25 (item 7): the trailing branch reads TTM through `_trailing_pe_earnings`, which substitutes
+    # normalised core earnings only when trailing EPS carries non-recurring income (> 2x NTM consensus).
+    assert '_pe_ni, _pe_label, _pe_flag = _trailing_pe_earnings(most_recent, net_income, shares, forward_consensus)' in src
+    assert 'eps = (_pe_ni / shares) if (_pe_ni is not None and shares > 0) else None' in src
     assert 'norm_ni = most_recent.get("normalized_net_income")' in src
     assert _consumer_profiles()["Luxury Goods"]["rationale"].startswith(
         "Pricing power and brand equity make P/E multiples stable and high.")
@@ -1407,7 +1410,8 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # label whether the bank fallback (equity x target ROE) supplied the
     # earnings -- a disclosure read for the Excel export, not a valuation one.
     # EIGHT since 2026-10-04 (plan EN2): the recovery discount re-reads it.
-    assert src.count('"normalized_net_income"') == 9          # 2026-11-12: + the cycle measure's mid-cycle rebuild (a write)
+    # 2026-11-12: + the cycle measure's mid-cycle rebuild (a write); 2026-11-25: + `_trailing_pe_earnings` (item 7)
+    assert src.count('"normalized_net_income"') == 10
     # SIX since 2026-09-20: the FCF Yield leg on a cyclical profile now stands
     # on the same five-year normalisation as the EV/EBITDA and P/E legs, so
     # `_norm_fcf` is computed beside the other three (with a `free_cash_flow`

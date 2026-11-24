@@ -4387,6 +4387,56 @@ HK_SECTOR_WACC: dict[str, float] = {
 }
 
 
+#: Owner, 2026-11-25 (relative-valuation mechanics, item 6): sectors whose profiles never take the whole-sector
+#: comps rung. Together with dcf_agent._CYCLICAL_PROFILES. An auto OEM's trailing P/E fell to the Consumer Cyclical
+#: sector median (Amazon, Home Depot, McDonald's) when its own industry was a seat short; a field with no industry
+#: or family reading is dropped (static table, flagged) instead.
+_SECTOR_RUNG_BLOCKED_SECTORS = ("Industrials", "Materials", "Transportation")
+
+#: Method-name fragment -> the comps field the method prices on, most specific first.
+_METHOD_FIELD = (
+    ("ev/ebitda", "ev_ebitda"), ("ev/ebit", "ev_ebit"), ("ev/ocf", "ev_ocf"), ("ev/rev", "ev_revenue"),
+    ("ev/sales", "ev_revenue"), ("p/e", "pe"), ("p/b", "pb"), ("fcf yield", "fcf_yield"),
+)
+
+
+def _method_field(name: str):
+    n = (name or "").lower()
+    return next((f for frag, f in _METHOD_FIELD if frag in n), None)
+
+
+def _profile_methods(profile_name: str) -> list:
+    for _sec, _profiles in INDUSTRY_VALUATION_PROFILES.items():
+        if profile_name in _profiles:
+            return list((_profiles[profile_name] or {}).get("methods") or [])
+    return []
+
+
+def profile_anchor_field(profile_name: str):
+    """The comps field of the profile's anchor multiple: the anchor method when it is a multiple, else the
+    heaviest multiple leg. None when the profile prices on no peer multiple."""
+    methods = _profile_methods(profile_name)
+    anchor = next((m for m in methods if m.get("anchor")), None)
+    f = _method_field((anchor or {}).get("name"))
+    if f:
+        return f
+    ranked = sorted((m for m in methods if _method_field(m.get("name"))), key=lambda m: -(m.get("weight") or 0))
+    return _method_field(ranked[0]["name"]) if ranked else None
+
+
+def sector_rung_blocked(profile_name: str) -> bool:
+    """Owner, 2026-11-25: cyclical (dcf_agent._CYCLICAL_PROFILES) and industrial profiles never take the sector rung."""
+    if not profile_name:
+        return False
+    if any(profile_name in (INDUSTRY_VALUATION_PROFILES.get(s_) or {}) for s_ in _SECTOR_RUNG_BLOCKED_SECTORS):
+        return True
+    try:
+        from src.agents.analysis.dcf_agent import _CYCLICAL_PROFILES
+        return profile_name in _CYCLICAL_PROFILES
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def get_sector_peer_multiples(
     sector: str,
     is_hk: bool = False,
@@ -4441,8 +4491,18 @@ def get_sector_peer_multiples(
     # 139 industries clear the peer floor) and SGX resolves to sector for all
     # but a handful. Falls through to `static` for any field without a
     # qualifying comp set, so this can only add information.
+    _diag: dict = {}
     regional = _regional_peer_multiples(ticker, exchange, industry, sector,
-                                        market_cap)
+                                        market_cap, profile_name=profile_name, diagnostics=_diag)
+    # Owner, 2026-11-25 (item 6): a cyclical or industrial profile is never priced on the whole sector. The ladder
+    # already refuses that rung; this also covers a resolver that did not (a recorded replay), so the rule holds
+    # wherever the comps came from.
+    _live_dropped: dict = dict(_diag.get("dropped") or {})
+    if regional and sector_rung_blocked(profile_name):
+        for _f in [f for f, r in regional.items() if isinstance(r, dict) and r.get("basis") == "sector"]:
+            _live_dropped.setdefault(_f, []).append(
+                f"sector rung refused for this profile ({regional[_f].get('key')})")
+            regional.pop(_f)
     # A curated profile basket outranks the industry median for every field it
     # resolves (regional_comps.PROFILE_PEER_BASKETS): the industry label can
     # blend businesses the profile has just told us apart.
@@ -4503,6 +4563,10 @@ def get_sector_peer_multiples(
             if field not in full:
                 full[field] = {"basis": "static", "cohort": _market or "US",
                                "peer_count": None}
+            # Owner, 2026-11-25: a live reading that was refused (subject-only basket, too few after the
+            # outlier screen, the sector rung on a cyclical) says so on the field that replaced it.
+            if field in _live_dropped and full[field].get("basis") in ("static", "dynamic"):
+                full[field] = {**full[field], "live_dropped": list(_live_dropped[field])}
         out["_comp_basis"] = full
         out["_comp_market"] = _market
         try:
@@ -4542,7 +4606,9 @@ def get_sector_peer_multiples(
             # Owner, 2026-10-06 (PFE / Innovent / MRNA / Sheng Siong reviews): the subject exclusion and the
             # frozen members (plan 1F.3 / EN8) were computed and then dropped here, so no run recorded them
             # and the workbook re-read the live basket WITH the valued company (Innovent P/E 52.9 vs 46.4).
-            for _k in ("subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject"):
+            for _k in ("subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject",
+                       # owner, 2026-11-25: the screen's working and the stored label median it replaced
+                       "members_trimmed", "excluded_mcap_mismatch", "label_value", "off_anchor_basket"):
                 if row.get(_k) is not None:
                     basis[field][_k] = row.get(_k)
         # Non-numeric, underscore-prefixed so the numeric consumers that read
@@ -4567,6 +4633,8 @@ def _regional_peer_multiples(
     industry: str = "",
     sector: str = "",
     market_cap: float = 0.0,
+    profile_name: str = "",
+    diagnostics: "dict | None" = None,
 ) -> dict[str, dict]:
     """Live HK/SG comps for one name, or {} when unavailable.
 
@@ -4609,9 +4677,17 @@ def _regional_peer_multiples(
     if not market:
         return {}
     try:
+        _kw = {}
+        if profile_name:
+            # Owner, 2026-11-25 (item 6): one peer set per subject -- every field tries the anchor multiple's
+            # basket first -- and no whole-sector rung for cyclical or industrial profiles.
+            _kw = {"block_sector": sector_rung_blocked(profile_name),
+                   "anchor_field": profile_anchor_field(profile_name)}
+        if diagnostics is not None:
+            _kw["diagnostics"] = diagnostics
         return get_regional_multiples(market, industry, fmp_sector,
                                       market_cap=market_cap or None,
-                                      exclude_symbol=ticker or None)
+                                      exclude_symbol=ticker or None, **_kw)
     except Exception:
         return {}
 

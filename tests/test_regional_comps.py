@@ -182,8 +182,10 @@ class TestComputeMedians:
         rows = rc.compute_medians(self._basket(6), self._metrics(vals),
                                   "industry", rc.MIN_INDUSTRY_PEERS)
         pe = [r for r in rows if r["field"] == "pe" and r["cohort"] == "all"][0]
-        assert pe["value"] == pytest.approx(13.5)
-        assert pe["peer_count"] == 6
+        # Owner, 2026-11-25: the stored median is MAD-screened too, so the receipt (3.4x below the
+        # cluster) is trimmed rather than merely out-voted: median of the five banks, five peers.
+        assert pe["value"] == pytest.approx(14.0)
+        assert pe["peer_count"] == 5
 
     def test_below_peer_floor_is_omitted_not_returned_weak(self):
         rows = rc.compute_medians(self._basket(3), self._metrics([12.0, 13.0, 14.0]),
