@@ -1850,3 +1850,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-10-10: Consumer Growth drops its 20% trailing P/E for Forward EV/EBITDA; no golden is on the profile, every fixture moves only param_version
 
+## 2026-11-12T07:42:48+00:00
+
+- regenerated at HEAD: `e7f39135`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-12: cycle measure adds its cycle-position flag on cyclical profiles (MU, FCX); IV unchanged in replay (CYCLE_LONG_HISTORY pinned off)
+
+## 2026-11-24T15:51:06+00:00
+
+- regenerated at HEAD: `c2894123`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-24: the observation-only peak-consensus line no longer prints on a cyclical the cycle measure acts on (MU); IV unchanged
+

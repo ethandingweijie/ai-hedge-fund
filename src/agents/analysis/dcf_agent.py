@@ -16437,6 +16437,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"mid-cycle EBIT margin {_mid_e:.1%} ({_cyc['mid_cycle_years']}-year median) x current revenue, "
                     f"less today's interest, taxed at {_UFCF_TAX_DEFAULT:.0%}")
                 _cyc["normalized_before"] = _before
+                # the five-year audit line above no longer describes what the P/E (norm) leg reads
+                ticker_forward_flags[:] = [f for f in ticker_forward_flags if not str(f).startswith("Normalized NI: TTM")]
+                _ni_cur = most_recent.get("net_income")
+                if isinstance(_ni_cur, (int, float)) and _ni_cur > 0:
+                    ticker_forward_flags.append(
+                        f"Normalized NI: TTM {_ni_cur / 1e9:,.2f}bn -> mid-cycle {most_recent['normalized_net_income'] / 1e9:,.2f}bn "
+                        f"({most_recent['normalized_net_income'] / _ni_cur - 1.0:+.0%}) -- P/E (norm) uses the mid-cycle figure")
                 ticker_forward_flags.append(
                     f"Normalised earnings on the {_cyc['mid_cycle_years']}-year mid-cycle (cyclical): EBIT margin "
                     f"{_mid_e:.1%}" + (f", EBITDA margin {_ebitda_m:.1%}" if _ebitda_m is not None else "")
@@ -18398,7 +18405,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 f"fwd EPS {_peak['eps_forward']:.2f} vs "
                                 + (f"{_peak['max_line']:.2f})" if _peak["max_line"] is not None
                                    else "no profitable year to draw a line from)"))
-                        if _flag_bits:
+                        # Owner, 2026-11-12: on a cyclical the cycle measure now acts (mid-cycle forecast, legs,
+                        # peak swaps), so the observation-only line would describe a path the run did not take.
+                        if _flag_bits and not ((most_recent.get("_cycle") or {}).get("cyclical")):
                             # `forward_flags`, NOT `ticker_forward_flags`. The
                             # ticker-level list is snapshotted per scenario at
                             # `forward_flags = list(ticker_forward_flags)` ABOVE

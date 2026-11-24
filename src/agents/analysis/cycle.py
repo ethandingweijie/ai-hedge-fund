@@ -132,6 +132,11 @@ def measure(series: Optional[list], *, profile_cyclical: bool = False, max_years
     # Cyclicality is an industry trait: only a cyclical PROFILE mean-reverts. Margins that swing on a non-cyclical
     # profile are usually one-offs or a broken franchise (INTC, WBD, MMM) -- flagged for review, never reverted.
     cyclical = bool(profile_cyclical) and not structural
+    # A ten-year mid-cycle that is itself a loss (BA: 2019-2024) is not a cycle to revert to -- the franchise's
+    # earning power is the question, which the turnaround model answers (phase 3).
+    loss_mid = bool(profile_cyclical) and mid <= 0
+    if loss_mid:
+        cyclical = False
     return {
         "years": years, "ebit_margins": [round(m, 4) for m in ms], "n_years": len(ms),
         "mid_cycle_margin": round(mid, 4), "mid_cycle_years": len(mid_ms), "latest_margin": round(latest, 4),
@@ -140,7 +145,7 @@ def measure(series: Optional[list], *, profile_cyclical: bool = False, max_years
         "z": round(z, 2), "position": position,
         "cyclical": cyclical, "cyclical_basis": ("profile" if profile_cyclical else None),
         "review_cyclical": bool(data_cyclical and not profile_cyclical and not structural),
-        "data_cyclical": bool(data_cyclical), "structural_decline": bool(structural),
+        "data_cyclical": bool(data_cyclical), "structural_decline": bool(structural), "loss_making_mid_cycle": loss_mid,
         "reversion_years": REVERSION_YEARS,
     }
 
@@ -151,6 +156,10 @@ def describe(c: Optional[dict]) -> Optional[str]:
     if c.get("structural_decline"):
         return (f"Margin in structural decline, not a cycle: EBIT margin {c['latest_margin']:.1%} against a "
                 f"{c['n_years']}-year median {c['mid_cycle_margin']:.1%}, falling in most years -- not mean-reverted")
+    if c.get("loss_making_mid_cycle"):
+        return (f"Mid-cycle EBIT margin {c['mid_cycle_margin']:.1%} over the last {c['mid_cycle_years']} years is a loss: "
+                "not a cycle to revert to -- the company's earning power is a turnaround question, so the forecast and "
+                "the normalised legs are left as they are")
     if c.get("review_cyclical"):
         return (f"Margins swing like a cyclical's ({c['n_years']} years, range {c['range']:.0%}, {c['median_crossings']} "
                 f"crossings of the median) but the profile is not cyclical: not mean-reverted -- review the profile, or "

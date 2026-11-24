@@ -92,3 +92,10 @@ def test_legs_swapped_onto_one_normalised_leg_merge_into_one_row():
     assert [r["name"] for r in out] == ["P/E (norm)", "EV/EBITDA (norm)", "DCF"]
     assert out[1]["weight"] == pytest.approx(0.40) and out[0]["anchor"] and sum(r["weight"] for r in out) == pytest.approx(1.0)
     assert rows[1]["name"] == "EV/EBITDA"                           # the profile's own rows are untouched
+
+
+def test_a_loss_making_mid_cycle_is_a_turnaround_not_a_cycle():
+    # BA-shaped: a decade with the 2019-2024 crisis in it
+    c = cycle.measure(_series([0.06, 0.07, 0.05, -0.02, -0.18, -0.07, -0.04, 0.01, -0.14, 0.05]), profile_cyclical=True)
+    assert c["mid_cycle_margin"] <= 0 and c["loss_making_mid_cycle"] and not c["cyclical"]
+    assert "turnaround question" in cycle.describe(c)

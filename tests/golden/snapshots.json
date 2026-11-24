@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-11-12T07:42:48+00:00",
+  "generated_at": "2026-11-24T15:51:06+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "e7f39135",
-  "reason": "owner 2026-11-12: cycle measure adds its cycle-position flag on cyclical profiles (MU, FCX); IV unchanged in replay (CYCLE_LONG_HISTORY pinned off)",
+  "regenerated_at_commit": "c2894123",
+  "reason": "owner 2026-11-24: the observation-only peak-consensus line no longer prints on a cyclical the cycle measure acts on (MU); IV unchanged",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -4838,7 +4838,6 @@
     "CAGR-divergence gate: NTM growth +100.0% \u2192 +12.8%; analyst bands scaled 0.13x (NTM consensus +100.0% diverges from historical CAGR +7.8% by 92.2pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Cash-conversion (observed, not applied): FCF margin 4.2% vs 2.9% \u2014 reported FCF is 0.3x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Cycle position MID: EBIT margin 27.1% against a 5-year mid-cycle 25.8% (z +0.1; 5 years read); the forecast margin returns to mid-cycle over 3 years after the guided years",
-    "Cyclical peak-consensus gate (observation-only, not applied): mid-cycle legs EV/EBITDA\u2192EV/EBITDA (norm); peak trigger fired (multiple-of-max+mean-plus-sigma, fwd EPS 156.86 vs 15.48). IV unchanged; both paths recorded for the forward test.",
     "Forward legs on the next twelve months: 5% of FY+1 (2027-08-28) has elapsed, so each forward metric weights FY+2 5%",
     "Framework metrics (Memory / DRAM-NAND, completeness=0.75): gross_margin_pct=0.7257 (Blended memory gross margin (decimal) \u2014 the cycle's clearest single read) | hbm_revenue_share=0.175 (HBM as a share of DRAM revenue (decimal) \u2014 the AI-cycle growth driver) | bit_supply_demand_gap=-0.015 (Industry bit supply growth less demand growth (decimal; positive = oversupply)) | memory_capex=27000000000.0 (Capex guidance for the year, reporting currency)",
     "Gate B (base): Forward ROIC (2.1% [Y10 projected]) < threshold (5.3%) \u2192 TGR set to 0",
