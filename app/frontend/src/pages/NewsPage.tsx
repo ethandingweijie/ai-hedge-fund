@@ -61,15 +61,8 @@ export function NewsPage() {
 
   return (
     <PageContainer size="default">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="min-w-0">
-          <h1 className="text-[19px] font-semibold text-content-high">News</h1>
-          <p className="text-[12px] text-content-muted">
-            {tickers.length > 0
-              ? `Across ${tickers.length} ticker${tickers.length === 1 ? '' : 's'} on your watchlist`
-              : 'Driven by your watchlist'}
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <h1 className="text-[32px] md:text-[36px] font-bold tracking-tight leading-none text-foreground">News</h1>
         <Button
           variant="outline"
           size="sm"
@@ -82,13 +75,13 @@ export function NewsPage() {
 
       {/* Per-ticker filter. Only worth showing once there is more than one. */}
       {tickers.length > 1 && (
-        <div className="flex items-center gap-1.5 flex-wrap mb-4">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
           <button
             onClick={() => setFilter(null)}
-            className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors
+            className={`h-9 px-4 rounded-full text-sm font-semibold border transition-colors
               ${filter === null
-                ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
-                : 'text-content-muted border-transparent hover:text-content-high'}`}
+                ? 'bg-brand text-white border-transparent'
+                : 'text-foreground border-border hover:bg-muted'}`}
           >
             All
           </button>
@@ -96,10 +89,10 @@ export function NewsPage() {
             <button
               key={t}
               onClick={() => setFilter(t === filter ? null : t)}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium border tabular-nums transition-colors
+              className={`h-9 px-4 rounded-full text-sm font-semibold border tabular-nums transition-colors
                 ${filter === t
-                  ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
-                  : 'text-content-muted border-transparent hover:text-content-high'}`}
+                  ? 'bg-brand text-white border-transparent'
+                  : 'text-foreground border-border hover:bg-muted'}`}
             >
               {t}
             </button>
@@ -123,15 +116,9 @@ export function NewsPage() {
           page says how rather than showing a bare "no results". */}
       {!loading && !error && tickers.length === 0 && (
         <Card className="p-8 flex flex-col items-center gap-3 text-center">
-          <p className="text-[13px] text-content-high font-medium">
-            Nothing on your watchlist yet
-          </p>
-          <p className="text-[12px] text-content-muted max-w-sm">
-            News here follows what you choose to monitor. Add a ticker and its
-            coverage shows up on this page.
-          </p>
-          <Button size="sm" onClick={() => navigate('/watchlist')}>
-            Go to watchlist
+          <p className="text-[15px] text-content-high font-semibold">No watchlist yet</p>
+          <Button size="sm" className="rounded-full" onClick={() => navigate('/watchlist')}>
+            Add tickers
           </Button>
         </Card>
       )}
@@ -146,9 +133,7 @@ export function NewsPage() {
 
       {!loading && !error && shown.length > 0 && (
         <div
-          className={isMobile
-            ? 'rounded-lg border border-border bg-card overflow-hidden shadow-sm px-3'
-            : 'rounded-xl border border-border/70 bg-card shadow-sm px-4'}
+          className={isMobile ? 'border-t border-border' : 'border-t border-border'}
         >
           <div className="flex flex-col divide-y divide-border/40">
             {shown.map((a, i) => (

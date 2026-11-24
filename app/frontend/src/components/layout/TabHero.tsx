@@ -1,41 +1,42 @@
 /**
  * TabHero.tsx
  * ===========
- * Grab-style sticky page hero for the main tabs (Screener, Watchlist,
- * Research Ideas, History), shared by mobile and desktop.
+ * Sticky page header for the main tabs (Screener, Watchlist, Portfolio,
+ * History, Research Ideas, Discuss, Robo, Model Accuracy), shared by mobile
+ * and desktop.
  *
- * Behaviour modelled on Grab's Finance header (reference screenshots):
- *   - At rest: a tall deep-green band with a large bold light title
- *     (+ optional subtitle and right-aligned actions).
- *   - On scroll: the bar stays pinned (sticky) and TRANSITIONS COLOUR —
- *     green fades to the page background, the title flips to dark
- *     foreground text at the same size, the subtitle folds away, and a
- *     hairline + shadow appear so content visibly slides beneath it.
+ * Owner, 2026-11-24 (UI clean-up, "Robinhood-style"): a large bold title on
+ * the page background — no coloured band, no icon, no subtitle line. The
+ * `icon` and `subtitle` props are still accepted so call sites keep
+ * compiling, but neither is rendered: the subtitles were the wordy
+ * "explain the page" captions the clean-up removes. A subtitle that carries
+ * real data should move into the page body.
  *
- * Scroll detection uses an IntersectionObserver on a 1px sentinel rendered
- * just above the sticky band, so it works in any scroll container (the
- * desktop <main> scroller and the 430px mobile phone frame alike).
+ * On scroll the header stays pinned, shrinks a step and gains a hairline so
+ * content visibly slides beneath it. Scroll detection uses an
+ * IntersectionObserver on a 1px sentinel above the sticky block, so it works
+ * in any scroll container (desktop <main> and the mobile phone frame alike).
  *
- * In mobile layout mode the band pads itself below the iOS safe area and
- * right of the floating avatar button (MobileTopBar), with the title
- * flush to the normal left gutter.
+ * In mobile layout mode the header pads itself below the iOS safe area and
+ * clears the floating avatar button (MobileTopBar, top-right).
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { cn } from '@/lib/utils';
 
 interface TabHeroProps {
   title: string;
+  /** Accepted for compatibility; not rendered (see file header). */
   subtitle?: ReactNode;
+  /** Accepted for compatibility; not rendered (see file header). */
   icon?: LucideIcon;
-  /** Right-aligned slot (refresh buttons etc.). Style children for a dark
-   *  background — e.g. `text-hero-foreground hover:bg-hero-foreground/10`. */
+  /** Right-aligned slot (refresh buttons etc.). */
   actions?: ReactNode;
   className?: string;
 }
 
-export function TabHero({ title, subtitle, icon: Icon, actions, className }: TabHeroProps) {
+export function TabHero({ title, actions, className }: TabHeroProps) {
   const { mode } = useLayoutMode();
   const isMobile = mode === 'mobile';
   const [scrolled, setScrolled] = useState(false);
@@ -49,67 +50,48 @@ export function TabHero({ title, subtitle, icon: Icon, actions, className }: Tab
     return () => obs.disconnect();
   }, []);
 
+  // Call sites style their action buttons for the old dark band
+  // (`text-hero-foreground hover:bg-hero-foreground/10`). Point those tokens
+  // at the page colours here so the same classes read correctly in both
+  // themes without touching every page.
+  const tokenRemap = {
+    '--hero': 'var(--background)',
+    '--hero-foreground': 'var(--foreground)',
+  } as CSSProperties;
+
   return (
     <>
-      {/* 1px sentinel: when it scrolls out of view the band collapses. */}
       <div ref={sentinelRef} aria-hidden className="h-px -mb-px" />
       <div
         className={cn(
-          'sticky top-0 z-30 transition-[background-color,color,box-shadow] duration-300',
-          scrolled
-            ? 'bg-background text-foreground shadow-sm border-b border-border/60'
-            : 'bg-hero text-hero-foreground',
+          'sticky top-0 z-30 bg-background text-foreground transition-[box-shadow,border-color] duration-200',
+          scrolled ? 'border-b border-border' : 'border-b border-transparent',
           className,
         )}
-        // Mobile: keep the actions slot clear of the fixed avatar button
-        // (top-right, viewport safe-area + 12px) while the title uses the
-        // full left gutter. At rest the phone frame already pads for the
-        // safe area, so we add only 12px; once pinned at the viewport top
-        // the frame's padding has scrolled away, so the band must carry the
-        // safe-area inset itself.
-        style={isMobile ? {
-          paddingTop: scrolled
-            ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
-            : '12px',
-        } : undefined}
+        style={{
+          ...tokenRemap,
+          ...(isMobile ? {
+            paddingTop: scrolled ? 'calc(env(safe-area-inset-top, 0px) + 12px)' : '12px',
+          } : {}),
+        }}
       >
         <div
           className={cn(
-            'px-4 md:px-6 flex items-center justify-between gap-3 transition-all duration-300',
+            'px-4 md:px-6 flex items-center justify-between gap-3 transition-all duration-200',
             isMobile && 'pr-14', // clear the floating avatar button (top-right)
-            scrolled ? 'pb-3' : 'pb-4',
-            !isMobile && (scrolled ? 'pt-3' : 'pt-6'),
+            scrolled ? 'pb-3' : 'pb-5',
+            !isMobile && (scrolled ? 'pt-3' : 'pt-8'),
           )}
         >
-          <div className="min-w-0">
-            {/* Title keeps its size in both states (Grab keeps "Finance" large
-                on the white bar too) — only the colours swap. */}
-            <h1 className="font-bold tracking-tight leading-none flex items-center gap-2.5 text-[26px] md:text-[30px] min-h-9">
-              {Icon && (
-                <Icon
-                  strokeWidth={2.5}
-                  className={cn(
-                    'shrink-0 w-7 h-7 md:w-8 md:h-8 transition-colors duration-300',
-                    scrolled ? 'text-brand' : 'text-primary',
-                  )}
-                />
-              )}
-              <span className="truncate">{title}</span>
-            </h1>
-            {subtitle && (
-              <p
-                className={cn(
-                  'overflow-hidden transition-all duration-300 text-[12.5px] md:text-sm',
-                  scrolled
-                    ? 'max-h-0 opacity-0 mt-0'
-                    : 'max-h-12 opacity-100 mt-1.5 text-hero-foreground/70',
-                )}
-              >
-                {subtitle}
-              </p>
+          <h1
+            className={cn(
+              'min-w-0 truncate font-bold tracking-tight leading-none transition-all duration-200',
+              scrolled ? 'text-[22px] md:text-[24px]' : 'text-[32px] md:text-[36px]',
             )}
-          </div>
-          {/* Children use text-current so they follow the band's colour flip. */}
+            style={{ letterSpacing: '-0.02em' }}
+          >
+            {title}
+          </h1>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </div>
       </div>

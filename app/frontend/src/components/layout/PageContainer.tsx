@@ -42,7 +42,7 @@ interface PageContainerProps {
 export function PageContainer({ size = 'default', className, flush = false, children }: PageContainerProps) {
   const { mode } = useLayoutMode();
   return (
-    <div className="min-h-full bg-background">
+    <div className="min-h-full bg-background ui-flat">
       <div
         className={cn(
           'mx-auto w-full px-4 md:px-8',

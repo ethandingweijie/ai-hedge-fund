@@ -1122,7 +1122,7 @@ function ResearchBody({
       {hasData && sub === 'brief' && industryBrief && (
         <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
-            Industry Intelligence Brief
+            Industry brief
           </div>
           <Markdown>{industryBrief}</Markdown>
           <BriefReferences footnotes={briefFootnotes} />
@@ -1176,7 +1176,7 @@ function StreamingResearchSummary({
             onClick={() => setBriefOpen(o => !o)}
             className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
-            <span>Industry Intelligence Brief</span>
+            <span>Industry brief</span>
             <span className="text-[11px] text-muted-foreground/70">{briefOpen ? '▲' : '▼'}</span>
           </button>
           {briefOpen && (
@@ -1191,7 +1191,7 @@ function StreamingResearchSummary({
             onClick={() => setDeepOpen(o => !o)}
             className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
-            <span>Deep Research</span>
+            <span>Deep research</span>
             <span className="text-[11px] text-muted-foreground/70">{deepOpen ? '▲' : '▼'}</span>
           </button>
           {deepOpen && (

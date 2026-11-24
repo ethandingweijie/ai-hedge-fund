@@ -241,7 +241,7 @@ export function HistoryPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-background">
+    <div className="min-h-full flex flex-col bg-background ui-flat">
       <TabHero title="History" />
       {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
           to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
@@ -301,7 +301,7 @@ export function HistoryPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[13px] font-semibold text-foreground tabular-nums">{r.ticker}</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-brand">Ongoing</span>
+                <span className="text-xs font-medium text-brand">Ongoing</span>
               </div>
               <div className="text-[11px] text-muted-foreground truncate">
                 started {daysAgo(r.startedAt)}
@@ -313,7 +313,7 @@ export function HistoryPage() {
 
         {/* Recent analyses header */}
         <div className="flex items-center justify-between px-1 mb-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+          <span className="text-xs font-semibold text-muted-foreground">
             Recent analyses
           </span>
           <span className="text-[10px] text-muted-foreground/70">
@@ -330,12 +330,12 @@ export function HistoryPage() {
             mobile gap. */}
         <div className={`items-center gap-2 px-3 mx-px pb-1 ${isDesktop ? 'hidden' : 'flex'}`}>
           <div className="flex-1" />
-          <div className="w-[72px] shrink-0 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+          <div className="w-[72px] shrink-0 text-center text-xs font-medium text-muted-foreground">
             Target
           </div>
           <div className="flex items-center shrink-0">
             {['V', 'G', 'P', 'M'].map(l => (
-              <div key={l} className="w-10 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+              <div key={l} className="w-10 text-center text-xs font-medium text-muted-foreground">
                 {l}
               </div>
             ))}
@@ -354,12 +354,12 @@ export function HistoryPage() {
               // px-4 lines up exactly with the row content inside the card.
               <div key={i} className={`items-center gap-5 px-4 mx-px ${i === 1 ? 'hidden lg:flex' : 'flex'}`}>
                 <div className="flex-1" />
-                <div className="w-24 shrink-0 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                <div className="w-24 shrink-0 text-center text-xs font-medium text-muted-foreground">
                   Target
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
                   {['V', 'G', 'P', 'M'].map(l => (
-                    <div key={l} className="w-10 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                    <div key={l} className="w-10 text-center text-xs font-medium text-muted-foreground">
                       {l}
                     </div>
                   ))}
@@ -483,7 +483,7 @@ function HistoryRow({
               {row.ticker}
             </span>
             {isNew && (
-              <span className="text-[10px] font-bold uppercase tracking-wider text-brand">
+              <span className="text-xs font-bold text-brand">
                 new
               </span>
             )}

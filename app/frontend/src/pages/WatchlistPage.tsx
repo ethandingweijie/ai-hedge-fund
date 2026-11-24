@@ -206,7 +206,7 @@ export function WatchlistPage() {
   // token-driven cream/forest surfaces, shared GradeChip for VGPM.
   if (mode === 'mobile') {
     return (
-      <div className="min-h-full flex flex-col bg-background">
+      <div className="min-h-full flex flex-col bg-background ui-flat">
         <TabHero title="Watchlist" />
 
         <div className="px-4 py-3 space-y-3">
@@ -248,10 +248,10 @@ export function WatchlistPage() {
           <div className="flex items-center px-3 mb-1">
             <div className="flex-1" />
             <div className="flex items-center gap-0">
-              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">V</span>
-              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">G</span>
-              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">P</span>
-              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">M</span>
+              <span className="w-9 text-center text-xs font-medium text-muted-foreground">V</span>
+              <span className="w-9 text-center text-xs font-medium text-muted-foreground">G</span>
+              <span className="w-9 text-center text-xs font-medium text-muted-foreground">P</span>
+              <span className="w-9 text-center text-xs font-medium text-muted-foreground">M</span>
             </div>
           </div>
 

@@ -64,7 +64,7 @@ const mdComponents: Components = {
       return (
         <div className="mb-6 pb-5 border-b">
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">
-            Industry Intelligence Brief
+            Industry brief
           </p>
           <h2 className="text-base font-bold text-foreground leading-snug">{company}</h2>
           {badges.length > 0 && (

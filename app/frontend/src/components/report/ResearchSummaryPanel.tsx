@@ -188,14 +188,14 @@ export function ResearchSummaryPanel({
 
       {/* ── Collapsible source panels — original formatted components ── */}
       {(industryBriefContent || industryBrief) && (
-        <Accordion title="Industry Intelligence Brief">
+        <Accordion title="Industry brief">
           {industryBriefContent ?? (
             <Markdown>{industryBrief}</Markdown>
           )}
         </Accordion>
       )}
       {(deepResearchContent || deepResearch) && (
-        <Accordion title="Deep Research">
+        <Accordion title="Deep research">
           {deepResearchContent ?? (
             <Markdown>{deepResearch}</Markdown>
           )}

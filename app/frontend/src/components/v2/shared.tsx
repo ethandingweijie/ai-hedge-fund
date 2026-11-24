@@ -228,7 +228,10 @@ export function SwipeRow({
           transition: start.current == null ? 'transform 0.24s ease' : 'none',
           touchAction: 'pan-y',
         }}
-        className="bg-card relative"
+        // Opaque page background, not bg-card: this layer must hide the
+        // swipe actions underneath, and the flat-page rule (.ui-flat /
+        // .report-flat) makes bg-card transparent.
+        className="bg-background relative"
       >
         {children}
       </div>

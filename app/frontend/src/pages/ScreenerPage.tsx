@@ -415,7 +415,7 @@ export function ScreenerPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-background">
+    <div className="min-h-full flex flex-col bg-background ui-flat">
       <TabHero title="Screener" />
       {/* Market segmented control */}
       <div className="px-3 md:px-6 pt-3">
@@ -459,7 +459,7 @@ export function ScreenerPage() {
       <div className="px-3 md:px-6 pt-2 pb-6 flex-1">
         <div className="flex items-center justify-between px-1 mb-1.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
+            <span className="text-[15px] md:text-[17px] font-semibold text-foreground">
               Top candidates
             </span>
             {lastRefreshed && (
@@ -477,7 +477,7 @@ export function ScreenerPage() {
               rows; the mobile header's gap-2 must match the mobile body rows'
               grid so the 12-column tracks line up exactly under each row. */}
           {isDesktop ? (
-            <div className={`px-4 py-2.5 border-b border-border/60 bg-muted/50 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70 ${DESK_GRID}`}>
+            <div className={`px-4 py-2.5 border-b border-border/60 text-xs font-medium text-muted-foreground ${DESK_GRID}`}>
               <span>Ticker</span>
               <span className="hidden lg:block text-right">Price</span>
               <span className="hidden lg:block text-right">Change</span>
@@ -490,7 +490,7 @@ export function ScreenerPage() {
               <span aria-hidden />
             </div>
           ) : (
-            <div className="px-3 py-2 border-b border-border/60 bg-muted/50 grid grid-cols-12 items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+            <div className="px-3 py-2 border-b border-border/60 grid grid-cols-12 items-center gap-2 text-xs font-medium text-muted-foreground">
               <span className="col-span-5">Ticker · Sector</span>
               <span className="col-span-2 text-right">Score</span>
               <div className="col-span-5 flex justify-end">
@@ -659,8 +659,11 @@ export function ScreenerPage() {
           )}
         </div>
 
-        <div className="mt-3 px-1 text-[10.5px] md:text-[11.5px] text-muted-foreground/70 leading-relaxed">
-          Universe: {data?.total ?? 0} stocks · Composite = 0.30·V + 0.25·G + 0.25·P + 0.20·M, sector-neutralised.
+        <div
+          className="mt-3 px-1 text-xs text-muted-foreground"
+          title="Score = 0.30·V + 0.25·G + 0.25·P + 0.20·M, sector-neutralised"
+        >
+          {data?.total ?? 0} stocks
         </div>
       </div>
     </div>

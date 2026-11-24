@@ -331,29 +331,32 @@ export function PortfolioPage() {
         {/* ── Tab 1: Positions & indicators (P1) ─────────────────────────── */}
         <TabsContent value="positions">
           {/* Summary strip */}
+          {/* Summary: one big number, the rest beside it (no boxed tiles). */}
           {dash && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-              <Card className="p-4">
-                <div className="text-xs text-muted-foreground">Market value</div>
-                <div className="text-xl font-semibold tabular-nums">{fmtTotal(s?.total_market_value)}</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-xs text-muted-foreground">Cost basis</div>
-                <div className="text-xl font-semibold tabular-nums">{fmtTotal(s?.total_cost_basis)}</div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-xs text-muted-foreground">Unrealized P&L</div>
-                <div className="text-xl font-semibold"><PnlText value={s?.total_unrealized_pnl} pct={s?.total_pnl_pct} ccy={totalCcy} /></div>
-              </Card>
-              <Card className="p-4">
-                <div className="text-xs text-muted-foreground">Positions</div>
-                <div className="text-xl font-semibold tabular-nums">
+            <div className="mt-6 flex flex-wrap items-end gap-x-12 gap-y-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Market value</div>
+                <div className="mt-1 text-[40px] md:text-[48px] font-bold tracking-tight leading-none tabular-nums">
+                  {fmtTotal(s?.total_market_value)}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Unrealised return</div>
+                <div className="mt-1 text-xl font-semibold"><PnlText value={s?.total_unrealized_pnl} pct={s?.total_pnl_pct} ccy={totalCcy} /></div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Cost basis</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">{fmtTotal(s?.total_cost_basis)}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Positions</div>
+                <div className="mt-1 text-xl font-semibold tabular-nums">
                   {s?.position_count ?? 0}
                   {s?.top_weight_pct != null && (
-                    <span className="text-xs text-muted-foreground ml-2">top {fmtNum(s.top_weight_pct, 1)}%</span>
+                    <span className="text-sm font-normal text-muted-foreground ml-2">largest {fmtNum(s.top_weight_pct, 1)}%</span>
                   )}
                 </div>
-              </Card>
+              </div>
             </div>
           )}
 
@@ -414,10 +417,10 @@ export function PortfolioPage() {
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Value</TableHead>
                   <TableHead className="text-right">Weight</TableHead>
-                  <TableHead className="text-right">P&L</TableHead>
-                  <TableHead className="text-center">Decision</TableHead>
-                  <TableHead className="text-right">IV (bear/base/bull)</TableHead>
-                  <TableHead className="text-right">IV upside</TableHead>
+                  <TableHead className="text-right">Return</TableHead>
+                  <TableHead className="text-center">Rating</TableHead>
+                  <TableHead className="text-right">Fair value (bear / base / bull)</TableHead>
+                  <TableHead className="text-right">Upside</TableHead>
                   <TableHead>Sector</TableHead>
                   <TableHead className="text-right">Run</TableHead>
                   <TableHead />
@@ -459,7 +462,9 @@ export function PortfolioPage() {
                       <TableCell className="text-right"><PnlText value={h.unrealized_pnl} pct={h.pnl_pct} ccy={h.currency} /></TableCell>
                       <TableCell className="text-center">
                         {decision
-                          ? <span className={`text-xs font-bold ${actionTone(decision, 'text')}`}>{decision.replace('_', ' ')}</span>
+                          ? <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-xs font-semibold ${actionTone(decision)}`}>
+                              {decision.charAt(0) + decision.slice(1).toLowerCase().replace('_', ' ')}
+                            </span>
                           : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-xs">{ivs}</TableCell>
@@ -508,12 +513,12 @@ export function PortfolioPage() {
           )}
 
           {dash && (
-            <p className="text-[11px] text-muted-foreground mt-3">
-              Prices: FMP live quotes for US, HK and SGX lines ({new Date(dash.prices_at).toLocaleTimeString()}).
-              Price, cost, value and P&L per line are in its trading currency; IVs are in the same
-              currency as the price. {multiCcy ? 'Totals and weights are converted to US$ at live FX. ' : ''}
-              Signals: latest archived analysis run per ticker — decision, DCF intrinsic
-              values (bear/base/bull) and sector are read-only joins, not new valuations.
+            <p
+              className="text-xs text-muted-foreground mt-3"
+              title="Price, cost, value and P&L per line are in its trading currency; fair values are in the same currency as the price. Signals are the latest saved analysis per ticker, not new valuations."
+            >
+              Prices as of {new Date(dash.prices_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {multiCcy ? ' · each line in its listing currency, totals in US$' : ''}
             </p>
           )}
         </TabsContent>
@@ -707,14 +712,14 @@ function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined 
     <div className="mt-3">
       <div className="grid md:grid-cols-2 gap-2">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+          <div className="text-xs text-muted-foreground mb-1"
                title="Best window returns across the GICS sector SPDR ETFs — positive (green) means the sector actually rose during the crisis">
             Sectors that held up
           </div>
           <div className="space-y-1">{best.map(row)}</div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+          <div className="text-xs text-muted-foreground mb-1"
                title="Worst window returns across the GICS sector SPDR ETFs">
             Sectors hit hardest
           </div>
@@ -775,22 +780,22 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
       {/* Portfolio impact */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your portfolio</div>
+          <div className="text-xs text-muted-foreground">Your portfolio</div>
           <div className="text-lg font-semibold"><RetText value={ev.portfolio.window_return_pct} /></div>
           <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.portfolio.max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">SPY (live)</div>
+          <div className="text-xs text-muted-foreground">SPY (live)</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.spy_return_pct} /></div>
           <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.benchmarks.live.spy_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">QQQ (live)</div>
+          <div className="text-xs text-muted-foreground">QQQ (live)</div>
           <div className="text-lg font-semibold"><RetText value={ev.benchmarks.live.qqq_return_pct} /></div>
           <div className="text-[10px] text-muted-foreground">max DD <RetText value={ev.benchmarks.live.qqq_max_dd_pct} /></div>
         </div>
         <div className="p-2.5 rounded-md bg-muted/40">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coverage</div>
+          <div className="text-xs text-muted-foreground">Coverage</div>
           <div className="text-lg font-semibold tabular-nums">{covered != null ? `${fmtNum(covered, 1)}%` : '—'}</div>
           <div className="text-[10px] text-muted-foreground">of cost basis replayed</div>
         </div>
@@ -1207,24 +1212,24 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
         {/* Headline tiles */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Portfolio est. impact</div>
+            <div className="text-xs text-muted-foreground">Portfolio est. impact</div>
             <div className="text-lg font-semibold"><RetText value={skel.portfolio_est_impact_pct} /></div>
             <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coverage</div>
+            <div className="text-xs text-muted-foreground">Coverage</div>
             <div className="text-lg font-semibold tabular-nums">
               {skel.covered_weight_pct != null ? `${fmtNum(skel.covered_weight_pct, 1)}%` : '—'}
             </div>
             <div className="text-[10px] text-muted-foreground">of cost basis estimated</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Model</div>
+            <div className="text-xs text-muted-foreground">Model</div>
             <div className="text-lg font-semibold">{result.model.name.replace('deepseek-v4-flash', 'DS-v4-flash')}</div>
             <div className="text-[10px] text-muted-foreground">est. cost ${result.model.cost_usd_est.toFixed(4)}</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Reference SPY/QQQ</div>
+            <div className="text-xs text-muted-foreground">Reference SPY/QQQ</div>
             <div className="text-lg font-semibold">
               {ref ? (<><RetText value={ref.benchmarks.spy_return_pct} /> / <RetText value={ref.benchmarks.qqq_return_pct} /></>) : '—'}
             </div>
@@ -1240,7 +1245,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
           <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
           <div className="grid md:grid-cols-2 gap-3 mt-3">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
+              <div className="text-xs text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
@@ -1248,7 +1253,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
@@ -1673,19 +1678,19 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
         {/* Author headline tile */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Author&apos;s portfolio est. impact</div>
+            <div className="text-xs text-muted-foreground">Author&apos;s portfolio est. impact</div>
             <div className="text-lg font-semibold">
               <RetText value={skel?.portfolio_est_impact_pct ?? null} />
             </div>
             <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Assumptions tracked</div>
+            <div className="text-xs text-muted-foreground">Assumptions tracked</div>
             <div className="text-lg font-semibold tabular-nums">{detail.assumptions.length}</div>
             <div className="text-[10px] text-muted-foreground">verifiable datapoints</div>
           </div>
           <div className="p-2.5 rounded-md bg-muted/40">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Community notes</div>
+            <div className="text-xs text-muted-foreground">Community notes</div>
             <div className="text-lg font-semibold tabular-nums">{detail.notes.length}</div>
             <div className="text-[10px] text-muted-foreground">append your own below</div>
           </div>
@@ -1699,7 +1704,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
           <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
           <div className="grid md:grid-cols-2 gap-3 mt-3">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
+              <div className="text-xs text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
@@ -1707,7 +1712,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="text-xs text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
                   <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
@@ -1758,13 +1763,13 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
           <div className="mt-3 space-y-3">
             <div className="grid grid-cols-2 gap-3 max-w-md">
               <div className="p-2.5 rounded-md bg-muted/40">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your est. impact</div>
+                <div className="text-xs text-muted-foreground">Your est. impact</div>
                 <div className="text-lg font-semibold">
                   <RetText value={compare.skeleton.portfolio_est_impact_pct} />
                 </div>
               </div>
               <div className="p-2.5 rounded-md bg-muted/40">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coverage</div>
+                <div className="text-xs text-muted-foreground">Coverage</div>
                 <div className="text-lg font-semibold tabular-nums">
                   {compare.skeleton.covered_weight_pct != null
                     ? `${fmtNum(compare.skeleton.covered_weight_pct, 1)}%` : '—'}

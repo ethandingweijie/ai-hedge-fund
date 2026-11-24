@@ -625,7 +625,12 @@ html, body {
    stack of boxes. Scoped by the `report-flat` wrapper class so other pages
    are untouched. Two-class selectors outrank the single-class Tailwind
    utilities they override. */
-.report-flat .bg-card {
+/* `ui-flat` (set by PageContainer) extends the same treatment to the main
+   tab pages: Portfolio, Screener, Watchlist, News, History, ... */
+/* Floating surfaces (dropdowns, modals, popovers: positioned or raised with a
+   large shadow) keep their solid fill, or text behind them would show through. */
+.report-flat .bg-card:not(.fixed):not(.absolute):not(.shadow-lg):not(.shadow-xl):not(.shadow-2xl),
+.ui-flat .bg-card:not(.fixed):not(.absolute):not(.shadow-lg):not(.shadow-xl):not(.shadow-2xl) {
   background-color: transparent;
   box-shadow: none;
 }
