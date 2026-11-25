@@ -32,20 +32,20 @@ def fmp_down(monkeypatch):
 
 
 def test_direct_table_pair_unchanged(fmp_down):
-    assert api.get_fx_rate("HKD", "USD") == pytest.approx(0.1282)
-    assert api.get_fx_rate("CNY", "USD") == pytest.approx(0.1376)
+    assert api.get_fx_rate("HKD", "USD") == pytest.approx(0.127524)
+    assert api.get_fx_rate("CNY", "USD") == pytest.approx(0.149909)
 
 
 def test_inverse_pair_resolves_through_table(fmp_down):
     rate = api.get_fx_rate("USD", "HKD")
-    assert rate == pytest.approx(1.0 / 0.1282)
+    assert rate == pytest.approx(1.0 / 0.127524)
     assert 7.5 < rate < 8.1  # sanity: sane USDHKD band, not 1.0
 
 
 def test_usd_cross_resolves_through_two_table_entries(fmp_down):
     rate = api.get_fx_rate("CNY", "HKD")
-    assert rate == pytest.approx(0.1376 / 0.1282)
-    assert 1.02 < rate < 1.15  # sanity: not 1.0 / not absurd
+    assert rate == pytest.approx(0.149909 / 0.127524)
+    assert 1.02 < rate < 1.25  # sanity: not 1.0 / not absurd (1.1755 live 2026-11-25)
 
 
 def test_same_currency_short_circuits(fmp_down):

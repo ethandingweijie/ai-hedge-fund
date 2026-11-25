@@ -1411,7 +1411,8 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # earnings -- a disclosure read for the Excel export, not a valuation one.
     # EIGHT since 2026-10-04 (plan EN2): the recovery discount re-reads it.
     # 2026-11-12: + the cycle measure's mid-cycle rebuild (a write); 2026-11-25: + `_trailing_pe_earnings` (item 7)
-    assert src.count('"normalized_net_income"') == 10
+    # 2026-11-25 (HK/SG audit): - the bank-fallback label read (the bank leg now states its own basis).
+    assert src.count('"normalized_net_income"') == 9
     # SIX since 2026-09-20: the FCF Yield leg on a cyclical profile now stands
     # on the same five-year normalisation as the EV/EBITDA and P/E legs, so
     # `_norm_fcf` is computed beside the other three (with a `free_cash_flow`

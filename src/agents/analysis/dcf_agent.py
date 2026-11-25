@@ -1691,6 +1691,28 @@ def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: s
                       f"operating leg prices; net debt {float(nd) / 1e9:,.2f}bn -> {nd2 / 1e9:,.2f}bn")
 
 
+def _operating_earnings_for_netted_holdings(row: dict) -> Optional[str]:
+    """Once long-term investments count as cash, the EV legs capitalise OPERATING EBITDA / EBIT (audit 2026-11-25
+    HK/SG). FMP's EBITDA is pretax + interest + D&A, so it carries the associates' share of profit and the investment
+    income those holdings earn: China Mobile's CNY 29.5bn below the operating line was capitalised at the peer
+    multiple AND its HK$657bn of holdings were added at book. Lowers ebitda_core / ebit_core in place, never raises
+    them; a message for the forward flags when it moved anything."""
+    opi = row.get("operating_income")
+    if not isinstance(opi, (int, float)):
+        return None
+    da = float(row.get("depreciation_and_amortization") or 0.0)
+    moved = []
+    for key, op_val in (("ebitda", float(opi) + da), ("ebit", float(opi))):
+        cur = row.get(key + "_core") if row.get(key + "_core") is not None else row.get(key)
+        if isinstance(cur, (int, float)) and cur > op_val:
+            row[key + "_core"] = op_val
+            moved.append(f"{key.upper()} {float(cur) / 1e9:,.2f}bn -> {op_val / 1e9:,.2f}bn")
+    if not moved:
+        return None
+    return ("Operating earnings: with long-term investments counted as cash, the EV legs price operating earnings "
+            "only (their income is not capitalised twice): " + ", ".join(moved))
+
+
 def _valuation_net_debt(row: dict, sector: str = "", ticker: str = "",
                         reported_currency: Optional[str] = None,
                         industry: Optional[str] = None) -> tuple[float, dict]:
@@ -4279,6 +4301,21 @@ def _non_operating_gap(row: dict) -> Optional[float]:
     return float(ebitda) - (float(opi) + float(row.get("depreciation_and_amortization") or 0.0))
 
 
+#: Interest expense at or above this share of revenue in the median year marks a balance-sheet intermediary
+#: (OCBC ~0.45, DBS ~0.4) rather than a fee business (Visa, SGX: a few %).
+_INTEREST_HEAVY_SHARE = 0.20
+
+
+def _interest_heavy(series: list) -> bool:
+    """True when interest expense is a cost of goods for this name, measured on its own statements."""
+    shares = []
+    for r in series or []:
+        ie, rev = r.get("interest_expense"), r.get("revenue")
+        if isinstance(ie, (int, float)) and isinstance(rev, (int, float)) and rev > 0:
+            shares.append(abs(float(ie)) / float(rev))
+    return bool(shares) and statistics.median(shares) >= _INTEREST_HEAVY_SHARE
+
+
 def _core_earnings(row: dict, prior_rows: Optional[list] = None) -> dict:
     """Owner, 2026-10-04 (plan 1E.1): earnings without a non-recurring item a multiple must not
     capitalise. FMP's EBITDA is pre-tax profit + interest + D&A, so it carries everything below
@@ -6147,7 +6184,7 @@ def _compute_sreit_ddm(ticker: str, subtype: str, most_recent: dict,
                        shares: float, dpu_growth: float = 0.0):
     """Value an S-REIT on its distributions.
 
-        value/unit = DPU_forward x (1 + g) / (CoE - g)
+        value/unit = DPU_forward / (CoE - g)      (DPU_forward = D1)
 
     Returns (value_per_unit, dpu_forward, assumptions) or None when the
     inputs cannot support it — notably when CoE approaches g, where the
@@ -6165,7 +6202,9 @@ def _compute_sreit_ddm(ticker: str, subtype: str, most_recent: dict,
     # wild scenario growth rate must not leak into the terminal value.
     _gr = max(min(dpu_growth or 0.0, 0.15), -0.15)
     dpu_fwd = dpu * (1.0 + _gr)
-    value = dpu_fwd * (1.0 + g) / (coe - g)
+    # Gordon: P0 = D1 / (k - g). dpu_fwd IS D1 -- growing it once more by g capitalised D2 (CICT +1.5%; audit
+    # 2026-11-25 HK/SG).
+    value = dpu_fwd / (coe - g)
     return round(value, 4), round(dpu_fwd, 6), a
 
 
@@ -8036,15 +8075,23 @@ def _compute_rnpv(
 
 # ── Multi-Method Valuation Engine ─────────────────────────────────────────────
 
-def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc: float) -> tuple[float, str]:
+def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc: float,
+                        firm_ke: Optional[float] = None) -> tuple[float, str]:
     """The discount rate for a dividend stream: the owner's cost-of-equity row
-    for this profile and market when one exists, else WACC plus the owner's
-    proposed equity spread (never below WACC). Returns (rate, source)."""
+    for this profile and market when one exists, else the firm-CAPM cost of
+    equity when the WACC was built on it (owner, 2026-11-25), else WACC plus the
+    owner's proposed equity spread (never below WACC). Returns (rate, source).
+
+    WACC + spread was a proxy for a Ke nobody had computed; once firm CAPM has
+    computed it, the proxy double-counts (a net-cash name's WACC already IS its Ke,
+    so the spread lifted Ke 150bp -- audit 2026-11-25 HK/SG)."""
     try:
         from src.data import valuation_constants as _vc
         _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker))
         if isinstance(_coe, (int, float)) and _coe > 0:
             return max(float(_coe), float(wacc)), "owner cost_of_equity table"
+        if isinstance(firm_ke, (int, float)) and 0.03 <= float(firm_ke) <= 0.25:
+            return float(firm_ke), "firm CAPM cost of equity (the DCF's own Ke)"
         _spread = _vc.ddm_equity_spread()
     except Exception:                                      # noqa: BLE001
         _spread = 0.015
@@ -8131,6 +8178,12 @@ def _traced_method_value(**kwargs) -> tuple[Optional[float], dict]:
     finally:
         _LEG_TRACE.reset(token)
     trace["value"] = value
+    if trace.get("peer_static_default") and isinstance(trace.get("multiple_parts"), dict):
+        _mp = trace["multiple_parts"]
+        _orig = str(_mp.get("peer_source") or "")
+        if not _orig.startswith("static default"):
+            _mp["peer_source"] = ("static default -- no peer basket measured for this market (owner basket needed)"
+                                  + (f"; was labelled '{_orig}'" if _orig else ""))
     return value, trace
 
 
@@ -8218,6 +8271,27 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
         # five-peer minimum, so no Singapore energy basket exists to build.
         "no_peer_multiples": not fields,
     }
+
+
+def _peer_fields_required(method_name: str, profile_name: Optional[str], sector: Optional[str]) -> tuple:
+    """The peer field(s) a relative leg prices on (any one suffices); () when the leg prices on something else."""
+    m = method_name or ""
+    _bank = (sector == "Financials" and (profile_name or "") in _BANK_PROFILE_CALIBRATION) or "Bank" in (profile_name or "")
+    if m in _EV_MULTIPLE_METHODS and m not in _EV_EBIT_NORM_METHODS:
+        return ("ev_ebitda", "ev_ebit")
+    if m in {"EV/EBITDA (norm)", "EV/EBITDA (Norm)", "Forward EV/EBITDA", "Fwd EV/EBITDA", "NTM EV/EBITDA"}:
+        return ("ev_ebitda", "ev_ebitda_ntm")
+    if m in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)", "Forward P/E", "Fwd P/E", "NTM P/E"}:
+        return ("pe", "pe_ntm")
+    if m in {"P/E (norm)", "P/E norm", "Normalized P/E"}:
+        return () if _bank else ("pe", "pe_ntm")
+    if m in {"EV/Revenue", "Forward P/S", "Fwd P/S", "NTM P/S"}:
+        return ("ev_revenue",)
+    if m == "P/BV" and not _bank:
+        return ("pb",)
+    if m in {"FCF Yield", "P/CF", "Price/CF"}:
+        return ("fcf_yield",)
+    return ()
 
 
 #: Every spelling the EV/EBITDA branch below answers to. A profile-table
@@ -8356,6 +8430,14 @@ def _compute_method_value(
         _own_disc = _vc_disc.ticker_multiple_discount(ticker)
     except Exception:                                      # noqa: BLE001
         _own_disc = 1.0
+    # Audit 2026-11-25 (HK/SG): a relative leg whose peer field nobody measured or authored prices on the literal
+    # default in its branch (12.0x EV/EBITDA, 18x P/E, 2.0x P/B) -- SIA at 2x spot on multiples no basket produced
+    # (SES carries no static table). Withholding the leg left Sembcorp with no value at all, so until the owner
+    # approves a basket the leg stands but is SAID to be a default: _traced_method_value relabels its peer_source.
+    _need = _peer_fields_required(method_name, profile_name, sector)
+    if _need and isinstance(peer, dict) and not any(
+            isinstance(peer.get(f), (int, float)) and peer.get(f) > 0 for f in _need):
+        _leg_trace(peer_static_default="/".join(_need))
     # Owner, 2026-10-04 (plan 1E.1): the core figures when a large non-operating item was found.
     ebitda = most_recent.get("ebitda_core") if most_recent.get("ebitda_core") is not None else most_recent.get("ebitda")
     net_income = (most_recent.get("net_income_core") if most_recent.get("net_income_core") is not None
@@ -9263,17 +9345,22 @@ def _compute_method_value(
         norm_ni = most_recent.get("normalized_net_income")
         _is_bank = (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
                     or "Bank" in (profile_name or "")
-        if (norm_ni is None or norm_ni <= 0) and _is_bank:
-            # Through-cycle normalized earnings = equity × target_ROE.
-            # Immune to credit-cycle provision distortion (low provisions →
-            # inflated NI at cycle peak → overvalued bank; high provisions →
-            # depressed NI at cycle trough → undervalued bank).
+        _bank_norm_basis = None
+        if _is_bank:
+            # Through-cycle normalized earnings = equity x the bank's own 5y mean ROE (audit 2026-11-25): never the
+            # net-margin x revenue mean, whose bank "revenue" is gross interest income. The target ROE is the
+            # fallback when fewer than three years of ROE are on file. Immune to credit-cycle provision distortion.
             cfg = _bank_profile_calibration(profile_name)
             eq = most_recent.get("total_equity")
+            _mean_roe = most_recent.get("_roe_mean_5y")
             _research_roe = most_recent.get("_bank_target_roe_research")
-            _target_roe = _research_roe if _research_roe else cfg["target_roe"]
-            if eq and eq > 0:
-                norm_ni = eq * _target_roe
+            if eq and eq > 0 and isinstance(_mean_roe, (int, float)) and 0.0 < _mean_roe < 0.40:
+                norm_ni = eq * float(_mean_roe)
+                _bank_norm_basis = (f"equity x own {most_recent.get('_roe_mean_5y_n')}y mean ROE "
+                                    f"{float(_mean_roe):.1%}, bank")
+            elif eq and eq > 0:
+                norm_ni = eq * (_research_roe if _research_roe else cfg["target_roe"])
+                _bank_norm_basis = "equity x target ROE, bank"
         if norm_ni is None or norm_ni <= 0 or shares <= 0:
             return None
         _dyn_pe, _dyn_pe_src = (None, None)
@@ -9287,8 +9374,7 @@ def _compute_method_value(
             mult = (_dyn_pe if _dyn_pe else peer.get("pe", 18.0)) * sm * growth_premium * sbc_pe_discount
         eps_norm = norm_ni / shares
         _leg_trace(kind="equity_multiple",
-                   metric=("Net income (equity x target ROE, bank)"
-                           if (_is_bank and most_recent.get("normalized_net_income") in (None, 0))
+                   metric=(f"Net income ({_bank_norm_basis})" if _bank_norm_basis
                            else "Net income (5y normalised: "
                            + str(most_recent.get("_normalized_net_income_basis") or "net margin, 5y mean") + ")"),
                    metric_value=float(norm_ni), shares=float(shares),
@@ -10055,13 +10141,16 @@ def _compute_method_value(
         # where a row exists, else WACC plus the owner's proposed equity
         # spread, disclosed in the trace. A dividend the earnings or free
         # cash flow do not cover is capped at what covers it, and flagged.
-        _ke, _ke_src = _ddm_cost_of_equity(profile_name, ticker, wacc)
+        _ke, _ke_src = _ddm_cost_of_equity(profile_name, ticker, wacc, most_recent.get("_firm_cost_of_equity"))
         _cov_eps = (float(net_income) / float(shares)) if (isinstance(net_income, (int, float)) and net_income > 0
                                                           and shares and shares > 0) else None
         _fcf_abs = _safe(most_recent.get("free_cash_flow"))
         _cov_fcf = (float(_fcf_abs) / float(shares)) if (_fcf_abs is not None and _fcf_abs > 0
                                                          and shares and shares > 0) else None
-        _cover = min(x for x in (_cov_eps, _cov_fcf) if x is not None) if (_cov_eps or _cov_fcf) else None
+        # Covered by EITHER earnings or free cash flow is covered (audit 2026-11-25 HK/SG): capping at the lower of
+        # the two cut CapitaLand Investment's S$0.12 dividend to a GAAP EPS of S$0.029 -- an asset manager's EPS
+        # after non-cash fair-value losses -- while FCF covered S$0.095 of it (DDM S$0.46 against a S$2.24 spot).
+        _cover = max(x for x in (_cov_eps, _cov_fcf) if x is not None) if (_cov_eps or _cov_fcf) else None
         _div_capped = False
         if div and div > 0 and _cover is not None and div > _cover:
             div, _div_capped = _cover, True
@@ -13793,7 +13882,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # Owner, 2026-10-04 (plan 1E.1): core earnings per year, so neither the trailing legs nor the
         # five-year normalisation capitalise a disposal gain (see _core_earnings).
+        # A deposit- or float-funded intermediary is skipped: FMP builds its EBITDA as pretax + interest + D&A,
+        # and for a bank that interest is cost of goods, so the "gap" is the interest bill moving with rates, not
+        # a disposal gain. OCBC (audit 2026-11-25 HK/SG): FY25 core NI read 14.55bn against 7.42bn reported (Forward
+        # P/E S$52 vs spot 26.6) and FY22-24 core NI near zero (P/E norm S$3.32). Fee financials (exchanges,
+        # networks: interest a few % of revenue) keep the strip.
+        _deposit_funded = (sector or "") in ("Financials", "Banks", "Insurance") and _interest_heavy(series)
         for _i, _row in enumerate(series):
+            if _deposit_funded:
+                break
             _ce = _core_earnings(_row, series[max(0, _i - 4):_i])
             for _k in ("ebitda_core", "ebit_core", "net_income_core", "non_operating_gap"):
                 _row[_k] = _ce.get(_k)
@@ -13826,6 +13923,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "valuation_constants.bridge_adjustments): " + ", ".join(_oo_done))
         _norm_series = [{**_row, **{k: _row[k + "_core"] for k in ("ebitda", "ebit", "net_income")
                                     if _row.get(k + "_core") is not None}} for _row in series]
+        # A bank's through-cycle earnings are its own mean ROE on today's book (audit 2026-11-25 HK/SG): FMP's
+        # bank "revenue" is gross interest + fees, which moves with rates, so a net-margin x revenue mean is not
+        # mid-cycle earnings (DBS +17% on the leg, OCBC -84% through the core-earnings strip).
+        _roes = [float(r["net_income"]) / float(r["total_equity"]) for r in series[-5:]
+                 if isinstance(r.get("net_income"), (int, float)) and isinstance(r.get("total_equity"), (int, float))
+                 and r["total_equity"] > 0]
+        most_recent["_roe_mean_5y"] = (sum(_roes) / len(_roes)) if len(_roes) >= 3 else None
+        most_recent["_roe_mean_5y_n"] = len(_roes)
         _norm_ni     = _normalized_earnings(_norm_series, "net_income", window=5)
         _norm_ebitda = _normalized_earnings(_norm_series, "ebitda",     window=5)
         _norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)
@@ -16229,6 +16334,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
                     _wacc_build["firm_capm"] = _firm_capm
                     wacc = float(_firm_capm["wacc"])
+                    most_recent["_firm_cost_of_equity"] = _firm_capm.get("cost_of_equity")
                     ticker_forward_flags.append(_capmm.describe(_firm_capm))
                     # Owner, 2026-11-25 (moat): a terminal RONIC above WACC only on the company's own ROIC record.
                     _moat = _capmm.moat_spread(_capmm.roic_history(ticker, api_key), wacc)
@@ -16389,6 +16495,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                                                       ticker, profile_name)
             if _lti_flag:
                 ticker_forward_flags.append(_lti_flag)
+                _op_flag = _operating_earnings_for_netted_holdings(most_recent)
+                if _op_flag:
+                    ticker_forward_flags.append(_op_flag)
         except NameError:                                  # a path that computed no net-debt basis
             pass
 

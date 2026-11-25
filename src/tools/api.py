@@ -2497,24 +2497,25 @@ def get_financial_scores(ticker: str, api_key: str = None) -> dict | None:
 # Updated Jan 2026 (Damodaran / Bloomberg midpoints).
 # Used only when the FMP forex endpoint is unavailable or returns no data.
 _FX_FALLBACK_RATES: dict[str, float] = {
-    "CNYUSD": 0.1376,   # China (mainland) RMB / offshore CNY  (Mar 2026 midpoint)
-    "CNHUSD": 0.1376,   # offshore CNH ≈ CNY
-    "HKDUSD": 0.1282,   # Hong Kong dollar
-    "EURUSD": 1.085,    # Euro
-    "GBPUSD": 1.265,    # British pound
-    "JPYUSD": 0.00655,  # Japanese yen
-    "INRUSD": 0.01175,  # Indian rupee
-    "KRWUSD": 0.000705, # South Korean won
-    "TWDUSD": 0.0305,   # Taiwan dollar
-    "BRLUSD": 0.171,    # Brazilian real
-    "CADUSD": 0.738,    # Canadian dollar
-    "AUDUSD": 0.628,    # Australian dollar
-    "SGDUSD": 0.745,    # Singapore dollar
-    "CHFUSD": 1.115,    # Swiss franc
+    "CNYUSD": 0.149909,   # China (mainland) RMB / offshore CNY  (FMP 2026-11-25; refreshed in the HK/SG audit -- the Mar 2026 cross
+                        # CNYHKD 1.073 understated every CNY reporter in Hong Kong ~9% against 1.1755 live)
+    "CNHUSD": 0.149909,   # offshore CNH ≈ CNY
+    "HKDUSD": 0.127524,   # Hong Kong dollar
+    "EURUSD": 1.09458,    # Euro
+    "GBPUSD": 1.30922,    # British pound
+    "JPYUSD": 0.00627786,  # Japanese yen
+    "INRUSD": 0.0108038,  # Indian rupee
+    "KRWUSD": 0.000744546, # South Korean won
+    "TWDUSD": 0.0303159,   # Taiwan dollar
+    "BRLUSD": 0.169411,    # Brazilian real
+    "CADUSD": 0.700692,    # Canadian dollar
+    "AUDUSD": 0.66074,    # Australian dollar
+    "SGDUSD": 0.774875,    # Singapore dollar
+    "CHFUSD": 1.19557,    # Swiss franc
     "SEKUSD": 0.093,    # Swedish krona
     "NOKUSD": 0.090,    # Norwegian krone
     "ILSUSD": 0.267,    # Israeli shekel (ILS)
-    "MXNUSD": 0.049,    # Mexican peso
+    "MXNUSD": 0.0513777,    # Mexican peso
 }
 
 
@@ -2560,7 +2561,7 @@ def get_fx_rate(
         1. FMP /stable/batch-forex-quotes (live; full ~1500-pair batch cached
            process-wide for 5 min — single-pair /stable/fx-quote was retired).
            Direct pair first, then inverse pair (1/XXYY).
-        2. _FX_FALLBACK_RATES hardcoded table (Mar 2026 midpoints): direct
+        2. _FX_FALLBACK_RATES hardcoded table (2026-11-25 midpoints): direct
            pair, then inverse of a table pair, then USD cross of two table
            pairs (e.g. CNYHKD = CNYUSD/HKDUSD).
         3. 1.0 with a warning (unknown pair — caller should flag in output)

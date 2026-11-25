@@ -1064,6 +1064,27 @@ def lease_free_key_metrics(symbol: str, km_row: dict) -> dict:
     return out
 
 
+def mcap_in_listing_currency(symbol: str, mcap: Optional[float], reported_ccy: Optional[str]) -> Optional[float]:
+    """A reporting-currency market cap restated in the symbol's venue currency; None when that cannot be done."""
+    from src.tools.api import _KNOWN_USD_QUOTED, _VENUE_CCY, get_fx_rate
+    s = str(symbol or "").upper()
+    venue = "USD" if s in _KNOWN_USD_QUOTED else next((c for suf, c in _VENUE_CCY.items() if s.endswith(suf)),
+                                                       "USD" if "." not in s else None)
+    rep = str(reported_ccy or "").strip().upper()
+    if not mcap or not venue:
+        return None
+    if not rep:
+        return mcap if venue == "USD" else None
+    if rep == venue:
+        return mcap
+    if not (len(venue) == 3 and venue.isupper() and len(rep) == 3):
+        return None
+    fx = get_fx_rate(rep, venue)
+    if not isinstance(fx, (int, float)) or fx <= 0 or fx == 1.0:    # 1.0 = unknown pair
+        return None
+    return float(mcap) * float(fx)
+
+
 def fetch_name_multiples(symbol: str) -> Optional[dict]:
     """TTM multiples, mean revenue growth and NTM multiples for one name.
 
@@ -1101,6 +1122,14 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
                 if v is not None]
         if vals:
             out["growth_avg"] = sum(vals) / len(vals)
+
+    # The sanity check compares this cap with the screener cap, which is in the LISTING currency, while key-metrics
+    # states it in the REPORTING currency (HSBC: USD 278bn against HKD 2.2tn). Put it in the listing currency, or
+    # drop it when either currency is unknown -- an unconvertible cap would read every USD reporter in Hong Kong
+    # (HSBC, AIA, StanChart, Prudential) as a feed error and strip it from its basket.
+    if out.get("mcap_multiples"):
+        _rep = (gr[0].get("reportedCurrency") if isinstance(gr, list) and gr and isinstance(gr[0], dict) else None)
+        out["mcap_multiples"] = mcap_in_listing_currency(symbol, out["mcap_multiples"], _rep)
 
     if symbol in _FFO_SYMBOLS and _km_row:
         out["p_ffo"] = fetch_p_ffo(symbol, _safe_float(_km_row.get("marketCap")))

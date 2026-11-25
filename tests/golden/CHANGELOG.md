@@ -1890,3 +1890,27 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-25: CAPM beta = average of the relevered Damodaran industry beta and the company's own Blume-adjusted beta (09988.HK 80.73->88.98, BABA 72.65->81.48, AAPL 145.70->151.15, MELI 3961->4136; COST/V/MU/FCX small); the moat RONIC rule is off in replay (MOAT_HISTORY pinned off)
 
+## 2026-11-25T04:21:56+00:00
+
+- regenerated at HEAD: `f5ee5ca1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: HK/SG audit 2026-11-25: bank P/E (norm) on own 5y mean ROE x book (not net margin x gross-interest revenue); S-REIT DDM capitalises D1 not D2
+
+## 2026-11-25T04:39:07+00:00
+
+- regenerated at HEAD: `f5ee5ca1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: HK/SG audit 2026-11-25: with long-term investments netted as cash, EV legs price operating EBITDA/EBIT (MU -1.5% EBITDA, new flag)
+
+## 2026-11-25T04:59:10+00:00
+
+- regenerated at HEAD: `f5ee5ca1`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: HK/SG audit 2026-11-25: DDM dividend cover = earnings OR free cash flow (max), and firm-CAPM Ke before WACC+spread (BN4 DDM +6%)
+

@@ -214,7 +214,13 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
     taxes, alphas, nwcs, buybacks, roics, cx_int, da_cx = [], [], [], [], [], [], []
     for i, r in enumerate(rows):
         e, n, it = _f(r.get("ebit")) or _f(r.get("operating_income")), _f(r.get("net_income")), abs(_f(r.get("interest_expense")) or 0.0)
-        if e is not None and n is not None and (e - it) > 0:
+        # The filed effective rate (tax / pretax) first: 1 - NI / (EBIT - interest) reads any gap between FMP's EBIT
+        # and pretax (associates, investment income) as tax -- China Mobile came out at 4-8% and clamped to the 10%
+        # floor against a filed 21.8% (audit 2026-11-25 HK/SG). The identity is the fallback.
+        _tx, _pt = _f(r.get("income_tax_expense")), _f(r.get("pretax_income"))
+        if _tx is not None and _pt and _pt > 0:
+            taxes.append(_tx / _pt)
+        elif e is not None and n is not None and (e - it) > 0:
             taxes.append(1.0 - n / (e - it))
         ic = _f(r.get("invested_capital"))
         if e is not None and ic and ic > 0:
