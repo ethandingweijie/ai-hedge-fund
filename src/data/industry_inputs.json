@@ -1,5 +1,11 @@
 {
  "omitted": {
+  "01339.HK": {
+   "embedded_value": {
+    "at": "2026-11-25T09:27:16+00:00",
+    "reason": "2026-11-25: the extracted figure is book value per share (RMB 6.99), not embedded value; PICC Group publishes no group EV (only PICC Life). Not a P/EV cohort input."
+   }
+  },
   "02883.HK": {
    "backlog": {
     "at": "2026-09-20T01:59:24+00:00",
@@ -1986,6 +1992,7 @@
     "value_usd": 43141459200.0
    }
   },
+  "01339.HK": {},
   "01801.HK": {
    "pipeline": {
     "anchors": {
