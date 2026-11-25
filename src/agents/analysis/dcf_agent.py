@@ -4387,6 +4387,19 @@ def _windfall_periods(series: list[dict], field: str, window: int = 5) -> list[s
     return out if len(pts) - len(out) >= 2 else []
 
 
+def _normalized_ex_ramp(series: list[dict], field: str, window: int = 5) -> Optional[float]:
+    """The 5y normalisation without the window's leading pre-profit years (owner, 2026-11-25): a non-cyclical
+    company's scale-up losses are not a mid-cycle year. Later loss years (a price war) stay. None when nothing was
+    dropped or fewer than three years remain -- the caller then keeps the plain normalisation."""
+    tail = list(series[-window:])
+    k = 0
+    while k < len(tail) and not (isinstance(tail[k].get(field), (int, float)) and tail[k][field] > 0):
+        k += 1
+    if k == 0 or len(tail) - k < 3:
+        return None
+    return _normalized_earnings(tail[k:], field, window=len(tail) - k)
+
+
 def _normalized_earnings(
     series: list[dict],
     field: str,
@@ -8074,8 +8087,25 @@ def _compute_rnpv(
 
 # ── Multi-Method Valuation Engine ─────────────────────────────────────────────
 
+#: Owner, 2026-11-25: PRC dividend withholding tax on H-shares for a non-PRC holder.
+H_SHARE_DIVIDEND_WHT = 0.10
+
+
+def _is_h_share(ticker: Optional[str]) -> bool:
+    """A Hong Kong line of a PRC-incorporated company (ISIN CNE...): an H-share, not a red chip (HK-incorporated,
+    China Mobile HK0941...) or an offshore holdco (Cayman, Tencent KYG...)."""
+    t = str(ticker or "").upper()
+    if not t.endswith(".HK"):
+        return False
+    try:
+        from src.data.regional_comps import get_fmp_classification
+        return str(get_fmp_classification(t).get("isin") or "").startswith("CNE")
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
 def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc: float,
-                        firm_ke: Optional[float] = None) -> tuple[float, str]:
+                        firm_ke: Optional[float] = None, cash_flow_ccy: Optional[str] = None) -> tuple[float, str]:
     """The discount rate for a dividend stream: the owner's cost-of-equity row
     for this profile and market when one exists, else the firm-CAPM cost of
     equity when the WACC was built on it (owner, 2026-11-25), else WACC plus the
@@ -8086,7 +8116,7 @@ def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc
     so the spread lifted Ke 150bp -- audit 2026-11-25 HK/SG)."""
     try:
         from src.data import valuation_constants as _vc
-        _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker))
+        _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker), cash_flow_ccy=cash_flow_ccy)
         if isinstance(_coe, (int, float)) and _coe > 0:
             return max(float(_coe), float(wacc)), "owner cost_of_equity table"
         if isinstance(firm_ke, (int, float)) and 0.03 <= float(firm_ke) <= 0.25:
@@ -8832,6 +8862,10 @@ def _compute_method_value(
     if method_name in {"EV/EBITDA (norm)", "EV/EBITDA (Norm)",
                        "EV/EBITDA norm", "Normalized EV/EBITDA"}:
         norm_ebitda = most_recent.get("normalized_ebitda")
+        _xr = most_recent.get("_normalized_ebitda_ex_ramp")
+        _ramp_note = None
+        if profile_name not in _CYCLICAL_PROFILES and isinstance(_xr, (int, float)) and _xr > 0:
+            norm_ebitda, _ramp_note = _xr, "pre-profit ramp years left out (non-cyclical; owner 2026-11-25)"
         if norm_ebitda is None or norm_ebitda <= 0 or shares <= 0:
             return None
         _dyn, _dyn_src = _dynamic_norm_multiple(peer, "ev_ebitda", ticker, "EV/EBITDA (norm)")
@@ -8840,7 +8874,7 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = norm_ebitda * mult
-        _leg_trace(kind="ev_multiple", metric="EBITDA (5y normalised)",
+        _leg_trace(kind="ev_multiple", metric="EBITDA (5y normalised" + (f"; {_ramp_note})" if _ramp_note else ")"),
                    metric_value=float(norm_ebitda), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(_base_mult),
                                    "peer_source": _dyn_src or "peer median ev_ebitda (trailing; no through-cycle multiple)",
@@ -9345,6 +9379,12 @@ def _compute_method_value(
         _is_bank = (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
                     or "Bank" in (profile_name or "")
         _bank_norm_basis = None
+        _xr_ni = most_recent.get("_normalized_net_income_ex_ramp")
+        if (not _is_bank and profile_name not in _CYCLICAL_PROFILES and isinstance(_xr_ni, (int, float))
+                and _xr_ni > 0):
+            norm_ni = _xr_ni
+            most_recent["_normalized_net_income_basis"] = ("net margin, 5y mean; pre-profit ramp years left out "
+                                                           "(non-cyclical; owner 2026-11-25)")
         if _is_bank:
             # Through-cycle normalized earnings = equity x the bank's own 5y mean ROE (audit 2026-11-25): never the
             # net-margin x revenue mean, whose bank "revenue" is gross interest income. The target ROE is the
@@ -9695,7 +9735,9 @@ def _compute_method_value(
         _rb = most_recent.get("rate_base_accepted")
         _rb_d = most_recent.get("_rate_base_detail") or {}
         _roe = _rb_d.get("allowed_roe")
-        _coe = _vc.cost_of_equity(profile_name, _vc.market_key(ticker))
+        _coe = (_vc.cost_of_equity(profile_name, _vc.market_key(ticker), cash_flow_ccy=reported_currency)
+                or (most_recent.get("_firm_cost_of_equity")
+                    if _vc.cost_of_equity(profile_name, _vc.market_key(ticker)) else None))
         if not (_rb and _rb > 0 and _roe and _coe and shares > 0
                 and total_equity and total_equity > 0):
             return None
@@ -9741,8 +9783,13 @@ def _compute_method_value(
         return None
     if method_name in {"P/BV", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
-        mult = peer.get("pb", 2.0) * sm * growth_premium * _own_disc
-        _pb_parts = {"peer_multiple": float(peer.get("pb", 2.0)), "peer_source": "peer median pb",
+        _ipb = most_recent.get("_insurer_pb") or {}
+        _pb_base, _pb_src = ((float(_ipb["value"]), f"median P/B, {_ipb.get('cohort')} life cohort "
+                              f"({len(_ipb.get('members_used') or [])} peers, subject excluded)")
+                             if method_name == "P/BV" and isinstance(_ipb.get("value"), (int, float)) and _ipb["value"] > 0
+                             else (float(peer.get("pb", 2.0)), "peer median pb"))
+        mult = _pb_base * sm * growth_premium * _own_disc
+        _pb_parts = {"peer_multiple": _pb_base, "peer_source": _pb_src,
                      "scenario_band": sm, "growth_premium": growth_premium,
                      **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})}
         if bvps and bvps > 0:
@@ -10154,7 +10201,15 @@ def _compute_method_value(
         # where a row exists, else WACC plus the owner's proposed equity
         # spread, disclosed in the trace. A dividend the earnings or free
         # cash flow do not cover is capped at what covers it, and flagged.
-        _ke, _ke_src = _ddm_cost_of_equity(profile_name, ticker, wacc, most_recent.get("_firm_cost_of_equity"))
+        _ke, _ke_src = _ddm_cost_of_equity(profile_name, ticker, wacc, most_recent.get("_firm_cost_of_equity"),
+                                           cash_flow_ccy=reported_currency)
+        # Owner, 2026-11-25 (HK/SG audit): a PRC-incorporated H-share withholds 10% PRC tax on dividends paid to
+        # non-PRC holders, so the leg values the dividend the holder receives. Red chips and HK/SG companies stay gross.
+        _wht = H_SHARE_DIVIDEND_WHT if _is_h_share(ticker) else 0.0
+        if _wht and div:
+            div = div * (1.0 - _wht)
+            _leg_trace(withholding_tax=_wht, withholding_basis="PRC 10% on H-share dividends to non-PRC holders "
+                                                              "(owner 2026-11-25)")
         _cov_eps = (float(net_income) / float(shares)) if (isinstance(net_income, (int, float)) and net_income > 0
                                                           and shares and shares > 0) else None
         _fcf_abs = _safe(most_recent.get("free_cash_flow"))
@@ -10824,7 +10879,15 @@ def _growth_premium_withheld(method_name: str, profile_name: str) -> Optional[st
     n = f"{(method_name or '').lower()} "
     if any(t in n for t in _THROUGH_CYCLE_LEG_TOKENS):
         return "through-cycle leg: a mid-cycle multiple on mid-cycle earnings carries no growth premium"
+    # HK/SG audit (2026-11-25): a life insurer's growth is priced in its embedded value and VNB, and its IFRS 17
+    # insurance revenue is not a growth line a P/B or P/E can be scaled by (Ping An took x1.30, AIA x0.85).
+    if profile_name in _LIFE_INSURER_PROFILES:
+        return f"life insurer ({profile_name}): growth sits in embedded value and VNB, not in a revenue-growth premium"
     return None
+
+
+#: Profiles valued on embedded value (the life-insurance cohort P/EV and P/B legs).
+_LIFE_INSURER_PROFILES = frozenset({"Insurance", "Insurance (life)", "Life Insurance"})
 
 
 def _peer_forward_growth(peer: dict) -> tuple[Optional[float], str]:
@@ -14005,6 +14068,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         }
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
+        most_recent["_normalized_ebitda_ex_ramp"] = _normalized_ex_ramp(_norm_series, "ebitda")
+        most_recent["_normalized_net_income_ex_ramp"] = _normalized_ex_ramp(_norm_series, "net_income")
         most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
         # audit E13 / E15: the cyclical FCF Yield leg's normalised figure on the peers' basis (OCF less all capex)
         most_recent["normalized_free_cash_flow"] = _normalized_earnings(series, "free_cash_flow", window=5)
@@ -14382,7 +14447,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     most_recent["embedded_value_per_share"] = _ev_out["ev_per_share"]
                     most_recent["vnb_margin"] = _ev_out.get("vnb_margin")
                     try:
-                        from src.data.insurer_pev import cohort_pev as _cohort_pev
+                        from src.data.insurer_pev import cohort_pb as _cohort_pb, cohort_pev as _cohort_pev
+                        _ipb_out = _cohort_pb(ticker)
+                        if _ipb_out and _ipb_out.get("value"):
+                            most_recent["_insurer_pb"] = _ipb_out
                         _pev_out = _cohort_pev(ticker)
                         if _pev_out:
                             most_recent["_insurer_pev"] = _pev_out

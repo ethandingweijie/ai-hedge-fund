@@ -1425,7 +1425,7 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     # earnings (with its FCF fallback) -- five call sites, applied to non-cyclical profiles only.
     # THIRTEEN since 2026-10-10 (cross-sector audit E13 / E15): the normalised REPORTED FCF the cyclical FCF Yield leg
     # prices on the peers' basis.
-    assert src.count("_normalized_earnings(") == 13   # def + twelve call sites
+    assert src.count("_normalized_earnings(") == 14   # def + twelve call sites + _normalized_ex_ramp (2026-11-25)
     # 2026-10-04 (plan 1E.1): normalised on CORE earnings (a disposal gain is not cycle profit).
     assert '_norm_ebit   = _normalized_earnings(_norm_series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src

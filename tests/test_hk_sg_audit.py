@@ -171,3 +171,61 @@ def test_embedded_value_leg_prices_at_the_cohort_pev(monkeypatch):
     assert v == pytest.approx(101.66 * 0.5) and "median P/EV" in tr["multiple_parts"]["peer_source"]
     v1, tr1 = d._traced_method_value(most_recent={"embedded_value_per_share": 101.66}, **kw)
     assert v1 == pytest.approx(101.66) and "1.0x" in tr1["multiple_parts"]["peer_source"]
+
+
+# ── A/H dual listings priced at the H-share quote ────────────────────────────
+
+def test_an_h_share_is_restated_from_the_a_share_price():
+    # China Telecom (0728.HK): key metrics on the A-share price, HK$757.7bn, against an H-share cap of HK$498bn
+    mm = {"mcap_multiples": 757.7e9, "ev_multiples": 800.0e9}
+    vals = {"ev_ebitda": {"value": 7.41, "in_band": True}, "pe": {"value": 22.7, "in_band": True},
+            "fcf_yield": {"value": 0.05, "in_band": True}, "roic": {"value": 0.06, "in_band": True}}
+    rc._restate_at_listing_price("0728.HK", 498.0e9, mm, vals)
+    r = 498.0 / 757.7
+    assert vals["pe"]["value"] == pytest.approx(22.7 * r)
+    assert vals["ev_ebitda"]["value"] == pytest.approx(7.41 * (800.0 - 757.7 + 498.0) / 800.0)
+    assert vals["fcf_yield"]["value"] == pytest.approx(0.05 / r) and vals["roic"]["value"] == 0.06
+    assert mm["mcap_multiples"] == 498.0e9
+
+
+def test_restatement_leaves_aligned_and_non_hk_lines_alone():
+    for sym, cap in (("0005.HK", 2200e9), ("AAPL", 2.0e12)):
+        mm, vals = {"mcap_multiples": 2178e9, "ev_multiples": 2300e9}, {"pe": {"value": 10.0, "in_band": True}}
+        rc._restate_at_listing_price(sym, cap, mm, vals)
+        assert vals["pe"]["value"] == 10.0
+
+
+# ── non-cyclical normalisation leaves out the pre-profit ramp (owner, 2026-11-25) ──
+
+def test_ex_ramp_drops_only_the_leading_loss_years():
+    rows = [{"revenue": 100.0, "ebitda": m * 100.0} for m in (-0.076, 0.014, 0.085, 0.123, -0.057)]   # Meituan
+    xr = d._normalized_ex_ramp(rows, "ebitda")
+    assert xr is not None and xr == pytest.approx(d._normalized_earnings(rows[1:], "ebitda", window=4))
+    assert d._normalized_ex_ramp([{"revenue": 1.0, "ebitda": 0.1}] * 5, "ebitda") is None        # nothing to drop
+    assert d._normalized_ex_ramp([{"revenue": 1.0, "ebitda": v} for v in (-1, -1, -1, 0.1, 0.1)], "ebitda") is None
+
+
+# ── HKSE utility CoE row by currency; H-share withholding tax (owner, 2026-11-25) ──
+
+def test_the_cgb_utility_row_prices_rmb_cash_flows_only():
+    from src.data import valuation_constants as vc
+    assert vc.cost_of_equity("Regulated Utility", "HKSE", cash_flow_ccy="CNY") == pytest.approx(0.06)
+    assert vc.cost_of_equity("Regulated Utility", "HKSE", cash_flow_ccy="HKD") is None
+    assert vc.cost_of_equity("Regulated Utility", "HKSE") == pytest.approx(0.06)          # no currency given: unchanged
+    ke, src = d._ddm_cost_of_equity("Regulated Utility", "00002.HK", 0.0614, firm_ke=0.069, cash_flow_ccy="HKD")
+    assert ke == pytest.approx(0.069) and "firm CAPM" in src
+
+
+def test_h_share_dividends_are_net_of_prc_withholding(monkeypatch):
+    from src.data import regional_comps as _rc
+    monkeypatch.setattr(_rc, "get_fmp_classification",
+                        lambda t: {"isin": {"01398.HK": "CNE1000003G1", "00941.HK": "HK0941009539"}.get(t, "")})
+    assert d._is_h_share("01398.HK") and not d._is_h_share("00941.HK") and not d._is_h_share("D05.SI")
+    monkeypatch.setattr(d, "get_sector_peer_multiples", lambda *a, **k: {})
+    kw = dict(method_name="DDM", revenue_base=1e12, shares=1e10, net_debt=0.0, market_cap=1e12, wacc=0.08,
+              growth_base=0.03, fcf_margin_base=0.1, tgr=0.02, fcf_floor=0.0, sector="Financials", scenario="base",
+              profile_name="Telecom Carrier")
+    row = {"dividends_per_share": 0.30, "net_income": 1e11, "free_cash_flow": 1e11, "_firm_cost_of_equity": 0.08}
+    v_h, tr = d._traced_method_value(most_recent=dict(row), ticker="01398.HK", **kw)
+    v_r, _ = d._traced_method_value(most_recent=dict(row), ticker="00941.HK", **kw)
+    assert v_h == pytest.approx(v_r * 0.9) and tr["withholding_tax"] == pytest.approx(0.10)

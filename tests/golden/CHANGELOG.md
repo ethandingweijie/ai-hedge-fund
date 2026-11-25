@@ -1922,3 +1922,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: HK/SG audit 2026-11-25 owner decisions: SG risk-free = SGS 10y 2.29% (SGD cash flows; U96 WACC 7.67->6.51%, C38U 6.24->4.57%); bank RI terminal = CFA persistence fade w=0.8 (D05 RI 36.81->39.70)
 
+## 2026-11-25T09:08:58+00:00
+
+- regenerated at HEAD: `4512a1a7`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: HK/SG open items 2026-11-25: book value per share restated on shareholders' equity (FMP's bookValuePerShare is total equity incl. minorities; FCX P/B-ROE -38.6%); flag text from the routed-profile write-back
+

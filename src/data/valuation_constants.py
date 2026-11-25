@@ -78,7 +78,7 @@ def market_key(ticker: Optional[str]) -> str:
 
 
 def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
-                   doc: Optional[dict] = None) -> Optional[float]:
+                   doc: Optional[dict] = None, cash_flow_ccy: Optional[str] = None) -> Optional[float]:
     """The owner-set cost of equity for this profile IN THIS MARKET, or None.
 
     Read by the P/Rate Base leg, whose justified multiple is
@@ -91,6 +91,11 @@ def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
     e = ((((doc or load()).get("cost_of_equity") or {}).get("profiles") or {})
          .get(profile or "") or {}).get(market or "US") or {}
     v = e.get("value")
+    # A row stated for given currencies prices only those cash flows (owner, 2026-11-25: the CGB-based HKSE utility
+    # row is RMB-only; an HKD utility takes the firm CAPM).
+    _ccys = e.get("currencies")
+    if _ccys and cash_flow_ccy and str(cash_flow_ccy).upper() not in {str(c).upper() for c in _ccys}:
+        return None
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
 
 

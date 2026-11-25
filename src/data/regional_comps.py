@@ -1139,7 +1139,11 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
     # (HSBC, AIA, StanChart, Prudential) as a feed error and strip it from its basket.
     if out.get("mcap_multiples"):
         _rep = (gr[0].get("reportedCurrency") if isinstance(gr, list) and gr and isinstance(gr[0], dict) else None)
+        _km_mcap_rep = out["mcap_multiples"]
         out["mcap_multiples"] = mcap_in_listing_currency(symbol, out["mcap_multiples"], _rep)
+        _ev_rep = _safe_float((_km_row or {}).get("enterpriseValueTTM"))
+        if out["mcap_multiples"] and _ev_rep and _km_mcap_rep:
+            out["ev_multiples"] = _ev_rep * out["mcap_multiples"] / _km_mcap_rep      # same FX as the cap
 
     if symbol in _FFO_SYMBOLS and _km_row:
         out["p_ffo"] = fetch_p_ffo(symbol, _safe_float(_km_row.get("marketCap")))
@@ -1529,6 +1533,49 @@ def load_history(exchange: str, key: str, field: str, cohort: str = "all",
     return [by_date[d] for d in sorted(by_date)]
 
 
+#: A Hong Kong line whose multiples-cap sits more than this far from its own quoted cap is priced off another line
+#: (A/H dual listings: FMP's key metrics use the A-share price -- China Telecom HK$758bn against HK$498bn, its
+#: EV/EBITDA 7.4x against ~5x at the H price). Inside the band the gap is snapshot timing and nothing moves.
+AH_RESTATE_BAND = 0.05
+_PRICE_FIELDS = ("pe", "pb", "pe_ntm", "pe_norm", "p_ffo")
+_EV_FIELDS = ("ev_ebitda", "ev_revenue", "ev_ebit", "ev_ocf", "ev_ebitda_ntm", "ev_revenue_ntm", "ev_ebitda_norm",
+              "ev_ebit_norm")
+
+
+def _restate_at_listing_price(symbol: str, listing_cap, mm: dict, vals: dict) -> None:
+    """Restate an HK member's multiples at its own quote when FMP computed them on a different line's price. In
+    place on `vals` (the stored multiples) and `mm` (so the sanity check then compares like with like)."""
+    if not str(symbol or "").upper().endswith(".HK"):
+        return
+    km_cap, ev = _multiples_mcap(mm), _safe_float(mm.get("ev_multiples"))
+    try:
+        cap = float(listing_cap) if listing_cap else None
+    except (TypeError, ValueError):
+        cap = None
+    if not (cap and km_cap and cap > 0 and km_cap > 0):
+        return
+    r = cap / km_cap
+    if abs(r - 1.0) <= AH_RESTATE_BAND or not (1.0 / MCAP_SANITY_RATIO < r < MCAP_SANITY_RATIO):
+        return
+    ev_f = ((ev - km_cap + cap) / ev) if (ev and ev > 0 and ev - km_cap + cap > 0) else None
+    for f, cell in vals.items():
+        v = cell.get("value") if isinstance(cell, dict) else None
+        if not isinstance(v, (int, float)):
+            continue
+        if f in _PRICE_FIELDS:
+            nv = v * r
+        elif f in _EV_FIELDS and ev_f:
+            nv = v * ev_f
+        elif f == "fcf_yield":
+            nv = v / r
+        else:
+            continue
+        lo, hi = _BANDS.get(f, (float("-inf"), float("inf")))
+        vals[f] = {"value": nv, "in_band": lo <= nv <= hi}
+    vals["_listing_restated"] = {"value": round(r, 4), "in_band": False}
+    mm["mcap_multiples"] = cap
+
+
 def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
                     level: str) -> list[dict]:
     """One row per (grouping, cohort, member) with the member's multiples."""
@@ -1550,6 +1597,7 @@ def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
                     vals[field] = {"value": f,
                                    "in_band": f is not None and not math.isnan(f)
                                    and lo <= f <= hi}
+                _restate_at_listing_price(m["symbol"], m.get("market_cap"), mm, vals)
                 # not a multiple (never in band): the cap the multiples were computed on, for mcap_mismatch
                 if _multiples_mcap(mm):
                     vals["_mcap_multiples"] = {"value": _multiples_mcap(mm), "in_band": False}
@@ -2039,6 +2087,7 @@ def get_fmp_classification(ticker: str) -> dict:
                 "name": (row.get("companyName") or "").strip(),
                 "currency": (row.get("currency") or "").strip(),
                 "beta": row.get("beta"),          # owner, 2026-10-04: the CAPM cross-check (same request)
+                "isin": (row.get("isin") or "").strip().upper(),   # H-share test: PRC-incorporated = CNE... (WHT)
             }
     except Exception as exc:
         logger.debug("get_fmp_classification(%s) failed: %s", ticker, exc)

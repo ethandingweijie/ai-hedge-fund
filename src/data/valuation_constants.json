@@ -476,6 +476,8 @@
         },
         "HKSE": {
           "value": 0.06,
+          "currencies": ["CNY"],
+          "currencies_note": "Owner, 2026-11-25 (HK/SG audit): the row is CGB-based, so it prices RMB cash flows only. HKD-earning utilities (CLP, Power Assets, HK Electric) take the firm-CAPM cost of equity on US rates under the peg.",
           "band": [
             0.058,
             0.062

@@ -99,6 +99,24 @@ def _classify_unknown_profiles_with_llm(
         for t in all_tickers:
             if existing_profile_names.get(t):
                 continue   # already classified via TICKER_SECTOR_LOOKUP
+            # The industry map before the LLM (audit 2026-11-25 HK/SG): the DCF re-routes by the same map, but only
+            # after deep research has extracted under the router's guess -- CLP (00002.HK) was researched as
+            # "Mature SaaS" in "Tech" and valued as a Regulated Utility. Same call, same answer, earlier.
+            try:
+                from src.agents.analysis.dcf_agent import (_industry_routed_profile, _industry_routing_enabled,
+                                                           _industry_routing_in_scope)
+                if _industry_routing_enabled() or _industry_routing_in_scope(t):
+                    _routed = _industry_routed_profile(t, sectors.get(t, ""))
+                    if _routed:
+                        sectors[t], existing_profile_names[t] = _routed[0], _routed[1]
+                        state["data"]["sectors"] = sectors
+                        if t == primary_ticker:
+                            state["data"]["sector"] = _routed[0]
+                        _record_profile_source(state, t, "router_industry_map")
+                        print(f"  Profile ({t}): {_routed[1]} [industry map, sector {_routed[0]}]")
+                        continue
+            except Exception as _im_exc:                   # noqa: BLE001
+                _log.warning("[strategic_router] industry map skipped for %s: %r", t, _im_exc)
             t_sector = sectors.get(t, "")
             candidates = _profiles_by_sector.get(t_sector) or []
             if not candidates:

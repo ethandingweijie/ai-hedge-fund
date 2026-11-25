@@ -18,7 +18,7 @@ PROFILE = "Regulated Utility"
 
 def _value(row, monkeypatch, coe=0.085, scenario="base", tgr=0.02, method="P/Rate Base"):
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
-    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: coe)
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None, cash_flow_ccy=None: coe)
     return dcf_agent._compute_method_value(
         method_name=method, most_recent=row, revenue_base=2.5e10, shares=2e9, net_debt=9e10,
         market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=tgr,
@@ -53,7 +53,7 @@ def test_a_pure_utility_is_the_planned_formula_exactly(monkeypatch):
 
 def test_the_trace_is_one_multiple_on_book_so_the_workbook_rebuilds_it(monkeypatch):
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
-    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: 0.085)
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None, cash_flow_ccy=None: 0.085)
     v, tr = dcf_agent._traced_method_value(
         method_name="P/Rate Base", most_recent=_row(), revenue_base=2.5e10, shares=2e9, net_debt=9e10,
         market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02,
@@ -70,7 +70,7 @@ def test_net_debt_is_not_subtracted(monkeypatch):
     a = _value(_row(), monkeypatch)
     monkeypatch.undo()
     monkeypatch.setattr(dcf_agent, "get_sector_peer_multiples", lambda *a, **k: {"pb": 2.0})
-    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None: 0.085)
+    monkeypatch.setattr(vc, "cost_of_equity", lambda profile, market="US", doc=None, cash_flow_ccy=None: 0.085)
     b = dcf_agent._compute_method_value(
         method_name="P/Rate Base", most_recent=_row(), revenue_base=2.5e10, shares=2e9, net_debt=0.0,
         market_cap=1.5e11, wacc=0.045, growth_base=0.04, fcf_margin_base=0.05, tgr=0.02,

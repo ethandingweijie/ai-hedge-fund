@@ -1022,6 +1022,13 @@ def search_line_items(
 
         # Derived: book_value_per_share from ratios if not present
         # (already handled by _RATIOS_MAP → "bookValuePerShare")
+        # FMP's bookValuePerShare is TOTAL equity (incl. minority interest) per share; a shareholder's book is the
+        # parent's. Restated on shareholders' equity (audit 2026-11-25 HK/SG): Ping An CNY 78.23 -> 55.27, its
+        # P/BV leg 41% high on Ping An Bank's outside holders. FMP totalEquity = totalStockholdersEquity + minority.
+        _bv, _se, _mi = snake.get("book_value_per_share"), snake.get("shareholders_equity"), snake.get("minority_interest")
+        if (isinstance(_bv, (int, float)) and _bv > 0 and isinstance(_se, (int, float)) and _se > 0
+                and isinstance(_mi, (int, float)) and _mi > 0):
+            snake["book_value_per_share"] = float(_bv) * float(_se) / (float(_se) + float(_mi))
 
         item_fields: dict = {
             "ticker":        ticker,
