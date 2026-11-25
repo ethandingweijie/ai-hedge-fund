@@ -253,7 +253,9 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         pretax = ebit - int_exp + int_inc
         tax_rate = float((fc.get("history") or {}).get("tax_rate") or 0.21)
         tax = max(pretax, 0.0) * tax_rate
-        ni_total = pretax - tax
+        # recurring income below EBIT carried by the forecast (associates' share, reported after tax): owner 2026-11-25
+        noi = float(r.get("non_operating_income") or 0.0)
+        ni_total = pretax - tax + noi
         mi_share = ni_total * val("minority_share_of_ni")
         ni = ni_total - mi_share
         # cash flow
@@ -296,7 +298,7 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
             shares = shares + issue / price
         for k, x in (("revenue", rev), ("growth", rev / rev_prev - 1.0 if rev_prev else None), ("cogs", -cogs if cogs is not None else None), ("gross_profit", gp),
                      ("gross_margin", (gp / rev) if gp is not None and rev else None), ("opex_ex_da", -opex), ("ebitda", ebit + da), ("da", -da), ("ebit", ebit),
-                     ("ebit_margin", ebit / rev if rev else None), ("interest_expense", -int_exp), ("interest_income", int_inc), ("pretax", pretax), ("tax", -tax),
+                     ("ebit_margin", ebit / rev if rev else None), ("interest_expense", -int_exp), ("interest_income", int_inc), ("pretax", pretax), ("tax", -tax), ("associates_income", noi),
                      ("tax_rate", tax_rate), ("minority", -mi_share), ("net_income", ni), ("net_margin", ni / rev if rev else None), ("shares", shares), ("eps", ni / shares if shares else None),
                      ("dividends_per_share", div / shares if shares else None), ("sbc_memo", sbc)):
             L(IS, k, x)

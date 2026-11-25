@@ -884,7 +884,8 @@
     "_doc": "Owner, 2026-11-25 (HK/SG audit): the risk-free rate matches the currency of the cash flows. A market listed here discounts at its own government 10y; any other market takes live FRED DGS10. HK is not listed: the HKD peg keeps it on US rates. Reviewed quarterly.",
     "reviewed": {"last_reviewed": "2026-11-25", "reviewer": "owner", "cadence": "quarterly"},
     "markets": {
-      "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)"}
+      "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)",
+             "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."}
     }
   }
 }

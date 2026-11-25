@@ -1946,3 +1946,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: 2026-11-25 workbook audit: cost of debt rebased onto the SGS curve with its spread (U96 WACC 6.51->5.42%, C38U 4.57->3.90%); U96's thin-residual DCF (EV ~15bn vs 13.8bn net debt) turns positive and enters at 0.50 -- the 11x leg dispersion caps its rating at Neutral; the PPA project-finance DCF is the structural fix
 
+## 2026-11-25T12:24:56+00:00
+
+- regenerated at HEAD: `9b98f6fb`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-25: SG Ke/WACC floored at SGS + 3.0pp (C38U WACC 3.90->5.29%); bank GGM growth capped at the market risk-free rate (D05 g 3.3->2.29%, IV 47.47->45.08)
+

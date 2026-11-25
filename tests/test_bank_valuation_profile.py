@@ -169,14 +169,19 @@ def test_efficiency_ratio_uses_total_income():
         ("JPM",    "Money Center Bank",      2.37),
     ],
 )
-def test_ggm_reproduces_published_target_pb(ticker, profile, expected_pb):
+def test_ggm_reproduces_published_target_pb(ticker, profile, expected_pb, monkeypatch):
+    # The broker inputs still reproduce the published multiple; the owner's rf cap (2026-11-25) is pinned separately.
+    from src.data import capm as _capm
+    monkeypatch.setattr(_capm, "risk_free", lambda market="US": (0.10, "test: cap not binding"))
     row = {"book_value_per_share": 20.0, "net_income": 1e9, "total_equity": 1e10}
     _value, target_pb, _a = _compute_ggm_pb(ticker, profile, row, 1e9)
     assert target_pb == pytest.approx(expected_pb, abs=0.02)
 
 
-def test_ggm_reproduces_dbs_target_price():
-    """target P/B x BVPS must land on the published S$61.00 target."""
+def test_ggm_reproduces_dbs_target_price(monkeypatch):
+    """target P/B x BVPS must land on the published S$61.00 target (the broker's own, uncapped g)."""
+    from src.data import capm as _capm
+    monkeypatch.setattr(_capm, "risk_free", lambda market="US": (0.10, "test: cap not binding"))
     value, _pb, assumptions = _compute_ggm_pb(
         "D05.SI", "Money Center Bank (SG)", DBS_FY2025, DBS_FY2025["shares_outstanding"]
     )
@@ -195,7 +200,19 @@ def test_ggm_returns_none_when_coe_approaches_growth():
            "_bank_ggm_g_research": 0.063, "_bank_target_roe_research": 0.15}
     a = _bank_ggm_assumptions("XXX", "Money Center Bank (SG)", row)
     assert (a["coe"], a["g"]) == (0.065, 0.063)     # both accepted
-    assert _compute_ggm_pb("XXX", "Money Center Bank (SG)", row, 1e9) is None
+    from src.data import capm as _capm
+    import pytest as _pt
+    with _pt.MonkeyPatch.context() as mp:
+        mp.setattr(_capm, "risk_free", lambda market="US": (0.10, "test: cap not binding"))
+        assert _compute_ggm_pb("XXX", "Money Center Bank (SG)", row, 1e9) is None
+
+
+def test_ggm_growth_is_capped_at_the_market_risk_free_rate():
+    """Owner, 2026-11-25: DBS's 3.3% broker g against a 2.29% SGS 10y is capped at the SGS rate."""
+    v_cap, pb_cap, a = _compute_ggm_pb("D05.SI", "Money Center Bank (SG)", DBS_FY2025, DBS_FY2025["shares_outstanding"])
+    assert a["g"] == pytest.approx(0.0229) and a["g_capped_from"] == pytest.approx(0.033)
+    assert pb_cap == pytest.approx((a["roe"] - 0.0229) / (a["coe"] - 0.0229), rel=0.01)   # tangible-to-book step
+    assert any("capped at the risk-free rate" in p for p in a["provenance"])
 
 
 def test_out_of_band_research_coe_falls_back_to_profile():

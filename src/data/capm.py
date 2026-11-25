@@ -173,6 +173,17 @@ def risk_free(market: str = "US") -> tuple[float, str]:
     return RF_FALLBACK, "Damodaran US T-bond rate 2026-11-01 (fallback)"
 
 
+def local_min_spread(market: str) -> Optional[float]:
+    """The owner's minimum Ke / WACC spread over a local government curve, or None (valuation_constants)."""
+    try:
+        from src.data import valuation_constants as _vc
+        v = ((((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "") or {})
+             .get("min_spread_over_rf"))
+        return float(v) if isinstance(v, (int, float)) and 0.0 < v < 0.10 else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
 def applies(profile: Optional[str]) -> bool:
     """FIRM_CAPM=off restores the sector table and its overlays (rollback lever)."""
     if os.environ.get("FIRM_CAPM", "on").strip().lower() in ("0", "false", "no", "off"):
@@ -246,6 +257,13 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
         beta_own_adj = 0.67 * float(own_beta) + 0.33
     beta_l = 0.5 * (beta_l_industry + beta_own_adj) if beta_own_adj is not None else beta_l_industry
     ke = rf + beta_l * ERP + float(crp or 0.0)
+    # Owner, 2026-11-25: on a local government curve far below the US one (SGS 2.29%), a low-beta name's Ke and
+    # WACC fall to levels no local desk would use (Singtel Ke 4.16%, WACC 3.9%: 0.42 x a US ERP on the SGS rate).
+    # Floor both at the market's minimum spread over its own rf (valuation_constants.risk_free_by_market).
+    _min_spread = local_min_spread(market) if "owner-set" in str(rf_source) else None
+    ke_floored = bool(_min_spread) and ke < rf + _min_spread
+    if ke_floored:
+        ke = rf + _min_spread
     kd = float(cost_of_debt) if isinstance(cost_of_debt, (int, float)) and cost_of_debt > 0 else rf + 0.016
     # HK/SG workbook audit (2026-11-25): the live Kd is a US yield (Treasury + the rating's spread). When the market
     # discounts on its own government curve, the debt moves onto that curve too, spread kept -- Singtel's Kd stayed
@@ -257,7 +275,7 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
         kd = kd_rebased
     dv = D / (D + E)
     wacc = (1.0 - dv) * ke + dv * kd * (1.0 - t) + float(contracted_discount or 0.0)
-    floor = rf + WACC_FLOOR_OVER_RF
+    floor = rf + max(WACC_FLOOR_OVER_RF, _min_spread or 0.0)
     floored = wacc < floor
     wacc = max(wacc, floor)
     return {"wacc": round(wacc, 5), "industry": industry, "beta_unlevered": beta_u, "beta_levered": round(beta_l, 4),
@@ -267,6 +285,7 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
             "crp": round(float(crp or 0.0), 5), "cost_of_equity": round(ke, 5), "cost_of_debt": round(kd, 5),
             "tax_rate": t, "contracted_discount": float(contracted_discount or 0.0), "floored": floored,
             "cost_of_debt_rebased": kd_rebased is not None,
+            "min_spread_over_rf": _min_spread, "ke_floored": ke_floored,
             **({"us_rf": round(us_rf, 5), "cost_of_debt_us": round(float(cost_of_debt), 5)} if kd_rebased is not None else {}),
             "source": SOURCE}
 
@@ -281,5 +300,6 @@ def describe(w: dict) -> str:
             + _b + f" x ERP {w['erp']:.2%}" + (f" + CRP {w['crp']:.2%}" if w['crp'] else "")
             + f"; Kd {w['cost_of_debt']:.2%} pre-tax at D/V {w['dv_ratio']:.0%}"
             + (f"; contracted-revenue {w['contracted_discount']:+.2%}" if w['contracted_discount'] else "")
-            + (f"; floored at rf + {WACC_FLOOR_OVER_RF:.0%}" if w['floored'] else "")
+            + (f"; Ke floored at rf + {w['min_spread_over_rf']:.1%}" if w.get('ke_floored') else "")
+            + (f"; floored at rf + {max(WACC_FLOOR_OVER_RF, w.get('min_spread_over_rf') or 0.0):.1%}" if w['floored'] else "")
             + " -- replaces the sector table and its regime / research / insider overlays")

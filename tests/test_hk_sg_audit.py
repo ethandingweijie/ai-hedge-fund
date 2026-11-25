@@ -256,3 +256,24 @@ def test_insurer_pe_cohort_excludes_the_subject():
     pe = {"02378.HK": 12.0, "MFC": 14.0, "01828.HK": 20.0, "G07.SI": 10.0, "01299.HK": 15.0}
     out = ip.cohort_pe("01299.HK", pe=pe.get)
     assert out["value"] == pytest.approx(13.0) and "01299.HK" not in [m["symbol"] for m in out["members_used"]]
+
+
+# ── owner decisions round 5 (2026-11-25) ─────────────────────────────────────
+
+def test_sg_ke_and_wacc_are_floored_at_the_local_minimum_spread():
+    from src.data import capm
+    w = capm.firm_wacc(profile="Telecom Carrier", net_debt=9.4e9, market_cap=69e9, cost_of_debt=None, market="SG")
+    assert w["min_spread_over_rf"] == pytest.approx(0.03) and w["ke_floored"]
+    assert w["cost_of_equity"] == pytest.approx(0.0229 + 0.03) and w["wacc"] >= 0.0229 + 0.03 - 1e-9
+    us = capm.firm_wacc(profile="Telecom Carrier", net_debt=9.4e9, market_cap=69e9, cost_of_debt=None, market="US")
+    assert us["min_spread_over_rf"] is None and not us["ke_floored"]
+
+
+def test_recurring_income_below_ebit_is_its_own_line_unless_the_holdings_are_cash():
+    from src.agents.analysis import guidance_forecast as _gf
+    h = _gf.with_non_operating_decision({"non_operating_ratio": 0.30}, holdings_netted=False)
+    assert h["non_operating_ratio_used"] == pytest.approx(0.30)
+    assert _gf.with_non_operating_decision({"non_operating_ratio": 0.30}, True)["non_operating_ratio_used"] == 0.0
+    assert _gf.with_non_operating_decision({"non_operating_ratio": -0.05}, False)["non_operating_ratio_used"] == 0.0
+    rows = [{"revenue": 100.0, "ebit": 10.0, "interest_expense": 1.0, "pretax_income": 39.0}] * 3   # Singtel-like
+    assert _gf._non_operating_ratio(rows) == pytest.approx(0.30)

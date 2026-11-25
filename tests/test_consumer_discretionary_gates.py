@@ -2635,7 +2635,7 @@ def test_every_blend_that_values_the_profile_reads_the_promoted_rows():
     # ── (1) computed once, above the loop ─────────────────────────────────
     assert body.count("_pe_normalization_deviation(") == 1
     assert body.count("_pe_norm_leg_swaps(") == 1
-    assert body.count("_apply_pe_norm_swaps(") == 3          # Wave 9 margin-peak gate; 2026-11-12 the cycle-peak swap (same rows, same helper)
+    assert body.count("_apply_pe_norm_swaps(") == 4          # Wave 9 margin-peak gate; 2026-11-12 the cycle-peak swap; 2026-11-25 the PPA swap (same helper)
     assert body.count('for scenario in ("base", "bear", "bull"):') == 1
 
     # On comment-stripped lines, and that is not stylistic. The `_cyc_rec`

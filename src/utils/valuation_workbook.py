@@ -1436,7 +1436,12 @@ class _Book:
                 run_day)
         add("fc_contracted", "Contracted-revenue discount", _num(fc.get("contracted_discount")) or 0.0, PCT2,
             "Engine (research keywords; wacc_build.contracted_revenue_discount)", run_day)
-        add("fc_floor", "WACC floor over the risk-free rate", float(_floor), PCT2, "Engine constant (capm.WACC_FLOOR_OVER_RF)")
+        _ms = _num(fc.get("min_spread_over_rf"))
+        add("fc_floor", "WACC floor over the risk-free rate", float(max(_floor, _ms or 0.0)), PCT2,
+            "Engine constant (capm.WACC_FLOOR_OVER_RF)" + (f", raised to the owner's local-curve minimum spread "
+                                                            f"(valuation_constants.risk_free_by_market)" if _ms else ""))
+        add("fc_ke_min", "Minimum cost-of-equity spread over the risk-free rate (local curve; 0 = none)", float(_ms or 0.0),
+            PCT2, "Owner, 2026-11-25 (valuation_constants.risk_free_by_market.min_spread_over_rf)" if _ms else "None for this market")
         add("fc_dp", "Firm-CAPM WACC rounding (decimal places, engine)", 5, "0", "Engine constant (capm.firm_wacc)")
         _pr = wb.get("pharma_capm_rule") or {}
         if isinstance(_pr.get("floor"), (int, float)):
@@ -2108,8 +2113,9 @@ class _Book:
         line("beta", "Beta used = blend of relevered industry and Blume own beta (industry alone when own n/a)",
              f"=IF({C('use')}=1,{A['fc_blend_w']}*{C('bl')}+(1-{A['fc_blend_w']})*{C('badj')},{C('bl')})", "0.0000",
              fc.get("beta_levered"), 4)
-        line("ke", "Cost of equity = rf + β × ERP + CRP", f"={C('rf')}+{C('beta')}*{C('erp')}+{C('crp')}", PCT2,
-             fc.get("cost_of_equity"), 5, bold=True)
+        line("ke", "Cost of equity = MAX(rf + β × ERP + CRP, rf + minimum spread when set)",
+             f"=IF({A['fc_ke_min']}>0,MAX({C('rf')}+{C('beta')}*{C('erp')}+{C('crp')},{C('rf')}+{A['fc_ke_min']}),"
+             f"{C('rf')}+{C('beta')}*{C('erp')}+{C('crp')})", PCT2, fc.get("cost_of_equity"), 5, bold=True)
         if A.get("fc_kd_live") and A.get("fc_us_rf"):
             line("kd", "Pre-tax cost of debt on the local curve = MAX(live Kd − US 10y + rf, rf)",
                  f"=MAX({A['fc_kd_live']}-{A['fc_us_rf']}+{C('rf')},{C('rf')})", PCT2, fc.get("cost_of_debt"), 5)
@@ -3524,6 +3530,8 @@ class _Book:
         arow("invd", "Inventory days (blank = held)", av("inventory_days"), "0.0")
         arow("apd", "Payable days (blank = held)", av("payable_days"), "0.0")
         arow("mi", "Minority share of net income", av("minority_share_of_ni"), PCT)
+        arow("noi", "Associates' share of profit and investment income (recurring, after tax; engine forecast)",
+             list(IS.get("associates_income") or [0.0] * n), MIL, 1e-6)
         arow("acq", "Acquisitions", av("acquisitions"), MIL, 1e-6)
         r += 1
         R: dict = {}
@@ -3554,8 +3562,9 @@ class _Book:
         frow("intinc", "Interest income (opening cash × rate)", lambda L, P: f"=({P}{{cash}}+{P}{{sti}})*{L}{A['iir']}")
         frow("pretax", "Pre-tax income", lambda L, P: f"={L}{R['ebit']}+{L}{R['intexp']}+{L}{R['intinc']}", bold=True, opening=(op.get("pretax") or 0) * M)
         frow("tax", "Income tax", lambda L, P: f"=-MAX({L}{R['pretax']},0)*{L}{A['tax']}")
-        frow("mino", "Minority interest", lambda L, P: f"=-({L}{R['pretax']}+{L}{R['tax']})*{L}{A['mi']}")
-        frow("ni", "Net income to common", lambda L, P: f"={L}{R['pretax']}+{L}{R['tax']}+{L}{R['mino']}", bold=True, opening=(op.get("net_income") or 0) * M)
+        frow("assoc", "Associates and investment income (after tax)", lambda L, P: f"={L}{A['noi']}")
+        frow("mino", "Minority interest", lambda L, P: f"=-({L}{R['pretax']}+{L}{R['tax']}+{L}{R['assoc']})*{L}{A['mi']}")
+        frow("ni", "Net income to common", lambda L, P: f"={L}{R['pretax']}+{L}{R['tax']}+{L}{R['assoc']}+{L}{R['mino']}", bold=True, opening=(op.get("net_income") or 0) * M)
         frow("shares", "Diluted shares (millions)", lambda L, P: f'=IF({L}{A["px"]}>0,{P}{R["shares"]}+({L}{{bbk}}+{L}{{issue}})/{L}{A["px"]},{P}{R["shares"]})', fmt=MIL, opening=(op.get("shares") or 0) * M)
         frow("eps", "Diluted EPS", lambda L, P: f"=IFERROR({L}{R['ni']}/{L}{R['shares']},0)", fmt=NUM, bold=True)
         frow("dps", "Dividend per share", lambda L, P: f"=IFERROR(-{L}{{div}}/{L}{R['shares']},0)", fmt=NUM)

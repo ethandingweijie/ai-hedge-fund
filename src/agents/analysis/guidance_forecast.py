@@ -210,6 +210,15 @@ def _non_operating_ratio(rows: list[dict]) -> float:
     return max(-0.5, min(0.5, median(vals))) if vals else 0.0
 
 
+def with_non_operating_decision(hist: dict, holdings_netted: bool) -> dict:
+    """hist plus `non_operating_ratio_used`: the recurring income below EBIT the forecast carries (0 when the
+    holdings that earn it are already cash in net debt, or when it is a loss)."""
+    out = dict(hist or {})
+    nor = float(out.get("non_operating_ratio") or 0.0)
+    out["non_operating_ratio_used"] = nor if (nor > 0 and not holdings_netted) else 0.0
+    return out
+
+
 def history_ratios(series: list[dict], cfg: dict) -> dict:
     """Activity and intensity ratios from the audited years (medians), with their sources."""
     rows = [r for r in (series or []) if isinstance(r, dict) and _f(r.get("revenue"))]
@@ -465,24 +474,23 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
     out["ebit_T_implied"] = ebit_T
     out["net_income_T_from_eps"] = ni_T_from_eps
     out["net_income_T_from_margin"] = ni_T_from_ebit
-    # The non-operating ratio is recorded but not yet taken out of the back-solve: until the forecast carries
-    # associates' income as its own line into the DCF, removing it from EBIT would drop the associates from the
-    # valuation entirely (Singtel's are most of the company). Owner design pending (2026-11-25).
-    _nonop_T = 0.0
-    if ni_T_from_eps is not None and ebit_T is not None and ebit_T - interest + _nonop_T > 0:
-        implied_tax = 1.0 - ni_T_from_eps / (ebit_T - interest + _nonop_T)
+    # Owner, 2026-11-25: guided EPS carries the recurring income below EBIT (associates, investment income), which
+    # the forecast now carries as its own line, so the EBIT that EPS implies excludes it: NI = (EBIT - i)(1-t) + NOI.
+    _nonop_T = float(hist.get("non_operating_ratio_used") or 0.0) * float(revT or 0.0)
+    if ni_T_from_eps is not None and ebit_T is not None and ebit_T - interest > 0:
+        implied_tax = 1.0 - (ni_T_from_eps - _nonop_T) / (ebit_T - interest)
         out["implied_tax_rate"] = implied_tax
         if not (0.0 <= implied_tax <= 0.45) and targets.get("eps_adjusted"):
             # Owner, 2026-10-06 (plan E28, PFE / LLY): adjusted (non-GAAP) EPS excludes amortisation, deal and
             # one-off costs, so it cannot set a GAAP margin -- the guided / history margin stands.
             out["flags"].append(f"Guided EPS is on an adjusted (non-GAAP) basis: it implies a {implied_tax:.0%} tax-and-"
                                 f"non-operating take against a GAAP margin, so it does not set the margin ({mT:.1%} stands)")
-        elif not (0.0 <= implied_tax <= 0.45) and not _eps_margin_plausible(ni_T_from_eps / (1.0 - tax) + interest - _nonop_T, revT, hist):
+        elif not (0.0 <= implied_tax <= 0.45) and not _eps_margin_plausible((ni_T_from_eps - _nonop_T) / (1.0 - tax) + interest, revT, hist):
             # 2026-11-12 (09988.HK): research EPS per ADS (8 shares) over ordinary shares implied a 109.6% EBIT margin;
             # taking it made the share-count check pass by construction (EPS x shares = net income) and sent the DCF
             # to 646 against a 92 spot. An implausible implied margin means the EPS is off the model's share basis:
             # the margin stands, and the share-count check fails and acts on the EPS.
-            out["eps_margin_implausible"] = (ni_T_from_eps / (1.0 - tax) + interest - _nonop_T) / revT if revT else None
+            out["eps_margin_implausible"] = ((ni_T_from_eps - _nonop_T) / (1.0 - tax) + interest) / revT if revT else None
             out["flags"].append(f"Guided EPS implies an EBIT margin of {out['eps_margin_implausible']:.1%} against "
                                 f"{float(hist.get('ebit_margin') or 0.0):.1%} trailing: not on the model's share basis (ADS, units or "
                                 f"currency), so it does not set the margin ({mT:.1%} stands)")
@@ -492,7 +500,7 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
             # history's tax and interest replaces the incompatible margin (Molina: the margin path put
             # FY27 EBIT at 2.7x consensus while guided EPS supported a third of it).
             out["margin_T_conflicting"] = mT
-            out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest - _nonop_T
+            out["ebit_T_implied"] = (ni_T_from_eps - _nonop_T) / (1.0 - tax) + interest
             out["margin_T_guided"] = out["ebit_T_implied"] / revT if revT else mT
             out["margin_T_basis"] = "EBIT implied by guided EPS (the guided margin conflicted with it)"
             out["flags"].append(f"Guided EPS and guided margin are not compatible: they imply a {implied_tax:.0%} tax-and-non-operating take "
@@ -500,7 +508,7 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
                                 f"({out['margin_T_guided']:.1%}, not {mT:.1%})")
     if ni_T_from_eps is not None and ebit_T is None:
         # back-solve the EBIT the EPS needs at the history's tax and interest
-        _ebit_eps = ni_T_from_eps / (1.0 - tax) + interest - _nonop_T
+        _ebit_eps = (ni_T_from_eps - _nonop_T) / (1.0 - tax) + interest
         if _eps_margin_plausible(_ebit_eps, revT, hist):
             out["ebit_T_implied"] = _ebit_eps
             out["margin_T_implied"] = _ebit_eps / revT if revT else None
@@ -536,7 +544,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
                    peer_ev_ebitda: Optional[float] = None, market_growth: Optional[float] = None,
                    engine_growth_path: Optional[list[float]] = None, fcf_margin_base: Optional[float] = None,
                    cfg: Optional[dict] = None, hist: Optional[dict] = None, overrides: Optional[dict] = None,
-                   fx_to_valuation: float = 1.0, valuation_currency: Optional[str] = None) -> Optional[dict]:
+                   fx_to_valuation: float = 1.0, valuation_currency: Optional[str] = None,
+                   holdings_netted: bool = False) -> Optional[dict]:
     """The intermediate years from today to the guided endpoints, by the owner's five principles.
 
     Returns the per-year table, the schedules the DCF leg runs on (growth and FCF margin for
@@ -554,6 +563,12 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
     if _num(ov.get("fade_years")) is not None:
         cfg["fade_years"] = int(max(1, min(8, round(float(ov["fade_years"])))))
     hist = dict(hist) if hist else history_ratios(series, cfg)
+    # Owner, 2026-11-25: income below EBIT that recurs (associates' share of profit, investment income) is its own
+    # forecast line, valued in the cash flow -- unless the holdings that earn it are already counted as cash in net
+    # debt (then it would be valued twice). Losses there are not projected as recurring.
+    if "non_operating_ratio_used" not in hist:          # a recompute passes the engine's decision back in
+        _nor = float(hist.get("non_operating_ratio") or 0.0)
+        hist["non_operating_ratio_used"] = _nor if (_nor > 0 and not holdings_netted) else 0.0
     applied: dict = {}
     for k in ("tax_rate", "capex_alpha", "nwc_intensity"):
         if _num(ov.get(k)) is not None:
@@ -762,15 +777,17 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
             amort = 0.0
         nopat = ebit * (1.0 - tax)
         dnwc = nwc_i * (rev - rev_prev)
-        ufcf = nopat + da - capex - dnwc
-        ni = (ebit - interest) * (1.0 - tax)
+        # recurring income below EBIT (associates' share is reported after tax): its own line, in cash flow and NI
+        noi = float(hist.get("non_operating_ratio_used") or 0.0) * rev
+        ufcf = nopat + da - capex - dnwc + noi
+        ni = (ebit - interest) * (1.0 - tax) + noi
         sh = shares_path[-1]
         rows.append({"year": t, "revenue": rev, "growth": growth_sched[t - 1],
                      "ebit_margin": (ebit / rev if (amort_mode and rev) else margins[t - 1]), "ebit": ebit,
                      "tax": (ebit - interest) * tax if ebit > interest else 0.0, "nopat": nopat, "da": da, "capex": capex,
                      "capex_maintenance": (min(capex, da - amort) if amort_mode else da),
                      "capex_growth": (capex - min(capex, da - amort)) if amort_mode else capex - da,
-                     "amortisation": amort, "delta_nwc": dnwc, "ufcf": ufcf,
+                     "amortisation": amort, "delta_nwc": dnwc, "ufcf": ufcf, "non_operating_income": noi,
                      "net_income": ni, "shares": sh, "eps": (ni / sh) if sh else None, "fcf_margin": (ufcf / rev) if rev else 0.0,
                      "phase": ("engine path" if t <= len(lead) else "guided") if t <= T else ("fade" if t <= T + F else "steady")})
         if amort_mode:
@@ -912,7 +929,8 @@ def build_forecast(block: dict, *, scenario: str, series: list[dict], profile_na
         "capex_rule": capex_rule,
         "margin_source": margin_source, "margin_start": m0, "margin_target": mT, "curve": curve,
         "deconstruction": {k: v for k, v in dec.items() if k != "flags"}, "flags": dec["flags"],
-        "history": {k: hist.get(k) for k in ("revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",
+        "history": {k: hist.get(k) for k in ("non_operating_ratio", "non_operating_ratio_used",
+                                              "revenue", "ebit", "ebit_margin", "da", "da_pct_revenue", "capex", "net_income", "interest", "shares",
                                               "tax_rate", "tax_rate_source", "capex_alpha", "capex_alpha_n", "nwc_intensity", "nwc_n",
                                               "buyback_median", "roic_median", "years", "fy0")},
         "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0), "spot": spot,

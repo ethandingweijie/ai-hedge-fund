@@ -7362,6 +7362,19 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     """
     a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
     roe, coe, g = a["roe"], a["coe"], a["g"]
+    # Owner, 2026-11-25: the bank's perpetuity is capped at the risk-free rate, as every terminal value is. DBS took
+    # Phillip's 3.3% against a 2.29% SGS 10y -- a bank growing faster than the risk-free rate forever. The published
+    # broker targets the method was calibrated to used the uncapped rates; the cap is the house view.
+    try:
+        from src.data.capm import risk_free as _rf_mkt
+        _t_up = str(ticker or "").upper()
+        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US")[0]
+        if g is not None and _rf_g and g > _rf_g:
+            a = {**a, "g": _rf_g, "g_capped_from": g,
+                 "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
+            g = _rf_g
+    except Exception:                                      # noqa: BLE001
+        pass
     if not (coe and g is not None and (coe - g) > 0.005):
         return None          # denominator too small — formula unstable
     if roe is None or roe <= g:
@@ -17033,6 +17046,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"(z {_cyc['z']:+.1f}); " + ", ".join(f"{x['from']} -> {x['to']}" for x in _cyc_swaps)
                     + " (cycle peak: no multiple capitalises peak earnings)")
                 _cyc["peak_swaps"] = _cyc_swaps
+        # Owner, 2026-11-25 (Sembcorp): a contracted generator with an ACCEPTED ppa input is valued on the project-finance
+        # DCF whatever profile it routes to -- the corporate DCF on group FCF less group net debt (largely non-recourse
+        # project debt) left U96 a thin, unstable residual (S$0.50 against S$5.72 on EV/EBITDA).
+        try:
+            from src.data import industry_inputs as _ii_ppa
+            _present_p = {m.get("name") for m in _pe_norm_methods if isinstance(m, dict)}
+            if ("DCF" in _present_p and "PPA-backed DCF" not in _present_p
+                    and _ii_ppa.accepted_entry(ticker, "ppa")):
+                _pe_norm_methods = _apply_pe_norm_swaps(_pe_norm_methods, [{"from": "DCF", "to": "PPA-backed DCF"}])
+                _pe_norm_flag = (_pe_norm_flag + " " if _pe_norm_flag else "") + (
+                    "Contracted generation: DCF -> PPA-backed DCF on the accepted ppa input (owner, 2026-11-25)")
+        except Exception:                                  # noqa: BLE001
+            pass
         # Wave 9 (owner, 2026-09-27): GATE_MARGIN_PEAK. A capital-goods margin above its seven-year median by more
         # than 1.5 sigma moves the EBITDA and P/E legs onto mid-cycle earnings for every scenario.
         _mp9 = None
@@ -17555,7 +17581,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 try:
                     from src.agents.analysis import guidance_forecast as _gfm
                     _fc_ctx = {
-                        "history": _gfm.history_ratios(series, _gfm.load_cfg()),
+                        "history": _gfm.with_non_operating_decision(
+                            _gfm.history_ratios(series, _gfm.load_cfg()),
+                            bool((_net_debt_basis or {}).get("long_term_investments_netted")
+                                 if isinstance(locals().get("_net_debt_basis"), dict) else False)),
                         "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0),
                                    "spot": ((resolved_mcap / shares) if (resolved_mcap and shares) else None),
                                    "peer_ev_ebitda": _peer_fwd_ev_ebitda(_peer_for_gf),
@@ -17637,7 +17666,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
                         overrides=_eo_engine_ov or None,
                         fx_to_valuation=float(fx_rate or 1.0),
-                        valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
+                        valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency),
+                        holdings_netted=bool((_net_debt_basis or {}).get("long_term_investments_netted")
+                                             if isinstance(locals().get("_net_debt_basis"), dict) else False))
                 except Exception as _gf_exc:  # noqa: BLE001
                     _gf = None
                     if scenario == "base":
@@ -17664,7 +17695,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 engine_growth_path=_growth_schedule, fcf_margin_base=fcf_margin_base,
                                 overrides=_eo_engine_ov or None,
                                 fx_to_valuation=float(fx_rate or 1.0),
-                                valuation_currency=_sci_cur)
+                                valuation_currency=_sci_cur,
+                                holdings_netted=bool((_net_debt_basis or {}).get("long_term_investments_netted")
+                                                     if isinstance(locals().get("_net_debt_basis"), dict) else False))
                             _sci = _sci_blk["_share_count_intervention"]
                             if _gf2:
                                 _inv3b = next((i for i in _gf2.get("invariants") or [] if i.get("id") == 3), None)
