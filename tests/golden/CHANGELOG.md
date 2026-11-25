@@ -1930,3 +1930,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: HK/SG open items 2026-11-25: book value per share restated on shareholders' equity (FMP's bookValuePerShare is total equity incl. minorities; FCX P/B-ROE -38.6%); flag text from the routed-profile write-back
 
+## 2026-11-25T10:47:19+00:00
+
+- regenerated at HEAD: `7732a3ee`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: CFA review item 5 (2026-11-25): input reconciliation notes appended to the base forward flags (values unchanged)
+

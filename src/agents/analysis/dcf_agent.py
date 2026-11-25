@@ -4306,6 +4306,33 @@ def _non_operating_gap(row: dict) -> Optional[float]:
 _INTEREST_HEAVY_SHARE = 0.20
 
 
+def _accepted_inputs_used(ticker: str) -> list[dict]:
+    """[{kind, period, source_url}] for every owner-accepted industry input on file for this ticker."""
+    out: list[dict] = []
+    try:
+        from src.data import industry_inputs as _ii
+        for kind in _ii.KINDS:
+            e = _ii.accepted_entry(ticker, kind)
+            if not e:
+                continue
+            d = _ii.canonical_data(e) or {}
+            url = None
+            stack = [d]
+            while stack and not url:
+                cur = stack.pop()
+                if isinstance(cur, dict):
+                    u = cur.get("source_url")
+                    if isinstance(u, str) and u.startswith("http"):
+                        url = u
+                    stack.extend(cur.values())
+                elif isinstance(cur, list):
+                    stack.extend(cur)
+            out.append({"kind": kind, "period": d.get("fiscal_year") or e.get("period"), "source_url": url})
+    except Exception:                                      # noqa: BLE001
+        pass
+    return out
+
+
 def _interest_heavy(series: list) -> bool:
     """True when interest expense is a cost of goods for this name, measured on its own statements."""
     shares = []
@@ -20885,8 +20912,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # publishes in the one analyst format, with its weight; the segment-only block is retired.
         sotp_breakdown = _sotp_family_breakdown(scenario_results, _legs_in_blend, sotp_breakdown, shares, _output_currency)
 
+        # Owner, 2026-11-25 (CFA review item 5): the run reconciles its key inputs (src/data/input_reconciliation.py).
+        try:
+            from src.data import input_reconciliation as _irc
+            _input_checks = _irc.reconcile(
+                most_recent, shares=shares, run_date=end_date,
+                interest_is_cost=bool(_interest_heavy(series)),
+                inputs_used=_accepted_inputs_used(ticker))
+            if _input_checks["flags"] and isinstance(scenario_results.get("base"), dict):
+                scenario_results["base"].setdefault("forward_flags", []).extend(_input_checks["flags"])
+        except Exception as _irc_exc:                       # noqa: BLE001 -- a check must never fail a run
+            _input_checks = {"checks": [], "failed": 0, "run": 0, "flags": [], "error": str(_irc_exc)[:200]}
+
         dcf_range[ticker] = {
             **scenario_results,
+            "input_checks":       _input_checks,
             "rating_state":       _rating_state,
             "wacc":               round(wacc, 4),
             "c_macro":            round(c_macro, 4),

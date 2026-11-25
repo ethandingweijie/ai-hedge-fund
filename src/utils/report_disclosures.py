@@ -218,6 +218,10 @@ def data_limitations(data: dict, ticker: str) -> list[str]:
     if mu:
         names = ", ".join(_plain(str((m or {}).get("method") if isinstance(m, dict) else m)) for m in mu[:6])
         out.append(f"Valuation methods that could not be computed and carry no weight: {names}.")
+    # Owner, 2026-11-25 (CFA review item 5): a key input that fails its accounting identity is a stated limitation.
+    for c in ((dcf_t.get("input_checks") or {}).get("checks") or []):
+        if isinstance(c, dict) and c.get("status") == "fail":
+            out.append(f"Input check failed ({c.get('check')}): {c.get('detail')}.")
     rs = dcf_t.get("rating_state") or {}
     if rs.get("state") == "unrated" and rs.get("reason"):
         out.append(f"No rating is published: {rs['reason']}.")

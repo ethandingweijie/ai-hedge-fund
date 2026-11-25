@@ -29,6 +29,19 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "- end with the implication for the stock (what it means for the "
     "position).\n"
     "Theme 1 states the single dominant theme driving the stock right now. "
+    # Owner, 2026-11-25: the summary reads as an analyst's view of the business, not a valuation printout.
+    "Business-first rule — the thesis is about the business and its industry; valuation is the conclusion, not the "
+    "story. At most TWO themes may be about valuation (the rating / price target / method, and the risk theme's bear "
+    "case). Of the rest, ONE theme MUST be an INDUSTRY development: where the industry is heading -- demand, pricing "
+    "and competition, regulation or policy, the rate / commodity / technology cycle -- with a figure or dated event "
+    "from the industry brief or research digest, and what it does to this company's revenue, margin or returns. ONE "
+    "theme MUST be a COMPANY development: strategy and execution -- segment or product momentum, market share, cost "
+    "programme, capital allocation (capex, buybacks, M&A, disposals), management or ownership change -- with a dated "
+    "event or a figure from the digest and its implication for earnings. When the rating opens theme 1, follow it "
+    "with the business driver behind the call, not with the gap between price and value. Never let 'trades above / "
+    "below intrinsic value' stand as the reason for the view: say what in the business or the industry the price is "
+    "missing or already paying for. If the digest holds no industry or company development, say so in one line "
+    "rather than padding.\n"
     "Among the themes, cover whether the dominant theme is priced in, "
     "sustainable, or at risk, and cover price target, structural moat "
     "quality, and the primary risk. Use FEWER themes rather than padding — "
@@ -793,19 +806,22 @@ def _build_research_digest(state, ticker: str) -> str:
     parts: list[str] = []
     _rn = str(sections.get("recent_news") or "")
     if _rn:
-        parts.append("RECENT NEWS / LATEST DEVELOPMENTS:\n" + _rn[:2500])
+        parts.append("RECENT NEWS / LATEST DEVELOPMENTS:\n" + _rn[:2200])
+    # Owner, 2026-11-25: the industry brief comes second and has its own budget. It used to be appended LAST to a
+    # digest capped at 8,000 characters, after 2,500 + 3 x 1,800 + 3 x 500 of sections, so on any fully researched
+    # name it was cut off entirely and the write-up had no industry to talk about.
+    _brief = str(data.get("industry_brief") or "")
+    if _brief:
+        parts.append("INDUSTRY BRIEF (compressed):\n" + _brief[:1800])
     # 2F is the research narrative (thesis); 2A/2B the structural analysis.
     for _k in ("2f", "2a", "2b"):
         _s = str(sections.get(_k) or "")
         if _s:
-            parts.append(f"RESEARCH SECTION {_k.upper()} (excerpt):\n" + _s[:1800])
+            parts.append(f"RESEARCH SECTION {_k.upper()} (excerpt):\n" + _s[:1150])
     for _k in ("2c", "2d", "2e"):
         _s = str(sections.get(_k) or "")
         if _s:
-            parts.append(f"SECTION {_k.upper()} (excerpt):\n" + _s[:500])
-    _brief = str(data.get("industry_brief") or "")
-    if _brief:
-        parts.append("INDUSTRY BRIEF (compressed):\n" + _brief[:1500])
+            parts.append(f"SECTION {_k.upper()} (excerpt):\n" + _s[:300])
     if not parts and sections.get("full"):
         parts.append(str(sections["full"])[:4000])
     digest = "\n\n".join(parts)
@@ -1174,6 +1190,12 @@ def _macro_one_liner(state) -> str:
     return _line + (f" — {_notes}" if _notes else "")
 
 
+def _unreconciled_for(ticker: str, dcf: dict) -> dict | None:
+    """The base scenario's leg dispersion when it caps the rating (src.decisions.ratings.unreconciled_legs)."""
+    from src.decisions.ratings import unreconciled_legs
+    return unreconciled_legs(((dcf or {}).get("base") or {}).get("leg_dispersion"), ticker)
+
+
 def _research_view_for(ticker: str, state, scenario: dict,
                        delta: dict) -> dict | None:
     """The research rating for this ticker, or None without a 12-month target.
@@ -1231,6 +1253,7 @@ def _research_view_for(ticker: str, state, scenario: dict,
             near_term_catalyst=catalyst, methodology_gap=gap,
             next_earnings=next_earnings,
             sotp_per_share=(dcf.get("sotp_breakdown") or {}).get("per_share_reporting"),
+            unreconciled=_unreconciled_for(ticker, dcf),
         )
     except Exception:
         return None

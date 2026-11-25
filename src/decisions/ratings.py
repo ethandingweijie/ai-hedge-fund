@@ -132,6 +132,7 @@ def build_unrated_view(rating_state: dict, *, price: Optional[float] = None,
         "research_rating": ResearchRating.UNRATED.value,
         "rating_label": label,
         "under_review": False,
+        "valuation_unreconciled": None,
         "trade_action": TradeAction.HOLD.value,
         "tactical_rating": None,
         "structural_rating": None,
@@ -218,6 +219,26 @@ def total_return(price: float, target: Optional[float],
             "tsr": round(capital + yld, 6), "dividend_known": dps is not None}
 
 
+#: Owner, 2026-11-25: weighted valuation legs further apart than this (highest / lowest) cap the rating at Neutral.
+LEG_DISPERSION_CAP = 2.5
+
+
+def unreconciled_legs(dispersion: Optional[dict], ticker: str = "") -> Optional[dict]:
+    """The dispersion record when it exceeds LEG_DISPERSION_CAP and the owner has not reviewed it, else None.
+    A review (valuation_constants.dispersion_reviewed[ticker], with a reason) lifts the cap for that ticker."""
+    if not isinstance(dispersion, dict) or not isinstance(dispersion.get("ratio"), (int, float)):
+        return None
+    if dispersion["ratio"] <= LEG_DISPERSION_CAP:
+        return None
+    try:
+        from src.data import valuation_constants as _vc
+        if ((_vc.load().get("dispersion_reviewed") or {}).get("tickers") or {}).get(ticker):
+            return None
+    except Exception:                                      # noqa: BLE001
+        pass
+    return dispersion
+
+
 def rate(tsr: float, benchmark_return: float,
          threshold: float = RATING_THRESHOLD) -> ResearchRating:
     excess = round(tsr - benchmark_return, 9)
@@ -238,7 +259,7 @@ def build_research_view(
     dps: Optional[float], near_term_catalyst: Optional[str] = None,
     methodology_gap: Optional[str] = None,
     next_earnings: Optional[str] = None, sotp_per_share: Optional[float] = None,
-    today: Optional[date] = None,
+    today: Optional[date] = None, unreconciled: Optional[dict] = None,
 ) -> Optional[dict]:
     """Everything the report header and the trade layer need, decided once.
 
@@ -311,11 +332,25 @@ def build_research_view(
         if status == "clean":
             status = "holdco_disclosure"
 
-    headline = ResearchRating.NEUTRAL if under_review else tactical
+    # Owner, 2026-11-25 (CFA review item 2): weighted legs that disagree by more than LEG_DISPERSION_CAP average values
+    # on incompatible premises; the blended value is still published but carries no conviction, so the rating is
+    # capped at Neutral until the outlier leg is fixed or the owner excludes it (valuation_constants
+    # dispersion_reviewed).
+    capped = False
+    if unreconciled and tactical != ResearchRating.NEUTRAL and not under_review:
+        capped = True
+        status = "valuation_unreconciled"
+        notes.append(
+            f"Rating capped at Neutral (tactical {RATING_LABELS[tactical]}): valuation unreconciled -- "
+            f"{unreconciled.get('hi_leg')} {unreconciled.get('hi'):,.2f} is {unreconciled.get('ratio'):.1f}x "
+            f"{unreconciled.get('lo_leg')} {unreconciled.get('lo'):,.2f}; the blend averages values on different "
+            f"premises, so it carries no conviction until the outlier leg is resolved.")
+    headline = ResearchRating.NEUTRAL if (under_review or capped) else tactical
     return {
         "research_rating": headline.value,
         "rating_label": ("Under Review" if under_review else RATING_LABELS[headline]),
         "under_review": under_review,
+        "valuation_unreconciled": (dict(unreconciled) if capped else None),
         "trade_action": to_action(headline).value,
         "tactical_rating": tactical.value,
         "structural_rating": structural.value if structural else None,

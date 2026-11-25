@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-11-25T09:08:58+00:00",
+  "generated_at": "2026-11-25T10:47:19+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "4512a1a7",
-  "reason": "HK/SG open items 2026-11-25: book value per share restated on shareholders' equity (FMP's bookValuePerShare is total equity incl. minorities; FCX P/B-ROE -38.6%); flag text from the routed-profile write-back",
+  "regenerated_at_commit": "7732a3ee",
+  "reason": "CFA review item 5 (2026-11-25): input reconciliation notes appended to the base forward flags (values unchanged)",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -881,6 +881,7 @@
     "Core earnings: +83.30bn below the operating line in the last fiscal year is out of line with the company's own history (a disposal gain or a one-off charge); the trailing and normalised multiples price earnings without it",
     "Forward legs on the next twelve months: 47% of FY+1 (2027-03-31) has elapsed, so each forward metric weights FY+2 47%",
     "Growth reinvestment NOT leviable on this profile: 'China Internet Platform' is not a capital-turnover profile, so revenue \u00f7 invested capital (0.90) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference only.",
+    "Input note -- EBITDA = operating income + D&A: 93.07bn (43% of EBITDA) sits outside the operating line (associates, investment income or one-offs); EV multiples on this EBITDA price it",
     "Normalized NI: TTM RMB121.25B \u2192 5y-cycle RMB94.47B (-22%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Goldman Sachs 21 August 2026 vs FMP) \u2014 not compared",
     "SaaS research metrics: Rule of 40 -2",
@@ -2352,6 +2353,8 @@
     "Forward legs on the next twelve months: 47% of FY+1 (2027-03-31) has elapsed, so each forward metric weights FY+2 47%",
     "Growth reinvestment NOT leviable on this profile: 'China Internet Platform' is not a capital-turnover profile, so revenue \u00f7 invested capital (0.90) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference only.",
     "Growth_Inflection_Speculative: consensus target 180.57 sits +65% above spot; the market prices a re-rated path and this name is scored apart",
+    "Input check failed -- book value per share x shares = shareholders' equity: 67.8417 x 2,483.0m = 168.45bn vs equity 157.46bn (7.0% apart)",
+    "Input note -- EBITDA = operating income + D&A: 11.85bn (43% of EBITDA) sits outside the operating line (associates, investment income or one-offs); EV multiples on this EBITDA price it",
     "Product segments (2026-03-31): Customer management services 45%, Sales of goods 22%, Logistics services 14%, Cloud services 11%, Membership fees and value added services 5%",
     "R1 house vs street FY+1 revenue: currency basis differs (Goldman Sachs 21 August 2026 vs FMP) \u2014 not compared",
     "R1 structured guidance (Priority 0): Yr1 EBITDA 120.00B [edgar_6k_ex99, as of 2026-11-15]",
@@ -5478,6 +5481,7 @@
     "Forward legs on the next twelve months: 71% of FY+1 (2026-12-31) has elapsed, so each forward metric weights FY+2 71%",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=0.67): roic_pct=0.0879905875641757 (Return on invested capital (decimal)) | fcf_conversion_pct=-0.2224 (Free cash flow / net profit (decimal))",
     "Growth reinvestment NOT leviable on this profile: 'Conglomerate / Industrial (SG)' is not a capital-turnover profile, so revenue \u00f7 invested capital (0.41) is not a sales-to-capital ratio here and no deduction is computed. Measured for reference only.",
+    "Input note -- EBITDA = operating income + D&A: 0.69bn (34% of EBITDA) sits outside the operating line (associates, investment income or one-offs); EV multiples on this EBITDA price it",
     "Non-positive leg dropped: DCF = -0.9493 (25% of intended weight renormalised onto the survivors)",
     "Normalized NI: TTM S$0.98B \u2192 5y-cycle S$0.64B (-35%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
