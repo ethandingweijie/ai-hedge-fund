@@ -204,7 +204,9 @@ def _non_operating_ratio(rows: list[dict]) -> float:
     """Median of (pretax - (EBIT - interest)) / revenue over the filed years, bounded to +/-50%; 0 without data."""
     vals = []
     for r in rows or []:
-        pt, e, it, rv = _f(r.get("pretax_income")), _f(r.get("ebit")) or _f(r.get("operating_income")),             abs(_f(r.get("interest_expense")) or 0.0), _f(r.get("revenue"))
+        # operating income first: in some years FMP's `ebit` is pretax + interest, which carries the associates' share
+        # inside it and reads the gap as zero (Singtel: -0.2% on that basis, ~19% on operating income)
+        pt, e, it, rv = _f(r.get("pretax_income")), _f(r.get("operating_income")) or _f(r.get("ebit")), abs(_f(r.get("interest_expense")) or 0.0), _f(r.get("revenue"))
         if pt is not None and e is not None and rv and rv > 0:
             vals.append((pt - (e - it)) / rv)
     return max(-0.5, min(0.5, median(vals))) if vals else 0.0
