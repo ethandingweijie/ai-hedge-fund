@@ -247,6 +247,14 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
     beta_l = 0.5 * (beta_l_industry + beta_own_adj) if beta_own_adj is not None else beta_l_industry
     ke = rf + beta_l * ERP + float(crp or 0.0)
     kd = float(cost_of_debt) if isinstance(cost_of_debt, (int, float)) and cost_of_debt > 0 else rf + 0.016
+    # HK/SG workbook audit (2026-11-25): the live Kd is a US yield (Treasury + the rating's spread). When the market
+    # discounts on its own government curve, the debt moves onto that curve too, spread kept -- Singtel's Kd stayed
+    # at 5.15% on US rates while its Ke fell to 4.16% on SGS, a cost of equity below its cost of debt.
+    kd_rebased, us_rf = None, None
+    if isinstance(cost_of_debt, (int, float)) and cost_of_debt > 0 and "owner-set" in str(rf_source):
+        us_rf = risk_free("US")[0]
+        kd_rebased = max(kd - us_rf + rf, rf)
+        kd = kd_rebased
     dv = D / (D + E)
     wacc = (1.0 - dv) * ke + dv * kd * (1.0 - t) + float(contracted_discount or 0.0)
     floor = rf + WACC_FLOOR_OVER_RF
@@ -258,6 +266,8 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
             "de_ratio": round(de, 4), "dv_ratio": round(dv, 4), "rf": round(rf, 5), "rf_source": rf_source, "erp": ERP,
             "crp": round(float(crp or 0.0), 5), "cost_of_equity": round(ke, 5), "cost_of_debt": round(kd, 5),
             "tax_rate": t, "contracted_discount": float(contracted_discount or 0.0), "floored": floored,
+            "cost_of_debt_rebased": kd_rebased is not None,
+            **({"us_rf": round(us_rf, 5), "cost_of_debt_us": round(float(cost_of_debt), 5)} if kd_rebased is not None else {}),
             "source": SOURCE}
 
 

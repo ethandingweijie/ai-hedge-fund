@@ -229,3 +229,30 @@ def test_h_share_dividends_are_net_of_prc_withholding(monkeypatch):
     v_h, tr = d._traced_method_value(most_recent=dict(row), ticker="01398.HK", **kw)
     v_r, _ = d._traced_method_value(most_recent=dict(row), ticker="00941.HK", **kw)
     assert v_h == pytest.approx(v_r * 0.9) and tr["withholding_tax"] == pytest.approx(0.10)
+
+
+# ── workbook audit follow-ups (2026-11-25) ───────────────────────────────────
+
+def test_kd_moves_onto_the_local_curve_with_the_rf():
+    from src.data import capm
+    us_rf = capm.risk_free("US")[0]
+    w = capm.firm_wacc(profile="Telecom Carrier", net_debt=9.4e9, market_cap=69e9, cost_of_debt=us_rf + 0.0023,
+                       market="SG", own_beta=0.6)
+    assert w["cost_of_debt_rebased"] and w["cost_of_debt"] == pytest.approx(0.0229 + 0.0023, abs=1e-5)
+    assert w["cost_of_equity"] > w["cost_of_debt"]
+    us = capm.firm_wacc(profile="Telecom Carrier", net_debt=9.4e9, market_cap=69e9, cost_of_debt=0.055, market="US")
+    assert not us["cost_of_debt_rebased"] and us["cost_of_debt"] == pytest.approx(0.055)
+
+
+def test_company_tax_rate_prefers_the_filed_rate_then_the_market_statutory_rate():
+    rows = [{"income_tax_expense": 17.0, "pretax_income": 100.0}, {"income_tax_expense": 18.0, "pretax_income": 100.0}]
+    assert d._company_tax_rate(rows, "C6L.SI")[0] == pytest.approx(0.175)
+    assert d._company_tax_rate([], "C6L.SI") == (0.17, "SG statutory rate")
+    assert d._company_tax_rate([], "00941.HK", "CNY")[0] == pytest.approx(0.25)
+
+
+def test_insurer_pe_cohort_excludes_the_subject():
+    from src.data import insurer_pev as ip
+    pe = {"02378.HK": 12.0, "MFC": 14.0, "01828.HK": 20.0, "G07.SI": 10.0, "01299.HK": 15.0}
+    out = ip.cohort_pe("01299.HK", pe=pe.get)
+    assert out["value"] == pytest.approx(13.0) and "01299.HK" not in [m["symbol"] for m in out["members_used"]]

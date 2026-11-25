@@ -112,3 +112,33 @@ def cohort_pb(ticker: str, *, pb: Callable[[str], Optional[float]] = _pb) -> Opt
     value = statistics.median(u["pb"] for u in used) if len(used) >= MIN_MEMBERS else None
     return {"value": round(value, 4) if value is not None else None, "cohort": name,
             "members_used": used, "members_missing": missing}
+
+
+def _pe(symbol: str) -> Optional[float]:
+    from src.agents.analysis.dcf_agent import _fmp_quote_symbol
+    from src.tools.api import _STABLE, _fmp_get
+    rows = _fmp_get(f"{_STABLE}/ratios-ttm", {"symbol": _fmp_quote_symbol(symbol)}, api_key=None)
+    v = (rows[0] or {}).get("priceToEarningsRatioTTM") if isinstance(rows, list) and rows else None
+    return float(v) if isinstance(v, (int, float)) and 1.0 < v < 100 else None
+
+
+def cohort_pe(ticker: str, *, pe: Callable[[str], Optional[float]] = _pe) -> Optional[dict]:
+    """The cohort's median trailing P/E for the insurer P/E leg (HK/SG workbook audit, 2026-11-25): AIA's P/E (ops)
+    priced on an HKSE 'Insurance - Life' median whose middle member was a broker (Yunfeng Financial)."""
+    from src.tools.ticker_canonical import canonical_ticker
+    name = cohort_of(ticker)
+    if not name:
+        return None
+    subject = canonical_ticker(ticker)
+    used, missing = [], []
+    for m in COHORTS[name]:
+        if m == subject:
+            continue
+        try:
+            v = pe(m)
+        except Exception:                                  # noqa: BLE001
+            v = None
+        (used.append({"symbol": m, "pe": round(v, 4)}) if v else missing.append(m))
+    value = statistics.median(u["pe"] for u in used) if len(used) >= MIN_MEMBERS else None
+    return {"value": round(value, 4) if value is not None else None, "cohort": name,
+            "members_used": used, "members_missing": missing}

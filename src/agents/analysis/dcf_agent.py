@@ -4333,6 +4333,27 @@ def _accepted_inputs_used(ticker: str) -> list[dict]:
     return out
 
 
+#: Statutory corporate tax by market of domicile, the fallback when the filings give no usable effective rate
+#: (HK/SG workbook audit, 2026-11-25: SIA's normalised earnings were taxed at the US 21%, not Singapore's 17%).
+_STATUTORY_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25}
+
+
+def _company_tax_rate(series: list, ticker: str, reported_currency: Optional[str] = None) -> tuple[float, str]:
+    """(rate, source): the median filed effective rate (tax / pretax, bounded) over the series, else the statutory
+    rate of the market the company is taxed in (a CNY reporter in Hong Kong pays PRC 25%)."""
+    rates = []
+    for r in series or []:
+        tx, pt = r.get("income_tax_expense"), r.get("pretax_income")
+        if isinstance(tx, (int, float)) and isinstance(pt, (int, float)) and pt > 0:
+            rates.append(min(max(float(tx) / float(pt), _UFCF_TAX_BOUNDS[0]), _UFCF_TAX_BOUNDS[1]))
+    if len(rates) >= 2:
+        return statistics.median(rates), f"filed effective rate, {len(rates)}-year median"
+    t = str(ticker or "").upper()
+    mkt = ("CN" if str(reported_currency or "").upper() == "CNY" else
+           "HK" if t.endswith(".HK") else "SG" if t.endswith(".SI") else "US")
+    return _STATUTORY_TAX[mkt], f"{mkt} statutory rate"
+
+
 def _interest_heavy(series: list) -> bool:
     """True when interest expense is a cost of goods for this name, measured on its own statements."""
     shares = []
@@ -9375,7 +9396,12 @@ def _compute_method_value(
     # this branch — they differ only in documentation intent, not earnings
     # source. For the TRUE cycle-normalized path use "P/E (norm)" below.
     if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:
-        mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount * _own_disc
+        _ipe = most_recent.get("_insurer_pe") or {}
+        _pe_base, _pe_src = ((float(_ipe["value"]), f"median P/E, {_ipe.get('cohort')} life cohort "
+                              f"({len(_ipe.get('members_used') or [])} peers, subject excluded)")
+                             if isinstance(_ipe.get("value"), (int, float)) and _ipe["value"] > 0
+                             else (float(peer.get("pe", 18.0)), "peer median pe"))
+        mult = _pe_base * sm * growth_premium * sbc_pe_discount * _own_disc
         _pe_ni, _pe_label, _pe_flag = _trailing_pe_earnings(most_recent, net_income, shares, forward_consensus)
         eps = (_pe_ni / shares) if (_pe_ni is not None and shares > 0) else None
         if _pe_flag:
@@ -9384,10 +9410,11 @@ def _compute_method_value(
             _leg_trace(kind="equity_multiple", metric=_pe_label,
                        metric_value=float(_pe_ni), shares=float(shares),
                        per_share_metric=float(eps), multiple=float(mult),
-                       multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
-                                       "peer_source": "peer median pe", "scenario_band": sm,
+                       multiple_parts={"peer_multiple": _pe_base,
+                                       "peer_source": _pe_src, "scenario_band": sm,
                                        "growth_premium": growth_premium,
                                        "sbc_pe_discount": sbc_pe_discount,
+                                       **({"members_used": _ipe.get("members_used")} if _ipe.get("value") else {}),
                                        **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})})
             return eps * mult
         return None
@@ -9817,6 +9844,7 @@ def _compute_method_value(
                              else (float(peer.get("pb", 2.0)), "peer median pb"))
         mult = _pb_base * sm * growth_premium * _own_disc
         _pb_parts = {"peer_multiple": _pb_base, "peer_source": _pb_src,
+                     **({"members_used": _ipb.get("members_used")} if _pb_src.startswith("median P/B") else {}),
                      "scenario_band": sm, "growth_premium": growth_premium,
                      **({"owner_multiple_discount": _own_disc} if _own_disc != 1.0 else {})}
         if bvps and bvps > 0:
@@ -14478,6 +14506,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _ipb_out = _cohort_pb(ticker)
                         if _ipb_out and _ipb_out.get("value"):
                             most_recent["_insurer_pb"] = _ipb_out
+                        from src.data.insurer_pev import cohort_pe as _cohort_pe
+                        _ipe_out = _cohort_pe(ticker)
+                        if _ipe_out and _ipe_out.get("value"):
+                            most_recent["_insurer_pe"] = _ipe_out
                         _pev_out = _cohort_pev(ticker)
                         if _pev_out:
                             most_recent["_insurer_pev"] = _pev_out
@@ -16952,11 +16984,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 most_recent["normalized_ebit"] = _mid_e * float(_rev_norm)
                 if _ebitda_m is not None:
                     most_recent["normalized_ebitda"] = _ebitda_m * float(_rev_norm)
-                most_recent["normalized_net_income"] = (_mid_e * float(_rev_norm) - _ie_c) * (1.0 - _UFCF_TAX_DEFAULT)
+                _tx_norm, _tx_norm_src = _company_tax_rate(series, ticker, reported_currency)
+                most_recent["normalized_net_income"] = (_mid_e * float(_rev_norm) - _ie_c) * (1.0 - _tx_norm)
                 most_recent["_normalized_net_income_basis"] = (
                     f"mid-cycle EBIT margin {_mid_e:.1%} ({_cyc['mid_cycle_years']}-year median) x "
                     + ("ten-year trend revenue" if _rev_norm != _rev_cur else "current revenue")
-                    + f", less today's interest, taxed at {_UFCF_TAX_DEFAULT:.0%}")
+                    + f", less today's interest, taxed at {_tx_norm:.0%} ({_tx_norm_src})")
                 _cyc["normalized_before"] = _before
                 # the five-year audit line above no longer describes what the P/E (norm) leg reads
                 ticker_forward_flags[:] = [f for f in ticker_forward_flags if not str(f).startswith("Normalized NI: TTM")]

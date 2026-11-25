@@ -285,7 +285,11 @@ def test_e1_amortisation_heavy_capex_follows_its_intensity_and_amortisation_runs
     out = ts.build(fc, ts.opening_from_raw(raw), ts.assumptions_from_history(raw, spot=190.0))
     assert not out.get("skipped"), out.get("skipped")
     sch = out["schedules"]
-    assert all(x < 0 for x in sch["gi_amort"]) and all(rc["ok"] for rc in out["reconciliation"]["assertions"]) \
+    # 2026-11-25: amortisation stops at a zero balance (China Mobile ran its goodwill & intangibles negative), so a
+    # year after the run-off carries none; the balance never goes below zero.
+    assert sch["gi_amort"][0] < 0 and all(x <= 0 for x in sch["gi_amort"])
+    assert min(out["balance"]["goodwill_intangibles"]) >= -1e-6
+    assert all(rc["ok"] for rc in out["reconciliation"]["assertions"]) \
         if isinstance(out.get("reconciliation"), dict) and out["reconciliation"].get("assertions") else True
     gi = out["balance"]["goodwill_intangibles"]
     assert gi[1] < gi[0]                                                                  # intangibles amortise

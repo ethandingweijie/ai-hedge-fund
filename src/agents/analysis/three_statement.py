@@ -230,7 +230,9 @@ def build(fc: dict, opening: dict, a: dict, *, years: int = YEARS, fy1: Optional
         r = rows[i]
         rev, ebit, da, capex, dnwc = float(r["revenue"]), float(r["ebit"]), float(r.get("da") or 0.0), float(r.get("capex") or 0.0), float(r.get("delta_nwc") or 0.0)
         # Plan E1 (owner, 2026-10-07): acquired-intangible amortisation runs off goodwill & intangibles, not PP&E.
-        amort = max(0.0, min(float(r.get("amortisation") or 0.0), da))
+        # HK/SG workbook audit (2026-11-25): never amortise below a zero balance -- China Mobile's 33.0bn a year ran an
+        # 88.7bn goodwill-and-intangibles line negative by FY+4; what is left of D&A runs off PP&E.
+        amort = max(0.0, min(float(r.get("amortisation") or 0.0), da, max(float(o["goodwill_intangibles"]), 0.0)))
         dep = da - amort
         # a user's gross-margin override wins; otherwise gross profit follows the forecast's EBIT
         _oxr = v("opex_ex_da_ratio") if ((a.get("gross_margin") or {}).get("source") != "user override") else None

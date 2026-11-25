@@ -178,10 +178,18 @@ def _num(v) -> Optional[float]:
         return None
 
 
-def family_rows(raw_financials: Optional[dict], family: str, years: int = 3) -> tuple[list[str], list[tuple[str, str, list]]]:
+def family_rows(raw_financials: Optional[dict], family: str, years: int = 3,
+                fallback_rows: Optional[list] = None,
+                fallback_scale: float = 1.0) -> tuple[list[str], list[tuple[str, str, list]]]:
     """(fiscal-year keys, [(label, kind, [value per year])]) for the family's rows, read from the
     per-year `raw_financials` records. Missing inputs give None; a derived ratio with a
-    non-positive denominator gives None. Never raises."""
+    non-positive denominator gives None. Never raises.
+
+    `fallback_rows` (audit 2026-11-25, HK/SG): the engine's per-period statement rows
+    (`dcf_range[T].financials_used.rows`, {"period": "YYYY-MM-DD", ...}). The raw records carry no
+    `dividends_per_share`, so DPS read "n/a" on every Summary while the engine's rows had it (D05 2.87,
+    C38U 0.101). Only the DPS row reads them, matched by fiscal year, times `fallback_scale` (the rows
+    are in the valuation currency; pass 1 / FX to put them back in the raw records' currency)."""
     if not isinstance(raw_financials, dict):
         return [], []
     fy_keys = sorted(k for k, v in raw_financials.items() if isinstance(v, dict))[-years:]
@@ -199,6 +207,11 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3) -> 
             v = _num(row.get("operating_income"))
         return v
 
+    fb: dict[str, dict] = {}
+    for x in (fallback_rows or []):
+        if isinstance(x, dict) and str(x.get("period") or "")[:4].isdigit():
+            fb[f"FY{str(x['period'])[:4]}"] = x
+
     out = []
     for label, kind, source in family_row_specs(family):
         vals = []
@@ -208,6 +221,9 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3) -> 
             elif kind == "ps":
                 field, num_f, den_f = source
                 v = get(fy, field)
+                if v is None and field == "dividends_per_share":
+                    _f = _num((fb.get(fy) or {}).get(field))
+                    v = (_f * float(fallback_scale)) if _f is not None else None
                 if v is None and num_f and den_f:
                     num, den = get(fy, num_f), get(fy, den_f)
                     v = (num / den) if (num is not None and den) else None

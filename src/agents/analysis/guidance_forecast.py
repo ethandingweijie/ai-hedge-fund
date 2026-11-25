@@ -200,6 +200,16 @@ def _median(vals: list[float], lo: float, hi: float, default: float) -> float:
     return max(lo, min(hi, median(vals)))
 
 
+def _non_operating_ratio(rows: list[dict]) -> float:
+    """Median of (pretax - (EBIT - interest)) / revenue over the filed years, bounded to +/-50%; 0 without data."""
+    vals = []
+    for r in rows or []:
+        pt, e, it, rv = _f(r.get("pretax_income")), _f(r.get("ebit")) or _f(r.get("operating_income")),             abs(_f(r.get("interest_expense")) or 0.0), _f(r.get("revenue"))
+        if pt is not None and e is not None and rv and rv > 0:
+            vals.append((pt - (e - it)) / rv)
+    return max(-0.5, min(0.5, median(vals))) if vals else 0.0
+
+
 def history_ratios(series: list[dict], cfg: dict) -> dict:
     """Activity and intensity ratios from the audited years (medians), with their sources."""
     rows = [r for r in (series or []) if isinstance(r, dict) and _f(r.get("revenue"))]
@@ -250,6 +260,9 @@ def history_ratios(series: list[dict], cfg: dict) -> dict:
         "da": da0, "da_pct_revenue": (da0 / rev0) if rev0 else 0.0, "capex": capex0, "net_income": ni0,
         "capex_intensity": _median(cx_int, 0.0, 1.0, (capex0 / rev0) if rev0 else 0.0) if cx_int else ((capex0 / rev0) if rev0 else 0.0),
         "interest": int0, "shares": shares0,
+        # HK/SG workbook audit (2026-11-25): what sits between EBIT and pretax every year (associates' share of
+        # profit, investment income), as a share of revenue -- recorded for disclosure; see the back-solve note.
+        "non_operating_ratio": _non_operating_ratio(rows),
         # audit E3: the ratio the amortisation split keys on (median, not the last year), the acquired intangibles it
         # runs off, and any content-amortisation line the filings carry
         "da_capex_ratio_median": (_median(da_cx, 0.0, float("inf"), 0.0) if da_cx else None),
@@ -452,20 +465,24 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
     out["ebit_T_implied"] = ebit_T
     out["net_income_T_from_eps"] = ni_T_from_eps
     out["net_income_T_from_margin"] = ni_T_from_ebit
-    if ni_T_from_eps is not None and ebit_T is not None and ebit_T - interest > 0:
-        implied_tax = 1.0 - ni_T_from_eps / (ebit_T - interest)
+    # The non-operating ratio is recorded but not yet taken out of the back-solve: until the forecast carries
+    # associates' income as its own line into the DCF, removing it from EBIT would drop the associates from the
+    # valuation entirely (Singtel's are most of the company). Owner design pending (2026-11-25).
+    _nonop_T = 0.0
+    if ni_T_from_eps is not None and ebit_T is not None and ebit_T - interest + _nonop_T > 0:
+        implied_tax = 1.0 - ni_T_from_eps / (ebit_T - interest + _nonop_T)
         out["implied_tax_rate"] = implied_tax
         if not (0.0 <= implied_tax <= 0.45) and targets.get("eps_adjusted"):
             # Owner, 2026-10-06 (plan E28, PFE / LLY): adjusted (non-GAAP) EPS excludes amortisation, deal and
             # one-off costs, so it cannot set a GAAP margin -- the guided / history margin stands.
             out["flags"].append(f"Guided EPS is on an adjusted (non-GAAP) basis: it implies a {implied_tax:.0%} tax-and-"
                                 f"non-operating take against a GAAP margin, so it does not set the margin ({mT:.1%} stands)")
-        elif not (0.0 <= implied_tax <= 0.45) and not _eps_margin_plausible(ni_T_from_eps / (1.0 - tax) + interest, revT, hist):
+        elif not (0.0 <= implied_tax <= 0.45) and not _eps_margin_plausible(ni_T_from_eps / (1.0 - tax) + interest - _nonop_T, revT, hist):
             # 2026-11-12 (09988.HK): research EPS per ADS (8 shares) over ordinary shares implied a 109.6% EBIT margin;
             # taking it made the share-count check pass by construction (EPS x shares = net income) and sent the DCF
             # to 646 against a 92 spot. An implausible implied margin means the EPS is off the model's share basis:
             # the margin stands, and the share-count check fails and acts on the EPS.
-            out["eps_margin_implausible"] = (ni_T_from_eps / (1.0 - tax) + interest) / revT if revT else None
+            out["eps_margin_implausible"] = (ni_T_from_eps / (1.0 - tax) + interest - _nonop_T) / revT if revT else None
             out["flags"].append(f"Guided EPS implies an EBIT margin of {out['eps_margin_implausible']:.1%} against "
                                 f"{float(hist.get('ebit_margin') or 0.0):.1%} trailing: not on the model's share basis (ADS, units or "
                                 f"currency), so it does not set the margin ({mT:.1%} stands)")
@@ -475,7 +492,7 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
             # history's tax and interest replaces the incompatible margin (Molina: the margin path put
             # FY27 EBIT at 2.7x consensus while guided EPS supported a third of it).
             out["margin_T_conflicting"] = mT
-            out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest
+            out["ebit_T_implied"] = ni_T_from_eps / (1.0 - tax) + interest - _nonop_T
             out["margin_T_guided"] = out["ebit_T_implied"] / revT if revT else mT
             out["margin_T_basis"] = "EBIT implied by guided EPS (the guided margin conflicted with it)"
             out["flags"].append(f"Guided EPS and guided margin are not compatible: they imply a {implied_tax:.0%} tax-and-non-operating take "
@@ -483,7 +500,7 @@ def deconstruct(targets: dict, hist: dict, shares: float, cfg: dict, market_grow
                                 f"({out['margin_T_guided']:.1%}, not {mT:.1%})")
     if ni_T_from_eps is not None and ebit_T is None:
         # back-solve the EBIT the EPS needs at the history's tax and interest
-        _ebit_eps = ni_T_from_eps / (1.0 - tax) + interest
+        _ebit_eps = ni_T_from_eps / (1.0 - tax) + interest - _nonop_T
         if _eps_margin_plausible(_ebit_eps, revT, hist):
             out["ebit_T_implied"] = _ebit_eps
             out["margin_T_implied"] = _ebit_eps / revT if revT else None
