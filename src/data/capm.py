@@ -151,7 +151,17 @@ def live_rf_enabled() -> bool:
     return os.environ.get("CAPM_LIVE_RF", "on").strip().lower() not in ("0", "false", "no", "off")
 
 
-def risk_free() -> tuple[float, str]:
+def risk_free(market: str = "US") -> tuple[float, str]:
+    """The risk-free rate in the currency of the cash flows: an owner-set government 10y for a market listed in
+    valuation_constants.risk_free_by_market (SG: SGS 10y, owner 2026-11-25), else live FRED DGS10."""
+    try:
+        from src.data import valuation_constants as _vc
+        _m = (((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "US") or {})
+        _v = _m.get("value")
+        if isinstance(_v, (int, float)) and 0.0 < _v < 0.15:
+            return float(_v), f"{_m.get('basis')} (owner-set; {_m.get('source')})"
+    except Exception:                                      # noqa: BLE001
+        pass
     if live_rf_enabled():
         try:
             from src.tools.fred import get_fred_spread
@@ -225,7 +235,7 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
         return None
     industry = PROFILE_INDUSTRY.get(profile or "", "Total Market (without financials)")
     beta_u = INDUSTRY_BETA_U.get(industry, INDUSTRY_BETA_U["Total Market (without financials)"])
-    rf, rf_source = risk_free()
+    rf, rf_source = risk_free(market)
     t = _TAX.get(market, 0.21)
     D = max(float(net_debt or 0.0), 0.0)
     E = float(market_cap)

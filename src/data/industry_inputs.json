@@ -18,6 +18,12 @@
     "reason": "Halliburton does not disclose a backlog figure; the pre-fill returned none. Omitted rather than substituted, so the OFS bear-case revenue bound simply does not apply."
    }
   },
+  "MFC": {
+   "embedded_value": {
+    "at": "2026-11-25T07:46:32+00:00",
+    "reason": "owner 2026-11-25: FY2023 embedded value is stale (FMP latest 2025); not a P/EV cohort input until a current figure is sourced"
+   }
+  },
   "WMB": {
    "maintenance_capex": {
     "at": "2026-09-20T02:49:43+00:00",
@@ -1886,6 +1892,100 @@
     "value_usd": 79678000000.0
    }
   },
+  "01336.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 17.36,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 19.6
+    },
+    "basis": "actual",
+    "built_at": "2026-11-25T07:00:08+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "2.49x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 2.4857
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "13.8294276 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional EV (CAA Standards of Actuarial Practice: Appraisal of Embedded Value)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "New China Life Insurance Company Ltd.",
+    "data": {
+     "basis": "Traditional EV (CAA Standards of Actuarial Practice: Appraisal of Embedded Value)",
+     "ev_per_share": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "EV（元/股） 82.85 92.27",
+      "scale": "units",
+      "source_url": "https://oss.sdyanbao.com/page/2026/8/27/AP202608271828522193/0.png",
+      "value": 92.27
+     },
+     "ev_total": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "Valuation Date 31 Dec 2025 ... Embedded Value 287,840",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0416/2026041600588.pdf",
+      "value": 287840.0
+     },
+     "fiscal_year": "FY2025",
+     "notes": "New China Life reports group embedded value in accordance with the China Association of Actuaries (CAA) 'Standards of Actuarial Practice: Appraisal of Embedded Value' (traditional EV approach using deterministic discounted cash flow). The company does not publish a per-share embedded value row in its embedded value disclosures; EV per share is calculated by dividing total group EV (RMB 287,840 million) by total issued ordinary share capital (3,119,546,600 shares), yielding RMB 92.27 per share (reported as RMB 92.27 / RMB 92.26 by research analysts). In its subsequent 1H2026 interim report (valuation date 30 June 2026), group embedded value reached RMB 310,384 million (equating to RMB 99.50 per share) and first half new business value reached RMB 6,916 million.",
+     "vnb": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "Value of One Year's New Business After Cost of Required Capital Held 9,842",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0416/2026041600588.pdf",
+      "value": 9842.0
+     },
+     "vnb_margin": {
+      "period": "FY2025",
+      "quote": "NBV margin was 16.2%, up by 1.5 percentage points.",
+      "source_url": "https://www.investing.com/news/company-news/earnings-call-transcript-new-china-life-insurance-q4-2025-reveals-earnings-miss-stock-dips-93CH-3950244",
+      "value": 0.162
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 13.8294276,
+     "vnb_margin": 0.162
+    },
+    "fmp_context_usd": {
+     "company": "New China Life Insurance Company Ltd.",
+     "depreciation_and_amortization": 263093656.56000003,
+     "market_cap": 17355961823.57196,
+     "net_ppe": 2596732300.92,
+     "operating_cash_flow": 23094282581.760002,
+     "period": "2025-12-31",
+     "revenue": 19604130139.2,
+     "shares": 4011237086.998821
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 129.0,
+    "value_usd": 43141459200.0
+   }
+  },
   "01801.HK": {
    "pipeline": {
     "anchors": {
@@ -2262,6 +2362,104 @@
     "ok": true,
     "secs": 157.7,
     "value_usd": 39171034074.51573
+   }
+  },
+  "01828.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 5.45,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 4.81
+    },
+    "basis": "actual",
+    "built_at": "2026-11-25T06:44:54+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "1.28x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 1.2752
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "5.43 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional Embedded Value (TEV)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "3 of 3 grounding wrapper(s) resolved",
+      "ok": true
+     }
+    ],
+    "company": "FWD Group Holdings Limited",
+    "data": {
+     "basis": "Traditional Embedded Value (TEV)",
+     "ev_per_share": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHa36EukcAOH7ZjDUjpNBe94q_G2YREsnU4edkY_12ur4JvsS9UKeAL4bVLHfdycYM2vvyJk_XTVBx7GnhCGndVTt--NHsCykm9FJIAr_X1DnuUamZ44aeFdeT2CiA_Ye-JDOE7hoLM_ZjQkEbTz-qaN5O0F8fPfCP3PsjRuMrDIxjJ",
+      "period": "1H2026",
+      "quote": "EV per share (US$) (ii). 5.43.",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0911/2026091100067.pdf",
+      "value": 5.43
+     },
+     "ev_total": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHa36EukcAOH7ZjDUjpNBe94q_G2YREsnU4edkY_12ur4JvsS9UKeAL4bVLHfdycYM2vvyJk_XTVBx7GnhCGndVTt--NHsCykm9FJIAr_X1DnuUamZ44aeFdeT2CiA_Ye-JDOE7hoLM_ZjQkEbTz-qaN5O0F8fPfCP3PsjRuMrDIxjJ",
+      "period": "1H2026",
+      "quote": "Closing Group EV. 6,949.",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0911/2026091100067.pdf",
+      "value": 6949.0
+     },
+     "fiscal_year": "1H2026",
+     "notes": "FWD Group calculates embedded value and VNB using a Traditional Embedded Value (TEV) framework. As at 31 December 2025 (FY2025), Group EV was US$6,850 million (US$5.37 per share).",
+     "vnb": {
+      "currency": "USD",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8Z3HdXAOCNpgPaKuluIZo1f0hgY6taVYup-KG6_mQTkw7ym4VTydMVML60WL3A2u5BS4G7-5RMSsFmm0o2x1RINLBksLhzikA7hkPMitkfo-Ru_N-yJQjgTUhYcHvNDqxXFfrTFzB2Y2j5U5YOovpoXIwWT3z07HvneOOEcGa9MjwtjJRvQNC_Hcmdn3Y96hkjZvAi4Jl0OJtxKdBysnNWXdMtfHGlpyG7YYCkIO-On3W_x-ZNJKzTu1GiDWp4CGS6u6j80tWwpwyPHi4MTUkRZZiIjIGnlMfpJ0=",
+      "period": "FY2025",
+      "quote": "2025 group embedded value (EV) evolution. ($m) ... VNB. 945.",
+      "scale": "mn",
+      "source_url": "https://www.fwd.com/files/v3/assets/blt7159ee3244a0ea01/blt03eae7d9eeaf4fe7/69b6571c31f53cc6d269a946/FWD_Group_Holdings_Limited_Annual_Results_Presentation_2025.pdf",
+      "value": 945.0
+     },
+     "vnb_margin": {
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHCJo7B_WkLXRoeH7-aJWCzuxU8MHlKH5xh0NztKfY5P0rSlsKLGIsgnoahPZmCO95h_TqRv2I4VxZCULsnkNpj84xzkvcB1YcJfmPQnhdZawo_DDp-4hZAldczjFS0qWzByzvqbYdAPnFOTZ_NR8O1l4FebTjL3ncMTSP-u8JuvJ4Y9w==",
+      "period": "FY2025",
+      "quote": "Total new business margin. 38.6%.",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0416/2026041600073.pdf",
+      "value": 0.386
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 5.43,
+     "vnb_margin": 0.386
+    },
+    "fmp_context_usd": {
+     "company": "FWD Group Holdings Limited",
+     "depreciation_and_amortization": 1035101760.0,
+     "market_cap": 5449408673.73684,
+     "net_ppe": 152000000.0,
+     "operating_cash_flow": 247000000.0,
+     "period": "2025-12-31",
+     "revenue": 4809000000.0,
+     "shares": 1285983036.9957857
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 87.1,
+    "value_usd": 6949000000.0
    }
   },
   "01972.HK": {
@@ -2813,6 +3011,100 @@
     "value_usd": 14500449600.0
    }
   },
+  "02378.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 30.17,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 28.34
+    },
+    "basis": "actual",
+    "built_at": "2026-11-25T06:41:46+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "1.30x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 1.2957
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "15.57 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional Embedded Value (TEV)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "Prudential plc",
+    "data": {
+     "basis": "Traditional Embedded Value (TEV)",
+     "ev_per_share": {
+      "currency": "USD",
+      "period": "1H2026",
+      "quote": "Group TEV equity per share ($). 15.57.",
+      "scale": "units",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1161728/000116172826000030/a3213s.htm",
+      "value": 15.57
+     },
+     "ev_total": {
+      "currency": "USD",
+      "period": "1H2026",
+      "quote": "Group TEV equity. 39,091.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1161728/000116172826000030/a3213s.htm",
+      "value": 39091.0
+     },
+     "fiscal_year": "1H2026",
+     "notes": "Prudential plc transitioned its embedded value reporting framework from European Embedded Value (EEV) to Traditional Embedded Value (TEV) starting with its 2025 financial reporting. Group embedded value is presented as Group TEV equity.",
+     "vnb": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "New business profit on a traditional embedded value (TEV) basis grew 12 per cent to $2,782 million",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1161728/000116172826000018/fullyearprelimreport.htm",
+      "value": 2782.0
+     },
+     "vnb_margin": {
+      "period": "FY2025",
+      "quote": "new business margin increased 2 ppts to 42 percent.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1161728/000116172826000018/fullyearprelimreport.htm",
+      "value": 0.42
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 15.57,
+     "vnb_margin": 0.42
+    },
+    "fmp_context_usd": {
+     "company": "Prudential plc",
+     "depreciation_and_amortization": 0.0,
+     "market_cap": 30170467244.48712,
+     "net_ppe": 530193000.0,
+     "operating_cash_flow": 2321709212.0,
+     "period": "2025-12-31",
+     "revenue": 28337308000.0,
+     "shares": 2440864935.00516
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 54.5,
+    "value_usd": 39091000000.0
+   }
+  },
   "02507.HK": {
    "backlog": {
     "basis": "actual",
@@ -2865,6 +3157,100 @@
     "ok": false,
     "secs": 118.4,
     "value_usd": 1059.0
+   }
+  },
+  "02601.HK": {
+   "embedded_value": {
+    "anchors": {
+     "market_cap_usd_bn": 32.1,
+     "reported_currency": "USD",
+     "revenue_latest_usd_bn": 56.51
+    },
+    "basis": "actual",
+    "built_at": "2026-11-25T06:46:21+00:00",
+    "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "embedded_value / market_cap",
+      "detail": "2.98x (plausible 0.3x to 3.0x)",
+      "ok": true,
+      "ratio": 2.9793
+     },
+     {
+      "check": "EV per share cited",
+      "detail": "9.942093599999998 USD/share",
+      "ok": true
+     },
+     {
+      "check": "EV basis stated",
+      "detail": "Traditional EV (CAA Standard of Actuarial Practice: Appraisal of Embedded Value)",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "no grounding wrappers",
+      "ok": true
+     }
+    ],
+    "company": "China Pacific Insurance (Group) Co., Ltd. Class H",
+    "data": {
+     "basis": "Traditional EV (CAA Standard of Actuarial Practice: Appraisal of Embedded Value)",
+     "ev_per_share": {
+      "currency": "CNY",
+      "period": "1H2026",
+      "quote": "19. Embedded Value as at 30 June 2026 per share (RMB). 66.21.",
+      "scale": "units",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0827/2026082701049.pdf",
+      "value": 66.21
+     },
+     "ev_total": {
+      "currency": "CNY",
+      "period": "1H2026",
+      "quote": "18. Group Embedded Value as at 30 June 2026. 636,938.",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0827/2026082701049.pdf",
+      "value": 636938.0
+     },
+     "fiscal_year": "1H2026",
+     "notes": "Group Embedded Value is prepared in accordance with CSRC rules and the 'CAA Standard of Actuarial Practice: Appraisal of Embedded Value' issued by the China Association of Actuaries. As at FY2025 (year ended 31 December 2025), Group EV was RMB 613,365 million (RMB 63.76 per share).",
+     "vnb": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "In 2025, NBV amounted to RMB18. 609 billion, a year-on-year growth of 40.1%",
+      "scale": "mn",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032601145.pdf",
+      "value": 18609.0
+     },
+     "vnb_margin": {
+      "period": "FY2025",
+      "quote": "with an NBV margin of 19.8%, up 3.2 percentage points.",
+      "source_url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/0326/2026032601145.pdf",
+      "value": 0.198
+     }
+    },
+    "engine_preview": {
+     "ev_per_share_usd": 9.942093599999998,
+     "vnb_margin": 0.198
+    },
+    "fmp_context_usd": {
+     "company": "China Pacific Insurance (Group) Co., Ltd. Class H",
+     "depreciation_and_amortization": 624212905.46,
+     "market_cap": 32102787724.48188,
+     "net_ppe": 4723021993.42,
+     "operating_cash_flow": 39409805837.14,
+     "period": "2025-12-31",
+     "revenue": 56512480699.24,
+     "shares": 9620341679.013762
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 82.5,
+    "value_usd": 95642610079.99998
    }
   },
   "02628.HK": {
@@ -10684,6 +11070,7 @@
     "value_usd": 0.0
    }
   },
+  "MFC": {},
   "MRNA": {
    "pipeline": {
     "anchors": {

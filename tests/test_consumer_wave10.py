@@ -26,7 +26,7 @@ def _w(sector, profile):
 
 def test_the_seventeen_labels_are_in_scope_and_the_dead_row_is_gone():
     raw = json.loads((Path(ipm.__file__).parent / "industry_profile_map.json").read_text(encoding="utf-8"))
-    assert raw["version"] == 24
+    assert raw["version"] >= 24
     assert set(SCOPE) <= set(raw["routing_scope"])
     assert "Other Industrial Metals & Mining" not in raw["map"]                     # decision 7
 

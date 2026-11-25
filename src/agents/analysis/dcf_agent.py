@@ -7624,6 +7624,11 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
     }
 
 
+#: Owner, 2026-11-25 (HK/SG audit): persistence of a bank's excess return after the explicit fade (CFA multistage
+#: residual income, TV = RI_{T+1} / (1 + r - w)). 0.8 for franchise banks.
+_RI_PERSISTENCE = 0.80
+
+
 def _compute_residual_income_2stage(
     most_recent: dict,
     shares: float,
@@ -7635,8 +7640,7 @@ def _compute_residual_income_2stage(
 
     Stage 1 (5 years, or 7/10 for India/Neo): ROE fades linearly from current
              level to profile target. BVPS grows at retention × ROE per year.
-    Stage 2 (terminal): ROE = CoE, so RI = 0 → TV contribution is zero.
-             (This is the "fair value" assumption: no excess return in perpetuity.)
+    Stage 2 (terminal): the last year's excess return persists at _RI_PERSISTENCE a year (CFA multistage RI).
 
     Formula:
         V_per_share = BVPS_0 + Σ_{t=1..N} RI_t / (1 + CoE)^t
@@ -7687,20 +7691,15 @@ def _compute_residual_income_2stage(
         # Grow book value for next period (retained earnings compound)
         bvps_t = bvps_t * (1 + retention * roe_t)
 
-    # Terminal: ROE fades to (CoE + terminal_spread) in perpetuity. Captures
-    # durable moat premium for scale-advantaged banks (GSIBs, Indian privates,
-    # Super-Regionals) that sustainably earn above CoE forever. Setting
-    # terminal_spread=0 recovers the Damodaran-standard conservative TV=0.
-    # Per Gemini critique: even a small 50-100 bps moat premium closes the
-    # "missing 30%" gap we see on JPM/GS/DBS where current IV is 55-70% of
-    # market price. Perpetuity formula:
-    #   TV = (terminal_spread) × BVPS_terminal / CoE
-    # Discounted back: PV(TV) = TV / (1 + CoE)^fade_years
-    terminal_spread = cfg.get("terminal_spread", 0.0)
-    if terminal_spread > 0 and coe > 0:
-        tv_per_share = (terminal_spread * bvps_t) / coe
-        pv_tv = tv_per_share / ((1 + coe) ** fade_years)
-        v_per_share += pv_tv
+    # Terminal (owner, 2026-11-25, HK/SG audit): the CFA multistage persistence form. The excess return the bank
+    # earns in the last explicit year decays at a persistence factor w each year after:
+    #   TV_T = (ROE_T - CoE) x BVPS_T / (1 + CoE - w)        PV = TV_T / (1 + CoE)^T
+    # Replaces a cliff to CoE + terminal_spread with no book growth, which contradicted the GGM leg's perpetual
+    # RoTE (DBS: RI S$36.8 against GGM S$76.3, the two carrying 85% of the weight).
+    roe_T = target_roe
+    if coe > 0 and (1.0 + coe - _RI_PERSISTENCE) > 0:
+        tv_per_share = (roe_T - coe) * bvps_t / (1.0 + coe - _RI_PERSISTENCE)
+        v_per_share += tv_per_share / ((1 + coe) ** fade_years)
 
     # Floor at 50% of TBV to prevent deep pathological discounts when
     # current ROE is transiently negative (e.g. 2020 COVID year for US banks)
@@ -9573,8 +9572,22 @@ def _compute_method_value(
     if method_name in {"Embedded Value", "EV", "EV per Share"}:
         ev_ps = most_recent.get("embedded_value_per_share")
         if ev_ps and ev_ps > 0:
-            # Apply scenario multiplier (bear/base/bull symmetric ±10%)
-            return ev_ps * sm
+            # Owner, 2026-11-25 (HK/SG audit): EV per share x the cohort's median P/EV (src/data/insurer_pev.py),
+            # the subject excluded; 1.0x only when the cohort does not measure, and then said.
+            _pev = most_recent.get("_insurer_pev") or {}
+            _m = float(_pev["value"]) if isinstance(_pev.get("value"), (int, float)) and _pev["value"] > 0 else 1.0
+            _leg_trace(kind="equity_multiple", metric="Embedded value per share (owner-accepted input)",
+                       metric_value=float(ev_ps), per_share_metric=float(ev_ps), multiple=_m * sm,
+                       multiple_parts={"peer_multiple": _m, "scenario_band": sm,
+                                       "peer_source": (f"median P/EV, {_pev.get('cohort')} life cohort "
+                                                       f"({len(_pev.get('members_used') or [])} peers, subject excluded)"
+                                                       if _m != 1.0 or _pev.get("value") else
+                                                       "1.0x EV: cohort P/EV not measurable"
+                                                       + (f" ({len(_pev.get('members_used') or [])} peers with an "
+                                                          f"accepted EV)" if _pev else "")),
+                                       "members_used": _pev.get("members_used") or [],
+                                       "members_missing": _pev.get("members_missing") or []})
+            return ev_ps * _m * sm
         # VNB-margin uplift on P/BV (proxy when EV/share not disclosed)
         vnb = most_recent.get("vnb_margin")
         if vnb and vnb > 0 and bvps and bvps > 0:
@@ -14368,6 +14381,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _ev_out.get("ev_per_share"):
                     most_recent["embedded_value_per_share"] = _ev_out["ev_per_share"]
                     most_recent["vnb_margin"] = _ev_out.get("vnb_margin")
+                    try:
+                        from src.data.insurer_pev import cohort_pev as _cohort_pev
+                        _pev_out = _cohort_pev(ticker)
+                        if _pev_out:
+                            most_recent["_insurer_pev"] = _pev_out
+                            ticker_forward_flags.append(
+                                f"Embedded Value multiple: " + (
+                                    f"{_pev_out['value']:.2f}x, the median P/EV of the {_pev_out['cohort']} life cohort "
+                                    f"({', '.join(m['symbol'] + ' ' + format(m['p_ev'], '.2f') + 'x' for m in _pev_out['members_used'])})"
+                                    if _pev_out.get("value") else
+                                    f"1.0x -- the {_pev_out['cohort']} cohort has {len(_pev_out['members_used'])} peer(s) "
+                                    f"with an accepted EV (needs 2); missing {', '.join(_pev_out['members_missing'])}"))
+                    except Exception as _pev_exc:          # noqa: BLE001
+                        _log.warning("[DCF] %s: insurer P/EV cohort failed: %s", ticker, _pev_exc)
                     ticker_forward_flags.append(
                         f"Embedded Value: {_ev_out['ev_per_share']:,.2f} {_target_ccy}/share from the owner-accepted "
                         f"input ({_ev_out.get('basis') or 'EV'}, {_ev_out.get('period') or 'period n/a'})"
@@ -15705,10 +15732,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if profile_name:
             try:
                 _pn_dict = state["data"].setdefault("profile_names", {})
-                if isinstance(_pn_dict, dict) and not _pn_dict.get(ticker):
+                # The valuation's profile wins over the router's guess (audit 2026-11-25 HK/SG): the industry map
+                # re-routed CLP (00002.HK) from the router LLM's "Mature SaaS" to Regulated Utility and CNOOC from
+                # "IPP" to Upstream Oil & Gas, but only an EMPTY slot was written, so the report, sector card and
+                # audits still read Mature SaaS / IPP beside a utility / E&P valuation.
+                if isinstance(_pn_dict, dict) and _pn_dict.get(ticker) != profile_name:
+                    if _pn_dict.get(ticker):
+                        state["data"].setdefault("profile_names_router", {})[ticker] = _pn_dict[ticker]
                     _pn_dict[ticker] = profile_name
-                if not state["data"].get("profile_name"):
+                if not state["data"].get("profile_name") or len(_pn_dict) <= 1:
                     state["data"]["profile_name"] = profile_name
+                if sector:
+                    _sec_d = state["data"].get("sectors")
+                    if isinstance(_sec_d, dict) and _sec_d.get(ticker) not in (None, sector):
+                        state["data"].setdefault("sectors_router", {})[ticker] = _sec_d[ticker]
+                        _sec_d[ticker] = sector
+                    if len(_pn_dict) <= 1 and state["data"].get("sector") not in (None, sector):
+                        state["data"]["sector"] = sector
             except Exception:
                 pass  # state-write failure is non-fatal
         if not profile_name:

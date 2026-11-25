@@ -1914,3 +1914,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: HK/SG audit 2026-11-25: DDM dividend cover = earnings OR free cash flow (max), and firm-CAPM Ke before WACC+spread (BN4 DDM +6%)
 
+## 2026-11-25T06:29:45+00:00
+
+- regenerated at HEAD: `2c6373fa`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: HK/SG audit 2026-11-25 owner decisions: SG risk-free = SGS 10y 2.29% (SGD cash flows; U96 WACC 7.67->6.51%, C38U 6.24->4.57%); bank RI terminal = CFA persistence fade w=0.8 (D05 RI 36.81->39.70)
+

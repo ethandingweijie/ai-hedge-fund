@@ -1014,10 +1014,12 @@ class TestTheGoldenBlindSpot:
         assert '_pn_dict = state["data"].setdefault("profile_names", {})' in src
         assert "_pn_dict[ticker] = profile_name" in src
         assert TICKER_SECTOR_LOOKUP["COST"][1] == "Membership / Subscription Retail"   # Wave 4 pin
-        # The write-back is guarded so it cannot overwrite a name that was already
-        # supplied, which is what makes it a pure pre-classification feed and not a
-        # two-way sync.
-        assert "if isinstance(_pn_dict, dict) and not _pn_dict.get(ticker):" in src
+        # HK/SG audit (2026-11-25): the write-back now overwrites the router's guess with the profile the
+        # valuation used (CLP read "Mature SaaS" on the report beside a Regulated Utility valuation), keeping the
+        # guess under profile_names_router. Replay is unaffected: the archived name is still the engine's own
+        # answer at capture time, so it remains an input that reproduces itself.
+        assert "if isinstance(_pn_dict, dict) and _pn_dict.get(ticker) != profile_name:" in src
+        assert 'state["data"].setdefault("profile_names_router", {})[ticker]' in src
 
     def test_meli_is_the_other_ladder_decided_fixture_and_is_also_bypassed(self):
         """The blind spot is not Consumer-specific.

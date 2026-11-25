@@ -285,6 +285,26 @@ _DCF_DRIVER_KEYS = ("revenue_base", "fcf_margin_base", "margin_delta_absolute", 
                     "tgr", "net_debt", "shares", "wacc", "terminal_nopat_ratio", "terminal_ronic_spread")
 
 
+_TERMINAL_KEYS = ("terminal_nopat_ratio", "terminal_ronic_spread", "terminal_formula")
+
+
+def _with_core_terminal(tr: dict, core: dict) -> dict:
+    """A DCF-family leg's trace with the value-driver terminal inputs it was priced on.
+
+    Tie-out 2026-11-25 (00941.HK, "DCF (2-stage)"): every DCF-family leg projects through `_project_dcf` with the
+    scenario's shared projection context -- the same `terminal_nopat_ratio` / `terminal_ronic_spread` the core "DCF"
+    trace records -- but the family leg's own trace leaves them out. Read without them, the leg was rebuilt on the
+    Gordon terminal (bear 177.56 against the engine's 178.13; base / bull 9.19 / 28.15 apart). A trace that records
+    none of them takes the core DCF's, and only when the core DCF records the value-driver form (under the Gordon
+    kill switch the leg's own trace already rebuilds as Gordon).
+    """
+    if not core or not tr or any(k in tr for k in _TERMINAL_KEYS):
+        return tr
+    if core.get("terminal_formula") != "value_driver":
+        return tr
+    return {**tr, **{k: core[k] for k in _TERMINAL_KEYS if k in core}}
+
+
 _MILLION_KEYS = ("revenue_base", "net_debt", "shares")
 
 
@@ -1178,6 +1198,7 @@ class _Book:
                 for leg, tr in legs.items():
                     if leg == "DCF" or tr.get("kind") != "dcf" or not tr.get("projection_rows"):
                         continue
+                    tr = _with_core_terminal(tr, core)
                     if core.get("projection_rows") and _same_projection(tr, core):
                         self.dcf_variants.setdefault(leg, {})[s_] = {"same_as_core": True}
                     else:
@@ -2383,7 +2404,16 @@ class _Book:
                 if tr.get("kind") != "sotp" or not self.in_blend(name):
                     continue
                 t = tr.get("table") or {}
-                sh.section(r, f"{s.upper()} — {name} ({tr.get('source')})", 9); r += 1
+                sh.section(r, f"{s.upper()} — {name} ({tr.get('source') or tr.get('metric') or 'segments'})", 9); r += 1
+                # Tie-out 2026-11-25 (BN4.SI / U96.SI / VLO): two SOTP traces carry no analyst `table` -- the holdco
+                # look-through (template parts) and the segment-EV SOTP (revenue × margin × multiple). The tab used to
+                # render an empty table (segment value 0) beside the engine's leg; each is rebuilt from its own parts.
+                if not t.get("rows") and (tr.get("lookthrough") or {}).get("parts"):
+                    r = self._sotp_lookthrough(sh, r, s, name, tr)
+                    continue
+                if not t.get("rows") and tr.get("segments"):
+                    r = self._sotp_segments(sh, r, s, name, tr)
+                    continue
                 sh.header(r, ["Segment", "Method", "Multiple", "Base value", "Revenue factor",
                               "Multiple band", "Scenario value"])
                 flex = {f.get("segment"): f for f in (tr.get("flex") or [])}
@@ -2449,6 +2479,136 @@ class _Book:
                 sh.put(r, 7, f"=G{ps}-G{r - 1}", NUM); r += 2
                 self.leg_cell[(s, name)] = _ref("SOTP", ps, 7)
         sh.widths({"A": 44, "B": 10, "C": 10, "D": 14, "E": 14, "F": 12, "G": 16})
+
+    def _sotp_check(self, sh: _Sheet, r: int, s: str, name: str, tr: dict, ps: int) -> int:
+        sh.label(r, 1, "Engine value")
+        sh.put(r, 7, _num(tr.get("value")), NUM); r += 1
+        sh.label(r, 1, "Check")
+        sh.put(r, 7, f"=G{ps}-G{r - 1}", NUM); r += 2
+        self.leg_cell[(s, name)] = _ref("SOTP", ps, 7)
+        return r
+
+    def _sotp_lookthrough(self, sh: _Sheet, r: int, s: str, name: str, tr: dict) -> int:
+        """The holdco look-through (`holdco_sotp.look_through_value`): each template part is driver × stake or
+        multiple × FX (and the template's units) × (1 − the part's own discount); the parts sum to the gross asset
+        value, parent net debt comes off, the holdco discount is taken on the remainder, and the NAV is carried to
+        the listing currency over the shares."""
+        lt = tr.get("lookthrough") or {}
+        sh.header(r, ["Division", "Basis", "Driver (millions)", "Stake / multiple", "FX × units",
+                      "Part discount", "Value"])
+        sh.note(r - 1, 8, f"Template currency {lt.get('reporting_currency') or ''}; values in millions")
+        first = r + 1
+        for p in lt.get("parts") or []:
+            r += 1
+            basis = p.get("basis") or ""
+            gross = _num(p.get("gross_value")) or 0.0
+            mr = p.get("multiple_range")
+            lo_hi = (mr if isinstance(mr, (list, tuple)) and len(mr) == 2
+                     and all(isinstance(x, (int, float)) for x in mr) else None)
+            mid = f"=({float(lo_hi[0])}+{float(lo_hi[1])})/2" if lo_hi else None
+            mid_v = (float(lo_hi[0]) + float(lo_hi[1])) / 2.0 if lo_hi else None
+            drv, fac, fac_v, fx = None, 1.0, 1.0, None
+            if basis == "market_stake" and _num(p.get("stake_pct")) and _num(p.get("fx_to_reporting")):
+                stake, rate = float(p["stake_pct"]), float(p["fx_to_reporting"])
+                drv, fac, fac_v, fx = gross / (stake * rate) / 1e6, stake, stake, rate     # the stake's market cap
+            elif basis == "pe_range" and _num(p.get("net_profit")) is not None and lo_hi:
+                drv, fac, fac_v = float(p["net_profit"]), mid, mid_v
+            elif basis == "revenue_multiple" and _num(p.get("revenue")) is not None and lo_hi:
+                drv, fac, fac_v = float(p["revenue"]), mid, mid_v
+            elif basis == "cap_rate" and _num(p.get("ebit")) is not None and p.get("cap_rate_range"):
+                c_lo, c_hi = p["cap_rate_range"]
+                drv, fac, fac_v = float(p["ebit"]), f"=1/(({float(c_lo)}+{float(c_hi)})/2)", 2.0 / (float(c_lo) + float(c_hi))
+            elif lo_hi and _num(p.get("ebit")) is not None:                              # ev_ebit_range
+                drv, fac, fac_v = float(p["ebit"]), mid, mid_v
+            elif lo_hi and _num(p.get("ebitda")) is not None:                            # EBITDA × multiple band
+                drv, fac, fac_v = float(p["ebitda"]), mid, mid_v
+            elif basis == "fixed_value" and _num(p.get("amount")) is not None:
+                drv = float(p["amount"])
+            elif basis == "transaction_anchor" and _num(p.get("enterprise_value")) is not None:
+                drv = float(p["enterprise_value"])
+            elif basis == "nil":
+                drv = 0.0
+            if drv is None:
+                drv, fac, fac_v, fx = gross / 1e6, 1.0, 1.0, 1.0                           # stated as the part's value
+            if fx is None:
+                # The template records each figure in its own currency and units (units_multiplier); the factor
+                # that takes driver × multiple to template-currency millions is read from the part's gross value.
+                _den = drv * fac_v
+                fx = (gross / 1e6 / _den) if _den else 1.0
+            sh.put(r, 1, p.get("division")).font = Font(color=BLACK)
+            sh.put(r, 2, basis).font = Font(color=BLACK)
+            sh.put(r, 3, drv, MIL)
+            sh.put(r, 4, fac, "0.0000")
+            sh.put(r, 5, fx, "0.000000")
+            sh.put(r, 6, _num(p.get("discount_pct")) or 0.0, PCT)
+            sh.put(r, 7, f"=C{r}*D{r}*E{r}*(1-F{r})", MIL)
+        last = r
+        r += 1
+        sh.label(r, 1, "Gross asset value", bold=True)
+        sh.put(r, 7, f"=SUM(G{first}:G{last})" if last >= first else 0.0, MIL, bold=True); gav = r; r += 1
+        sh.label(r, 1, "Less: parent net debt (plus net cash when negative)")
+        sh.put(r, 7, -(_num(lt.get("parent_net_debt")) or 0.0) / 1e6, MIL); nd = r; r += 1
+        sh.label(r, 1, "NAV before the holdco discount", bold=True)
+        sh.put(r, 7, f"=G{gav}+G{nd}", MIL, bold=True); pre = r; r += 1
+        sh.label(r, 1, "Holdco discount (template band midpoint)")
+        sh.put(r, 7, _num(lt.get("holdco_discount")) or 0.0, PCT); dr_ = r; r += 1
+        sh.label(r, 1, "Net asset value after the holdco discount", bold=True)
+        sh.put(r, 7, f"=G{pre}*(1-G{dr_})", MIL, bold=True); nav = r; r += 1
+        sh.label(r, 1, "FX to the listing currency")
+        sh.put(r, 7, _num(lt.get("fx_to_listing")) or 1.0, "0.000000"); fx_r = r; r += 1
+        sh.label(r, 1, "Shares (millions)")
+        sh.put(r, 7, (_num(lt.get("shares")) or 0.0) / 1e6, MIL); shr = r; r += 1
+        sh.label(r, 1, "Value per share", bold=True)
+        sh.put(r, 7, f"=IFERROR(G{nav}*G{fx_r}/G{shr},0)", NUM, bold=True); ps = r; r += 1
+        return self._sotp_check(sh, r, s, name, tr, ps)
+
+    def _sotp_segments(self, sh: _Sheet, r: int, s: str, name: str, tr: dict) -> int:
+        """The segment-EV SOTP (`_sotp_parts`): an energy segment is revenue × peer EBITDA margin × the scaler that
+        reconciles the parts to company EBITDA × its EV/EBITDA multiple; another is revenue × its EV/Revenue
+        multiple; an equity-accounted line is held at carrying value. The EVs sum, take the growth premium, and
+        bridge to equity (net debt, minorities, preferred) over the shares, floored at zero."""
+        sh.header(r, ["Segment", "Basis", "Revenue", "EBITDA margin", "Reconciliation scaler", "Multiple", "EV"])
+        first = r + 1
+        for p in tr.get("segments") or []:
+            r += 1
+            basis = p.get("basis") or ""
+            sh.put(r, 1, p.get("segment")).font = Font(color=BLACK)
+            sh.put(r, 2, basis).font = Font(color=BLACK)
+            sh.put(r, 3, (_num(p.get("revenue")) or 0.0) / 1e6, MIL)
+            mult = _num(p.get("multiple"))
+            if basis == "ev_ebitda" and mult is not None and _num(p.get("ebitda_margin")) is not None:
+                sh.put(r, 4, _num(p.get("ebitda_margin")), PCT2)
+                sh.put(r, 5, _num(p.get("reconciliation_scaler")) or 1.0, "0.000000")
+                sh.put(r, 6, mult, "0.00")
+                sh.put(r, 7, f"=C{r}*D{r}*E{r}*F{r}", MIL)
+            elif basis == "ev_revenue" and mult is not None:
+                sh.put(r, 6, mult, "0.00")
+                sh.put(r, 7, f"=C{r}*F{r}", MIL)
+            else:
+                # carrying value (equity-accounted), excluded or unpriced: the EV the part states
+                sh.put(r, 7, (_num(p.get("carrying_value")) if p.get("carrying_value") is not None
+                              else (_num(p.get("ev")) or 0.0)) / 1e6, MIL)
+        last = r
+        r += 1
+        sh.label(r, 1, "Sum of segment EVs", bold=True)
+        sh.put(r, 7, f"=SUM(G{first}:G{last})" if last >= first else 0.0, MIL, bold=True); seg = r; r += 1
+        sh.label(r, 1, "× Growth premium")
+        sh.put(r, 7, _num(tr.get("growth_premium")) or 1.0, "0.0000"); gp = r; r += 1
+        sh.label(r, 1, "Enterprise value", bold=True)
+        sh.put(r, 7, f"=G{seg}*G{gp}", MIL, bold=True); ev = r; r += 1
+        sh.label(r, 1, "Less: net debt (plus net cash when negative)")
+        sh.put(r, 7, -(_num(tr.get("net_debt")) or 0.0) / 1e6, MIL); nd = r; r += 1
+        sh.label(r, 1, "Less: minority interest")
+        sh.put(r, 7, -(_num(tr.get("minority_interest")) or 0.0) / 1e6, MIL); mi = r; r += 1
+        sh.label(r, 1, "Less: preferred equity")
+        sh.put(r, 7, -(_num(tr.get("preferred_equity")) or 0.0) / 1e6, MIL); pe = r; r += 1
+        sh.label(r, 1, "Equity value", bold=True)
+        sh.put(r, 7, f"=G{ev}+G{nd}+G{mi}+G{pe}", MIL, bold=True); eq = r; r += 1
+        sh.label(r, 1, "Shares (millions)")
+        sh.put(r, 7, (_num(tr.get("shares")) or 0.0) / 1e6, MIL); shr = r; r += 1
+        sh.label(r, 1, "Value per share (floored at zero)", bold=True)
+        sh.put(r, 7, f"=IFERROR(MAX(G{eq}/G{shr},0),0)", NUM, bold=True); ps = r; r += 1
+        return self._sotp_check(sh, r, s, name, tr, ps)
 
     # ── Guidance → estimates (owner, 2026-10-03) ──────────────────────────────
     def guidance_tab(self) -> None:
@@ -3135,6 +3295,24 @@ class _Book:
             sh.put(r, 6, f"=ROUND(F{r - 2}*F{r - 1},{self.A['dp']})", NUM, bold=True)
             iv_row = r
             r += 1
+            # Tie-out 2026-11-25 (00883.HK): the engine floors the BEAR case at the reserve value
+            # (`_apply_reserve_floor`: proved reserves after tax, less net debt, per share; owner 2026-09-20) --
+            # it carries no weight, it is a floor. Rebuilt as MAX(blend, floor) so the bear Check ties
+            # (24.05 blend -> 26.63 floor) and a run where the floor did not bind still reads the blend.
+            _rf = sc.get("reserve_floor") or {}
+            _floor = _num(_rf.get("floor_per_share"))
+            if _floor is None and s == "bear":
+                _floor = _num((sc.get("method_iv_table") or {}).get("Reserve NPV (PV-10)"))
+            if s == "bear" and _floor is not None and _floor > 0:
+                sh.label(r, 5, "Reserve floor: proved reserves PV, after tax, less net debt, per share")
+                sh.put(r, 6, _floor, NUM)
+                if _rf.get("period") or _rf.get("source_url"):
+                    sh.note(r, 7, " ".join(str(x) for x in (_rf.get("period"), _rf.get("source_url")) if x))
+                r += 1
+                sh.label(r, 5, "Intrinsic value after the bear reserve floor", bold=True)
+                sh.put(r, 6, f"=MAX(F{iv_row},F{r - 1})", NUM, bold=True)
+                iv_row = r
+                r += 1
             clamp = sc.get("intrinsic_value_unclamped") is not None
             sh.label(r, 5, "Engine" + (" (ordering clamp applied)" if clamp else ""))
             sh.put(r, 6, _num(sc.get("intrinsic_value")), NUM)

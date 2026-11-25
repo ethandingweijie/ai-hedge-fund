@@ -877,5 +877,12 @@
       }
     },
     "entries": {}
+  },
+  "risk_free_by_market": {
+    "_doc": "Owner, 2026-11-25 (HK/SG audit): the risk-free rate matches the currency of the cash flows. A market listed here discounts at its own government 10y; any other market takes live FRED DGS10. HK is not listed: the HKD peg keeps it on US rates. Reviewed quarterly.",
+    "reviewed": {"last_reviewed": "2026-11-25", "reviewer": "owner", "cadence": "quarterly"},
+    "markets": {
+      "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)"}
+    }
   }
 }

@@ -382,6 +382,16 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
                                                 "symbols": ("SONY", "RMS.PA", "MC.PA", "RACE")},
     "Consumer Technology Ecosystem: Services": {"markets": (),
                                                 "symbols": ("MSFT", "GOOGL", "META", "V", "MA", "SPGI")},
+    # Owner, 2026-11-25 (HK/SG audit): SGX has one airline, one exchange and four planters, so these legs priced on
+    # the engine's literal 12x / 18x / 2.0x. Full-service network carriers (not the loss-making Chinese state
+    # carriers); listed exchanges and clearing houses (not the ratings and data firms of the US label SGX was
+    # borrowing); Asian planters and global agri-processors for Wilmar.
+    "Airlines": {"markets": ("SES",),
+                 "symbols": ("0293.HK", "QAN.AX", "9201.T", "9202.T", "003490.KS", "DAL", "UAL")},
+    "Market Infrastructure (SG)": {"markets": ("SES",),
+                                   "symbols": ("0388.HK", "ASX.AX", "8697.T", "CME", "ICE", "NDAQ", "CBOE")},
+    "Agribusiness & Food (SG)": {"markets": ("SES",),
+                                 "symbols": ("E5H.SI", "EB5.SI", "P8Z.SI", "VC2.SI", "ADM", "BG")},
 }
 
 

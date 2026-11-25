@@ -107,7 +107,10 @@ def test_life_insurance_dropped_the_combined_ratio_gate_and_holdco_declares_the_
 
 
 def test_sgx_takes_the_global_exchange_basket_by_a_documented_exception():
-    assert ipm.comps_exchange_for("S68.SI") == "US" and ipm.comps_exchange_for("D05.SI") is None
+    # v25 (owner, 2026-11-25): the US-label override is gone; SGX prices on the cross-market exchanges basket.
+    from src.data.regional_comps import CROSS_MARKET_BASKETS
+    assert ipm.comps_exchange_for("S68.SI") is None and ipm.comps_exchange_for("D05.SI") is None
+    assert "SES" in CROSS_MARKET_BASKETS["Market Infrastructure (SG)"]["markets"]
     src = inspect.getsource(sp)
     assert "market = comps_exchange_for(ticker) or market" in src
 

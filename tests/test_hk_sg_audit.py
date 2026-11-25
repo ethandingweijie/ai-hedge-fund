@@ -118,3 +118,56 @@ def test_netted_holdings_put_the_ev_legs_on_operating_earnings():
     # never raises a figure that is already below the operating line
     low = {"operating_income": 10.0, "depreciation_and_amortization": 2.0, "ebitda": 11.0, "ebit": 9.0}
     assert d._operating_earnings_for_netted_holdings(low) is None and "ebitda_core" not in low
+
+
+# ── owner decisions, 2026-11-25 ──────────────────────────────────────────────
+
+def test_sg_cash_flows_discount_on_the_sgs_10y():
+    from src.data import capm
+    rf, src = capm.risk_free("SG")
+    assert rf == pytest.approx(0.0229) and "Singapore Government" in src
+    assert capm.risk_free("HK")[0] != pytest.approx(0.0229)          # HKD peg: US rates
+    w = capm.firm_wacc(profile="Telecom Carrier", net_debt=0.0, market_cap=7e10, cost_of_debt=None, market="SG")
+    assert w and w["rf"] == pytest.approx(0.0229)
+
+
+def test_bank_ri_terminal_is_the_persistence_fade():
+    assert d._RI_PERSISTENCE == pytest.approx(0.80)
+    import inspect
+    src = inspect.getsource(d._compute_residual_income_2stage)
+    assert "(1.0 + coe - _RI_PERSISTENCE)" in src and "terminal_spread * bvps_t" not in src
+
+
+def test_thin_sgx_profiles_have_cross_market_baskets():
+    for prof in ("Airlines", "Market Infrastructure (SG)", "Agribusiness & Food (SG)"):
+        spec = rc.CROSS_MARKET_BASKETS[prof]
+        assert "SES" in spec["markets"] and len(spec["symbols"]) >= 6
+    assert not {"SPGI", "MCO", "MSCI"} & set(rc.CROSS_MARKET_BASKETS["Market Infrastructure (SG)"]["symbols"])
+
+
+# ── life insurers on cohort P/EV (owner, 2026-11-25) ─────────────────────────
+
+def test_cohort_pev_is_the_median_without_the_subject():
+    from src.data import insurer_pev as ip
+    px = {"02628.HK": 20.0, "02601.HK": 30.0, "01336.HK": 40.0, "01339.HK": 5.0, "02318.HK": 50.0}
+    ev = {"02628.HK": 50.0, "02601.HK": 60.0, "01336.HK": 80.0}            # PICC has no accepted EV
+    out = ip.cohort_pev("02318.HK", quote=px.get, ev_ps=lambda s, c: ev.get(s), listing_ccy=lambda s: "HKD")
+    assert out["cohort"] == "china_domestic" and out["value"] == pytest.approx(0.5)   # 0.4, 0.5, 0.5
+    assert "02318.HK" not in [m["symbol"] for m in out["members_used"]] and "01339.HK" in out["members_missing"]
+    thin = ip.cohort_pev("02318.HK", quote=px.get, ev_ps=lambda s, c: ev.get(s) if s == "02628.HK" else None,
+                         listing_ccy=lambda s: "HKD")
+    assert thin["value"] is None
+    assert ip.cohort_pev("D05.SI") is None
+
+
+def test_embedded_value_leg_prices_at_the_cohort_pev(monkeypatch):
+    monkeypatch.setattr(d, "get_sector_peer_multiples", lambda *a, **k: {"pb": 1.2})
+    row = {"embedded_value_per_share": 101.66, "_insurer_pev": {"value": 0.5, "cohort": "china_domestic",
+                                                                "members_used": [{"symbol": "02628.HK"}, {"symbol": "02601.HK"}]}}
+    kw = dict(method_name="Embedded Value", revenue_base=1e12, shares=1.8e10, net_debt=0.0, market_cap=9e11,
+              wacc=0.08, growth_base=0.03, fcf_margin_base=0.1, tgr=0.02, fcf_floor=0.0, sector="Financials",
+              scenario="base", profile_name="Insurance", ticker="02318.HK")
+    v, tr = d._traced_method_value(most_recent=row, **kw)
+    assert v == pytest.approx(101.66 * 0.5) and "median P/EV" in tr["multiple_parts"]["peer_source"]
+    v1, tr1 = d._traced_method_value(most_recent={"embedded_value_per_share": 101.66}, **kw)
+    assert v1 == pytest.approx(101.66) and "1.0x" in tr1["multiple_parts"]["peer_source"]

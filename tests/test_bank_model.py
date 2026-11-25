@@ -210,7 +210,8 @@ def test_the_dbs_golden_keeps_the_research_roe_without_family_guidance_and_reads
     # premium (a through-cycle leg takes none), so the leg rises 17.6% and the base IV to 47.98.
     # 47.98 until the HK/SG audit (2026-11-25): a bank's normalised earnings are its own 5y mean ROE (14.9%) on
     # today's book, not net margin x FMP's gross-interest "revenue" (+17% at DBS); P/E (norm) 53.97 -> 44.42.
-    assert out["base_iv"] == pytest.approx(46.49, abs=0.05)
+    # 46.49 -> 47.47 (owner, 2026-11-25): residual income's terminal is the CFA persistence fade (w = 0.8), RI 36.81 -> 39.70.
+    assert out["base_iv"] == pytest.approx(47.47, abs=0.05)
     block = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "confidence": "HIGH", "estimates": {"base": {"revenue_growth_fy1": 0.022, "revenue_growth_fy2": 0.035}},
              "family_metrics": {"family": "bank", "bank": {"loan_growth_fy1": 0.05, "nim_fy1": 0.0205, "cost_to_income_fy1": 0.40, "credit_cost_bps_fy1": 20.0, "payout_ratio": 0.55}}}
     out2 = replay_fixture("D05_SI", state_patch={"guidance_estimates": {"D05.SI": block}})
