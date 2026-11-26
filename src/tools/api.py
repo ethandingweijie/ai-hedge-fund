@@ -2611,6 +2611,23 @@ def get_fx_rate(
         print(f"  [FX] {pair} — live rate {rate:.6f} (FMP batch inverse of {inverse_pair}={inv_price:.4f})")
         return rate
 
+    # ── 1c. Live USD cross (e.g. PHPSGD = PHPUSD x USDSGD) ───────────────
+    # FMP quotes many emerging currencies only against USD. Without the cross,
+    # PHPSGD fell through to 1.0 while both USD legs were live -- a Globe
+    # Telecom stake (PHP) would have entered Singtel's look-through 44x too big.
+    if "USD" not in (from_currency, to_currency):
+        def _to_usd(ccy: str) -> float | None:
+            p = _fetch_fx_quote(f"{ccy}USD")
+            if p:
+                return p
+            q = _fetch_fx_quote(f"USD{ccy}")
+            return (1.0 / q) if q else None
+        f_live, t_live = _to_usd(from_currency), _to_usd(to_currency)
+        if f_live and t_live:
+            rate = f_live / t_live
+            print(f"  [FX] {pair} — live rate {rate:.6f} (FMP batch USD cross)")
+            return rate
+
     # ── 2. Hardcoded fallback ─────────────────────────────────────────────
     rate = _FX_FALLBACK_RATES.get(pair)
     if rate:

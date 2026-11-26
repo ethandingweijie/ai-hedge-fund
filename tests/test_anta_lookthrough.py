@@ -243,12 +243,12 @@ class TestTheSchema:
 
     def test_the_new_template_is_appended_last_and_the_count_is_fifteen(self):
         keys = list(_doc()["templates"])
-        assert keys[-1] == TICKER, (
+        assert keys[14] == TICKER, (   # Z74.SI (2026-11-26) appended after it
             "this file's key order is CREATION order, not alphabetical; a "
             "sorted insertion would drop 02020.HK at index 3 between 00019.HK "
             "and C07.SI for no reason a reader could explain"
         )
-        assert len(keys) == 15
+        assert len(keys) == 16
         # 10 shipped the template; 11 corrected its net-debt note. Nothing reads
         # `version` -- it is pinned so a correction to a SOURCED figure cannot
         # land silently in a file whose whole convention is that its numbers

@@ -1954,3 +1954,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-25: SG Ke/WACC floored at SGS + 3.0pp (C38U WACC 3.90->5.29%); bank GGM growth capped at the market risk-free rate (D05 g 3.3->2.29%, IV 47.47->45.08)
 
+## 2026-11-26T02:47:33+00:00
+
+- regenerated at HEAD: `7596d718`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-26: Telco / Infrastructure (SG) SOTP slot renamed SOTP (published) -> SOTP / NAV (look-through); param_version hash only, no value moved
+

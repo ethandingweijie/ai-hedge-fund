@@ -10,6 +10,11 @@
     "provider": "Alibaba"
   },
   {
+    "display_name": "Qwen3.8-Flash (Alibaba)",
+    "model_name": "qwen3.8-flash",
+    "provider": "Alibaba"
+  },
+  {
     "display_name": "Grok 4",
     "model_name": "grok-4-0709",
     "provider": "xAI"

@@ -3293,9 +3293,13 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # the domestic access network, and infrastructure concessions, each
         # on its own multiple. EV/EBITDA cross-checks the operating core.
         "Telco / Infrastructure (SG)": {
+            # Owner, 2026-11-26: the SOTP slot is the look-through (holdco_sotp_templates.json),
+            # not a published table -- Singtel publishes none, so the 0.35 was dropped every run
+            # and 62% of the weight sat on consolidated EBITDA that cannot see Bharti/Telkomsel/
+            # AIS/Globe. Names without a template (StarHub, NetLink) still drop it and renormalise.
             "methods": [
                 {"name": "EV/EBITDA",           "weight": 0.4, "anchor": True, "implementable": True},
-                {"name": "SOTP (published)",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "SOTP / NAV (look-through)", "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "DCF",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/BV"],

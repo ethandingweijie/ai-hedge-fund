@@ -1846,6 +1846,17 @@ async def run_analysis_pipeline(
             else:
                 _pipeline_model = model_name
                 _provider = "Anthropic"  # default for Claude/other models
+            # Opt-in, unset in prod: PIPELINE_MODEL moves the structured phases
+            # off Claude onto a registry model (owner, 2026-11-26: local live
+            # runs go on the owner's Qwen key, e.g. PIPELINE_MODEL=qwen3.6-plus).
+            _pm_env = os.environ.get("PIPELINE_MODEL", "").strip()
+            if _pm_env:
+                from src.llm.models import find_model_by_name
+                _pm_info = find_model_by_name(_pm_env)
+                if _pm_info is not None:
+                    _pipeline_model, _provider = _pm_env, _pm_info.provider.value
+                else:
+                    print(f"  [model-config] PIPELINE_MODEL '{_pm_env}' not in the registry -- ignored")
 
             # R2: resume from a recent crashed run's checkpoint when eligible.
             # Compares against the user-facing model_name — that is what

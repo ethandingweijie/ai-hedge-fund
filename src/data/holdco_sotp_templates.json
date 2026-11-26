@@ -704,6 +704,67 @@
       "net_debt_note": "CORRECTED 2026-09-18 after a production run; the first version of this note stated the wrong figure with the wrong sign and is quoted below so the correction is auditable. WHAT THE BRIDGE ACTUALLY DEDUCTS: net debt at the 30-Jun-2026 interim is CNY 11.1bn of NET CASH (cash 17.2bn + short-term investments 26.8bn less debt 33.0bn), HKD 12.959bn converted at 1.1704 -- so `value_per_share` ADDS it to gross asset value rather than subtracting it. At the 31-Dec-2025 year end the same convention gives CNY 5.616bn of net cash (12.845 + 26.206 - 33.435). THE ENGINE'S CONVENTION COUNTS SHORT-TERM INVESTMENTS AS CASH: `_net_debt_net_of_investments` exists because FMP's own `netDebt` field is total debt less cash and equivalents ONLY, and its docstring names this exact trap on Alibaba with the sign flip. THE ORIGINAL NOTE QUOTED THE RAW FIELD INSTEAD: 'Group net debt CNY 20.590bn at 31 Dec 2025 (total debt CNY 33.435bn less cash and equivalents CNY 12.845bn), HKD 24.166bn converted. The engine deducts it in full.' 20.590 is precisely `total_debt - cash_and_equivalents`, measured, and precisely what the helper corrects. The omission is the CNY 26.206bn short-term investments line. THE BRIDGE WAS NEVER WRONG -- it takes net debt from the caller and this template carries no `net_debt_override`, so no shipped code used the bad figure; only the documentation did, and this file's rule is that its sourced numbers are checked. Measured effect on the published leg: HKD 93.68/share in production (run bda1622f, 2026-09-18) against the HKD 81.03 this template previewed, a HKD 37.125bn / HKD 12.78-per-share swing, taking the premium to the HKD 72.00 close from +12.5% to +30.1%. Also corrected: this file's convention is to quote the LATEST QUARTER (S08.SI and C38U.SI both say 30 Jun 2026) because `_refresh_balance_sheet_from_latest_quarter` overlays the annual row with it; the original note quoted the year end. The rest of the original reasoning stands and is unchanged: the core division is an ENTERPRISE value (`ev_ebitda_range` is not in EQUITY_BASES) so parent debt has to reach the bridge or the SOTP counts debt-financed assets as equity; Amer is 42.5%, below the 50% threshold, so `parent_net_debt` removes none of its borrowings -- measured returning the consolidated figure unchanged, correct for an equity-accounted associate; and the TEMPLATE CURRENCY IS HKD, NOT CNY, although Anta REPORTS in CNY, per the v6b rule, since parent net debt reaches the bridge in the listing currency and `residual_ebitda` converts the CNY group EBITDA to HKD itself.",
       "shares_note": "The engine divides by 2.904bn line-item shares, not by the 2.771bn implied by market cap / price (HKD 199.490bn / HKD 72.00). The quote cross-check that exists to catch exactly this divergence is explicitly SKIPPED for HK and SG tickers, and 4.8% would not have cleared its 25% trigger anyway. Every per-share figure for this name -- the look-through NAV, the DCF, the multiples -- is therefore ~4.6% lower than it would be on the quote-implied count. Not corrected here; it is a pre-existing engine behaviour across every HK name, not a property of this template. The ratio is what is sourced, not the level: the per-share figures this note used to quote (HKD 81.21 on 2.904bn against HKD 85.12 on 2.771bn) were computed on the superseded net-debt figure and are corrected in net_debt_note; production publishes HKD 93.68 on the 2.904bn count.",
       "unmarked_note": "PUMA SE is deliberately NOT marked. Anta agreed to acquire ~29.06% from the Pinault family (announced Aug 2025), but neither the final percentage nor completion is sourced here, and this file's rule is that an unsourced ownership percentage is worse than a missing division. Puma's market cap measured at EUR 3.239bn on 17 Sep 2026, so ~29% is roughly HKD 8.5bn or HKD 2.9/share on 2.904bn shares: the look-through as written understates NAV by ~3-4%. Marking it needs a sourced percentage. TRAP FOR WHOEVER MARKS IT: `_SUFFIX_CCY` has no `.DE` entry and `currency_of` falls through to USD, so `listed: \"PUM.DE\"` would be converted at USD->HKD 7.8447 instead of EUR->HKD 9.0081 and understate the stake by 14.8%. The look-through would still report complete: true."
+    },
+    "Z74.SI": {
+      "name": "Singapore Telecommunications (Singtel)",
+      "currency": "SGD",
+      "holdco_discount": [
+        0.1,
+        0.2
+      ],
+      "divisions": [
+        {
+          "name": "Bharti Airtel",
+          "basis": "market_stake",
+          "listed": "BHARTIARTL.NS",
+          "stake_pct": 0.269,
+          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an effective equity interest of 26.9% (31 March 2026: 27.5%) in Airtel'. Held directly via Pastel and through 49.4% of Bharti Telecom. 27.5% after the 7 Nov 2025 sale is confirmed by the SGX release; 26.9% is the MD&A figure, owner to tick against the pack. Airtel Africa sits inside Bharti's market cap, not counted separately."
+        },
+        {
+          "name": "Advanced Info Service (AIS)",
+          "basis": "market_stake",
+          "listed": "ADVANC.BK",
+          "stake_pct": 0.248,
+          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an equity interest of 24.8% (31 March 2026: 24.8%) in AIS', held via Singtel Strategic Investments. Direct only; the former Intouch route is now the Gulf line."
+        },
+        {
+          "name": "Gulf Development",
+          "basis": "market_stake",
+          "listed": "GULF.BK",
+          "stake_pct": 0.0495,
+          "source": "Singtel release 23 Jun 2026 (2.8% sold); retains 4.95%, an FVOCI investment since the 1 Apr 2025 Intouch-Gulf amalgamation (7.73% at conversion)."
+        },
+        {
+          "name": "Globe Telecom",
+          "basis": "fixed_value",
+          "amount": 84248000000.0,
+          "currency": "PHP",
+          "fiscal_year": "2026-11-25",
+          "source": "FMP carries no PSE data, so marked by hand (owner, 2026-11-26): PSE EDGE market cap PHP 180.79bn at PHP 1,278 on 25 Nov 2026 x Singtel's 46.6% economic interest (Annual Report 2026; 22.2% of voting shares, rest via Asiacom). STALE-ABLE: refresh quarterly."
+        },
+        {
+          "name": "Telkomsel",
+          "basis": "pe_range",
+          "net_profit": 450000000.0,
+          "currency": "SGD",
+          "multiple_range": [
+            8.3,
+            11.3
+          ],
+          "fiscal_year": "TTM to 30 Sep 2026",
+          "source": "Unlisted 30.1% (Annual Report 2026). Singtel's share of Telkomsel post-tax profit TTM = FY26 S$460m - H1 FY26 S$228m + H1 FY27 S$218m = S$450m (Singtel AR 2026 / H1 FY27 MD&A section 6). Cross-check: Telkomsel 2025 NI IDR 19.687tn (Telkom 6-K) x 30.1% ~ S$416m. P/E band = FMP trailing P/E of Indonesian listed peers on 2026-11-26: Indosat 8.3x, Telkom 11.3x (XL loss-making, excluded). Owner chose P/E on Singtel's share (2026-11-26)."
+        },
+        {
+          "name": "Consolidated operations (Singtel Singapore, Optus, NCS, Digital InfraCo)",
+          "basis": "ev_ebitda_range",
+          "multiple_range": [
+            7.5,
+            8.8
+          ],
+          "source": "Group EBITDA is the consolidated operations: every stake above is an associate/JV/FVOCI, equity-accounted outside EBITDA (FY26 FMP EBITDA S$3.59bn = operating income 1.12bn + D&A 2.47bn). Band = FMP EV/EBITDA on 2026-11-26 of StarHub 7.6x, Telstra 7.5x, TPG 8.8x; Spark 5.8x dropped as a NZ outlier (owner, 2026-11-26). Consolidated net debt (incl. leases, matching post-IFRS16 EBITDA) comes off the total."
+        }
+      ],
+      "discount_source": "Owner, 2026-11-26: 10-20% at the total -- minority stakes without control, Bharti partly inside Bharti Telecom (a holdco within the holdco), exit tax leakage; narrowed by Singtel's active capital recycling at market (Bharti May/Nov 2025, Gulf Jun 2026)."
     }
   }
 }

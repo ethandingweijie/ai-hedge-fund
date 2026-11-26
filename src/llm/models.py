@@ -123,6 +123,10 @@ def get_model_info(model_name: str, model_provider: str) -> LLMModel | None:
     return next((model for model in all_models if model.model_name == model_name and model.provider == model_provider), None)
 
 
+#: Alibaba models that think by default but must not on structured pipeline calls.
+_QWEN_THINKING_OFF = frozenset({"qwen3.8-flash"})
+
+
 def find_model_by_name(model_name: str) -> LLMModel | None:
     """Find a model by its name across all available models."""
     all_models = AVAILABLE_MODELS + OLLAMA_MODELS
@@ -265,12 +269,17 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         #    openai-python retry layer uses exponential backoff (~1s,
         #    2s, 4s) on 429s, which is exactly what DashScope's
         #    "limit_burst_rate" recovery window needs.
+        # qwen3.8-flash thinks by default; structured pipeline calls with
+        # thinking on timed out (Singtel PM: 3 x 120s on 2026-11-26), so the
+        # flash model runs with thinking off, as deep_research already does.
+        _extra = {"enable_thinking": False} if model_name in _QWEN_THINKING_OFF else None
         return ChatOpenAI(
             model=model_name,
             api_key=api_key,
             base_url=base_url,
             timeout=120,
             max_retries=3,
+            **({"extra_body": _extra} if _extra else {}),
         )
     elif model_provider == ModelProvider.AZURE_OPENAI:
         # Get and validate API key

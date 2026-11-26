@@ -178,7 +178,7 @@ def test_every_declared_method_produces_a_value(profile):
     """
     # `SOTP (analyst)` likewise (Wave 3): it prices only on owner-ACCEPTED
     # Gemini segment inputs and declines otherwise, by design.
-    DATA_GATED = {"SOTP (published)", "Published SOTP", "SOTP (analyst)"}
+    DATA_GATED = {"SOTP (published)", "Published SOTP", "SOTP (analyst)", "SOTP / NAV (look-through)"}
     dead = []
     for m in _declared_methods(profile):
         name = m["name"]

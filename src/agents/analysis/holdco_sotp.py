@@ -111,7 +111,8 @@ def template_for(ticker: str) -> Optional[dict]:
 #: one line would be the entire valuation.
 _SUFFIX_CCY = {".HK": "HKD", ".SI": "SGD", ".JK": "IDR", ".SS": "CNY",
                ".SZ": "CNY", ".TW": "TWD", ".T": "JPY", ".L": "GBP",
-               ".AX": "AUD", ".KS": "KRW", ".NS": "INR", ".BO": "INR"}
+               ".AX": "AUD", ".KS": "KRW", ".NS": "INR", ".BO": "INR",
+               ".BK": "THB", ".PS": "PHP"}
 
 
 def currency_of(listed: str) -> str:
