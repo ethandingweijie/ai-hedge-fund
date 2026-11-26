@@ -127,6 +127,11 @@ def get_model_info(model_name: str, model_provider: str) -> LLMModel | None:
 _QWEN_THINKING_OFF = frozenset({"qwen3.8-flash"})
 
 
+def _qwen_pipeline_thinking() -> bool:
+    """QWEN_PIPELINE_THINKING=on lets those models think on pipeline calls."""
+    return os.environ.get("QWEN_PIPELINE_THINKING", "").strip().lower() in ("1", "on", "true", "yes")
+
+
 def find_model_by_name(model_name: str) -> LLMModel | None:
     """Find a model by its name across all available models."""
     all_models = AVAILABLE_MODELS + OLLAMA_MODELS
@@ -269,15 +274,18 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         #    openai-python retry layer uses exponential backoff (~1s,
         #    2s, 4s) on 429s, which is exactly what DashScope's
         #    "limit_burst_rate" recovery window needs.
-        # qwen3.8-flash thinks by default; structured pipeline calls with
-        # thinking on timed out (Singtel PM: 3 x 120s on 2026-11-26), so the
-        # flash model runs with thinking off, as deep_research already does.
-        _extra = {"enable_thinking": False} if model_name in _QWEN_THINKING_OFF else None
+        # qwen3.8-flash thinks by default. QWEN_PIPELINE_THINKING (owner,
+        # 2026-11-26: "on") decides it: on -> the model thinks and the call gets
+        # a 300s timeout (qwen3.6-plus thinking timed the Singtel PM out at
+        # 3 x 120s); off/unset -> enable_thinking False, as deep_research does.
+        _thinking = _qwen_pipeline_thinking() and model_name in _QWEN_THINKING_OFF
+        _extra = ({"enable_thinking": False}
+                  if model_name in _QWEN_THINKING_OFF and not _thinking else None)
         return ChatOpenAI(
             model=model_name,
             api_key=api_key,
             base_url=base_url,
-            timeout=120,
+            timeout=300 if _thinking else 120,
             max_retries=3,
             **({"extra_body": _extra} if _extra else {}),
         )

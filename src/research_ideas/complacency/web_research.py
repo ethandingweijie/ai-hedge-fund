@@ -93,6 +93,35 @@ def _qwen_client():
     return OpenAI(api_key=api_key, base_url=base_url, timeout=180, max_retries=3)
 
 
+def _responses_web_search(client, user_prompt: str, system_prompt: str) -> str:
+    """One Responses API call with the web_search tool. Returns the answer with
+    a dated-source tail ("Sources: url; url") so callers see what was read, or
+    '' when nothing came back."""
+    from src.agents.industry.deep_research import (
+        _is_flash_tier, _responses_report_text, _responses_search_sources)
+    # Short dated lookups: the flash tier with thinking off (6 searches in
+    # ~30 s, probed 2026-11-26); qwen3.6-plus thinks and blew the 45 s
+    # freshness budget. QWEN_SEARCH_MODEL overrides.
+    model = os.environ.get("QWEN_SEARCH_MODEL", "").strip() or "qwen3.8-flash"
+    extra = {"enable_thinking": False} if _is_flash_tier(model) else None
+    resp = client.responses.create(
+        model=model,
+        instructions=system_prompt,
+        input=f"Today is {time.strftime('%Y-%m-%d')}. {user_prompt}",
+        tools=[{"type": "web_search"}],
+        max_tool_calls=4,
+        max_output_tokens=4096,
+        extra_body=extra,
+    )
+    text = (_responses_report_text(resp.output) or getattr(resp, "output_text", "") or "").strip()
+    if not text:
+        return ""
+    n, _queries, cits = _responses_search_sources(resp.output)
+    if cits:
+        text += f"\n\nSources ({n} searches): " + "; ".join(c["url"] for c in cits[:8])
+    return text
+
+
 def qwen_web_search(
     user_prompt: str,
     system_prompt: str = "You are a forensic equity research analyst.",
@@ -133,6 +162,18 @@ def qwen_web_search(
         # bucket empty. weight=2 because web-search calls are heavier
         # than plain chat completions (longer + more API surface).
         qwen_throttle.acquire(weight=2.0)
+        # Owner, 2026-11-26: the Responses API web_search tool first -- real
+        # searches with source URLs (the chat enable_search answer on flash
+        # with thinking off came back from model memory). Chat path = fallback.
+        from src.agents.industry.deep_research import _qwen_search_api
+        if _qwen_search_api() == "responses":
+            try:
+                text = _responses_web_search(client, user_prompt, system_prompt)
+                if text:
+                    return text[:max_chars]
+            except Exception as exc:
+                qwen_throttle.report_429_from_exception(exc)
+                logger.warning("Qwen Responses web_search failed (%s) -- chat search fallback", exc)
         try:
             stream = client.chat.completions.create(
                 model=QWEN_RESEARCH_MODEL,

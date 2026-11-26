@@ -61,6 +61,13 @@ import { useI18n } from '@/i18n';
 // archetype picker were decommissioned with the committee-free PM (Track D).
 // Rollback path is git history — there is deliberately no kill switch.
 
+// Landing-page provider toggle -> the run model sent to /analysis/run.
+type RunProvider = 'qwen' | 'anthropic';
+const RUN_PROVIDER_MODEL: Record<RunProvider, string> = {
+  qwen: 'qwen3.8-flash',
+  anthropic: 'claude-sonnet-4-6',
+};
+
 // ── Report sections — BLUF-first order ───────────────────────────────────────
 const SECTIONS = [
   { id: 'summary',       label: 'Summary'    },
@@ -245,7 +252,17 @@ export function ReportPage() {
   // ongoing run's ticker would pre-fill (and visually tie) the new-analysis
   // form to the run that is still in flight.
   const [ticker, setTicker]           = useState(isFreshRequest ? '' : (activeRun?.ticker ?? ''));
-  const [model]                       = useState('qwen3.6-plus');
+  // Provider toggle (owner, 2026-11-26): Qwen is the default; the choice runs
+  // the whole pipeline (research + every phase) on that provider. Remembered
+  // per browser; storage can be unavailable, so every access is guarded.
+  const [provider, setProvider]       = useState<RunProvider>(() => {
+    try { return localStorage.getItem('run_provider') === 'anthropic' ? 'anthropic' : 'qwen'; } catch { return 'qwen'; }
+  });
+  const model                         = RUN_PROVIDER_MODEL[provider];
+  const chooseProvider = (p: RunProvider) => {
+    setProvider(p);
+    try { localStorage.setItem('run_provider', p); } catch { /* ignore */ }
+  };
   const [suggestions, setSuggestions]     = useState<CompanySearchResult[]>([]);
   const [showSugg, setShowSugg]           = useState(false);
   const [v2Popular, setV2Popular]         = useState<PopularTicker[]>([]);
@@ -1052,6 +1069,26 @@ export function ReportPage() {
               {tr('Analyse')}
             </button>
           </form>
+
+          {/* Provider toggle — which API runs the analysis. */}
+          <div className="px-4 mt-3 flex items-center gap-2" role="radiogroup" aria-label={tr('Model provider')}>
+            <span className="text-xs text-muted-foreground">{tr('Run on')}</span>
+            <div className="inline-flex rounded-full border border-border bg-card/90 p-0.5 shadow-sm">
+              {(['qwen', 'anthropic'] as RunProvider[]).map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  role="radio"
+                  aria-checked={provider === p}
+                  onClick={() => chooseProvider(p)}
+                  className={`h-7 px-3 rounded-full text-xs font-semibold transition-colors ${
+                    provider === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {p === 'qwen' ? 'Qwen' : 'Anthropic'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Pulse — instant recall of past research on this ticker (M2 C2).
               Fires on debounced ticker input, never auto-runs the pipeline.

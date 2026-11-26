@@ -523,6 +523,107 @@ def _qwen_search_extra_body(model) -> dict:
         body["enable_thinking"] = False
     return body
 
+
+def _qwen_search_api() -> str:
+    """Which DashScope search surface Tier 1 uses: "responses" (default; the
+    web_search tool, with search count + sources) or "chat" (enable_search)."""
+    v = os.environ.get("QWEN_SEARCH_API", "responses").strip().lower()
+    return "chat" if v == "chat" else "responses"
+
+
+def _responses_search_sources(output, per_call: int = 5) -> tuple[int, list[str], list[dict]]:
+    """(n_searches, queries, citations) from a Responses API output list. The
+    citations take the Anthropic server-citation shape {url, title, cited_text},
+    deduped by URL, so the caller's registry treats both providers alike.
+    Only each search's top `per_call` sources are kept: DashScope returns ~20
+    per search (U11.SI: 200 over 9 searches, 168 registry rows), Anthropic
+    seeds only what it cited."""
+    n, queries, cits, seen = 0, [], [], set()
+    for item in output or []:
+        if getattr(item, "type", "") != "web_search_call":
+            continue
+        n += 1
+        action = getattr(item, "action", None)
+        a = action.model_dump() if hasattr(action, "model_dump") else (action or {})
+        queries.extend([q for q in (a.get("queries") or [a.get("query")]) if q])
+        for s in (a.get("sources") or [])[:per_call]:
+            url = (s or {}).get("url") or ""
+            if url and url not in seen:
+                seen.add(url)
+                cits.append({"url": url, "title": (s or {}).get("title") or "", "cited_text": ""})
+    return n, queries, cits
+
+
+def _responses_report_text(output) -> str:
+    """The report: the last assistant message (flash narrates "I'll search..."
+    in earlier messages between tool calls). Falls back to every message's text
+    when the last one is too short to be the report."""
+    msgs = []
+    for item in output or []:
+        if getattr(item, "type", "") == "message":
+            msgs.append("".join(getattr(p, "text", "") or "" for p in (getattr(item, "content", None) or [])))
+    if not msgs:
+        return ""
+    return msgs[-1] if len(msgs[-1]) >= 2000 or len(msgs) == 1 else "\n\n".join(msgs)
+
+
+def _run_qwen_responses_search(client, model_name: str, system: str, user: str,
+                               *, agent_id: str, ticker: str):
+    """Tier 1 on DashScope's Responses API with the web_search tool. Returns
+    (text, n_searches, citations) or None when the answer is empty/degenerate
+    (the caller then falls back to the chat search)."""
+    extra = {}
+    if _is_flash_tier(model_name) and os.environ.get(
+            "DEEP_RESEARCH_SEARCH_THINKING", "off").strip().lower() not in ("on", "1", "true", "yes"):
+        extra["enable_thinking"] = False
+    progress.update_status(agent_id, ticker, "Tier 1 — Qwen web_search tool (live)...")
+    stream = client.responses.create(
+        model=model_name,
+        instructions=system,
+        input=user,
+        tools=[{"type": "web_search"}],
+        max_tool_calls=MAX_SEARCHES,
+        max_output_tokens=_report_max_tokens(model_name),
+        extra_body=extra or None,
+        stream=True,
+    )
+    final, n_live, chars, last = None, 0, 0, time.time()
+    for ev in stream:
+        et = getattr(ev, "type", "")
+        if et == "response.web_search_call.searching":
+            n_live += 1
+            progress.update_status(agent_id, ticker, f"Web search {n_live}/{MAX_SEARCHES}...")
+            last = time.time()
+        elif et == "response.output_text.delta":
+            chars += len(getattr(ev, "delta", "") or "")
+            if time.time() - last > 15:
+                progress.update_status(agent_id, ticker, f"Writing report ({chars:,} chars so far)...")
+                last = time.time()
+        elif et in ("response.completed", "response.incomplete"):
+            # incomplete = max_output_tokens reached: the report so far is kept
+            # (the chat path would have truncated the same way).
+            final = getattr(ev, "response", None)
+        elif et in ("response.failed", "error"):
+            raise RuntimeError(f"Responses stream {et}: {str(getattr(ev, 'response', ev))[:200]}")
+    if final is None:
+        progress.update_status(agent_id, ticker, "Tier 1 Responses search: stream ended without a response — chat fallback")
+        return None
+    n, queries, cits = _responses_search_sources(final.output)
+    text = _strip_narration(_responses_report_text(final.output)).strip()
+    if not text or _tier1_degenerate(text):
+        progress.update_status(
+            agent_id, ticker,
+            f"Tier 1 Responses search: {len(text)} chars after {n} searches "
+            f"(status={getattr(final, 'status', '?')}) — chat fallback")
+        return None
+    progress.update_status(
+        agent_id, ticker,
+        f"Found {len(cits)} sources across {n} searches",
+        partial_data={"live_search_sources": [{"url": c["url"], "title": c["title"]} for c in cits[:40]],
+                      "live_search_queries": queries[:20]},
+    )
+    return text, n, cits
+
 # ── Narration filter ──────────────────────────────────────────────────────────
 # Patterns that identify LLM meta-commentary rather than research content.
 # These appear when the model narrates its own process instead of writing findings.
@@ -808,7 +909,10 @@ def _extract_management_guidance(report_text: str) -> dict:
         m = re.match(r'\$?([\d.]+)\s*(b|billion|bn|t|trillion|m|million|mn|k|thousand)?', s, re.IGNORECASE)
         if not m:
             return None
-        val = float(m.group(1))
+        try:                                   # "$." / "$1.2.3" from prose (S68.SI, 2026-11-26)
+            val = float(m.group(1))
+        except ValueError:
+            return None
         unit = (m.group(2) or "").lower()
         if unit in ("b", "billion", "bn"):
             return val * 1e9
@@ -5769,6 +5873,38 @@ def _research_one_ticker(
             f"sub-sections 2A through 2G fully populated."
         )
 
+        # ── Responses API web_search (owner, 2026-11-26) ─────────────────────
+        # The chat enable_search path below is one opaque call: no search count,
+        # no sources, and on qwen3.8-flash with thinking off it searched once
+        # and wrote a Singtel report a year stale (0 dated refs in 6 months).
+        # DashScope's Responses API runs the web_search TOOL the way Anthropic's
+        # server tool does: several searches, each with its queries and source
+        # URLs. Probed 2026-11-26: flash 6 searches / 30 s, found the 13 Nov
+        # H1 FY27 results. Any failure falls back to the chat path below.
+        if _qwen_search_api() == "responses":
+            try:
+                _rs = _run_qwen_responses_search(
+                    _qwen_search_client, model_name,
+                    _build_research_system(
+                        year, sector=sector, profile_name=profile_name,
+                        reit_subtype=_reit_subtype_for_prompt, native_search=True,
+                    ),
+                    human_msg_qwen + (
+                        f"\n\nToday is {today}. Lead with the most recent reported "
+                        f"period and anything announced in the last six months; "
+                        f"date every figure."
+                    ),
+                    agent_id=agent_id, ticker=ticker,
+                )
+                if _rs is not None:
+                    return _rs
+            except Exception as _rs_err:            # noqa: BLE001
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Tier 1 Responses search failed ({type(_rs_err).__name__}: "
+                    f"{str(_rs_err)[:80]}) — falling back to chat search..."
+                )
+
         progress.update_status(agent_id, ticker, "Tier 1 — Qwen native web search (live)...")
 
         # Qwen web search requires streaming mode — non-streaming returns 400.
@@ -6635,7 +6771,9 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         # dcf_calibration, segment_scenarios) to fail silently and return {}.
         # This was the hidden bug behind empty saas_metrics on DDOG/CRM/SNOW
         # live runs — extractors were 404-ing in production, not rate-limited.
-        if is_hk_ticker(t):
+        # A Claude run (landing-page toggle, 2026-11-26) researches on Anthropic
+        # in every market; only Qwen runs take the DashScope route for HK.
+        if is_hk_ticker(t) and not str(_hk_model or "").startswith("claude"):
             _key              = _hk_key
             _base_url         = _hk_base_url
             _model            = _hk_model or DEFAULT_RESEARCH_MODEL   # OpenAI-compat web search

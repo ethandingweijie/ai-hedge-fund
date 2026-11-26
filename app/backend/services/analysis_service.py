@@ -567,6 +567,22 @@ def _save_partial_web_run(
 _RESUME_MIN_AGE_S = 20 * 60
 
 
+
+def _resolve_run_models(model_name: str) -> tuple[str, str]:
+    """(pipeline model, provider) for a run started with `model_name`.
+
+    qwen* -> PIPELINE_MODEL (registry model; default qwen3.8-flash) on Alibaba.
+    Anything else -> the run model itself on Anthropic."""
+    if not str(model_name or "").lower().startswith("qwen"):
+        return model_name, "Anthropic"
+    from src.llm.models import find_model_by_name
+    _pm = os.environ.get("PIPELINE_MODEL", "").strip() or "qwen3.8-flash"
+    _info = find_model_by_name(_pm)
+    if _info is None:
+        print(f"  [model-config] PIPELINE_MODEL '{_pm}' not in the registry -- qwen3.8-flash")
+        _pm, _info = "qwen3.8-flash", find_model_by_name("qwen3.8-flash")
+    return _pm, _info.provider.value
+
 def _build_resume_bundle(
     ticker: str,
     model_name: str,
@@ -1832,31 +1848,14 @@ async def run_analysis_pipeline(
                 "realized_gains": {},
             }
 
-            # Qwen drives deep research (web search + free-text synthesis)
-            # but structured pipeline phases (macro regime, sector
-            # classification, etc.) must use Claude because Qwen's thinking
-            # mode blocks function_calling / Pydantic schema compliance.
-            _is_qwen = model_name.startswith("qwen")
-            if _is_qwen:
-                # Per-run, not process-wide: a concurrent Claude run must not
-                # inherit this user's Qwen deep-research model.
-                run_config.update_run_settings({"DEEP_RESEARCH_MODEL": model_name})
-                _pipeline_model = "claude-sonnet-4-6"
-                _provider = "Anthropic"
-            else:
-                _pipeline_model = model_name
-                _provider = "Anthropic"  # default for Claude/other models
-            # Opt-in, unset in prod: PIPELINE_MODEL moves the structured phases
-            # off Claude onto a registry model (owner, 2026-11-26: local live
-            # runs go on the owner's Qwen key, e.g. PIPELINE_MODEL=qwen3.6-plus).
-            _pm_env = os.environ.get("PIPELINE_MODEL", "").strip()
-            if _pm_env:
-                from src.llm.models import find_model_by_name
-                _pm_info = find_model_by_name(_pm_env)
-                if _pm_info is not None:
-                    _pipeline_model, _provider = _pm_env, _pm_info.provider.value
-                else:
-                    print(f"  [model-config] PIPELINE_MODEL '{_pm_env}' not in the registry -- ignored")
+            # Provider toggle (owner, 2026-11-26: the landing page picks
+            # Qwen -- default -- or Anthropic, and the choice runs the WHOLE
+            # pipeline): a qwen* run researches on that model (Responses API
+            # web_search) and runs the structured phases on PIPELINE_MODEL
+            # (default qwen3.8-flash, thinking off); a claude* run does both on
+            # Claude, research included (Anthropic web_search server tool).
+            _pipeline_model, _provider = _resolve_run_models(model_name)
+            run_config.update_run_settings({"DEEP_RESEARCH_MODEL": model_name})
 
             # R2: resume from a recent crashed run's checkpoint when eligible.
             # Compares against the user-facing model_name — that is what
