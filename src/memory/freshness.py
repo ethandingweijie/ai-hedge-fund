@@ -172,8 +172,17 @@ def _search_fresh_snippets(
     """Qwen primary, Tavily secondary. Returns '' when nothing usable.
     L5: query leads with earnings releases and product launches — the two
     event classes that most often move a thesis inside a 2–3 day window."""
+    # The company name leads the query: a bare SGX/HK code finds other issuers
+    # (prod 2026-11-26: "Z74.SI" returned Z.AI and pharma news, so Singtel's
+    # 13 Nov H1 FY27 results never reached the LATEST DEVELOPMENTS addendum).
+    try:
+        from src.agents.industry.deep_research import _fetch_company_name
+        _name = _fetch_company_name(ticker) or ticker
+    except Exception:                                   # noqa: BLE001
+        _name = ticker
+    _who = f"{_name} ({ticker})" if _name != ticker else ticker
     query = (
-        f"{ticker} earnings results or announcement, product launch or release "
+        f"{_who} earnings results or announcement, product launch or release "
         f"since {since}, then guidance M&A regulatory news"
     )
     try:

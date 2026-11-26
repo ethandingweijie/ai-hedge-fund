@@ -57,3 +57,13 @@ def test_guidance_parser_survives_a_bare_dollar_dot():
 def test_registry_seed_keeps_each_searchs_top_sources_only():
     out = [_call("q", [f"https://s/{i}" for i in range(20)])]
     assert len(dr._responses_search_sources(out)[2]) == 5
+
+
+def test_freshness_query_leads_with_the_company_name(monkeypatch):
+    import src.research_ideas.complacency.web_research as wr
+    from src.memory import freshness
+    seen = {}
+    monkeypatch.setattr(dr, "_fetch_company_name", lambda t: "Singapore Telecommunications Limited")
+    monkeypatch.setattr(wr, "qwen_web_search", lambda q, **k: seen.setdefault("q", q) and "ok")
+    freshness._search_fresh_snippets("Z74.SI", "2026-11-25", None, 5.0)
+    assert seen["q"].startswith("Singapore Telecommunications Limited (Z74.SI)")
