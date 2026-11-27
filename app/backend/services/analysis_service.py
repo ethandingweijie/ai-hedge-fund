@@ -1074,7 +1074,9 @@ def _attach_statement_forecast(payload: dict) -> None:
         if entry is None:
             real = [v for k, v in dr.items() if isinstance(v, dict) and (v.get("base") or v.get("three_statements"))]
             entry = real[0] if len(real) == 1 else {}
-        from src.tools.financial_statements import attach_forecast
+        from src.tools.financial_statements import attach_forecast, repair_statements
+        # Archived runs predate the period-key and comparability fixes (2026-11-27) and replay as stored.
+        fs = repair_statements(fs)
         data["financial_statements"] = attach_forecast(
             fs, entry.get("three_statements"), override=entry.get("estimate_override"))
     except Exception as exc:                               # noqa: BLE001

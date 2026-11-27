@@ -220,6 +220,10 @@ def data_limitations(data: dict, ticker: str) -> list[str]:
         out.append("Some figures in the research narrative differ from reported financials; reported financials "
                    "were used for every number in the valuation.")
     # valuation
+    _skip = str((data.get("dcf_skip_reasons") or {}).get(ticker) or "")
+    if _skip.startswith("fx_unavailable"):
+        out.append("The valuation was not computed: no exchange rate was available to convert the reported "
+                   "statements into the currency the shares trade in, and an unconverted figure would be wrong.")
     mu = dcf_t.get("methods_unavailable") or []
     if mu:
         names = ", ".join(_plain(str((m or {}).get("method") if isinstance(m, dict) else m)) for m in mu[:6])

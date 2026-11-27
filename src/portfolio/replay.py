@@ -49,6 +49,16 @@ _SPY, _QQQ = "SPY", "QQQ"
 _HOME_BENCHMARK = {"hk": "HSI", "sg": "STI"}
 
 
+def usd_rate(h: dict) -> float:
+    """A holding's rate to USD for cost-basis weights. A non-USD line whose rate
+    could not be resolved (fx_to_usd None) weighs nothing rather than entering
+    at 1.0 -- one-for-one would let a rupiah or baht cost basis dominate."""
+    r = h.get("fx_to_usd")
+    if isinstance(r, (int, float)) and r > 0:
+        return float(r)
+    return 1.0 if str(h.get("currency") or "USD").upper() == "USD" else 0.0
+
+
 def _home_benchmark(ticker: str) -> Optional[str]:
     """Regional benchmark key for a holding, or None for US names."""
     try:
@@ -374,7 +384,7 @@ def replay_portfolio(holdings: list[dict],
 
     evs = list(events) if events else list(EVENTS)
     basis = {h["ticker"].upper(): float(h.get("quantity") or 0) * float(h.get("avg_cost") or 0)
-             * float(h.get("fx_to_usd") or 1.0)
+             * usd_rate(h)
              for h in holdings}
     total = sum(basis.values())
     weights = {t: (v / total if total else 0.0) for t, v in basis.items()}

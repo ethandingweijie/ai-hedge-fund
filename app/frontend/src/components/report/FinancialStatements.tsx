@@ -55,6 +55,9 @@ export interface FinancialStatementsPayload {
   forecast_periods?: string[];
   forecast?:   StatementForecastMeta;
   statements?: Partial<Record<StatementId, Statement>>;
+  /** {FY: reason} — years whose cost lines the provider classified differently from the
+   *  company's own history: withheld, and no cost-line growth is computed across them. */
+  not_comparable?: Record<string, string>;
 }
 
 type StatementId = 'income' | 'balance' | 'cashflow';
@@ -134,6 +137,7 @@ export function FinancialStatements({
   const meta = statements?.forecast;
   const suite = meta?.reconciliation;
   const failed = (suite?.assertions ?? []).filter(a => !a.ok);
+  const notComparable = statements?.not_comparable ?? {};
 
   return (
     <Card className="p-0 overflow-hidden">
@@ -191,7 +195,7 @@ export function FinancialStatements({
                     i === periods.length && forecast.length ? 'border-l border-border' : '',
                   ].join(' ')}
                 >
-                  {shortPeriod(p)}
+                  {shortPeriod(p)}{notComparable[p] ? '*' : ''}
                 </th>
               ))}
             </tr>
@@ -242,6 +246,11 @@ export function FinancialStatements({
           Growth is year-on-year, derived from the reported series. Blank where
           the prior year is zero or the sign flips.
         </p>
+        {Object.entries(notComparable).map(([p, why]) => (
+          <p key={p}>
+            {shortPeriod(p)}* not comparable: {why}. Cost lines withheld; operating income is the reported figure.
+          </p>
+        ))}
         {forecast.length > 0 && (
           <p>
             {shortPeriod(forecast[0])}–{shortPeriod(forecast[forecast.length - 1])} are{' '}

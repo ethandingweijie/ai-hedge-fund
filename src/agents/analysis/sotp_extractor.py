@@ -183,9 +183,16 @@ def _deterministic_skeleton(ticker: str, end_date: str, api_key) -> dict:
         try:
             _ccy_fx = get_fx_rate(_ccy, "USD", api_key) if _ccy != "USD" else 1.0
         except Exception:
-            _ccy_fx = 1.0
+            _ccy_fx = None
         if not _ccy_fx or _ccy_fx <= 0:
-            _ccy_fx = 1.0
+            # No rate: the reported-currency facts cannot enter a USD skeleton. Reading
+            # them as USD (the old 1.0) put IDR/THB balances in at face value.
+            skeleton["reporting_currency"] = _ccy
+            skeleton["fx_unavailable"] = (f"no {_ccy}->USD exchange rate: net cash, associates and "
+                                          f"revenue from the {_ccy} statements were not used")
+            if getattr(row, "shares_outstanding", None):
+                skeleton["shares"] = float(row.shares_outstanding)   # a count, needs no FX
+            return skeleton
         cash = getattr(row, "cash_and_equivalents", None)
         sti = getattr(row, "short_term_investments", None) or 0.0
         debt = getattr(row, "total_debt", None)
@@ -928,7 +935,8 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
             },
             "_confidence": {"economics": econ.confidence, "multiples": mult.confidence},
             "_data_limitations": " | ".join(filter(None, [
-                econ.data_limitations, mult.data_limitations, _consistency])),
+                econ.data_limitations, mult.data_limitations, _consistency,
+                skeleton.get("fx_unavailable")])),
         }
         results[ticker] = assumptions
         progress.update_status(

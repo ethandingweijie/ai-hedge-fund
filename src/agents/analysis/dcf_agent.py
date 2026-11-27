@@ -66,6 +66,7 @@ from src.tools.api import (
     get_analyst_estimates,
     get_prices,
     get_fx_rate,
+    fx_rate_source,
     get_revenue_product_segmentation,
     get_price_target_consensus,
 )
@@ -13782,7 +13783,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                       f"{_venue_ccy} venue default — valuing in {_target_ccy}")
 
         if reported_currency != _target_ccy:
-            fx_rate = get_fx_rate(reported_currency, _target_ccy, api_key)
+            _fx_resolved = get_fx_rate(reported_currency, _target_ccy, api_key)
+            if not isinstance(_fx_resolved, (int, float)) or _fx_resolved <= 0:
+                # No rate at all. Valuing the reporting-currency statements against a
+                # listing-currency price is not a degraded answer, it is a wrong one
+                # (a THB or IDR figure read as SGD), so the DCF is declined outright.
+                progress.update_status(
+                    agent_id, ticker,
+                    f"FX rate unavailable for {reported_currency}→{_target_ccy} — skipping DCF")
+                state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                    f"fx_unavailable: no {reported_currency}->{_target_ccy} rate (live batch empty, "
+                    f"no fallback); statements cannot be compared with the {_target_ccy} price")
+                dcf_range[ticker] = {}
+                continue
+            fx_rate = float(_fx_resolved)
             if fx_rate != 1.0 and fx_rate > 0:
                 for row in series:
                     for field in _FX_MONETARY:
@@ -13798,6 +13812,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 fx_note = (
                     f"Financials reported in {reported_currency}; "
                     f"converted to {_target_ccy} at {fx_rate:.6f} {_ccy_label}"
+                    + (" (static fallback rate -- live FX unavailable)"
+                       if fx_rate_source(reported_currency, _target_ccy) == "fallback" else "")
                 )
                 progress.update_status(
                     agent_id, ticker,
@@ -14374,11 +14390,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             f"Gemini inputs, each with a cited multiple range (midpoint used)")
             except Exception:                              # noqa: BLE001
                 _ticker_sotp = None
-        if _ticker_sotp:
-            if not _ticker_sotp.get("fx_usd_to_reporting"):
+        if _ticker_sotp and not _ticker_sotp.get("fx_usd_to_reporting"):
+            _usd_fx = get_fx_rate("USD", _target_ccy, api_key)
+            if _usd_fx and _usd_fx > 0:
                 _ticker_sotp = dict(_ticker_sotp)
-                _usd_fx = get_fx_rate("USD", _target_ccy, api_key)
-                _ticker_sotp["fx_usd_to_reporting"] = _usd_fx if _usd_fx and _usd_fx > 0 else 1.0
+                _ticker_sotp["fx_usd_to_reporting"] = _usd_fx
+            else:
+                # The analyst SOTP is in USD; without a USD->listing rate its per-share figure
+                # would be read as the listing currency (the old 1.0). The leg is dropped.
+                ticker_forward_flags.append(
+                    f"SOTP (analyst) excluded: no USD->{_target_ccy} exchange rate was available "
+                    f"to convert its USD segment values")
+                _ticker_sotp = None
+        if _ticker_sotp:
             _ticker_sotp, _net_cash_flag = _refresh_sotp_net_cash(
                 _ticker_sotp, net_debt)
             if _net_cash_flag:

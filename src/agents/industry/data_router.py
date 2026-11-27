@@ -215,7 +215,7 @@ def run_data_router(state: AgentState) -> AgentState:
     # issues one set of calls, so adding these costs no extra round trip —
     # they ride along with the fetch that is already happening.
     from src.tools.financial_statements import (
-        STATEMENT_LINE_ITEMS, build_financial_statements,
+        STATEMENT_LINE_ITEMS, build_financial_statements, _fy_key,
     )
     all_fields.update(STATEMENT_LINE_ITEMS)
 
@@ -309,10 +309,15 @@ def run_data_router(state: AgentState) -> AgentState:
                 if _val is not None:
                     _stmt_rows.setdefault(f"FY{_ym.group(1)}", {})[_field] = _val
         if isinstance(_raw_fin, dict):
+            # One column per fiscal year: "FY2022 (Ending 2022-06-30)" from the
+            # research echo is FY2022, not a second period beside it (S68.SI
+            # rendered every year twice). FMP's rows above win field by field.
             for _fy, _fy_dict in _raw_fin.items():
-                if isinstance(_fy_dict, dict):
+                _fyk = _fy_key(_fy)
+                if _fyk and isinstance(_fy_dict, dict):
                     for _k, _v in _fy_dict.items():
-                        _stmt_rows.setdefault(_fy, {}).setdefault(_k, _v)
+                        if _stmt_rows.setdefault(_fyk, {}).get(_k) is None:
+                            _stmt_rows[_fyk][_k] = _v
         if _stmt_rows:
             state["data"]["financial_statements"] = build_financial_statements(
                 _stmt_rows,

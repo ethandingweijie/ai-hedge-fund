@@ -133,14 +133,28 @@ def _market_value(listed: str, end_date: str) -> Optional[float]:
 
 
 def _fx(from_ccy: str, to_ccy: str) -> Optional[float]:
+    """Rate from_ccy -> to_ccy, or None when it cannot be resolved.
+
+    None is a refusal, never a 1.0: the caller excludes the part. A pair that
+    resolved only from the static fallback table is recorded in
+    _FX_FALLBACK_SEEN so the result can say its conversion is not live.
+    """
     if not from_ccy or not to_ccy or from_ccy == to_ccy:
         return 1.0
     try:
-        from src.tools.api import get_fx_rate
+        from src.tools.api import fx_rate_source, get_fx_rate
         rate = get_fx_rate(from_ccy, to_ccy)
-        return float(rate) if rate else None
+        if not isinstance(rate, (int, float)) or rate <= 0:
+            return None
+        if fx_rate_source(from_ccy, to_ccy) == "fallback":
+            _FX_FALLBACK_SEEN.add(f"{from_ccy.upper()}->{to_ccy.upper()}")
+        return float(rate)
     except Exception:                                      # noqa: BLE001
         return None
+
+
+#: Pairs converted at a static fallback rate during the current look-through.
+_FX_FALLBACK_SEEN: set[str] = set()
 
 
 def _ebitda_of(ticker: str, end_date: str) -> Optional[tuple[float, str]]:
@@ -489,6 +503,7 @@ def look_through_value(ticker: str, end_date: str, *,
     tpl = template_for(ticker)
     if not tpl:
         return None
+    _FX_FALLBACK_SEEN.clear()
     ebitda_by_division = ebitda_by_division or {}
     ccy = tpl.get("currency") or currency_of(ticker)
     divisions, toggles = _apply_toggles(tpl, scenario_toggles)
@@ -512,7 +527,7 @@ def look_through_value(ticker: str, end_date: str, *,
             rate = _fx(src_ccy, ccy)
             if rate is None:
                 skipped.append({"division": name,
-                                "reason": f"no {src_ccy}->{ccy} rate"})
+                                "reason": f"no {src_ccy}->{ccy} exchange rate -- division excluded"})
                 continue
             # A discount can belong to a SINGLE STAKE rather than to the
             # group. Kingboard's haircut is on the Laminates holding, because
@@ -541,8 +556,14 @@ def look_through_value(ticker: str, end_date: str, *,
                      "revenue_multiple"):
             _r = _stated_division_value(div, ccy)
             if _r is None:
-                skipped.append({"division": name,
-                                "reason": f"{basis}: figure missing or unusable"})
+                _src = (div.get("currency") or ccy or "USD").upper()
+                if _fx(_src, ccy) is None:
+                    # Excluded, not converted at 1.0: a PHP figure read as SGD is 60x too big.
+                    skipped.append({"division": name,
+                                    "reason": f"no {_src}->{ccy} exchange rate -- division excluded"})
+                else:
+                    skipped.append({"division": name,
+                                    "reason": f"{basis}: figure missing or unusable"})
                 continue
             _val, _detail = _r
             _d = div.get("discount_pct")
@@ -605,6 +626,8 @@ def look_through_value(ticker: str, end_date: str, *,
         # A SOTP missing a division is not conservative, it is wrong. The
         # consumer must be able to see that before using the number.
         "complete": not skipped,
+        # Conversions that used the static fallback table (live FX unavailable).
+        "fx_fallback_pairs": sorted(_FX_FALLBACK_SEEN),
     }
 
 

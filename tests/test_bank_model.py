@@ -178,8 +178,10 @@ def test_the_model_tab_and_the_pdf_print_the_bank_layout():
     rr = [c.row for c in is_ws["A"] if c.value == "Net interest income"]
     f0 = next(c for c in range(3, 20) if str(is_ws.cell(row=4, column=c).value).startswith("=EDATE("))
     assert rr and str(is_ws.cell(row=rr[-1], column=f0).value).startswith("='Model'!")
-    rev_r = [c.row for c in is_ws["A"] if c.value == "Revenue"][0]
-    assert str(is_ws.cell(row=rev_r, column=f0).value).startswith("='Model'!")                     # total income on the revenue row
+    # 2026-11-27: the gross line is labelled as such; total income has its own row and carries the model link
+    rev_r = [c.row for c in is_ws["A"] if c.value == "Total income (NII + non-interest income)"][0]
+    assert str(is_ws.cell(row=rev_r, column=f0).value).startswith("='Model'!")
+    assert any(str(c.value).startswith("Gross revenue") for c in is_ws["A"])
     bs_ws = wb["BS"]
     rr = [c.row for c in bs_ws["A"] if c.value == "Shareholders' equity"]
     f0b = next(c for c in range(3, 20) if str(bs_ws.cell(row=4, column=c).value).startswith("=EDATE("))

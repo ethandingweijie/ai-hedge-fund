@@ -23,6 +23,10 @@ from typing import Optional
 #:   "x"    a ratio shown as a multiple            source = (numerator field, denominator field)
 _R = {
     "revenue":  ("Revenue", "bn", "revenue"),
+    # A bank's street revenue: NII + non-interest income, the derivation the web statements print
+    # (dcf_agent._bank_total_income). FMP's `revenue` is GROSS interest income plus fees -- UOB read
+    # S$26.5bn here against S$14.8bn total income on the web (owner request 2026-11-27).
+    "total_income": ("Total income (NII + non-interest income)", "bn", "_bank_total_income"),
     "ni":       ("Net income", "bn", "net_income"),
     "ebitda":   ("EBITDA", "bn", "ebitda"),
     "fcf":      ("FCF", "bn", "free_cash_flow"),
@@ -45,7 +49,7 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Regional Bank",
                      "Super-Regional Bank", "EM Bank", "Bank / Lending Institution",
                      "Investment Bank", "Mortgage/GSE", "Card Issuer & Consumer Lender"],
-        "rows": ["revenue", "ni", "equity", "bvps", "dps", "roe"],
+        "rows": ["total_income", "ni", "equity", "bvps", "dps", "roe"],
         "exposition": ["GGM inputs (RoTE, CoE, g, target P/B) against spot P/TBV", "residual-income fade",
                        "excess capital", "implied-CoE flag when it fires"],
         "skeleton": ["rating and 12-month TSR", "book multiple against the GGM", "NII and credit cycle",
@@ -192,6 +196,12 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3,
     are in the valuation currency; pass 1 / FX to put them back in the raw records' currency)."""
     if not isinstance(raw_financials, dict):
         return [], []
+    # One record per fiscal year: "FY2025 (Ending 2025-06-30)" is FY2025 (S68.SI carried both spellings).
+    if any(isinstance(v, dict) for v in raw_financials.values()):
+        from src.tools.financial_statements import normalise_period_keys
+        _norm = normalise_period_keys({k: v for k, v in raw_financials.items() if isinstance(v, dict)})
+        if _norm:
+            raw_financials = _norm
     fy_keys = sorted(k for k, v in raw_financials.items() if isinstance(v, dict))[-years:]
     if not fy_keys:
         return [], []
@@ -200,7 +210,17 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3,
         if not field:
             return None
         row = raw_financials.get(fy) or {}
+        if field == "_bank_total_income":
+            try:
+                from src.agents.analysis.dcf_agent import _bank_total_income
+                return _num(_bank_total_income(row))
+            except Exception:                              # noqa: BLE001
+                return None
         v = _num(row.get(field))
+        # The raw records carry FMP's `shareholders_equity`; `total_equity` exists only where an
+        # overlay wrote it, so a bank with S$48.5bn of equity read "n/a" for equity and ROE.
+        if v is None and field == "total_equity":
+            v = _num(row.get("shareholders_equity"))
         # Owner, 2026-10-04 (plan 1A.6): the raw records carry operating income, not "ebit";
         # the EBIT margin read n/a on every Summary.
         if v is None and field == "ebit":
@@ -221,6 +241,8 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3,
             elif kind == "ps":
                 field, num_f, den_f = source
                 v = get(fy, field)
+                if v == 0 and num_f and den_f:
+                    v = None                                # FMP zero-fills per-share lines: derive instead
                 if v is None and field == "dividends_per_share":
                     _f = _num((fb.get(fy) or {}).get(field))
                     v = (_f * float(fallback_scale)) if _f is not None else None

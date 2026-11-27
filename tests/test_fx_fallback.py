@@ -53,8 +53,11 @@ def test_same_currency_short_circuits(fmp_down):
     assert api.get_fx_rate("HKD", "HKD") == 1.0
 
 
-def test_unknown_pair_still_returns_one(fmp_down):
-    assert api.get_fx_rate("XYZ", "ABC") == 1.0
+def test_unknown_pair_returns_none_never_one(fmp_down):
+    # 2026-11-27: a silent 1.0 valued Singtel's THB/IDR stakes as SGD (SOTP 4.46 -> 22.85).
+    assert api.get_fx_rate("XYZ", "ABC") is None
+    d = api.get_fx_rate_detail("XYZ", "ABC")
+    assert d["rate"] is None and d["source"] == "unavailable"
 
 
 def test_live_batch_quote_beats_fallback(monkeypatch):

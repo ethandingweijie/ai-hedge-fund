@@ -2739,6 +2739,48 @@ async def get_news(ticker: str, limit: int = 8):
 
 # ── GET /analysis/financials/{ticker} ────────────────────────────────────────
 
+def _sg_financial_items(rows: list, period: str, industry: Optional[str] = None) -> list[dict]:
+    """Chart items from engine line items, oldest first. Pure (no I/O) so it can be tested.
+
+    * operating income is the REPORTED line, as on the report's statements and in the workbook;
+    * a year whose cost classification breaks from its own history is marked `not_comparable`
+      (src/tools/financial_statements.noncomparable_flags, the test the other two surfaces run);
+    * a bank's revenue is total income (NII + non-interest income), never FMP's gross revenue.
+    """
+    from datetime import datetime as _dt
+    from src.tools.financial_statements import noncomparable_flags
+
+    recs = []
+    for li in rows:
+        d = li.model_dump() if hasattr(li, "model_dump") else dict(li)
+        rp = str(d.get("report_period") or d.get("date") or "")[:10]
+        recs.append({"_date": rp, **d})
+    recs.sort(key=lambda x: x["_date"])
+    is_bank = "bank" in str(industry or "").lower()
+    flags = [None] * len(recs) if (is_bank or period == "quarter") else noncomparable_flags(recs)
+    items = []
+    for rec, why in zip(recs, flags):
+        rp = rec["_date"]
+        if period == "quarter":
+            try:
+                dd = _dt.strptime(rp, "%Y-%m-%d")
+                label = f"Q{(dd.month - 1) // 3 + 1} {dd.year}"
+            except ValueError:
+                label = rp
+        else:
+            label = f"FY{rp[:4]}" if rp else "—"
+        revenue = rec.get("revenue")
+        if is_bank:
+            from src.agents.analysis.dcf_agent import _bank_total_income
+            revenue = _bank_total_income(rec)
+        item = {"date": rp, "period_label": label, "revenue": revenue,
+                "net_income": rec.get("net_income"), "operating_income": rec.get("operating_income")}
+        if why:
+            item["not_comparable"] = why
+        items.append(item)
+    return items
+
+
 @router.get("/financials/{ticker}")
 async def get_financials(ticker: str, period: str = "annual"):
     """
@@ -2816,33 +2858,28 @@ async def get_financials(ticker: str, period: str = "annual"):
         _sg = False
 
     if _sg:
+        # Owner request 2026-11-27 (Singtel FY2025): the chart read yfinance directly (operating income 1,146.6m)
+        # while the report's statements and the Excel export read FMP through search_line_items (2,366.2m). One
+        # source for all three: the engine's own line-item path (FMP first, yfinance only when FMP serves
+        # nothing), the same comparability test, and a bank's total income rather than its gross revenue.
         try:
-            from src.tools.sg.line_items import search_sg_line_items
+            from src.tools.api import get_company_industry, search_line_items
             period_arg = "quarterly" if period == "quarter" else "annual"
             limit = 20 if period == "quarter" else 5
             rows = await asyncio.to_thread(
-                search_sg_line_items,
+                search_line_items,
                 sym,
-                ["revenue", "operating_income", "net_income"],
-                period=period_arg,
-                limit=limit,
+                ["revenue", "operating_income", "net_income", "cost_of_revenue", "gross_profit",
+                 "interest_income", "interest_expense"],
+                _dt.now().strftime("%Y-%m-%d"),
+                period_arg,
+                limit,
             )
+            industry = await asyncio.to_thread(get_company_industry, sym)
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"yfinance financials error for {sym}: {exc}")
-
-        items = []
-        for row in rows:
-            date_str = row.get("date") or ""
-            period_label = row.get("period_label") or f"FY{date_str[:4]}"
-            items.append({
-                "date":             date_str,
-                "period_label":     period_label,
-                "revenue":          row.get("revenue"),
-                "net_income":       row.get("net_income"),
-                "operating_income": row.get("operating_income"),
-            })
-        items.sort(key=lambda x: x["date"])
-        return {"ticker": sym, "period_type": period, "items": items}
+            raise HTTPException(status_code=500, detail=f"financials error for {sym}: {exc}")
+        return {"ticker": sym, "period_type": period,
+                "items": _sg_financial_items(rows or [], period, industry)}
 
     # ── US / non-HK / non-SG path (FMP) ───────────────────────────────────────
     try:

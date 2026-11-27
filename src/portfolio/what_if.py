@@ -43,6 +43,7 @@ from typing import Callable, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from src.portfolio.event_library import EventSpec, get_event
+from src.portfolio.replay import usd_rate as _usd_rate
 
 logger = logging.getLogger(__name__)
 
@@ -445,7 +446,7 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
             "est_impact_pct": None, "anchor_pct": None,
             "weight_basis": round(float(h.get("quantity") or 0)
                                   * float(h.get("avg_cost") or 0)
-                                  * float(h.get("fx_to_usd") or 1.0), 2),
+                                  * _usd_rate(h), 2),
         }
 
         cls = classify_product(tkr, h.get("notes"))

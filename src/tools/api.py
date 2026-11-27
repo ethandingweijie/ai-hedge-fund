@@ -2606,6 +2606,16 @@ _FX_FALLBACK_RATES: dict[str, float] = {
     "NOKUSD": 0.090,    # Norwegian krone
     "ILSUSD": 0.267,    # Israeli shekel (ILS)
     "MXNUSD": 0.0513777,    # Mexican peso
+    # Added 2026-11-27 (FMP batch midpoints that day). Without them a THB/PHP/
+    # MYR/IDR/VND/ZAR pair fell through to a silent 1.0 whenever the batch was
+    # empty: Singtel's look-through took the AIS (THB) and Telkomsel (IDR)
+    # stakes unconverted and its SOTP went from S$4.46 to S$22.85.
+    "THBUSD": 0.0293858,   # Thai baht
+    "PHPUSD": 0.0157023,   # Philippine peso
+    "MYRUSD": 0.24307,     # Malaysian ringgit
+    "IDRUSD": 0.00005424,  # Indonesian rupiah
+    "VNDUSD": 0.000038675, # Vietnamese dong
+    "ZARUSD": 0.0573326,   # South African rand
 }
 
 
@@ -2639,13 +2649,42 @@ def _get_fx_batch(api_key: str | None) -> dict[str, dict]:
     return _FX_BATCH_CACHE
 
 
+#: pair -> source of the most recent resolution ("live" / "fallback" / ...). Lets a caller that took
+#: its rate through the patchable get_fx_rate say whether it was a fallback, with no second lookup.
+_FX_LAST_SOURCE: dict[str, str] = {}
+
+
+def fx_rate_source(from_currency: str, to_currency: str = "USD") -> str | None:
+    """How the last get_fx_rate / get_fx_rate_detail for this pair was resolved, or None."""
+    return _FX_LAST_SOURCE.get(f"{(from_currency or 'USD').upper().strip()}{(to_currency or 'USD').upper().strip()}")
+
+
 def get_fx_rate(
     from_currency: str,
     to_currency: str = "USD",
     api_key: str = None,
-) -> float:
+) -> float | None:
+    """Rate converting 1 unit of *from_currency* into *to_currency*, or None.
+
+    None means the pair could not be resolved from the live batch or the
+    fallback table. It is never 1.0 unless the two currencies are equal: a
+    silent 1.0 valued Singtel's THB and IDR stakes as if they were SGD.
+    Callers must treat None as "cannot convert" and drop the figure.
+    Use get_fx_rate_detail() to learn whether the rate is live or fallback.
     """
-    Return the FX rate to convert 1 unit of *from_currency* into *to_currency*.
+    return get_fx_rate_detail(from_currency, to_currency, api_key)["rate"]
+
+
+def get_fx_rate_detail(
+    from_currency: str,
+    to_currency: str = "USD",
+    api_key: str = None,
+) -> dict:
+    """{"rate": float | None, "source": str, "pair": str, "fallback": bool}.
+
+    source is one of "identity", "live", "fallback", "unavailable".
+    `fallback` is True when the rate came from the static table (stale by
+    construction) -- callers that publish a figure should say so.
 
     Priority:
         1. FMP /stable/batch-forex-quotes (live; full ~1500-pair batch cached
@@ -2654,7 +2693,7 @@ def get_fx_rate(
         2. _FX_FALLBACK_RATES hardcoded table (2026-11-25 midpoints): direct
            pair, then inverse of a table pair, then USD cross of two table
            pairs (e.g. CNYHKD = CNYUSD/HKDUSD).
-        3. 1.0 with a warning (unknown pair — caller should flag in output)
+        3. None (unknown pair -- caller must drop the figure, never use 1.0)
 
     Used by dcf_agent.py to normalise ADR financials reported in non-USD
     currencies (e.g. Alibaba/BABA reports in CNY, BIDU in CNY, etc.) before
@@ -2663,10 +2702,15 @@ def get_fx_rate(
     from_currency = (from_currency or "USD").upper().strip()
     to_currency   = (to_currency   or "USD").upper().strip()
 
-    if from_currency == to_currency:
-        return 1.0
-
     pair = f"{from_currency}{to_currency}"
+
+    def _res(rate, source):
+        _FX_LAST_SOURCE[pair] = source
+        return {"rate": rate, "source": source, "pair": pair,
+                "fallback": source == "fallback"}
+
+    if from_currency == to_currency:
+        return _res(1.0, "identity")
 
     # ── 1. Try FMP live forex quote (direct pair via cached batch) ────────
     def _fetch_fx_quote(symbol: str) -> float | None:
@@ -2683,7 +2727,7 @@ def get_fx_rate(
     price = _fetch_fx_quote(pair)
     if price:
         print(f"  [FX] {pair} — live rate {price:.6f} (FMP batch direct)")
-        return price
+        return _res(price, "live")
 
     # ── 1b. Try inverse pair (e.g. USDCNY when CNYUSD not available) ─────
     # FMP offers many pairs only in one direction (e.g. USDCNY but not CNYUSD).
@@ -2692,7 +2736,7 @@ def get_fx_rate(
     if inv_price and inv_price > 0:
         rate = 1.0 / inv_price
         print(f"  [FX] {pair} — live rate {rate:.6f} (FMP batch inverse of {inverse_pair}={inv_price:.4f})")
-        return rate
+        return _res(rate, "live")
 
     # ── 1c. Live USD cross (e.g. PHPSGD = PHPUSD x USDSGD) ───────────────
     # FMP quotes many emerging currencies only against USD. Without the cross,
@@ -2709,20 +2753,20 @@ def get_fx_rate(
         if f_live and t_live:
             rate = f_live / t_live
             print(f"  [FX] {pair} — live rate {rate:.6f} (FMP batch USD cross)")
-            return rate
+            return _res(rate, "live")
 
     # ── 2. Hardcoded fallback ─────────────────────────────────────────────
     rate = _FX_FALLBACK_RATES.get(pair)
     if rate:
-        print(f"  [FX] {pair} — fallback rate {rate:.6f} (FMP unavailable; Mar 2026 midpoint)")
-        return rate
+        print(f"  [FX] {pair} — fallback rate {rate:.6f} (FMP unavailable; static table midpoint)")
+        return _res(rate, "fallback")
 
     # ── 2b. Inverse of a fallback pair (e.g. USDHKD = 1/HKDUSD) ──────────
     inv_rate = _FX_FALLBACK_RATES.get(inverse_pair)
     if inv_rate:
         rate = 1.0 / inv_rate
         print(f"  [FX] {pair} — fallback rate {rate:.6f} (inverse of {inverse_pair}={inv_rate:.4f})")
-        return rate
+        return _res(rate, "fallback")
 
     # ── 2c. USD cross from two fallback pairs (e.g. CNYHKD = CNYUSD/HKDUSD) ──
     # Without this, non-USD crosses like CNYHKD fall through to 1.0 whenever
@@ -2733,11 +2777,11 @@ def get_fx_rate(
         rate = f_usd / t_usd
         print(f"  [FX] {pair} — fallback rate {rate:.6f} (USD cross: "
               f"{from_currency}USD={f_usd:.4f} / {to_currency}USD={t_usd:.4f})")
-        return rate
+        return _res(rate, "fallback")
 
     # ── 3. Unknown pair ───────────────────────────────────────────────────
-    print(f"  [FX] {pair} — unknown pair, returning 1.0 (no conversion applied)")
-    return 1.0
+    print(f"  [FX] {pair} — unknown pair, no rate (caller must not convert at 1.0)")
+    return _res(None, "unavailable")
 
 
 # ── Company industry (for valuation-profile routing) ────────────────────────

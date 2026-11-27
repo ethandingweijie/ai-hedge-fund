@@ -257,12 +257,14 @@ def currency_info(tickers: list[str]) -> dict[str, dict]:
     """{ticker: {currency, fx_to_usd}} — the currency each line is QUOTED
     in (FMP profile, venue default fallback) and the rate to USD.
 
-    Never raises: a line whose currency cannot be resolved is reported in
-    USD at 1.0, which is right for US names.
+    Never raises: a line whose listing currency cannot be resolved is
+    treated as USD, which is right for US names. A known non-USD currency
+    with no rate gets fx_to_usd=None -- never 1.0, which would add HK$ or
+    rupiah to US$ one-for-one -- and drops out of the USD totals.
     """
     from src.tools.api import get_fx_rate, get_listing_currency
     out: dict[str, dict] = {}
-    rates: dict[str, float] = {"USD": 1.0}
+    rates: dict[str, Optional[float]] = {"USD": 1.0}
     for t in tickers:
         try:
             ccy = (get_listing_currency(t) or "USD").upper()
@@ -270,9 +272,10 @@ def currency_info(tickers: list[str]) -> dict[str, dict]:
             ccy = "USD"
         if ccy not in rates:
             try:
-                rates[ccy] = float(get_fx_rate(ccy, "USD"))
+                _r = get_fx_rate(ccy, "USD")
+                rates[ccy] = float(_r) if _r and _r > 0 else None
             except Exception:
-                rates[ccy] = 1.0
+                rates[ccy] = None
         out[t] = {"currency": ccy, "fx_to_usd": rates[ccy]}
     return out
 
@@ -308,7 +311,11 @@ def build_dashboard(holdings: list[dict],
         sig = signals.get(h["ticker"], {})
         cinfo = fx.get(h["ticker"]) or {}
         ccy = cinfo.get("currency") or "USD"
-        rate = float(cinfo.get("fx_to_usd") or 1.0)
+        _raw_rate = cinfo.get("fx_to_usd")
+        if _raw_rate is None and ccy != "USD" and "fx_to_usd" in cinfo:
+            rate = None                     # no rate: shown in its own currency, out of the USD totals
+        else:
+            rate = float(_raw_rate or 1.0)
         qty = h["quantity"] or 0.0
         cost = h["avg_cost"] or 0.0
         mv = qty * price if price is not None else None
@@ -322,14 +329,17 @@ def build_dashboard(holdings: list[dict],
             "market_value":   mv,
             "cost_basis":     cost_basis,
             "unrealized_pnl": pnl,
-            "market_value_usd":   mv * rate if mv is not None else None,
-            "cost_basis_usd":     cost_basis * rate,
-            "unrealized_pnl_usd": pnl * rate if pnl is not None else None,
+            "fx_unavailable":     rate is None,
+            "market_value_usd":   mv * rate if (mv is not None and rate is not None) else None,
+            "cost_basis_usd":     cost_basis * rate if rate is not None else None,
+            "unrealized_pnl_usd": pnl * rate if (pnl is not None and rate is not None) else None,
             "pnl_pct":        (pnl / cost_basis * 100) if (pnl is not None and cost_basis) else None,
             "iv_upside_pct":  ((sig.get("dcf_base_iv") / price - 1) * 100)
                               if (sig.get("dcf_base_iv") and price) else None,
             "signals":        sig or None,
         })
+        if rate is None:
+            continue
         if mv is not None:
             total_mv += mv * rate
             total_cost_priced += cost_basis * rate

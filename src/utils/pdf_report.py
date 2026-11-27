@@ -611,7 +611,13 @@ def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5,
     if not raw_financials or not isinstance(raw_financials, dict):
         return None
 
-    # Accept keys like "FY2020", "FY2021", "2020", "2021", etc.
+    # Accept keys like "FY2020", "FY2021", "2020", "2021", etc. -- one column per fiscal year:
+    # "FY2025 (Ending 2025-06-30)" merges into FY2025 rather than printing beside it (S68.SI).
+    _ccy_raw = raw_financials.get("currency")
+    from src.tools.financial_statements import normalise_period_keys
+    _norm = normalise_period_keys({k: v for k, v in raw_financials.items() if isinstance(v, dict)})
+    if _norm:
+        raw_financials = {**_norm, **({"currency": _ccy_raw} if _ccy_raw else {})}
     fy_keys = sorted(k for k in raw_financials if isinstance(raw_financials.get(k), dict))
     if not fy_keys:
         return None

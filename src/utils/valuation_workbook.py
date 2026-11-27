@@ -1558,6 +1558,19 @@ class _Book:
                     "other_income_expense": "intinc", "pretax_income": "pretax", "income_tax_expense": "tax", "net_income": "ni", "shares_outstanding": "shares"}
                    if _op else {"revenue": "total_income", "operating_expense": "operating_expenses", "pretax_income": "pretax", "income_tax_expense": "tax",
                                 "net_income": "net_income", "shares_outstanding": "shares"})
+        # Owner request 2026-11-27 (UOB): a bank's FMP `revenue` is GROSS interest income plus fees (S$26.1bn) while
+        # the web, the Summary key metrics and the bank model all carry total income (NII + non-interest income,
+        # S$14.8bn). The gross line stays -- the reported lines tie out on it -- but is labelled for what it is, and
+        # total income is printed beneath it with the model's forecast linked to IT, not to the gross line.
+        try:
+            from src.data.report_families import report_family_for
+            _bank_is = self.model_kind == "bank" or (self.model_kind is None and report_family_for(self.dr.get("profile")) == "Banks")
+        except Exception:                                  # noqa: BLE001
+            _bank_is = self.model_kind == "bank"
+        if _bank_is:
+            from src.agents.analysis.dcf_agent import _bank_total_income
+            rows = [dict(x, _bank_total_income=_bank_total_income(x)) for x in rows]
+            _is_map = {**{k: v for k, v in _is_map.items() if k != "revenue"}, "_bank_total_income": "total_income"}
 
         def _link(rr: int, key: str) -> None:
             mk = _is_map.get(key)
@@ -1593,16 +1606,40 @@ class _Book:
             r += 1
             return r - 1
 
-        rev = inrow("revenue", "Revenue")
-        g = frow("YoY growth (%)", lambda L: f"=IFERROR({L}{rev}/{get_column_letter(max(c0, _col(L) - 1))}{rev}-1,0)"
+        rev = inrow("revenue", "Gross revenue (interest income + non-interest income, FMP)" if _bank_is else "Revenue")
+        _grow = rev
+        if _bank_is:
+            _grow = inrow("_bank_total_income", "Total income (NII + non-interest income)", 1.0, 1)
+        g = frow("YoY growth (%)", lambda L: f"=IFERROR({L}{_grow}/{get_column_letter(max(c0, _col(L) - 1))}{_grow}-1,0)"
                  if _col(L) > c0 else '=""', PCT)
         cogs = inrow("cost_of_revenue", "Cost of goods sold", -1.0)
         gp = frow("Gross profit", lambda L: f"={L}{rev}+{L}{cogs}", bold=True)
-        frow("Gross margin (%)", lambda L: f"=IFERROR({L}{gp}/{L}{rev},0)", PCT)
+        gpm = frow("Gross margin (%)", lambda L: f"=IFERROR({L}{gp}/{L}{rev},0)", PCT)
         sga = inrow("selling_general_admin", "SG&A", -1.0, 1)
         rnd = inrow("research_and_development", "Research & development", -1.0, 1)
         opx = inrow("operating_expense", "Total operating expenses (reported)", -1.0)
         ebit = frow("EBIT (operating income)", lambda L: f"={L}{gp}+{L}{opx}", bold=True, link=("ebit" if _op else "pre_provision_profit"))
+        # Owner request 2026-11-27 (Singtel FY2025): a year whose cost classification breaks from its own history
+        # (FMP swapped COGS and opex) is not comparable. Its cost lines are withheld and EBIT is the REPORTED
+        # operating income, the figure the web statements print -- rebuilding it from the swapped lines gave
+        # -1,821.9m against a reported 2,366.2m. Same test as src/tools/financial_statements.noncomparable_flags.
+        try:
+            from src.tools.financial_statements import noncomparable_flags
+            _nc = noncomparable_flags(rows) if self.model_kind not in ("bank", "insurer") else [None] * len(rows)
+        except Exception:                                  # noqa: BLE001
+            _nc = [None] * len(rows)
+        for i, why in enumerate(_nc):
+            if not why:
+                continue
+            c = c0 + i
+            for rr in (cogs, opx):
+                sh.ws.cell(row=rr, column=c).value = None      # put(None) would leave the swapped figure
+            sh.put(gp, c, "n/c")
+            sh.put(gpm, c, "n/c")
+            _oi = _num(rows[i].get("operating_income"))
+            sh.put(ebit, c, None if _oi is None else _oi / 1e6, MIL, bold=True)
+            self.stmt_checks.append(("Information", "IS", f"FY{str(rows[i].get('period') or '')[:4]}: not comparable -- {why}; "
+                                     "cost lines withheld, EBIT is the reported operating income", _ref("IS", ebit, c)))
         if _fc_cols and _op:
             # the reported total includes D&A; in the forecast it is EBIT less gross profit, so the row ties to the model's EBIT
             for c in _fc_cols:

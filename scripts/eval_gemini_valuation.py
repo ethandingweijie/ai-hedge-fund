@@ -115,7 +115,7 @@ def anchors(ticker: str) -> dict:
     return {
         "price": price, "shares": (mcap / price) if price and mcap else None,
         "reported_currency": ccy,
-        "revenue_fwd_usd": (fwd.get("revenueAvg") or 0) * to_usd or None,
+        "revenue_fwd_usd": (fwd.get("revenueAvg") or 0) * (to_usd or 0) or None,
         "revenue_fwd_period": fwd.get("date"),
         "analysts": fwd.get("numAnalystsRevenue"),
         "fx_usd_to_listing": 1.0 if listing == "USD" else get_fx_rate("USD", listing),
