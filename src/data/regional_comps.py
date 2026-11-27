@@ -353,6 +353,7 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
 BASKET_FLOORS: dict[str, int] = {
     "Money Center Bank (EU)": 4,                    # StanChart, BNP, Barclays, Citi, DBS (owner, 2026-11-27)
     "Payment Networks: Global": 3,                  # display only (owner, 2026-11-27)
+    "Hyper-Growth Platform": 4,                     # MELI's marketplace basket, six names (owner, 2026-11-27)
     "Membership / Subscription Retail": 3,          # WMT, PSMT, BJ once COST is out (owner, 2026-11-25)
     "Consumer Technology Ecosystem: Hardware": 3,   # SONY, RMS.PA, MC.PA, RACE (owner, 2026-11-25)
     "Consumer Technology Ecosystem: Services": 4,   # MSFT, GOOGL, META, V, MA, SPGI (owner, 2026-11-25)
@@ -409,6 +410,11 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
     "Payment Networks: Global": {"markets": (),
                                  "symbols": ("ADYEN.AS", "3769.T", "300773.SZ", "377300.KS")},
 }
+
+#: Owner, 2026-11-27 (MELI 4B): MELI -- the only name on the profile -- prices its EV/NTM revenue and EV/EBITDA legs
+#: on listed marketplaces instead of the generic US Tech cohort (4.67x EV/Rev) or the static 55x sub-type row.
+CROSS_MARKET_BASKETS["Hyper-Growth Platform"] = {"markets": ("US",),
+                                                "symbols": ("EBAY", "ETSY", "AMZN", "BABA", "PDD", "SE")}
 
 #: Owner, 2026-11-27: the peer table's global columns for a profile whose label is a different business
 #: abroad. Display only; the valuation keeps its own basket.

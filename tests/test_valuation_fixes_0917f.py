@@ -153,11 +153,14 @@ _WAVE9_G_AVG = {"BN4_SI": 0.0763}
 #: Gate B still fires on these eight, so each carries the flag prose to compare
 #: the persisted field against.
 _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW",
-                "U96_SI")
+                "U96_SI",
+                # Owner, 2026-11-27 (MELI 4A): the cash-conversion cap now applies to a customer-fund holder, so
+                # MELI's bear margin starts from the repeatable 15.9% and its bear ROIC (7.4%) sits below WACC.
+                "MELI")
 
 #: Gate B deactivated on these five when the `× 10` was dropped: their corrected
 #: bear ROIC clears WACC, so terminal growth survives.
-_DEACTIVATED = ("02888_HK", "AAPL", "COST", "MELI", "V")
+_DEACTIVATED = ("02888_HK", "AAPL", "COST", "V")     # MELI moved to _STILL_FIRES on 2026-11-27
 
 _GATE_B_RE = re.compile(
     r"^Gate B \(bear\): Forward ROIC \((-?[\d.]+)%(?:\s*\[([^\]]+)\])?\)")

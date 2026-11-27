@@ -6260,7 +6260,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "CVX":   ("Resources",  "Integrated Oil & Gas", "Oil/Gas (Integrated)",  "Chevron — integrated (Wave 1, 2026-09-20)"),
     "COP":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "ConocoPhillips — pure-play E&P"),
     "EOG":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "EOG Resources"),
-    "LEU":   ("Resources",  "",  "Uranium",               "Centrus Energy — uranium enrichment (SWU contracts); NOT power generation"),
+    "LEU":   ("Energy",  "Clean Tech / Power Equipment OEM",  "Uranium",               "Centrus Energy — uranium enrichment (SWU contracts); NOT power generation, NOT a depleting asset (owner, 2026-11-27: off Mining (Major))"),
 
     # ── Crypto (multimodal Family G — sub-industry router by ticker) ──────────
     "MSTR":  ("Crypto", "BTC Treasury / Proxy",  "Diversified",  "MicroStrategy — BTC treasury company (Saylor playbook)"),
