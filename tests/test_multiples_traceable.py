@@ -52,11 +52,15 @@ class TestMultiplesTrace:
 
 
 class TestProvenanceIsAlwaysStamped:
-    def test_static_fallback_is_labelled_static_not_left_blank(self):
+    def test_static_fallback_is_labelled_static_not_left_blank(self, monkeypatch):
         """Silence about a fallback is what hid the outage: provenance was
         written only when live comps resolved, so a US-static valuation of a
         Hong Kong stock looked like a run with no provenance at all."""
         from src.data.sector_profiles import get_sector_peer_multiples
+        # No live peer data: a screener run on this machine fills the TTM cache
+        # (kg_ticker_metrics) and would make the basis dynamic (2026-11-27).
+        import app.backend.services.knowledge_graph as _kg
+        monkeypatch.setattr(_kg, "get_ttm_metrics_cached", lambda tickers: {})
         peer = get_sector_peer_multiples("Tech")
         assert "_comp_basis" in peer
         assert peer["_comp_basis"]

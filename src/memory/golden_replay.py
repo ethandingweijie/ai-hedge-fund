@@ -464,7 +464,15 @@ def replay_fixture(name: str, *, frozen_now: Any = None, state_patch: Optional[d
     # frozen_comps imports regional_comps, so it must enter AFTER the Replayer:
     # regional_comps binds `_fmp_get` by value at import, and an import outside
     # the replay window captures the real network function.
-    with gc.pinned_env(), gc.Replayer(calls) as rp, gc.frozen_comps(gc.read_comps(name), name):
+    # 2026-11-27: the US dynamic peer multiples read the screener's TTM cache
+    # (kg_ticker_metrics, 24 h TTL) from the local DB. Under the frozen clock any
+    # row written after the fixture's capture looks fresh, so running the screener
+    # once flipped MU/MELI from static to "dynamic Semiconductor" multiples. The
+    # fixtures recorded no TTM cache: serve none.
+    from unittest import mock as _mock
+    with gc.pinned_env(), gc.Replayer(calls) as rp, gc.frozen_comps(gc.read_comps(name), name), \
+            _mock.patch("app.backend.services.knowledge_graph.get_ttm_metrics_cached",
+                        lambda tickers: {}):
         out = run_dcf_agent(state)
 
     entry = (out.get("data", {}).get("dcf_range") or {}).get(ticker)
