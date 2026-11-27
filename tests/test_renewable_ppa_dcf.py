@@ -33,7 +33,8 @@ def test_the_registration_is_complete():
     cfg = d._ppa_cfg()
     assert cfg["capture_rate"] == 0.85 and cfg["scenario"]["bear"]["merchant_price"] == 0.80
     root = Path(__file__).resolve().parents[1] / "app" / "frontend" / "src"
-    assert "ppa:" in (root / "pages" / "ModelAccuracyPage.tsx").read_text(encoding="utf-8")
+    # The Model Accuracy redesign (2026-11-27) moved the industry-input labels into components/model-accuracy.
+    assert "ppa:" in (root / "components" / "model-accuracy" / "labels.ts").read_text(encoding="utf-8")
     assert "| 'nav' | 'ppa';" in (root / "lib" / "api.ts").read_text(encoding="utf-8")
 
 
