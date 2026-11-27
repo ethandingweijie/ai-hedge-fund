@@ -232,6 +232,16 @@ def data_limitations(data: dict, ticker: str) -> list[str]:
     for c in ((dcf_t.get("input_checks") or {}).get("checks") or []):
         if isinstance(c, dict) and c.get("status") == "fail":
             out.append(f"Input check failed ({c.get('check')}): {c.get('detail')}.")
+    # Owner, 2026-11-27 (D3): the sector FCF-margin floor binds the terminal year only; earlier years below it are
+    # projected as modelled, and the report says which.
+    _dcf_leg = (((dcf_t.get("base") or {}).get("leg_inputs") or {}).get("DCF") or {})
+    _fb = [y for y in (_dcf_leg.get("fcf_floor_breach_years") or []) if isinstance(y, int)]
+    if _fb:
+        _fl = _dcf_leg.get("fcf_floor")
+        out.append("The cash-flow forecast's free-cash-flow margin sits below the sector's terminal floor"
+                   + (f" ({float(_fl):.0%})" if isinstance(_fl, (int, float)) else "")
+                   + f" in forecast year(s) {', '.join(str(y) for y in _fb)}; those years are valued as forecast, "
+                     "and the floor applies to the terminal year only.")
     rs = dcf_t.get("rating_state") or {}
     if rs.get("state") == "unrated" and rs.get("reason"):
         out.append(f"No rating is published: {rs['reason']}.")

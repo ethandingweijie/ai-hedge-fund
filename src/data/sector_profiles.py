@@ -857,6 +857,13 @@ TERMINAL_GROWTH_RATES: dict[str, dict[str, float]] = {
 # Prevents nonsensical negative-to-infinity FCF projections for companies
 # with currently negative FCF (e.g., early-growth SaaS, UBER, Crypto miners).
 # The floor is not a guarantee — it is a clamping bound during projection.
+#
+# Owner, 2026-11-27 (D3): a POSITIVE floor is a TERMINAL floor. It binds the
+# terminal year of the DCF only (dcf_agent._floored_fcf_margin) -- the steady
+# state a going concern in the sector reaches; earlier years below it are
+# projected as modelled and raise a forward flag naming the years
+# (leg_inputs.DCF.fcf_floor_breach_years), never lifted. A floor at or below
+# zero is a loss clamp and still binds every projected year. Values unchanged.
 FCF_MARGIN_FLOOR: dict[str, float] = {
     "Tech":        -0.05,   # allow modest negative FCF (growth-phase SaaS)
     "Consumer":     0.02,   # consumer staples should always generate some FCF

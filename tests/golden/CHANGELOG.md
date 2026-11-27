@@ -1962,3 +1962,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-26: Telco / Infrastructure (SG) SOTP slot renamed SOTP (published) -> SOTP / NAV (look-through); param_version hash only, no value moved
 
+## 2026-11-27T03:50:26+00:00
+
+- regenerated at HEAD: `6c40f0d5`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-27 (D3): a positive sector FCF-margin floor binds the terminal year only; earlier years below it are projected as modelled and flagged (leg_inputs.DCF.fcf_floor_breach_years + a forward flag). Moves: COST bear IV 343.39 -> 338.23 (DCF leg 271.44 -> 254.22, years 1-9 below the 2% floor), bear target 633.08 -> 630.50; BN4_SI DCF leg tv_pct / reverse-DCF text and flags only (years 1-3 below the floor; IV unchanged); every other fixture and every base IV unchanged
+

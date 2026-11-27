@@ -588,7 +588,8 @@ def test_the_y10_estimate_and_the_engine_read_the_same_clamp():
         "margin_t = fcf_margin_base + margin_delta_per_year * t",
         "reinvest_t = _reinvestment_margin_deduction(g_t, _s_to_c)",
         "margin_t -= reinvest_t",
-        "margin_t = max(margin_t, fcf_floor)",
+        # D3 (owner, 2026-11-27): the floor goes through the one helper, terminal year only when positive.
+        "margin_t = _floored_fcf_margin(margin_t, fcf_floor, terminal=(t == years))",
         "margin_t = min(margin_t, _FCF_MARGIN_CAP)",
     ]
     at = [eng.index(s) for s in seq]        # ValueError names the missing one
@@ -598,7 +599,7 @@ def test_the_y10_estimate_and_the_engine_read_the_same_clamp():
     assert "fcf_margin_base + margin_delta_absolute" in eng
     run = inspect.getsource(dcf_agent.run_dcf_agent)
     assert "_y10_fcf_margin = min(" in run
-    assert "max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)" in run
+    assert "_floored_fcf_margin(fcf_margin_base + md_abs, fcf_floor, terminal=True), _FCF_MARGIN_CAP)" in run
     # The pre-fix form, so a revert is a named failure rather than a delta.
     assert "_y10_fcf_margin = fcf_margin_base + md_abs" not in run
     # The parity this test is named for, stated as the thing that would break

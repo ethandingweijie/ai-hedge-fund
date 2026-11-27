@@ -104,7 +104,10 @@ _PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
 #   v1 (implicit, unstamped): pre-task-#26 legacy engine — wrong legacy IVs
 #     for CN names (FX artifact in _analyst_growth_bands) and no SOTP blend.
 #   v2: task #26 FX fix + task #27 SOTP(analyst) snapshot attachment.
-_DCF_CACHE_VERSION = 2
+#   v3: owner decisions 2026-11-27 -- terminal-only FCF floor (D3), bank RI
+#     scenario drivers (D4), equity-accounted stakes in the one equity bridge
+#     (D2), 12-month target carries the price path at Ke - dividend yield (D1).
+_DCF_CACHE_VERSION = 3
 # A1: the background peer-comparison and price-history joins had no deadline,
 # so one hung upstream call could hold a finished run open until the 3600 s
 # job timeout. Past this they are reported and the run continues without them.

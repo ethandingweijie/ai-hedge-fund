@@ -5746,6 +5746,31 @@ def _dcf_timing(fy0_end, balance_sheet_date, valuation_date, years: int = _PROJE
             "roll_forward_years": round(roll, 6), "convention": "mid-year; flows after the balance-sheet date"}
 
 
+def _floored_fcf_margin(margin: float, fcf_floor: Optional[float], *, terminal: bool) -> float:
+    """The FCF margin after the sector floor (owner, 2026-11-27, D3).
+
+    A POSITIVE floor (Telco / REIT / Professional Services +5%, Consumer /
+    Industrials +2%, Materials +1%) says what a going concern in the sector
+    earns in steady state, so it binds the TERMINAL year only: lifting every
+    projected year valued a -20% cash burner on +5% margins with no flag. The
+    earlier years are projected as modelled and flagged
+    (`_fcf_floor_breached`). A floor at or below zero is a loss clamp against
+    a runaway negative margin and binds every year, as before. Gate B's
+    terminal-margin estimate calls this with `terminal=True`, so the terminal
+    state it judges is the one the DCF projects.
+    """
+    if fcf_floor is None:
+        return margin
+    if float(fcf_floor) > 0 and not terminal:
+        return margin
+    return max(margin, float(fcf_floor))
+
+
+def _fcf_floor_breached(margin: float, fcf_floor: Optional[float], t: int, years: int) -> bool:
+    """True for a pre-terminal year whose margin sits below a positive floor (D3: flagged, not lifted)."""
+    return bool(fcf_floor is not None and float(fcf_floor) > 0 and t < years and margin < float(fcf_floor))
+
+
 def _project_dcf(
     revenue_base: float,
     fcf_margin_base: float,
@@ -5933,9 +5958,14 @@ def _project_dcf(
         # valuation that quietly failed to change.
         reinvest_t = _reinvestment_margin_deduction(g_t, _s_to_c)
         margin_t -= reinvest_t
-        # Floor then cap, in the legacy order: with `_s_to_c` None this is
-        # byte-identical to `min(max(base + delta, floor), cap)`.
-        margin_t = max(margin_t, fcf_floor)
+        # Floor then cap, in the legacy order. Owner, 2026-11-27 (D3): a
+        # POSITIVE floor is a statement about the steady state, so it binds the
+        # terminal year only (`_floored_fcf_margin`); an earlier year below it
+        # is projected as modelled and recorded (`below_fcf_floor`) for the
+        # forward flag, never lifted. A floor at or below zero is a loss clamp
+        # and still binds every year.
+        _below_floor = _fcf_floor_breached(margin_t, fcf_floor, t, years)
+        margin_t = _floored_fcf_margin(margin_t, fcf_floor, terminal=(t == years))
         margin_t = min(margin_t, _FCF_MARGIN_CAP)
         f_t      = _fr[t - 1] if _dated else 1.0
         fcf_t    = rev_t * margin_t * f_t
@@ -5959,6 +5989,8 @@ def _project_dcf(
             # neither `_SCALAR_KEYS` nor `_DICT_KEYS` — so this is a payload
             # audit field, not a baseline field.
             "reinvest_margin_deduction": reinvest_t,
+            # D3 (owner, 2026-11-27): a pre-terminal year below a positive floor, projected unlifted.
+            "below_fcf_floor": _below_floor,
         })
 
     # Terminal value — use the last year's revenue/margin/WACC so growth-decay
@@ -18034,8 +18066,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # with `_y10_g` read off the same resolved schedule
                 # `_y10_rev_mult` uses, under the same length condition
                 # `_project_dcf` applies, so the two cannot pick different years.
+                # D3 (owner, 2026-11-27): Y10 IS the terminal year, so the floor binds here exactly as it does
+                # on `_project_dcf`'s final year -- the same helper, so the two cannot drift.
                 _y10_fcf_margin = min(
-                    max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)
+                    _floored_fcf_margin(fcf_margin_base + md_abs, fcf_floor, terminal=True), _FCF_MARGIN_CAP)
                 _y10_fcf = _y10_rev * _y10_fcf_margin
                 # Scale invested capital proportionally with revenue
                 _y10_ic = ic_val * _y10_rev_mult
@@ -18239,6 +18273,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "guidance_channel": _gc,          # None when guidance did not set years 1–E
                 "guidance_forecast": ({k: v for k, v in _gf.items() if k not in ("rows", "curve")} if _gf else None),
             }
+            # D3 (owner, 2026-11-27): the positive sector floor binds the terminal year only; earlier years below it
+            # are projected as modelled and disclosed here, with the years, rather than lifted silently.
+            _floor_breach = [i + 1 for i, _r in enumerate(_proj_rows or []) if _r.get("below_fcf_floor")]
+            leg_inputs["DCF"]["fcf_floor_breach_years"] = _floor_breach
+            if _floor_breach:
+                forward_flags.append(
+                    f"FCF margin below the terminal FCF-margin floor ({float(fcf_floor):.0%}) in projection year(s) "
+                    f"{', '.join(str(y) for y in _floor_breach)} ({scenario}): projected as modelled, not lifted; "
+                    f"the floor binds the terminal year only")
             # Plan E10 (owner, 2026-10-07): what the price implies -- the growth the DCF needs to reach spot.
             if scenario == "base":
                 try:
