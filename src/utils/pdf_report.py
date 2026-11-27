@@ -562,6 +562,10 @@ def _peer_comparison_table(
             f"{sym}{cap/1e6:.0f}M"  if cap and cap >= 1e6  else ""
         )
         inner = f"{t}" + (f" {cap_s}" if cap_s else "")
+        if row.get("name"):
+            from src.agents.analysis.peer_comparison import short_company_name
+            _nm = short_company_name(row.get("name")).replace("&", "&amp;").replace("<", "&lt;")
+            inner = f"{t}<br/>{_nm}" + (f"<br/>{cap_s}" if cap_s else "")
         if _grouped and t != subject:
             inner += f"<br/>{row.get('market') or ''} · {row.get('group')}"
         hdr.append(Paragraph(_wh(inner), styles["RptLabel"]))

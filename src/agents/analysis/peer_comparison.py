@@ -330,6 +330,7 @@ def localized_peer_table(subject: str, subject_row: dict, profile: str | None = 
         return None
     subj_row = {**(subject_row or {"ticker": subject}), "is_subject": True, "group": "subject",
                 "market": _MARKET_LABEL.get(market, market), "industry": industry}
+    subj_row.setdefault("name", cls.get("name"))
     # The peers' caps are in US$; the subject's (listing currency) is restated so the header compares.
     if subj_row.get("market_cap_usd") is None:
         subj_row["market_cap_usd"] = _usd(subj_row.get("market_cap"), market)
@@ -366,3 +367,24 @@ def localize_peer_tables(data: dict) -> dict:
 def _is_us_listing(ticker: str) -> bool:
     t = (ticker or "").upper()
     return "." not in t and not t.isdigit()
+
+
+_NAME_NOISE_RE = None
+
+
+def short_company_name(name, limit: int = 30) -> str:
+    """"Oversea-Chinese Banking Corporation Limited" -> "Oversea-Chinese Banking" for a table header."""
+    import re
+    global _NAME_NOISE_RE
+    if _NAME_NOISE_RE is None:
+        _NAME_NOISE_RE = re.compile(
+            r"[,.]?\s+(?:co\.?,?\s*ltd\.?|company\s+limited|corporation|incorporated|limited|ltd\.?|inc\.?|"
+            r"plc|holdings?|group|corp\.?|n\.?v\.?|s\.?a\.?|ag|class\s+[a-z])\b\.?", re.IGNORECASE)
+    n = str(name or "").strip()
+    prev = None
+    while prev != n:
+        prev, n = n, _NAME_NOISE_RE.sub("", n).strip(" ,.")
+    if len(n) > limit:
+        n = n[: limit - 1].rstrip() + "…"
+    return n
+

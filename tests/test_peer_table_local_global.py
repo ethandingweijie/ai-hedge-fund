@@ -66,3 +66,12 @@ def test_pipeline_localizes_after_join():
     import inspect
     import src.pipeline as p
     assert "localize_peer_tables(state[\"data\"])" in inspect.getsource(p)
+
+
+def test_rows_carry_company_names_and_headers_shorten_them(store):
+    t = pc.localized_peer_table("U11.SI", {"ticker": "U11.SI"})
+    assert t["U11.SI"]["name"] == "United Overseas Bank Limited"
+    assert t["O39.SI"]["name"].startswith("Oversea-Chinese")
+    assert pc.short_company_name("Oversea-Chinese Banking Corporation Limited") == "Oversea-Chinese Banking"
+    assert pc.short_company_name("Recruit Holdings Co., Ltd.") == "Recruit"
+    assert pc.short_company_name("Meituan") == "Meituan"
