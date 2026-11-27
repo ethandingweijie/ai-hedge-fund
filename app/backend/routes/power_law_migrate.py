@@ -38,7 +38,7 @@ DIM_KEYS = tuple(WEIGHTS.keys())
 
 
 def _get_db_path() -> str:
-    """Same resolution as db_upload.py — /data/run_archive.db on Railway."""
+    """RUN_ARCHIVE_PATH, else /data/run_archive.db (local SQLite mode only)."""
     return os.environ.get("RUN_ARCHIVE_PATH", "/data/run_archive.db")
 
 

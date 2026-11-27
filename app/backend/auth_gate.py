@@ -61,7 +61,7 @@ PUBLIC_PATHS: frozenset[str] = frozenset({
 
 # Prefix matches. /admin/* is exempt because each of those routes performs its
 # own DB_UPLOAD_SECRET check and fails closed when the env var is unset — see
-# admin.py, db_upload.py, power_law_migrate.py.
+# admin.py, power_law_migrate.py.
 PUBLIC_PREFIXES: tuple[str, ...] = (
     "/admin/",
 )
