@@ -350,7 +350,9 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
             timing=leg.get("timing"),                       # D2: the run's dating, so an override re-prices like-for-like
             terminal_multiplier=_tv_mult,
             terminal_nopat_ratio=((fc.get("terminal") or {}).get("nopat_to_ufcf")),   # owner, 2026-11-25: value-driver TV
-            terminal_ronic_spread=float(leg.get("terminal_ronic_spread") or 0.0))
+            terminal_ronic_spread=float(leg.get("terminal_ronic_spread") or 0.0),
+            # owner, 2026-11-27 (D2): the run's equity-accounted stakes, explicitly (0 for most names)
+            non_operating_assets=float(leg.get("non_operating_assets") or 0.0))
         iv_dcf = _num(iv_dcf)
         rec["forecast"] = gfm.summary(fc)
         if sc == "base":
@@ -412,7 +414,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
                     continue
                 ev = new_metric * mult
                 new_value = (ev - float(tr.get("net_debt") or leg.get("net_debt") or 0.0) - float(tr.get("minority_interest") or 0.0)
-                             - float(tr.get("preferred_equity") or 0.0)) / sh
+                             - float(tr.get("preferred_equity") or 0.0)
+                             + max(float(tr.get("non_operating_assets") or 0.0), 0.0)) / sh   # D2 (2026-11-27)
             legs_changed[name] = {"metric": m, "metric_before": old_metric, "metric_after": new_metric, "multiple": mult,
                                   "value_before": _num(tr.get("value")), "value_after": new_value, "basis": basis}
         rec["legs"] = legs_changed

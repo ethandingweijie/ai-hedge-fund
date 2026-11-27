@@ -1093,6 +1093,8 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         "terminal_multiplier",
         "terminal_nopat_ratio",   # owner, 2026-11-25: the value-driver terminal value (NOPAT on the guidance path)
         "terminal_ronic_spread",  # owner-set moat spread over WACC (default 0)
+        # 2026-11-27 (owner, D2): equity-accounted stakes in the one equity bridge (None = the run's figure).
+        "non_operating_assets",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
                    "depreciation", "ebit",

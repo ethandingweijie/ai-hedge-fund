@@ -5794,6 +5794,7 @@ def _project_dcf(
     terminal_multiplier: float = 1.0,
     terminal_nopat_ratio: Optional[float] = None,
     terminal_ronic_spread: float = 0.0,
+    non_operating_assets: Optional[float] = None,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -6032,7 +6033,9 @@ def _project_dcf(
         # Struck at the balance-sheet date; carried to the valuation date at the year-1 rate.
         _roll = (1 + _w_by_year[0]) ** float((timing or {}).get("roll_forward_years") or 0.0)
         pv_sum, pv_tv = pv_sum * _roll, pv_tv * _roll
-    equity_value = build_equity_bridge(pv_sum + pv_tv, net_debt, minority_interest, preferred_equity)
+    # D2 (owner, 2026-11-27): plus the equity-accounted stakes -- None reads the run's figure.
+    equity_value = build_equity_bridge(pv_sum + pv_tv, net_debt, minority_interest, preferred_equity,
+                                       _bridge_non_operating_assets(non_operating_assets))
     iv = equity_value / shares
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
 
@@ -8234,11 +8237,32 @@ def _ddm_cost_of_equity(profile_name: Optional[str], ticker: Optional[str], wacc
     return float(wacc) + float(_spread), f"WACC + {_spread:.2%} equity spread (proposed; no owner CoE row for {profile_name})"
 
 
+#: Holding-company discount on the equity-accounted stakes when the template states none (owner, 2026-11-27).
+_STAKES_HOLDCO_DISCOUNT = 0.15
+
+
+def _bridge_non_operating_assets(explicit: Optional[float] = None) -> float:
+    """The stakes figure a bridge adds (D2): the explicit one when given, else the run's (0 when none was sourced)."""
+    if explicit is not None:
+        return max(float(explicit), 0.0)
+    try:
+        return max(float(_BRIDGE_NON_OPERATING_ASSETS.get()), 0.0)
+    except (LookupError, NameError, TypeError, ValueError):
+        return 0.0
+
+
 def build_equity_bridge(ev: float, net_debt: Optional[float], minority_interest: Optional[float] = 0.0,
-                        preferred_equity: Optional[float] = 0.0) -> float:
+                        preferred_equity: Optional[float] = 0.0, non_operating_assets: float = 0.0) -> float:
     """Owner, 2026-09-26: the ONE equity bridge every leg uses.
 
         equity = EV - net debt - minority interest - preferred equity
+                 + equity-accounted stakes (owner, 2026-11-27, D2)
+
+    D2: a company that equity-accounts large stakes (Singtel: Airtel, AIS, Globe, Telkomsel -- S$66bn at market)
+    books their profit below EBITDA, so an EV multiple on EBITDA never prices them, and a bridge without them put
+    Singtel's 40%-weight EV/EBITDA leg at S$2.04 a share. The stakes enter at market value less the holding-company
+    discount, floored at zero (a stake is never a liability); the DCF's associates-income line is removed
+    (`holdings_netted`) so they are not counted twice.
 
     Until today the multiples legs deducted minority interest and the DCF
     family and the analyst SOTP did not, so one company had two bridges and a
@@ -8249,7 +8273,58 @@ def build_equity_bridge(ev: float, net_debt: Optional[float], minority_interest:
     """
     return (float(ev) - float(net_debt or 0.0)
             - max(float(minority_interest or 0.0), 0.0)
-            - max(float(preferred_equity or 0.0), 0.0))
+            - max(float(preferred_equity or 0.0), 0.0)
+            + max(float(non_operating_assets or 0.0), 0.0))
+
+
+def _equity_accounted_stakes(ticker: str, end_date: Optional[str], listing_ccy: Optional[str]) -> Optional[dict]:
+    """The equity-accounted stakes for the shared bridge (owner, 2026-11-27, D2), or None.
+
+    Only for a holdco template that opts in with `bridge_equity_accounted_stakes: true` (Z74.SI today): its
+    NON-CONSOLIDATED rows -- the equity bases (a listed stake at market, P/E on the share of profit, a fixed mark)
+    -- are summed as the look-through values them (each row's own stake discount applied), the template's
+    holding-company discount (midpoint of its range; 15% when it states none) is taken once on the total, and the
+    result is converted to the listing currency. The consolidated operating rows are the business the EV legs
+    already price, so they are excluded. A stake that cannot be valued is reported, never assumed or guessed.
+    """
+    try:
+        from src.agents.analysis import holdco_sotp as _hs
+        tpl = _hs.template_for(ticker) or {}
+        if not tpl.get("bridge_equity_accounted_stakes"):
+            return None
+        res = _hs.look_through_value(ticker, end_date)
+        if not res:
+            return {"value": 0.0, "declined": "no stake could be valued", "skipped": []}
+        rows = [p for p in (res.get("parts") or []) if p.get("basis") in _hs.EQUITY_BASES]
+        _divs = {d_.get("name"): d_ for d_ in tpl.get("divisions") or []}
+        skipped = [s_ for s_ in (res.get("skipped") or [])
+                   if (_divs.get(s_.get("division")) or {}).get("basis") in _hs.EQUITY_BASES]
+        gross = sum(float(p.get("value") or 0.0) for p in rows)
+        if gross <= 0:
+            return {"value": 0.0, "declined": "no stake could be valued", "skipped": skipped}
+        _rng = tpl.get("holdco_discount")
+        _has_rng = isinstance(_rng, (list, tuple)) and len(_rng) == 2
+        disc = float(sum(_rng)) / 2.0 if _has_rng else _STAKES_HOLDCO_DISCOUNT
+        rep_ccy = (tpl.get("currency") or _hs.currency_of(ticker)).upper()
+        to = (listing_ccy or rep_ccy).upper()
+        rate = 1.0 if to == rep_ccy else _hs._fx(rep_ccy, to)
+        if rate is None:
+            return {"value": 0.0, "declined": f"no {rep_ccy}->{to} exchange rate for the stakes", "skipped": skipped}
+        return {
+            "value": gross * (1.0 - disc) * rate,
+            "gross_value": gross * rate,
+            "holdco_discount": disc,
+            "holdco_discount_source": ("template holdco_discount (midpoint)" if _has_rng
+                                       else "engine default (the template states none)"),
+            "currency": to, "reporting_currency": rep_ccy, "fx_to_listing": rate,
+            "parts": [{"division": p.get("division"), "basis": p.get("basis"),
+                       "value_reporting": p.get("value")} for p in rows],
+            "skipped": skipped,
+            "fx_fallback_pairs": res.get("fx_fallback_pairs") or [],
+            "basis": "equity-accounted stakes at market value less the holding-company discount (owner, 2026-11-27)",
+        }
+    except Exception as _exc:                              # noqa: BLE001
+        return {"value": 0.0, "declined": f"stakes not valued ({type(_exc).__name__})", "skipped": []}
 
 
 def _preferred_equity(most_recent: dict) -> float:
@@ -8295,6 +8370,14 @@ import contextvars as _contextvars
 _LEG_TRACE: "_contextvars.ContextVar[Optional[dict]]" = _contextvars.ContextVar(
     "_LEG_TRACE", default=None)
 
+#: Owner, 2026-11-27 (D2): the equity-accounted stakes the run adds to the ONE equity bridge, in the listing
+#: currency, after the holding-company discount. Sourced once per ticker before the leg loop
+#: (`_equity_accounted_stakes`) and read by every bridge that is not handed a figure explicitly (`_ev_to_equity_ps`,
+#: `_project_dcf`), so no leg can stand on a different perimeter. Set at the top of EVERY ticker (0 unless sourced),
+#: so a stake can never leak into the next name's bridge.
+_BRIDGE_NON_OPERATING_ASSETS: "_contextvars.ContextVar[float]" = _contextvars.ContextVar(
+    "_BRIDGE_NON_OPERATING_ASSETS", default=0.0)
+
 
 def _leg_trace(**fields) -> None:
     t = _LEG_TRACE.get()
@@ -8328,6 +8411,7 @@ def _ev_to_equity_ps(
     net_debt: Optional[float],
     most_recent: dict,
     shares: float,
+    non_operating_assets: Optional[float] = None,
 ) -> Optional[float]:
     """Enterprise value -> equity value per share.
 
@@ -8346,15 +8430,21 @@ def _ev_to_equity_ps(
     Preferred equity belongs in this bridge too, but is not carried in the
     line items, so it is not deducted and remains a known overstatement for
     the handful of names that have it.
+
+    `non_operating_assets` (D2, owner 2026-11-27): the equity-accounted stakes;
+    None reads the run's figure (`_BRIDGE_NON_OPERATING_ASSETS`), 0.0 opts out
+    (a SOTP whose parts already hold the stakes).
     """
     if not shares or shares <= 0:
         return None
     _mi = _minority_interest(most_recent)
     _pref = _preferred_equity(most_recent)
-    equity = build_equity_bridge(ev, net_debt, _mi, _pref)
+    _noa = _bridge_non_operating_assets(non_operating_assets)
+    equity = build_equity_bridge(ev, net_debt, _mi, _pref, _noa)
     _leg_trace(ev=float(ev), net_debt=float(net_debt or 0.0),
                minority_interest=float(_mi), preferred_equity=float(_pref), equity=float(equity),
-               shares=float(shares), floored_at_zero=equity < 0)
+               shares=float(shares), floored_at_zero=equity < 0,
+               **({"non_operating_assets": float(_noa)} if _noa else {}))
     return max(equity / shares, 0.0)
 
 
@@ -9111,7 +9201,8 @@ def _compute_method_value(
                    tier=tier, segments=_parts,
                    priced_share_of_revenue=_priced / _all_rev,
                    growth_premium=growth_premium)
-        return _ev_to_equity_ps(total_ev, net_debt, most_recent, shares)
+        # D2: a segment SOTP prices its own parts; the stakes are not added on top of it.
+        return _ev_to_equity_ps(total_ev, net_debt, most_recent, shares, non_operating_assets=0.0)
 
     # ── SOTP 12m (probabilistic) — Monte Carlo with scenario trees ────────
     # Same tier-based multiples, but each segment revenue is grown by a rate
@@ -13390,6 +13481,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     dcf_range: dict[str, dict] = {}
 
     for ticker in tickers:
+        # D2 (owner, 2026-11-27): no stake carries over from the previous ticker's bridge.
+        _BRIDGE_NON_OPERATING_ASSETS.set(0.0)
+        _bridge_stakes: Optional[dict] = None
         # Resolve per-ticker sector so WACC, TGR, and FCF floor reflect the correct industry
         sector = sectors_map.get(ticker, _primary_sector)
 
@@ -16752,6 +16846,42 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         except NameError:                                  # a path that computed no net-debt basis
             pass
 
+        # ── D2 (owner, 2026-11-27): equity-accounted stakes in the ONE bridge ─
+        # Sourced once, before any leg is priced, from the holdco template's non-consolidated rows (market value
+        # less the holding-company discount). Every EV leg and the DCF bridge add the same figure; the SOTP leg
+        # already holds the stakes in its parts and adds nothing; the DCF's associates-income line is removed
+        # (`_holdings_netted`) so the stakes are not counted twice. Never on top of book long-term investments
+        # already counted as cash (audit E18).
+        try:
+            _lti_already = bool((_net_debt_basis or {}).get("long_term_investments_netted"))
+        except NameError:
+            _lti_already = False
+        _bridge_stakes = _equity_accounted_stakes(
+            ticker, end_date, (_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
+        if _bridge_stakes and _lti_already:
+            _bridge_stakes = {**_bridge_stakes, "value": 0.0,
+                              "declined": "long-term investments already counted as cash in net debt"}
+        if _bridge_stakes and float(_bridge_stakes.get("value") or 0.0) > 0:
+            _BRIDGE_NON_OPERATING_ASSETS.set(float(_bridge_stakes["value"]))
+            ticker_forward_flags.append(
+                f"Equity-accounted stakes in the equity bridge (owner, 2026-11-27): "
+                f"{float(_bridge_stakes['gross_value']) / 1e9:,.2f}bn at market less a "
+                f"{float(_bridge_stakes['holdco_discount']):.0%} holding-company discount = "
+                f"{float(_bridge_stakes['value']) / 1e9:,.2f}bn ({float(_bridge_stakes['value']) / float(shares):,.2f} a share) "
+                f"added to every EV leg and the DCF; the DCF's associates-income line is removed; the SOTP already "
+                f"holds them" if shares else "Equity-accounted stakes in the equity bridge (owner, 2026-11-27)")
+            for _sk in _bridge_stakes.get("skipped") or []:
+                ticker_forward_flags.append(f"Equity-accounted stake not in the bridge: {_sk.get('division')} "
+                                            f"({_sk.get('reason')})")
+            if _bridge_stakes.get("fx_fallback_pairs"):
+                ticker_forward_flags.append("Equity-accounted stakes converted on the static FX fallback table: "
+                                            + ", ".join(map(str, _bridge_stakes["fx_fallback_pairs"])))
+        elif _bridge_stakes and _bridge_stakes.get("declined"):
+            ticker_forward_flags.append(f"Equity-accounted stakes NOT in the equity bridge: {_bridge_stakes['declined']}")
+        # Holdings are on the balance-sheet side of the bridge (book LTI as cash, or the stakes at market): the
+        # forecast carries no income from them (guidance_forecast non_operating_ratio_used = 0).
+        _holdings_netted = bool(_lti_already or (_bridge_stakes and float(_bridge_stakes.get("value") or 0.0) > 0))
+
         # ── Phase 1.1: CAGR-divergence gate (all profiles) ────────────────
         # Applied BEFORE the revenue-scale tier below and BEFORE the scenario
         # multipliers, for the reason that tier's own comment gives: bind the
@@ -17314,7 +17444,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _pv10_d = _ii_g.accepted_detail(ticker, "pv10", _stmt_ccy)
                 if _pv10_d and shares and shares > 0:
                     _pv10_floor_ps = build_equity_bridge(_pv10_d["value"], net_debt, _minority_interest(most_recent),
-                                                         _preferred_equity(most_recent)) / shares
+                                                         _preferred_equity(most_recent),
+                                                         _bridge_non_operating_assets()) / shares
             if profile_name in _BACKLOG_VISIBILITY_PROFILES:
                 _backlog_d = _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
                 if _backlog_d and revenue_base and revenue_base > 0:
@@ -17653,9 +17784,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     from src.agents.analysis import guidance_forecast as _gfm
                     _fc_ctx = {
                         "history": _gfm.with_non_operating_decision(
-                            _gfm.history_ratios(series, _gfm.load_cfg()),
-                            bool((_net_debt_basis or {}).get("long_term_investments_netted")
-                                 if isinstance(locals().get("_net_debt_basis"), dict) else False)),
+                            _gfm.history_ratios(series, _gfm.load_cfg()), _holdings_netted),
                         "inputs": {"wacc": float(wacc), "tgr": float(tgr), "shares": float(shares), "net_debt": float(net_debt or 0.0),
                                    "spot": ((resolved_mcap / shares) if (resolved_mcap and shares) else None),
                                    "peer_ev_ebitda": _peer_fwd_ev_ebitda(_peer_for_gf),
@@ -17738,8 +17867,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         overrides=_eo_engine_ov or None,
                         fx_to_valuation=float(fx_rate or 1.0),
                         valuation_currency=(_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency),
-                        holdings_netted=bool((_net_debt_basis or {}).get("long_term_investments_netted")
-                                             if isinstance(locals().get("_net_debt_basis"), dict) else False))
+                        holdings_netted=_holdings_netted)
                 except Exception as _gf_exc:  # noqa: BLE001
                     _gf = None
                     if scenario == "base":
@@ -17767,8 +17895,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 overrides=_eo_engine_ov or None,
                                 fx_to_valuation=float(fx_rate or 1.0),
                                 valuation_currency=_sci_cur,
-                                holdings_netted=bool((_net_debt_basis or {}).get("long_term_investments_netted")
-                                                     if isinstance(locals().get("_net_debt_basis"), dict) else False))
+                                holdings_netted=_holdings_netted)
                             _sci = _sci_blk["_share_count_intervention"]
                             if _gf2:
                                 _inv3b = next((i for i in _gf2.get("invariants") or [] if i.get("id") == 3), None)
@@ -18281,6 +18408,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "net_debt": float(net_debt or 0.0), "shares": shares,
                 "minority_interest": float(_minority_interest(most_recent) or 0.0),
                 "preferred_equity": float(_preferred_equity(most_recent) or 0.0),
+                # D2 (owner, 2026-11-27): equity-accounted stakes added in the bridge (0 for most names)
+                "non_operating_assets": _bridge_non_operating_assets(),
                 "scenario": scenario,
                 "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
                 "projection_rows": _proj_rows,
@@ -18297,6 +18426,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"FCF margin below the terminal FCF-margin floor ({float(fcf_floor):.0%}) in projection year(s) "
                     f"{', '.join(str(y) for y in _floor_breach)} ({scenario}): projected as modelled, not lifted; "
                     f"the floor binds the terminal year only")
+            # D2: the stakes are in the bridge; on the guidance path the associates-income line is removed. On the
+            # historical flat margin there is no separate line to remove, so say what may still be inside it.
+            if _bridge_non_operating_assets() > 0 and not _gf and scenario == "base":
+                forward_flags.append(
+                    "Equity-accounted stakes are in the DCF bridge, but this DCF ran on the historical FCF margin "
+                    "(no guidance forecast): any dividends received from the associates inside that margin are not "
+                    "separable and may be counted twice")
             # Plan E10 (owner, 2026-10-07): what the price implies -- the growth the DCF needs to reach spot.
             if scenario == "base":
                 try:
@@ -19666,19 +19802,25 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         base_tgr = tgr_table.get("base", _DEFAULT_TGR["base"])
         if wacc <= base_tgr:
             base_tgr = wacc - 0.005
-        calibration_error, calibration_note, calibration_record = _run_backward_gate(
-            ticker=ticker,
-            series=series,
-            sector=sector,
-            end_date=end_date,
-            wacc=wacc,
-            tgr=base_tgr,
-            fcf_floor=fcf_floor,
-            api_key=api_key,
-            profile_data=profile_data,
-            reported_currency=reported_currency,
-            profile_name=profile_name,
-        )
+        # D2: the T-1 test values the PRIOR year's statements; today's stake marks are not that year's, so its
+        # bridges run without them (as before) rather than on a perimeter dated a year later.
+        _noa_token = _BRIDGE_NON_OPERATING_ASSETS.set(0.0)
+        try:
+            calibration_error, calibration_note, calibration_record = _run_backward_gate(
+                ticker=ticker,
+                series=series,
+                sector=sector,
+                end_date=end_date,
+                wacc=wacc,
+                tgr=base_tgr,
+                fcf_floor=fcf_floor,
+                api_key=api_key,
+                profile_data=profile_data,
+                reported_currency=reported_currency,
+                profile_name=profile_name,
+            )
+        finally:
+            _BRIDGE_NON_OPERATING_ASSETS.reset(_noa_token)
 
         # ── 12m Forward-Multiple Price Target ────────────────────────────────
         # Framework §7: separate from intrinsic value — market pricing via sector multiples
@@ -19863,11 +20005,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _ebitda_margin_ok and _yr1_ebit > 0 and shares and shares > 0:
                     _ev = _yr1_ebit * peer.get("ev_ebitda", 15.0) * _smult * _adr_h * _gp_pt
                     _pt = max(build_equity_bridge(_ev, _nd, _minority_interest(most_recent),
-                                                  _preferred_equity(most_recent)) / shares, 0.0)
+                                                  _preferred_equity(most_recent),
+                                                  _bridge_non_operating_assets()) / shares, 0.0)
                 elif _yr1_rev and _yr1_rev > 0 and shares and shares > 0:
                     _ev = _yr1_rev * peer.get("ev_revenue", 4.0) * _smult * _adr_h * _gp_pt
                     _pt = max(build_equity_bridge(_ev, _nd, _minority_interest(most_recent),
-                                                  _preferred_equity(most_recent)) / shares, 0.0)
+                                                  _preferred_equity(most_recent),
+                                                  _bridge_non_operating_assets()) / shares, 0.0)
                 elif _yr1_eps and _yr1_eps > 0:
                     _pt = _yr1_eps * peer.get("pe", 20.0) * _smult * _adr_h * _gp_pt
             _12m_targets[scen_name] = round(_pt, 2) if _pt else None
@@ -21141,6 +21285,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # `dcfRange?.sotp_breakdown`. Rides the existing persistence chain
             # (pipeline allowlist → analysis_service → web_runs) untouched.
             "sotp_breakdown":     sotp_breakdown,
+            # D2 (owner, 2026-11-27): the equity-accounted stakes every EV leg and the DCF add in the bridge
+            # (None for a name whose template does not opt in).
+            "equity_accounted_stakes": _bridge_stakes,
             # Owner, 2026-10-03: management guidance → the model's bear / base / bull
             # estimates (deep research 2G) and whether the DCF's years 1–2 ran on them.
             # Frontend: GuidanceEstimatesPanel reads `dcfRange?.guidance_estimates`.
@@ -21252,5 +21399,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             f"| source: {data_source}{cal_tag}"
         )
 
+    # D2: the last ticker's stakes never outlive the run (a reused worker thread keeps its context).
+    _BRIDGE_NON_OPERATING_ASSETS.set(0.0)
     state["data"]["dcf_range"] = dcf_range
     return state

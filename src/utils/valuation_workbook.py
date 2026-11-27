@@ -2336,7 +2336,7 @@ class _Book:
                         A[f"terminal_ronic_spread:{s}{sfx}"])
         K = {k: out + i for i, k in enumerate((
             "pv_sum", "tw", "ronic", "ratio", "reinv", "fcf_t1", "tv", "pv_tv_bs", "carry", "pv_fcf", "pv_tv", "ev", "nd",
-            "mi", "pe", "eq", "iv", "eng", "chk", "tv_share", "tv_fcf"))}
+            "mi", "pe", "noa", "eq", "iv", "eng", "chk", "tv_share", "tv_fcf"))}
         lines = {
             "pv_sum": ("Sum of PV of FCF (balance-sheet date)", f"=SUM({F}{pvr}:{Lc}{pvr})", MIL),
             "tw": ("Terminal WACC (spread guard applied)", f"=IF({Lc}{wr}<={tg},{tg}+{A['tv_guard']},{Lc}{wr})", PCT2),
@@ -2359,7 +2359,10 @@ class _Book:
             # preferred equity in the DCF bridge.
             "mi": ("Less: minority interest", self._bridge_ref(tr, "minority_interest", "mi_used", negate=True), MIL),
             "pe": ("Less: preferred equity", self._bridge_ref(tr, "preferred_equity", "pe_used", negate=True), MIL),
-            "eq": ("Equity value", f"=B{K['ev']}+B{K['nd']}+B{K['mi']}+B{K['pe']}", MIL),
+            # Owner, 2026-11-27 (D2): equity-accounted stakes at market less the holding-company discount.
+            "noa": ("Add: equity-accounted stakes (market value less holding-company discount)",
+                    (_num(tr.get("non_operating_assets")) or 0.0) / 1e6, MIL),
+            "eq": ("Equity value", f"=B{K['ev']}+B{K['nd']}+B{K['mi']}+B{K['pe']}+B{K['noa']}", MIL),
             "iv": ("Intrinsic value per share", f"=IFERROR(B{K['eq']}/{shs},0)", NUM),
             "eng": ("Engine value", _num(tr.get("value")), NUM),
             "chk": ("Check", f"=B{K['iv']}-B{K['eng']}", NUM),
@@ -2385,7 +2388,7 @@ class _Book:
         self.dcf[s] = {"iv": _ref("DCF", K["iv"], 2), "pv_fcf": _ref("DCF", K["pv_fcf"], 2),
                        "pv_tv": _ref("DCF", K["pv_tv"], 2), "ev": _ref("DCF", K["ev"], 2),
                        "nd": _ref("DCF", K["nd"], 2), "mi": _ref("DCF", K["mi"], 2), "pe": _ref("DCF", K["pe"], 2),
-                       "eq": _ref("DCF", K["eq"], 2),
+                       "noa": _ref("DCF", K["noa"], 2), "eq": _ref("DCF", K["eq"], 2),
                        "fcf_row": fr, "rev_row": rv, "c0": c0, "n": n, "margin_row": mr, "ev_raw": K["ev"],
                        "shares": shs}
         self.leg_cell[(s, "DCF")] = self.dcf[s]["iv"]
@@ -2412,7 +2415,7 @@ class _Book:
             sh.put(r, 2 + j, f"={tg}+({k})*{A['sens_g']}", PCT2, bold=True)
         top = r
         t_end = f"SUM(${F}${fsr}:${Lc}${fsr})"
-        bridge = f"-{nd}+$B${K['mi']}+$B${K['pe']}"
+        bridge = f"-{nd}+$B${K['mi']}+$B${K['pe']}+$B${K['noa']}"
         loe = A[f"terminal_loe_multiplier:{s}{sfx}"]
         for i, k in enumerate((-2, -1, 0, 1, 2)):
             rr = r + 1 + i
@@ -2447,7 +2450,7 @@ class _Book:
         # Audit 2026-11-25 (item 5): units in the headers; money in millions, per-share in the trading currency.
         cols = ["Scenario", "Leg", "Metric", f"Metric value ({self.ccy} m; per share for equity legs)",
                 "Peer multiple (Comps)", "Scenario band", "Growth premium", "Other adj.", "Multiple",
-                f"Enterprise value ({self.ccy} m)", f"Net debt ({self.ccy} m)", f"Minority + preferred ({self.ccy} m)",
+                f"Enterprise value ({self.ccy} m)", f"Net debt ({self.ccy} m)", f"Minority + preferred - stakes ({self.ccy} m)",
                 f"Equity value ({self.ccy} m)", "Diluted shares (m)", f"Value per share ({self.ccy})",
                 f"Engine value ({self.ccy})", "Check", "Notes"]
         A = self.A
@@ -2837,11 +2840,14 @@ class _Book:
         return (-v if negate else v) / 1e6
 
     def _mi_pe_ref(self, tr: dict) -> Any:
+        """Minority interest + preferred equity, LESS the equity-accounted stakes the engine adds in the same bridge
+        (owner, 2026-11-27, D2), so `EV - net debt - this` is the engine's equity."""
         a, b = self._bridge_ref(tr, "minority_interest", "mi_used"), self._bridge_ref(tr, "preferred_equity", "pe_used")
+        c = -(max(_num(tr.get("non_operating_assets")) or 0.0, 0.0)) / 1e6
         if isinstance(a, str) or isinstance(b, str):
-            return "=" + "+".join(x[1:] if isinstance(x, str) else repr(float(x)) for x in (a, b)
+            return "=" + "+".join(x[1:] if isinstance(x, str) else repr(float(x)) for x in (a, b, c)
                                   if isinstance(x, str) or abs(float(x)) > 0)
-        return a + b
+        return a + b + c
 
     # ── Comps ───────────────────────────────────────────────────────────────
     def _peer_key(self, tr: dict) -> Optional[tuple]:
@@ -4095,7 +4101,7 @@ class _Book:
         d = self.dcf.get(s)
         if leg == "DCF" and d and not getattr(self, "dcf_shadow", False):
             # EV is linear in the margin path: FCF and the terminal value both scale with it
-            return f"IFERROR(({d['ev']}*{a}+{d['nd']}+{d['mi']}+{d['pe']})/{d['shares']},0)"
+            return f"IFERROR(({d['ev']}*{a}+{d['nd']}+{d['mi']}+{d['pe']}+{d['noa']})/{d['shares']},0)"
         return None
 
     def _target_sensitivities(self, sh: _Sheet, r: int) -> None:
@@ -4571,15 +4577,18 @@ class _Book:
             _nd = _li.get("net_debt") / 1e6 if isinstance(_li.get("net_debt"), (int, float)) else None
             _mi = float(_li.get("minority_interest") or 0.0) / 1e6 if isinstance(_li.get("minority_interest"), (int, float)) else 0.0
             _pe = float(_li.get("preferred_equity") or 0.0) / 1e6 if isinstance(_li.get("preferred_equity"), (int, float)) else 0.0
-            _eq = (_ev - _nd - _mi - _pe) if (_ev is not None and _nd is not None) else None
+            _noa = float(_li.get("non_operating_assets") or 0.0) / 1e6 if isinstance(_li.get("non_operating_assets"), (int, float)) else 0.0
+            _eq = (_ev - _nd - _mi - _pe + _noa) if (_ev is not None and _nd is not None) else None
             # Owner, 2026-10-03 (Alibaba review): the static column carries the SAME sign as the linked
             # "Less:" cells (the engine column had shown +189bn against the link's -189bn).
-            _static = {"pv_fcf": _pvf, "pv_tv": _pvt, "ev": _ev, "nd": (-_nd if _nd is not None else None), "mi": -_mi, "pe": -_pe, "eq": _eq,
+            _static = {"pv_fcf": _pvf, "pv_tv": _pvt, "ev": _ev, "nd": (-_nd if _nd is not None else None), "mi": -_mi, "pe": -_pe,
+                       "noa": _noa, "eq": _eq,
                        "iv": _li.get("value") if isinstance(_li.get("value"), (int, float)) else None}
             for lab, key in (("PV of forecast FCF", "pv_fcf"), ("PV of terminal value", "pv_tv"),
                              ("Enterprise value", "ev"),
                              (self._net_debt_label(), "nd"),
                              ("Less: minority interest", "mi"), ("Less: preferred equity", "pe"),
+                             ("Add: equity-accounted stakes", "noa"),
                              ("Equity value", "eq"),
                              ("DCF value per share", "iv")):
                 sh.label(r, 1, lab, indent=1)
