@@ -6,12 +6,13 @@ plus read endpoints for run history and archive summary.
 """
 
 import asyncio
+import functools
 import json
 import logging
 import os
 import re
-import traceback
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -24,14 +25,51 @@ from sqlalchemy.orm import Session
 from app.backend.database import get_db
 from app.backend.services.api_key_service import ApiKeyService
 from app.backend.services import analysis_service
+from app.backend.services import progress_bus
+from app.backend.auth_gate import auth_enforced
+from app.backend.request_guards import (internal_error, validate_model_input,
+                                        validate_ticker_input)
 from src.tools.ticker_canonical import canonical_ticker
 from app.backend.services.auth_service import get_user_from_token
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_RUN_MODEL = "claude-sonnet-4-6"
+
+
 # ── Per-ticker deduplication: one pipeline at a time per ticker ──────────────
-_in_flight: dict[str, asyncio.Event] = {}
+@dataclass(eq=False)
+class _InFlightSlot:
+    """One in-process run holding a ticker's dedup slot.
+
+    Identity matters: a run releases the slot only while it still holds THIS
+    object, so a cancel-then-resubmit (run B claims the ticker while run A is
+    still unwinding) can never have A's cleanup remove B's slot.
+    """
+    run_id: str
+    user_id: Optional[int] = None
+    model_name: Optional[str] = None
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+
+
+_in_flight: dict[str, _InFlightSlot] = {}
 _in_flight_lock: asyncio.Lock = asyncio.Lock()
+
+# Owner of each queue-mode run this process enqueued (run_id -> user_id), so a
+# cancel can be ownership-checked before the worker's first checkpoint row
+# exists. Bounded; the web_runs row is the fallback source.
+_queue_run_owners: dict[str, Optional[int]] = {}
+_QUEUE_RUN_OWNERS_MAX = 500
+
+
+async def _scoped_cached_run(ticker: str, within_minutes: int,
+                             user_id: Optional[int],
+                             model_name: Optional[str]) -> Optional[dict]:
+    """get_cached_run off the event loop, scoped to caller + provider family."""
+    return await asyncio.to_thread(functools.partial(
+        analysis_service.get_cached_run, ticker,
+        within_minutes=within_minutes, user_id=user_id, model_name=model_name,
+    ))
 
 # ── Global pipeline cap: at most 5 concurrent pipelines ──────────────────────
 _pipeline_semaphore: asyncio.Semaphore = asyncio.Semaphore(5)
@@ -118,23 +156,32 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
       event: complete  {run_id, ticker}
       event: error     {error}
     """
+    # Shape-check the input BEFORE anything else (cache lookup, rate limit,
+    # run start): `AAPL;DROP`, `../../ETC`, NUL bytes, 50-char and full-width
+    # strings used to pass, and a non-string ticker raised a 500.
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="request body must be an object")
+    _raw_ticker = validate_ticker_input(body.get("ticker"))
+    model_name = validate_model_input(body.get("model"), _DEFAULT_RUN_MODEL)
     # Normalise HK/SG tickers to their canonical form so the routing cache
     # and web_runs DB always see a consistent key regardless of input format.
-    ticker = canonical_ticker(body.get("ticker"))
-    model_name = body.get("model", "claude-sonnet-4-6")
+    ticker = canonical_ticker(_raw_ticker)
     # M2 Track E: the investor committee is decommissioned — runs are
     # per-ticker with no agent selection. A legacy "agents" body key from
     # older frontends is silently ignored.
 
     if not ticker:
-        raise HTTPException(status_code=400, detail="ticker is required")
+        raise HTTPException(status_code=422, detail="ticker is required")
 
     # ── Extract authenticated user (optional — unauthenticated runs stored with NULL user_id)
     _caller = _get_user(request, db)
     user_id = _caller.id if _caller else None
 
     # ── Cache check (fast path, no lock) ─────────────────────────────────────
-    cached = analysis_service.get_cached_run(ticker, within_minutes=30)
+    # Scoped to (ticker, caller, provider family): another user's run would
+    # 404 on get_run_result's ownership check, and the other provider's run is
+    # not what the Qwen/Anthropic toggle asked for.
+    cached = await _scoped_cached_run(ticker, 30, user_id, model_name)
     if cached:
         async def cached_event_generator():
             yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name})}\n\n"
@@ -167,7 +214,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     from app.backend.services import queue_client
     if await queue_client.queue_mode_enabled():
         try:
-            _q_api_keys = ApiKeyService(db).get_api_keys_dict(user_id)
+            _q_api_keys = await asyncio.to_thread(ApiKeyService(db).get_api_keys_dict, user_id)
             _queued = await _start_queue_run(
                 ticker, model_name, user_id, _q_api_keys
             )
@@ -182,25 +229,26 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     # same analysis wait for the first pipeline to finish, then reuse its
     # cached result instead of launching N identical pipelines.
     _dedup_key = ticker
-    _wait_event: asyncio.Event | None = None
-    _run_event: asyncio.Event | None = None
+    _wait_slot: _InFlightSlot | None = None
+    _run_slot: _InFlightSlot | None = None
     _cached_in_lock: dict | None = None
 
     async with _in_flight_lock:
         # Re-check inside the lock to close the TOCTOU gap (another request may
         # have finished the pipeline between our fast-path check and here).
-        _cached_in_lock = analysis_service.get_cached_run(
-            ticker, within_minutes=30
-        )
+        _cached_in_lock = await _scoped_cached_run(ticker, 30, user_id, model_name)
         if not _cached_in_lock:
             if _dedup_key in _in_flight:
                 # A pipeline for this ticker is already running —
-                # grab its completion event so we can wait for it.
-                _wait_event = _in_flight[_dedup_key]
+                # grab its slot so we can wait for it.
+                _wait_slot = _in_flight[_dedup_key]
             else:
-                # We are the first — claim the dedup slot.
-                _run_event = asyncio.Event()
-                _in_flight[_dedup_key] = _run_event
+                # We are the first — claim the dedup slot. The run id is
+                # minted HERE (not inside the pipeline) so a cancel can target
+                # exactly this run from the moment the slot exists.
+                _run_slot = _InFlightSlot(run_id=str(uuid.uuid4()),
+                                          user_id=user_id, model_name=model_name)
+                _in_flight[_dedup_key] = _run_slot
 
     if _cached_in_lock:
         async def cached_in_lock_generator():
@@ -215,12 +263,22 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    if _wait_event is not None:
+    if _wait_slot is not None:
         # Waiter path: another request for the same ticker is already in-flight.
         # Wait up to 15 min for it to finish, polling every 30s.  If it finishes
         # successfully we reuse its cached result.  If it fails or times out we
         # tell the client to retry — this cleans up the stale dedup entry so the
         # NEXT request becomes the runner instead of also waiting on a dead event.
+        _wait_event = _wait_slot.event
+        # A run started by another account or on the other provider cannot be
+        # handed to this caller (ownership / provider scope), so when it ends
+        # this caller has to start its own.
+        _same_scope = (
+            _wait_slot.user_id == user_id
+            and analysis_service.provider_family(_wait_slot.model_name)
+            == analysis_service.provider_family(model_name)
+        )
+
         async def waiting_generator():
             yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': 0})}\n\n"
             _wait_msg = "Analysis already in progress for " + ticker + " \u2014 awaiting result\u2026"
@@ -237,25 +295,32 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                     # Check if the dedup slot was orphaned (runner crashed/restarted
                     # or uvicorn reload wiped the in-memory dict)
                     async with _in_flight_lock:
-                        if _dedup_key not in _in_flight:
+                        if _in_flight.get(_dedup_key) is not _wait_slot:
                             _orphaned = True
                             break
                     yield "event: heartbeat\ndata: {}\n\n"
             else:
                 # Timeout exhausted — force-clean the stale dedup entry so ALL
                 # subsequent requests can become runners instead of also waiting.
+                # Only if it is still the slot we waited on: a newer run's slot
+                # is not stale.
                 async with _in_flight_lock:
-                    _in_flight.pop(_dedup_key, None)
+                    if _in_flight.get(_dedup_key) is _wait_slot:
+                        _in_flight.pop(_dedup_key, None)
                 yield f"event: error\ndata: {json.dumps({'error': 'Timed out waiting for in-progress analysis (15 min). The next request will start a fresh run.'})}\n\n"
                 return
 
             # Runner finished (event was set) or was orphaned — check for cached result
-            _result = analysis_service.get_cached_run(ticker, within_minutes=5)
+            _result = await _scoped_cached_run(ticker, 5, user_id, model_name)
             if _result:
                 yield (
                     f"event: cached\ndata: "
                     f"{json.dumps({'run_id': _result['run_id'], 'ticker': ticker, 'run_at': _result['run_at']})}\n\n"
                 )
+            elif not _same_scope:
+                _msg = ("Another analysis of " + ticker + " has just finished"
+                        " — please retry to start your own run.")
+                yield f"event: error\ndata: {json.dumps({'error': _msg})}\n\n"
             else:
                 # Runner failed or produced no result — tell client to retry.
                 # The dedup slot is already cleaned up by the runner's finally block.
@@ -269,8 +334,21 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 
     # ── Runner path: we hold the dedup slot, proceed with the pipeline ────────
     # Load API keys from DB — the caller's own keys override globals (3e)
-    api_key_svc = ApiKeyService(db)
-    api_keys = api_key_svc.get_api_keys_dict(user_id)
+    try:
+        api_keys = await asyncio.to_thread(ApiKeyService(db).get_api_keys_dict, user_id)
+    except Exception:
+        # The generator (whose finally releases the slot) never starts, so
+        # release it here or the ticker stays blocked for this process's life.
+        async with _in_flight_lock:
+            if _in_flight.get(_dedup_key) is _run_slot:
+                _in_flight.pop(_dedup_key, None)
+        _run_slot.event.set()
+        raise internal_error(logger, "run_analysis api-key load")
+    _run_id = _run_slot.run_id
+    # A fresh phase map for this run: the previous run's map (and its
+    # pipeline_complete marker) must not bleed into this one's status.
+    _live_phases.pop(ticker.upper(), None)
+    _live_phase_maps[ticker.upper()] = {}
 
     async def event_generator():
         result_container: dict = {}
@@ -316,6 +394,10 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 if partial_data:
                     event["partial_data"] = partial_data
                 phase_events.put_nowait(event)
+                # A cancelled run still unwinding must not write into the
+                # live state of the run that has since claimed this ticker.
+                if _in_flight.get(_dedup_key) is not _run_slot:
+                    return
                 # Store latest phase for read-only status endpoint
                 _tk = ticker.upper() if ticker else ""
                 _phase_event = {
@@ -339,44 +421,57 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                         api_keys=api_keys,
                         on_phase=_on_phase_sync,
                         user_id=user_id,
+                        run_id=_run_id,
                     )
                 result_container["run_id"] = run_id
                 result_container["result"] = result
             except Exception as exc:
-                error_container["error"] = str(exc)
+                # The pipeline's RuntimeError carries the worker traceback;
+                # log it, send the client only the first line.
+                logger.warning("analysis run %s (%s) failed: %s", _run_id, ticker, exc)
+                _first = (str(exc).strip().splitlines() or ["Analysis failed"])[0]
+                error_container["error"] = _first[:300]
             finally:
                 # Release the dedup slot and wake any waiters BEFORE signalling
                 # __pipeline_done__ so waiters can fetch the result while this
-                # SSE stream is still closing.
+                # SSE stream is still closing. Only OUR slot: after a cancel a
+                # resubmitted run may already hold this ticker.
                 async with _in_flight_lock:
-                    _in_flight.pop(_dedup_key, None)
+                    _superseded = (_dedup_key in _in_flight
+                                   and _in_flight[_dedup_key] is not _run_slot)
+                    if not _superseded:
+                        _in_flight.pop(_dedup_key, None)
 
                 # Write a synthetic "pipeline_complete" phase marker so reconnecting
                 # clients can detect completion even if the DB write hasn't landed yet.
                 # This stays in _live_phases for 120s before normal cleanup.
-                _tk_done = ticker.upper()
-                _completion_marker = {
-                    "phase": "pipeline_complete",
-                    "status": "done",
-                    "summary": f"Run completed: {result_container.get('run_id', '')}",
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
-                    "run_id": result_container.get("run_id", ""),
-                    "completed": True,
-                }
-                _live_phases[_tk_done] = _completion_marker
-                if _tk_done not in _live_phase_maps:
-                    _live_phase_maps[_tk_done] = {}
-                _live_phase_maps[_tk_done]["pipeline_complete"] = _completion_marker
+                # Skipped when superseded: the live state is the newer run's.
+                if not _superseded:
+                    _tk_done = ticker.upper()
+                    _completion_marker = {
+                        "phase": "pipeline_complete",
+                        "status": "done",
+                        "summary": f"Run completed: {result_container.get('run_id', '')}",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                        "run_id": result_container.get("run_id", ""),
+                        "completed": True,
+                    }
+                    _live_phases[_tk_done] = _completion_marker
+                    _done_map = _live_phase_maps.setdefault(_tk_done, {})
+                    _done_map["pipeline_complete"] = _completion_marker
 
-                # Schedule delayed cleanup — give clients 2 min to poll and see completion
-                async def _delayed_cleanup():
-                    await asyncio.sleep(120)
-                    _live_phases.pop(_tk_done, None)
-                    _live_phase_maps.pop(_tk_done, None)
-                asyncio.create_task(_delayed_cleanup())
+                    # Delayed cleanup — give clients 2 min to poll and see
+                    # completion. Pops only this run's state, never a newer
+                    # run's that started inside the window.
+                    async def _delayed_cleanup():
+                        await asyncio.sleep(120)
+                        if _live_phases.get(_tk_done) is _completion_marker:
+                            _live_phases.pop(_tk_done, None)
+                        if _live_phase_maps.get(_tk_done) is _done_map:
+                            _live_phase_maps.pop(_tk_done, None)
+                    asyncio.create_task(_delayed_cleanup())
 
-                if _run_event is not None:
-                    _run_event.set()
+                _run_slot.event.set()
                 await phase_events.put(
                     {"phase": "__pipeline_done__", "status": "done", "summary": ""}
                 )
@@ -476,7 +571,8 @@ async def _start_queue_run(
             if not runner_id:
                 return None  # neither claim nor read worked — fall back
             return StreamingResponse(
-                _queue_stream_generator(runner_id, ticker, model_name, waiter=True),
+                _queue_stream_generator(runner_id, ticker, model_name, waiter=True,
+                                        user_id=user_id),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
@@ -494,8 +590,13 @@ async def _start_queue_run(
         await queue_client.release_run(dedup_key)
         return None
 
+    _queue_run_owners[run_id] = user_id
+    while len(_queue_run_owners) > _QUEUE_RUN_OWNERS_MAX:
+        _queue_run_owners.pop(next(iter(_queue_run_owners)))
+
     return StreamingResponse(
-        _queue_stream_generator(run_id, ticker, model_name, waiter=False),
+        _queue_stream_generator(run_id, ticker, model_name, waiter=False,
+                                user_id=user_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -506,10 +607,10 @@ async def _queue_stream_generator(
     ticker: str,
     model_name: str,
     waiter: bool,
+    user_id: Optional[int] = None,
 ):
     """SSE stream sourced from progress_bus. Emits the same event contract as
     the in-process path: start / progress / heartbeat / cached / complete / error."""
-    from app.backend.services import progress_bus
 
     if waiter:
         yield (
@@ -553,15 +654,20 @@ async def _queue_stream_generator(
                     f"{json.dumps({'error': event.get('summary', 'Analysis failed')})}\n\n"
                 )
             elif waiter:
-                # Match the in-process waiter contract: hand back the cached run.
-                cached = analysis_service.get_cached_run(
-                    ticker, within_minutes=5
-                )
+                # Match the in-process waiter contract: hand back the cached run
+                # -- scoped to this caller and provider family.
+                cached = await _scoped_cached_run(ticker, 5, user_id, model_name)
                 if cached:
                     yield (
                         f"event: cached\ndata: "
                         f"{json.dumps({'run_id': cached['run_id'], 'ticker': ticker, 'run_at': cached['run_at']})}\n\n"
                     )
+                elif not await _run_in_scope(run_id, user_id, model_name):
+                    # The runner's run belongs to another account or provider:
+                    # handing back its id would 404 (or show the wrong model).
+                    _msg = ("Another analysis of " + ticker + " has just finished"
+                            " — please retry to start your own run.")
+                    yield f"event: error\ndata: {json.dumps({'error': _msg})}\n\n"
                 else:
                     yield (
                         f"event: complete\ndata: "
@@ -574,6 +680,30 @@ async def _queue_stream_generator(
                 )
             return
         yield f"event: progress\ndata: {json.dumps(event)}\n\n"
+
+
+async def _run_in_scope(run_id: str, user_id: Optional[int],
+                        model_name: Optional[str]) -> bool:
+    """Whether *run_id* may be handed to this caller as their result.
+
+    Unknown runs (no web_runs row yet, DB unreadable) keep the legacy
+    behaviour (True); get_run_result still enforces ownership on read.
+    """
+    try:
+        meta = await asyncio.to_thread(analysis_service.get_run_meta, run_id)
+    except Exception:
+        return True
+    if not meta:
+        return True
+    owner = meta.get("user_id")
+    if owner is not None and owner != user_id:
+        return False
+    if meta.get("model_name") and (
+        analysis_service.provider_family(meta["model_name"])
+        != analysis_service.provider_family(model_name)
+    ):
+        return False
+    return True
 
 
 # ── GET /analysis/runs ────────────────────────────────────────────────────────
@@ -610,10 +740,8 @@ async def get_runs(
                 user_id=user_id,
             )
         )
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_history failed: %s\n%s", exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, "get_history")
 
 
 # ── GET /analysis/runs/{run_id} ───────────────────────────────────────────────
@@ -628,10 +756,8 @@ async def get_run(run_id: str, request: Request, db: Session = Depends(get_db)):
         return result
     except HTTPException:
         raise
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_run_result(%s) failed: %s\n%s", run_id, exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, f"get_run_result({run_id})")
 
 
 # ── GET /analysis/runs/{run_id}/workbook ─────────────────────────────────────
@@ -707,9 +833,8 @@ async def delete_run(run_id: str, request: Request, db: Session = Depends(get_db
         return {"deleted": run_id}
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("delete_run(%s) failed: %s", run_id, exc)
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, f"delete_run({run_id})")
 
 
 # ── Dead-worker detection for /analysis/status ────────────────────────────────
@@ -919,38 +1044,92 @@ async def cancel_analysis(ticker: str, request: Request, db: Session = Depends(g
     # the stored ticker will not match and the cancel silently no-ops. HK and SG
     # tickers are canonicalised there (e.g. 700.HK -> 00700.HK), and SG is
     # exactly where this matters most.
-    t = canonical_ticker(ticker)
+    t = canonical_ticker(validate_ticker_input(ticker))
     if not t:
-        raise HTTPException(status_code=400, detail="ticker required")
+        raise HTTPException(status_code=422, detail="ticker required")
 
-    from app.backend.services import analysis_service
+    # ── Who is asking, and whose run is this? ───────────────────────────────
+    # A cancel used to need no ownership at all: any caller could stop any
+    # user's run and purge every user's checkpoint rows for the ticker.
+    _caller = _get_user(request, db)
+    caller_id = _caller.id if _caller else None
+    _state = getattr(request, "state", None)
+    is_service = bool(getattr(_state, "is_service_call", False))
+    enforced = auth_enforced()
+    if enforced and caller_id is None and not is_service:
+        raise HTTPException(status_code=401, detail="authentication required")
 
-    result = {"ticker": t, "cancelled": True}
+    target_run_id: Optional[str] = None
+    owner_known = False
+    owner: Optional[int] = None
+    queue_runner = False
 
-    # 1. Ask the pipeline to stop at its next checkpoint.
-    try:
-        analysis_service.request_cancel(ticker=t)
-    except Exception as exc:
-        logger.warning("[cancel] %s: flag failed: %s", t, exc)
+    async with _in_flight_lock:
+        slot = _in_flight.get(t)
+    if slot is not None:
+        target_run_id, owner, owner_known = slot.run_id, slot.user_id, True
+    else:
+        try:
+            from app.backend.services import queue_client
+            runner_id = await queue_client.get_runner_run_id(
+                queue_client.build_dedup_key(t))
+        except Exception as exc:
+            logger.warning("[cancel] %s: runner lookup failed: %s", t, exc)
+            runner_id = None
+        if runner_id:
+            target_run_id, queue_runner = runner_id, True
+            if runner_id in _queue_run_owners:
+                owner, owner_known = _queue_run_owners[runner_id], True
+            else:
+                try:
+                    meta = await asyncio.to_thread(analysis_service.get_run_meta, runner_id)
+                except Exception:
+                    meta = None
+                if meta is not None:
+                    owner, owner_known = meta.get("user_id"), True
+
+    if owner_known and owner is not None and not is_service:
+        # Unauthenticated callers only get here with auth off (local dev),
+        # where every run is reachable anyway -- same rule as get_run_result.
+        if caller_id is not None and caller_id != owner:
+            raise HTTPException(status_code=403, detail="not your run")
+        if caller_id is None and enforced:
+            raise HTTPException(status_code=403, detail="not your run")
+
+    # "cancelled" stays True (cleanup ran) for the existing client contract;
+    # run_id says which run was flagged, None when nothing was in flight.
+    result = {"ticker": t, "cancelled": True, "run_id": target_run_id}
+
+    # 1. Ask THIS run to stop at its next checkpoint (per run id: a run
+    #    resubmitted right after the cancel is a different run and unaffected).
+    if target_run_id:
+        try:
+            analysis_service.request_cancel(run_id=target_run_id)
+        except Exception as exc:
+            logger.warning("[cancel] %s: flag failed: %s", t, exc)
 
     # 2. Release the distributed dedup slot so the ticker can be re-run at
     #    once, rather than waiting out the 65-minute TTL.
-    try:
-        from app.backend.services import queue_client
-        await queue_client.release_run(queue_client.build_dedup_key(t))
-        result["slot_released"] = True
-    except Exception as exc:
-        logger.warning("[cancel] %s: dedup release failed: %s", t, exc)
-        result["slot_released"] = False
+    result["slot_released"] = False
+    if queue_runner:
+        try:
+            from app.backend.services import queue_client
+            await queue_client.release_run(queue_client.build_dedup_key(t))
+            result["slot_released"] = True
+        except Exception as exc:
+            logger.warning("[cancel] %s: dedup release failed: %s", t, exc)
 
-    # 3. Unblock the in-process dedup waiters, if this run took that path.
-    try:
-        async with _in_flight_lock:
-            ev = _in_flight.pop(t, None)
-        if ev is not None:
-            ev.set()
-    except Exception as exc:
-        logger.warning("[cancel] %s: in-flight clear failed: %s", t, exc)
+    # 3. Unblock the in-process dedup waiters, if this run took that path --
+    #    only the slot we checked ownership of.
+    if slot is not None:
+        try:
+            async with _in_flight_lock:
+                if _in_flight.get(t) is slot:
+                    _in_flight.pop(t, None)
+            slot.event.set()
+            result["slot_released"] = True
+        except Exception as exc:
+            logger.warning("[cancel] %s: in-flight clear failed: %s", t, exc)
 
     # 4. Drop live phase state so a reconnecting client is not shown the
     #    cancelled run's progress as if it were still going.
@@ -958,21 +1137,28 @@ async def cancel_analysis(ticker: str, request: Request, db: Session = Depends(g
         await progress_bus.clear_ticker(t)
     except Exception as exc:
         logger.warning("[cancel] %s: progress bus clear failed: %s", t, exc)
-    try:
-        _live_phases.pop(t, None)
-    except Exception:
-        pass
+    _live_phases.pop(t, None)
+    _live_phase_maps.pop(t, None)
 
-    # 5. Remove the partial row. Guarded on is_checkpoint = 1 inside
-    #    purge_run_rows, so a completed run is never deleted.
+    # 5. Remove partial rows: this run's, plus the caller's own abandoned
+    #    checkpoints for the ticker -- never another user's. Guarded on
+    #    is_checkpoint = 1 inside purge_run_rows, so a completed run is never
+    #    deleted.
+    removed = 0
     try:
-        result["rows_removed"] = await asyncio.to_thread(analysis_service.purge_run_rows, t)
+        if target_run_id:
+            removed += await asyncio.to_thread(
+                analysis_service.purge_run_rows, t, run_id=target_run_id)
+        removed += await asyncio.to_thread(functools.partial(
+            analysis_service.purge_run_rows, t, user_id=caller_id,
+            all_users=(caller_id is None and (is_service or not enforced)),
+        ))
     except Exception as exc:
         logger.warning("[cancel] %s: row purge failed: %s", t, exc)
-        result["rows_removed"] = 0
+    result["rows_removed"] = removed
 
-    logger.info("[cancel] %s: slot_released=%s rows_removed=%s",
-                t, result.get("slot_released"), result.get("rows_removed"))
+    logger.info("[cancel] %s: run=%s slot_released=%s rows_removed=%s",
+                t, target_run_id, result.get("slot_released"), result.get("rows_removed"))
     return result
 
 
@@ -1356,6 +1542,9 @@ async def get_company_names_batch(tickers: str):
 
 # ── GET /analysis/company/{ticker} ───────────────────────────────────────────
 
+_COMPANY_INFO_TIMEOUT_S = 8.0
+
+
 @router.get("/company/{ticker}")
 async def get_company_info(ticker: str):
     """Return company profile for a ticker symbol (via yfinance): name, sector, industry."""
@@ -1410,9 +1599,15 @@ async def get_company_info(ticker: str):
     sector: str | None = None
     industry: str | None = None
 
+    # yfinance .info is a blocking HTTP call: inline, 20 concurrent requests
+    # froze the whole server for ~6 s. Off the loop, with a timeout so a hung
+    # Yahoo request degrades to the fallbacks below.
     try:
         import yfinance as yf
-        info = yf.Ticker(yf_sym).info
+        info = await asyncio.wait_for(
+            asyncio.to_thread(lambda: yf.Ticker(yf_sym).info),
+            timeout=_COMPANY_INFO_TIMEOUT_S,
+        ) or {}
         name     = info.get("longName") or info.get("shortName") or None
         sector   = info.get("sector") or None
         industry = info.get("industry") or None
@@ -1428,7 +1623,10 @@ async def get_company_info(ticker: str):
         if not name:
             try:
                 import akshare as ak
-                df = ak.stock_hk_spot_em()
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(ak.stock_hk_spot_em),
+                    timeout=_COMPANY_INFO_TIMEOUT_S,
+                )
                 hit = df[df["代码"] == ak_code]
                 if not hit.empty:
                     raw = str(hit.iloc[0].get("名称", "") or "").strip()
@@ -2717,10 +2915,8 @@ async def get_financials(ticker: str, period: str = "annual"):
 async def get_summary():
     try:
         return await asyncio.to_thread(analysis_service.get_archive_summary)
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_archive_summary failed: %s\n%s", exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, "get_archive_summary")
 
 
 # ── POST /analysis/research-summary ──────────────────────────────────────────

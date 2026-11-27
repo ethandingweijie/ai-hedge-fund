@@ -10,15 +10,16 @@ per the async-routes rule.
 """
 import asyncio
 import logging
-import traceback
+import math
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.backend.database.connection import get_db
+from app.backend.request_guards import TICKER_MAX_LEN, TICKER_RE, internal_error
 from app.backend.services import portfolio_service
 from app.backend.services.auth_service import get_user_from_token
 
@@ -26,19 +27,47 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class HoldingRequest(BaseModel):
-    ticker: str
-    quantity: float = Field(gt=0)
-    avg_cost: float = Field(gt=0)
-    opened_at: Optional[datetime] = None
-    notes: Optional[str] = None
+# Bounds: 1e309 parses to inf and a non-finite quantity 500'd /portfolio on
+# every load until the row was deleted. allow_inf_nan=False rejects inf/nan;
+# the ceilings are far above any real position and keep products finite.
+_MAX_QUANTITY = 1e12
+_MAX_PRICE = 1e9
 
 
-class HoldingUpdate(BaseModel):
-    quantity: Optional[float] = Field(default=None, gt=0)
-    avg_cost: Optional[float] = Field(default=None, gt=0)
+def _finite_or_tag(v):
+    """Turn a non-finite float into its string tag before validation.
+
+    The value is still rejected (allow_inf_nan=False parses "inf" back and
+    refuses it), but the 422 body echoes the input -- and a raw inf/nan in
+    that body makes the JSON encoder raise, turning the 422 into a 500.
+    """
+    if isinstance(v, float) and not math.isfinite(v):
+        return repr(v)
+    return v
+
+
+class _HoldingNumbers(BaseModel):
+    @field_validator("quantity", "avg_cost", mode="before", check_fields=False)
+    @classmethod
+    def _tag_non_finite(cls, v):
+        return _finite_or_tag(v)
+
+
+class HoldingRequest(_HoldingNumbers):
+    # Anchored: pydantic's `pattern` is a search, not a full match.
+    ticker: str = Field(min_length=1, max_length=TICKER_MAX_LEN,
+                        pattern=r"^\s*" + TICKER_RE.pattern + r"\s*$")
+    quantity: float = Field(gt=0, le=_MAX_QUANTITY, allow_inf_nan=False)
+    avg_cost: float = Field(gt=0, le=_MAX_PRICE, allow_inf_nan=False)
     opened_at: Optional[datetime] = None
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class HoldingUpdate(_HoldingNumbers):
+    quantity: Optional[float] = Field(default=None, gt=0, le=_MAX_QUANTITY, allow_inf_nan=False)
+    avg_cost: Optional[float] = Field(default=None, gt=0, le=_MAX_PRICE, allow_inf_nan=False)
+    opened_at: Optional[datetime] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
 
 
 def _optional_user_id(authorization: Optional[str] = Header(default=None),
@@ -60,9 +89,8 @@ async def get_portfolio_dashboard(user_id: Optional[int] = Depends(_optional_use
     weights, sector exposure and unrealized P&L."""
     try:
         return await asyncio.to_thread(portfolio_service.get_dashboard, db, user_id)
-    except Exception as exc:
-        logger.error("get_portfolio_dashboard failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "get_portfolio_dashboard")
 
 
 @router.post("/holdings")
@@ -77,9 +105,8 @@ async def add_holding(body: HoldingRequest,
         return portfolio_service._holding_dict(row)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        logger.error("add_holding failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "add_holding")
 
 
 @router.put("/holdings/{holding_id}")
@@ -95,9 +122,8 @@ async def update_holding(holding_id: int, body: HoldingUpdate,
         return portfolio_service._holding_dict(row)
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("update_holding failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "update_holding")
 
 
 @router.delete("/holdings/{holding_id}")
@@ -112,9 +138,8 @@ async def delete_holding(holding_id: int,
         return {"removed": holding_id}
     except HTTPException:
         raise
-    except Exception as exc:
-        logger.error("delete_holding failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "delete_holding")
 
 
 # ── P2: crisis replay ────────────────────────────────────────────────────────
@@ -138,9 +163,8 @@ async def start_replay(user_id: Optional[int] = Depends(_optional_user_id),
         raise HTTPException(status_code=503, detail="portfolio replay disabled")
     try:
         out = await asyncio.to_thread(portfolio_service.start_replay, db, user_id)
-    except Exception as exc:
-        logger.error("start_replay failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "start_replay")
     if out.get("error") == "no_holdings":
         raise HTTPException(status_code=400, detail="add holdings before replaying")
     return out
@@ -205,9 +229,8 @@ async def start_what_if(body: WhatIfRequest,
             body.horizon_days, body.share, body.parent_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        logger.error("start_what_if failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "start_what_if")
     if out.get("error") == "no_holdings":
         raise HTTPException(status_code=400, detail="add holdings before simulating")
     return out
@@ -274,9 +297,8 @@ async def add_what_if_note(scenario_id: str, body: NoteRequest,
             user_name, body.text)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        logger.error("add_what_if_note failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "add_what_if_note")
     if note is None:
         raise HTTPException(status_code=404,
                             detail=f"scenario {scenario_id} not found")
@@ -296,9 +318,8 @@ async def compare_what_if(scenario_id: str,
         out = await asyncio.to_thread(
             portfolio_service.compare_what_if_to_holdings, db, user_id,
             scenario_id)
-    except Exception as exc:
-        logger.error("compare_what_if failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "compare_what_if")
     if out is None:
         raise HTTPException(status_code=404,
                             detail=f"scenario {scenario_id} not found")
@@ -326,6 +347,5 @@ async def check_assumption(assumption_id: str, body: CheckRequest,
             assumption_id, body.method)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        logger.error("check_assumption failed: %s\n%s", exc, traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        raise internal_error(logger, "check_assumption")

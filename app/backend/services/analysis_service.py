@@ -675,46 +675,48 @@ def _build_resume_bundle(
 # checkpoint callback checks; the run unwinds at the next boundary instead of
 # being torn down mid-write.
 _CANCELLED_RUNS: set[str] = set()
-_CANCELLED_TICKERS: set[str] = set()
 
 
 class RunCancelled(Exception):
     """Raised inside the pipeline thread when a cancel has been requested."""
 
 
-def request_cancel(run_id: Optional[str] = None, ticker: Optional[str] = None) -> None:
-    """Mark a run (by id and/or ticker) as cancelled.
+# Cancellation is keyed by run id ONLY. It used to accept a ticker too, and
+# that was unsafe both ways: a new run of the ticker had to clear the ticker
+# flag at start (or every later run stopped at its first checkpoint), so a
+# cancel followed by an immediate resubmit let run B wipe run A's flag and
+# BOTH runs completed. The route resolves the ticker to the in-flight run id
+# (it mints the id before the run starts), so a ticker is never needed here.
 
-    Ticker is accepted because the client often knows only that: the run_id is
-    assigned server-side and a waiter-flavour SSE client never learns it.
-    """
+def request_cancel(run_id: Optional[str] = None) -> None:
+    """Mark one run as cancelled; it stops at its next checkpoint."""
     if run_id:
         _CANCELLED_RUNS.add(run_id)
-    if ticker:
-        _CANCELLED_TICKERS.add(ticker.upper())
 
 
-def is_cancelled(run_id: Optional[str] = None, ticker: Optional[str] = None) -> bool:
-    if run_id and run_id in _CANCELLED_RUNS:
-        return True
-    if ticker and ticker.upper() in _CANCELLED_TICKERS:
-        return True
-    return False
+def is_cancelled(run_id: Optional[str] = None) -> bool:
+    return bool(run_id) and run_id in _CANCELLED_RUNS
 
 
-def clear_cancel(run_id: Optional[str] = None, ticker: Optional[str] = None) -> None:
-    """Drop the flag once a run has actually stopped, so the next run is clean."""
+def clear_cancel(run_id: Optional[str] = None) -> None:
+    """Drop the flag once a run has actually stopped."""
     if run_id:
         _CANCELLED_RUNS.discard(run_id)
-    if ticker:
-        _CANCELLED_TICKERS.discard(ticker.upper())
 
 
-def purge_run_rows(ticker: str, run_id: Optional[str] = None) -> int:
-    """Delete abandoned checkpoint rows for a ticker (never final rows).
+def purge_run_rows(ticker: str, run_id: Optional[str] = None,
+                   user_id: Optional[int] = None,
+                   all_users: bool = False) -> int:
+    """Delete abandoned checkpoint rows (never final rows).
 
     Guarded on is_checkpoint = 1 so a completed run is never removed: a
     successful run upserts its row to is_checkpoint = 0.
+
+    With *run_id* only that run's row goes. Without it the purge is limited to
+    the caller's own rows for *ticker* (``user_id`` match, plus legacy NULL
+    rows); ``all_users=True`` (unauthenticated local dev) restores the old
+    ticker-wide purge. A cancel used to delete every user's checkpoint rows
+    for the ticker.
     """
     _ensure_web_runs_table()
     try:
@@ -723,9 +725,21 @@ def purge_run_rows(ticker: str, run_id: Optional[str] = None) -> int:
                 "DELETE FROM web_runs WHERE is_checkpoint = 1 AND run_id = ?",
                 [run_id],
             )
+        if all_users:
+            return _exec(
+                "DELETE FROM web_runs WHERE is_checkpoint = 1 AND UPPER(ticker) = UPPER(?)",
+                [ticker],
+            )
+        if user_id is None:
+            return _exec(
+                "DELETE FROM web_runs WHERE is_checkpoint = 1 AND UPPER(ticker) = UPPER(?) "
+                "AND user_id IS NULL",
+                [ticker],
+            )
         return _exec(
-            "DELETE FROM web_runs WHERE is_checkpoint = 1 AND UPPER(ticker) = UPPER(?)",
-            [ticker],
+            "DELETE FROM web_runs WHERE is_checkpoint = 1 AND UPPER(ticker) = UPPER(?) "
+            "AND (user_id = ? OR user_id IS NULL)",
+            [ticker, user_id],
         )
     except Exception as exc:
         logger.warning("[cancel] purge_run_rows failed for %s: %s", ticker, exc)
@@ -913,44 +927,85 @@ def _save_web_run(
 
 # ── Cache helper ──────────────────────────────────────────────────────────────
 
+def provider_family(model_name: Optional[str]) -> str:
+    """'qwen' for Qwen runs, 'claude' for everything else.
+
+    Mirrors _resolve_run_models: a model id starting with "qwen" runs on
+    Alibaba, anything else on Anthropic. The landing-page provider toggle
+    picks between the two, so the run cache must never hand one family's
+    run to a request for the other.
+    """
+    return "qwen" if str(model_name or "").strip().lower().startswith("qwen") else "claude"
+
+
 def get_cached_run(
     ticker: str,
     within_minutes: int = 30,
+    user_id: Optional[int] = None,
+    model_name: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Return the most recent completed web run for *ticker* if it was created
     within *within_minutes* minutes ago, otherwise None.
 
-    Runs are per-ticker (the investor committee was decommissioned in M2
-    Track E), so no agent-set comparison is needed — the newest completed
-    run for the ticker IS the cached result.
+    Scoped to the caller: only runs owned by *user_id* (``user_id IS NULL``
+    rows for an anonymous caller) and of the same provider family as
+    *model_name* (see provider_family). Unscoped, a second user was handed
+    another user's run id -- which get_run_result then 404s on ownership --
+    and could not start their own run for 30 minutes; and flipping the
+    Qwen/Anthropic toggle silently served the other provider's run.
+
+    Selects only the identifying columns: callers need run_id/run_at, and
+    parsing the full result blob here cost a multi-MB json.loads per request.
     """
     _ensure_web_runs_table()
     cutoff = (datetime.now() - timedelta(minutes=within_minutes)).strftime(
         "%Y-%m-%dT%H:%M:%S.%f"
     )
+    where = [
+        "ticker = ?",
+        "run_at >= ?",
+        "full_result_json IS NOT NULL",
+        f"{_json_field('checkpoint')} IS NULL",
+    ]
+    params: list = [ticker.upper(), cutoff]
+    if user_id is None:
+        where.append("user_id IS NULL")
+    else:
+        where.append("user_id = ?")
+        params.append(user_id)
+    # LIKE pattern goes in as a parameter: a literal % in the SQL text breaks
+    # psycopg's placeholder parsing.
+    if provider_family(model_name) == "qwen":
+        where.append("LOWER(COALESCE(model_name, '')) LIKE ?")
+    else:
+        where.append("LOWER(COALESCE(model_name, '')) NOT LIKE ?")
+    params.append("qwen%")
     row = _fetch_one(
-        f"""
-        SELECT run_id, run_at, ticker, full_result_json
-        FROM   web_runs
-        WHERE  ticker  = ?
-          AND  run_at >= ?
-          AND  full_result_json IS NOT NULL
-          AND  {_json_field("checkpoint")} IS NULL
-        ORDER  BY run_at DESC
-        LIMIT  1
-        """,
-        [ticker.upper(), cutoff],
+        "SELECT run_id, run_at, ticker FROM web_runs WHERE "
+        + " AND ".join(where)
+        + " ORDER BY run_at DESC LIMIT 1",
+        params,
     )
     if row is None:
         return None
 
     return {
-        "run_id":           row["run_id"],
-        "run_at":           row["run_at"],
-        "ticker":           row["ticker"],
-        "full_result_json": json.loads(row["full_result_json"]),
+        "run_id": row["run_id"],
+        "run_at": row["run_at"],
+        "ticker": row["ticker"],
     }
+
+
+def get_run_meta(run_id: str) -> Optional[dict]:
+    """{user_id, model_name} of a web_runs row (checkpoint or final), or None."""
+    _ensure_web_runs_table()
+    row = _fetch_one(
+        "SELECT user_id, model_name FROM web_runs WHERE run_id = ?", [run_id]
+    )
+    if row is None:
+        return None
+    return {"user_id": row["user_id"], "model_name": row["model_name"]}
 
 
 # ── Delete helper ─────────────────────────────────────────────────────────────
@@ -1725,11 +1780,9 @@ async def run_analysis_pipeline(
     can subscribe to progress:{run_id} before the job starts executing.
     """
     run_id = run_id or str(uuid.uuid4())
-    # A ticker-level cancel belongs to the run it was aimed at. clear_cancel was never called, so a cancel left
-    # the ticker flagged for the life of the process and every later run of it on that process stopped at its
-    # first checkpoint (found 2026-10-07 purging a REGN run killed by a redeploy). A cancel sent during THIS run
-    # is set after this line and still applies.
-    clear_cancel(ticker=ticker)
+    # Cancellation is per run id (see request_cancel): a cancel aimed at an
+    # earlier run of this ticker can neither stop this run nor be cleared by
+    # it.
     loop = asyncio.get_event_loop()
     progress_queue: asyncio.Queue = asyncio.Queue()
     result_container: dict = {}
@@ -1816,7 +1869,7 @@ async def run_analysis_pipeline(
         that cannot be killed safely from outside, so a cancel request raises
         here and the run unwinds at a clean point rather than mid-write.
         """
-        if is_cancelled(run_id, ticker):
+        if is_cancelled(run_id):
             logger.info("[cancel] %s (%s): stopping at checkpoint %s",
                         ticker, run_id, checkpoint_name)
             raise RunCancelled(f"{ticker} cancelled by user")
@@ -1925,6 +1978,10 @@ async def run_analysis_pipeline(
     finally:
         progress.unregister_handler(_progress_handler)
         thread.join(timeout=5)
+        # The run has stopped, so its cancel flag (if any) has done its job.
+        # Left set while the thread is still alive so a cancel still lands.
+        if not thread.is_alive():
+            clear_cancel(run_id)
 
     if error_container:
         raise RuntimeError(

@@ -173,7 +173,7 @@ def test_waiter_stream_hands_back_cached_run(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None:
+        lambda ticker, within_minutes=None, **kw:
             {"run_id": "runner-1", "ticker": ticker, "run_at": "2026-08-08T00:00:00"})
 
     chunks = _drain(A._queue_stream_generator(
@@ -195,12 +195,34 @@ def test_waiter_stream_without_cache_emits_complete(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None: None)
+        lambda ticker, within_minutes=None, **kw: None)
+    # Runner row not written yet -> legacy behaviour: hand back its id.
+    monkeypatch.setattr(A.analysis_service, "get_run_meta", lambda run_id: None)
 
     chunks = _drain(A._queue_stream_generator(
         "runner-1", "NVDA", "m", waiter=True))
     name, done = _parse_sse(chunks[-1])
     assert name == "complete" and done["run_id"] == "runner-1"
+
+
+def test_waiter_stream_never_hands_back_another_users_run(monkeypatch):
+    """The runner's run belongs to user 7; a waiter for user 8 must not be
+    given its id (get_run_result would 404 it on ownership)."""
+    monkeypatch.setattr(progress_bus, "iter_events", _fake_iter_events([
+        {"phase": "pipeline_complete", "status": "done", "summary": "ok",
+         "completed": True},
+    ]))
+    monkeypatch.setattr(
+        A.analysis_service, "get_cached_run",
+        lambda ticker, within_minutes=None, **kw: None)
+    monkeypatch.setattr(A.analysis_service, "get_run_meta",
+                        lambda run_id: {"user_id": 7, "model_name": "claude-sonnet-4-6"})
+
+    chunks = _drain(A._queue_stream_generator(
+        "runner-1", "NVDA", "claude-sonnet-4-6", waiter=True, user_id=8))
+    name, err = _parse_sse(chunks[-1])
+    assert name == "error" and "retry" in err["error"]
+    assert "runner-1" not in chunks[-1]
 
 
 # ── _start_queue_run: claim / waiter / fallback ──────────────────────────────
@@ -241,7 +263,7 @@ def test_start_queue_run_waiter_subscribes_to_runner(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None: None)
+        lambda ticker, within_minutes=None, **kw: None)
 
     async def claim_fails(key, run_id):
         return False

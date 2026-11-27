@@ -371,8 +371,23 @@ def build_dashboard(holdings: list[dict],
 
 def get_dashboard(db: Session, user_id: Optional[int]) -> dict:
     """Full pipeline: holdings → live prices → latest signals → assembly."""
+    import math
     rows = list_holdings(db, user_id)
-    holdings = [_holding_dict(r) for r in rows]
+    holdings = []
+    for r in rows:
+        h = _holding_dict(r)
+        # A row written before the route rejected inf/nan (quantity=1e309)
+        # made every dashboard load 500. Skip it rather than fail the page;
+        # the route now refuses such values, so this only catches old rows.
+        try:
+            finite = math.isfinite(float(h.get("quantity"))) and math.isfinite(float(h.get("avg_cost")))
+        except (TypeError, ValueError):
+            finite = False
+        if not finite:
+            logger.warning("portfolio: skipping holding %s (%s) with non-finite quantity/cost",
+                           h.get("id"), h.get("ticker"))
+            continue
+        holdings.append(h)
     if not holdings:
         return build_dashboard([], {}, {})
 

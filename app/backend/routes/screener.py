@@ -4,12 +4,12 @@ app/backend/routes/screener.py
 Stock screener endpoint — fetches FMP candidates + joins with internal VGPM data.
 """
 import asyncio
-import traceback
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.backend.request_guards import internal_error
 from app.backend.services import screener_service
 
 logger = logging.getLogger(__name__)
@@ -40,10 +40,8 @@ async def get_screener_stocks(
             limit=limit,
             force_refresh=refresh,
         )
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_screener_stocks failed: %s\n%s", exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, "get_screener_stocks")
 
 
 @router.get("/hk-stocks")
@@ -55,10 +53,8 @@ async def get_hk_screener_stocks(
         result = await asyncio.to_thread(screener_service.get_hk_screener_stocks, force_refresh=refresh)
         # Live price + day change on every row (one FMP call per exchange).
         return await asyncio.to_thread(screener_service.overlay_exchange_quotes, result, "HKSE")
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_hk_screener_stocks failed: %s\n%s", exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, "get_hk_screener_stocks")
 
 
 @router.get("/sg-stocks")
@@ -70,10 +66,8 @@ async def get_sg_screener_stocks(
         result = await asyncio.to_thread(screener_service.get_sg_screener_stocks, force_refresh=refresh)
         # Live price + day change on every row (one FMP call per exchange).
         return await asyncio.to_thread(screener_service.overlay_exchange_quotes, result, "SES")
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.error("get_sg_screener_stocks failed: %s\n%s", exc, tb)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+    except Exception:
+        raise internal_error(logger, "get_sg_screener_stocks")
 
 
 @router.get("/lookup")

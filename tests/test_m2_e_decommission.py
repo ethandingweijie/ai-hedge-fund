@@ -49,7 +49,7 @@ def test_run_endpoint_ignores_legacy_agents_body_key(monkeypatch):
     behaviour as a new client — the cached-run lookup is agent-agnostic."""
     calls = []
 
-    def fake_cached(ticker, within_minutes=None):
+    def fake_cached(ticker, within_minutes=None, **scope):
         calls.append((ticker, within_minutes))
         return {"run_id": "cached-1", "ticker": ticker,
                 "run_at": "2026-08-20T00:00:00"}
