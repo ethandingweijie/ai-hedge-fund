@@ -178,6 +178,36 @@ def ensure_learning_ledger_columns(engine: sa.engine.Engine) -> None:
         logger.info("Schema guard: learning ledger columns added: %s", added)
 
 
+def ensure_id_sequences(engine: sa.engine.Engine) -> None:
+    """Postgres: every identity / serial key generates ahead of the rows already there.
+
+    2026-11-27: the 2026-04 SQLite->Postgres copy left identity sequences where
+    they started. watchlist.id sat at 3 beside a max id of 8, and its insert is
+    ON CONFLICT DO NOTHING, so adding a name silently did nothing;
+    hq_question_ledger.id sat at 1 beside 39,226 rows. Forward-only (setval to
+    MAX+1 when behind), idempotent, a no-op on SQLite.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    from src.data import db
+    if not db.is_postgres():
+        return
+    rows = db.query(
+        "SELECT DISTINCT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND (is_identity = 'YES' "
+        "OR position('nextval' in coalesce(column_default, '')) > 0)"
+    )
+    moved = []
+    for r in rows:
+        try:
+            if db.ensure_serial_id(r["table_name"], r["column_name"]):
+                moved.append(f"{r['table_name']}.{r['column_name']}")
+        except Exception:                                  # noqa: BLE001
+            logger.exception("Schema guard: sequence check failed for %s.%s", r["table_name"], r["column_name"])
+    if moved:
+        logger.info("Schema guard: id sequences moved past MAX(id): %s", moved)
+
+
 def ensure_all(engine: sa.engine.Engine) -> None:
     """Run every runtime schema guard. Called at boot (main.py) and by
     scripts/sync_schema.py. Failures are logged, not raised — a startup
@@ -185,7 +215,7 @@ def ensure_all(engine: sa.engine.Engine) -> None:
     the missing columns."""
     for guard in (ensure_user_extensions, ensure_api_key_user_scope,
                   ensure_calibration_family, ensure_agent_lessons_scope,
-                  ensure_learning_ledger_columns):
+                  ensure_learning_ledger_columns, ensure_id_sequences):
         try:
             guard(engine)
         except Exception:

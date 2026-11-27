@@ -14,7 +14,8 @@ versus the bare absolute number. E.g.:
 Implementation:
 
   • Computes peer medians lazily across the complacency universe (50 tickers).
-  • Caches the result in SQLite (`peer_benchmarks` table) with a 14-day TTL
+  • Caches the result in the run archive (`peer_benchmarks` table; Postgres in
+    production via src.data.db since 2026-11-27) with a 14-day TTL
     so per-ticker scoring doesn't re-fan-out the cohort.
   • Falls back to a static SOFTWARE_TECH_REFERENCE dict when the cache is
     cold and a live refresh would be too slow.
@@ -33,12 +34,13 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import statistics
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
+
+from src.data import db
 
 logger = logging.getLogger(__name__)
 
@@ -60,30 +62,13 @@ SOFTWARE_TECH_REFERENCE: dict[str, dict[str, float]] = {
 }
 
 
-# ─── SQLite cache ─────────────────────────────────────────────────────────
-
-
-def _get_db_path() -> str:
-    import os
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+# ─── Cache (shared run archive) ─────────────────────────────────────────────────────────
 
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS peer_benchmarks (
     refreshed_at  TEXT NOT NULL,
-    cohort_name   TEXT NOT NULL,        -- 'complacency'
+    cohort_name   TEXT NOT NULL,
     metric        TEXT NOT NULL,
     median_value  REAL,
     p25_value     REAL,
@@ -94,59 +79,50 @@ CREATE TABLE IF NOT EXISTS peer_benchmarks (
 """
 
 
+_ensured_for: Optional[str] = None
+_ensure_lock = threading.Lock()
+
+
 def _ensure_table() -> None:
-    import os
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect()
-    try:
-        conn.execute(_DDL)
-        conn.commit()
-    finally:
-        conn.close()
+    global _ensured_for
+    target = "pg" if db.is_postgres() else db.get_db_path()
+    if _ensured_for == target:
+        return
+    with _ensure_lock:
+        if _ensured_for == target:
+            return
+        db.ensure_table(_DDL)
+        _ensured_for = target
 
 
 def _latest_refresh(cohort_name: str) -> Optional[str]:
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT MAX(refreshed_at) FROM peer_benchmarks WHERE cohort_name = ?",
-            (cohort_name,),
-        ).fetchone()
-    finally:
-        conn.close()
-    return row[0] if row and row[0] else None
+    row = db.query_one(
+        "SELECT MAX(refreshed_at) AS latest FROM peer_benchmarks WHERE cohort_name = ?",
+        [cohort_name],
+    )
+    return row["latest"] if row and row["latest"] else None
 
 
 def _load_latest(cohort_name: str) -> dict[str, dict[str, float]]:
     """Returns {metric: {median, p25, p75, sample_size}} for latest refresh."""
-    _ensure_table()
-    conn = _connect()
-    try:
-        latest = conn.execute(
-            "SELECT MAX(refreshed_at) FROM peer_benchmarks WHERE cohort_name = ?",
-            (cohort_name,),
-        ).fetchone()
-        if not latest or not latest[0]:
-            return {}
-        rows = conn.execute(
-            """
-            SELECT metric, median_value, p25_value, p75_value, sample_size
-            FROM peer_benchmarks
-            WHERE cohort_name = ? AND refreshed_at = ?
-            """,
-            (cohort_name, latest[0]),
-        ).fetchall()
-    finally:
-        conn.close()
-
+    latest = _latest_refresh(cohort_name)
+    if not latest:
+        return {}
+    rows = db.query(
+        """
+        SELECT metric, median_value, p25_value, p75_value, sample_size
+        FROM peer_benchmarks
+        WHERE cohort_name = ? AND refreshed_at = ?
+        """,
+        [cohort_name, latest],
+    )
     return {
-        r[0]: {
-            "median": r[1],
-            "p25": r[2],
-            "p75": r[3],
-            "sample_size": r[4],
+        r["metric"]: {
+            "median": r["median_value"],
+            "p25": r["p25_value"],
+            "p75": r["p75_value"],
+            "sample_size": r["sample_size"],
         }
         for r in rows
     }
@@ -155,25 +131,22 @@ def _load_latest(cohort_name: str) -> dict[str, dict[str, float]]:
 def _save_batch(cohort_name: str, medians: dict[str, dict[str, float]], sample_size: int) -> None:
     refreshed_at = datetime.now(timezone.utc).isoformat()
     _ensure_table()
-    conn = _connect()
-    try:
-        for metric, vals in medians.items():
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO peer_benchmarks
-                  (refreshed_at, cohort_name, metric, median_value,
-                   p25_value, p75_value, sample_size)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    refreshed_at, cohort_name, metric,
-                    vals.get("median"), vals.get("p25"), vals.get("p75"),
-                    sample_size,
-                ),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+    rows = [
+        [refreshed_at, cohort_name, metric, vals.get("median"), vals.get("p25"), vals.get("p75"), sample_size]
+        for metric, vals in medians.items()
+    ]
+    if rows:
+        db.executemany(
+            """
+            INSERT INTO peer_benchmarks
+              (refreshed_at, cohort_name, metric, median_value, p25_value, p75_value, sample_size)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(refreshed_at, cohort_name, metric) DO UPDATE SET
+              median_value = excluded.median_value, p25_value = excluded.p25_value,
+              p75_value = excluded.p75_value, sample_size = excluded.sample_size
+            """,
+            rows,
+        )
 
 
 # ─── Cohort refresh ───────────────────────────────────────────────────────

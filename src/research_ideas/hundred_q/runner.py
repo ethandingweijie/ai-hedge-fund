@@ -293,7 +293,9 @@ def run_daily_trigger_sweep(tickers: list[str] | None = None) -> list[dict]:
     if tickers is None:
         tickers = [r["ticker"] for r in storage.get_watchlist()] or list_tickers()
 
-    state = trigger_state.load_state(path=_HQ_TRIGGER_STATE_PATH)
+    # Persisted in the run archive (survives deploys); a local JSON file from
+    # before 2026-11-27 seeds it once when the table is still empty.
+    state = storage.load_trigger_state() or trigger_state.load_state(path=_HQ_TRIGGER_STATE_PATH)
     fired_log: list[dict] = []
 
     for ticker in tickers:
@@ -319,7 +321,7 @@ def run_daily_trigger_sweep(tickers: list[str] | None = None) -> list[dict]:
             run_event_triggered_rescore(ticker, trigger_type, reason=reason)
             fired_log.append({"ticker": ticker, "trigger_type": trigger_type, "reason": reason})
 
-    trigger_state.save_state(state, path=_HQ_TRIGGER_STATE_PATH)
+    storage.save_trigger_state(state)
     storage.record_sweep_run(uuid.uuid4().hex[:12], "daily_trigger_sweep", ticker_count=len(tickers))
     return fired_log
 

@@ -157,3 +157,129 @@ def test_implausible_fair_value_never_alerts(tmp_archive, monkeypatch):
     monkeypatch.setattr(mm, "load_hk50_candidates", lambda: cands)
     r = mm.run_iv15_sweep(baseline=False)
     assert r.fired == [] and r.implausible == ["hk50:0966.HK"] and posts == []
+
+
+# ── 100-Question screener + complacency peer benchmarks (ported 2026-11-27) ──
+
+HQ = "src.research_ideas.hundred_q.storage"
+PB = "src.research_ideas.complacency.peer_benchmarks"
+
+
+@pytest.fixture
+def tmp_archive2(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RUN_ARCHIVE_PATH", str(tmp_path / "archive2.db"))
+    for name in (HQ, PB):
+        importlib.import_module(name)._ensured_for = None
+    yield
+    for name in (HQ, PB):
+        importlib.import_module(name)._ensured_for = None
+
+
+@pytest.mark.parametrize("name", [HQ, PB])
+def test_research_stores_have_no_private_sqlite(name):
+    src = inspect.getsource(importlib.import_module(name))
+    assert "import sqlite3" not in src and "from src.data import db" in src
+
+
+def _cohort(run_id, tier, composite, answers):
+    from src.research_ideas.hundred_q.schemas import HundredQCohortResult, HundredQTickerResult, QuestionAnswer
+    led = [QuestionAnswer(question_id=q, pillar="P1", label=q, q_type="quant", answer=a,
+                          evaluated_at=f"2026-11-27T00:00:0{i}+00:00") for i, (q, a) in enumerate(answers)]
+    t = HundredQTickerResult(ticker="MSFT", name="Microsoft", tier=tier, composite_pct=composite, question_ledger=led)
+    return HundredQCohortResult(run_id=run_id, created_at="2026-11-27T00:00:00+00:00", run_type="weekly_quant",
+                                ticker_count=1, results=[t])
+
+
+def test_hundred_q_run_watchlist_and_tier_history(tmp_archive2):
+    s = importlib.import_module(HQ)
+    s.save_run(_cohort("r1", "on_deck", 55.0, [("P1.1", True), ("P1.2", False)]))
+    s.save_run(_cohort("r2", "active_pass", 81.0, [("P1.1", False)]))
+    wl = s.get_watchlist()
+    assert len(wl) == 1 and wl[0]["tier"] == "active_pass" and wl[0]["composite_pct"] == 81.0
+    hist = s.get_tier_history("MSFT")
+    assert [(h["from_tier"], h["to_tier"]) for h in hist] == [("on_deck", "active_pass")]
+    assert len(s.get_question_ledger("r1", "msft")) == 2
+    latest = s.get_latest_quant_answers("MSFT")
+    assert set(latest) == {"P1.1", "P1.2"}
+    assert s.get_latest_run_id() in ("r1", "r2")
+    assert s.get_latest_run_by_type("weekly_quant")["run_id"] in ("r1", "r2")
+    assert s.get_cohort_summary()["tier_counts"] == {"active_pass": 1}
+
+
+def test_hundred_q_sweep_event_and_qual_cache(tmp_archive2):
+    s = importlib.import_module(HQ)
+    from src.research_ideas.hundred_q.schemas import QuestionAnswer
+    s.record_sweep_run("sw1", "daily_trigger_sweep", 30)
+    assert s.get_latest_run_by_type("daily_trigger_sweep")["ticker_count"] == 30
+    s.record_event_triggered_run("ev1", "msft", "earnings",
+                                 [QuestionAnswer(question_id="P2.1", pillar="P2", label="x", q_type="quant", answer=True)])
+    assert len(s.get_question_ledger("ev1", "MSFT")) == 1
+    s.set_qual_answer("msft", "P5.1", "P5", True, 0.8, "ok", "[]", "deepseek-v4-flash", 0.001, "weekly")
+    s.set_qual_answer("msft", "P5.1", "P5", False, 0.6, "changed", "[]", "deepseek-v4-flash", 0.001, "event")
+    c = s.get_qual_cache("MSFT")
+    assert c["P5.1"]["answer"] == 0 and c["P5.1"]["triggered_by"] == "event"
+    assert s.get_qual_cache("MSFT", ["P5.1"]).keys() == {"P5.1"}
+    assert s.get_stale_qual_question_ids("MSFT", ["P5.1", "P5.2"]) == ["P5.2"]
+    assert s.get_stale_qual_question_ids("MSFT", []) == []
+
+
+def test_watchlist_sorts_null_composite_last(tmp_archive2):
+    s = importlib.import_module(HQ)
+    from src.data import db
+    s.save_run(_cohort("r1", "on_deck", 40.0, []))
+    s._ensure_tables()
+    db.execute("INSERT INTO hq_watchlist (ticker, tier, composite_pct) VALUES ('NUL', 'on_deck', NULL)")
+    assert [r["ticker"] for r in s.get_watchlist()] == ["MSFT", "NUL"]
+
+
+def test_peer_benchmarks_roundtrip(tmp_archive2):
+    pb = importlib.import_module(PB)
+    assert pb._load_latest("complacency") == {}
+    pb._save_batch("complacency", {"dso_days": {"median": 70, "p25": 50, "p75": 90}}, 48)
+    got = pb._load_latest("complacency")
+    assert got["dso_days"]["median"] == 70 and got["dso_days"]["sample_size"] == 48
+    assert pb._latest_refresh("complacency")
+
+
+def test_ensure_serial_id_is_noop_on_sqlite(tmp_archive2):
+    from src.data import db
+    assert db.ensure_serial_id("hq_question_ledger") is False
+
+
+def test_schema_guard_runs_id_sequence_check():
+    from app.backend.database import schema_guard as g
+    src = inspect.getsource(g.ensure_all)
+    assert "ensure_id_sequences" in src
+    import sqlalchemy as sa
+    g.ensure_id_sequences(sa.create_engine("sqlite://"))     # no-op off Postgres, never raises
+
+
+def test_hundred_q_trigger_state_survives_in_archive(tmp_archive2):
+    s = importlib.import_module(HQ)
+    assert s.load_trigger_state() == {}
+    s.save_trigger_state({"MSFT": {"new_10q": "0000950170-26-1", "earnings_reported": "2026-10-28"}})
+    s.save_trigger_state({"MSFT": {"new_10q": "0000950170-26-2"}})
+    assert s.load_trigger_state() == {"MSFT": {"new_10q": "0000950170-26-2", "earnings_reported": "2026-10-28"}}
+
+
+def test_daily_sweep_uses_archive_trigger_state():
+    src = inspect.getsource(importlib.import_module("src.research_ideas.hundred_q.runner").run_daily_trigger_sweep)
+    assert "storage.load_trigger_state()" in src and "storage.save_trigger_state(state)" in src
+
+
+def test_hk50_price_is_the_hk_quote_not_eps_times_pe(monkeypatch):
+    """A/H listing: provider P/E is the A-share multiple (ICBC 9.81 rebuilt vs HK$7.94)."""
+    import scripts.hk50_iv15 as m
+    from types import SimpleNamespace
+    monkeypatch.setattr(m, "get_financial_metrics", lambda *a, **k: [SimpleNamespace(
+        return_on_equity=0.1, payout_ratio=0.3, price_to_earnings_ratio=8.1, currency="CNY",
+        earnings_per_share=1.21, revenue_growth=0.02)])
+    monkeypatch.setattr(m, "_yf_info", lambda t: {"currentPrice": 7.94})
+    monkeypatch.setattr(m, "_owner_earnings_retention", lambda t: None, raising=False)
+    inp = m.build_inputs("1398.HK")
+    assert inp["price"] == 7.94 and abs(inp["pe"] - 7.94 / 1.21) < 1e-9
+    monkeypatch.setattr(m, "_yf_info", lambda t: {})
+    import src.research_ideas.alerts.batch_quote as bq
+    monkeypatch.setattr(bq, "fetch_batch_quotes", lambda syms: {"1398.HK": SimpleNamespace(price=7.62)})
+    assert m.build_inputs("1398.HK")["price"] == 7.62      # FMP quote when yfinance is down

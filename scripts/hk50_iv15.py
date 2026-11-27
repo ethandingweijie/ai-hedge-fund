@@ -260,7 +260,25 @@ def build_inputs(ticker):
     else:
         # HK (AKShare) or missing P/E: AKShare EPS is reliable & in listing ccy.
         E0 = fmg("earnings_per_share") or yi.get("trailingEps")
-        price = (E0 * pe) if (E0 and pe and E0 > 0 and pe > 0) else mkt_price
+        # 2026-11-27: the HK line's own quote, not EPS x P/E. For A/H dual
+        # listings the provider's P/E is the A-share multiple, so EPS x P/E
+        # rebuilt the A-share price: ICBC 9.81 vs HK$7.94 (+24%), New China
+        # Life +67% -- the A/H premium. EPS is already in HKD (AIA 6.08 =
+        # USD 0.78 x 7.8), so the HK quote is the consistent price. EPS x P/E
+        # stays only as a last resort when no quote resolves.
+        if not mkt_price and is_hk:
+            try:
+                from src.research_ideas.alerts.batch_quote import fetch_batch_quotes
+                q = fetch_batch_quotes([ticker]).get(ticker.upper())
+                mkt_price = q.price if q and q.price and q.price > 0 else None
+            except Exception:
+                mkt_price = None
+        if mkt_price and mkt_price > 0:
+            price = mkt_price
+            if E0 and E0 > 0:
+                pe = mkt_price / E0            # keep pe quote-consistent for downstream
+        else:
+            price = (E0 * pe) if (E0 and pe and E0 > 0 and pe > 0) else None
 
     # growth signal: conservative min of forward-EPS growth & revenue growth
     cands = []
@@ -312,7 +330,7 @@ def main():
     print("=" * 122)
     print(f"HK50 IV15  |  SW46 logic (15yr DDM @ {int(R*100)}% RR + Buffett-multiple blend)  |  end={END_DATE}")
     print(f"AICT modulation applies ONLY to SW/Internet-Platform names; all other sectors use a neutral Gordon path (AICT=—)")
-    print(f"OE proxied by trailing EPS; price = EPS x P/E (same currency as EPS)")
+    print(f"OE proxied by trailing EPS; price = the HK quote (EPS x P/E only when no quote resolves)")
     print("=" * 122)
     hdr = (f"{'Ticker':<9} {'Name':<16} {'AICT':<8} {'cur':<4} {'EPS':>8} {'g1':>6} "
            f"{'IV_A':>9} {'IV_B':>9} {'IV15':>9} {'Price':>9} {'P/IV15':>7} {'Vpts':>5}  read")
