@@ -14,6 +14,7 @@ import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { DataLimitationsBanner } from '@/components/report/DataLimitationsBanner';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
+import { BalanceSheetRiskCard, RisksToRatingCard } from '@/components/report/BalanceSheetRiskCard';
 import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
@@ -156,7 +157,8 @@ export function ReportViewPage() {
   const scenarioAnalysis = (data.scenario_analysis as Record<string, import('@/lib/reportTypes').ScenarioAnalysis> | undefined)?.[ticker];
   const powerLaw = (data.power_law_analysis as Record<string, import('@/lib/reportTypes').PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, import('@/lib/reportTypes').ValueTrapAnalysis> | undefined)?.[ticker];
-  const dcfRange = (data.dcf_range as Record<string, import('@/lib/reportTypes').DcfRange> | undefined)?.[ticker];
+  const riskMetrics = (data.risk_metrics as Record<string, import('@/lib/reportTypes').RiskMetricsBlock> | undefined)?.[ticker];
+  const dcfRange =(data.dcf_range as Record<string, import('@/lib/reportTypes').DcfRange> | undefined)?.[ticker];
   const dcfSkipReason = (data.dcf_skip_reasons as Record<string, string> | undefined)?.[ticker];
   const industryBrief = data.industry_brief as string | undefined;
 
@@ -378,6 +380,11 @@ export function ReportViewPage() {
         <div className={CARD_GRID}>
           <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
           <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
+        </div>
+        {/* Owner, 2026-11-27: also mounted in V2ReportView (mobile bypasses this JSX). */}
+        <div className={CARD_GRID}>
+          <BalanceSheetRiskCard block={riskMetrics} />
+          <RisksToRatingCard risks={decision?.risks_to_rating} fallbackLine={riskMetrics?.risk_line} />
         </div>
 
         {/* ── Research ─────────────────────────────────────── */}

@@ -1349,6 +1349,19 @@ def run_advanced_pipeline(
             if not _power_law_cached:
                 state["data"]["power_law_analysis"] = next(_p7_it)["data"]["power_law_analysis"]
 
+        # Owner, 2026-11-27 (contrarian QA item 6): the balance-sheet check is deterministic --
+        # level thresholds (net debt/EBITDA, interest cover), banks on capital, NOT ASSESSED on
+        # thin or stale data -- and replaces the model's trend-only call, cached or fresh.
+        try:
+            from src.agents.analysis.risk_metrics import (
+                assess_balance_sheet as _assess_bs, apply_balance_sheet_check as _apply_bs)
+            _vt_all = state["data"].get("value_trap_analysis") or {}
+            for _t in tickers:
+                if isinstance(_vt_all.get(_t), dict) and _vt_all[_t]:
+                    _vt_all[_t] = _apply_bs(_vt_all[_t], _assess_bs(state["data"], _t, as_of=end_date))
+        except Exception as _bs_exc:                       # noqa: BLE001 -- never blocks the run
+            print(f"  [value-trap] balance-sheet check skipped: {type(_bs_exc).__name__}: {_bs_exc}")
+
         for ticker in tickers:
             scen = state["data"]["scenario_analysis"].get(ticker, {})
             pl = state["data"]["power_law_analysis"].get(ticker, {})
@@ -1435,8 +1448,16 @@ def run_advanced_pipeline(
             flags = risk.get("level1_flags", []) + risk.get("sector_flags", [])
             print(f"  {ticker}: approved size {risk.get('approved_size_pct', 0):.1%}"
                   + (f" | flags: {'; '.join(flags)}" if flags else ""))
+        # Owner, 2026-11-27: the Balance sheet & risk card, assembled once from values the run holds.
+        try:
+            from src.agents.analysis.risk_metrics import risk_metrics_for as _risk_metrics_for
+            state["data"]["risk_metrics"] = _risk_metrics_for(state["data"], as_of=end_date)
+        except Exception as _rm_exc:                       # noqa: BLE001 -- disclosure only
+            state["data"]["risk_metrics"] = {}
+            print(f"  [risk-metrics] skipped: {type(_rm_exc).__name__}: {_rm_exc}")
         progress.update_status("advanced_risk_manager", primary_ticker, "✓ Risk assessed",
-                               partial_data={"analyst_signals": state["data"].get("analyst_signals")})
+                               partial_data={"analyst_signals": state["data"].get("analyst_signals"),
+                                             "risk_metrics": state["data"].get("risk_metrics")})
 
         # ----------------------------------------------------------------
         # PHASE 9 — Advanced Portfolio Manager
@@ -1775,6 +1796,7 @@ def run_advanced_pipeline(
             "scenario_analysis":  state["data"].get("scenario_analysis"),
             "power_law_analysis": state["data"].get("power_law_analysis"),
             "value_trap_analysis":state["data"].get("value_trap_analysis"),
+            "risk_metrics":       state["data"].get("risk_metrics", {}),
             "post_trade_review":  state["data"].get("post_trade_review"),
             # Phase 2.5 intelligence — included so downstream consumers
             # (alerts, PDF) can access without re-fetching from state.

@@ -7,7 +7,10 @@ What it does:
     2. Structural decline (negative 5-year revenue CAGR, shrinking market share)
     3. Earnings vs. cash flow mismatch (net income up but FCF flat, receivables > revenue growth)
     4. Insider behaviour (net selling by CEO/CFO >$5M last 12 months)
-    5. Balance sheet deterioration (net debt/EBITDA increasing 3+ consecutive years)
+    5. Balance sheet deterioration (net debt/EBITDA increasing 3+ consecutive years). Owner,
+       2026-11-27: the model's call is replaced after Phase 7 by the deterministic check in
+       src/agents/analysis/risk_metrics.py (level thresholds, banks on capital, NOT ASSESSED
+       on thin or stale data); the verdict moves by exactly that check's change.
 - Produces TRAP RISK HIGH / MEDIUM / LOW verdict
 - TRAP RISK HIGH halves the position size in the Portfolio Manager formula
 

@@ -9,12 +9,14 @@ interface ValueTrapChecklistProps {
   ticker?: string;
 }
 
+// `alt` is the key the backend actually emits (value_trap_agent / risk_metrics.py); the
+// frontend names never matched it, so those two rows were silently dropped (2026-11-27).
 const CHECKS = [
-  { key: 'dividend_sustainability', label: 'Dividend Sustainability' },
-  { key: 'structural_decline',      label: 'Structural Decline'      },
-  { key: 'earnings_cash_mismatch',  label: 'Earnings / Cash Mismatch'},
-  { key: 'insider_behaviour',       label: 'Insider Behaviour'       },
-  { key: 'balance_sheet',           label: 'Balance Sheet'           },
+  { key: 'dividend_sustainability', alt: 'dividend_sustainability',    label: 'Dividend Sustainability' },
+  { key: 'structural_decline',      alt: 'structural_decline',         label: 'Structural Decline'      },
+  { key: 'earnings_cash_mismatch',  alt: 'earnings_cashflow_mismatch', label: 'Earnings / Cash Mismatch'},
+  { key: 'insider_behaviour',       alt: 'insider_behaviour',          label: 'Insider Behaviour'       },
+  { key: 'balance_sheet',           alt: 'balance_sheet_deterioration', label: 'Balance Sheet'          },
 ] as const;
 
 const verdictColor: Record<string, string> = {
@@ -52,10 +54,10 @@ export function ValueTrapChecklist({ analysis }: ValueTrapChecklistProps) {
   const verdictCls = verdictColor[verdict] ?? 'bg-muted text-muted-foreground border-muted';
 
   // Build ordered list of all checks with their rating + evidence
-  const items = CHECKS.flatMap(({ key, label }) => {
-    const check = analysis[key];
+  const items = CHECKS.flatMap(({ key, alt, label }) => {
+    const check = analysis[key] ?? analysis[alt];
     if (!check) return [];
-    const rating   = (check.rating ?? 'AMBER').toUpperCase() as 'RED' | 'AMBER' | 'GREEN';
+    const rating   = (check.status ?? check.rating ?? 'NOT ASSESSED').toUpperCase();
     const evidence = check.evidence ?? check.detail ?? '';
     return [{ key, label, rating, evidence }];
   });
@@ -90,6 +92,14 @@ export function ValueTrapChecklist({ analysis }: ValueTrapChecklistProps) {
                 {/* Label */}
                 <span className="flex-1 text-xs font-medium text-foreground">
                   {label}
+                </span>
+
+                {/* Status in words: the monochrome dots alone cannot tell RED from GREEN. */}
+                <span className={`shrink-0 text-[11px] tracking-wide ${
+                  rating === 'RED' ? 'font-semibold text-content-high'
+                  : rating === 'AMBER' ? 'font-medium text-warning'
+                  : 'text-muted-foreground'}`}>
+                  {rating === 'NOT ASSESSED' ? 'Not assessed' : rating}
                 </span>
 
                 {/* Chevron */}

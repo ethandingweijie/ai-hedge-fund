@@ -469,8 +469,12 @@ def check_change_claims(text: str, attribution: dict,
 
 def build_risks_to_rating(*, rating_label: Optional[str], spot, target, view: Optional[dict],
                           pt_bridge: Optional[dict], scenario: Optional[dict], trap: Optional[dict],
-                          sym: str = "$") -> list[str]:
-    """2-4 computed sentences on what would make the rating or the target wrong."""
+                          sym: str = "$", balance_sheet_line: Optional[str] = None) -> list[str]:
+    """2-4 computed sentences on what would make the rating or the target wrong.
+
+    `balance_sheet_line` (owner, 2026-11-27): the Balance sheet & risk card's sentence naming each
+    leverage or dilution metric past its threshold (risk_metrics.balance_sheet_risk_line); it takes
+    the value-trap balance-sheet slot when present."""
     out: list[str] = []
     spot, target = _num(spot), _num(target)
     view = view or {}
@@ -525,10 +529,15 @@ def build_risks_to_rating(*, rating_label: Optional[str], spot, target, view: Op
             dn = spot * (1 + exp - thr - yld)
             out.append(f"The rating stays Neutral while the 12-month target sits between about {_money(dn, sym)} and "
                        f"{_money(up, sym)} at today's price.")
-    # 3. value-trap checks that came back RED or AMBER
+    # 3. balance sheet and dilution past their thresholds
+    if balance_sheet_line and len(out) < 4:
+        out.append(str(balance_sheet_line).strip())
+    # 4. value-trap checks that came back RED or AMBER
     for key, label in (("structural_decline", "Structural decline"), ("balance_sheet_deterioration", "Balance sheet"),
                        ("earnings_cashflow_mismatch", "Earnings quality"), ("dividend_sustainability", "Dividend"),
                        ("insider_behaviour", "Insider selling")):
+        if key == "balance_sheet_deterioration" and balance_sheet_line:
+            continue
         chk = (trap or {}).get(key) or {}
         if isinstance(chk, dict) and str(chk.get("status") or "").upper() in ("RED", "AMBER") and len(out) < 4:
             ev = re.split(r"(?<=[.])\s", str(chk.get("evidence") or "").strip())[0][:200]

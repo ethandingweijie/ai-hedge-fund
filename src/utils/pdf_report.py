@@ -2684,6 +2684,48 @@ def _risks_to_rating_block(decision: dict, styles, width: float) -> list:
     return out
 
 
+def _risk_metrics_for_pdf(result: dict, ticker: str) -> dict:
+    rm = (result.get("risk_metrics") or {}).get(ticker)
+    if rm:
+        return rm
+    try:
+        from src.agents.analysis.risk_metrics import assemble_risk_metrics
+        return assemble_risk_metrics(result, ticker, as_of=result.get("run_at") or result.get("end_date"))
+    except Exception:                                      # noqa: BLE001
+        return {}
+
+
+def _balance_sheet_risk_block(rm: dict, styles, width: float) -> list:
+    """Owner, 2026-11-27: the Balance sheet & risk card -- value plus one plain line per metric,
+    "n/a -- reason" when the run did not have it. Same block as the web card (data.risk_metrics)."""
+    metrics = (rm or {}).get("metrics") or []
+    if not metrics:
+        return []
+    out = _section_header("BALANCE SHEET & RISK", width)
+    rows = []
+    for m in metrics:
+        val = m.get("display") or f"n/a — {m.get('reason') or 'not in this run'}"
+        rows.append([Paragraph(_strip(str(m.get("label") or "")), styles["RptLabel"]),
+                     Paragraph(_strip(str(val)), styles["RptValue"]),
+                     Paragraph(_strip(str(m.get("explain") or "")), styles["RptSource"])])
+    t = Table(rows, colWidths=[width * 0.26, width * 0.30, width * 0.44], hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING",   (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBELOW",    (0, 0), (-1, -1), 0.25, C_LGREY),
+    ]))
+    out.append(t)
+    chk = (rm or {}).get("balance_sheet_check") or {}
+    if chk.get("evidence"):
+        out.append(Spacer(1, 3))
+        out.append(Paragraph(f"<b>Value-trap balance-sheet check: {_strip(str(chk.get('status') or ''))}.</b> "
+                             f"{_strip(str(chk['evidence']))}", styles["RptBody"]))
+    return out
+
+
 def _disclosures_section(ticker: str, disc: dict, styles, page_w: float, multi: bool) -> list:
     """Last section: data limitations for this run, then the standing disclosures."""
     out: list = []
@@ -3209,7 +3251,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
                  + _section_header("SCENARIO ANALYSIS", _w)
                  + _scenario_block(_scn, _dcf_t, styles, _w)
                  + _methodology_and_street_block(_disc_t, styles)
-                 + _risks_to_rating_block(_dec, styles, _w))
+                 + _risks_to_rating_block(_dec, styles, _w)
+                 + _balance_sheet_risk_block(_risk_metrics_for_pdf(result, _t), styles, _w))
         if _single:
             story += _title + [FrameBreak()] + _side_column(_t, side_w) + [FrameBreak()]
             story += [NextPageTemplate("body")] + _main

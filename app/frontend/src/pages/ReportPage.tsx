@@ -30,6 +30,7 @@ import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
 import { DataLimitationsBanner } from '@/components/report/DataLimitationsBanner';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
+import { BalanceSheetRiskCard, RisksToRatingCard } from '@/components/report/BalanceSheetRiskCard';
 import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { ExportFab } from '@/components/report/ExportFab';
@@ -661,6 +662,7 @@ export function ReportPage() {
   const scenarioAnalysis = _byTicker(data.scenario_analysis as Record<string, import('@/lib/reportTypes').ScenarioAnalysis> | undefined);
   const powerLaw      = _byTicker(data.power_law_analysis  as Record<string, import('@/lib/reportTypes').PowerLawAnalysis>  | undefined);
   const valueTrap     = _byTicker(data.value_trap_analysis as Record<string, import('@/lib/reportTypes').ValueTrapAnalysis> | undefined);
+  const riskMetrics   = _byTicker(data.risk_metrics        as Record<string, import('@/lib/reportTypes').RiskMetricsBlock>  | undefined);
   const dcfRange      = _byTicker(data.dcf_range           as Record<string, import('@/lib/reportTypes').DcfRange>          | undefined);
   const dcfSkipReason = _byTicker(data.dcf_skip_reasons    as Record<string, string>                                        | undefined);
   const industryBrief = data.industry_brief       as string | undefined;
@@ -1457,6 +1459,9 @@ export function ReportPage() {
             {renderSection('risk', 'Value Trap Audit', (
               <ValueTrapChecklist analysis={valueTrap} ticker={liveTicker} />
             ))}
+            {/* Owner, 2026-11-27: also mounted in V2ReportView (mobile bypasses this JSX). */}
+            <BalanceSheetRiskCard block={riskMetrics} />
+            <RisksToRatingCard risks={decision?.risks_to_rating} fallbackLine={riskMetrics?.risk_line} />
             {/* Decision-inputs card (M2 D3) — replaces the investor persona
                 panel retired with the committee. Shows the quantitative
                 anchors + qualitative inputs the PM decided from. */}

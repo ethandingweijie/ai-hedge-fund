@@ -568,8 +568,8 @@ class EarningsQualityOutput(BaseModel):
     accrual_ratio_avg: float | None = None   # 3-year avg of (NI - OCF) / Total Assets
     accrual_ratios: list[float] = Field(default_factory=list)   # per-year, newest first
     accrual_trend: Literal["DETERIORATING", "STABLE", "IMPROVING", "UNKNOWN"] = "UNKNOWN"
-    accrual_flag: Literal["RED", "AMBER", "GREEN", "UNKNOWN"] = "UNKNOWN"
-    # RED: avg > 0.10 | AMBER: 0.05–0.10 | GREEN: < 0.05
+    accrual_flag: Literal["RED", "AMBER", "GREEN", "UNKNOWN", "NOT ASSESSED"] = "UNKNOWN"
+    # RED: avg > 0.10 | AMBER: 0.05–0.10 | GREEN: < 0.05 | NOT ASSESSED: a single year
 
     # ── Cash conversion (OCF / Net Income) ───────────────────────────────────
     cash_conversion_ratio: float | None = None   # OCF / NI (most recent full year)

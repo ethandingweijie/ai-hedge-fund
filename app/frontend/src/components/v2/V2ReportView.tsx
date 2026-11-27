@@ -33,7 +33,9 @@ import type {
   PtHistoryPoint,
   PriorRecap,
   FreshnessDelta,
+  RiskMetricsBlock,
 } from '@/lib/reportTypes';
+import { BalanceSheetRiskCard, RisksToRatingCard } from '@/components/report/BalanceSheetRiskCard';
 import {
   getStockData, getCompanyName,
   getRevenueProductSegmentation, getRevenueGeoSegmentation,
@@ -151,7 +153,8 @@ export function V2ReportView({
   const scenarioAnalysis = (data.scenario_analysis as Record<string, ScenarioAnalysis> | undefined)?.[ticker];
   const powerLaw = (data.power_law_analysis as Record<string, PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, ValueTrapAnalysis> | undefined)?.[ticker];
-  const dcfRange = (data.dcf_range as Record<string, DcfRange> | undefined)?.[ticker];
+  const riskMetrics = (data.risk_metrics as Record<string, RiskMetricsBlock> | undefined)?.[ticker];
+  const dcfRange =(data.dcf_range as Record<string, DcfRange> | undefined)?.[ticker];
   const dcfSkipReason = (data.dcf_skip_reasons as Record<string, string> | undefined)?.[ticker];
   // Sector-specific valuation card (Option B). Absent for legacy sub-profiles.
   const sectorCard = (data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker];
@@ -345,7 +348,8 @@ export function V2ReportView({
               </div>
             </>
           ))}
-        {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
+        {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning}
+                                                 riskMetrics={riskMetrics} risksToRating={decision?.risks_to_rating} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} briefFootnotes={briefFootnotes} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
         {tab === 'financials' && (
           <FinancialsBody
@@ -790,12 +794,15 @@ function V2ValuationLadder({
 
 /* ───────── Risk Tab — v2 native (Power Law + Value Trap + Scenario Mix) ─── */
 function RiskBody({
-  powerLaw, valueTrap, scenarioAnalysis,
+  powerLaw, valueTrap, scenarioAnalysis, riskMetrics, risksToRating,
 }: {
   powerLaw: PowerLawAnalysis | undefined;
   valueTrap: ValueTrapAnalysis | undefined;
   scenarioAnalysis?: ScenarioAnalysis | undefined;
   isRunning: boolean;
+  /** Owner, 2026-11-27: Balance sheet & risk card + risks to rating (also on desktop). */
+  riskMetrics?: RiskMetricsBlock;
+  risksToRating?: string[];
 }) {
   const powerLawOverall = powerLaw?.score ?? powerLaw?.total_score ?? null;
 
@@ -828,9 +835,11 @@ function RiskBody({
   const trapChecks = valueTrap ? [
     { k: 'Dividend sustainability', rating: checkRating(valueTrap.dividend_sustainability), ev: checkEv(valueTrap.dividend_sustainability) },
     { k: 'Structural decline',      rating: checkRating(valueTrap.structural_decline),      ev: checkEv(valueTrap.structural_decline) },
-    { k: 'Earnings / cash mismatch',rating: checkRating(valueTrap.earnings_cash_mismatch),  ev: checkEv(valueTrap.earnings_cash_mismatch) },
+    // The backend keys are earnings_cashflow_mismatch / balance_sheet_deterioration; the
+    // frontend names never matched, so both rows were dropped (2026-11-27).
+    { k: 'Earnings / cash mismatch',rating: checkRating(valueTrap.earnings_cash_mismatch ?? valueTrap.earnings_cashflow_mismatch),  ev: checkEv(valueTrap.earnings_cash_mismatch ?? valueTrap.earnings_cashflow_mismatch) },
     { k: 'Insider behaviour',       rating: checkRating(valueTrap.insider_behaviour),       ev: checkEv(valueTrap.insider_behaviour) },
-    { k: 'Balance sheet',           rating: checkRating(valueTrap.balance_sheet),           ev: checkEv(valueTrap.balance_sheet) },
+    { k: 'Balance sheet',           rating: checkRating(valueTrap.balance_sheet ?? valueTrap.balance_sheet_deterioration),           ev: checkEv(valueTrap.balance_sheet ?? valueTrap.balance_sheet_deterioration) },
   ] : [];
   const trapVerdict = valueTrap?.verdict || valueTrap?.overall_verdict || '';
 
@@ -953,6 +962,9 @@ function RiskBody({
       ) : (
         <LoadingCard label="Value Trap Check" minH={200} />
       )}
+
+      <BalanceSheetRiskCard block={riskMetrics} className="p-5" />
+      <RisksToRatingCard risks={risksToRating} fallbackLine={riskMetrics?.risk_line} className="p-5" />
 
       {/* Scenario Mix (bull/bear split bar) */}
       {showScenario && (

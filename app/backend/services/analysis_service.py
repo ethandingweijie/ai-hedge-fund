@@ -1054,6 +1054,28 @@ def delete_run(run_id: str, user_id: int = None) -> bool:
 
 # ── Public read helpers ───────────────────────────────────────────────────────
 
+def _attach_risk_metrics(payload: dict) -> None:
+    """Owner, 2026-11-27: runs saved before data.risk_metrics existed get the Balance sheet & risk
+    card on read, assembled from the values the stored payload already holds (no network). A run
+    that carries the block is left as saved. The stored value-trap verdict is never rewritten on
+    read: the decision was made on it. Idempotent; never raises."""
+    try:
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return
+        from src.agents.analysis.risk_metrics import assemble_risk_metrics
+        rm = data.get("risk_metrics")
+        rm = dict(rm) if isinstance(rm, dict) else {}
+        tickers = list(data.get("tickers") or []) or ([payload["ticker"]] if payload.get("ticker") else [])
+        for t in tickers:
+            if not rm.get(t):
+                rm[t] = {**assemble_risk_metrics(data, t, as_of=payload.get("run_at")), "assembled_on_read": True}
+        if rm:
+            data["risk_metrics"] = rm
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("risk metrics on read skipped: %s", exc)
+
+
 def _attach_statement_forecast(payload: dict) -> None:
     """Owner, 2026-10-04: the Financials tab prints FY+1E..FY+5E beside the reported years on
     web and mobile. The forecast is the run's own three-statement model (dcf_range[ticker]
@@ -1156,6 +1178,7 @@ def get_run_result(run_id: str, user_id: int = None, apply_overrides: bool = Tru
             from app.backend.services import estimate_override_service as _eo
             _eo.apply_saved(run_id, _payload)
         _attach_statement_forecast(_payload)
+        _attach_risk_metrics(_payload)
         return _sanitize_floats(_payload)
 
     # ── 2. Try reconstructing from CLI archive tables ─────────────────────

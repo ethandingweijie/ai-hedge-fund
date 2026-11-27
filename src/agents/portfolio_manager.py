@@ -2132,7 +2132,9 @@ def run_advanced_portfolio_manager(state) -> dict:
             d["risks_to_rating"] = _brr(
                 rating_label=(research_view or {}).get("rating_label"), spot=current_price,
                 target=d.get("price_target"), view=research_view, pt_bridge=_bridge_t,
-                scenario=scenario, trap=trap, sym=_sym_ca) if not _is_unrated else []
+                scenario=scenario, trap=trap, sym=_sym_ca,
+                balance_sheet_line=((state["data"].get("risk_metrics") or {}).get(ticker) or {}).get("risk_line"),
+            ) if not _is_unrated else []
         except Exception:                                  # noqa: BLE001
             d["risks_to_rating"] = []
         try:

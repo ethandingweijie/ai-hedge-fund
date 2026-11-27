@@ -186,9 +186,14 @@ def _compute_earnings_quality(
     accrual_trend_val = "UNKNOWN"
     accrual_flag = "UNKNOWN"
 
-    if accrual_ratios:
+    if len(accrual_ratios) == 1:
+        # Owner, 2026-11-27 (contrarian QA): one year is not a three-year average -- a single
+        # observation is NOT ASSESSED, never a GREEN (accruals were GREEN in 81 of 88 runs).
+        accrual_ratio_avg = accrual_ratios[0]
+        accrual_flag = "NOT ASSESSED"
+    elif accrual_ratios:
         metrics_computed += 1
-        accrual_ratio_avg = statistics.mean(accrual_ratios[:3]) if len(accrual_ratios) >= 1 else accrual_ratios[0]
+        accrual_ratio_avg = statistics.mean(accrual_ratios[:3])
         accrual_trend_val = _accrual_trend(accrual_ratios)
         avg = accrual_ratio_avg
         if avg > _ACCRUAL_RED:

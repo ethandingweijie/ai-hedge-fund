@@ -95,7 +95,9 @@ export interface PowerLawAnalysis {
 }
 
 export interface ValueTrapCheck {
-  rating: 'RED' | 'AMBER' | 'GREEN';
+  rating?: 'RED' | 'AMBER' | 'GREEN' | 'NOT ASSESSED';
+  /** The backend emits `status`; `rating` is the legacy name. */
+  status?: 'RED' | 'AMBER' | 'GREEN' | 'NOT ASSESSED';
   evidence?: string;  // backend field name
   detail?: string;    // legacy alias
 }
@@ -104,8 +106,12 @@ export interface ValueTrapAnalysis {
   dividend_sustainability?: ValueTrapCheck;
   structural_decline?: ValueTrapCheck;
   earnings_cash_mismatch?: ValueTrapCheck;
+  /** Backend key (the frontend's earnings_cash_mismatch never matched it). */
+  earnings_cashflow_mismatch?: ValueTrapCheck;
   insider_behaviour?: ValueTrapCheck;
   balance_sheet?: ValueTrapCheck;
+  /** Backend key; since 2026-11-27 the deterministic check (risk_metrics.py). */
+  balance_sheet_deterioration?: ValueTrapCheck;
   verdict?: string;          // "TRAP RISK HIGH" | "TRAP RISK MEDIUM" | "TRAP RISK LOW"
   overall_verdict?: string;  // legacy field name used by older pipeline runs
 }
@@ -754,6 +760,8 @@ export interface PipelineData {
   scenario_analysis?: Record<string, ScenarioAnalysis>;
   power_law_analysis?: Record<string, PowerLawAnalysis>;
   value_trap_analysis?: Record<string, ValueTrapAnalysis>;
+  /** Owner, 2026-11-27: Balance sheet & risk card (src/agents/analysis/risk_metrics.py). */
+  risk_metrics?: Record<string, RiskMetricsBlock>;
   dcf_range?: Record<string, DcfRange>;
   // Tier 2.6 — past-run PT track record per ticker (built at save time by
   // analysis_service._build_pt_history; oldest-first). Absent on the first
@@ -935,8 +943,32 @@ export interface ResearchView {
   };
 }
 
+export interface RiskMetric {
+  key: string;
+  label: string;
+  value?: number | null;
+  /** Formatted value; null when the run did not have it (then `reason`). */
+  display?: string | null;
+  explain?: string;
+  reason?: string;
+  status?: 'RED' | 'AMBER' | 'GREEN' | null;
+}
+
+export interface RiskMetricsBlock {
+  ticker?: string;
+  is_bank?: boolean;
+  currency?: string | null;
+  latest_period?: string | null;
+  metrics?: RiskMetric[];
+  balance_sheet_check?: { status?: string; evidence?: string };
+  /** One sentence naming each leverage/dilution metric past its threshold. */
+  risk_line?: string | null;
+}
+
 export interface PortfolioDecision {
   action: string;        // BUY | SELL | SHORT | COVER | HOLD
+  /** Computed sentences on what would make the rating or target wrong (PM, 2026-11-25). */
+  risks_to_rating?: string[];
   position_size_pct?: number;
   entry_range?: [number, number];
   stop_loss?: number;

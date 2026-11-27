@@ -16521,6 +16521,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             ticker_forward_flags.append(_wacc_info["audit"])
             # The components, for the Excel export's discount-rate build.
             _wacc_build = {k: v for k, v in _wacc_info.items() if k != "audit"}
+            # Owner, 2026-11-27: the cover and the rating's basis reach the report's Balance sheet & risk card.
+            _wacc_build["interest_coverage"] = round(float(_coverage), 3) if _coverage is not None else None
+            _wacc_build["rating_source"] = (
+                "agency" if (_ar_note or "").startswith("Cost of debt on the agency rating")
+                else "net cash" if _wacc_info.get("source") == "no-overlay-net-cash"
+                else "implied by interest cover" if _wacc_info.get("rating") else None)
         except Exception as _wacc_exc:  # noqa: BLE001 — never block DCF on audit
             _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
                          ticker, _wacc_exc)
