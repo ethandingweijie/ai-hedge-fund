@@ -226,7 +226,7 @@ class TestColdBuildProtection:
         monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("D0"))
         monkeypatch.setattr(ss, "_get_cached_stale",
                             lambda key: [{"symbol": "D05.SI"}])
-        lock = ss._build_lock("sg_fmp_v3")
+        lock = ss._build_lock("sg_fmp_v4")
         assert lock.acquire(blocking=False)
         try:
             out = ss.get_sg_screener_stocks()
@@ -235,7 +235,7 @@ class TestColdBuildProtection:
         assert out["stale"] is True
 
     def test_locks_are_per_cache_key(self, stubbed):
-        assert ss._build_lock("hk_fmp_v7") is not ss._build_lock("sg_fmp_v3")
+        assert ss._build_lock("hk_fmp_v7") is not ss._build_lock("sg_fmp_v4")
         assert ss._build_lock("hk_fmp_v7") is ss._build_lock("hk_fmp_v7")
 
 
@@ -375,14 +375,14 @@ class TestSectorCanonicalisation:
 
 class TestCacheKeyVersionFallback:
     """Cache keys carry a version suffix and get bumped when the row shape or
-    a field fix changes (sg_universe_v1 -> sg_fmp_v2 -> sg_fmp_v3). A bump
+    a field fix changes (sg_universe_v1 -> sg_fmp_v2 -> sg_fmp_v4). A bump
     leaves ZERO rows under the new key, so the exact-key stale lookup finds
     nothing, the stale guard cannot fire, and the first reader after the
     deploy eats the full cold build — 93s for SGX. That is how SGX failed a
     second time, after its marketCap fix."""
 
     def test_family_prefix(self):
-        assert ss._cache_key_family("sg_fmp_v3") == "sg_"
+        assert ss._cache_key_family("sg_fmp_v4") == "sg_"
         assert ss._cache_key_family("hk_fmp_v7") == "hk_"
         assert ss._cache_key_family("d910850ee9375ba2") == "", "US keys are hashes"
 
@@ -397,7 +397,7 @@ class TestCacheKeyVersionFallback:
             {"cache_key": "sg_fmp_v2", "results_json": json.dumps(rows),
              "fetched_at": _recent},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") == rows
+        assert ss._get_cached_stale("sg_fmp_v4") == rows
 
     def test_other_markets_are_not_borrowed(self, monkeypatch):
         """An HK payload must never stand in for SGX."""
@@ -406,7 +406,7 @@ class TestCacheKeyVersionFallback:
             {"cache_key": "hk_fmp_v7", "results_json": json.dumps([{"symbol": "0700.HK"}]),
              "fetched_at": "2026-08-26T00:00:00"},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") is None
+        assert ss._get_cached_stale("sg_fmp_v4") is None
 
     def test_exact_key_wins_over_older_versions(self, monkeypatch):
         monkeypatch.setattr(ss._db, "query_one",
@@ -415,7 +415,7 @@ class TestCacheKeyVersionFallback:
             {"cache_key": "sg_fmp_v2", "results_json": json.dumps([{"symbol": "OLD"}]),
              "fetched_at": "2026-08-20T00:00:00"},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "NEW"}]
+        assert ss._get_cached_stale("sg_fmp_v4") == [{"symbol": "NEW"}]
 
     def test_no_percent_in_the_sql(self):
         """A literal percent sign in the SQL text breaks psycopg ("only
@@ -466,7 +466,7 @@ class TestServeStaleAndRefresh:
                             lambda key: [{"symbol": "D05.SI"}])
         ss.get_sg_screener_stocks()
         import time
-        lock = ss._build_lock("sg_fmp_v3")
+        lock = ss._build_lock("sg_fmp_v4")
         for _ in range(100):
             if lock.acquire(blocking=False):
                 lock.release()
@@ -486,7 +486,7 @@ class TestServeStaleAndRefresh:
             {"cache_key": "sg_universe_v1",
              "results_json": json.dumps([{"symbol": "OLD"}]), "fetched_at": old},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") is None
+        assert ss._get_cached_stale("sg_fmp_v4") is None
 
     def test_recent_previous_version_is_borrowed(self, monkeypatch):
         from datetime import datetime, timedelta, timezone
@@ -496,7 +496,7 @@ class TestServeStaleAndRefresh:
             {"cache_key": "sg_fmp_v2",
              "results_json": json.dumps([{"symbol": "D05.SI"}]), "fetched_at": recent},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "D05.SI"}]
+        assert ss._get_cached_stale("sg_fmp_v4") == [{"symbol": "D05.SI"}]
 
     def test_newest_version_preferred(self, monkeypatch):
         from datetime import datetime, timedelta, timezone
@@ -508,7 +508,7 @@ class TestServeStaleAndRefresh:
             {"cache_key": "sg_universe_v1", "results_json": json.dumps([{"symbol": "OLDER"}]),
              "fetched_at": (now - timedelta(days=20)).isoformat()},
         ])
-        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "NEWER"}]
+        assert ss._get_cached_stale("sg_fmp_v4") == [{"symbol": "NEWER"}]
 
 
 class TestInvalidateForTicker:
@@ -561,4 +561,4 @@ class TestInvalidateForTicker:
         rows = [{"symbol": "D05.SI"}]
         monkeypatch.setattr(ss._db, "query_one",
                             lambda *a, **k: {"results_json": json.dumps(rows)})
-        assert ss._get_cached_stale("sg_fmp_v3") == rows
+        assert ss._get_cached_stale("sg_fmp_v4") == rows

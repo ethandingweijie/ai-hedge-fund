@@ -9,6 +9,7 @@ import type {
   RunResult,
   ScreenerResponse,
   ScreenerStock,
+  ScreenerPricesResponse,
   WatchlistItem,
 } from './reportTypes';
 import { API_BASE_URL } from '@/config';
@@ -1362,7 +1363,9 @@ export function getFinancials(
 
 // ── Screener ────────────────────────────────────────────────────────────────
 
-/** Fetch FMP screener results merged with internal VGPM grades. */
+/** One page of the US screener (FMP universe merged with internal VGPM
+ *  grades). Filters, sort and paging apply server-side to the whole
+ *  universe; `total` / `has_more` describe it. */
 export function getScreenerStocks(params: {
   sector?: string;
   exchange?: string;
@@ -1370,8 +1373,13 @@ export function getScreenerStocks(params: {
   marketCapMin?: number;
   marketCapMax?: number;
   limit?: number;
+  offset?: number;
+  sort?: 'score' | 'marketCap' | 'price' | 'change' | 'symbol';
+  order?: 'asc' | 'desc';
   refresh?: boolean;
-} = {}): Promise<ScreenerResponse> {
+  /** false skips the server's live-quote overlay (default true). */
+  live?: boolean;
+} = {}, signal?: AbortSignal): Promise<ScreenerResponse> {
   const q = new URLSearchParams();
   if (params.sector)                  q.set('sector', params.sector);
   if (params.exchange)                q.set('exchange', params.exchange);
@@ -1379,8 +1387,12 @@ export function getScreenerStocks(params: {
   if (params.marketCapMin != null)    q.set('marketCapMin', String(params.marketCapMin));
   if (params.marketCapMax != null)    q.set('marketCapMax', String(params.marketCapMax));
   if (params.limit != null)           q.set('limit', String(params.limit));
+  if (params.offset != null)          q.set('offset', String(params.offset));
+  if (params.sort)                    q.set('sort', params.sort);
+  if (params.order)                   q.set('order', params.order);
   if (params.refresh)                 q.set('refresh', 'true');
-  return fetchJson<ScreenerResponse>(`${BASE}/screener/stocks?${q}`);
+  if (params.live === false)          q.set('live', 'false');
+  return fetchJson<ScreenerResponse>(`${BASE}/screener/stocks?${q}`, { signal });
 }
 
 /** Direct FMP profile lookup for a single ticker — fallback when not in screener batch. */
@@ -1388,20 +1400,24 @@ export function lookupScreenerTicker(symbol: string): Promise<ScreenerStock> {
   return fetchJson<ScreenerStock>(`${BASE}/screener/lookup?symbol=${encodeURIComponent(symbol.toUpperCase())}`);
 }
 
-/** ~118 well-known HKEX stocks with VGPM scores (peer-relative within HK universe). */
-export function getHkScreenerStocks(refresh = false): Promise<ScreenerResponse> {
-  return fetchJson<ScreenerResponse>(`${BASE}/screener/hk-stocks${refresh ? '?refresh=true' : ''}`);
+/** HKEX universe with VGPM scores (peer-relative within HK). Rows carry
+ *  currency + marketCapUsd. */
+export function getHkScreenerStocks(refresh = false, signal?: AbortSignal): Promise<ScreenerResponse> {
+  return fetchJson<ScreenerResponse>(`${BASE}/screener/hk-stocks${refresh ? '?refresh=true' : ''}`, { signal });
 }
 
-export function getSgScreenerStocks(refresh = false): Promise<ScreenerResponse> {
-  return fetchJson<ScreenerResponse>(`${BASE}/screener/sg-stocks${refresh ? '?refresh=true' : ''}`);
+export function getSgScreenerStocks(refresh = false, signal?: AbortSignal): Promise<ScreenerResponse> {
+  return fetchJson<ScreenerResponse>(`${BASE}/screener/sg-stocks${refresh ? '?refresh=true' : ''}`, { signal });
 }
 
-/** Lightweight live quote fetch — price, marketCap, volume, beta, change_pct. No VGPM recompute. */
+/** Live quotes for up to 200 symbols: {quotes, missing, stale, as_of}.
+ *  `stale` symbols' prices are not live (provider failed / delisted). */
 export function getScreenerPrices(
   symbols: string[],
-): Promise<Record<string, { price?: number; marketCap?: number; volume?: number; beta?: number; change_pct?: number | null }>> {
-  return fetchJson(`${BASE}/screener/prices?symbols=${symbols.join(',')}`);
+  signal?: AbortSignal,
+): Promise<ScreenerPricesResponse> {
+  return fetchJson<ScreenerPricesResponse>(
+    `${BASE}/screener/prices?symbols=${symbols.map(encodeURIComponent).join(',')}`, { signal });
 }
 
 // ── Watchlist ────────────────────────────────────────────────────────────────

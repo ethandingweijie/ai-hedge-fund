@@ -1076,12 +1076,40 @@ export interface ScreenerStock {
   } | null;
   vgpm_estimated: boolean;
   composite_score: number | null;
+  /** Listing currency of price and marketCap (HK/SG rows: HKD, SGD, CNY, USD). */
+  currency?: string;
+  /** marketCap in USD; null when no FX rate was available. */
+  marketCapUsd?: number | null;
 }
 
 export interface ScreenerResponse {
   items: ScreenerStock[];
+  /** Number of matching stocks in the whole universe (not just this page). */
   total: number;
   cached: boolean;
+  /** US paging: offset of this page and whether another page exists. */
+  offset?: number;
+  limit?: number | null;
+  has_more?: boolean;
+  /** True when previous rows were served while a rebuild runs. */
+  stale?: boolean;
+  currency?: string;
+}
+
+export interface ScreenerQuote {
+  price?: number;
+  marketCap?: number;
+  volume?: number;
+  change_pct?: number | null;
+  as_of?: string;
+  stale?: boolean;
+}
+
+export interface ScreenerPricesResponse {
+  quotes: Record<string, ScreenerQuote>;
+  missing: string[];
+  stale: string[];
+  as_of: string;
 }
 
 // ── Watchlist ────────────────────────────────────────────────────────────────

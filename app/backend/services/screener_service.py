@@ -20,9 +20,12 @@ Fast VGPM methodology
 """
 import hashlib
 import json
+import math
 import os
+import re
 import sqlite3
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -55,8 +58,10 @@ _US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX"}
 # Bumped whenever cached entries written under the same parameter dict
 # become stale — a bump retires them without a manual cache wipe. v2: the
 # US universe cache predates the exchange filter above and is contaminated
-# with non-US listings.
-_CACHE_V = 2
+# with non-US listings. v3: one row per universe (country, exchange, cap
+# floor) instead of one per parameter dict — limit/offset/sort/sector/cap
+# filters are applied on read.
+_CACHE_V = 3
 
 
 def _us_listing(s: dict) -> bool:
@@ -196,118 +201,290 @@ def overlay_exchange_quotes(result: dict, exchange: str) -> dict:
     return result
 
 
-def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -> dict[str, dict]:
-    """Fetch live price + volume + day % change for a set of tickers.
+# ── Live quotes (screener tick, portfolio, watchlist, lookup) ───────────────
+# One FMP /stable/batch-quote call quotes up to _QUOTE_BATCH symbols (verified
+# 2026-11-27: AAPL,MSFT,9988.HK,D05.SI in one ~1 s call; the comma list must
+# go in `symbols`, plural — `quote?symbol=A,B` returns []). The old path made
+# one /stable/quote call per symbol through the shared token bucket, which
+# cost 31-70 s for the 50 symbols a 15 s UI tick asks for, so ticks stacked.
+#
+# A short process-wide cache with single-flight fetching sits in front of
+# it: overlapping requests for the same symbols (two tabs, a tick racing a
+# page load, the watchlist) share one provider round-trip. When the provider
+# fails, a quote up to _QUOTE_STALE_MAX_S old is served and reported as
+# stale instead of silently disappearing.
+_QUOTE_TTL_S = 10.0
+_QUOTE_STALE_MAX_S = 600.0
+#: A provider quote whose own timestamp is older than this is not a live
+#: price — FMP still returns delisted TWTR at 53.70 from Oct 2022.
+_QUOTE_PROVIDER_STALE_S = 4 * 86400
+_QUOTE_BATCH = 100
+#: Hard ceiling on symbols per /screener/prices request (deduped).
+MAX_PRICE_SYMBOLS = 200
+#: Per-symbol fallback is only used when batch-quote fails outright, and is
+#: capped so a provider outage cannot turn one request into minutes of calls.
+_QUOTE_FALLBACK_MAX = 50
 
-    US + SG tickers: FMP /stable/quote, one call per symbol in parallel.
-    HK tickers: the same FMP path on the 4-digit symbol FMP accepts
-    (09988.HK -> 9988.HK), keyed back to the caller's ticker; yfinance
-    fast_info only for HK names FMP did not return.
-    Returns {symbol: {price, volume, change_pct}}, {} on failure.
-    """
-    if not tickers:
+_QUOTE_CACHE: dict[str, tuple[float, dict]] = {}
+_QUOTE_CACHE_LOCK = threading.Lock()
+_QUOTE_FETCH_LOCK = threading.Lock()
+
+
+def _parse_fmp_quote(row: dict, now: float) -> Optional[dict]:
+    """FMP quote row -> {price, volume, change_pct, marketCap, as_of, stale}.
+
+    None when the row has no usable price: a zero or negative price is a
+    provider placeholder, never a real quote, and overlaying it zeroes the
+    row on screen."""
+    if not isinstance(row, dict):
+        return None
+    price = _safe_float(row.get("price"))
+    if price is None or price <= 0 or not math.isfinite(price):
+        return None
+    q: dict = {"price": price, "volume": row.get("volume")}
+    pct = _safe_float(row.get("changePercentage"))
+    if pct is not None:
+        q["change_pct"] = pct
+    mcap = _safe_float(row.get("marketCap"))
+    if mcap is not None and mcap > 0:
+        q["marketCap"] = mcap
+    ts = _safe_float(row.get("timestamp"))
+    if ts:
+        q["as_of"] = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        if now - ts > _QUOTE_PROVIDER_STALE_S:
+            q["stale"] = True
+    return q
+
+
+def _fmp_quote_symbol(ticker: str) -> str:
+    """The symbol FMP quotes `ticker` under. FMP rejects the repo's 5-digit
+    canonical HK form (09988.HK) and wants 9988.HK."""
+    try:
+        from src.tools.hk.ticker import is_hk_ticker, to_fmp_code
+        if is_hk_ticker(ticker):
+            return to_fmp_code(ticker)
+    except Exception:
+        pass
+    return ticker
+
+
+def _fetch_batch_quotes(jobs: list[tuple[str, str]], api_key: str
+                        ) -> tuple[dict[str, dict], bool]:
+    """({result key: quote}, any_chunk_succeeded) via /stable/batch-quote."""
+    now = time.time()
+    by_fmp: dict[str, list[str]] = {}
+    for key, sym in jobs:
+        by_fmp.setdefault(sym.upper(), []).append(key)
+    fmp_syms = list(by_fmp)
+    chunks = [fmp_syms[i:i + _QUOTE_BATCH] for i in range(0, len(fmp_syms), _QUOTE_BATCH)]
+
+    def _one(chunk: list[str]) -> Optional[list]:
+        try:
+            from src.tools.api import acquire_fmp_token
+            acquire_fmp_token()
+            r = requests.get(f"{_STABLE}/batch-quote",
+                             params={"symbols": ",".join(chunk), "apikey": api_key},
+                             timeout=10)
+            if not r.ok:
+                _sqlog.warning("batch-quote HTTP %s for %d symbols", r.status_code, len(chunk))
+                return None
+            data = r.json()
+            return data if isinstance(data, list) else None
+        except Exception as exc:
+            _sqlog.warning("batch-quote failed for %d symbols: %s", len(chunk), exc)
+            return None
+
+    out: dict[str, dict] = {}
+    ok = False
+    if not chunks:
+        return out, ok
+    with ThreadPoolExecutor(max_workers=min(4, len(chunks))) as pool:
+        for rows in pool.map(_one, chunks):
+            if rows is None:
+                continue
+            ok = True
+            for row in rows:
+                q = _parse_fmp_quote(row, now)
+                if q is None:
+                    continue
+                for key in by_fmp.get(str(row.get("symbol") or "").upper(), []):
+                    out[key] = q
+    return out, ok
+
+
+def _fetch_single_quotes(jobs: list[tuple[str, str]], api_key: str) -> dict[str, dict]:
+    """Degraded path: one /stable/quote call per symbol, bounded."""
+    now = time.time()
+
+    def _one(job: tuple[str, str]) -> Optional[tuple[str, dict]]:
+        key, sym = job
+        try:
+            from src.tools.api import acquire_fmp_token
+            acquire_fmp_token()
+            r = requests.get(f"{_STABLE}/quote",
+                             params={"symbol": sym, "apikey": api_key}, timeout=8)
+            if not r.ok:
+                return None
+            data = r.json()
+            if not isinstance(data, list) or not data:
+                return None
+            q = _parse_fmp_quote(data[0], now)
+            return (key, q) if q else None
+        except Exception:
+            return None
+
+    out: dict[str, dict] = {}
+    jobs = jobs[:_QUOTE_FALLBACK_MAX]
+    if not jobs:
+        return out
+    with ThreadPoolExecutor(max_workers=min(10, len(jobs))) as pool:
+        for pair in pool.map(_one, jobs):
+            if pair:
+                out[pair[0]] = pair[1]
+    return out
+
+
+def _fetch_hk_yfinance(tickers: list[str]) -> dict[str, dict]:
+    """Last-resort HK quotes for names FMP did not return."""
+    try:
+        from src.tools.hk.ticker import to_yfinance_code as _hk_yf
+    except Exception:
         return {}
 
-    # ── Split HK vs US ───────────────────────────────────────────────────────
-    try:
-        from src.tools.hk.ticker import (
-            is_hk_ticker, to_fmp_code as _hk_fmp, to_yfinance_code as _hk_yf)
-        hk_tickers = [t for t in tickers if is_hk_ticker(t)]
-        us_tickers  = [t for t in tickers if not is_hk_ticker(t)]
-    except Exception:
-        hk_tickers, us_tickers = [], list(tickers)
-
-    result: dict[str, dict] = {}
-
-    # (result key, FMP symbol). HK goes through FMP too -- yfinance's HK
-    # fast_info started returning nothing, which left every HK holding and
-    # watchlist row without a price. FMP rejects the 5-digit canonical form.
-    fmp_jobs: list[tuple[str, str]] = [(t, t) for t in us_tickers]
-    for t in hk_tickers:
+    def _one(ticker: str) -> Optional[tuple[str, dict]]:
         try:
-            fmp_jobs.append((t, _hk_fmp(t)))
-        except Exception:
-            pass
-
-    # ── US: FMP /stable/quote — one call per symbol in parallel ─────────────────
-    # /stable/quote only accepts a single symbol per request (batch returns []).
-    # v3 is deprecated (403) for current API keys. Use per-symbol parallel calls.
-    if fmp_jobs:
-        api_key = _get_fmp_key()
-        if not api_key:
-            _sqlog.warning("get_live_quotes: no FMP API key found")
-        else:
-            _FMP_STABLE = "https://financialmodelingprep.com/stable/quote"
-
-            def _fetch_one(job: tuple[str, str]) -> tuple[str, dict] | None:
-                key, sym = job
-                try:
-                    from src.tools.api import acquire_fmp_token
-                    acquire_fmp_token()
-                    r = requests.get(
-                        _FMP_STABLE,
-                        params={"symbol": sym, "apikey": api_key},
-                        timeout=10,
-                    )
-                    if not r.ok:
-                        _sqlog.debug("FMP quote %s HTTP %s", sym, r.status_code)
-                        return None
-                    data = r.json()
-                    if not isinstance(data, list) or not data:
-                        return None
-                    item = data[0]
-                    if item.get("price") is None:
-                        return None
-                    q: dict = {
-                        "price":  item.get("price"),
-                        "volume": item.get("volume"),
-                    }
-                    pct = item.get("changePercentage")
-                    if pct is not None:
-                        q["change_pct"] = pct
-                    return (key, q)
-                except Exception as exc:
-                    _sqlog.debug("FMP quote %s exception: %s", sym, exc)
-                    return None
-
-            # Cap at 10 workers to stay within FMP free-tier rate limits (~300 req/min)
-            with ThreadPoolExecutor(max_workers=10) as pool:
-                for pair in pool.map(_fetch_one, fmp_jobs):
-                    if pair:
-                        result[pair[0]] = pair[1]
-
-            _sqlog.info("FMP /stable/quote: fetched %d/%d symbols", len(result), len(fmp_jobs))
-            if result:
-                sample = next(iter(result.values()))
-                _sqlog.info("Sample: price=%s change_pct=%s", sample.get("price"), sample.get("change_pct", "MISSING"))
-
-    # ── HK fallback: yfinance fast_info for names FMP did not return ────────
-    hk_tickers = [t for t in hk_tickers if t not in result]
-    if hk_tickers:
-        def _fetch_hk(ticker: str) -> tuple[str, dict] | None:
-            try:
-                import yfinance as yf
-                yf_sym = _hk_yf(ticker)
-                fi = yf.Ticker(yf_sym).fast_info
-                price = fi.get("last_price") or fi.get("regular_market_price")
-                prev  = fi.get("previous_close")
-                if price is None:
-                    return None
-                change_pct = ((price - prev) / prev * 100) if prev else None
-                volume = fi.get("three_month_average_volume")
-                q: dict = {"price": price, "volume": volume}
-                if change_pct is not None:   # omit key if unavailable — don't wipe AKShare value
-                    q["change_pct"] = change_pct
-                return ticker, q
-            except Exception:
+            import yfinance as yf
+            fi = yf.Ticker(_hk_yf(ticker)).fast_info
+            price = _safe_float(fi.get("last_price") or fi.get("regular_market_price"))
+            if price is None or price <= 0:
                 return None
+            prev = _safe_float(fi.get("previous_close"))
+            q: dict = {"price": price, "volume": fi.get("three_month_average_volume")}
+            if prev:
+                q["change_pct"] = (price - prev) / prev * 100
+            return ticker, q
+        except Exception:
+            return None
 
-        with ThreadPoolExecutor(max_workers=min(4, len(hk_tickers))) as pool:
-            for res in pool.map(_fetch_hk, hk_tickers):
-                if res:
-                    result[res[0]] = res[1]
+    out: dict[str, dict] = {}
+    if not tickers:
+        return out
+    with ThreadPoolExecutor(max_workers=min(4, len(tickers))) as pool:
+        for res in pool.map(_one, tickers):
+            if res:
+                out[res[0]] = res[1]
+    return out
 
+
+def _fetch_quotes_uncached(tickers: list[str]) -> dict[str, dict]:
+    api_key = _get_fmp_key()
+    result: dict[str, dict] = {}
+    if api_key:
+        jobs = [(t, _fmp_quote_symbol(t)) for t in tickers]
+        result, ok = _fetch_batch_quotes(jobs, api_key)
+        if not ok:
+            # batch-quote unavailable (plan, outage) — bounded per-symbol path.
+            _sqlog.warning("batch-quote failed for all chunks; per-symbol fallback")
+            result = _fetch_single_quotes(jobs, api_key)
+    else:
+        _sqlog.warning("get_live_quotes: no FMP API key found")
+    try:
+        from src.tools.hk.ticker import is_hk_ticker
+        hk_missing = [t for t in tickers if t not in result and is_hk_ticker(t)]
+    except Exception:
+        hk_missing = []
+    if hk_missing:
+        result.update(_fetch_hk_yfinance(hk_missing))
     return result
+
+
+def _dedupe_symbols(tickers) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in tickers or []:
+        s = str(t or "").strip().upper()
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
+def get_live_quotes_detail(tickers: list[str]) -> dict:
+    """{quotes, missing, stale, as_of} for `tickers` (deduped, upper-cased).
+
+    quotes   {symbol: {price, volume, change_pct?, marketCap?, as_of?, stale?}}
+    missing  symbols with no usable quote at all
+    stale    symbols whose quote is NOT live: either a cached value served
+             because the provider failed, or a provider row whose own
+             timestamp is days old (delisted / suspended)
+    as_of    when this answer was assembled (UTC ISO)
+    """
+    syms = _dedupe_symbols(tickers)
+    now = time.time()
+
+    def _cached(max_age: float) -> dict[str, dict]:
+        with _QUOTE_CACHE_LOCK:
+            return {s: hit[1] for s in syms
+                    if (hit := _QUOTE_CACHE.get(s)) and now - hit[0] < max_age}
+
+    fresh = _cached(_QUOTE_TTL_S)
+    need = [s for s in syms if s not in fresh]
+    if need:
+        # Single flight: a second request for the same symbols waits for the
+        # first fetch and is then answered from the cache it filled.
+        with _QUOTE_FETCH_LOCK:
+            with _QUOTE_CACHE_LOCK:
+                t_now = time.time()
+                still = [s for s in need
+                         if not ((hit := _QUOTE_CACHE.get(s)) and t_now - hit[0] < _QUOTE_TTL_S)]
+            if still:
+                fetched = _fetch_quotes_uncached(still)
+                stamp = time.time()
+                with _QUOTE_CACHE_LOCK:
+                    for s, q in fetched.items():
+                        _QUOTE_CACHE[s] = (stamp, q)
+                    if len(_QUOTE_CACHE) > 20000:      # bound memory
+                        for k in sorted(_QUOTE_CACHE, key=lambda k: _QUOTE_CACHE[k][0])[:5000]:
+                            _QUOTE_CACHE.pop(k, None)
+        now = time.time()
+        fresh = _cached(_QUOTE_TTL_S)
+
+    quotes: dict[str, dict] = {}
+    stale: list[str] = []
+    missing: list[str] = []
+    older = _cached(_QUOTE_STALE_MAX_S)
+    for s in syms:
+        if s in fresh:
+            q = fresh[s]
+            quotes[s] = q
+            if q.get("stale"):
+                stale.append(s)
+        elif s in older:
+            quotes[s] = {**older[s], "stale": True}
+            stale.append(s)
+        else:
+            missing.append(s)
+    return {"quotes": quotes, "missing": missing, "stale": stale,
+            "as_of": datetime.now(timezone.utc).isoformat()}
+
+
+def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -> dict[str, dict]:
+    """{symbol: {price, volume, change_pct?, ...}} — the quotes part of
+    get_live_quotes_detail, keyed by the caller's spelling of each ticker.
+    Stale quotes are included and carry stale=True. {} on failure."""
+    if not tickers:
+        return {}
+    try:
+        quotes = get_live_quotes_detail(tickers)["quotes"]
+    except Exception as exc:
+        _sqlog.warning("get_live_quotes failed: %s", exc)
+        return {}
+    out: dict[str, dict] = {}
+    for t in tickers:
+        q = quotes.get(str(t or "").strip().upper())
+        if q:
+            out[t] = q
+    return out
 
 
 # ── DB helpers ─────────────────────────────────────────────────────────────────
@@ -668,34 +845,117 @@ def _call_fmp_screener(
         return []
 
 
-def _resolve_to_ticker(query: str, api_key: Optional[str]) -> Optional[str]:
-    base = {"apikey": api_key} if api_key else {}
+class ProviderUnavailable(Exception):
+    """The market-data provider failed (429, 5xx, timeout) — the answer is
+    unknown, which is not the same as "no such ticker". Routes map it to
+    503 so a rate-limited lookup is never reported as 404 "not found"."""
+
+
+def _fmp_lookup_get(path: str, params: dict) -> list | dict | None:
+    """One lookup-path FMP GET through the shared token bucket.
+
+    Returns parsed JSON, or None when FMP answered definitively with nothing
+    (404 / empty). Raises ProviderUnavailable on 429/402/5xx/network after a
+    single short retry — the long 20 s-per-attempt backoff of _fmp_get is
+    what made lookup p95 18 s.
+    """
+    from src.tools.api import acquire_fmp_token
+    api_key = _get_fmp_key()
+    full = {**params, **({"apikey": api_key} if api_key else {})}
+    last = "no response"
+    for attempt in range(2):
+        acquire_fmp_token()
+        try:
+            r = requests.get(f"{_STABLE}/{path}", params=full, timeout=8)
+        except Exception as exc:
+            last = f"network error: {type(exc).__name__}"
+        else:
+            if r.status_code == 200:
+                try:
+                    return r.json()
+                except Exception:
+                    return None
+            if r.status_code in (429, 402) or r.status_code >= 500:
+                last = f"HTTP {r.status_code}"
+            else:
+                return None
+        if attempt == 0:
+            time.sleep(1.0)
+    raise ProviderUnavailable(f"FMP {path}: {last}")
+
+
+_TICKERISH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-^]{0,11}$")
+_NAME_NOISE_WORDS = {"inc", "incorporated", "corp", "corporation", "co", "company",
+                     "ltd", "limited", "plc", "holdings", "holding", "group", "the",
+                     "sa", "nv", "ag", "se", "class", "a", "b", "c"}
+
+
+def _name_tokens(name: str) -> list[str]:
+    return [w for w in re.sub(r"[^a-z0-9 ]", " ", (name or "").lower()).split()]
+
+
+def _confident_name_match(query: str, name: str) -> bool:
+    """True when `query` names this company rather than merely resembling
+    it: the query's words are the leading whole words of the company name.
+
+    "apple" -> "Apple Inc." yes; "micro" -> "Microsoft Corporation" no;
+    "xyzzzq" -> anything FMP fuzzes up: no."""
+    q = _name_tokens(query)
+    n = _name_tokens(name)
+    if not q or not n or len(q) > len(n):
+        return False
+    return n[:len(q)] == q
+
+
+def _resolve_to_ticker(query: str, api_key: Optional[str] = None) -> Optional[str]:
+    """Ticker for a symbol or company name, None when nothing matches
+    confidently. Raises ProviderUnavailable when FMP failed — callers must
+    not turn that into "not found"."""
     q = query.strip().upper()
+    if _TICKERISH.match(q):
+        data = _fmp_lookup_get("profile", {"symbol": q})
+        if isinstance(data, list) and data and data[0].get("symbol"):
+            return data[0]["symbol"]
+        data = _fmp_lookup_get("search-symbol", {"query": q, "limit": 10})
+        for r in data if isinstance(data, list) else []:
+            if str(r.get("symbol", "")).upper() == q:
+                return r["symbol"]
+
+    data = _fmp_lookup_get("search-name", {"query": query.strip(), "limit": 20})
+    matches = [r for r in (data if isinstance(data, list) else [])
+               if r.get("symbol") and _confident_name_match(query, r.get("name") or "")]
+    if not matches:
+        return None
+    # Several listings of one company (APC.DE, AAPL.TO, AAPL): prefer the
+    # US primary line, then a USD quote, then FMP's order.
+    # An exact name ("apple" == "Apple Inc." minus suffixes) beats a longer
+    # one that merely starts the same way ("Apple Hospitality REIT").
+    q_tokens = _name_tokens(query)
+
+    def _rank(r: dict) -> tuple:
+        ex = str(r.get("exchange") or "").upper()
+        core = [w for w in _name_tokens(r.get("name") or "") if w not in _NAME_NOISE_WORDS]
+        return (core != q_tokens, ex not in _US_EXCHANGES,
+                str(r.get("currency") or "").upper() != "USD")
+    return sorted(matches, key=_rank)[0]["symbol"]
+
+
+def _cached_lookup(ticker: str) -> Optional[dict]:
+    now_iso = datetime.now(timezone.utc).isoformat()
     try:
-        pr = requests.get(f"{_STABLE}/profile", params={"symbol": q, **base}, timeout=8)
-        if pr.ok:
-            data = pr.json()
-            if data and isinstance(data, list) and data[0].get("symbol"):
-                return data[0]["symbol"]
-    except Exception:
-        pass
-    try:
-        sr = requests.get(
-            f"{_STABLE}/search",
-            params={"query": query, "limit": 5, **base},
-            timeout=8,
+        row = _db.query_one(
+            "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
+            [ticker, now_iso],
         )
-        if sr.ok:
-            results = sr.json()
-            if isinstance(results, list):
-                for r in results:
-                    if r.get("symbol", "").upper() == q:
-                        return r["symbol"]
-                if results:
-                    return results[0].get("symbol")
     except Exception:
-        pass
-    return None
+        return None
+    if not row:
+        return None
+    item = json.loads(row["item_json"])
+    live = get_live_quotes([ticker])
+    if ticker in live and not live[ticker].get("stale"):
+        _overlay_live(item, live[ticker])
+    return item
 
 
 def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
@@ -839,27 +1099,25 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
         _sqlog.warning("lookup_ticker HK path failed for %s: %s", query, _hk_err)
     # ─────────────────────────────────────────────────────────────────────────
 
-    ticker = _resolve_to_ticker(query, api_key)
+    # Cache first: a cached symbol needs no provider call at all, so a
+    # rate-limited FMP can no longer turn a cached ticker into "not found".
+    if not force_refresh:
+        hit = _cached_lookup(query.upper())
+        if hit is not None:
+            return hit
+
+    ticker = _resolve_to_ticker(query, api_key)     # ProviderUnavailable propagates
     if not ticker:
         return None
 
-    if not force_refresh:
-        now_iso = datetime.now(timezone.utc).isoformat()
-        row = _db.query_one(
-            "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
-            [ticker, now_iso],
-        )
-        if row:
-            item = json.loads(row["item_json"])
-            # Always overlay live quote data — not cached so it stays fresh
-            live = get_live_quotes([ticker])
-            if ticker in live:
-                _overlay_live(item, live[ticker])
-            return item
+    if not force_refresh and ticker != query.upper():
+        hit = _cached_lookup(ticker)
+        if hit is not None:
+            return hit
 
     try:
-        pr = requests.get(f"{_STABLE}/profile", params={"symbol": ticker, **base}, timeout=10)
-        profile = (pr.json()[0] if pr.ok and pr.json() else None) or {}
+        data = _fmp_lookup_get("profile", {"symbol": ticker})
+        profile = (data[0] if isinstance(data, list) and data else None) or {}
         if not profile:
             return None
 
@@ -892,9 +1150,11 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
             "companyName":     profile.get("companyName", ""),
             "sector":          sector,
             "industry":        industry,
-            "marketCap":       profile.get("mktCap"),
+            # /stable/profile names these marketCap / averageVolume; the
+            # legacy v3 names are kept as fallbacks.
+            "marketCap":       profile.get("marketCap") or profile.get("mktCap"),
             "price":           profile.get("price"),
-            "volume":          profile.get("volAvg"),
+            "volume":          profile.get("averageVolume") or profile.get("volAvg"),
             "beta":            profile.get("beta"),
             "exchange":        profile.get("exchangeShortName", ""),
             "country":         profile.get("country", ""),
@@ -913,10 +1173,12 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
 
         # Overlay live quote data after caching base item — always fresh, never cached
         live = get_live_quotes([ticker])
-        if ticker in live:
+        if ticker in live and not live[ticker].get("stale"):
             _overlay_live(item, live[ticker])
 
         return item
+    except ProviderUnavailable:
+        raise
     except Exception:
         return None
 
@@ -1632,10 +1894,15 @@ def _get_or_compute_fast_vgpm(
     sector_map: Optional[dict[str, str]] = None,
     industry_map: Optional[dict[str, str]] = None,
     use_yfinance: bool = False,
+    max_fetch: Optional[int] = None,
 ) -> dict[str, dict]:
     """
     Return fast VGPM for the given tickers, using cache where available.
     Fetches missing tickers from FMP (in parallel) and caches raw metrics + VGPM.
+
+    max_fetch bounds how many tickers are fetched from FMP (the first ones in
+    `tickers` order); the rest are scored only if their raw metrics are
+    already in the knowledge-graph cache.
     """
     if not tickers:
         return {}
@@ -1651,6 +1918,10 @@ def _get_or_compute_fast_vgpm(
         from app.backend.services import knowledge_graph as _kg
         cached_raw = _kg.get_ttm_metrics_cached(missing)
         to_fetch   = [t for t in missing if t not in cached_raw]
+        if max_fetch is not None and len(to_fetch) > max_fetch:
+            _sqlog.info("fast VGPM: fetching %d of %d unscored tickers; the rest "
+                        "wait for the backfill", max_fetch, len(to_fetch))
+            to_fetch = to_fetch[:max(0, max_fetch)]
 
         api_key = _get_fmp_key()
         good_fetched: dict[str, dict] = {}
@@ -1941,39 +2212,26 @@ def backfill_master_universe(
     merged_vgpm = {**all_fast_vgpm}
     merged_vgpm.update(pipeline_vgpm)  # pipeline overrides fast
 
+    # One universe row (what get_screener_stocks reads for the US tab);
+    # every cap range is filtered from it on read.
+    universe_items = _build_screener_items(
+        [s for s in fmp_stocks if (s.get("marketCap") or 0) >= _US_UNIVERSE_FLOOR],
+        pipeline_vgpm, all_fast_vgpm)
+    if universe_items:
+        _set_cached(_us_universe_cache_key(None, "US", _US_UNIVERSE_FLOOR), universe_items)
+
     range_results = []
     for cap in _FRONTEND_CAP_RANGES:
-        # Filter stocks by cap range
-        subset = []
-        for s in fmp_stocks:
-            mc = s.get("marketCap") or 0
-            if mc < cap["min"]:
-                continue
-            if cap["max"] is not None and mc >= cap["max"]:
-                continue
-            subset.append(s)
-
-        items = _build_screener_items(subset, pipeline_vgpm, all_fast_vgpm)
-
-        # Build the cache key matching what get_screener_stocks() would produce
-        cache_params = dict(
-            sector=None, exchange=None, country="US",
-            market_cap_more_than=cap["min"],
-            market_cap_lower_than=cap["max"],
-            limit=_PER_SECTOR_LIMIT,
-            cache_v=_CACHE_V,
-        )
-        ck = _make_cache_key(cache_params)
-        if items:
-            _set_cached(ck, items)
-
+        items = [i for i in universe_items
+                 if (i.get("marketCap") or 0) >= cap["min"]
+                 and (cap["max"] is None or (i.get("marketCap") or 0) < cap["max"])]
         scored_count = sum(1 for i in items if i.get("vgpm"))
         range_results.append({
             "range": cap["label"],
             "total": len(items),
             "scored": scored_count,
         })
-        _sqlog.info("backfill cached %s: %d items (%d scored)", cap["label"], len(items), scored_count)
+        _sqlog.info("backfill %s: %d items (%d scored)", cap["label"], len(items), scored_count)
 
     final_scored = pass_log[-1]["scored"] if pass_log else 0
     return {
@@ -1991,11 +2249,13 @@ def _fetch_all_sectors_parallel(
     country: str,
     market_cap_more_than: Optional[int],
     market_cap_lower_than: Optional[int],
+    per_sector_limit: int = _PER_SECTOR_LIMIT,
 ) -> list[dict]:
-    """Fetch _PER_SECTOR_LIMIT stocks from each GICS sector in parallel.
+    """Fetch `per_sector_limit` stocks from each GICS sector in parallel.
 
-    Returns a de-duped list sorted by market cap descending.  Running 11
-    FMP calls in parallel keeps wall-clock time ≈ 1-2 s (one round-trip).
+    Only the backfill's supplement path uses this now; the screener read
+    path fetches whole exchanges (_fetch_us_universe). Returns a de-duped
+    list sorted by market cap descending.
     """
     cap_floor = market_cap_more_than if market_cap_more_than is not None else 2_000_000_000
 
@@ -2006,7 +2266,7 @@ def _fetch_all_sectors_parallel(
             country=country,
             market_cap_more_than=cap_floor,
             market_cap_lower_than=market_cap_lower_than,
-            limit=_PER_SECTOR_LIMIT,
+            limit=per_sector_limit,
         )
 
     merged: dict[str, dict] = {}
@@ -2022,6 +2282,241 @@ def _fetch_all_sectors_parallel(
     return sorted(merged.values(), key=lambda s: s.get("marketCap") or 0, reverse=True)
 
 
+# ── US universe (cached whole; filters, sort and paging apply on read) ────────
+#
+# The old read path cached one result per parameter dict and, with no sector
+# given, fetched the top _PER_SECTOR_LIMIT=30 names of each sector BEFORE
+# dropping foreign listings — so limit=500 returned 109 rows, marketCapMin
+# changed nothing (every survivor was a mega-cap anyway) and "All" carried 7
+# of the 31 US Technology names a sector=Technology call returned. Now the
+# universe for (country, exchange, cap floor) is fetched whole — one
+# company-screener call per US exchange — cached once, and every filter,
+# sort and page is applied to that merged universe.
+
+#: Cap floor of the cached universe. Requests with a higher marketCapMin are
+#: filtered in memory from the same universe instead of building their own.
+_US_UNIVERSE_FLOOR = 2_000_000_000
+#: company-screener limit per exchange. NASDAQ has ~900 names above $2B; a
+#: call that comes back with exactly this many rows is logged as truncated.
+_US_FETCH_LIMIT = 5000
+#: A cold build scores fast VGPM synchronously for at most this many names
+#: (largest first, ~8 FMP calls each). Everything else is scored from the
+#: knowledge-graph TTM cache when present, and by the daily backfill
+#: otherwise — a 1,400-name synchronous build is ~11k calls (~15 min).
+_COLD_VGPM_FETCH_CAP = 120
+
+SCREENER_SORTS = ("score", "marketCap", "price", "change", "symbol")
+_SORT_ALIASES = {
+    "composite": "score", "grade": "score", "score": "score",
+    "marketcap": "marketCap", "market_cap": "marketCap", "mcap": "marketCap",
+    "price": "price", "change": "change", "change_pct": "change",
+    "symbol": "symbol", "ticker": "symbol",
+}
+
+
+def normalize_sort(sort: Optional[str]) -> Optional[str]:
+    """Canonical sort key, None for the default (score), ValueError if unknown."""
+    if sort is None or str(sort).strip() == "":
+        return None
+    key = _SORT_ALIASES.get(str(sort).strip().lower())
+    if key is None:
+        raise ValueError(f"unknown sort {sort!r}; use one of {', '.join(SCREENER_SORTS)}")
+    return key
+
+
+def _score_sort_key(x: dict):
+    return (x.get("vgpm_estimated") is True,
+            x.get("composite_score") is None,
+            -(x.get("composite_score") or 0))
+
+
+def sort_items(items: list[dict], sort: Optional[str] = None,
+               order: Optional[str] = None) -> list[dict]:
+    """Sorted copy. Rows missing the sort field always go last, whichever
+    the direction — a null price is not the cheapest stock."""
+    key = normalize_sort(sort) or "score"
+    if key == "score":
+        out = sorted(items, key=_score_sort_key)
+        return out[::-1] if (order or "").lower() == "asc" else out
+    field = {"marketCap": "marketCap", "price": "price",
+             "change": "change_pct", "symbol": "symbol"}[key]
+    desc = (order or ("asc" if key == "symbol" else "desc")).lower() != "asc"
+    have = [i for i in items if i.get(field) is not None]
+    none = [i for i in items if i.get(field) is None]
+    if key == "symbol":
+        have.sort(key=lambda i: str(i.get(field)), reverse=desc)
+    else:
+        have.sort(key=lambda i: float(i.get(field) or 0), reverse=desc)
+    return have + none
+
+
+def paginate(items: list[dict], offset: int = 0, limit: Optional[int] = None) -> list[dict]:
+    offset = max(0, int(offset or 0))
+    if limit is None:
+        return items[offset:]
+    return items[offset:offset + max(0, int(limit))]
+
+
+def _us_universe_cache_key(exchange: Optional[str], country: str, floor: int) -> str:
+    return _make_cache_key(dict(
+        universe="us", exchange=exchange, country=country,
+        market_cap_floor=floor, cache_v=_CACHE_V,
+    ))
+
+
+def _fetch_us_universe(exchange: Optional[str], country: str, floor: int) -> list[dict]:
+    """FMP company-screener rows for the whole (country, exchange) universe
+    above `floor`, US listings only for the US tab, market cap descending."""
+    if exchange:
+        exchanges: list[Optional[str]] = [exchange]
+    elif (country or "").upper() == "US":
+        exchanges = sorted(_US_EXCHANGES)
+    else:
+        exchanges = [None]
+
+    def _one(ex: Optional[str]) -> list[dict]:
+        rows = _call_fmp_screener(exchange=ex, country=country,
+                                  market_cap_more_than=floor, limit=_US_FETCH_LIMIT)
+        if len(rows) >= _US_FETCH_LIMIT:
+            _sqlog.warning("company-screener %s returned the %d-row limit — "
+                           "universe may be truncated", ex, _US_FETCH_LIMIT)
+        return rows
+
+    merged: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=len(exchanges)) as pool:
+        for rows in pool.map(_one, exchanges):
+            for s in rows:
+                sym = s.get("symbol")
+                if sym and sym not in merged:
+                    merged[sym] = s
+    stocks = list(merged.values())
+    if (country or "").upper() == "US" and not exchange:
+        # FMP ignores the country param — keep US-exchange listings only.
+        stocks = [s for s in stocks if _us_listing(s)]
+    stocks = [s for s in stocks if (s.get("marketCap") or 0) >= floor]
+    return sorted(stocks, key=lambda s: s.get("marketCap") or 0, reverse=True)
+
+
+def _build_us_universe(cache_key: str, exchange: Optional[str], country: str,
+                       floor: int) -> dict:
+    """Cold build of the US universe cache row. Callers hold the build lock."""
+    master = _get_master_universe() if (country or "").upper() == "US" else None
+    from_master = master is not None
+    if from_master:
+        stocks = [s for s in master if (s.get("marketCap") or 0) >= floor]
+        if exchange:
+            stocks = [s for s in stocks
+                      if (s.get("exchangeShortName") or s.get("exchange", "")) == exchange]
+        else:
+            # master_universe may carry foreign listings (LSE/XETRA/TSX/…).
+            stocks = [s for s in stocks if _us_listing(s)]
+    else:
+        stocks = _fetch_us_universe(exchange, country, floor)
+
+    tickers = [s.get("symbol", "") for s in stocks if s.get("symbol")]
+    pipeline_vgpm = _get_vgpm_map(tickers)
+    if from_master:
+        # The daily backfill scored this universe; read, never fetch.
+        fast_vgpm = _get_fast_vgpm_cached(tickers)
+    else:
+        sector_map = {s.get("symbol", ""): s.get("sector") or "Unknown" for s in stocks}
+        industry_map = {s.get("symbol", ""): s.get("industry") or "Unknown" for s in stocks}
+        need = [t for t in tickers if t not in pipeline_vgpm]   # already mcap-desc
+        fast_vgpm = _get_or_compute_fast_vgpm(
+            need, sector_map=sector_map, industry_map=industry_map,
+            use_yfinance=False, max_fetch=_COLD_VGPM_FETCH_CAP,
+        )
+    items = _build_screener_items(stocks, pipeline_vgpm, fast_vgpm)
+    if items:
+        _set_cached(cache_key, items)
+    return {"items": items, "total": len(items), "cached": False}
+
+
+def _refresh_missing_vgpm(cache_key: str, cached: list[dict]) -> None:
+    """Overlay VGPM scores that became available since the cache was written
+    (e.g. a backfill pass). Reads caches only — never fetches."""
+    missing_vgpm = [i for i in cached if not i.get("vgpm")]
+    if not missing_vgpm:
+        return
+    backfill_tickers = [i["symbol"] for i in missing_vgpm]
+    fresh = _get_fast_vgpm_cached(backfill_tickers)
+    pipeline = _get_vgpm_map(backfill_tickers)
+    merged = {**fresh, **pipeline}
+    updated = False
+    for item in cached:
+        sym = item["symbol"]
+        vgpm = merged.get(sym)
+        if not item.get("vgpm") and vgpm:
+            item["vgpm"] = vgpm
+            item["vgpm_estimated"] = sym not in pipeline
+            scores = [v["score"] for v in vgpm.values()
+                      if isinstance(v.get("score"), (int, float))]
+            item["composite_score"] = round(sum(scores) / len(scores)) if scores else None
+            updated = True
+    if updated:
+        _set_cached(cache_key, cached)
+
+
+def _master_universe_fresh(country: str) -> bool:
+    if (country or "").upper() != "US":
+        return False
+    try:
+        row = _db.query_one("SELECT expires_at FROM master_universe LIMIT 1")
+        return bool(row) and datetime.now(timezone.utc).isoformat() <= row["expires_at"]
+    except Exception:
+        return False
+
+
+def _get_us_universe(exchange: Optional[str], country: str, floor: int,
+                     force_refresh: bool = False) -> dict:
+    """{"items", "cached", "stale"?} — the whole cached universe."""
+    cache_key = _us_universe_cache_key(exchange, country, floor)
+    if not force_refresh:
+        cached = _get_cached(cache_key)
+        if cached is not None:
+            _refresh_missing_vgpm(cache_key, cached)
+            return {"items": cached, "cached": True}
+
+    # One build per universe at a time (same herd protection as HK/SG):
+    # concurrent requests serve the previous rows or wait for the build.
+    lock = _build_lock(cache_key)
+    if not lock.acquire(blocking=False):
+        stale = _get_cached_stale(cache_key)
+        if stale:
+            return {"items": stale, "cached": True, "stale": True}
+        lock.acquire()
+        try:
+            done = _get_cached(cache_key) or _get_cached_stale(cache_key) or []
+        finally:
+            lock.release()
+        return {"items": done, "cached": bool(done)}
+
+    released = False
+    try:
+        # A fresh master_universe makes the build an in-memory filter, so
+        # only a genuinely cold build is worth serving stale rows for.
+        if not force_refresh and not _master_universe_fresh(country):
+            served = _serve_stale_and_refresh(
+                cache_key, lambda: _build_us_universe(cache_key, exchange, country, floor),
+                "US screener")
+            if served is not None:
+                lock.release()
+                released = True
+                return {"items": served["items"], "cached": True, "stale": True}
+        built = _build_us_universe(cache_key, exchange, country, floor)
+        return {"items": built["items"], "cached": False}
+    finally:
+        if not released:
+            lock.release()
+
+
+def _annotate_usd(items: list[dict]) -> None:
+    for i in items:
+        i.setdefault("currency", "USD")
+        if i.get("currency") == "USD":
+            i["marketCapUsd"] = i.get("marketCap")
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def get_screener_stocks(
@@ -2030,117 +2525,75 @@ def get_screener_stocks(
     country: str = "US",
     market_cap_more_than: Optional[int] = None,
     market_cap_lower_than: Optional[int] = None,
-    limit: int = 100,
+    limit: Optional[int] = None,
     force_refresh: bool = False,
+    offset: int = 0,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
+    live: bool = False,
 ) -> dict:
+    """One page of the US screener.
+
+    sector / market-cap / exchange filters, `sort` and `offset`/`limit` all
+    apply to the merged universe, so `total` is the number of matching
+    stocks and `has_more` says whether another page exists. limit=None
+    returns every match (in-process callers: robo strategy, weekly refresh).
+    live=True overlays fresh quotes — on every match when sorting by price
+    or change (the order depends on them), otherwise on the returned page.
+    """
     _ensure_tables()
-    # When sector is None we use per-sector parallel fetch (ignoring limit),
-    # so normalise the cache key so different limit values don't create duplicates.
-    effective_limit = _PER_SECTOR_LIMIT if sector is None else limit
-    filter_params = dict(
-        sector=sector, exchange=exchange, country=country,
-        market_cap_more_than=market_cap_more_than,
-        market_cap_lower_than=market_cap_lower_than,
-        limit=effective_limit,
-        cache_v=_CACHE_V,
-    )
-    cache_key = _make_cache_key(filter_params)
+    sort_key = normalize_sort(sort)
+    requested_min = market_cap_more_than
+    floor = _US_UNIVERSE_FLOOR
+    if requested_min is not None and requested_min < floor:
+        floor = int(requested_min)
+    universe = _get_us_universe(exchange, country, floor, force_refresh)
 
-    if not force_refresh:
-        cached = _get_cached(cache_key)
-        if cached is not None:
-            # Overlay any VGPM scores that became available since the cache was written
-            # (e.g. from a background backfill pass).  Only reads from cache — never
-            # triggers new FMP fetches, so this is always fast.
-            missing_vgpm = [i for i in cached if not i.get("vgpm")]
-            if missing_vgpm:
-                backfill_tickers = [i["symbol"] for i in missing_vgpm]
-                fresh = _get_fast_vgpm_cached(backfill_tickers)
-                pipeline = _get_vgpm_map(backfill_tickers)
-                merged = {**fresh, **pipeline}
-                updated = False
-                for item in cached:
-                    sym = item["symbol"]
-                    vgpm = merged.get(sym)
-                    if not item.get("vgpm") and vgpm:
-                        item["vgpm"] = vgpm
-                        item["vgpm_estimated"] = sym not in pipeline
-                        scores = [v["score"] for v in vgpm.values()
-                                  if isinstance(v.get("score"), (int, float))]
-                        item["composite_score"] = round(sum(scores) / len(scores)) if scores else None
-                        updated = True
-                if updated:
-                    _set_cached(cache_key, cached)
-            return {"items": cached, "total": len(cached), "cached": True}
+    items = universe["items"]
+    if sector:
+        items = [s for s in items if s.get("sector") == sector]
+    cap_min = max(floor, requested_min or 0)
+    items = [s for s in items if (s.get("marketCap") or 0) >= cap_min]
+    if market_cap_lower_than is not None:
+        items = [s for s in items if (s.get("marketCap") or 0) < market_cap_lower_than]
 
-    # ── Try master universe first (populated by backfill) ────────────────────
-    # If the master universe is fresh, filter it in-memory instead of calling
-    # FMP again.  This gives instant responses for any filter combination.
-    master = _get_master_universe()
-    if master is not None:
-        # Filter master universe by the requested params
-        filtered = master
-        cap_floor = market_cap_more_than or 2_000_000_000
-        if cap_floor:
-            filtered = [s for s in filtered if (s.get("marketCap") or 0) >= cap_floor]
-        if market_cap_lower_than is not None:
-            filtered = [s for s in filtered if (s.get("marketCap") or 0) < market_cap_lower_than]
-        if sector:
-            filtered = [s for s in filtered if s.get("sector") == sector]
-        if exchange:
-            filtered = [s for s in filtered if
-                        (s.get("exchangeShortName") or s.get("exchange", "")) == exchange]
-        if country == "US" and not exchange:
-            # FMP ignores the country param — master_universe carries foreign
-            # listings (LSE/XETRA/TSX/…) that don't belong in the US tab.
-            filtered = [s for s in filtered if _us_listing(s)]
+    if live and sort_key in ("price", "change"):
+        overlay_live_quotes(items)
+    ordered = sort_items(items, sort_key, order)
+    page = [dict(i) for i in paginate(ordered, offset, limit)]
+    if live and sort_key not in ("price", "change"):
+        overlay_live_quotes(page)
+    _annotate_usd(page)
 
-        tickers = [s.get("symbol", "") for s in filtered if s.get("symbol")]
-        pipeline_vgpm = _get_vgpm_map(tickers)
-        fast_vgpm = _get_fast_vgpm_cached(tickers)
-        items = _build_screener_items(filtered, pipeline_vgpm, fast_vgpm)
-        if items:
-            _set_cached(cache_key, items)
-        return {"items": items, "total": len(items), "cached": False}
+    out = {
+        "items": page,
+        "total": len(ordered),
+        "offset": max(0, int(offset or 0)),
+        "limit": limit,
+        "has_more": max(0, int(offset or 0)) + len(page) < len(ordered),
+        "sort": sort_key or "score",
+        "order": (order or "").lower() or None,
+        "currency": "USD",
+        "cached": universe.get("cached", False),
+    }
+    if universe.get("stale"):
+        out["stale"] = True
+    return out
 
-    # ── Fallback: no master universe — fetch from FMP directly ────────────────
-    if sector is None:
-        fmp_stocks = _fetch_all_sectors_parallel(
-            exchange=exchange,
-            country=country,
-            market_cap_more_than=market_cap_more_than,
-            market_cap_lower_than=market_cap_lower_than,
-        )
-    else:
-        fetch_params = {k: v for k, v in filter_params.items() if k != "cache_v"}
-        fmp_stocks = _call_fmp_screener(**fetch_params)
-    if country == "US" and not exchange:
-        # FMP ignores the country param — keep US-exchange listings only.
-        fmp_stocks = [s for s in fmp_stocks if _us_listing(s)]
-    tickers    = [s.get("symbol", "") for s in fmp_stocks if s.get("symbol")]
 
-    live_quotes = {} if sector is None else get_live_quotes(tickers)
-
-    pipeline_vgpm = _get_vgpm_map(tickers)
-    sector_map   = {s.get("symbol", ""): s.get("sector")   or "Unknown" for s in fmp_stocks}
-    industry_map = {s.get("symbol", ""): s.get("industry") or "Unknown" for s in fmp_stocks}
-    tickers_needing_fast = [
-        t for t in tickers
-        if t not in pipeline_vgpm and (
-            {s.get("symbol"): s.get("marketCap") or 0 for s in fmp_stocks}.get(t, 0) >= 2_000_000_000
-        )
-    ]
-    fast_vgpm = _get_or_compute_fast_vgpm(
-        tickers_needing_fast,
-        sector_map=sector_map,
-        industry_map=industry_map,
-        use_yfinance=False,
-    )
-
-    items = _build_screener_items(fmp_stocks, pipeline_vgpm, fast_vgpm, live_quotes)
-    if items:
-        _set_cached(cache_key, items)
-    return {"items": items, "total": len(items), "cached": False}
+def overlay_live_quotes(items: list[dict]) -> None:
+    """Overlay fresh, non-stale quotes onto screener items in place. Never raises."""
+    try:
+        syms = [i.get("symbol") for i in items if i.get("symbol")]
+        if not syms:
+            return
+        quotes = get_live_quotes_detail(syms)["quotes"]
+        for i in items:
+            q = quotes.get(str(i.get("symbol") or "").upper())
+            if q and not q.get("stale"):
+                _overlay_live(i, q)
+    except Exception as exc:
+        _sqlog.warning("live quote overlay failed: %s", exc)
 
 
 def get_company_names(tickers: list[str]) -> dict[str, dict]:
@@ -2247,6 +2700,114 @@ def get_company_names(tickers: list[str]) -> dict[str, dict]:
 
 
 
+# ── SGX depositary receipts ──────────────────────────────────────────────────
+# SGX lists depositary receipts over companies primary-listed elsewhere —
+# UTSD.SI (TSMC), UXSD.SI (SpaceX), UNXD.SI (SK hynix), UGGD.SI (Sea),
+# UGBD.SI (Grab), HZJD.SI (Innolight), IBKD.SI (BCA), TATD.SI (AOT) … Each
+# trades around S$1-2 but FMP reports the WHOLE underlying company's market
+# cap on it, so they topped the SG market-cap sort and voted in the SG peer
+# universe that VGPM percentiles are ranked against. Their names rarely say
+# "depositary receipt", which is why the name filter in regional_comps let
+# them through.
+#
+# Rule — a row is a receipt when ANY of:
+#   1. the code follows SGX's DR convention: three letters + "D" (.SI).
+#      Verified against the 2026-11 SES universe: every such code is a DR
+#      (HBND, HPAD, HSHD, UTSD, …) and no ordinary share uses it — SGX
+#      ordinary codes are alphanumeric (D05, 5DD, F9D) and trust units end
+#      in "U" (C38U, AJBU);
+#   2. the name says so (regional_comps.is_depositary_receipt);
+#   3. price and market cap are inconsistent: implied shares outstanding
+#      above _SGX_MAX_PLAUSIBLE_SHARES. The largest genuine SGX share counts
+#      are ~25-26bn (Thai Beverage, Thomson Medical); the receipts above imply
+#      30bn-1,600bn.
+_SGX_DR_CODE = re.compile(r"^[A-Z]{3}D\.SI$")
+_SGX_MAX_PLAUSIBLE_SHARES = 60e9
+
+
+def is_sgx_depositary_receipt(symbol: Optional[str], name: Optional[str] = None,
+                              price=None, market_cap=None) -> bool:
+    sym = str(symbol or "").strip().upper()
+    if _SGX_DR_CODE.match(sym):
+        return True
+    try:
+        from src.data.regional_comps import is_depositary_receipt
+        if is_depositary_receipt(name):
+            return True
+    except Exception:
+        pass
+    p, mc = _safe_float(price), _safe_float(market_cap)
+    if p and p > 0 and mc and mc / p > _SGX_MAX_PLAUSIBLE_SHARES:
+        return True
+    return False
+
+
+def _drop_sgx_receipts(result: dict) -> dict:
+    """SG screener result without depositary receipts. Applied on read too,
+    so rows cached before the build-time filter are clean immediately."""
+    items = [i for i in (result.get("items") or [])
+             if not is_sgx_depositary_receipt(i.get("symbol"), i.get("companyName"),
+                                              i.get("price"), i.get("marketCap"))]
+    if len(items) == len(result.get("items") or []):
+        return result
+    return {**result, "items": items, "total": len(items)}
+
+
+# ── Listing currency (HK / SG screener rows) ─────────────────────────────────
+_MARKET_CCY = {"US": "USD", "HK": "HKD", "SG": "SGD"}
+_HK_RMB_COUNTER = re.compile(r"^8\d{4}\.HK$")
+
+
+def _listing_currency(symbol: str, market: str) -> str:
+    """Currency a screener row's price and market cap are quoted in.
+
+    Static on purpose — the per-ticker FMP profile lookup behind
+    src.tools.api.get_listing_currency costs one call per row. HK RMB
+    counters (8xxxx.HK) quote in CNY; the USD-quoted SGX counters come from
+    the same static table get_listing_currency falls back to."""
+    sym = str(symbol or "").upper()
+    if market == "HK" and _HK_RMB_COUNTER.match(sym):
+        return "CNY"
+    if market == "SG":
+        try:
+            from src.tools.api import _KNOWN_USD_QUOTED
+            if sym in _KNOWN_USD_QUOTED:
+                return "USD"
+        except Exception:
+            pass
+    return _MARKET_CCY.get(market, "USD")
+
+
+def annotate_currency(result: dict, market: str) -> dict:
+    """Attach `currency` and `marketCapUsd` to every row, in place.
+
+    HK/SG market caps are in the listing currency; the frontend's market-cap
+    bands are USD, so filtering on the raw figure treated HK$100bn as
+    US$100bn. marketCapUsd is None when no FX rate is available — the row
+    then cannot be placed in a USD band, which is reported, never guessed
+    (get_fx_rate never returns a silent 1.0). Never raises."""
+    rates: dict[str, Optional[float]] = {"USD": 1.0}
+    try:
+        from src.tools.api import get_fx_rate
+    except Exception:
+        get_fx_rate = None
+    for item in (result or {}).get("items") or []:
+        ccy = _listing_currency(item.get("symbol", ""), market)
+        if ccy not in rates:
+            try:
+                rates[ccy] = get_fx_rate(ccy, "USD") if get_fx_rate else None
+            except Exception:
+                rates[ccy] = None
+        rate = rates[ccy]
+        item["currency"] = ccy
+        mc = _safe_float(item.get("marketCap"))
+        item["marketCapUsd"] = (mc * rate) if (mc is not None and rate) else None
+    if result is not None:
+        result["currency"] = _MARKET_CCY.get(market, "USD")
+        result["fx_to_usd"] = {k: v for k, v in rates.items() if k != "USD"}
+    return result
+
+
 def _intl_universe(market: str,
                    per_sector_limit: int = _PER_SECTOR_LIMIT
                    ) -> tuple[list[dict], dict, dict, dict]:
@@ -2287,6 +2848,12 @@ def _intl_universe(market: str,
             _sqlog.warning("SGX cross-listing filter unavailable: %s", exc)
 
     raw = dedupe_universe(fetch_universe(market), exclude_names=exclude)
+    if market == "SES":
+        before = len(raw)
+        raw = [r for r in raw if not is_sgx_depositary_receipt(
+            r.get("symbol"), r.get("name"), r.get("price"), r.get("market_cap"))]
+        if len(raw) != before:
+            _sqlog.info("SGX screener: dropped %d depositary receipts", before - len(raw))
 
     # Bound the universe the same way the US screener does: the largest
     # `per_sector_limit` names in each GICS sector. HKEX has ~1,750 names
@@ -2529,6 +3096,13 @@ def _build_hk_screener(cache_key: str) -> dict:
 
 
 def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
+    """The SGX screener (see _get_sg_screener_stocks) minus depositary
+    receipts — filtered on read as well as at build time, so stale or
+    previous-version rows served during a rebuild are clean too."""
+    return _drop_sgx_receipts(_get_sg_screener_stocks(force_refresh))
+
+
+def _get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     """
     Return the SGX universe with VGPM scores.
 
@@ -2537,7 +3111,7 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
                      src/tools/sg/universe.py, now the fallback).
     Metrics source:  the shared _fetch_ticker_metrics FMP pipeline.
     VGPM:            peer-relative percentile ranks, industry-first.
-    Caching:         8d in screener_cache under "sg_fmp_v3" (the weekly
+    Caching:         8d in screener_cache under "sg_fmp_v4" (the weekly
                      scheduler job rewrites it; prices via write-back).
 
     SGX is small (~150 names above the market-cap floor), so most stocks
@@ -2545,7 +3119,7 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     rather than presented as industry-relative.
     """
     _ensure_tables()
-    cache_key = "sg_fmp_v3"   # v3: marketCap fix (v2 rows were all null — the FMP metrics path never sets market_cap_sgd)
+    cache_key = "sg_fmp_v4"   # v4: depositary receipts out of the universe + VGPM peer set (v3: marketCap fix)
 
     if not force_refresh:
         cached = _get_cached(cache_key)
@@ -2703,7 +3277,7 @@ def _build_sg_screener(cache_key: str) -> dict:
 # ── Weekly refresh (scheduler job + manual prod seed) ────────────────────────
 #: Primary structure caches the weekly job keeps warm. US needs no entry:
 #: its read path filters the daily-backfilled master_universe in-memory.
-_PRIMARY_KEYS = ("hk_fmp_v7", "sg_fmp_v3")
+_PRIMARY_KEYS = ("hk_fmp_v7", "sg_fmp_v4")
 
 #: A refresh younger than this counts as "already ran this week" — the
 #: worker-side idempotency gate (mirrors regional_comps' ~6-day window).

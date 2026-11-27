@@ -27,7 +27,7 @@ import {
   addToWatchlist,
   lookupScreenerTicker,
 } from '@/lib/api';
-import type { ScreenerResponse } from '@/lib/reportTypes';
+import type { ScreenerResponse, ScreenerStock } from '@/lib/reportTypes';
 import {
   Search,
   Check,
@@ -43,7 +43,40 @@ import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { useI18n } from '@/i18n';
 
 type Market = 'US' | 'HK' | 'SG';
-type SortKey = 'composite' | 'valuation' | 'growth' | 'profitability' | 'momentum';
+type SortKey =
+  | 'composite' | 'valuation' | 'growth' | 'profitability' | 'momentum'
+  | 'marketCap' | 'price' | 'change';
+
+/** Rows per rendered page (the old view silently truncated at 200). */
+const PAGE_SIZE = 100;
+/** US universe is fetched in server pages of this size. */
+const US_FETCH_PAGE = 500;
+/** Safety bound on US pages fetched for the client-side universe. */
+const US_MAX_PAGES = 12;
+/** A screener request that takes longer than this is abandoned with a
+ *  retry prompt instead of an endless spinner. Cold builds can be slow;
+ *  the backend keeps building and the retry is served from it. */
+const LOAD_TIMEOUT_MS = 60_000;
+/** After this long, the loading state explains a first-time build. */
+const SLOW_LOAD_MS = 8_000;
+/** Live price tick. */
+const PRICE_TICK_MS = 15_000;
+
+const CCY_SYMBOL: Record<string, string> = {
+  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'CN¥',
+};
+const MARKET_CCY: Record<Market, string> = { US: 'USD', HK: 'HKD', SG: 'SGD' };
+
+function ccySymbol(ccy?: string | null): string {
+  if (!ccy) return '$';
+  return CCY_SYMBOL[ccy] ?? `${ccy} `;
+}
+
+/** Market cap in USD for the USD bands; null when it cannot be converted. */
+function capUsd(r: ScreenerStock): number | null {
+  if (r.marketCapUsd !== undefined) return r.marketCapUsd ?? null;
+  return (!r.currency || r.currency === 'USD') ? r.marketCap : null;
+}
 
 /**
  * Desktop row grid — the header row and every body row share this exact
@@ -71,10 +104,13 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: 'growth',        label: 'G' },
   { id: 'profitability', label: 'P' },
   { id: 'momentum',      label: 'M' },
+  { id: 'marketCap',     label: 'Market cap' },
+  { id: 'price',         label: 'Price' },
+  { id: 'change',        label: 'Change' },
 ];
 
-// The VGPM dropdown in the search bar IS the sort control now — the old
-// Sort tab row is gone.
+// The Sort dropdown in the search bar is the sort control: VGPM grades,
+// or market cap / price / day change (largest first).
 const SORT_OPTIONS: FilterOption[] = SORTS.map(s => ({ id: s.id, label: s.label }));
 
 // Canonical FMP sector order — used only to keep the derived dropdown
@@ -87,8 +123,9 @@ const FMP_SECTOR_ORDER = [
   'Basic Materials', 'Real Estate', 'Utilities',
 ];
 
-// Market-cap ranges — labels mirror the backend's _FRONTEND_CAP_RANGES so
-// the pre-computed US cache subsets stay aligned.
+// Market-cap ranges in USD — labels mirror the backend's
+// _FRONTEND_CAP_RANGES. HK/SG rows are placed by marketCapUsd (converted
+// server-side at live FX); a row with no FX rate cannot be placed in a band.
 const CAP_RANGES: { id: string; label: string; min: number | null; max: number | null }[] = [
   { id: 'all',     label: 'Any market cap', min: null,  max: null },
   { id: '2-12',    label: '$2B – $12B',     min: 2e9,   max: 12e9 },
@@ -101,12 +138,21 @@ const CAP_RANGES: { id: string; label: string; min: number | null; max: number |
 
 type FilterOption = { id: string; label: string; count?: number };
 
-function formatMarketCap(mc: number | null): string {
+const TIMEOUT_ERROR = '__timeout__';
+
+/** Market cap in its listing currency (HK$ / S$ / $), never relabelled. */
+function formatMarketCap(mc: number | null, ccy?: string | null): string {
   if (mc == null) return '—';
-  if (mc >= 1e12) return `$${(mc / 1e12).toFixed(2)}T`;
-  if (mc >= 1e9)  return `$${(mc / 1e9).toFixed(1)}B`;
-  if (mc >= 1e6)  return `$${(mc / 1e6).toFixed(0)}M`;
-  return `$${mc.toFixed(0)}`;
+  const s = ccySymbol(ccy);
+  if (mc >= 1e12) return `${s}${(mc / 1e12).toFixed(2)}T`;
+  if (mc >= 1e9)  return `${s}${(mc / 1e9).toFixed(1)}B`;
+  if (mc >= 1e6)  return `${s}${(mc / 1e6).toFixed(0)}M`;
+  return `${s}${mc.toFixed(0)}`;
+}
+
+function formatPrice(p: number | null, ccy?: string | null): string {
+  if (p == null) return '—';
+  return `${ccySymbol(ccy)}${p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // Grade-rank helper for V/G/P/M sort (A+ > A > A- > B+ > ...)
@@ -259,67 +305,152 @@ export function ScreenerPage() {
 
   const [data, setData]             = useState<ScreenerResponse | null>(null);
   const [loading, setLoading]       = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [slowLoad, setSlowLoad]     = useState(false);
+  const [loadError, setLoadError]   = useState<string | null>(null);
   const [lastRefreshed, setLastRef] = useState<Date | null>(null);
+  const [page, setPage]             = useState(0);
 
   const dataRef = useRef<ScreenerResponse | null>(null);
   useEffect(() => { dataRef.current = data; }, [data]);
 
+  // Monotonic load id: a response is applied only if no newer load (e.g. a
+  // market switch) started after it, so US rows can never land under the
+  // HK label.
+  const loadSeq = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+
   // ── Load universe on market change ───────────────────────────────────────
   // Sector and cap filtering happen client-side on the full universe, so
-  // changing a filter never refetches — only switching markets does.
+  // changing a filter never refetches — only switching markets does. The
+  // US universe arrives in server pages; the first page renders at once and
+  // the rest stream in behind it.
   const load = useCallback(async (forceRefresh = false) => {
+    const seq = ++loadSeq.current;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const isCurrent = () => seq === loadSeq.current;
+
+    // Clear the previous market's rows immediately.
+    setData(null);
+    setLoadError(null);
+    setSlowLoad(false);
     setLoading(true);
+    setLoadingMore(false);
+    const slowTimer = setTimeout(() => { if (isCurrent()) setSlowLoad(true); }, SLOW_LOAD_MS);
+    const timeout = setTimeout(() => ctrl.abort(), LOAD_TIMEOUT_MS);
     try {
       let result: ScreenerResponse;
-      if (market === 'HK') result = await getHkScreenerStocks(forceRefresh);
-      else if (market === 'SG') result = await getSgScreenerStocks(forceRefresh);
+      if (market === 'HK') result = await getHkScreenerStocks(forceRefresh, ctrl.signal);
+      else if (market === 'SG') result = await getSgScreenerStocks(forceRefresh, ctrl.signal);
       else result = await getScreenerStocks({
         marketCapMin: 2_000_000_000,
+        limit: US_FETCH_PAGE,
+        offset: 0,
         refresh: forceRefresh,
-      });
+      }, ctrl.signal);
+      if (!isCurrent()) return;
       setData(result);
       setLastRef(new Date());
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
       setLoading(false);
+      clearTimeout(timeout);
+
+      // Remaining US pages.
+      if (market === 'US' && result.has_more) {
+        setLoadingMore(true);
+        let offset = result.items.length;
+        for (let p = 1; p < US_MAX_PAGES; p++) {
+          const next = await getScreenerStocks({
+            // No live overlay on background pages: the price tick refreshes
+            // whatever rows are on screen, and skipping it makes each page
+            // a cache read.
+            marketCapMin: 2_000_000_000, limit: US_FETCH_PAGE, offset, live: false,
+          }, ctrl.signal);
+          if (!isCurrent()) return;
+          setData(prev => {
+            if (!prev) return prev;
+            const have = new Set(prev.items.map(i => i.symbol));
+            return {
+              ...next,
+              items: [...prev.items, ...next.items.filter(i => !have.has(i.symbol))],
+            };
+          });
+          offset += next.items.length;
+          if (!next.has_more || next.items.length === 0) break;
+        }
+      }
+    } catch (e) {
+      if (!isCurrent()) return;
+      const aborted = (e as Error).name === 'AbortError';
+      // A partial US universe is still useful — keep what arrived.
+      if (!dataRef.current?.items.length) {
+        setLoadError(aborted ? TIMEOUT_ERROR : (e as Error).message);
+      } else if (!aborted) {
+        toast.error((e as Error).message);
+      }
+    } finally {
+      clearTimeout(slowTimer);
+      clearTimeout(timeout);
+      if (isCurrent()) {
+        setLoading(false);
+        setLoadingMore(false);
+        setSlowLoad(false);
+      }
     }
   }, [market]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    return () => { abortRef.current?.abort(); };
+  }, [load]);
 
-  // ── 15s live price refresh (top 50 by composite) ─────────────────────────
+  // Symbols of the rows currently on screen — what the price tick refreshes.
+  const visibleSymsRef = useRef<string[]>([]);
+  const tickInFlight = useRef(false);
+
+  // ── 15s live price refresh (the rows actually visible) ──────────────────
+  // Skips a tick while the previous one is still in flight, so slow
+  // provider responses can never stack into overlapping polls.
   useEffect(() => {
     const tick = async () => {
-      const current = dataRef.current;
-      if (!current?.items.length) return;
-      const top = [...current.items]
-        .sort((a, b) => (b.composite_score ?? -1) - (a.composite_score ?? -1))
-        .slice(0, 50);
-      const syms = top.map(s => s.symbol);
+      if (tickInFlight.current) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const syms = visibleSymsRef.current.slice(0, PAGE_SIZE);
+      if (!syms.length) return;
+      const seq = loadSeq.current;
+      tickInFlight.current = true;
       try {
-        const quotes = await getScreenerPrices(syms);
+        const { quotes } = await getScreenerPrices(syms);
+        if (seq !== loadSeq.current) return;      // market switched mid-tick
         setData(prev => {
           if (!prev) return prev;
           const newItems = prev.items.map(item => {
             const q = quotes[item.symbol];
-            if (!q) return item;
+            // A stale quote (provider failure / delisted line) is not a
+            // live price — keep what the row already shows.
+            if (!q || q.stale) return item;
             return {
               ...item,
               price:      q.price      ?? item.price,
-              marketCap:  q.marketCap  ?? item.marketCap,
+              // Quote market caps are in the listing currency; only USD rows
+              // can take them without re-converting the USD band figure.
+              ...((!item.currency || item.currency === 'USD') && q.marketCap != null
+                ? { marketCap: q.marketCap, marketCapUsd: q.marketCap }
+                : {}),
               volume:     q.volume     ?? item.volume,
-              beta:       q.beta       ?? item.beta,
               change_pct: q.change_pct != null ? q.change_pct : item.change_pct,
             };
           });
           return { ...prev, items: newItems };
         });
         setLastRef(new Date());
-      } catch { /* silent */ }
+      } catch { /* silent */ } finally {
+        tickInFlight.current = false;
+      }
     };
     const initial = setTimeout(tick, 3000);
-    const id = setInterval(tick, 15000);
+    const id = setInterval(tick, PRICE_TICK_MS);
     return () => { clearTimeout(initial); clearInterval(id); };
   }, []);
 
@@ -369,7 +500,9 @@ export function ScreenerPage() {
         } else if (isOther || s !== sector) return false;
       }
       if (capMin != null || capMax != null) {
-        const mc = r.marketCap;
+        // Bands are USD; HK/SG rows carry marketCapUsd. No FX rate → the
+        // row cannot be placed in a band, so it is excluded, not guessed.
+        const mc = capUsd(r);
         if (mc == null) return false;               // can't verify → exclude
         if (capMin != null && mc < capMin) return false;
         if (capMax != null && mc >= capMax) return false;
@@ -378,13 +511,28 @@ export function ScreenerPage() {
           !(r.companyName || '').toLowerCase().includes(q)) return false;
       return true;
     });
+    // Numeric sorts: largest first, missing values always last.
+    const num = (v: number | null | undefined) => (v == null ? -Infinity : v);
     return [...filtered].sort((a, b) => {
       if (sortKey === 'composite') return (b.composite_score ?? -1) - (a.composite_score ?? -1);
+      if (sortKey === 'marketCap') return num(capUsd(b) ?? b.marketCap) - num(capUsd(a) ?? a.marketCap);
+      if (sortKey === 'price')     return num(b.price) - num(a.price);
+      if (sortKey === 'change')    return num(b.change_pct) - num(a.change_pct);
       const ga = a.vgpm?.[sortKey]?.grade;
       const gb = b.vgpm?.[sortKey]?.grade;
       return gradeRank(gb) - gradeRank(ga);
     });
   }, [data, sector, capRange, search, sortKey]);
+
+  // ── Paging (client-side over the filtered universe) ─────────────────────
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  useEffect(() => { setPage(0); }, [market, sector, capId, sortKey, search]);
+  useEffect(() => { if (page > pageCount - 1) setPage(pageCount - 1); }, [page, pageCount]);
+  const pageRows = useMemo(
+    () => rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [rows, page],
+  );
+  useEffect(() => { visibleSymsRef.current = pageRows.map(r => r.symbol); }, [pageRows]);
 
   // ── Ticker not in universe → lookup on demand ────────────────────────────
   useEffect(() => {
@@ -426,7 +574,16 @@ export function ScreenerPage() {
           {(['US', 'HK', 'SG'] as Market[]).map(m => (
             <button
               key={m}
-              onClick={() => { setMarket(m); setSector('all'); setCapId('all'); }}
+              onClick={() => {
+                if (m === market) return;
+                // Drop the old market's rows in the same render as the label
+                // change; load() then fetches the new universe.
+                abortRef.current?.abort();
+                loadSeq.current += 1;
+                setData(null);
+                setLoading(true);
+                setMarket(m); setSector('all'); setCapId('all');
+              }}
               className={`flex-1 h-8 md:h-9 rounded-md text-xs md:text-[12.5px] font-medium transition-colors
                 ${market === m ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground active:text-foreground'}`}
             >
@@ -452,7 +609,7 @@ export function ScreenerPage() {
           <div className="flex flex-wrap items-center gap-1.5 ml-auto justify-end">
             <FilterDropdown label="Sector" value={sector} options={sectorOptions} onSelect={setSector} searchable/>
             <FilterDropdown label="Market Cap" value={capId} options={capOptions} onSelect={setCapId}/>
-            <FilterDropdown label="VGPM" value={sortKey} options={SORT_OPTIONS}
+            <FilterDropdown label="Sort" value={sortKey} options={SORT_OPTIONS}
                             onSelect={id => setSortKey(id as SortKey)} defaultValue="composite"/>
           </div>
         </div>
@@ -472,7 +629,10 @@ export function ScreenerPage() {
               </span>
             )}
           </div>
-          <span className="text-xs md:text-xs text-muted-foreground/70">{rows.length} · {market}</span>
+          <span className="text-xs md:text-xs text-muted-foreground/70">
+            {rows.length.toLocaleString()} · {market}
+            {loadingMore && <> · {t("loading more…")}</>}
+          </span>
         </div>
 
         <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
@@ -504,8 +664,30 @@ export function ScreenerPage() {
             </div>
           )}
 
-          {loading && !data ? (
-            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">{t("Loading…")}</div>
+          {loadError && !data ? (
+            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground">
+              <div>
+                {loadError === TIMEOUT_ERROR
+                  ? t('The screener is taking longer than usual to load. It keeps building in the background — try again in a moment.')
+                  : t('Could not load the screener: {msg}', { msg: loadError })}
+              </div>
+              <button
+                type="button"
+                onClick={() => load()}
+                className="mt-3 h-8 px-3 rounded-md border border-border bg-card text-foreground text-[12px] hover:bg-muted transition-colors"
+              >
+                {t("Retry")}
+              </button>
+            </div>
+          ) : loading && !data ? (
+            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70" role="status">
+              <div>{t("Loading…")}</div>
+              {slowLoad && (
+                <div className="mt-1.5">
+                  {t('Building the {market} screener — a first load can take up to a minute.', { market })}
+                </div>
+              )}
+            </div>
           ) : rows.length === 0 ? (
             <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">
               {t("No matches. Adjust filters.")}
@@ -514,7 +696,7 @@ export function ScreenerPage() {
             /* ── Desktop rows: dense table-style list, hover actions ────────
                Click anywhere on the row to open the report; Analyse/Watch
                reveal on hover (swipe gestures are phone-only). */
-            rows.slice(0, 200).map((r, i) => (
+            pageRows.map((r, i) => (
               <div
                 key={r.symbol}
                 onClick={() => handleOpen(r.symbol)}
@@ -530,14 +712,12 @@ export function ScreenerPage() {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
                       <span className="truncate">{r.sector ? t(r.sector) : '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
-                      <span className="tabular-nums shrink-0">{formatMarketCap(r.marketCap)}</span>
+                      <span className="tabular-nums shrink-0">{formatMarketCap(r.marketCap, r.currency ?? MARKET_CCY[market])}</span>
                     </div>
                   </div>
                   {/* Price — lg+ only, in sync with DESK_GRID's template */}
                   <div className="hidden lg:block text-right text-[13px] font-medium text-foreground tabular-nums">
-                    {r.price != null
-                      ? `$${r.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : '—'}
+                    {formatPrice(r.price, r.currency ?? MARKET_CCY[market])}
                   </div>
                   {/* % change — lg+ only */}
                   <div className="hidden lg:block text-right">
@@ -602,7 +782,7 @@ export function ScreenerPage() {
               </div>
             ))
           ) : (
-            rows.slice(0, 200).map((r, i) => (
+            pageRows.map((r, i) => (
               <SwipeRow
                 key={r.symbol}
                 onClick={() => handleOpen(r.symbol)}
@@ -630,7 +810,7 @@ export function ScreenerPage() {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/70">
                       <span className="truncate">{r.sector ? t(r.sector) : '—'}</span>
                       <span className="text-muted-foreground/50">·</span>
-                      <span className="tabular-nums">{formatMarketCap(r.marketCap)}</span>
+                      <span className="tabular-nums">{formatMarketCap(r.marketCap, r.currency ?? MARKET_CCY[market])}</span>
                     </div>
                   </div>
                   <div className="col-span-2 flex flex-col items-end">
@@ -663,11 +843,39 @@ export function ScreenerPage() {
           )}
         </div>
 
+        {rows.length > PAGE_SIZE && (
+          <div className="mt-3 px-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              className="h-8 px-3 rounded-md border border-border bg-card disabled:opacity-40 hover:bg-muted transition-colors"
+            >
+              {t("Previous")}
+            </button>
+            <span className="tabular-nums">
+              {(page * PAGE_SIZE + 1).toLocaleString()}–{Math.min(rows.length, (page + 1) * PAGE_SIZE).toLocaleString()} {t("of")} {rows.length.toLocaleString()}
+            </span>
+            <button
+              type="button"
+              disabled={page >= pageCount - 1}
+              onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+              className="h-8 px-3 rounded-md border border-border bg-card disabled:opacity-40 hover:bg-muted transition-colors"
+            >
+              {t("Next")}
+            </button>
+          </div>
+        )}
+
         <div
           className="mt-3 px-1 text-xs text-muted-foreground"
           title="Score = 0.30·V + 0.25·G + 0.25·P + 0.20·M, sector-neutralised"
         >
           {t('{n} stocks', { n: data?.total ?? 0 })}
+          {market !== 'US' && (
+            <> · {t('Market caps shown in {ccy}; market-cap bands are USD at live FX', { ccy: MARKET_CCY[market] })}</>
+          )}
+          {data?.stale && <> · {t("refreshing in background")}</>}
         </div>
       </div>
     </div>
