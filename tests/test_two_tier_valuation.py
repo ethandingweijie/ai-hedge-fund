@@ -54,7 +54,8 @@ def test_the_z_score_engine_is_gone():
 def test_the_target_is_pure_convergence_toward_the_iv():
     src = _run_src()
     assert "_convergence_bound(_siv, float(_spot_for_cap), _max_capture)" in src
-    assert '"rule": "target = spot + capture x (IV - spot)"' in src
+    # D1 (owner, 2026-11-27): the convergence target carries the year's price path
+    assert '"rule": "target = [spot + capture x (IV - spot)] x (1 + Ke - dividend yield)"' in src
 
 
 def test_unified_target_supersedes_the_independent_target_guards():

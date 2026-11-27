@@ -1274,6 +1274,32 @@ def _convergence_bound(scen_iv: float, spot: float, max_capture: float) -> float
     return spot + max_capture * (scen_iv - spot)
 
 
+def _price_path_carry(*, firm_ke: Optional[float], ggm_coe: Optional[float], market_capm: Optional[dict],
+                      dps: Optional[float], spot: Optional[float]) -> dict:
+    """The 12-month price-path factor, 1 + Ke - dividend yield (owner, 2026-11-27, D1 "a-full").
+
+    target = [spot + capture x (IV - spot)] x carry. A stock at fair value returns its cost of equity over a year,
+    part dividend and part price, so the price leg grows at Ke less the yield. Ke is the firm's own: the firm CAPM
+    cost of equity; for a bank (no firm CAPM) the GGM cost of equity; else the market cost of equity on the
+    valuation's CAPM inputs. With no Ke at all the factor is 1 (the old rule) and says so.
+
+    >>> round(_price_path_carry(firm_ke=0.0529, ggm_coe=None, market_capm=None, dps=0.184121, spot=4.30)["factor"], 6)
+    1.010081
+    """
+    ke, src = None, None
+    for v, s in ((firm_ke, "firm CAPM cost of equity"), (ggm_coe, "GGM cost of equity"),
+                 ((market_capm or {}).get("cost_of_equity"), "market cost of equity (rf + ERP + CRP)")):
+        if isinstance(v, (int, float)) and math.isfinite(float(v)) and 0.0 < float(v) < 0.5:
+            ke, src = float(v), s
+            break
+    dy = (float(dps) / float(spot)) if (isinstance(dps, (int, float)) and dps > 0 and spot and spot > 0) else 0.0
+    if ke is None:
+        return {"factor": 1.0, "cost_of_equity": None, "ke_source": "none available: no carry",
+                "dividend_yield": round(dy, 6), "rule": "1 + Ke - dividend yield"}
+    return {"factor": round(1.0 + ke - dy, 6), "cost_of_equity": round(ke, 6), "ke_source": src,
+            "dividend_yield": round(dy, 6), "rule": "1 + Ke - dividend yield"}
+
+
 #: Sectors whose short-term investments ARE the business -- a bank's securities
 #: book, an insurer's float -- and are never spare cash to net against debt.
 #: Healthcare is excluded too: a managed-care plan's investments back medical
@@ -16692,6 +16718,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             except Exception as _fc_exc:                   # noqa: BLE001
                 _log.warning("[DCF] %s: firm CAPM failed, table rate kept: %s", ticker, _fc_exc)
                 _firm_capm = None
+        # Owner, 2026-11-27 (D1): the MARKET cost of equity on the valuation's own CAPM inputs -- the same rf (the
+        # market's government curve), ERP and country premium the firm CAPM uses, at beta 1. It is the rating
+        # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
+        try:
+            from src.data import capm as _capm_mkt
+            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "US"
+            if _firm_capm:
+                _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
+            else:
+                _m_rf, _m_src = _capm_mkt.risk_free(_mkt_code)
+            _m_crp = float(_wacc_build.get("country_risk_premium_total") or 0.0)
+            _wacc_build["market_capm"] = {
+                "rf": round(float(_m_rf), 5), "rf_source": _m_src, "erp": _capm_mkt.ERP, "crp": round(_m_crp, 5),
+                "cost_of_equity": round(float(_m_rf) + _capm_mkt.ERP + _m_crp, 5), "market": _mkt_code,
+                "basis": "market cost of equity = rf + ERP + CRP (beta 1), the firm CAPM's own inputs"}
+        except Exception:                                  # noqa: BLE001
+            pass
         # ── CAPM cross-check and the risk-on band (owner, 2026-10-04, plan 1D.2/1D.4, D5) ─────
         # The table rate is the engine's; CAPM (rf + beta x ERP + country premium, blended with the
         # after-tax cost of debt at market weights) is the check. A beta outside a plausible band is
@@ -20230,25 +20273,37 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if _spot_for_cap and float(_spot_for_cap) > 0:
             _pt_cross = {"method": _12m_pt_method_label, "targets": dict(_12m_targets)}
             _pt_rows: dict = {}
+            # Owner, 2026-11-27 (D1, "a-full"): the 12-month target carries the whole price path. A stock that
+            # earns its cost of equity returns Ke in a year, part dividend and part price, so the price leg grows
+            # at Ke less the dividend yield; a target struck at today's value understated every name's 12-month
+            # return by that much and, against a market-Ke hurdle, rated a fairly valued stock Underweight.
+            _carry = _price_path_carry(
+                firm_ke=most_recent.get("_firm_cost_of_equity"),
+                ggm_coe=((((scenario_results.get("base") or {}).get("leg_inputs") or {}).get("GGM (P/B)") or {})
+                         .get("assumptions") or {}).get("coe"),
+                market_capm=(_wacc_build.get("market_capm") if isinstance(locals().get("_wacc_build"), dict) else None),
+                dps=most_recent.get("dividends_per_share"), spot=float(_spot_for_cap))
             for _sn in ("bear", "base", "bull"):
                 _sr = scenario_results.get(_sn) or {}
                 _siv = _sr.get("intrinsic_value")
                 if not isinstance(_siv, (int, float)) or _siv <= 0:
                     continue
-                _tgt = round(_convergence_bound(_siv, float(_spot_for_cap), _max_capture), 2)
+                _conv_pre = round(_convergence_bound(_siv, float(_spot_for_cap), _max_capture), 2)
+                _tgt = round(_convergence_bound(_siv, float(_spot_for_cap), _max_capture) * _carry["factor"], 2)
                 _12m_targets[_sn] = _tgt
-                _pt_rows[_sn] = {"intrinsic_value": _siv, "target": _tgt}
+                _pt_rows[_sn] = {"intrinsic_value": _siv, "target": _tgt, "target_before_carry": _conv_pre}
             if _pt_rows:
                 _pt_unified = True
                 _12m_pt_method_label = (
                     f"convergence toward intrinsic value: {_max_capture:.0%} of "
-                    f"the spot-to-IV gap")
+                    f"the spot-to-IV gap, carried at Ke - dividend yield ({_carry['factor'] - 1.0:+.2%})")
                 _pt_bridge = {
-                    "rule": "target = spot + capture x (IV - spot)",
+                    "rule": "target = [spot + capture x (IV - spot)] x (1 + Ke - dividend yield)",
                     "spot": float(_spot_for_cap),
                     "capture": _max_capture,
                     "capture_source": _capture_source,
                     "capture_reason": _capture_reason,
+                    "carry": _carry,
                     "scenarios": _pt_rows,
                     "cross_checks": _pt_cross,
                 }

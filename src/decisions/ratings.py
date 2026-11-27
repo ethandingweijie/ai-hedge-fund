@@ -14,7 +14,15 @@ How a rating is decided
 
   benchmark expected return = the market's cost of equity
       = risk-free rate + equity risk premium + country risk premium
-        (the same Damodaran anchors and per-market CRP the WACC uses)
+        (owner, 2026-11-27, D1: the valuation's OWN CAPM inputs -- the run's
+        firm-CAPM rf, ERP and CRP at beta 1, e.g. SG rf 2.29% on the SGS 10y,
+        US 4.94%, ERP 4.41%; the fixed constants below only when a run
+        carries no CAPM build)
+
+  The 12-month target carries the full price path, [spot + capture x
+  (IV - spot)] x (1 + Ke - dividend yield), so a fairly valued stock's TSR is
+  its own cost of equity and is rated Neutral against the market's. The
+  structural rating applies the same carry to intrinsic value.
 
   excess = TSR - benchmark return
       >= +500 bps  -> Overweight
@@ -35,11 +43,13 @@ target, both are disclosed.
 """
 from __future__ import annotations
 
+import math
 from datetime import date
 from enum import Enum
 from typing import Optional
 
-#: Damodaran January 2026 anchors -- the same basis the WACC registry uses.
+#: Damodaran January 2026 anchors. Since 2026-11-27 (D1) the FALLBACK only: the benchmark is built from the run's own
+#: CAPM inputs (`resolve_benchmark(capm=...)`); these apply when a caller passes none.
 RISK_FREE_RATE = 0.0395
 EQUITY_RISK_PREMIUM = 0.0446
 RATING_THRESHOLD = 0.05          # 500 bps
@@ -98,7 +108,8 @@ RATING_DEFINITION = (
     "Overweight: expected 12-month total shareholder return exceeds the "
     "benchmark's expected return by at least 500 bps. Underweight: trails it "
     "by at least 500 bps. Neutral: within 500 bps either way. The benchmark's "
-    "expected return is its market cost of equity."
+    "expected return is its market cost of equity: the risk-free rate, equity "
+    "risk premium and country risk premium the valuation itself uses."
 )
 
 REGULATORY_DISCLAIMER = (
@@ -141,6 +152,7 @@ def build_unrated_view(rating_state: dict, *, price: Optional[float] = None,
         "price": round(float(price), 4) if price else None, "price_as_of": price_as_of,
         "target_12m": None,
         "intrinsic_value": None,
+        "carry": None,
         "capital_gain_12m": None, "dividend_yield": None, "dividend_known": False,
         "projected_dps": None, "tsr_12m": None, "excess_return_bps": None,
         "callout": f"{label}: {reason}. No intrinsic value, 12-month target or rating is published.",
@@ -186,8 +198,29 @@ _BENCHMARKS: dict[tuple[str, bool], tuple[str, str]] = {
 }
 
 
-def resolve_benchmark(ticker: str, sector: str = "") -> dict:
-    """The index this ticker is rated against, and its expected 12-month return."""
+def _capm_inputs(capm: Optional[dict]) -> Optional[tuple[float, float, float]]:
+    """(rf, erp, crp) from a run's CAPM build, or None when it is missing or implausible."""
+    if not isinstance(capm, dict):
+        return None
+    try:
+        rf, erp = float(capm.get("rf")), float(capm.get("erp"))
+        crp = float(capm.get("crp") or 0.0)
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(x) for x in (rf, erp, crp)) or not (0.0 < rf < 0.15 and 0.0 < erp < 0.15
+                                                                 and -0.05 < crp < 0.15):
+        return None
+    return rf, erp, crp
+
+
+def resolve_benchmark(ticker: str, sector: str = "", capm: Optional[dict] = None) -> dict:
+    """The index this ticker is rated against, and its expected 12-month return.
+
+    Owner, 2026-11-27 (D1): expected = rf + ERP + CRP from the valuation's own CAPM inputs (`capm`: the payload's
+    wacc_build.firm_capm, else its wacc_build.market_capm), so the hurdle and the cost of capital the valuation
+    discounts at stand on one risk-free rate. The fixed Damodaran constants are the fallback only -- they put the SG
+    hurdle at 8.91% against a valuation on the 2.29% SGS curve (6.70%), a 221bp Underweight bias, and the US hurdle
+    94bp below its own CAPM."""
     from src.agents.industry.sector_prompts import is_tech_sector
     from src.data.sector_profiles import market_crp, resolve_market
 
@@ -196,13 +229,21 @@ def resolve_benchmark(ticker: str, sector: str = "") -> dict:
     code, name = (_BENCHMARKS.get((market, tech))
                   or _BENCHMARKS.get((market, False))
                   or _BENCHMARKS[("US", False)])
-    crp = market_crp(market)
-    expected = RISK_FREE_RATE + EQUITY_RISK_PREMIUM + crp
+    inputs = _capm_inputs(capm)
+    if inputs:
+        rf, erp, crp = inputs
+        src = "the valuation's CAPM inputs"
+    else:
+        rf, erp, crp = RISK_FREE_RATE, EQUITY_RISK_PREMIUM, market_crp(market)
+        src = "fallback constants (no CAPM build on the run)"
+    expected = rf + erp + crp
     return {
         "code": code, "name": name, "market": market,
         "expected_return": round(expected, 4),
-        "basis": (f"market cost of equity: risk-free {RISK_FREE_RATE:.2%} + "
-                  f"equity premium {EQUITY_RISK_PREMIUM:.2%} + country risk {crp:.2%}"),
+        "risk_free": round(rf, 5), "equity_risk_premium": round(erp, 5), "country_risk_premium": round(crp, 5),
+        "source": src,
+        "basis": (f"market cost of equity ({src}): risk-free {rf:.2%} + "
+                  f"equity premium {erp:.2%} + country risk {crp:.2%}"),
     }
 
 
@@ -262,6 +303,7 @@ def build_research_view(
     next_earnings: Optional[str] = None, sotp_per_share: Optional[float] = None,
     today: Optional[date] = None, unreconciled: Optional[dict] = None,
     material_unreflected: Optional[dict] = None,
+    capm: Optional[dict] = None, carry: Optional[float] = None,
 ) -> Optional[dict]:
     """Everything the report header and the trade layer need, decided once.
 
@@ -272,14 +314,21 @@ def build_research_view(
       3. `methodology_gap` -- the standing bridge between the 12-month and
          long-run methods, stated so the divergence is never silent.
 
+    `capm` (D1, owner 2026-11-27): the run's CAPM inputs, so the benchmark is the market cost of equity the
+    valuation itself uses. `carry`: the target's 12-month price-path factor (pt_bridge.carry.factor, 1 + Ke -
+    dividend yield); the structural test applies it to intrinsic value (IV x carry), so the long-run and
+    12-month views are compared on the same horizon. None = 1.0 (a run from before the carry).
+
     Returns None when there is no usable 12-month target (the caller keeps its
     no-valuation path)."""
-    bench = resolve_benchmark(ticker, sector)
+    bench = resolve_benchmark(ticker, sector, capm=capm)
     tactical_tr = total_return(price, target_12m, dps)
     if tactical_tr is None:
         return None
     tactical = rate(tactical_tr["tsr"], bench["expected_return"])
-    structural_tr = total_return(price, intrinsic_value, dps)
+    _k = float(carry) if isinstance(carry, (int, float)) and math.isfinite(float(carry)) and 0.5 < float(carry) < 1.5 \
+        else 1.0
+    structural_tr = total_return(price, (float(intrinsic_value) * _k) if intrinsic_value else intrinsic_value, dps)
     structural = (rate(structural_tr["tsr"], bench["expected_return"])
                   if structural_tr else None)
 
@@ -376,6 +425,7 @@ def build_research_view(
         "target_12m": round(float(target_12m), 4),
         "intrinsic_value": (round(float(intrinsic_value), 4)
                             if intrinsic_value else None),
+        "carry": round(_k, 6),
         "capital_gain_12m": tactical_tr["capital_gain"],
         "dividend_yield": tactical_tr["dividend_yield"],
         "dividend_known": tactical_tr["dividend_known"],

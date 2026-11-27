@@ -133,8 +133,9 @@ def test_running_header_is_the_brand(pdf):
 
 
 def test_target_bridge_is_the_capture_rule(pdf):
-    text = "\n".join(pdf)
+    text = " ".join("\n".join(pdf).split())     # D1 (2026-11-27): the longer rule line wraps
     assert "capture 50% of the gap to fair value" in text
+    assert "(1 + cost of equity − dividend yield)" in text
     assert "forward sector multiples" not in text
 
 

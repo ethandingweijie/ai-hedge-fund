@@ -1315,6 +1315,10 @@ def _research_view_for(ticker: str, state, scenario: dict,
             next_earnings=next_earnings,
             sotp_per_share=(dcf.get("sotp_breakdown") or {}).get("per_share_reporting"),
             unreconciled=_unreconciled_for(ticker, dcf),
+            # Owner, 2026-11-27 (D1): the benchmark on the valuation's own CAPM inputs (firm CAPM, else the
+            # market CAPM a bank / holdco run records), and the target's price-path carry for the structural test.
+            capm=((dcf.get("wacc_build") or {}).get("firm_capm") or (dcf.get("wacc_build") or {}).get("market_capm")),
+            carry=((dcf.get("pt_bridge") or {}).get("carry") or {}).get("factor"),
         )
     except Exception:
         return None
@@ -1861,7 +1865,8 @@ def run_advanced_portfolio_manager(state) -> dict:
                 rating_label=(research_view or {}).get("rating_label") or action,
                 capture_reason=str(_bridge_t.get("capture_reason") or ""), sym=_sym_ca,
                 material_update=_material_update_for_report(state, ticker, _delta),
-                rating_cause=_rating_cause(research_view))
+                rating_cause=_rating_cause(research_view),
+                carry=(_bridge_t.get("carry") or {}).get("factor"))
         except Exception:                                  # noqa: BLE001
             _change_attr = None
         # Owner, 2026-11-27: the material-news sentence is shown with the rating (web,

@@ -6,8 +6,9 @@ decides what the published prose is allowed to say about them.
 
   * change attribution  -- prior vs current report: spot, blended intrinsic value,
     capture share, rating and target. The target rule is
-    target = spot + capture x (IV - spot), so a target move splits exactly into a
-    spot effect, an intrinsic-value effect and a capture effect. The writer is
+    target = [spot + capture x (IV - spot)] x carry (D1, 2026-11-27: carry = 1 + Ke -
+    dividend yield), so a target move splits exactly into a spot effect, an
+    intrinsic-value effect, a capture effect and a carry effect. The writer is
     given this as the ONLY permitted explanation of a change, and the post-check
     removes upgrade / downgrade / capture / "mechanical" claims that contradict it.
   * unit lint    -- basis points printed as "points", "-0.0%", negative "upside".
@@ -233,7 +234,7 @@ def _rank(label) -> Optional[int]:
 def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, capture, target,
                              rating_label, capture_reason: str = "", sym: str = "$",
                              material_update: Optional[dict] = None,
-                             rating_cause: Optional[str] = None) -> dict:
+                             rating_cause: Optional[str] = None, carry: Optional[float] = None) -> dict:
     """Prior vs current report, decomposed on the target rule. Deterministic.
 
     `rating_cause` (owner, 2026-11-27): a rule that set the rating this run (the Neutral
@@ -254,15 +255,19 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
     iv0 = _num(pj.get("blended_iv"))
     c0 = _num(pj.get("capture"))
     c0_src = "prior report" if c0 is not None else None
+    # D1: the price-path carry (1 for a report from before it). Decomposed on pre-carry targets, plus a carry effect.
+    k1 = _num(carry) if (_num(carry) and 0.5 < _num(carry) < 1.5) else 1.0
+    k0 = _num(pj.get("carry")) if (_num(pj.get("carry")) and 0.5 < _num(pj.get("carry")) < 1.5) else 1.0
+    t0p = (t0 / k0) if t0 else t0
     prior_text = " ".join(str(x or "") for x in (pj.get("rationale"), pr.get("recap_text")))
     if c0 is None:
         m = _PRIOR_CAPTURE_RE.search(prior_text)
         if m and 0 < int(m.group(1)) <= 100:
             c0, c0_src = int(m.group(1)) / 100.0, "prior report text"
     if iv0 is None and c0 and s0 and t0:
-        iv0 = s0 + (t0 - s0) / c0                     # implied by the target rule
+        iv0 = s0 + (t0p - s0) / c0                    # implied by the target rule
     if c0 is None and iv0 and s0 and t0 and abs(iv0 - s0) > 1e-9:
-        _c = (t0 - s0) / (iv0 - s0)
+        _c = (t0p - s0) / (iv0 - s0)
         if 0 < _c <= 1:
             c0, c0_src = round(_c, 4), "implied by the prior target"
     r0_label = pj.get("rating_label") or pr.get("rating_label")
@@ -286,11 +291,13 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
             d_spot = (1 - c0) * (spot - s0)
             d_iv = c0 * (iv1 - iv0)
             d_cap = (c1 - c0) * (iv1 - spot)
+            d_carry = (t1 - t1 / k1) - (t0 - t0p)
             drivers = {"spot": round(d_spot, 2), "intrinsic_value": round(d_iv, 2), "capture": round(d_cap, 2),
-                       "residual": round(dt - d_spot - d_iv - d_cap, 2)}
+                       "carry": round(d_carry, 2),
+                       "residual": round(dt - d_spot - d_iv - d_cap - d_carry, 2)}
     dominant = None
     if drivers:
-        dominant = max(("spot", "intrinsic_value", "capture"), key=lambda k: abs(drivers[k]))
+        dominant = max(("spot", "intrinsic_value", "capture", "carry"), key=lambda k: abs(drivers[k]))
 
     when = f"our previous report on {prior['date']}" if prior["date"] else "our previous report"
     parts: list[str] = []
@@ -318,6 +325,9 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
                 if capture_changed:
                     bits.append(f"a change in the share of the price-to-value gap the target closes "
                                 f"({c0:.0%} to {c1:.0%}) for {_money(drivers['capture'], sym)}")
+                if abs(drivers.get("carry") or 0.0) >= 0.005 * t0:
+                    bits.append(f"carrying the target one year at the cost of equity less the dividend yield "
+                                f"for {_money(drivers['carry'], sym)}")
                 if bits:
                     s += ": " + ", ".join(bits)
             parts.append(s + ".")

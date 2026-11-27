@@ -81,6 +81,14 @@ def target_methodology(dcf_t: dict, scen: dict, sym: str) -> dict:
         if reason:
             _why = re.sub(r"^[0-9]+%:\s*", "", reason)
             parts[-1] += f"; the share is {cap:.0%} because {_why}"
+        # Owner, 2026-11-27 (D1): the target carries the year's price path at the cost of equity less the yield.
+        _cy = pb.get("carry") or {}
+        if isinstance(_num(_cy.get("factor")), float) and abs(_num(_cy.get("factor")) - 1.0) > 1e-9:
+            parts.append(f"carried forward one year at the cost of equity less the dividend yield "
+                         f"(× {_num(_cy.get('factor')):.4f}"
+                         + (f": cost of equity {_num(_cy.get('cost_of_equity')):.2%}, dividend yield "
+                            f"{(_num(_cy.get('dividend_yield')) or 0.0):.2%}" if _num(_cy.get("cost_of_equity")) else "")
+                         + ")")
     elif method:
         parts.append(f"12-month target on {method}")
     sc_bits = [f"{r['case']} {_money(r['intrinsic_value'], sym)}"
@@ -93,6 +101,7 @@ def target_methodology(dcf_t: dict, scen: dict, sym: str) -> dict:
         parts.append("12-month target by scenario: " + ", ".join(t_bits))
     text = ". ".join(p[:1].upper() + p[1:] for p in parts) + ("." if parts else "")
     return {"text": text or None, "rule": pb.get("rule"), "capture": cap, "capture_reason": reason or None,
+            "carry": _num((pb.get("carry") or {}).get("factor")),
             "method": method, "scenarios": rows}
 
 

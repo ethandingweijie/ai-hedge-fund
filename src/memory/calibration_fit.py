@@ -62,7 +62,8 @@ SHADOW_MIN_DAYS = 28
 HORIZON_PREFERENCE = ("px_365d", "px_180d", "px_90d", "consensus_0d")
 
 # ── pt family (self-learning loops 3 and 4, 2026-10-04) ─────────────────────
-# The 12-month target is spot + capture x (IV - spot) per scenario, probability-weighted.
+# The 12-month target is spot + capture x (IV - spot) per scenario, probability-weighted (x the D1 price-path carry
+# from 2026-11-27, implied per row by `_row_carry`).
 # Both the capture (per profile, else per market) and a shrink of the LLM's scenario
 # probabilities toward 25/50/25 are recomputable from what a run stored, so the same
 # walk-forward and shadow gates score them -- on the long price horizons only; the
@@ -383,12 +384,30 @@ def pt_from(row: dict, *, capture: Optional[float] = None, lam: Optional[float] 
     if not spot or c is None:
         return None
     ivs = [vo._pos(row.get(k)) for k in ("iv_bear", "iv_base", "iv_bull")]
+    k = _row_carry(row)
     probs = _probs(row, lam)
     if probs and all(ivs):
-        return sum(p * (spot + c * (iv - spot)) for p, iv in zip(probs, ivs))
+        return k * sum(p * (spot + c * (iv - spot)) for p, iv in zip(probs, ivs))
     if ivs[1]:
-        return spot + c * (ivs[1] - spot)
+        return k * (spot + c * (ivs[1] - spot))
     return None
+
+
+#: Owner, 2026-11-27 (D1): from this run date the target carries the price path, [spot + c x (IV - spot)] x carry.
+CARRY_SINCE = "2026-11-27"
+
+
+def _row_carry(row: dict) -> float:
+    """The carry a row's target was struck with (1 before D1), implied by its recorded base target and capture --
+    the ledger has no carry column, and the carry does not depend on the capture being fitted."""
+    if str(row.get("run_date") or "") < CARRY_SINCE:
+        return 1.0
+    spot, c, iv, pt = (vo._pos(row.get(x)) for x in ("spot", "capture", "iv_base", "pt_base"))
+    if not (spot and c is not None and iv and pt):
+        return 1.0
+    pre = spot + c * (iv - spot)
+    k = pt / pre if pre > 0 else 1.0
+    return k if 0.8 <= k <= 1.25 else 1.0
 
 
 def _pt_err(row: dict, pt: Optional[float]) -> Optional[float]:

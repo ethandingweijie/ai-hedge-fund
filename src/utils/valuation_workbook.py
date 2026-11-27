@@ -172,7 +172,7 @@ _METHOD_NOTES = {
     "SOTP": "Segment values (metric × multiple) flexed per scenario, plus associates and net cash, less minorities and the holdco "
             "discount. Money in millions of the SOTP currency.",
     "Blend": "Intrinsic value = Σ (effective weight × leg value) × calibration, per scenario. Leg values link to the tab that rebuilds them.",
-    "Target": "12-month target = spot + capture × (IV − spot) per scenario, probability-weighted. Sensitivities below flex the anchor "
+    "Target": "12-month target = [spot + capture × (IV − spot)] × (1 + Ke − dividend yield) per scenario, probability-weighted. Sensitivities below flex the anchor "
               "leg's peer multiple and metric, the capture and the scenario probabilities, and (cyclicals) the margin.",
     "Backtest": "Today's methodology on the previous fiscal year (T-1) against the price then; the gate ledger; the run's flags and the "
                 "WACC the valuation used.",
@@ -1308,6 +1308,14 @@ class _Book:
                f" — source: {pb.get('capture_source')}" if pb.get("capture_source") else ""),
             _num(pb.get("capture")), PCT, "Engine target rule" + (f" ({pb.get('capture_source')})" if pb.get("capture_source") else ""),
             _run_day)
+        # Owner, 2026-11-27 (D1): the target carries the 12-month price path, 1 + Ke - dividend yield. A run from
+        # before the carry records none and carries 1.
+        _cy = pb.get("carry") or {}
+        add("carry", "12-month price-path carry: 1 + cost of equity − dividend yield"
+            + (f" (Ke {_cy.get('cost_of_equity'):.2%}, {_cy.get('ke_source')}; yield {_cy.get('dividend_yield'):.2%})"
+               if isinstance(_cy.get("cost_of_equity"), (int, float)) and isinstance(_cy.get("dividend_yield"), (int, float))
+               else ""),
+            _num(_cy.get("factor")) or 1.0, "0.000000", "Engine target rule (pt_bridge.carry)", _run_day)
         sa = (self.data.get("scenario_analysis") or {}).get(self.ticker) or {}
         for s in SCENARIOS:
             add(f"prob:{s}", f"Scenario probability — {s}", _num((sa.get(s) or {}).get("probability")), PCT,
@@ -4047,8 +4055,8 @@ class _Book:
     # ── Target ──────────────────────────────────────────────────────────────
     def target_tab(self) -> None:
         sh = self.sheet("Target", "12-month price target bridge and cross-checks")
-        sh.title("12-month price target", "Target = spot + capture × (intrinsic value − spot), per scenario, "
-                                          "probability-weighted.")
+        sh.title("12-month price target", "Target = [spot + capture × (intrinsic value − spot)] × (1 + Ke − dividend "
+                                          "yield), per scenario, probability-weighted.")
         pb = self.dr.get("pt_bridge") or {}
         A = self.A
         sh.header(4, ["Scenario", "Intrinsic value", "Target", "Engine target", "Check", "Probability",
@@ -4059,7 +4067,7 @@ class _Book:
             sh.put(r, 1, s).font = Font(color=BLACK)
             sh.put(r, 2, ("=" + self.iv_cell[s]) if s in self.iv_cell else _num(self.scen(s).get("intrinsic_value")), NUM)
             if pb:
-                sh.put(r, 3, f"=ROUND({A['spot']}+{A['capture']}*(B{r}-{A['spot']}),{A['dp']})", NUM)
+                sh.put(r, 3, f"=ROUND(({A['spot']}+{A['capture']}*(B{r}-{A['spot']}))*{A['carry']},{A['dp']})", NUM)
                 sh.put(r, 5, f"=C{r}-D{r}", NUM)
             sh.put(r, 4, _num(targets.get(s)), NUM)
             sh.put(r, 6, "=" + A[f"prob:{s}"], PCT)
@@ -4110,6 +4118,7 @@ class _Book:
         A = self.A
         steps = (-2, -1, 0, 1, 2)
         spot, cap, cal, raw = A["spot"], A["capture"], A["calibration"], self.blend_raw["base"]
+        cy = A["carry"]                                    # D1: the target's price-path carry
         legs = [(k, w) for (s_, k), w in self.blend_w.items() if s_ == "base"]
         anchor = self.dr.get("anchor_method")
         mult_legs = [k for k, _ in legs if (("base", k) in self.leg_meta)]
@@ -4130,7 +4139,7 @@ class _Book:
                 for j in range(5):
                     fac = f"$A{rr}*{get_column_letter(2 + j)}${top}"
                     val = self._leg_value_at("base", leg, fac)
-                    sh.put(rr, 2 + j, f"=IFERROR({spot}+{cap}*(({raw}+{w}*({val}-{old}))*{cal}-{spot}),NA())", NUM)
+                    sh.put(rr, 2 + j, f"=IFERROR(({spot}+{cap}*(({raw}+{w}*({val}-{old}))*{cal}-{spot}))*{cy},NA())", NUM)
             r += 7
         # capture × probability
         sh.section(r, "Sensitivity: probability-weighted target vs capture (rows) × probability moved from bear to bull (columns)", 8); r += 1
@@ -4144,7 +4153,7 @@ class _Book:
             for j in range(5):
                 d = f"{get_column_letter(2 + j)}${top}"
                 pb_, pu = f"MAX($F$5-{d},0)", f"MAX($F$7+{d},0)"
-                sh.put(rr, 2 + j, f"=IFERROR({spot}+$A{rr}*(($B$5*{pb_}+$B$6*$F$6+$B$7*{pu})/({pb_}+$F$6+{pu})-{spot}),0)", NUM)
+                sh.put(rr, 2 + j, f"=IFERROR(({spot}+$A{rr}*(($B$5*{pb_}+$B$6*$F$6+$B$7*{pu})/({pb_}+$F$6+{pu})-{spot}))*{cy},0)", NUM)
         r += 7
         cyc = self.dr.get("cycle") or {}
         if cyc.get("cyclical"):
@@ -4163,7 +4172,7 @@ class _Book:
                     deltas.append(f"{self.blend_w[('base', leg)]}*({get_column_letter(2 + j)}{rr}-{self.leg_cell[('base', leg)]})")
                 c_iv = 2 + len(cols)
                 sh.put(rr, c_iv, f"=({raw}+{'+'.join(deltas) or '0'})*{cal}", NUM)
-                sh.put(rr, c_iv + 1, f"={spot}+{cap}*({get_column_letter(c_iv)}{rr}-{spot})", NUM)
+                sh.put(rr, c_iv + 1, f"=({spot}+{cap}*({get_column_letter(c_iv)}{rr}-{spot}))*{cy}", NUM)
             r = top + 7
             sh.note(r, 1, f"Cycle position {cyc.get('position') or 'n/a'}; mid-cycle margin {(_num(cyc.get('mid_cycle_margin')) or 0):.1%} "
                           f"against the latest {(_num(cyc.get('latest_margin')) or 0):.1%}. Net income is scaled in proportion "
@@ -4432,7 +4441,7 @@ class _Book:
             sh.put(r, 3, v, fmt)
             r += 1
         if not _unrated:
-            sh.label(r, 1, "Base-case target (spot + capture × (IV − spot))")
+            sh.label(r, 1, "Base-case target ([spot + capture × (IV − spot)] × carry)")
             if isinstance(_base_tgt_v, (int, float)):
                 sh.put(r, 2, float(_base_tgt_v), NUM).font = Font(color=BLUE)
             sh.put(r, 3, "='Target'!$C$6" if _pb else None, NUM)
@@ -4688,7 +4697,9 @@ class _Book:
                                 ("Capture" + (f" ({_pb.get('capture_reason')})" if _pb.get("capture_reason") else ""),
                                  "=" + A["capture"], PCT, _cap_v),
                                 ("Intrinsic value — base", ("=" + self.iv_cell["base"]) if "base" in self.iv_cell else None, NUM, _iv_v),
-                                ("Base target = spot + capture × (IV − spot)", "='Target'!$C$6", NUM, _bt_v),
+                                ("Carry (1 + Ke − dividend yield)", "=" + A["carry"], "0.0000",
+                                 _num((_pb.get("carry") or {}).get("factor")) or 1.0),
+                                ("Base target = [spot + capture × (IV − spot)] × carry", "='Target'!$C$6", NUM, _bt_v),
                                 ("Probability-weighted target", ("=" + self.target_cell) if self.target_cell else None, NUM, _tgt_v)):
             sh.label(r, 1, lab, indent=1)
             if isinstance(sv, (int, float)):

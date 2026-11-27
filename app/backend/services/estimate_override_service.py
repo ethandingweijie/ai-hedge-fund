@@ -8,7 +8,7 @@ number, nothing more and nothing less:
       → guidance_forecast.build_forecast on the run's stored history ratios   (same engine)
       → the DCF leg re-projected on the forecast's growth and FCF-margin schedules (same projector)
       → the profile blend with the DCF leg's new value at its SAME weight       (same weights)
-      → target = spot + capture × (IV − spot) per scenario                     (same bridge)
+      → target = [spot + capture × (IV − spot)] × carry per scenario          (same bridge; D1 carry)
       → the probability-weighted 12-month target                               (same probabilities)
 
 No LLM is involved. The agent (estimate_agent_service) explains and proposes; only the user's
@@ -199,8 +199,9 @@ def _recompute_bank(payload: dict, ticker: str, ov: dict, dr: dict, ctx: dict, b
                 rec["intrinsic_value"] = num / den
         else:
             rec["note"] = "no leg in this profile's blend reads the model (no GGM or forward P/E leg traced)"
+        carry = _num((((dr.get("pt_bridge") or {}).get("carry")) or {}).get("factor")) or 1.0   # D1 (2026-11-27)
         if spot is not None and capture is not None and rec["intrinsic_value"] is not None:
-            rec["target"] = spot + capture * (rec["intrinsic_value"] - spot)
+            rec["target"] = (spot + capture * (rec["intrinsic_value"] - spot)) * carry   # D1: the run's price-path carry
     pt = sum(probs[sc] * out_sc[sc]["target"] for sc in SCENARIOS if out_sc[sc]["target"] is not None)
     ev = sum(probs[sc] * out_sc[sc]["intrinsic_value"] for sc in SCENARIOS if out_sc[sc]["intrinsic_value"] is not None)
     pb = dr.get("pt_bridge") or {}
@@ -290,6 +291,8 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
     pb = dr.get("pt_bridge") or {}
     spot = _num(pb.get("spot")) or _num(inputs.get("spot"))
     capture = _num(pb.get("capture"))
+    # Owner, 2026-11-27 (D1): target = [spot + capture x (IV - spot)] x (1 + Ke - dividend yield), the run's carry.
+    carry = _num((pb.get("carry") or {}).get("factor")) or 1.0
     block = _block_for(dr, ctx, ov)
     shared = ov["shared"]
     engine_ov = {k: shared[k] for k in ("fade_years", "tax_rate", "capex_alpha", "nwc_intensity", "terminal_roic") if k in shared}
@@ -457,7 +460,7 @@ def recompute(payload: dict, ticker: str, overrides: dict) -> dict:
         elif w_dcf == 0:
             rec["note"] = f"the DCF carries no weight in the {dr.get('profile')} profile's blend; the forward legs re-priced on your estimates: " + ", ".join(legs_changed)
         if spot is not None and capture is not None and rec["intrinsic_value"] is not None:
-            rec["target"] = spot + capture * (rec["intrinsic_value"] - spot)
+            rec["target"] = (spot + capture * (rec["intrinsic_value"] - spot)) * carry   # D1: the run's price-path carry
     pt = sum(probs[sc] * out_sc[sc]["target"] for sc in SCENARIOS if out_sc[sc]["target"] is not None)
     ev = sum(probs[sc] * out_sc[sc]["intrinsic_value"] for sc in SCENARIOS if out_sc[sc]["intrinsic_value"] is not None)
     base_leg = ((dr.get("base") or {}).get("leg_inputs") or {}).get("DCF") or {}

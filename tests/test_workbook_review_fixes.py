@@ -61,9 +61,9 @@ def test_the_two_targets_and_the_three_net_debts_are_each_named():
     wb = load_workbook(io.BytesIO(build_workbook(_run_without_dcf_weight(), "TEST", load_statements=_wbt._statements)))
     s = wb["Summary"]
     labels = _col_a(s)
-    assert "12-month target (probability-weighted)" in labels and "Base-case target (spot + capture × (IV − spot))" in labels
+    assert "12-month target (probability-weighted)" in labels and "Base-case target ([spot + capture × (IV − spot)] × carry)" in labels
     r_pw = next(c.row for c in s["A"] if c.value == "12-month target (probability-weighted)")
-    r_base = next(c.row for c in s["A"] if c.value == "Base-case target (spot + capture × (IV − spot))")
+    r_base = next(c.row for c in s["A"] if c.value == "Base-case target ([spot + capture × (IV − spot)] × carry)")
     assert str(s.cell(row=r_pw, column=3).value).startswith("='Target'!$C$9")
     assert s.cell(row=r_base, column=3).value == "='Target'!$C$6"
     from src.data.report_families import _R

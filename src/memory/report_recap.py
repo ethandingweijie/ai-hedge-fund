@@ -267,6 +267,8 @@ def extract_structured(run_payload: dict, ticker: str) -> dict:
         "rating_label":     decision.get("rating_label"),
         "blended_iv":       _fnum((scenario.get("reconciliation") or {}).get("blended_iv")),
         "capture":          _fnum((dcf.get("pt_bridge") or {}).get("capture")),
+        # D1 (owner, 2026-11-27): the target's price-path carry, so the next report separates it from the IV move.
+        "carry":            _fnum(((dcf.get("pt_bridge") or {}).get("carry") or {}).get("factor")),
         "capture_reason":   (dcf.get("pt_bridge") or {}).get("capture_reason"),
     }
 

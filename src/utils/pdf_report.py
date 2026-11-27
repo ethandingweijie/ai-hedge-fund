@@ -2603,9 +2603,14 @@ def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
         return [Paragraph("Target derivation not recorded for this run.", styles["RptBody"])]
     spot, cap = pb.get("spot"), pb.get("capture")
     out = [Paragraph(
-        f"12-month target = price + capture × (intrinsic value − price). "
+        f"12-month target = [price + capture × (intrinsic value − price)] × (1 + cost of equity − dividend yield). "
         f"Price {_money(spot)}; capture {float(cap):.0%} of the gap to fair value over 12 months."
         + (f" Why {float(cap):.0%}: {_strip(str(pb.get('capture_reason')))}." if pb.get("capture_reason") else "")
+        + (f" Carried one year at × {float((pb.get('carry') or {}).get('factor')):.4f} (cost of equity "
+           f"{float((pb.get('carry') or {}).get('cost_of_equity')):.2%} less dividend yield "
+           f"{float((pb.get('carry') or {}).get('dividend_yield') or 0.0):.2%})."
+           if isinstance((pb.get("carry") or {}).get("factor"), (int, float))
+           and isinstance((pb.get("carry") or {}).get("cost_of_equity"), (int, float)) else "")
         if isinstance(cap, (int, float)) else _strip(pb.get("rule") or ""), styles["RptBody"]), Spacer(1, 3)]
     hdr = [Paragraph(_wh(x), styles["RptLabel"])
            for x in ("Scenario", "Probability", "Intrinsic value", "Gap to price", "12m target", "vs price")]
