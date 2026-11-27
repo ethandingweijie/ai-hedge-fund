@@ -382,6 +382,17 @@ export function getLearningOverview(): Promise<LearningOverview> {
   return fetchJson(`${BASE}/model-accuracy/learning/overview`, { headers: { ..._authHeaders() } });
 }
 
+/** GET /model-accuracy/learning/maturity: agent-only ledger runs per run date (read-only counts). */
+export interface LearningMaturity {
+  ledger_runs: number;
+  runs_by_date: Record<string, number>;
+  ticker_days_by_date: Record<string, number>;
+}
+
+export function getLearningMaturity(): Promise<LearningMaturity> {
+  return fetchJson(`${BASE}/model-accuracy/learning/maturity`, { headers: { ..._authHeaders() } });
+}
+
 export function getLearningEstimates(groupBy: string, periodKind: 'fy' | 'q_track' = 'fy'): Promise<LearningScorecard> {
   return fetchJson(`${BASE}/model-accuracy/learning/estimates?group_by=${encodeURIComponent(groupBy)}&period_kind=${periodKind}`,
     { headers: { ..._authHeaders() } });
@@ -439,7 +450,8 @@ export interface SegmentMemoryTicker {
 }
 
 export interface SegmentMemoryReview {
-  status: 'pending' | 'accepted' | 'revoked' | 'changed_since_acceptance' | 'unknown';
+  /** 'omitted': an industry input the owner ruled out (the figure was not the input it claimed to be). */
+  status: 'pending' | 'accepted' | 'revoked' | 'changed_since_acceptance' | 'omitted' | 'unknown';
   reviewer?: string | null;
   reviewed_at?: string | null;
   stale?: boolean;

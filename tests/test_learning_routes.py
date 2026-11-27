@@ -102,6 +102,21 @@ class TestRoutes:
         r = client.get("/model-accuracy/learning/guidance-credibility?ticker=ZZCO", headers=h)
         assert r.status_code == 200 and r.json()["n"] == 0
 
+    def test_maturity_counts_agent_runs_per_date(self, client, monkeypatch):
+        from src.memory import run_features as rf
+        assert client.get("/model-accuracy/learning/maturity").status_code == 403
+        h = self._bearer("owner-token")
+        empty = client.get("/model-accuracy/learning/maturity", headers=h).json()
+        assert empty == {"ledger_runs": 0, "runs_by_date": {}, "ticker_days_by_date": {}}
+        monkeypatch.setattr(rf, "rows", lambda **kw: [
+            {"ticker": "AAPL", "run_date": "2026-10-02"}, {"ticker": "AAPL", "run_date": "2026-10-02"},
+            {"ticker": "MSFT", "run_date": "2026-10-02"}, {"ticker": "V", "run_date": "2026-09-30"},
+        ])
+        r = client.get("/model-accuracy/learning/maturity", headers=h).json()
+        assert r["ledger_runs"] == 4
+        assert list(r["runs_by_date"]) == ["2026-09-30", "2026-10-02"]
+        assert r["runs_by_date"]["2026-10-02"] == 3 and r["ticker_days_by_date"]["2026-10-02"] == 2
+
 
 class TestAdminSweep:
     @pytest.fixture

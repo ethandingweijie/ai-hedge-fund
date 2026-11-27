@@ -235,3 +235,29 @@ async def learning_guidance_credibility(ticker: Optional[str] = None,
     """How management's guidance has held up, per ticker and per market."""
     from src.memory import learning_review
     return await asyncio.to_thread(learning_review.guidance_credibility, ticker)
+
+
+@router.get("/learning/maturity")
+async def learning_maturity(admin=Depends(require_model_accuracy_owner)):
+    """When the ledger's runs come due for each price horizon: agent-only runs per
+    run date, and distinct ticker-days per date. Read-only counts over run_features;
+    the page derives "due by now", the next maturity and the date a minimum is
+    reached from these. Nothing is scored here."""
+    from src.memory import run_features as rf
+
+    def _build() -> dict:
+        runs: dict[str, int] = {}
+        tickers: dict[str, set] = {}
+        for r in (rf.rows() if rf.enabled() else []):
+            d = str(r.get("run_date") or "")[:10]
+            if not d:
+                continue
+            runs[d] = runs.get(d, 0) + 1
+            tickers.setdefault(d, set()).add(str(r.get("ticker") or ""))
+        return {
+            "ledger_runs": sum(runs.values()),
+            "runs_by_date": dict(sorted(runs.items())),
+            "ticker_days_by_date": {d: len(t) for d, t in sorted(tickers.items())},
+        }
+
+    return await asyncio.to_thread(_build)
