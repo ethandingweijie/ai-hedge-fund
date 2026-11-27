@@ -92,6 +92,7 @@ class SweepResult:
     skipped_no_quote: list = field(default_factory=list)  # list[str]
     errors: list = field(default_factory=list)        # list[str]
     posted_to_slack: bool = False
+    baseline: bool = False   # silent re-baseline sweep: state persisted, nothing posted
 
 
 # ─── Cohort loaders ────────────────────────────────────────────────────────
@@ -179,17 +180,45 @@ def load_hk50_candidates() -> list[AlertCandidate]:
 # ─── The sweep ─────────────────────────────────────────────────────────────
 
 
-def run_iv15_sweep(*, dry_run: bool = False) -> SweepResult:
+# After an outage longer than this, the next sweep re-baselines silently.
+_BASELINE_AFTER_HOURS = float(os.environ.get("IV15_BASELINE_AFTER_HOURS", "72"))
+
+
+def _needs_baseline() -> bool:
+    """True when no sweep has been recorded recently enough to know what is *new*.
+
+    2026-11-27: the sweep was dead from 2026-08-08 (its store pointed at a path
+    that did not exist in the container) while the HK50 cohort grew 34 -> 91
+    names. The first revived sweep would have posted 32 "new" crosses at once —
+    most of them names that never had a state row, plus crosses that happened
+    weeks ago. A cross is only news relative to a recent prior observation, so
+    a sweep with no such observation records state without alerting.
+    """
+    try:
+        return not store.swept_within_hours(_BASELINE_AFTER_HOURS)
+    except Exception as exc:
+        logger.warning("iv15_monitor: baseline check failed (%s) — treating as baseline", exc)
+        return True
+
+
+def run_iv15_sweep(*, dry_run: bool = False, baseline: Optional[bool] = None) -> SweepResult:
     """Run one IV15 cross sweep across SW46 + HK50.
 
     dry_run=True computes crossings and returns them but does NOT persist any
     state change and does NOT post to Slack — safe to run repeatedly for
     testing. dry_run=False persists the hysteresis state and posts a single
     consolidated Slack message for the names that newly crossed below IV15.
+
+    baseline=None (default) re-baselines automatically when no sweep ran within
+    IV15_BASELINE_AFTER_HOURS: crosses are persisted as `triggered` (without an
+    alert timestamp) and nothing is posted. Pass True/False to force it.
     """
     from src.research_ideas.alerts.batch_quote import fetch_batch_quotes
 
     result = SweepResult()
+    result.baseline = _needs_baseline() if baseline is None else bool(baseline)
+    if result.baseline:
+        logger.info("iv15_monitor: baseline sweep — state is recorded, no alerts are posted")
 
     candidates = load_sw46_candidates() + load_hk50_candidates()
     if not candidates:
@@ -234,7 +263,8 @@ def run_iv15_sweep(*, dry_run: bool = False) -> SweepResult:
                 if not dry_run:
                     store.upsert_state(
                         cohort=c.cohort, ticker=c.quote_symbol, state="triggered",
-                        p_iv15=live_p_iv15, price=live_price, iv15=c.iv15, alerted=True,
+                        p_iv15=live_p_iv15, price=live_price, iv15=c.iv15,
+                        alerted=not result.baseline,
                     )
             elif live_p_iv15 >= REARM_BAND and prev_state == "triggered":
                 # Recovered above the re-arm band — re-arm (no alert).
@@ -256,7 +286,7 @@ def run_iv15_sweep(*, dry_run: bool = False) -> SweepResult:
             result.errors.append(f"{c.cohort}:{c.quote_symbol}: {exc}")
 
     # Consolidated Slack push for the names that newly crossed this sweep.
-    if result.fired and not dry_run:
+    if result.fired and not dry_run and not result.baseline:
         try:
             from src.research_ideas.alerts.iv15_slack import post_iv15_alerts
             result.posted_to_slack = post_iv15_alerts(
@@ -273,6 +303,7 @@ def run_iv15_sweep(*, dry_run: bool = False) -> SweepResult:
                 rearmed=len(result.rearmed),
                 skipped=len(result.skipped_no_quote),
                 detail={
+                    "baseline": result.baseline,
                     "fired": [f"{a.cohort}:{a.display_ticker}" for a in result.fired],
                     "errors": result.errors[:20],
                 },

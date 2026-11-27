@@ -1,62 +1,44 @@
 """
 app/backend/services/iv15_alert_store.py
 =========================================
-SQLite persistence for the IV15 "price reached fair value" alert monitor.
+Persistence for the IV15 "price reached fair value" alert monitor.
 
-Two tables (both auto-migrating, created on first read/write), living in the
-shared run_archive.db so admins have one place to back up state:
+Two tables (created on first use) in the shared run archive — Postgres in
+production, SQLite locally — via the dual-mode `src.data.db` layer:
 
   iv15_alert_state  — per (cohort, ticker) hysteresis state so we alert ONCE
                       on the downward cross below IV15 and only re-arm after
                       the price recovers above the re-arm band. Survives
-                      restarts (the whole point of persisting it).
+                      restarts and deploys (the whole point of persisting it).
 
   iv15_sweep_log    — one row per sweep, used for daily idempotency (don't
                       double-fire if the service restarts near the 08:00 SGT
                       slot) and for a lightweight audit trail.
 
-Mirrors the connection / path / auto-migrate pattern of sw46_storage.py and
-hk50_storage.py.
+2026-11-27: ported off a private sqlite3 connection. In production that
+connection followed RUN_ARCHIVE_PATH to a Windows path that does not exist in
+the container, so every sweep since August failed before reading state. On
+Postgres the August hysteresis rows are read back, so the revived monitor does
+not re-fire every name at once.
 """
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
+import threading
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
+
+from src.data import db
 
 logger = logging.getLogger(__name__)
 
 
-# ─── DB path (shared with the other research-idea stores) ──────────────────
-
-
-def _get_db_path() -> str:
-    import os
-
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or _get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
-
-
 _STATE_DDL = """
 CREATE TABLE IF NOT EXISTS iv15_alert_state (
-    cohort        TEXT NOT NULL,        -- 'sw46' | 'hk50'
-    ticker        TEXT NOT NULL,        -- the quote symbol used (upper-cased)
-    state         TEXT NOT NULL,        -- 'armed' | 'triggered'
+    cohort        TEXT NOT NULL,
+    ticker        TEXT NOT NULL,
+    state         TEXT NOT NULL,
     last_p_iv15   REAL,
     last_price    REAL,
     last_iv15     REAL,
@@ -81,21 +63,24 @@ _INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_iv15_sweep_run_at ON iv15_sweep_log(run_at DESC)",
 ]
 
+_ensured_for: Optional[str] = None
+_ensure_lock = threading.Lock()
+
 
 def _ensure_tables() -> None:
-    import os
-
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect(db_path)
-    try:
-        conn.execute(_STATE_DDL)
-        conn.execute(_SWEEP_DDL)
+    """Create the tables once per database target (re-checked if the target changes)."""
+    global _ensured_for
+    target = "pg" if db.is_postgres() else db.get_db_path()
+    if _ensured_for == target:
+        return
+    with _ensure_lock:
+        if _ensured_for == target:
+            return
+        db.ensure_table(_STATE_DDL)
+        db.ensure_table(_SWEEP_DDL)
         for idx in _INDEXES:
-            conn.execute(idx)
-        conn.commit()
-    finally:
-        conn.close()
+            db.execute(idx)
+        _ensured_for = target
 
 
 # ─── Hysteresis state ──────────────────────────────────────────────────────
@@ -104,27 +89,23 @@ def _ensure_tables() -> None:
 def get_all_states(cohort: str) -> dict[str, dict]:
     """Return {ticker: state_dict} for one cohort."""
     _ensure_tables()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            "SELECT ticker, state, last_p_iv15, last_price, last_iv15, "
-            "last_alert_at, updated_at FROM iv15_alert_state WHERE cohort = ?",
-            (cohort,),
-        ).fetchall()
-    finally:
-        conn.close()
-    return {
-        r[0]: {
-            "ticker": r[0],
-            "state": r[1],
-            "last_p_iv15": r[2],
-            "last_price": r[3],
-            "last_iv15": r[4],
-            "last_alert_at": r[5],
-            "updated_at": r[6],
+    rows = db.query(
+        "SELECT ticker, state, last_p_iv15, last_price, last_iv15, "
+        "last_alert_at, updated_at FROM iv15_alert_state WHERE cohort = ?",
+        [cohort],
+    )
+    out: dict[str, dict] = {}
+    for r in rows:
+        out[r["ticker"]] = {
+            "ticker": r["ticker"],
+            "state": r["state"],
+            "last_p_iv15": r["last_p_iv15"],
+            "last_price": r["last_price"],
+            "last_iv15": r["last_iv15"],
+            "last_alert_at": r["last_alert_at"],
+            "updated_at": r["updated_at"],
         }
-        for r in rows
-    }
+    return out
 
 
 def upsert_state(
@@ -144,32 +125,28 @@ def upsert_state(
     """
     _ensure_tables()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    conn = _connect()
-    try:
-        prev = conn.execute(
-            "SELECT last_alert_at FROM iv15_alert_state WHERE cohort = ? AND ticker = ?",
-            (cohort, ticker.upper()),
-        ).fetchone()
-        last_alert_at = now if alerted else (prev[0] if prev else None)
-        conn.execute(
-            """
-            INSERT INTO iv15_alert_state
-                (cohort, ticker, state, last_p_iv15, last_price, last_iv15,
-                 last_alert_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(cohort, ticker) DO UPDATE SET
-                state = excluded.state,
-                last_p_iv15 = excluded.last_p_iv15,
-                last_price = excluded.last_price,
-                last_iv15 = excluded.last_iv15,
-                last_alert_at = excluded.last_alert_at,
-                updated_at = excluded.updated_at
-            """,
-            (cohort, ticker.upper(), state, p_iv15, price, iv15, last_alert_at, now),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    sym = ticker.upper()
+    prev = db.query_one(
+        "SELECT last_alert_at FROM iv15_alert_state WHERE cohort = ? AND ticker = ?",
+        [cohort, sym],
+    )
+    last_alert_at = now if alerted else (prev["last_alert_at"] if prev else None)
+    db.execute(
+        """
+        INSERT INTO iv15_alert_state
+            (cohort, ticker, state, last_p_iv15, last_price, last_iv15,
+             last_alert_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(cohort, ticker) DO UPDATE SET
+            state = excluded.state,
+            last_p_iv15 = excluded.last_p_iv15,
+            last_price = excluded.last_price,
+            last_iv15 = excluded.last_iv15,
+            last_alert_at = excluded.last_alert_at,
+            updated_at = excluded.updated_at
+        """,
+        [cohort, sym, state, p_iv15, price, iv15, last_alert_at, now],
+    )
 
 
 # ─── Sweep log + idempotency ───────────────────────────────────────────────
@@ -179,29 +156,18 @@ def record_sweep(*, checked: int, fired: int, rearmed: int, skipped: int,
                   detail: Optional[dict] = None) -> None:
     _ensure_tables()
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT INTO iv15_sweep_log (run_at, checked, fired, rearmed, skipped, detail) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (now, checked, fired, rearmed, skipped, json.dumps(detail or {})),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "INSERT INTO iv15_sweep_log (run_at, checked, fired, rearmed, skipped, detail) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [now, checked, fired, rearmed, skipped, json.dumps(detail or {})],
+    )
 
 
 def last_sweep_at() -> Optional[str]:
     """ISO timestamp of the most recent sweep, or None."""
     _ensure_tables()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT run_at FROM iv15_sweep_log ORDER BY run_at DESC LIMIT 1"
-        ).fetchone()
-    finally:
-        conn.close()
-    return row[0] if row else None
+    row = db.query_one("SELECT run_at FROM iv15_sweep_log ORDER BY run_at DESC LIMIT 1")
+    return row["run_at"] if row else None
 
 
 def swept_within_hours(hours: float) -> bool:

@@ -27,14 +27,14 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
 
 import requests
 
+from src.data import db
 from app.backend.data.etf_universe import ETF_UNIVERSE, all_tickers, bucket_for
 
 logger = logging.getLogger(__name__)
@@ -114,23 +114,6 @@ def _region_for_country(country: str) -> Optional[str]:
     return _COUNTRY_TO_REGION.get(country.strip())
 
 
-def _get_db_path() -> str:
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
-
-
 def _get_fmp_key() -> Optional[str]:
     return os.environ.get("FMP_API_KEY") or os.environ.get("FINANCIAL_DATASETS_API_KEY")
 
@@ -145,61 +128,56 @@ CREATE TABLE IF NOT EXISTS etf_metadata_cache (
 """
 
 
+_ensured_for: Optional[str] = None
+_ensure_lock = threading.Lock()
+
+
 def _ensure_table() -> None:
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect()
-    try:
-        conn.execute(_DDL)
-        conn.commit()
-    finally:
-        conn.close()
+    """Create the cache table once per database target (Postgres in prod, SQLite locally).
+
+    2026-11-27: ported off a private sqlite3 connection that followed
+    RUN_ARCHIVE_PATH to a path that does not exist in the production container.
+    """
+    global _ensured_for
+    target = "pg" if db.is_postgres() else db.get_db_path()
+    if _ensured_for == target:
+        return
+    with _ensure_lock:
+        if _ensured_for == target:
+            return
+        db.ensure_table(_DDL)
+        _ensured_for = target
 
 
 def _get_cached() -> Optional[list[dict]]:
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        row = conn.execute(
-            "SELECT results_json, expires_at FROM etf_metadata_cache WHERE cache_key = ?",
-            (_CACHE_KEY,),
-        ).fetchone()
-        if not row:
-            return None
-        if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
-            return None
-        return json.loads(row["results_json"])
-    finally:
-        conn.close()
+    row = db.query_one(
+        "SELECT results_json, expires_at FROM etf_metadata_cache WHERE cache_key = ?",
+        [_CACHE_KEY],
+    )
+    if not row:
+        return None
+    if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
+        return None
+    return json.loads(row["results_json"])
 
 
 def _set_cached(results: list[dict]) -> None:
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=_TTL_HOURS)).isoformat()
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT OR REPLACE INTO etf_metadata_cache "
-            "(cache_key, fetched_at, expires_at, results_json) VALUES (?, ?, ?, ?)",
-            (_CACHE_KEY, now.isoformat(), expires, json.dumps(results)),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "INSERT INTO etf_metadata_cache (cache_key, fetched_at, expires_at, results_json) "
+        "VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(cache_key) DO UPDATE SET fetched_at = excluded.fetched_at, "
+        "expires_at = excluded.expires_at, results_json = excluded.results_json",
+        [_CACHE_KEY, now.isoformat(), expires, json.dumps(results)],
+    )
 
 
 def invalidate_etf_cache() -> None:
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute("DELETE FROM etf_metadata_cache WHERE cache_key = ?", (_CACHE_KEY,))
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute("DELETE FROM etf_metadata_cache WHERE cache_key = ?", [_CACHE_KEY])
 
 
-# ── FMP calls ────────────────────────────────────────────────────────────────
-#
 # NOTE: watchlist_service._batch_fetch_prices's path-style batch call
 # (GET /stable/quote/{comma-list}) was the original template here, but a
 # live smoke test against this project's actual FMP_API_KEY found it 404s,
