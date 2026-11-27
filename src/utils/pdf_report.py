@@ -1000,7 +1000,9 @@ def _compute_vgpm(
     # SECTOR-AWARE: Utility 5% = A; Tech 5% = B-band. See vgpm_thresholds.
     gr_pct = growth * 100
     g1 = score_growth(gr_pct, sector)
-    gr_lbl = f"Rev CAGR: {gr_pct:+.1f}%"
+    # Owner, 2026-11-27: the grade keeps this input (no conviction/sizing change); the label says what it
+    # is -- the single base-case growth input, not the DCF's year-by-year schedule and not a trailing CAGR.
+    gr_lbl = f"Base growth input: {gr_pct:+.1f}%"
 
     # Sub 2: Bull / Bear asymmetry (upside leverage)
     if bear_fv and bear_fv > 0 and bull_fv:

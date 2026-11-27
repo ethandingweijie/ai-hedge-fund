@@ -652,7 +652,6 @@ export const ZH: Record<string, string> = {
   'Unrated': '未评级',
   'short position': '做空头寸',
   'close a short': '平掉空头',
-  'market': '市场',
   'Buy = expected to beat the {b} by at least 5 percentage points over 12 months (price change plus dividends).': '买入 = 预计未来 12 个月跑赢{b}至少 5 个百分点（股价变动加股息）。',
   'Hold = expected to roughly match the {b} over 12 months (within 5 percentage points, price change plus dividends).': '持有 = 预计未来 12 个月与{b}大致持平（相差 5 个百分点以内，股价变动加股息）。',
   'Sell = expected to trail the {b} by at least 5 percentage points over 12 months (price change plus dividends).': '卖出 = 预计未来 12 个月落后{b}至少 5 个百分点（股价变动加股息）。',
