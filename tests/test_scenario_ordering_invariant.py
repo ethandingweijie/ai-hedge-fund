@@ -608,7 +608,7 @@ class TestTheCallSite:
     def test_the_clamp_runs_after_the_scenario_loop_and_before_the_first_iv_reader(self):
         src = _engine_src()
         clamp = src.index("_order_rec = _enforce_scenario_ordering(scenario_results)")
-        unanimous = src.index("_unanimous = len(_scen_ivs) == 3")
+        unanimous = src.index("_unanimity_capture(_base_capture, _scen_ivs, _spot_for_cap)")
         base_reader = src.index('base_iv = scenario_results["base"]["intrinsic_value"]')
         assert clamp < unanimous < base_reader, (clamp, unanimous, base_reader)
 

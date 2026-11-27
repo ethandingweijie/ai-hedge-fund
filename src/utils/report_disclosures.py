@@ -59,6 +59,13 @@ def _t(d: dict, key: str, ticker: str):
     return v.get(ticker) if isinstance(v, dict) else None
 
 
+def _cap_pct(c) -> str:
+    """A capture share for display: one decimal, dropped when whole (35%, 44.5%). Owner, 2026-11-27: the
+    unanimity bonus ramps, so a capture of 44.5% must not print as 45%."""
+    s = f"{float(c):.1%}"
+    return s[:-3] + "%" if s.endswith(".0%") else s
+
+
 # ── target methodology ───────────────────────────────────────────────────────
 
 def target_methodology(dcf_t: dict, scen: dict, sym: str) -> dict:
@@ -77,10 +84,10 @@ def target_methodology(dcf_t: dict, scen: dict, sym: str) -> dict:
                 "capture_reason": None, "method": None, "scenarios": rows}
     parts = []
     if cap is not None:
-        parts.append(f"12-month target = price + {cap:.0%} × (intrinsic value − price)")
+        parts.append(f"12-month target = price + {_cap_pct(cap)} × (intrinsic value − price)")
         if reason:
-            _why = re.sub(r"^[0-9]+%:\s*", "", reason)
-            parts[-1] += f"; the share is {cap:.0%} because {_why}"
+            _why = re.sub(r"^[0-9]+(?:\.[0-9]+)?%:\s*", "", reason)
+            parts[-1] += f"; the share is {_cap_pct(cap)} because {_why}"
         # Owner, 2026-11-27 (D1): the target carries the year's price path at the cost of equity less the yield.
         _cy = pb.get("carry") or {}
         if isinstance(_num(_cy.get("factor")), float) and abs(_num(_cy.get("factor")) - 1.0) > 1e-9:

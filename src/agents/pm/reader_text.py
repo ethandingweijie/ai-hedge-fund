@@ -33,6 +33,13 @@ def _sentences(par: str) -> list[str]:
     return [s for s in _SENT_SPLIT.split(par) if s.strip()]
 
 
+def _cap_pct(c) -> str:
+    """A capture share for display: one decimal, dropped when whole (35%, 44.5%). Owner, 2026-11-27: the
+    unanimity bonus ramps, so a capture of 44.5% must not print as 45%."""
+    s = f"{float(c):.1%}"
+    return s[:-3] + "%" if s.endswith(".0%") else s
+
+
 def _money(v, sym: str = "$") -> str:
     try:
         f = float(v)
@@ -223,7 +230,7 @@ _RATING_RANK = {"overweight": 2, "buy": 2, "neutral": 1, "hold": 1, "cover": 1,
 _RANK_LABEL = {2: "Overweight", 1: "Neutral", 0: "Underweight"}
 
 _PRIOR_CAPTURE_RE = re.compile(
-    r"(\d{1,3})\s*%[-\s]*(?:of[-\s]*(?:the[-\s]*)?(?:spot[-\s]*to[-\s]*IV[-\s]*|IV[-\s]*spot[-\s]*)?gap[-\s]*)?"
+    r"(?<![\d.])(\d{1,3}(?:\.\d+)?)\s*%[-\s]*(?:of[-\s]*(?:the[-\s]*)?(?:spot[-\s]*to[-\s]*IV[-\s]*|IV[-\s]*spot[-\s]*)?gap[-\s]*)?"
     r"(?:convergence|capture)", re.IGNORECASE)
 
 
@@ -262,8 +269,8 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
     prior_text = " ".join(str(x or "") for x in (pj.get("rationale"), pr.get("recap_text")))
     if c0 is None:
         m = _PRIOR_CAPTURE_RE.search(prior_text)
-        if m and 0 < int(m.group(1)) <= 100:
-            c0, c0_src = int(m.group(1)) / 100.0, "prior report text"
+        if m and 0 < float(m.group(1)) <= 100:
+            c0, c0_src = float(m.group(1)) / 100.0, "prior report text"
     if iv0 is None and c0 and s0 and t0:
         iv0 = s0 + (t0p - s0) / c0                    # implied by the target rule
     if c0 is None and iv0 and s0 and t0 and abs(iv0 - s0) > 1e-9:
@@ -324,7 +331,7 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
                                 f"{_money(drivers['intrinsic_value'], sym)}")
                 if capture_changed:
                     bits.append(f"a change in the share of the price-to-value gap the target closes "
-                                f"({c0:.0%} to {c1:.0%}) for {_money(drivers['capture'], sym)}")
+                                f"({_cap_pct(c0)} to {_cap_pct(c1)}) for {_money(drivers['capture'], sym)}")
                 if abs(drivers.get("carry") or 0.0) >= 0.005 * t0:
                     bits.append(f"carrying the target one year at the cost of equity less the dividend yield "
                                 f"for {_money(drivers['carry'], sym)}")
@@ -332,10 +339,10 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
                     s += ": " + ", ".join(bits)
             parts.append(s + ".")
     if capture_changed is False:
-        parts.append(f"The target still closes {c1:.0%} of the gap between price and intrinsic value; that share did "
+        parts.append(f"The target still closes {_cap_pct(c1)} of the gap between price and intrinsic value; that share did "
                      "not change.")
     elif capture_changed is None and c1 is not None:
-        parts.append(f"The target closes {c1:.0%} of the gap between price and intrinsic value.")
+        parts.append(f"The target closes {_cap_pct(c1)} of the gap between price and intrinsic value.")
     _cause = rating_cause if rc in ("upgrade", "downgrade") and rating_cause else None
     if _cause:
         parts.insert(1 if parts else 0, f"The rating change reflects {_cause}, not a change in our view of the business.")
@@ -356,7 +363,7 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
     block = ("Change since the prior report (computed; the ONLY permitted explanation of any change in rating or "
              f"target -- add no other cause):\n{sentence}\n{rating_instr}")
     if c1 is not None:
-        block += (f"\nWhy the target closes {c1:.0%} of the gap: {capture_reason or 'the house target rule'}. "
+        block += (f"\nWhy the target closes {_cap_pct(c1)} of the gap: {capture_reason or 'the house target rule'}. "
                   "Do not attribute it to the macro regime, volatility, sentiment or 'conservatism'.")
     if dominant == "intrinsic_value":
         block += "\nThe target move is driven mainly by our lower/higher intrinsic value: do not call it 'mechanical'."

@@ -1994,3 +1994,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-27: the BVPS x shares input check compares the statement BVPS with its own period share count (basic, then diluted), not the current valuation count; BABA's spurious 'Input check failed -- book value per share' forward flag (7.0% apart on the current count) is gone. Flags only; no value moves
 
+## 2026-11-27T06:38:14+00:00
+
+- regenerated at HEAD: `a02c5be7`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-27: the 12-month target's unanimity capture step is replaced by the V1 nearest-scenario ramp with a 10% band. capture = min(50%, base + 15pt x clamp(d / 10%, 0, 1)), d = distance beyond spot of the scenario NEAREST spot (fraction of spot) when bear, base and bull are all on one side, else 0. The old step added the full 15 points the moment the last scenario crossed spot (U11.SI: bear 34.62 on a 35.44 spot cost 15 points); the ramp is continuous across spot, monotone in every IV and symmetric. Expected moves, and only these: 02888.HK capture 0.500 -> 0.445 (nearest 6.3% above), target 291.59 -> 287.21; C38U.SI 0.500 -> 0.403 (nearest 3.5% below), target 2.02 -> 2.07; V 0.500 -> 0.426, target 368.21 -> 373.70. No intrinsic value moves on any name and no rating changes. Every other unanimous name (AAPL, COST, D05.SI, MU, SCHW: nearest >=10% beyond spot) keeps exactly 50%; MELI keeps 35% (high-SBC 20% base + full 15). capture_reason text changes on every unanimous name to state the nearest distance and the points added; capture is stored unrounded and displayed to one decimal when fractional.
+

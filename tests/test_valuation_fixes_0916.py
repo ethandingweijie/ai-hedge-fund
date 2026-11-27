@@ -168,8 +168,8 @@ class TestThePromotedWeightBelongsToTheSotpFamily:
 class TestUnanimousScenariosCloseMoreOfTheGap:
     def test_the_engine_carries_the_rule(self):
         src = inspect.getsource(d)
-        assert "_unanimous = len(_scen_ivs) == 3" in src
-        assert "_max_capture = min(0.50, _max_capture + 0.15)" in src
+        assert "_unanimity_capture(_base_capture, _scen_ivs, _spot_for_cap)" in src
+        assert (d._UNANIMITY_BAND, d._UNANIMITY_BONUS, d._UNANIMITY_CAP) == (0.10, 0.15, 0.50)
 
     def test_09618_moves_from_a_third_to_a_half_of_the_gap(self):
         spot, iv = 106.30, 147.78
@@ -183,6 +183,104 @@ class TestUnanimousScenariosCloseMoreOfTheGap:
         """bear below spot, bull above -> genuine disagreement, cap unchanged."""
         spot, ivs = 100.0, [90.0, 110.0, 130.0]
         assert not (all(v > spot for v in ivs) or all(v < spot for v in ivs))
+        assert d._unanimity_capture(0.35, ivs, spot) == (0.35, 0.0, None)
+
+
+def _target(base_capture, ivs, spot):
+    """The probability-free core of the 12m rule per scenario: spot + capture x (IV - spot)."""
+    cap = d._unanimity_capture(base_capture, ivs, spot)[0]
+    return [d._convergence_bound(v, spot, cap) for v in ivs]
+
+
+class TestUnanimityCaptureRamp:
+    """Owner, 2026-11-27: V1 nearest-scenario ramp, 10% band. The bonus is 15pt x clamp(d / 10%, 0, 1) where d is
+    the distance beyond spot of the scenario nearest it, so the capture no longer jumps when that scenario crosses
+    spot (U11.SI: bear 34.62 on a 35.44 spot cost the full 15 points)."""
+
+    def test_09618_still_closes_half_the_gap(self):
+        # bear HK$134 on a HK$106.30 spot: 26% beyond it, well past the band.
+        cap, near, side = d._unanimity_capture(0.35, [134.0, 147.78, 170.0], 106.30)
+        assert cap == 0.50 and side == "above" and near == pytest.approx(134.0 / 106.30 - 1.0)
+
+    @pytest.mark.parametrize("ivs,spot", [
+        ([126.48, 151.15, 176.94], 336.64),    # AAPL, 47% below
+        ([338.23, 454.63, 580.45], 922.76),    # COST, 37% below
+        ([37.2, 45.08, 53.9], 75.65),          # D05.SI, 29% below
+        ([110.0, 120.0, 140.0], 100.0),        # exactly 10% above: the band edge
+        ([60.0, 70.0, 85.0], 100.0),           # nearest 15% below
+    ])
+    def test_clearly_unanimous_names_keep_exactly_half(self, ivs, spot):
+        assert d._unanimity_capture(0.35, ivs, spot)[0] == 0.50
+
+    def test_the_bonus_never_lifts_past_the_cap(self):
+        assert d._unanimity_capture(0.45, [200.0, 250.0, 300.0], 100.0)[0] == 0.50
+        assert d._unanimity_capture(0.20, [200.0, 250.0, 300.0], 100.0)[0] == pytest.approx(0.35)
+
+    def test_partial_bonus_in_the_band(self):
+        # 02888.HK: bear 245.59 on a 231.00 spot, 6.3% above -> 35% + 15pt x 0.632.
+        cap, near, side = d._unanimity_capture(0.35, [245.59, 302.43, 364.04], 231.00)
+        assert side == "above" and near == pytest.approx(245.59 / 231.0 - 1.0)
+        assert cap == pytest.approx(0.35 + 0.15 * (245.59 / 231.0 - 1.0) / 0.10)
+        assert round(cap, 3) == 0.445
+        # C38U.SI: bull 2.18 on a 2.26 spot, 3.5% below.
+        assert round(d._unanimity_capture(0.35, [1.33, 1.72, 2.18], 2.26)[0], 3) == 0.403
+
+    def test_continuous_as_the_nearest_scenario_crosses_spot(self):
+        """UOB-like sweep: walk the bear IV through spot in fine steps; neither the capture nor the bear / base /
+        bull targets may jump."""
+        spot, base, bull = 35.44, 41.86, 49.93
+        step = 0.001
+        prev_cap = prev_t = None
+        bear = spot * 0.95
+        while bear <= spot * 1.05:
+            cap = d._unanimity_capture(0.35, [bear, base, bull], spot)[0]
+            t = _target(0.35, [bear, base, bull], spot)
+            if prev_cap is not None:
+                # the ramp's slope is 15pt per 10% of spot: one step moves the capture by at most that much
+                assert abs(cap - prev_cap) <= 0.15 * (step / spot) / 0.10 + 1e-12
+                for a, b in zip(t, prev_t):
+                    assert abs(a - b) < 0.01
+            prev_cap, prev_t = cap, t
+            bear += step
+        # at the crossing itself the bonus is zero from both sides
+        assert d._unanimity_capture(0.35, [spot * (1 - 1e-9), base, bull], spot)[0] == pytest.approx(0.35, abs=1e-6)
+        assert d._unanimity_capture(0.35, [spot * (1 + 1e-9), base, bull], spot)[0] == pytest.approx(0.35, abs=1e-6)
+
+    def test_raising_any_iv_never_lowers_any_target(self):
+        import random
+        rng = random.Random(20261127)
+        for _ in range(20000):
+            spot = rng.uniform(5.0, 500.0)
+            ivs = sorted(spot * rng.uniform(0.6, 1.4) for _ in range(3))
+            base_cap = rng.choice((0.20, 0.30, 0.35))
+            i = rng.randrange(3)
+            bumped = list(ivs)
+            bumped[i] *= 1.0 + rng.uniform(1e-4, 0.2)
+            before, after = _target(base_cap, ivs, spot), _target(base_cap, bumped, spot)
+            for a, b in zip(before, after):
+                assert b >= a - 1e-9, (spot, ivs, bumped, base_cap, before, after)
+
+    def test_symmetric_up_and_down(self):
+        import random
+        rng = random.Random(7)
+        for _ in range(2000):
+            spot = rng.uniform(5.0, 500.0)
+            ivs = [spot * (1 + rng.uniform(-0.3, 0.3)) for _ in range(3)]
+            mirrored = [2 * spot - v for v in ivs]
+            up = d._unanimity_capture(0.35, ivs, spot)
+            dn = d._unanimity_capture(0.35, mirrored, spot)
+            assert up[0] == pytest.approx(dn[0]) and up[1] == pytest.approx(dn[1])
+            if up[2] is None:
+                assert dn[2] is None
+            else:
+                assert {up[2], dn[2]} == {"above", "below"}
+
+    def test_missing_scenarios_or_spot_keep_the_base_capture(self):
+        assert d._unanimity_capture(0.35, [120.0, 130.0], 100.0) == (0.35, 0.0, None)
+        assert d._unanimity_capture(0.35, [120.0, 130.0, 140.0], 0.0) == (0.35, 0.0, None)
+
+    def test_capture_displays_one_decimal_when_fractional(self):
+        assert d._cap_pct(0.4454) == "44.5%" and d._cap_pct(0.35) == "35%" and d._cap_pct(0.5) == "50%"
 
 
 class TestTheBalanceSheetComesFromTheLatestQuarter:

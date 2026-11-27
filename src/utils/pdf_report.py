@@ -106,6 +106,13 @@ _fetch_company_name = _fetch_company_name_shared
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
+def _cap_pct(c) -> str:
+    """A capture share for display: one decimal, dropped when whole (35%, 44.5%). Owner, 2026-11-27: the
+    unanimity bonus ramps, so a capture of 44.5% must not print as 45%."""
+    s = f"{float(c):.1%}"
+    return s[:-3] + "%" if s.endswith(".0%") else s
+
+
 def _strip(text) -> str:
     """Remove ANSI escape codes, strip whitespace, and escape XML entities.
 
@@ -2606,8 +2613,8 @@ def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
     spot, cap = pb.get("spot"), pb.get("capture")
     out = [Paragraph(
         f"12-month target = [price + capture × (intrinsic value − price)] × (1 + cost of equity − dividend yield). "
-        f"Price {_money(spot)}; capture {float(cap):.0%} of the gap to fair value over 12 months."
-        + (f" Why {float(cap):.0%}: {_strip(str(pb.get('capture_reason')))}." if pb.get("capture_reason") else "")
+        f"Price {_money(spot)}; capture {_cap_pct(cap)} of the gap to fair value over 12 months."
+        + (f" Why {_cap_pct(cap)}: {_strip(str(pb.get('capture_reason')))}." if pb.get("capture_reason") else "")
         + (f" Carried one year at × {float((pb.get('carry') or {}).get('factor')):.4f} (cost of equity "
            f"{float((pb.get('carry') or {}).get('cost_of_equity')):.2%} less dividend yield "
            f"{float((pb.get('carry') or {}).get('dividend_yield') or 0.0):.2%})."

@@ -1274,6 +1274,49 @@ def _convergence_bound(scen_iv: float, spot: float, max_capture: float) -> float
     return spot + max_capture * (scen_iv - spot)
 
 
+def _cap_pct(c) -> str:
+    """A capture share for display: one decimal, dropped when whole (35%, 44.5%). Owner, 2026-11-27: the
+    unanimity bonus ramps, so a capture of 44.5% must not print as 45%."""
+    s = f"{float(c):.1%}"
+    return s[:-3] + "%" if s.endswith(".0%") else s
+
+
+#: Owner, 2026-11-27: the distance (fraction of spot) at which the scenario NEAREST spot earns the full unanimity
+#: bonus. Below it the bonus ramps linearly from 0, so a scenario crossing spot moves the capture continuously.
+_UNANIMITY_BAND = 0.10
+_UNANIMITY_BONUS = 0.15
+_UNANIMITY_CAP = 0.50
+
+
+def _unanimity_capture(base_capture: float, scen_ivs: list, spot: float,
+                       band: float = _UNANIMITY_BAND) -> tuple[float, float, Optional[str]]:
+    """Capture after the smooth unanimity bonus: (capture, nearest distance beyond spot, side).
+
+    capture = min(50%, base + 15pt x clamp(d / band, 0, 1)), d = how far the scenario NEAREST spot sits beyond it
+    (fraction of spot) when bear, base and bull are all on one side, else 0. Continuous where a scenario crosses
+    spot (d -> 0 from either side), never lowers a target when an IV rises (the bonus only grows as the scenarios
+    move away from spot in the direction they already agree on), and identical up and down.
+
+    >>> _unanimity_capture(0.35, [34.62, 41.86, 49.93], 35.44)[0]        # U11.SI: bear below spot -> split
+    0.35
+    >>> round(_unanimity_capture(0.35, [36.00, 41.86, 49.93], 35.44)[0], 4)   # bear 1.6% above: part of the bonus
+    0.3737
+    >>> _unanimity_capture(0.35, [126.48, 151.15, 176.94], 336.64)[0]    # AAPL: 47% below, full bonus
+    0.5
+    """
+    if len(scen_ivs) != 3 or not spot or spot <= 0:
+        return base_capture, 0.0, None
+    d = [v / spot - 1.0 for v in scen_ivs]
+    if all(x > 0 for x in d):
+        near, side = min(d), "above"
+    elif all(x < 0 for x in d):
+        near, side = min(-x for x in d), "below"
+    else:
+        return base_capture, 0.0, None
+    ramp = min(1.0, max(0.0, near / band)) if band > 0 else 1.0
+    return min(_UNANIMITY_CAP, base_capture + _UNANIMITY_BONUS * ramp), near, side
+
+
 def _price_path_carry(*, firm_ke: Optional[float], ggm_coe: Optional[float], market_capm: Optional[dict],
                       dps: Optional[float], spot: Optional[float]) -> dict:
     """The 12-month price-path factor, 1 + Ke - dividend yield (owner, 2026-11-27, D1 "a-full").
@@ -20142,14 +20185,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _s in ("bear", "base", "bull")
                 ) if isinstance(v, (int, float)) and v > 0
             ]
-            _unanimous = len(_scen_ivs) == 3 and (
-                all(v > _spot_for_cap for v in _scen_ivs)
-                or all(v < _spot_for_cap for v in _scen_ivs))
-            if _unanimous:
-                _max_capture = min(0.50, _max_capture + 0.15)
-                _capture_reason = (f"{_max_capture:.0%}: bear, base and bull all sit "
-                                   f"{'above' if _scen_ivs[0] > _spot_for_cap else 'below'} spot, "
-                                   f"so the rule adds 15 points (cap 50%)")
+            # Owner, 2026-11-27: the bonus ramps with the distance of the scenario nearest spot instead of
+            # switching on when the last one crosses it (U11.SI: bear 34.62 on a 35.44 spot cost 15 points).
+            _base_capture = _max_capture
+            _max_capture, _unan_near, _unan_side = _unanimity_capture(_base_capture, _scen_ivs, _spot_for_cap)
+            _unanimous = _unan_side is not None
+            if _max_capture > _base_capture:
+                _capture_reason = (f"{_cap_pct(_max_capture)}: bear, base and bull all sit {_unan_side} spot, the nearest "
+                                   f"{_unan_near:.1%} beyond it, so the rule adds "
+                                   f"{(_max_capture - _base_capture) * 100:.1f} of up to 15 points "
+                                   f"(full at {_UNANIMITY_BAND:.0%}; cap 50%)")
             # Self-learning loop 3 (2026-10-04): a PROMOTED pt calibration replaces the
             # rule's capture for this profile / market; nothing promoted = the rule.
             _capture_source = "rule"
@@ -20194,22 +20239,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _sotp_led and _scen_iv:
                     _conv = round(_convergence_bound(_scen_iv, _spot_for_cap, _max_capture), 2)
                     _cap_diagnostics.append(
-                        f"{_sn}: pt {_pt!r}→${_conv:.0f} (SOTP-led: {_max_capture:.0%} of IV-spot gap)")
+                        f"{_sn}: pt {_pt!r}→${_conv:.0f} (SOTP-led: {_cap_pct(_max_capture)} of IV-spot gap)")
                     _12m_targets[_sn] = _conv
                     _pt = _conv
                     _12m_pt_method_label = (
                         f"convergence toward SOTP-led intrinsic value "
-                        f"({_max_capture:.0%} of the IV-spot gap)")
+                        f"({_cap_pct(_max_capture)} of the IV-spot gap)")
                 elif _norm_led and _scen_iv:
                     _conv = round(_convergence_bound(_scen_iv, _spot_for_cap, _max_capture), 2)
                     _cap_diagnostics.append(
                         f"{_sn}: pt {_pt!r}→${_conv:.0f} (normalised-earnings-led: "
-                        f"{_max_capture:.0%} of IV-spot gap)")
+                        f"{_cap_pct(_max_capture)} of IV-spot gap)")
                     _12m_targets[_sn] = _conv
                     _pt = _conv
                     _12m_pt_method_label = (
                         f"convergence toward normalised-earnings intrinsic value "
-                        f"({_max_capture:.0%} of the IV-spot gap)")
+                        f"({_cap_pct(_max_capture)} of the IV-spot gap)")
                 if not _scen_iv or not _pt:
                     _cap_diagnostics.append(f"{_sn}: no scen_iv/pt")
                     continue
@@ -20238,7 +20283,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _pt = _12m_targets[_sn]
                     _capped_any = True
                     _cap_diagnostics.append(
-                        f"{_sn}: pt→${_conv_cap:.0f} (conv cap {_max_capture:.0%} of "
+                        f"{_sn}: pt→${_conv_cap:.0f} (conv cap {_cap_pct(_max_capture)} of "
                         f"IV-spot gap, IV {'above' if _scen_iv >= _spot_for_cap else 'below'} spot)"
                     )
                 # ── Bear floor for high-SBC names (Gemini Fix 2) ─────────
@@ -20260,14 +20305,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             print(
                 f"  [convergence-cap] {ticker}: profile={profile_name!r} "
                 f"high_sbc={_high_sbc} reaccel={_is_reaccel} "
-                f"max_capture={_max_capture:.0%} spot=${_spot_for_cap:.2f}"
+                f"max_capture={_cap_pct(_max_capture)} spot=${_spot_for_cap:.2f}"
             )
             if _cap_diagnostics:
                 for _d in _cap_diagnostics:
                     print(f"    • {_d}")
             if _capped_any:
                 ticker_forward_flags.append(
-                    f"Convergence cap: 12m PT capped at {_max_capture:.0%} of "
+                    f"Convergence cap: 12m PT capped at {_cap_pct(_max_capture)} of "
                     f"(IV − spot) gap ({'reaccel' if _is_reaccel else 'high-SBC' if _high_sbc else 'stable'})"
                     + (" + bear floor" if _high_sbc else "")
                 )
@@ -20307,7 +20352,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if _pt_rows:
                 _pt_unified = True
                 _12m_pt_method_label = (
-                    f"convergence toward intrinsic value: {_max_capture:.0%} of "
+                    f"convergence toward intrinsic value: {_cap_pct(_max_capture)} of "
                     f"the spot-to-IV gap, carried at Ke - dividend yield ({_carry['factor'] - 1.0:+.2%})")
                 _pt_bridge = {
                     "rule": "target = [spot + capture x (IV - spot)] x (1 + Ke - dividend yield)",
