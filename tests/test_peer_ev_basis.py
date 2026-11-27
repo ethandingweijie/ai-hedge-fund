@@ -103,3 +103,25 @@ def test_ah_restate_applies_to_every_basket_row_of_a_member():
     vals = {round(r["metrics"]["ev_ebitda"]["value"], 4) for r in rows}
     assert len(vals) == 1 and vals.pop() < 6.0
     assert all("_listing_restated" in r["metrics"] for r in rows)
+
+
+def test_lease_principal_proxy_ifrs_only():
+    bs = {"reportedCurrency": "SGD", "capitalLeaseObligations": 500.0}
+    assert rc.lease_principal_proxy("C6L.SI", bs) == pytest.approx(100.0)
+    assert rc.lease_principal_proxy("AAPL", {"reportedCurrency": "USD", "capitalLeaseObligations": 500.0}) == 0.0
+    assert d._lease_principal_proxy({"lease_liabilities": 500.0}, "C6L.SI", "SGD") == pytest.approx(100.0)
+    assert d._lease_principal_proxy({"lease_liabilities": 500.0}, "AAPL", "USD") == 0.0
+
+
+def test_peer_fcf_yield_after_lease_principal_inside_a_valuation_only():
+    m = {"fcf_yield": {"value": 0.08, "in_band": True}, "_fcf_lease_x": {"value": 0.02, "in_band": False}}
+    assert rc.on_subject_ev_basis(m) is m                     # outside a valuation: the feed's yield
+    s = rc.on_subject_ev_basis(m, "sti")
+    assert s["fcf_yield"]["value"] == pytest.approx(0.06) and s["fcf_yield"]["feed_value"] == 0.08
+
+
+def test_lease_share_follows_the_listing_restate():
+    vals = {"_listing_restated": {"value": 0.73, "in_band": False}}
+    rc._store_investment_shares(vals, "0728.HK", "Communication Services", "Telecommunications Services",
+                                {"fcf_lease_x": 0.0073})
+    assert vals["_fcf_lease_x"]["value"] == pytest.approx(0.01)

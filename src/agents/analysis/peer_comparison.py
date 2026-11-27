@@ -170,7 +170,11 @@ _N_GLOBAL = 3
 
 
 _SUFFIX_LABEL = ((".HK", "HK"), (".SI", "SG"), (".T", "JP"), (".KS", "KR"), (".KQ", "KR"), (".SS", "CN"), (".SZ", "CN"),
-                 (".PA", "FR"), (".L", "UK"), (".DE", "DE"), (".AS", "NL"), (".SW", "CH"), (".TW", "TW"))
+                 (".PA", "FR"), (".L", "UK"), (".DE", "DE"), (".AS", "NL"), (".SW", "CH"), (".TW", "TW"),
+                 (".KL", "MY"), (".JK", "ID"), (".BK", "TH"), (".AX", "AU"), (".MI", "IT"), (".PS", "PH"))
+_SUFFIX_CCY = {".HK": "HKD", ".SI": "SGD", ".T": "JPY", ".KS": "KRW", ".KQ": "KRW", ".SS": "CNY", ".SZ": "CNY",
+               ".PA": "EUR", ".AS": "EUR", ".DE": "EUR", ".MI": "EUR", ".SW": "CHF", ".TW": "TWD", ".KL": "MYR",
+               ".JK": "IDR", ".BK": "THB", ".AX": "AUD", ".PS": "PHP"}
 
 
 def _market_label(symbol: str, market: str) -> str:
@@ -208,10 +212,15 @@ def _band_value(metrics: dict, field: str):
     return None
 
 
-def _usd(mcap, market: str):
+def _usd(mcap, market: str, symbol: str = ""):
     if not isinstance(mcap, (int, float)) or mcap <= 0:
         return None
-    ccy = _MARKET_CCY.get(market, "USD")
+    sym = (symbol or "").upper()
+    # a cross-market member's cap is in its own listing currency (London quotes in pence: left out)
+    ccy = (next((c for suf, c in _SUFFIX_CCY.items() if sym.endswith(suf)), None)
+           or ("USD" if "." not in sym else None)) if market == "XMKT" else _MARKET_CCY.get(market, "USD")
+    if ccy is None:
+        return None
     if ccy == "USD":
         return float(mcap)
     try:
@@ -224,6 +233,7 @@ def _usd(mcap, market: str):
 
 def _peer_row(member: dict, market: str, group: str) -> dict:
     m = member.get("metrics") or {}
+    _cap = member.get("market_cap") or ((m.get("_mcap_multiples") or {}).get("value") if market == "XMKT" else None)
     return {
         "ticker": member["symbol"], "is_subject": False, "group": group,
         "market": _market_label(member.get("symbol"), market), "name": member.get("name"),
@@ -231,7 +241,7 @@ def _peer_row(member: dict, market: str, group: str) -> dict:
         "ev_revenue": _band_value(m, "ev_revenue"), "pb_ratio": _band_value(m, "pb"),
         "fcf_yield": _band_value(m, "fcf_yield"), "roic": _band_value(m, "roic"),
         "revenue_growth": _band_value(m, "growth_avg"), "gross_margin": None, "net_margin": None,
-        "market_cap": None, "market_cap_usd": _usd(member.get("market_cap"), market),
+        "market_cap": None, "market_cap_usd": _usd(_cap, market, member.get("symbol")),
     }
 
 
@@ -244,12 +254,13 @@ def _members_for(market: str, industries: set[str]) -> list[dict]:
     return sorted(seen.values(), key=lambda x: -(x.get("market_cap") or 0))
 
 
-def _profile_members(market: str, profile: str) -> list[dict]:
-    """The curated basket a profile names for this market, with each member's stored metrics."""
+def _profile_members(market: str, profile: str, basket: str | None = None) -> list[dict]:
+    """The curated basket a profile names for this market (or the named cross-market `basket`), with each
+    member's stored metrics and the exchange they were read from."""
     from src.data import db as _db
     from src.data.regional_comps import CROSS_MARKET_BASKETS, CROSS_MARKET_EXCHANGE, PROFILE_PEER_BASKETS
-    xm = CROSS_MARKET_BASKETS.get(profile or "")
-    if xm and market in (xm.get("markets") or ()):
+    xm = CROSS_MARKET_BASKETS.get(basket or profile or "")
+    if xm and (basket or market in (xm.get("markets") or ())):
         exch, syms = CROSS_MARKET_EXCHANGE, tuple(xm.get("symbols") or ())
     else:
         exch, syms = market, tuple((PROFILE_PEER_BASKETS.get(profile or "") or {}).get(market) or ())
@@ -267,7 +278,8 @@ def _profile_members(market: str, profile: str) -> list[dict]:
                 metrics = _json.loads(r["metrics_json"] or "{}")
             except (TypeError, ValueError):
                 metrics = {}
-            out.append({"symbol": r["symbol"], "name": r["name"], "market_cap": r["market_cap"], "metrics": metrics})
+            out.append({"symbol": r["symbol"], "name": r["name"], "market_cap": r["market_cap"], "metrics": metrics,
+                        "_exchange": exch})
     return sorted(out, key=lambda x: -(x.get("market_cap") or 0))
 
 
@@ -290,41 +302,65 @@ def localized_peer_table(subject: str, subject_row: dict, profile: str | None = 
             if mb["symbol"] in (subj, subject.upper()) or nm in names_taken:
                 continue
             names_taken.add(nm)
-            rows.append(_peer_row(mb, mkt, group))
+            rows.append(_peer_row(mb, mb.get("_exchange") or mkt, group))
             if len(rows) >= n:
                 break
         return rows
 
+    from src.data.regional_comps import GLOBAL_PEER_TABLE_BASKETS
+    own_label = _MARKET_LABEL.get(market, market)
     related = _related_industries(industry)
-    local_src = _profile_members(market, profile) if profile else []
-    local = take(local_src, market, "local", _N_LOCAL)
-    if len(local) < _N_LOCAL:
+    prof = _profile_members(market, profile) if profile else []
+    # Owner, 2026-11-27: "local" means listed in the subject's market; a cross-market basket's other members
+    # (UOB's ASEAN banks, SIA's regional carriers) are global peers.
+    is_local = lambda mb: _market_label(mb.get("symbol"), market) == own_label        # noqa: E731
+    local = take([mb for mb in prof if is_local(mb)], market, "local", _N_LOCAL)
+    # A curated basket exists because the label's local peers are a different business (HSBC: the Chinese state
+    # banks): it is the only local source, never topped up from the label.
+    if len(local) < _N_LOCAL and not prof:
         local += take(_members_for(market, related), market, "local", _N_LOCAL - len(local))
 
-    pool = []
-    for mkt in _MARKET_CCY:
-        if mkt == market:
+    region = {"SHH": "CN/HK", "SHZ": "CN/HK", "HKSE": "CN/HK", "CN": "CN/HK", "HK": "CN/HK"}
+    own_region_label = region.get(own_label, own_label)
+    display_basket = GLOBAL_PEER_TABLE_BASKETS.get(profile or "")
+    curated = ([mb for mb in prof if not is_local(mb)]
+               + (_profile_members(market, profile, display_basket) if display_basket else []))
+    glob, regions_used = [], {own_region_label}
+    # Curated foreign members first, one per listing region, in basket order (largest first where caps exist).
+    for mb in curated:
+        reg = region.get(_market_label(mb.get("symbol"), market), _market_label(mb.get("symbol"), market))
+        if reg in regions_used:
             continue
-        for mb in _members_for(mkt, related)[:_N_GLOBAL * 2]:
-            usd = _usd(mb.get("market_cap"), mkt)
-            if usd:
-                pool.append((usd, mkt, mb))
+        got = take([mb], "XMKT", "global", 1)
+        if got:
+            glob += got
+            regions_used.add(reg)
+        if len(glob) >= _N_GLOBAL:
+            break
+
+    pool = []
+    if not display_basket:          # a display basket exists because the label abroad is another business
+        for mkt in _MARKET_CCY:
+            if mkt == market:
+                continue
+            for mb in _members_for(mkt, related)[:_N_GLOBAL * 2]:
+                usd = _usd(mb.get("market_cap"), mkt)
+                if usd:
+                    pool.append((usd, mkt, mb))
     pool.sort(key=lambda x: -x[0])
     # One global peer per region (mainland A shares and HK count as one): by size alone the
     # Chinese state banks filled every global column for UOB.
-    region = {"SHH": "CN/HK", "SHZ": "CN/HK", "HKSE": "CN/HK"}
-    own_region = region.get(market, market)
-    glob, regions_used = [], {own_region}
     for _usd_cap, mkt, mb in pool:
-        reg = region.get(mkt, mkt)
+        if len(glob) >= _N_GLOBAL:
+            break
+        lab = _MARKET_LABEL.get(mkt, mkt)
+        reg = region.get(lab, lab)
         if reg in regions_used:
             continue
         got = take([mb], mkt, "global", 1)
         if got:
             glob += got
             regions_used.add(reg)
-        if len(glob) >= _N_GLOBAL:
-            break
 
     if not local and not glob:
         return None

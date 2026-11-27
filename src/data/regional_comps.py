@@ -351,6 +351,8 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
 #: Owner-approved thin baskets: the peer floor a named basket clears instead of MIN_INDUSTRY_PEERS. A
 #: like-for-like set this small is a decision, so it is listed here rather than lowered for every basket.
 BASKET_FLOORS: dict[str, int] = {
+    "Money Center Bank (EU)": 4,                    # StanChart, BNP, Barclays, Citi, DBS (owner, 2026-11-27)
+    "Payment Networks: Global": 3,                  # display only (owner, 2026-11-27)
     "Membership / Subscription Retail": 3,          # WMT, PSMT, BJ once COST is out (owner, 2026-11-25)
     "Consumer Technology Ecosystem: Hardware": 3,   # SONY, RMS.PA, MC.PA, RACE (owner, 2026-11-25)
     "Consumer Technology Ecosystem: Services": 4,   # MSFT, GOOGL, META, V, MA, SPGI (owner, 2026-11-25)
@@ -393,7 +395,24 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
                                    "symbols": ("0388.HK", "ASX.AX", "8697.T", "CME", "ICE", "NDAQ", "CBOE")},
     "Agribusiness & Food (SG)": {"markets": ("SES",),
                                  "symbols": ("E5H.SI", "EB5.SI", "P8Z.SI", "VC2.SI", "ADM", "BG")},
+    # Owner, 2026-11-27: SGX lists three banks, so each SG bank's peer set was the other two. ASEAN universal banks
+    # beside them (Maybank, CIMB, BCA, Kasikorn, Bangkok Bank). The bank P/E prices on the bank calibration; these
+    # feed the peer cross-check and the peer table.
+    "Money Center Bank (SG)": {"markets": ("SES",),
+                               "symbols": ("D05.SI", "O39.SI", "U11.SI", "1155.KL", "1023.KL", "BBCA.JK",
+                                           "KBANK.BK", "BBL.BK")},
+    # Owner, 2026-11-27: HSBC's HKSE label peers were the Chinese state banks; a global universal-bank set instead.
+    "Money Center Bank (EU)": {"markets": ("HKSE",),
+                               "symbols": ("2888.HK", "BNP.PA", "BARC.L", "C", "D05.SI")},
+    # Owner, 2026-11-27: no card network lists outside the US; FMP's "Credit Services" label abroad is leasing
+    # and consumer credit (ORIX, Samsung Card). Profitable payment processors, read by the peer table only.
+    "Payment Networks: Global": {"markets": (),
+                                 "symbols": ("ADYEN.AS", "3769.T", "300773.SZ", "377300.KS")},
 }
+
+#: Owner, 2026-11-27: the peer table's global columns for a profile whose label is a different business
+#: abroad. Display only; the valuation keeps its own basket.
+GLOBAL_PEER_TABLE_BASKETS: dict[str, str] = {"Payment Networks": "Payment Networks: Global"}
 
 
 def refresh_cross_market_baskets(fetch=None) -> int:
@@ -426,8 +445,11 @@ def refresh_cross_market_baskets(fetch=None) -> int:
             except Exception:                                  # noqa: BLE001
                 _cls = {}
             _store_investment_shares(vals, sym, _cls.get("sector"), _cls.get("industry"), mm)
+            if _multiples_mcap(mm):
+                vals["_mcap_multiples"] = {"value": _multiples_mcap(mm), "in_band": False}
             rows.append({"level": "profile", "key": profile, "cohort": "all", "symbol": sym.upper(),
-                         "name": mm.get("name") or sym, "market_cap": mm.get("market_cap"), "metrics": vals})
+                         "name": mm.get("name") or _cls.get("name") or sym, "market_cap": mm.get("market_cap"),
+                         "metrics": vals})
     return save_members(CROSS_MARKET_EXCHANGE, rows, datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
 
@@ -1138,6 +1160,12 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
         # Owner, 2026-11-27 (option A): FMP's EV nets cash and equivalents only. The member's short- and
         # long-term investments as a share of that EV, so a run can restate the EV multiples onto the valued
         # company's own bridge (PEER_EV_BASIS). Same currency: key metrics and the balance sheet both report.
+        # Owner, 2026-11-27 (E31, 1A): an IFRS 16 filer's FMP free cash flow pays no lease principal (it sits in
+        # financing); a US GAAP filer's operating cash flow already pays the rent. The proxy -- lease liability over
+        # LEASE_PRINCIPAL_TERM_YEARS -- as a share of the cap the FCF yield was computed on.
+        _km_cap = _safe_float(row.get("marketCap"))
+        if _bs_row and _km_cap and _km_cap > 0:
+            out["fcf_lease_x"] = lease_principal_proxy(symbol, _bs_row) / _km_cap
         _ev_km = _safe_float(row.get("enterpriseValueTTM"))
         if _bs_row and _ev_km and _ev_km > 0:
             out["ev_x_sti"] = max(_safe_float(_bs_row.get("shortTermInvestments")) or 0.0, 0.0) / _ev_km
@@ -1609,9 +1637,30 @@ def investment_ev_shares(symbol: str, sector: Optional[str], industry: Optional[
     return s, s + lt
 
 
+#: Owner, 2026-11-27 (E31, option 1A): annual lease principal = lease liability / this many years, for IFRS 16
+#: filers. A filed remaining term replaces it when one is on record (none yet).
+LEASE_PRINCIPAL_TERM_YEARS = 5.0
+
+
+def lease_principal_proxy(symbol: str, bs_row: Optional[dict]) -> float:
+    """Annual lease principal for an IFRS 16 filer (lease liability / LEASE_PRINCIPAL_TERM_YEARS), in the
+    balance sheet's currency; 0 for a US GAAP filer, whose operating cash flow already pays the rent."""
+    from src.data.filing_basis import reports_us_gaap
+    if not bs_row:
+        return 0.0
+    if reports_us_gaap(symbol, bs_row.get("reportedCurrency")):
+        return 0.0
+    lease = _safe_float(bs_row.get("capitalLeaseObligations"))
+    return max(float(lease or 0.0), 0.0) / LEASE_PRINCIPAL_TERM_YEARS
+
+
 def _store_investment_shares(vals: dict, symbol: str, sector: Optional[str], industry: Optional[str],
                              mm: dict) -> None:
-    """Write the member's investment shares (never in band: they are not multiples), on its restated EV."""
+    """Write the member's investment shares and lease-principal share (never in band: they are not multiples),
+    on its restated EV and cap."""
+    if isinstance(mm.get("fcf_lease_x"), (int, float)):
+        _r = float(((vals.get("_listing_restated") or {}).get("value")) or 1.0) or 1.0
+        vals["_fcf_lease_x"] = {"value": float(mm["fcf_lease_x"]) / _r, "in_band": False}
     xs, xi = investment_ev_shares(symbol, sector, industry, mm.get("ev_x_sti"), mm.get("ev_x_lti"))
     if xs is None:
         return
@@ -1628,11 +1677,19 @@ def on_subject_ev_basis(metrics: dict, basis: Optional[str] = None) -> dict:
     ck = _EV_BASIS_CELL.get(basis or "")
     if not ck or not isinstance(metrics, dict):
         return metrics
+    out = dict(metrics)
+    # E31 (1A): inside a valuation the peers' FCF yield is after IFRS 16 lease principal, as the subject's is.
+    _lx = (metrics.get("_fcf_lease_x") or {}).get("value")
+    _fy = metrics.get("fcf_yield")
+    if isinstance(_lx, (int, float)) and _lx > 0 and isinstance(_fy, dict) and isinstance(_fy.get("value"), (int, float)):
+        nv = float(_fy["value"]) - float(_lx)
+        lo, hi = _BANDS.get("fcf_yield", (float("-inf"), float("inf")))
+        out["fcf_yield"] = {"value": nv, "in_band": bool(_fy.get("in_band")) and lo <= nv <= hi,
+                            "lease_basis": "after lease principal", "feed_value": _fy["value"]}
     x = (metrics.get(ck) or {}).get("value")
     if not isinstance(x, (int, float)):
-        return metrics
+        return out if out.get("fcf_yield") is not metrics.get("fcf_yield") else metrics
     k = 1.0 - float(x)
-    out = dict(metrics)
     for f in _EV_FIELDS:
         cell = out.get(f)
         v = cell.get("value") if isinstance(cell, dict) else None

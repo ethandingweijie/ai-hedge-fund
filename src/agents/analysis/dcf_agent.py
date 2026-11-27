@@ -1740,8 +1740,25 @@ def _street_share_check(estimates: list, shares: Optional[float]) -> Optional[di
     return None
 
 
+def _equity_method_book_in_lti(ticker: str, to_ccy: Optional[str]) -> Optional[float]:
+    """Owner, 2026-11-27 (6B): the equity-method book value a holdco template says sits inside the feed's long-term
+    investments, in `to_ccy`; those stakes go to the bridge at market instead of counting as cash at book."""
+    try:
+        from src.agents.analysis import holdco_sotp as _hs
+        e = (_hs.template_for(ticker) or {}).get("equity_method_book_in_long_term_investments") or {}
+        amt = e.get("amount")
+        if not isinstance(amt, (int, float)) or amt <= 0:
+            return None
+        frm = str(e.get("currency") or "").upper()
+        to = str(to_ccy or frm).upper()
+        rate = 1.0 if (not frm or frm == to) else _hs._fx(frm, to)
+        return float(amt) * float(rate) if rate else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
 def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: str,
-                       profile_name: str) -> tuple[float, dict, Optional[str]]:
+                       profile_name: str, valuation_ccy: Optional[str] = None) -> tuple[float, dict, Optional[str]]:
     """Cross-sector audit E18 (owner, 2026-10-10): a non-financial company's long-term investments (Apple's non-current
     marketable securities, ~US$5 a share) are value the operating legs never price -- their income sits below EBITDA --
     so they count against debt like the short-term book. Not where a SOTP / look-through / NAV leg already prices the
@@ -1753,12 +1770,32 @@ def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: s
             or (sector or "") in _NO_LTI_NETTING_SECTORS or (sector or "") in _NO_INVESTMENT_NETTING_SECTORS
             or str(ticker or "").upper() in _CUSTOMER_FUND_HOLDERS or _profile_prices_holdings(sector, profile_name)):
         return nd, basis, None
-    nd2 = float(nd) - float(lti)
-    comp["long_term_investments"] = float(lti)
+    _carve = _equity_method_book_in_lti(ticker, valuation_ccy)
+    _carve = min(float(_carve), float(lti)) if _carve else 0.0
+    lti_cash = float(lti) - _carve
+    nd2 = float(nd) - lti_cash
+    comp["long_term_investments"] = lti_cash
+    if _carve:
+        comp["equity_method_book_carved_out"] = _carve
     comp["result"] = nd2
-    out = dict(basis, long_term_investments_netted=float(lti), components=comp)
-    return nd2, out, (f"Long-term investments of {float(lti) / 1e9:,.2f}bn counted as cash in net debt (audit E18): value no "
-                      f"operating leg prices; net debt {float(nd) / 1e9:,.2f}bn -> {nd2 / 1e9:,.2f}bn")
+    out = dict(basis, long_term_investments_netted=lti_cash, components=comp,
+               equity_method_carved_out=_carve or None)
+    _msg = (f"Long-term investments of {lti_cash / 1e9:,.2f}bn counted as cash in net debt (audit E18): value no "
+            f"operating leg prices; net debt {float(nd) / 1e9:,.2f}bn -> {nd2 / 1e9:,.2f}bn")
+    if _carve:
+        _msg += (f". Equity-method stakes at book ({_carve / 1e9:,.2f}bn) taken out of that cash; they enter the bridge "
+                 f"at market instead (owner, 2026-11-27)")
+    return nd2, out, _msg
+
+
+def _lease_principal_proxy(row: dict, ticker: str, reported_currency: Optional[str]) -> float:
+    """Owner, 2026-11-27 (E31, 1A): annual IFRS 16 lease principal = lease liability / 5 years (the peers' proxy,
+    regional_comps.LEASE_PRINCIPAL_TERM_YEARS); 0 for a US GAAP filer, whose operating cash flow pays the rent."""
+    if _reports_us_gaap(ticker, reported_currency):
+        return 0.0
+    from src.data.regional_comps import LEASE_PRINCIPAL_TERM_YEARS
+    lease = _safe((row or {}).get("lease_liabilities"))
+    return max(float(lease or 0.0), 0.0) / LEASE_PRINCIPAL_TERM_YEARS
 
 
 def _subject_peer_ev_basis(sector: str, ticker: str, net_debt_basis: dict, holdings_netted: bool) -> Optional[str]:
@@ -10314,6 +10351,11 @@ def _compute_method_value(
             if _norm and _norm > 0:
                 fcf = _norm
                 _fcf_label = "FCF: operating cash flow less capex (5y normalised)"
+        # E31 (owner, 2026-11-27, 1A): an IFRS 16 filer's FCF after lease principal, as the peers' yield now is.
+        _lp = _lease_principal_proxy(most_recent, ticker, reported_currency) if fcf else 0.0
+        if _lp > 0:
+            fcf = fcf - _lp
+            _fcf_label += f"; less IFRS 16 lease principal {_lp / 1e9:,.2f}bn (lease liability / 5y)"
         if fcf and fcf > 0 and shares > 0:
             _leg_trace(kind="yield", metric=_fcf_label,
                        metric_value=float(fcf), shares=float(shares),
@@ -10505,6 +10547,8 @@ def _compute_method_value(
         _cov_eps = (float(net_income) / float(shares)) if (isinstance(net_income, (int, float)) and net_income > 0
                                                           and shares and shares > 0) else None
         _fcf_abs = _safe(most_recent.get("free_cash_flow"))
+        if _fcf_abs is not None:                    # E31 (1A): cover is after IFRS 16 lease principal
+            _fcf_abs = _fcf_abs - _lease_principal_proxy(most_recent, ticker, reported_currency)
         _cov_fcf = (float(_fcf_abs) / float(shares)) if (_fcf_abs is not None and _fcf_abs > 0
                                                          and shares and shares > 0) else None
         # Covered by EITHER earnings or free cash flow is covered (audit 2026-11-25 HK/SG): capping at the lower of
@@ -16973,8 +17017,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             f"Profile: {profile_name} | Anchor: {_anchor_method} | WACC={wacc:.1%} | g={growth_base:.1%} | C_macro={c_macro:+.2f}"
         )
         try:
-            net_debt, _net_debt_basis, _lti_flag = _apply_lti_netting(net_debt, _net_debt_basis, most_recent, sector,
-                                                                      ticker, profile_name)
+            net_debt, _net_debt_basis, _lti_flag = _apply_lti_netting(
+                net_debt, _net_debt_basis, most_recent, sector, ticker, profile_name,
+                (_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
             if _lti_flag:
                 ticker_forward_flags.append(_lti_flag)
                 _op_flag = _operating_earnings_for_netted_holdings(most_recent)
@@ -16995,7 +17040,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _lti_already = False
         _bridge_stakes = _equity_accounted_stakes(
             ticker, end_date, (_target_ccy if (fx_rate and fx_rate != 1.0) else reported_currency))
-        if _bridge_stakes and _lti_already:
+        try:
+            _lti_carved = bool((_net_debt_basis or {}).get("equity_method_carved_out"))
+        except NameError:
+            _lti_carved = False
+        if _bridge_stakes and _lti_already and not _lti_carved:
             _bridge_stakes = {**_bridge_stakes, "value": 0.0,
                               "declined": "long-term investments already counted as cash in net debt"}
         if _bridge_stakes and float(_bridge_stakes.get("value") or 0.0) > 0:
@@ -17822,8 +17871,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Owner, 2026-11-25: no company outgrows the economy in perpetuity -- terminal growth is capped at the
             # risk-free rate (the long-run nominal growth proxy).
             _rf_cap = float(((_wacc_build.get("firm_capm") or {}).get("rf")) or _CAPM_RF)
+            # Held until this scenario's flag list exists (below): appending here raised UnboundLocalError on the
+            # first scenario and filed the flag in the previous scenario's list after it (2026-11-27, Q0F.SI).
+            _tgr_cap_flag = None
             if tgr > _rf_cap:
-                forward_flags.append(f"Terminal growth {tgr:.2%} capped at the risk-free rate {_rf_cap:.2%}")
+                _tgr_cap_flag = f"Terminal growth {tgr:.2%} capped at the risk-free rate {_rf_cap:.2%}"
                 tgr = _rf_cap
 
             # ── Growth schedule: convergence fade, else tech decay ──────────
@@ -18248,6 +18300,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             #   the defect hid behind an unmoved headline IV for as long as it
             #   did.
             forward_flags: list[str] = list(ticker_forward_flags)
+            if _tgr_cap_flag:
+                forward_flags.append(_tgr_cap_flag)
             # Cross-sector audit E9 (2026-10-10): when this scenario's guidance forecast replaced the engine's growth
             # schedule, the flags describing that engine path no longer describe what ran -- they leave this
             # scenario's list, and one line names them so the audit trail survives.

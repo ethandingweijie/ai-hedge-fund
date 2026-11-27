@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-11-27T06:38:14+00:00",
+  "generated_at": "2026-11-27T14:28:33+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "a02c5be7",
-  "reason": "owner 2026-11-27: the 12-month target's unanimity capture step is replaced by the V1 nearest-scenario ramp with a 10% band. capture = min(50%, base + 15pt x clamp(d / 10%, 0, 1)), d = distance beyond spot of the scenario NEAREST spot (fraction of spot) when bear, base and bull are all on one side, else 0. The old step added the full 15 points the moment the last scenario crossed spot (U11.SI: bear 34.62 on a 35.44 spot cost 15 points); the ramp is continuous across spot, monotone in every IV and symmetric. Expected moves, and only these: 02888.HK capture 0.500 -> 0.445 (nearest 6.3% above), target 291.59 -> 287.21; C38U.SI 0.500 -> 0.403 (nearest 3.5% below), target 2.02 -> 2.07; V 0.500 -> 0.426, target 368.21 -> 373.70. No intrinsic value moves on any name and no rating changes. Every other unanimous name (AAPL, COST, D05.SI, MU, SCHW: nearest >=10% beyond spot) keeps exactly 50%; MELI keeps 35% (high-SBC 20% base + full 15). capture_reason text changes on every unanimous name to state the nearest distance and the points added; capture is stored unrounded and displayed to one decimal when fractional.",
+  "regenerated_at_commit": "c9f41103",
+  "reason": "2026-11-27 terminal-growth flag fix: the cap at the risk-free rate appended to forward_flags before the scenario's list existed (UnboundLocalError on the first scenario, Q0F.SI) and filed it in the previous scenario's list otherwise. The flag is now held and added to its own scenario. Expected moves, and only these: C38U_SI and U96_SI scenarios.bear/bull.forward_flags gain the 'Terminal growth ... capped at the risk-free rate' line. No value moves on any name.",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -3213,7 +3213,6 @@
     "Reverse DCF: the price 2.26 implies a 10-year revenue CAGR of +4.7% against the model's +5.2% (-43bp a year on every year, margins and discount rate held)",
     "S-REIT DDM (retail): DPU fwd 10.76 cents -> S$2.21/unit [CoE 6.38% (sub-sector (retail)), g 1.50% (sub-sector (retail)), calibration: published]",
     "SBC drag: FCF margin 57.5% \u2192 56.3% (\u2212124 bps, 5/5 yr SBC data)",
-    "Terminal growth 3.00% capped at the risk-free rate 2.29%",
     "WACC 5.29% (firm CAPM): Ke 5.29% = rf 2.29% + beta 0.63 = average of industry 0.59 (R.E.I.T., unlevered 0.40 relevered at D/E 59%) and own adjusted 0.66 x ERP 4.41%; Kd 2.29% pre-tax at D/V 37%; Ke floored at rf + 3.0%; floored at rf + 3.0% -- replaces the sector table and its regime / research / insider overlays",
     "WACC 5.48% = base 5.50% + credit overlay -2bps (rd_live 4.49% vs baseline 4.57% for A \u00d7 D/V 36.9% \u00d7 0.75) [fred:BAMLC0A3CA]"
    ],
@@ -3276,6 +3275,7 @@
     "Reverse DCF: the price 2.26 implies a 10-year revenue CAGR of +4.7% against the model's +5.2% (-43bp a year on every year, margins and discount rate held)",
     "S-REIT DDM (retail): DPU fwd 10.76 cents -> S$2.21/unit [CoE 6.38% (sub-sector (retail)), g 1.50% (sub-sector (retail)), calibration: published]",
     "SBC drag: FCF margin 57.5% \u2192 56.3% (\u2212124 bps, 5/5 yr SBC data)",
+    "Terminal growth 3.00% capped at the risk-free rate 2.29%",
     "WACC 5.29% (firm CAPM): Ke 5.29% = rf 2.29% + beta 0.63 = average of industry 0.59 (R.E.I.T., unlevered 0.40 relevered at D/E 59%) and own adjusted 0.66 x ERP 4.41%; Kd 2.29% pre-tax at D/V 37%; Ke floored at rf + 3.0%; floored at rf + 3.0% -- replaces the sector table and its regime / research / insider overlays",
     "WACC 5.48% = base 5.50% + credit overlay -2bps (rd_live 4.49% vs baseline 4.57% for A \u00d7 D/V 36.9% \u00d7 0.75) [fred:BAMLC0A3CA]"
    ],
@@ -5652,7 +5652,6 @@
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
     "Reverse DCF: the price 5.95 implies a 10-year revenue CAGR of +8.7% against the model's +2.6% (+614bp a year on every year, margins and discount rate held)",
     "Single-method blend: only EV/EBITDA (EV/EBITDA, multi) contributed a value \u2014 40% of the profile's intended weight survived, so the published IV is that one method and not an average of views",
-    "Terminal growth 3.00% capped at the risk-free rate 2.29%",
     "UNVALUED ACQUISITION? Net debt rose 5.4bn (92% of revenue) since the 2025-12-31 year end. The debt is deducted, but anything it bought (an acquired pipeline, an in-process R&D write-off, a new business) is not in the statements the operating legs price: add it as a pipeline input or bridge item, or treat the debt as unexplained.",
     "Unlevered basis: DCF cash flow is owner-earnings FCF + after-tax interest (effective rate per year, bounded), margin 11.2% vs 7.0% on the after-interest FCF (5/5 yr); interest is no longer counted against both the cash flow and net debt",
     "WACC 5.42% (firm CAPM): Ke 9.97% = rf 2.29% + beta 1.74 (industry: Diversified, unlevered 0.84 relevered at D/E 129%; own beta unavailable or outside 0.4-2.5) x ERP 4.41%; Kd 2.29% pre-tax at D/V 56% -- replaces the sector table and its regime / research / insider overlays",
@@ -5710,6 +5709,7 @@
     "Normalized NI: TTM S$0.98B \u2192 5y-cycle S$0.64B (-35%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
     "Reverse DCF: the price 5.95 implies a 10-year revenue CAGR of +8.7% against the model's +2.6% (+614bp a year on every year, margins and discount rate held)",
+    "Terminal growth 3.00% capped at the risk-free rate 2.29%",
     "UNVALUED ACQUISITION? Net debt rose 5.4bn (92% of revenue) since the 2025-12-31 year end. The debt is deducted, but anything it bought (an acquired pipeline, an in-process R&D write-off, a new business) is not in the statements the operating legs price: add it as a pipeline input or bridge item, or treat the debt as unexplained.",
     "Unlevered basis: DCF cash flow is owner-earnings FCF + after-tax interest (effective rate per year, bounded), margin 11.2% vs 7.0% on the after-interest FCF (5/5 yr); interest is no longer counted against both the cash flow and net debt",
     "WACC 5.42% (firm CAPM): Ke 9.97% = rf 2.29% + beta 1.74 (industry: Diversified, unlevered 0.84 relevered at D/E 129%; own beta unavailable or outside 0.4-2.5) x ERP 4.41%; Kd 2.29% pre-tax at D/V 56% -- replaces the sector table and its regime / research / insider overlays",

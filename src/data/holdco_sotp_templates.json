@@ -720,14 +720,14 @@
           "basis": "market_stake",
           "listed": "BHARTIARTL.NS",
           "stake_pct": 0.269,
-          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an effective equity interest of 26.9% (31 March 2026: 27.5%) in Airtel'. Held directly via Pastel and through 49.4% of Bharti Telecom. 27.5% after the 7 Nov 2025 sale is confirmed by the SGX release; 26.9% is the MD&A figure, owner to tick against the pack. Airtel Africa sits inside Bharti's market cap, not counted separately."
+          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an effective equity interest of 26.9% (31 March 2026: 27.5%) in Airtel'. Held directly via Pastel and through 49.4% of Bharti Telecom. 27.5% after the 7 Nov 2025 sale is confirmed by the SGX release; 26.9% is the MD&A figure, owner to tick against the pack. Airtel Africa sits inside Bharti's market cap, not counted separately. VERIFIED 2026-11-27 against Singtel Group MD&A, half year to 30 Sep 2026, section 6 (https://www.singtel.com/content/dam/singtel/investorRelations/financialResults/2027/H1FY27/Singtel%20Group%20MDA%20Sep%2026%20(Final).pdf): 26.9% at 30 Sep 2026 (27.5% at 31 Mar 2026), notes to the associates table note (3) printed p.28 and Key Operating Highlights p.32; Singtel holds 49.4% of Bharti Telecom; Airtel Africa is inside Airtel's market cap (Airtel 79.4%)."
         },
         {
           "name": "Advanced Info Service (AIS)",
           "basis": "market_stake",
           "listed": "ADVANC.BK",
           "stake_pct": 0.248,
-          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an equity interest of 24.8% (31 March 2026: 24.8%) in AIS', held via Singtel Strategic Investments. Direct only; the former Intouch route is now the Gulf line."
+          "source": "Singtel MD&A, half year ended 30 September 2026 (Gemini grounded search 2026-11-26, verbatim quote): 'an equity interest of 24.8% (31 March 2026: 24.8%) in AIS', held via Singtel Strategic Investments. Direct only; the former Intouch route is now the Gulf line. VERIFIED 2026-11-27 against Singtel Group MD&A, half year to 30 Sep 2026, section 6 (https://www.singtel.com/content/dam/singtel/investorRelations/financialResults/2027/H1FY27/Singtel%20Group%20MDA%20Sep%2026%20(Final).pdf): 24.8% at 30 Sep 2026, note (4) p.28 and highlights p.32."
         },
         {
           "name": "Gulf Development",
@@ -742,7 +742,7 @@
           "amount": 84248000000.0,
           "currency": "PHP",
           "fiscal_year": "2026-11-25",
-          "source": "FMP carries no PSE data, so marked by hand (owner, 2026-11-26): PSE EDGE market cap PHP 180.79bn at PHP 1,278 on 25 Nov 2026 x Singtel's 46.6% economic interest (Annual Report 2026; 22.2% of voting shares, rest via Asiacom). STALE-ABLE: refresh quarterly."
+          "source": "FMP carries no PSE data, so marked by hand (owner, 2026-11-26): PSE EDGE market cap PHP 180.79bn at PHP 1,278 on 25 Nov 2026 x Singtel's 46.6% economic interest (Annual Report 2026; 22.2% of voting shares, rest via Asiacom). STALE-ABLE: refresh quarterly. VERIFIED 2026-11-27 against Singtel Group MD&A, half year to 30 Sep 2026, section 6 (https://www.singtel.com/content/dam/singtel/investorRelations/financialResults/2027/H1FY27/Singtel%20Group%20MDA%20Sep%2026%20(Final).pdf): 46.6% economic interest, 22.2% of voting shares, highlights p.32 and note (2)."
         },
         {
           "name": "Telkomsel",
@@ -754,7 +754,7 @@
             11.3
           ],
           "fiscal_year": "TTM to 30 Sep 2026",
-          "source": "Unlisted 30.1% (Annual Report 2026). Singtel's share of Telkomsel post-tax profit TTM = FY26 S$460m - H1 FY26 S$228m + H1 FY27 S$218m = S$450m (Singtel AR 2026 / H1 FY27 MD&A section 6). Cross-check: Telkomsel 2025 NI IDR 19.687tn (Telkom 6-K) x 30.1% ~ S$416m. P/E band = FMP trailing P/E of Indonesian listed peers on 2026-11-26: Indosat 8.3x, Telkom 11.3x (XL loss-making, excluded). Owner chose P/E on Singtel's share (2026-11-26)."
+          "source": "Unlisted 30.1% (Annual Report 2026). Singtel's share of Telkomsel post-tax profit TTM = FY26 S$460m - H1 FY26 S$228m + H1 FY27 S$218m = S$450m (Singtel AR 2026 / H1 FY27 MD&A section 6). Cross-check: Telkomsel 2025 NI IDR 19.687tn (Telkom 6-K) x 30.1% ~ S$416m. P/E band = FMP trailing P/E of Indonesian listed peers on 2026-11-26: Indosat 8.3x, Telkom 11.3x (XL loss-making, excluded). Owner chose P/E on Singtel's share (2026-11-26). VERIFIED 2026-11-27 against Singtel Group MD&A, half year to 30 Sep 2026, section 6 (https://www.singtel.com/content/dam/singtel/investorRelations/financialResults/2027/H1FY27/Singtel%20Group%20MDA%20Sep%2026%20(Final).pdf): 30.1% at 30 Sep 2026, highlights p.32. Cross-check of the P/E basis: Telkom Indonesia market cap x Telkomsel's revenue share of Telkom / 69.9% puts Singtel's 30.1% near S$4.6bn (revenue proxy; TLKM price and share count from secondary sources) against S$450m x 8.3-11.3x = S$3.7-5.1bn."
         },
         {
           "name": "Consolidated operations (Singtel Singapore, Optus, NCS, Digital InfraCo)",
@@ -767,6 +767,47 @@
         }
       ],
       "discount_source": "Owner, 2026-11-26: 10-20% at the total -- minority stakes without control, Bharti partly inside Bharti Telecom (a holdco within the holdco), exit tax leakage; narrowed by Singtel's active capital recycling at market (Bharti May/Nov 2025, Gulf Jun 2026)."
+    },
+    "00941.HK": {
+      "name": "China Mobile",
+      "currency": "HKD",
+      "bridge_equity_accounted_stakes": true,
+      "holdco_discount": [
+        0.1,
+        0.2
+      ],
+      "discount_source": "Owner, 2026-11-27 (6B): minority listed stakes held by an operating company, valued at market less a holding-company discount; the 10-20% band (15% midpoint) is the one set for Singtel's associates (Z74.SI, 2026-11-26) and the engine's default when a template states none. Owner may reset it; no China Mobile-specific evidence on the discount is on record.",
+      "equity_method_book_in_long_term_investments": {
+        "amount": 218353000000.0,
+        "currency": "CNY",
+        "as_of": "2026-06-30",
+        "source": "China Mobile 2026 Interim Report (https://www.chinamobileltd.com/en/ir/reports/ir2026.pdf), balance sheet p.14 and Note 13 p.28: interests in associates CNY 217,982m + joint ventures CNY 371m. FMP's longTermInvestments carries them at book; the bridge removes this amount from the investments counted as cash and adds the stakes below at market instead (owner, 2026-11-27, option 6B)."
+      },
+      "divisions": [
+        {
+          "name": "Shanghai Pudong Development Bank",
+          "basis": "market_stake",
+          "listed": "600000.SS",
+          "stake_pct": 0.18,
+          "source": "China Mobile 2026 Interim Report (https://www.chinamobileltd.com/en/ir/reports/ir2026.pdf), Note 13(a)(i) pp.28-29: ~18% associate, book CNY 142,727m against a level-1 fair value of CNY 52,121m at 30 Jun 2026; 2025 Annual Report Note 21 p.137: CNY 8,990m of SPDB convertibles converted in 2025 to hold ~18%."
+        },
+        {
+          "name": "China Tower",
+          "basis": "market_stake",
+          "listed": "0788.HK",
+          "stake_pct": 0.28,
+          "source": "China Mobile 2026 Interim Report (https://www.chinamobileltd.com/en/ir/reports/ir2026.pdf), Note 13(a)(i) pp.28-29: ~28% associate, book CNY 57,378m against a fair value of CNY 37,610m at 30 Jun 2026. Held mainly as unlisted domestic shares; priced at the H-share quote."
+        },
+        {
+          "name": "Other associates and joint ventures",
+          "basis": "fixed_value",
+          "amount": 18248000000.0,
+          "currency": "CNY",
+          "fiscal_year": "2026-06-30",
+          "source": "China Mobile 2026 Interim Report (https://www.chinamobileltd.com/en/ir/reports/ir2026.pdf), Note 13 p.28: equity-method total CNY 218,353m less SPDB 142,727m and China Tower 57,378m; unlisted and not itemised, kept at book."
+        }
+      ],
+      "unmarked_note": "True Corporation (TRUE.BK): Thai press (Aug 2026) put China Mobile at 7.81%, but neither report lists it as an associate; if held, it sits in the FVOCI book counted as cash. Not marked. Other cash caveats, not yet adjusted: FVOCI CNY 48.6bn may be partly listed equity; China Mobile Finance statutory reserves (~CNY 10bn at Dec 2025) inside long-term deposits are restricted."
     }
   }
 }

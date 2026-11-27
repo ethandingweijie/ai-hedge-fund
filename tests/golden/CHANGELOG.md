@@ -2002,3 +2002,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-27: the 12-month target's unanimity capture step is replaced by the V1 nearest-scenario ramp with a 10% band. capture = min(50%, base + 15pt x clamp(d / 10%, 0, 1)), d = distance beyond spot of the scenario NEAREST spot (fraction of spot) when bear, base and bull are all on one side, else 0. The old step added the full 15 points the moment the last scenario crossed spot (U11.SI: bear 34.62 on a 35.44 spot cost 15 points); the ramp is continuous across spot, monotone in every IV and symmetric. Expected moves, and only these: 02888.HK capture 0.500 -> 0.445 (nearest 6.3% above), target 291.59 -> 287.21; C38U.SI 0.500 -> 0.403 (nearest 3.5% below), target 2.02 -> 2.07; V 0.500 -> 0.426, target 368.21 -> 373.70. No intrinsic value moves on any name and no rating changes. Every other unanimous name (AAPL, COST, D05.SI, MU, SCHW: nearest >=10% beyond spot) keeps exactly 50%; MELI keeps 35% (high-SBC 20% base + full 15). capture_reason text changes on every unanimous name to state the nearest distance and the points added; capture is stored unrounded and displayed to one decimal when fractional.
 
+## 2026-11-27T14:27:44+00:00
+
+- regenerated at HEAD: `c9f41103`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: 2026-11-27 terminal-growth flag fix: the cap at the risk-free rate appended to forward_flags before the scenario's list existed (UnboundLocalError on the first scenario, Q0F.SI) and filed it in the previous scenario's list otherwise. The flag is now held and added to its own scenario. Expected moves, and only these: C38U_SI and U96_SI scenarios.bear/bull.forward_flags gain the 'Terminal growth ... capped at the risk-free rate' line. No value moves on any name.
+
+## 2026-11-27T14:28:33+00:00
+
+- regenerated at HEAD: `c9f41103`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: 2026-11-27 terminal-growth flag fix: the cap at the risk-free rate appended to forward_flags before the scenario's list existed (UnboundLocalError on the first scenario, Q0F.SI) and filed it in the previous scenario's list otherwise. The flag is now held and added to its own scenario. Expected moves, and only these: C38U_SI and U96_SI scenarios.bear/bull.forward_flags gain the 'Terminal growth ... capped at the risk-free rate' line. No value moves on any name.
+

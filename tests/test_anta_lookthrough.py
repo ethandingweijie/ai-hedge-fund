@@ -248,7 +248,7 @@ class TestTheSchema:
             "sorted insertion would drop 02020.HK at index 3 between 00019.HK "
             "and C07.SI for no reason a reader could explain"
         )
-        assert len(keys) == 16
+        assert len(keys) == 17      # 00941.HK (2026-11-27, owner 6B) appended last
         # 10 shipped the template; 11 corrected its net-debt note. Nothing reads
         # `version` -- it is pinned so a correction to a SOURCED figure cannot
         # land silently in a file whose whole convention is that its numbers
