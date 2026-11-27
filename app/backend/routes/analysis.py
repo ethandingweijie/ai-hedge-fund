@@ -2854,7 +2854,8 @@ async def get_financials(ticker: str, period: str = "annual"):
 
         # Sort oldest → newest
         items.sort(key=lambda x: x["date"])
-        return {"ticker": sym, "period_type": period, "items": items}
+        ccy = next((getattr(li, "currency", None) for li in rows if getattr(li, "currency", None)), None)
+        return {"ticker": sym, "period_type": period, "currency": ccy, "items": items}
 
     # ── SGX ticker path (yfinance) ────────────────────────────────────────────
     # FMP Starter plan returns 402 Payment Required for .SI tickers. Route
@@ -2886,7 +2887,8 @@ async def get_financials(ticker: str, period: str = "annual"):
             industry = await asyncio.to_thread(get_company_industry, sym)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"financials error for {sym}: {exc}")
-        return {"ticker": sym, "period_type": period,
+        ccy = next((getattr(li, "currency", None) for li in (rows or []) if getattr(li, "currency", None)), None)
+        return {"ticker": sym, "period_type": period, "currency": ccy,
                 "items": _sg_financial_items(rows or [], period, industry)}
 
     # ── US / non-HK / non-SG path (FMP) ───────────────────────────────────────
@@ -2951,7 +2953,8 @@ async def get_financials(ticker: str, period: str = "annual"):
             "operating_income": row.get("operatingIncome"),
         })
 
-    return {"ticker": sym, "period_type": period, "items": items}
+    ccy = next((r.get("reportedCurrency") for r in raw_sorted if r.get("reportedCurrency")), None)
+    return {"ticker": sym, "period_type": period, "currency": ccy, "items": items}
 
 
 # ── GET /analysis/summary ─────────────────────────────────────────────────────

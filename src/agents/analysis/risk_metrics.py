@@ -291,6 +291,11 @@ def assemble_risk_metrics(data: dict, ticker: str, as_of=None) -> dict:
         src = ("agency" if note.startswith("Cost of debt on the agency rating")
                else "net cash" if str(wb.get("source") or "") == "no-overlay-net-cash"
                else "implied by interest cover")
+    # 2026-11-27: with no interest expense in the valuation inputs the cost of debt is priced
+    # at a default AAA (sector_profiles.synthetic_rating(None)); "implied by interest cover"
+    # beside an n/a cover read as a contradiction.
+    if rating and src == "implied by interest cover" and _num(wb.get("interest_coverage")) is None:
+        src = "assumed: no interest expense in the valuation inputs"
     metrics.append(_metric(
         "credit_rating", "Credit rating", None,
         f"{rating} ({src})" if rating else None,

@@ -79,7 +79,7 @@ import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { Markdown } from '@/components/report/shared/Markdown';
-import { currencySymbol } from '@/lib/utils';
+import { currencyCodeSymbol, currencySymbol } from '@/lib/utils';
 import { useI18n } from '@/i18n';
 import { AskAiButton } from '@/components/report/AskAiPanel';
 import { TermLabel } from '@/components/report/shared/InfoTip';
@@ -1337,12 +1337,14 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
     ? 'Company does not report product-level revenue.'
     : 'Company does not report geographic revenue.';
 
+  // Segments are in the reporting currency (BABA CNY), not always "$".
+  const segSym = currencyCodeSymbol(data?.currency) || currencySymbol(ticker);
   const fmtMoney = (v: number) => {
     const abs = Math.abs(v);
-    if (abs >= 1e12) return `$${(abs / 1e12).toFixed(2)}T`;
-    if (abs >= 1e9)  return `$${(abs / 1e9).toFixed(1)}B`;
-    if (abs >= 1e6)  return `$${(abs / 1e6).toFixed(0)}M`;
-    return `$${abs.toLocaleString()}`;
+    if (abs >= 1e12) return `${segSym}${(abs / 1e12).toFixed(2)}T`;
+    if (abs >= 1e9)  return `${segSym}${(abs / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6)  return `${segSym}${(abs / 1e6).toFixed(0)}M`;
+    return `${segSym}${abs.toLocaleString()}`;
   };
   // Truncate long FMP segment names (e.g. "Wearables, Home and Accessories",
   // "Greater China Segment") for the tight 2-col grid on mobile.

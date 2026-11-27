@@ -66,6 +66,16 @@ export function formatKeyboardShortcut(key: string): string {
  * SG tickers end with .SI suffix.
  * All others default to USD ($).
  */
+/** Symbol for an ISO currency code (a statement's reporting currency), else ''. */
+const _CCY_SYMBOL: Record<string, string> = {
+  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: '¥', RMB: '¥', JPY: '¥', EUR: '€', GBP: '£', KRW: '₩', TWD: 'NT$', INR: '₹', AUD: 'A$',
+};
+export function currencyCodeSymbol(code?: string | null): string {
+  if (!code) return '';
+  const c = code.trim().toUpperCase();
+  return _CCY_SYMBOL[c] ?? `${c} `;
+}
+
 export function currencySymbol(ticker: string): string {
   if (!ticker) return '$';
   const upper = ticker.trim().toUpperCase();

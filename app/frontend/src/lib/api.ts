@@ -1355,6 +1355,8 @@ export interface FinancialsItem {
 export interface FinancialsResponse {
   ticker: string;
   period_type: string;
+  /** Reporting currency of the figures (CNY for Tencent, USD for HSBC); absent on older backends. */
+  currency?: string | null;
   items: FinancialsItem[];
 }
 

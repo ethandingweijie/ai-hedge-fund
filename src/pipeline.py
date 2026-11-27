@@ -1268,6 +1268,13 @@ def run_advanced_pipeline(
             try:
                 _st_peer_done = _f_peer_bg.result(timeout=_BG_JOIN_TIMEOUT_S)
                 state["data"]["peer_comparison"] = _st_peer_done["data"].get("peer_comparison", {})
+                # Owner, 2026-11-27: local + global peers from the comps store, after the
+                # valuation has routed its profile (UOB was compared with US banks).
+                try:
+                    from src.agents.analysis.peer_comparison import localize_peer_tables
+                    localize_peer_tables(state["data"])
+                except Exception as _loc_exc:  # noqa: BLE001
+                    print(f"  peer localisation skipped: {_loc_exc}")
             except _BgTimeout:
                 print(f"  [B2] peer comparison still running after "
                       f"{_BG_JOIN_TIMEOUT_S:.0f}s — continuing without it")

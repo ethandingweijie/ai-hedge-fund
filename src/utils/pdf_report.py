@@ -527,14 +527,21 @@ def _peer_comparison_table(
         ("P / E",          "pe_ratio",       lambda v: f"{v:.1f}x"     if v is not None else "—"),
         ("EV / EBITDA",    "ev_ebitda",      lambda v: f"{v:.1f}x"     if v is not None else "—"),
         ("EV / Revenue",   "ev_revenue",     lambda v: f"{v:.1f}x"     if v is not None else "—"),
+        ("P / B",          "pb_ratio",       lambda v: f"{v:.2f}x"     if v is not None else "—"),
         ("FCF Yield",      "fcf_yield",      lambda v: f"{v*100:.1f}%" if v is not None else "—"),
         ("ROIC",           "roic",           lambda v: f"{v*100:.1f}%" if v is not None else "—"),
         ("Rev Growth",     "revenue_growth", lambda v: f"{v*100:.1f}%" if v is not None else "—"),
         ("Gross Margin",   "gross_margin",   lambda v: f"{v*100:.1f}%" if v is not None else "—"),
     ]
 
-    # Order: subject first, then peers sorted alphabetically
-    ordered = [subject] + sorted(t for t in peer_data if t != subject)
+    # Order: subject, then local peers, then global peers (largest first, as built);
+    # a table without groups (US sector list) keeps the alphabetical order.
+    _grouped = any((r or {}).get("group") in ("local", "global") for r in peer_data.values())
+    if _grouped:
+        ordered = [subject] + [t for g in ("local", "global") for t, r in peer_data.items()
+                               if t != subject and (r or {}).get("group") == g]
+    else:
+        ordered = [subject] + sorted(t for t in peer_data if t != subject)
 
     # Column widths — metric label takes 22%, rest split equally among tickers
     n_tickers = len(ordered)
@@ -545,17 +552,25 @@ def _peer_comparison_table(
     hdr = [Paragraph(_wh("Metric"), styles["RptLabel"])]
     for t in ordered:
         row = peer_data.get(t, {})
-        cap = row.get("market_cap")
+        cap = row.get("market_cap_usd")
+        sym = "US$"
+        if cap is None:
+            cap, sym = row.get("market_cap"), _cs()
         cap_s = (
-            f"{_cs()}{cap/1e12:.1f}T" if cap and cap >= 1e12 else
-            f"{_cs()}{cap/1e9:.0f}B"  if cap and cap >= 1e9  else
-            f"{_cs()}{cap/1e6:.0f}M"  if cap and cap >= 1e6  else ""
+            f"{sym}{cap/1e12:.1f}T" if cap and cap >= 1e12 else
+            f"{sym}{cap/1e9:.0f}B"  if cap and cap >= 1e9  else
+            f"{sym}{cap/1e6:.0f}M"  if cap and cap >= 1e6  else ""
         )
         inner = f"{t}" + (f" {cap_s}" if cap_s else "")
+        if _grouped and t != subject:
+            inner += f"<br/>{row.get('market') or ''} · {row.get('group')}"
         hdr.append(Paragraph(_wh(inner), styles["RptLabel"]))
 
     rows: list[list] = [hdr]
     for metric_label, key, fmt in _METRICS:
+        # A row no peer can fill compares nothing (the comps store carries no gross margin).
+        if _grouped and all(peer_data.get(t, {}).get(key) is None for t in ordered if t != subject):
+            continue
         row_cells = [Paragraph(metric_label, styles["RptLabel"])]
         for t in ordered:
             val = peer_data.get(t, {}).get(key)

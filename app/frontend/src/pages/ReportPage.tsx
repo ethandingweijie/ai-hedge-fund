@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { cancelAnalysisRun, getPopularTickers, getRunResult, getStockData, searchCompanies, type CompanySearchResult, type PopularTicker } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
-import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
+import { currencySymbol, extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
@@ -1131,7 +1131,7 @@ export function ReportPage() {
                       >
                         <span className="text-[12px] font-semibold text-foreground tabular-nums tracking-tight">{t.ticker}</span>
                         {t.price != null && (
-                          <span className="text-xs text-muted-foreground tabular-nums">${t.price.toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground tabular-nums">{currencySymbol(t.ticker)}{t.price.toFixed(2)}</span>
                         )}
                         <span className={`text-xs font-medium tabular-nums ${delta >= 0 ? 'text-gain' : 'text-loss'}`}>
                           {delta >= 0 ? '^' : 'v'} {Math.abs(delta).toFixed(2)}%

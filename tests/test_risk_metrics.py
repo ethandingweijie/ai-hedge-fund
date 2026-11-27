@@ -241,3 +241,15 @@ def test_pdf_block_renders():
     flow = _balance_sheet_risk_block(blk, _build_styles(), 400.0)
     assert len(flow) >= 3
     assert _balance_sheet_risk_block({}, _build_styles(), 400.0) == []
+
+
+def test_default_aaa_is_not_labelled_implied_by_interest_cover():
+    """2026-11-27: no interest expense -> synthetic_rating(None) prices AAA; the card said
+    "implied by interest cover" beside an n/a cover."""
+    rows = [_row("2025-12-31", -1e9, 1e9)]
+    stored = _data(rows, wacc_build={"rating": "AAA", "rating_source": "implied by interest cover", "interest_coverage": None})
+    cr = _by(rm.assemble_risk_metrics(stored, "XYZ", as_of="2026-03-01"))["credit_rating"]
+    assert "implied by interest cover" not in cr["display"]
+    assert cr["display"] == "AAA (assumed: no interest expense in the valuation inputs)"
+    covered = _data(rows, wacc_build={"rating": "A", "interest_coverage": 7.0})
+    assert _by(rm.assemble_risk_metrics(covered, "XYZ", as_of="2026-03-01"))["credit_rating"]["display"] == "A (implied by interest cover)"

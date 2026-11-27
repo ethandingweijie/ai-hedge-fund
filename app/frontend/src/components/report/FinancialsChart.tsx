@@ -24,7 +24,7 @@ import {
 } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { getFinancials, type FinancialsItem } from '@/lib/api';
-import { currencySymbol } from '@/lib/utils';
+import { currencyCodeSymbol, currencySymbol } from '@/lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,8 +68,6 @@ function makeFmtAxis(sym: string) {
   };
 }
 
-// Module-level default (used by the tooltip formatter outside component scope)
-function fmtFull(v: number | null | undefined): string { return makeFmtFull('$')(v); }
 
 // ── Change calculation ────────────────────────────────────────────────────────
 
@@ -107,9 +105,11 @@ interface CustomTooltipProps {
   payload?: { value: number; payload: { periodLabel: string; rawValue: number | null } }[];
   label?:   string;
   metricLabel: string;
+  sym: string;
 }
 
-function CustomTooltip({ active, payload, metricLabel }: CustomTooltipProps) {
+function CustomTooltip({ active, payload, metricLabel, sym }: CustomTooltipProps) {
+  const fmtFull = makeFmtFull(sym);
   if (!active || !payload?.length) return null;
   const entry = payload[0];
   return (
@@ -130,12 +130,15 @@ interface FinancialsChartProps {
 }
 
 export function FinancialsChart({ ticker }: FinancialsChartProps) {
-  const sym = currencySymbol(ticker);
-  const fmtFull = makeFmtFull(sym);
-  const fmtAxis = makeFmtAxis(sym);
   const [metricIdx, setMetricIdx] = useState<number>(0);
   const [periodType, setPeriodType] = useState<PeriodType>('annual');
   const [items, setItems] = useState<FinancialsItem[]>([]);
+  // 2026-11-27: the figures are in the REPORTING currency (Tencent CNY, HSBC USD), not the
+  // listing's; the tooltip printed a bare "$" for every name.
+  const [reportCcy, setReportCcy] = useState<string | null>(null);
+  const sym = currencyCodeSymbol(reportCcy) || currencySymbol(ticker);
+  const fmtFull = makeFmtFull(sym);
+  const fmtAxis = makeFmtAxis(sym);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,7 +148,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
     setLoading(true);
     setError(null);
     getFinancials(ticker, pt)
-      .then(d => setItems(d.items))
+      .then(d => { setItems(d.items); setReportCcy(d.currency ?? null); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [ticker]);
@@ -282,7 +285,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
                         width={68}
                       />
                       <Tooltip
-                        content={<CustomTooltip metricLabel={metric.label} />}
+                        content={<CustomTooltip metricLabel={metric.label} sym={sym} />}
                         cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
                       />
                       {hasNegative && (
