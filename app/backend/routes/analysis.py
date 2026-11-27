@@ -2758,8 +2758,16 @@ def _sg_financial_items(rows: list, period: str, industry: Optional[str] = None)
     recs.sort(key=lambda x: x["_date"])
     is_bank = "bank" in str(industry or "").lower()
     flags = [None] * len(recs) if (is_bank or period == "quarter") else noncomparable_flags(recs)
+    bank_ti = None
+    if is_bank:
+        # One derivation across the series (financial_statements.bank_total_income_series): a year that
+        # cannot be put on NII + non-interest income is not comparable, never FMP's revenue.
+        from src.tools.financial_statements import bank_total_income_series
+        bank_ti = bank_total_income_series(recs) if period != "quarter" else None
+        if bank_ti:
+            flags = [w for _v, w in bank_ti]
     items = []
-    for rec, why in zip(recs, flags):
+    for idx, (rec, why) in enumerate(zip(recs, flags)):
         rp = rec["_date"]
         if period == "quarter":
             try:
@@ -2772,7 +2780,7 @@ def _sg_financial_items(rows: list, period: str, industry: Optional[str] = None)
         revenue = rec.get("revenue")
         if is_bank:
             from src.agents.analysis.dcf_agent import _bank_total_income
-            revenue = _bank_total_income(rec)
+            revenue = bank_ti[idx][0] if bank_ti else _bank_total_income(rec)
         item = {"date": rp, "period_label": label, "revenue": revenue,
                 "net_income": rec.get("net_income"), "operating_income": rec.get("operating_income")}
         if why:

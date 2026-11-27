@@ -206,16 +206,22 @@ def family_rows(raw_financials: Optional[dict], family: str, years: int = 3,
     if not fy_keys:
         return [], []
 
+    _bank_ti: dict = {}
+    if any(src == "_bank_total_income" for _l, _k, src in family_row_specs(family)):
+        # One derivation across the whole series, the web statements' (a withheld year prints n/a).
+        try:
+            from src.tools.financial_statements import bank_total_income_by_year
+            _bank_ti = bank_total_income_by_year(
+                {k: v for k, v in raw_financials.items() if isinstance(v, dict)})[0]
+        except Exception:                                  # noqa: BLE001
+            _bank_ti = {}
+
     def get(fy, field):
         if not field:
             return None
         row = raw_financials.get(fy) or {}
         if field == "_bank_total_income":
-            try:
-                from src.agents.analysis.dcf_agent import _bank_total_income
-                return _num(_bank_total_income(row))
-            except Exception:                              # noqa: BLE001
-                return None
+            return _num(_bank_ti.get(fy))
         v = _num(row.get(field))
         # The raw records carry FMP's `shareholders_equity`; `total_equity` exists only where an
         # overlay wrote it, so a bank with S$48.5bn of equity read "n/a" for equity and ROE.

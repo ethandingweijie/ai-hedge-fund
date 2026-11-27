@@ -322,7 +322,10 @@ def run_data_router(state: AgentState) -> AgentState:
             state["data"]["financial_statements"] = build_financial_statements(
                 _stmt_rows,
                 sector=state["data"].get("sector", ""),
-                profile=state["data"].get("wacc_profile", "") or "",
+                # The resolved valuation profile (the router's), the key report_families routes on --
+                # `wacc_profile` is never set, so every "Financials" name fell to the sector test.
+                profile=(((state["data"].get("profile_names") or {}).get(ticker))
+                         or state["data"].get("profile_name") or state["data"].get("wacc_profile") or ""),
                 currency=state["data"].get("reported_currency", "") or "",
             )
     except Exception as _e:  # never let a display view break the pipeline

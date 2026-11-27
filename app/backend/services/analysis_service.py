@@ -1074,7 +1074,15 @@ def _attach_statement_forecast(payload: dict) -> None:
         if entry is None:
             real = [v for k, v in dr.items() if isinstance(v, dict) and (v.get("base") or v.get("three_statements"))]
             entry = real[0] if len(real) == 1 else {}
-        from src.tools.financial_statements import attach_forecast, repair_statements
+        from src.tools.financial_statements import attach_forecast, relayout_statements, repair_statements
+        # The layout follows the valuation's final profile through report_families, the PDF's routing
+        # (2026-11-27: Visa and SGX were stored on the bank layout); bank total income on one derivation.
+        tk = next((t for t in cand if isinstance(dr.get(t), dict)), cand[0] if cand else None)
+        profile = ((entry or {}).get("profile")
+                   or ((data.get("profile_names") or {}).get(tk) if tk else None)
+                   or data.get("profile_name") or "")
+        sector = ((data.get("sectors") or {}).get(tk) if tk else None) or data.get("sector") or ""
+        fs = relayout_statements(fs, data.get("raw_financials"), sector=sector, profile=profile)
         # Archived runs predate the period-key and comparability fixes (2026-11-27) and replay as stored.
         fs = repair_statements(fs)
         data["financial_statements"] = attach_forecast(

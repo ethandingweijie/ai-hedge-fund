@@ -1986,3 +1986,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-27 (D1): the 12-month target carries the full price path, target = [spot + capture x (IV - spot)] x (1 + Ke - dividend yield) per scenario (Ke = firm CAPM cost of equity; banks the GGM CoE; else the market cost of equity), recorded in pt_bridge.carry with each scenario's target_before_carry. Every fixture's 12m targets move by its carry and no IV moves: 02888_HK x1.0908 (GGM CoE 10.5%), 09988_HK x1.0799, AAPL x1.0986, BABA x1.0794, BN4_SI x1.0364 (market Ke 6.70%), C38U_SI x1.0082, COST x1.0805, D05_SI x1.0480 (GGM CoE 8.6%), FCX x1.0922, MELI x1.1132, MU x1.1221, SCHW x1.0813 (market Ke 9.35%), U96_SI x1.0560, V x1.0785. The rating hurdle (portfolio manager, not in this snapshot) moves to the market cost of equity on the same CAPM inputs.
 
+## 2026-11-27T05:47:07+00:00
+
+- regenerated at HEAD: `0a877d39`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-27: the BVPS x shares input check compares the statement BVPS with its own period share count (basic, then diluted), not the current valuation count; BABA's spurious 'Input check failed -- book value per share' forward flag (7.0% apart on the current count) is gone. Flags only; no value moves
+

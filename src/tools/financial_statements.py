@@ -200,26 +200,38 @@ _NO_GROWTH = {"book_value_per_share", "gross_margin"}
 def resolve_layout(sector: str = "", profile: str = "") -> str:
     """Pick the statement layout family for a sector / valuation profile.
 
-    Reuses the same loose-matching helpers that route the KPI framework, so
-    a sector stored as "Banking" or "Financials" lands identically.
+    One source of truth with the PDF and the workbook (owner request 2026-11-27): a known valuation profile
+    routes through src/data/report_families.report_family_for, so only the Banks family's profiles get the
+    bank layout. The sector test this replaced matched "Financial" as a bank, and Visa ("Payment Networks")
+    and SGX ("Market Infrastructure (SG)") rendered net interest income of -US$0.54bn on the web while their
+    PDF used the Fee financials family. A Property-family profile keeps the REIT layout only where the
+    sector or profile names a REIT. With no known profile the sector decides, and only a bank sector
+    ("Banking", "Banks"), never the broad "Financials", is a bank.
     """
-    blob = f"{sector} {profile}".strip()
+    profile = (profile or "").strip()
+    try:
+        from src.agents.industry.sector_prompts import is_reit_sector
+    except Exception:                                      # noqa: BLE001
+        def is_reit_sector(s: str) -> bool:                # type: ignore[misc]
+            return "reit" in (s or "").lower()
+    try:
+        from src.data.report_families import report_family_for, REPORT_FAMILIES
+        known = any(profile in spec["profiles"] for spec in REPORT_FAMILIES.values())
+        family = report_family_for(profile) if known else None
+    except Exception:                                      # noqa: BLE001
+        family = None
+    if family == "Banks":
+        return "bank"
+    if family is not None:
+        if family == "Property, REITs and holdcos" and (is_reit_sector(profile) or is_reit_sector(sector or "")):
+            return "reit"
+        return "standard"
+    blob = f"{sector or ''} {profile}".strip().lower()
     if not blob:
         return "standard"
-    try:
-        from src.agents.industry.sector_prompts import (
-            is_bank_sector, is_reit_sector,
-        )
-        if is_bank_sector(blob):
-            return "bank"
-        if is_reit_sector(blob):
-            return "reit"
-    except Exception:
-        pass
-    low = blob.lower()
-    if "bank" in low:
+    if "bank" in blob:
         return "bank"
-    if "reit" in low:
+    if is_reit_sector(blob):
         return "reit"
     return "standard"
 
@@ -227,6 +239,10 @@ def resolve_layout(sector: str = "", profile: str = "") -> str:
 def _derive(key: str, row: dict) -> Optional[float]:
     """Resolve a derived pseudo-key (leading underscore) from a flat row."""
     if key == "_total_income":
+        # The series-level derivation (bank_total_income_by_year) when the builder ran it: one basis for every
+        # year, a withheld year stays None rather than falling back to the single-row reading.
+        if "_bank_total_income" in row:
+            return row["_bank_total_income"]
         try:
             from src.agents.analysis.dcf_agent import _bank_total_income
             return _bank_total_income(row)
@@ -407,6 +423,86 @@ def noncomparable_years(rows_by_fy: dict[str, dict]) -> dict[str, str]:
     return {k: why for k, why in zip(periods, flags) if why}
 
 
+# -- Bank total income, one derivation for every year (owner request 2026-11-27, HSBC) ---------------------
+# HSBC's web total income read 64.25 / 46.36 / 56.35 / 61.25 / 86.32bn against a reported ~50.0 / 66.1 / 65.9bn:
+# FMP's `revenue` reads as gross interest income plus non-interest income in FY2021 and FY2025 (netted to
+# total income) but sits BELOW interest income in FY2022-24 (passed through as if already net). Two bases in one
+# series. Total income is NII + non-interest income on every surface; non-interest income exists only where the
+# provider's revenue holds gross interest income (revenue - interest income), and a year that cannot be put on
+# that basis, or breaks from the others, is not comparable: withheld, never filled from a different basis.
+
+#: A derivable year's non-interest share of total income may move this much (relative) from the median of the
+#: other years before the year is withheld (UOB FY2021: 13% against ~31%, revenue S$9.1bn read as net).
+BANK_NONII_SHARE_BREAK = 0.5
+
+
+def bank_total_income_series(rows: list[dict]) -> list[tuple[Optional[float], Optional[str]]]:
+    """Per row (oldest first): (total income, reason it is withheld), on one derivation for the whole series.
+
+    * a year is derivable when dcf_agent._bank_total_income can put it on NII + (revenue - interest income);
+    * when the provider's revenue is on that gross basis in fewer than half of the years that carry it, its
+      definition is not stable across the series and no year is trusted (HSBC: 2 of 5);
+    * with three or more derivable years, one whose non-interest share of total income breaks from the median of
+      the others by more than BANK_NONII_SHARE_BREAK is withheld (UOB FY2021).
+    """
+    from src.agents.analysis.dcf_agent import _bank_total_income
+
+    n = len(rows)
+    if not any((_f((r or {}).get("interest_income")) or 0.0) > 0 for r in rows):
+        return [(None, None)] * n          # no interest lines at all: nothing to derive, nothing mixed
+    vals: list[Optional[float]] = []
+    why: list[Optional[str]] = [None] * n
+    carried = 0
+    for i, r in enumerate(rows):
+        r = r or {}
+        rev, ii = _f(r.get("revenue")), _f(r.get("interest_income"))
+        v = _bank_total_income(r)
+        vals.append(v)
+        if rev and rev > 0:
+            carried += 1
+        if v is None and rev and rev > 0:
+            if ii is None or ii <= 0:
+                why[i] = "no interest income line: NII and non-interest income cannot be separated (provider data)"
+            elif rev <= ii:
+                why[i] = (f"provider revenue {rev / 1e9:,.2f}bn is below interest income {ii / 1e9:,.2f}bn, so it is not "
+                          f"gross interest plus non-interest income: non-interest income is not separable (provider data)")
+            else:
+                why[i] = "interest lines do not reconcile with revenue: total income withheld (provider data)"
+    good = [i for i, v in enumerate(vals) if v is not None]
+    if good and len(good) * 2 < carried:
+        for i in good:
+            why[i] = (f"provider revenue reads as gross interest plus non-interest income in only {len(good)} of "
+                      f"{carried} years: its definition is not stable, so total income is withheld (provider data)")
+            vals[i] = None
+        good = []
+    if len(good) >= 3:
+        share = {}
+        for i in good:
+            r = rows[i] or {}
+            nonii = _f(r.get("revenue")) - _f(r.get("interest_income"))
+            share[i] = nonii / vals[i]
+        breaks = []
+        for i in good:
+            others = sorted(share[j] for j in good if j != i)
+            mid = len(others) // 2
+            base = others[mid] if len(others) % 2 else (others[mid - 1] + others[mid]) / 2.0
+            if base > 0 and abs(share[i] / base - 1.0) > BANK_NONII_SHARE_BREAK:
+                breaks.append((i, base))
+        for i, base in breaks:
+            why[i] = (f"non-interest income {share[i]:.0%} of total income against a {base:.0%} median in the other "
+                      f"years: the provider's revenue is not on the same basis this year (provider data)")
+            vals[i] = None
+    return list(zip(vals, why))
+
+
+def bank_total_income_by_year(rows_by_fy: dict[str, dict]) -> tuple[dict[str, Optional[float]], dict[str, str]]:
+    """({FY: total income or None}, {FY: reason}) for per-fiscal-year rows; see bank_total_income_series."""
+    periods = sorted(k for k, v in (rows_by_fy or {}).items() if isinstance(v, dict))
+    out = bank_total_income_series([rows_by_fy[k] for k in periods])
+    return ({k: v for k, (v, _w) in zip(periods, out)},
+            {k: w for k, (_v, w) in zip(periods, out) if w})
+
+
 def derive_per_share(key: str, row: dict) -> Optional[float]:
     """EPS / BVPS from the row's own totals, for a per-share line that is missing or a hard zero.
 
@@ -468,6 +564,13 @@ def build_financial_statements(
     for fy in not_comparable:
         for k in CLASSIFICATION_ROWS:
             merged[fy][k] = None
+    if layout_name == "bank":
+        # Total income on one derivation for every year; a year that cannot be put on it is not comparable
+        # (its total income, non-interest income and pre-provision profit are withheld; reported lines stay).
+        _ti, _ti_why = bank_total_income_by_year(merged)
+        for fy in periods:
+            merged[fy]["_bank_total_income"] = _ti.get(fy)
+        not_comparable = {fy: f"total income: {w}" for fy, w in _ti_why.items()}
 
     statements: dict[str, Any] = {}
     for stmt, rows in layout.items():
@@ -484,7 +587,7 @@ def build_financial_statements(
                 continue  # never render a row the data cannot fill
             growth: dict[str, Optional[float]] = {}
             if key not in _NO_GROWTH:
-                _across = key.lstrip("_") in _CLASSIFICATION_GROWTH
+                _across = layout_name == "standard" and key.lstrip("_") in _CLASSIFICATION_GROWTH
                 for i, fy in enumerate(periods):
                     growth[fy] = (
                         None if i == 0
@@ -511,6 +614,55 @@ def build_financial_statements(
         # cost-line growth is computed. Operating income stays the reported line.
         "not_comparable": not_comparable,
     }
+
+
+#: Statement keys computed from other lines (never carried over when a stored payload is rebuilt).
+_DERIVED_KEYS = {k.lstrip("_") for lay in _LAYOUTS.values() for rows in lay.values() for k, *_ in rows if k.startswith("_")}
+
+
+def relayout_statements(fs: Optional[dict], raw_financials: Optional[dict], sector: str = "",
+                        profile: str = "") -> Optional[dict]:
+    """The statements payload on the layout the run's FINAL valuation profile routes to (resolve_layout).
+
+    The statements are built in the data router, before the valuation settles the profile, and runs stored
+    before 2026-11-27 routed every "Financials" name to the bank layout (Visa, SGX). When the stored layout
+    differs from the routed one -- or the layout is the bank's, whose total income is now derived across the
+    whole series -- the view is rebuilt by build_financial_statements from the stored lines, with the run's
+    own per-year `raw_financials` filling lines the stored layout did not carry (an industrial's revenue and
+    cost lines). Nothing is invented; with no raw rows the payload is returned as stored. Idempotent."""
+    if not isinstance(fs, dict) or not fs.get("statements"):
+        return fs
+    target = resolve_layout(sector, profile)
+    layout = fs.get("layout") or "standard"
+    if target == layout and target != "bank":
+        return fs
+    raw = normalise_period_keys({k: v for k, v in (raw_financials or {}).items() if isinstance(v, dict)})
+    if target != layout and not raw:
+        return fs
+    periods = {str(p) for p in (fs.get("periods") or [])}
+    rows_by_fy: dict[str, dict] = {}
+    for st in (fs.get("statements") or {}).values():
+        for r in (st or {}).get("rows") or []:
+            key = r.get("key")
+            if not key or key in _DERIVED_KEYS:
+                continue
+            for p, v in (r.get("values") or {}).items():
+                fy = _fy_key(p)
+                if fy and (str(p) in periods or re.fullmatch(r"FY\d{4}", str(p))) and isinstance(v, (int, float)):
+                    rows_by_fy.setdefault(fy, {}).setdefault(key, v)
+    for fy, row in raw.items():
+        if periods and fy not in {(_fy_key(p) or p) for p in periods}:
+            continue
+        dst = rows_by_fy.setdefault(fy, {})
+        for k, v in row.items():
+            if dst.get(k) is None and v is not None:
+                dst[k] = v
+    if not rows_by_fy:
+        return fs
+    out = build_financial_statements(rows_by_fy, sector=sector, profile=profile, currency=fs.get("currency") or "")
+    if not out.get("statements"):
+        return fs
+    return out
 
 
 def repair_statements(fs: Optional[dict]) -> Optional[dict]:
@@ -558,7 +710,7 @@ def repair_statements(fs: Optional[dict]) -> Optional[dict]:
         key = r.get("key")
         if key in _NO_GROWTH:
             continue
-        across = key in _CLASSIFICATION_GROWTH
+        across = out.get("layout", "standard") == "standard" and key in _CLASSIFICATION_GROWTH
         cols = periods + [lab for lab in forecast if lab in r["values"]]
         g = {}
         for i, p in enumerate(cols):

@@ -1717,6 +1717,23 @@ def run_advanced_pipeline(
         # entries produced by this engine from stale ones. Empty {} placeholders
         # stay empty — the _all_cached truthy guard relies on them remaining
         # falsy so a crashed engine never masquerades as a valid cache hit.
+        # The statements were built in the data router, before the valuation settled the profile: put them on
+        # the layout the FINAL profile routes to (report_families, the PDF's routing). 2026-11-27: Visa and SGX
+        # rendered the bank layout with net interest income of -US$0.54bn.
+        try:
+            from src.tools.financial_statements import relayout_statements as _relayout
+            _fs_now = state["data"].get("financial_statements")
+            _pt = (tickers or [None])[0]
+            _dr_pt = ((state["data"].get("dcf_range") or {}).get(_pt) or {}) if _pt else {}
+            if isinstance(_fs_now, dict) and _fs_now.get("statements") and _pt:
+                state["data"]["financial_statements"] = _relayout(
+                    _fs_now, state["data"].get("raw_financials"),
+                    sector=((state["data"].get("sectors") or {}).get(_pt) or state["data"].get("sector") or ""),
+                    profile=(_dr_pt.get("profile") or (state["data"].get("profile_names") or {}).get(_pt)
+                             or state["data"].get("profile_name") or ""))
+        except Exception as _rl_exc:                       # noqa: BLE001 -- a display view never fails a run
+            print(f"  [statements] relayout skipped: {type(_rl_exc).__name__}")
+
         _dcf_range_out = {
             _t: ({**_v, "_engine_cache_version": _DCF_CACHE_VERSION}
                  if isinstance(_v, dict) and _v else _v)

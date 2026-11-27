@@ -7536,28 +7536,34 @@ def _bank_total_income(row: dict) -> Optional[float]:
         FY2023  derived 20,134  vs reported 20,180  (-0.2%)
         FY2024  derived 22,217  vs reported 22,297  (-0.4%)
 
-    Returns None when the row can't support the derivation, and returns
-    `revenue` unchanged when revenue is already a net figure (i.e. it does
-    not exceed interest income), so US filers that already report net
-    revenue are passed through untouched.
+    One derivation, every year (owner request 2026-11-27, HSBC): total income
+    = NII + non-interest income, where NII = interest income - interest
+    expense and non-interest income = revenue - interest income (the
+    provider's revenue holding gross interest income plus everything else).
+    Returns None -- never the provider's `revenue` -- when the row cannot be
+    put on that basis: no interest lines, revenue at or below interest income
+    (HSBC FY2022-24: then revenue is not gross interest plus fees and was
+    passed through as if it were total income, beside netted years), or a
+    total below 25% of revenue (a mis-scaled interest line). Callers that need
+    a series use financial_statements.bank_total_income_series, which also
+    withholds years that break from the others.
     """
-    revenue = row.get("revenue")
-    if revenue is None or revenue <= 0:
+    def _num(x):
+        return float(x) if isinstance(x, (int, float)) and not isinstance(x, bool) else None
+
+    revenue = _num(row.get("revenue"))
+    int_inc = _num(row.get("interest_income"))
+    int_exp = _num(row.get("interest_expense"))
+    if revenue is None or revenue <= 0 or int_exp is None or int_inc is None or int_inc <= 0:
         return None
-    int_inc = row.get("interest_income")
-    int_exp = row.get("interest_expense")
-    if int_exp is None:
-        return revenue
-    # Gross-revenue convention detected only when revenue exceeds interest
-    # income — otherwise `revenue` is already net and subtracting interest
-    # expense a second time would double-count it.
-    if int_inc is not None and revenue <= int_inc:
-        return revenue
-    total_income = revenue - abs(int_exp)
+    non_interest_income = revenue - int_inc
+    if non_interest_income <= 0:
+        return None
+    total_income = (int_inc - abs(int_exp)) + non_interest_income
     # Sanity: total income must stay a plausible share of gross revenue.
-    # Below 25% means the interest-expense line is mis-scaled; fall back.
+    # Below 25% means the interest-expense line is mis-scaled.
     if total_income <= 0 or total_income < revenue * 0.25:
-        return revenue
+        return None
     return total_income
 
 

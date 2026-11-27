@@ -57,14 +57,46 @@ def _parse_date(s: Any) -> Optional[date]:
 
 
 def check_bvps(row: dict, shares: Optional[float]) -> dict:
-    bv, eq, sh = _f(row.get("book_value_per_share")), _f(row.get("total_equity")), _f(shares)
+    """Book value per share against the equity it claims to divide, on ONE date and ONE share basis.
+
+    The statement's BVPS is shareholders' equity at the period end over that period's share count (FMP: equity
+    over `weightedAverageShsOut`, restated on the parent's equity in tools/api.py). The check multiplied it by the
+    engine's CURRENT valuation count instead -- V's as-converted 1,880m against the 1,689m Class A count the BVPS
+    divides (11.3%), HSBC's count a year of buybacks later (5.7%), Alibaba's current diluted quote count (7.9%) --
+    so it failed on every run and caught nothing. Compared here: BVPS x the statement's own count (basic, then
+    diluted; the valuation count only when the statement has none) against shareholders' equity attributable to
+    the parent (minorities excluded) for the same period. What it still catches: book on total equity (the Ping An
+    minorities case), a BVPS in another currency or unit, or from another period. The valuation count's gap is
+    reported in the detail, not failed: a buyback or a share class is not a data error."""
+    name = "book value per share x shares = shareholders' equity"
+    bv = _f(row.get("book_value_per_share"))
+    # The engine's `total_equity` IS FMP's totalStockholdersEquity (tools/api.py), the parent's equity.
+    eq = _f(row.get("shareholders_equity"))
+    if eq is None:
+        eq = _f(row.get("total_equity"))
+    basis = None
+    for key, label in (("shares_outstanding_basic", "period basic shares"),
+                       ("shares_outstanding", "period diluted shares")):
+        sh = _f(row.get(key))
+        if sh and sh > 0:
+            basis = label
+            break
+    if basis is None:
+        sh, basis = _f(shares), "valuation share count"
     if not (bv and eq and sh and bv > 0 and eq > 0 and sh > 0):
-        return _check("book value per share x shares = shareholders' equity", "not_run", "inputs missing")
+        return _check(name, "not_run", "inputs missing")
     implied = bv * sh
     r = _rel(implied, eq)
-    return _check("book value per share x shares = shareholders' equity", "pass" if r <= BVPS_TOL else "fail",
-                  f"{bv:,.4f} x {sh / 1e6:,.1f}m = {implied / 1e9:,.2f}bn vs equity {eq / 1e9:,.2f}bn ({r:.1%} apart)",
-                  gap=r)
+    detail = (f"{bv:,.4f} x {sh / 1e6:,.1f}m ({basis}) = {implied / 1e9:,.2f}bn vs shareholders' equity "
+              f"{eq / 1e9:,.2f}bn ({r:.1%} apart)")
+    cur = _f(shares)
+    if cur and cur > 0 and basis != "valuation share count" and abs(cur / sh - 1.0) > 0.005:
+        detail += f"; the valuation counts {cur / 1e6:,.1f}m shares ({cur / sh - 1.0:+.1%} on the period count)"
+    if r > BVPS_TOL:
+        mi = _f(row.get("minority_interest"))
+        if mi and mi > 0 and _rel(implied, eq + mi) <= BVPS_TOL:
+            detail += ": the per-share figure is TOTAL equity including minority interests"
+    return _check(name, "pass" if r <= BVPS_TOL else "fail", detail, gap=r, share_basis=basis)
 
 
 def check_eps(row: dict, shares: Optional[float]) -> dict:

@@ -107,13 +107,13 @@ def test_layout_resolution(sector, profile, expected):
 def test_bank_income_has_no_gross_profit_row():
     """A bank has no cost of revenue. Rendering one is the same category
     error as pricing an S-REIT on P/FFO."""
-    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials"), "income")
+    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)"), "income")
     assert "gross_profit" not in rows
     assert "cost_of_revenue" not in rows
 
 
 def test_bank_income_leads_with_total_income():
-    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials"), "income")
+    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)"), "income")
     assert "net_interest_income" in rows
     assert "total_income" in rows
     # NII + non-II must reconcile to total income
@@ -126,13 +126,13 @@ def test_bank_income_leads_with_total_income():
 def test_bank_total_income_is_net_not_gross():
     """DBS FY2025: total income S$24,124mn against gross revenue
     S$37,892mn — the 1.57x gap _bank_total_income exists to unwind."""
-    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials"), "income")
+    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)"), "income")
     assert rows["total_income"]["values"]["FY2025"] == pytest.approx(24_124e6)
     assert "revenue" not in rows
 
 
 def test_bank_balance_sheet_is_a_loan_book():
-    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials"), "balance")
+    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)"), "balance")
     assert {"loans_receivable", "total_deposits"} <= set(rows)
     assert "inventory" not in rows
 
@@ -164,7 +164,7 @@ def test_growth_is_none_on_a_zero_base():
 
 
 def test_per_share_rows_carry_no_growth():
-    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials"), "balance")
+    rows = _rows(build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)"), "balance")
     assert rows["book_value_per_share"]["growth"] == {}
 
 
@@ -186,7 +186,7 @@ def test_input_is_not_mutated():
 
 
 def test_three_statements_are_present():
-    payload = build_financial_statements(BANK_ROWS, sector="Financials")
+    payload = build_financial_statements(BANK_ROWS, sector="Financials", profile="Money Center Bank (SG)")
     assert set(payload["statements"]) == {"income", "balance", "cashflow"}
     assert payload["periods"] == ["FY2024", "FY2025"]
 
@@ -208,7 +208,7 @@ def test_isolated_zero_on_a_balance_line_is_blanked():
         "FY2024": {"retained_earnings": 53_163e6, "shareholders_equity": 68_786e6},
         "FY2025": {"retained_earnings": 0.0,      "shareholders_equity": 68_867e6},
     }
-    out = _rows(build_financial_statements(rows, sector="Financials"), "balance")
+    out = _rows(build_financial_statements(rows, sector="Financials", profile="Money Center Bank (SG)"), "balance")
     assert out["retained_earnings"]["values"]["FY2025"] is None
     assert out["retained_earnings"]["growth"]["FY2025"] is None
 
@@ -220,7 +220,7 @@ def test_a_genuinely_small_balance_is_not_blanked():
         "FY2024": {"minority_interest": 47e6, "total_assets": 827_219e6},
         "FY2025": {"minority_interest": 49e6, "total_assets": 897_488e6},
     }
-    out = _rows(build_financial_statements(rows, sector="Financials"), "balance")
+    out = _rows(build_financial_statements(rows, sector="Financials", profile="Money Center Bank (SG)"), "balance")
     assert out["minority_interest"]["values"]["FY2025"] == pytest.approx(49e6)
 
 

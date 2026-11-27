@@ -1576,8 +1576,9 @@ class _Book:
         except Exception:                                  # noqa: BLE001
             _bank_is = self.model_kind == "bank"
         if _bank_is:
-            from src.agents.analysis.dcf_agent import _bank_total_income
-            rows = [dict(x, _bank_total_income=_bank_total_income(x)) for x in rows]
+            # One derivation across the series, the web statements' (a withheld year stays blank).
+            from src.tools.financial_statements import bank_total_income_series
+            rows = [dict(x, _bank_total_income=ti) for x, (ti, _why) in zip(rows, bank_total_income_series(rows))]
             _is_map = {**{k: v for k, v in _is_map.items() if k != "revenue"}, "_bank_total_income": "total_income"}
 
         def _link(rr: int, key: str) -> None:

@@ -109,16 +109,25 @@ def test_bank_total_income_matches_reported(
     assert derived == pytest.approx(reported_total_income, rel=0.02)
 
 
-def test_bank_total_income_passes_through_net_revenue():
-    """A filer already reporting net revenue must not be netted twice."""
+def test_bank_total_income_never_passes_provider_revenue_through():
+    """Revenue below interest income is not gross interest plus fees, so non-interest income cannot be
+    separated: the year has no total income rather than the provider's revenue on another basis (owner
+    request 2026-11-27: HSBC FY2022-24 printed FMP revenue beside netted FY2021/FY2025)."""
     row = {"revenue": 100.0, "interest_income": 120.0, "interest_expense": 30.0}
-    assert _bank_total_income(row) == 100.0
+    assert _bank_total_income(row) is None
 
 
 def test_bank_total_income_rejects_implausible_netting():
-    """An interest-expense line larger than 75% of revenue is mis-scaled."""
+    """An interest-expense line larger than 75% of revenue is mis-scaled: withheld, not gross revenue."""
     row = {"revenue": 100.0, "interest_income": 90.0, "interest_expense": 95.0}
-    assert _bank_total_income(row) == 100.0
+    assert _bank_total_income(row) is None
+
+
+def test_bank_total_income_needs_both_interest_lines():
+    assert _bank_total_income({"revenue": 100.0, "interest_expense": 30.0}) is None
+    assert _bank_total_income({"revenue": 100.0, "interest_income": 60.0}) is None
+    # NII + non-interest income = (60 - 30) + (100 - 60)
+    assert _bank_total_income({"revenue": 100.0, "interest_income": 60.0, "interest_expense": 30.0}) == 70.0
 
 
 # ── Analyst growth bands ─────────────────────────────────────────────────

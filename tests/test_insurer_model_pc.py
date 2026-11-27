@@ -68,7 +68,10 @@ def test_the_page_prints_the_insurer_model_on_the_rows_it_shares():
     assert "insurer earnings-and-capital model" in out["forecast"]["source"]
     row = lambda st, k: next(r for r in out["statements"][st]["rows"] if r["key"] == k)       # noqa: E731
     r = m["rows"]
-    assert row("income", "total_income")["values"][labels[0]] == pytest.approx(r["net_earned_premiums"][0] + r["investment_income"][0])
+    # An insurer renders the standard layout since 2026-11-27 (only the Banks family gets the bank one): the
+    # model's premiums + investment income print on the revenue line.
+    assert out["layout"] == "standard"
+    assert row("income", "revenue")["values"][labels[0]] == pytest.approx(r["net_earned_premiums"][0] + r["investment_income"][0])
     assert row("income", "net_income")["values"][labels[0]] == pytest.approx(r["net_income"][0])
     assert row("income", "earnings_per_share")["values"][labels[-1]] == pytest.approx(r["eps"][-1])
     assert row("balance", "shareholders_equity")["values"][labels[0]] == pytest.approx(r["equity"][0])
@@ -83,7 +86,11 @@ def test_a_bank_model_prints_too_and_an_empty_or_withheld_one_does_not():
                                        "income_tax_expense": 1.6e9, "report_period": "2025-12-31"}, 2.85e9, 22.3e9, "FY2025")
     m = bmod.build_bank(op, bmod.bank_assumptions(op, {}, {}, coe=0.09, target_roe=0.15, cet1_target=0.13), scenario="base")
     assert forecast_labels(m) == m["fy_labels"]
-    out = attach_forecast(_fs(), m)
+    bank_fs = build_financial_statements(
+        {"FY2025": {"revenue": 50.0e9, "interest_income": 40e9, "interest_expense": 25e9, "operating_expense": 10.0e9,
+                    "net_income": 11.0e9, "total_assets": 897.5e9, "shareholders_equity": 68.9e9}},
+        sector="Financials", profile="Money Center Bank (SG)", currency="SGD")
+    out = attach_forecast(bank_fs, m)
     pre = next(r for r in out["statements"]["income"]["rows"] if r["key"] == "pre_provision_profit")
     assert pre["values"][m["fy_labels"][0]] == pytest.approx(m["rows"]["pre_provision_profit"][0])
     assert forecast_labels({"kind": "bank", "fy_labels": m["fy_labels"], "rows": {}}) == []
