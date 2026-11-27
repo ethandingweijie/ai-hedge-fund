@@ -46,6 +46,7 @@ def test_worker_settings_shape():
         # ASSUMPTION_STEWARD_SWEEP_HOUR; manual trigger via research routes)
         "run_assumption_steward_sweep_task",
         "run_prod_health_task",          # roadmap #4 (2026-11-28)
+        "run_canary_task",               # roadmap #4 part 2 (2026-11-28)
         # News ingest — two tiers because the sources have different latency:
         # HK/SG are near-real-time, FMP's US feed is ~4.4 h delayed and gains
         # nothing from a shorter interval.

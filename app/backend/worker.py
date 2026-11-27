@@ -842,6 +842,20 @@ async def run_prod_health_task(ctx: dict) -> dict:
     return {"ran": True, "status": report["status"], "counts": report["counts"], "slack": posted}
 
 
+async def run_canary_task(ctx: dict) -> dict:
+    """Roadmap #4 part 2 -- the nightly valuation canary: the golden fixtures replayed on the deployed code against
+    the pinned snapshot, and live runs whose IV moved with no deploy / constants / estimate / comps change between.
+    Records one row; the 23:30 UTC health report carries it to Slack."""
+    from src.monitoring import canary
+    report = await asyncio.to_thread(canary.run_canary)
+    try:
+        await asyncio.to_thread(canary.record, report)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[sched] canary: record failed: %s", exc)
+    logger.info("[sched] canary: %s at %s", report["status"], report.get("commit"))
+    return {"ran": True, "status": report["status"], "commit": report.get("commit")}
+
+
 def _log_publish_outcome(task: asyncio.Task) -> None:
     if not task.cancelled() and task.exception():
         logger.warning("worker: progress publish failed: %s", task.exception())
@@ -954,6 +968,8 @@ class WorkerSettings:
         run_assumption_steward_sweep_task,
         # Roadmap #4 -- daily production health report (scheduler_service: prod_health, 23:30 UTC)
         run_prod_health_task,
+        # Roadmap #4 part 2 -- nightly valuation canary (scheduler_service: canary, 22:30 UTC)
+        run_canary_task,
     ]
     # R1.e — arq-native daily cron. Railway workers run UTC, so set
     # DRIVE_SYNC_CRON_HOUR to the UTC hour matching local 8am (this knob

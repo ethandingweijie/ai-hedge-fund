@@ -203,7 +203,7 @@ GATED = {
 
 def test_build_schedules_wiring():
     specs = {s.name: s for s in sched_svc.build_schedules()}
-    assert set(specs) == GATED | {"maintenance", "prod_health"}   # prod_health: ungated, read-only (2026-11-28)
+    assert set(specs) == GATED | {"maintenance", "prod_health", "canary"}   # ungated, read-only (2026-11-28)
 
     for name in GATED:
         assert specs[name].gate_fn is not None, f"{name} lost its R2 gate"

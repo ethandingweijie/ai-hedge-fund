@@ -252,6 +252,8 @@ def compute_health(queue: Optional[dict] = None, hours: float = WINDOW_HOURS) ->
     checks += scheduled_checks()
     checks += _safe("owner_reviews", review_checks)
     checks += _safe("worker", lambda: queue_checks(queue))
+    from src.monitoring import canary as _canary                # the nightly canary's latest result (22:30 UTC)
+    checks += _safe("canary", _canary.latest_checks)
     status = max((c["status"] for c in checks), key=_RANK.get, default=OK)
     return {"generated_at": _now().isoformat(timespec="seconds"), "window_hours": hours, "status": status,
             "counts": {s: sum(1 for c in checks if c["status"] == s) for s in (OK, WARN, FAIL, UNKNOWN)},

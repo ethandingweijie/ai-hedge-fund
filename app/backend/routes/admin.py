@@ -86,7 +86,7 @@ async def migrate_to_postgres(request: Request, secret: str = "", dry_run: bool 
 
 
 @router.get("/admin/diag")
-async def admin_diag(request: Request, secret: str = "", health: int = 0):
+async def admin_diag(request: Request, secret: str = "", health: int = 0, canary: int = 0):
     """Read-only health probe for the storage stack (secret-gated).
 
     Reports, per layer, whether it works and the exception text when it does
@@ -263,6 +263,16 @@ async def admin_diag(request: Request, secret: str = "", health: int = 0):
             out["health"] = await _aio_h.to_thread(_ph.compute_health, out.get("queue"))
         except Exception:
             out["health"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 8c. Roadmap #4 part 2: the valuation canary on demand (?canary=1 live drift only; ?canary=2 also replays the
+    # golden fixtures on this container, ~1 min). Not recorded: the nightly job owns the canary_runs rows.
+    if canary:
+        try:
+            import asyncio as _aio_c
+            from src.monitoring import canary as _cn
+            out["canary"] = await _aio_c.to_thread(_cn.run_canary, golden=canary >= 2)
+        except Exception:
+            out["canary"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     # 9. Archive health (R2): abandoned checkpoint rows + final runs that
     # lost their archive link (save_run failed upstream). Both are the
