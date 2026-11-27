@@ -405,6 +405,15 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
     # Owner, 2026-11-27: HSBC's HKSE label peers were the Chinese state banks; a global universal-bank set instead.
     "Money Center Bank (EU)": {"markets": ("HKSE",),
                                "symbols": ("2888.HK", "BNP.PA", "BARC.L", "C", "D05.SI")},
+    # Owner, 2026-11-28 (option A): SGX lists Singtel, StarHub and Keppel Infrastructure Trust, so once Singtel is out
+    # the label set is one telco and a trust -- under the peer floor, and Singtel's 40% EV/EBITDA leg priced on the
+    # static 12x (first prod health report). StarHub beside Telstra (Optus's market), Spark, HKT, Maxis, CelcomDigi
+    # and AIS: 8.9x TTM / 8.2x NTM EV/EBITDA at derivation. Left out: Telkom Indonesia and XL (Telkomsel is a Singtel
+    # associate; Indonesian discount, 3-4x), Chorus (fibre wholesale), China Unicom (state carrier), NTT. Singtel's
+    # own 14.4x carries its associates in EV but not EBITDA; the stakes are bridged at market separately.
+    "Telco / Infrastructure (SG)": {"markets": ("SES",),
+                                    "symbols": ("CC3.SI", "TLS.AX", "SPK.NZ", "6823.HK", "6012.KL", "6947.KL",
+                                                "ADVANC.BK")},
     # Owner, 2026-11-27: no card network lists outside the US; FMP's "Credit Services" label abroad is leasing
     # and consumer credit (ORIX, Samsung Card). Profitable payment processors, read by the peer table only.
     "Payment Networks: Global": {"markets": (),
