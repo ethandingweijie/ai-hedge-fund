@@ -4619,7 +4619,9 @@ def get_sector_peer_multiples(
             # and the workbook re-read the live basket WITH the valued company (Innovent P/E 52.9 vs 46.4).
             for _k in ("subject_excluded", "members_used", "excluded_no_market_cap", "value_with_subject",
                        # owner, 2026-11-25: the screen's working and the stored label median it replaced
-                       "members_trimmed", "excluded_mcap_mismatch", "label_value", "off_anchor_basket"):
+                       "members_trimmed", "excluded_mcap_mismatch", "label_value", "off_anchor_basket",
+                       # owner, 2026-11-27: the cash definition the peers' EV multiples were restated onto
+                       "ev_basis", "ev_basis_unrestated"):
                 if row.get(_k) is not None:
                     basis[field][_k] = row.get(_k)
         # Non-numeric, underscore-prefixed so the numeric consumers that read

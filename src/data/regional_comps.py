@@ -61,6 +61,7 @@ HKSE (~5 min at the 11.5 rps token bucket in api.py) and ~150 for SES.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import math
@@ -420,6 +421,11 @@ def refresh_cross_market_baskets(fetch=None) -> int:
                     f = None
                 lo, hi = _BANDS[field]
                 vals[field] = {"value": f, "in_band": f is not None and not math.isnan(f) and lo <= f <= hi}
+            try:
+                _cls = get_fmp_classification(sym) or {}
+            except Exception:                                  # noqa: BLE001
+                _cls = {}
+            _store_investment_shares(vals, sym, _cls.get("sector"), _cls.get("industry"), mm)
             rows.append({"level": "profile", "key": profile, "cohort": "all", "symbol": sym.upper(),
                          "name": mm.get("name") or sym, "market_cap": mm.get("market_cap"), "metrics": vals})
     return save_members(CROSS_MARKET_EXCHANGE, rows, datetime.now(timezone.utc).isoformat(timespec="seconds"))
@@ -613,7 +619,7 @@ def basket_field_values(exchange: str, syms: tuple, field: str, max_age_days: fl
             continue
         seen.add(r["symbol"])
         try:
-            cell = (json.loads(r["metrics_json"] or "{}").get(field) or {})
+            cell = (on_subject_ev_basis(json.loads(r["metrics_json"] or "{}")).get(field) or {})
         except (TypeError, ValueError):
             continue
         if cell.get("in_band") and isinstance(cell.get("value"), (int, float)):
@@ -663,7 +669,7 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
         if _canon.get(r["symbol"], r["symbol"]) in metrics or (age is not None and age > max_age_days):
             continue
         try:
-            metrics[_canon.get(r["symbol"], r["symbol"])] = json.loads(r["metrics_json"] or "{}")
+            metrics[_canon.get(r["symbol"], r["symbol"])] = on_subject_ev_basis(json.loads(r["metrics_json"] or "{}"))
             ident[_canon.get(r["symbol"], r["symbol"])] = {"name": r.get("name"), "market_cap": r.get("market_cap")}
         except (TypeError, ValueError):
             continue
@@ -709,10 +715,24 @@ def basket_multiples(exchange: str, syms: tuple, key: str, *, max_age_days: floa
                                         "market_cap": (ident.get(sym) or {}).get("market_cap"), "value": v_}
                                        for sym, v_ in zip(used, vals)],
                       **({"subject_excluded": True} if _self_removed else {}),
+                      **_ev_basis_note(field, [metrics[s_] for s_ in used]),
                       **({"excluded_loss_makers": excluded} if exclude_loss_makers else {}),
                       **({"members_trimmed": [{"symbol": s_, "value": v_} for s_, v_ in sm["trimmed"]]}
                          if sm["trimmed"] else {}),
                       **({"excluded_mcap_mismatch": list(sm["mcap_mismatch"])} if sm["mcap_mismatch"] else {})}
+    return out
+
+
+def _ev_basis_note(field: str, member_metrics: list) -> dict:
+    """Provenance for an EV field taken over members: the bridge basis, and any member left on the feed's basis."""
+    basis = PEER_EV_BASIS.get()
+    if field not in _EV_FIELDS or not basis:
+        return {}
+    restated = [m for m in member_metrics if ((m or {}).get(field) or {}).get("ev_basis")]
+    out = {"ev_basis": EV_BASIS_LABEL.get(basis, basis) if restated else "cash only (feed)"}
+    left = len(member_metrics) - len(restated)
+    if restated and left:
+        out["ev_basis_unrestated"] = left
     return out
 
 
@@ -1056,13 +1076,15 @@ def lease_ev_factor(symbol: str, enterprise_value: Optional[float], bs_row: Opti
     return (enterprise_value - lease) / enterprise_value
 
 
-def lease_free_key_metrics(symbol: str, km_row: dict) -> dict:
+def lease_free_key_metrics(symbol: str, km_row: dict, bs_row: Optional[dict] = None) -> dict:
     """The key-metrics-ttm row with its EV fields on a lease-free basis (audit E1); unchanged for IFRS filers."""
     if not km_row or not _us_gaap_candidate(symbol):
         return km_row
-    bs = _fmp_get(f"{_STABLE}/balance-sheet-statement", {"symbol": symbol, "period": "quarter", "limit": 1}, api_key=None)
-    f = lease_ev_factor(symbol, _safe_float(km_row.get("enterpriseValueTTM")),
-                        bs[0] if isinstance(bs, list) and bs else None)
+    if bs_row is None:
+        bs = _fmp_get(f"{_STABLE}/balance-sheet-statement", {"symbol": symbol, "period": "quarter", "limit": 1},
+                      api_key=None)
+        bs_row = bs[0] if isinstance(bs, list) and bs else None
+    f = lease_ev_factor(symbol, _safe_float(km_row.get("enterpriseValueTTM")), bs_row)
     if f is None:
         return km_row
     out = dict(km_row)
@@ -1109,7 +1131,17 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
 
     km = _fmp_get(f"{_STABLE}/key-metrics-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(km, list) and km:
-        row = _km_row = lease_free_key_metrics(symbol, km[0])
+        _bs = _fmp_get(f"{_STABLE}/balance-sheet-statement", {"symbol": symbol, "period": "quarter", "limit": 1},
+                       api_key=None)
+        _bs_row = _bs[0] if isinstance(_bs, list) and _bs and isinstance(_bs[0], dict) else None
+        row = _km_row = lease_free_key_metrics(symbol, km[0], bs_row=_bs_row)
+        # Owner, 2026-11-27 (option A): FMP's EV nets cash and equivalents only. The member's short- and
+        # long-term investments as a share of that EV, so a run can restate the EV multiples onto the valued
+        # company's own bridge (PEER_EV_BASIS). Same currency: key metrics and the balance sheet both report.
+        _ev_km = _safe_float(row.get("enterpriseValueTTM"))
+        if _bs_row and _ev_km and _ev_km > 0:
+            out["ev_x_sti"] = max(_safe_float(_bs_row.get("shortTermInvestments")) or 0.0, 0.0) / _ev_km
+            out["ev_x_lti"] = max(_safe_float(_bs_row.get("longTermInvestments")) or 0.0, 0.0) / _ev_km
         out["ev_ebitda"] = _safe_float(row.get("evToEBITDATTM"))
         out["ev_revenue"] = _safe_float(row.get("evToSalesTTM"))
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))
@@ -1542,12 +1574,87 @@ _EV_FIELDS = ("ev_ebitda", "ev_revenue", "ev_ebit", "ev_ocf", "ev_ebitda_ntm", "
               "ev_ebit_norm")
 
 
+#: Owner, 2026-11-27 (China Mobile trace, option A). FMP's enterprise value is market cap + total debt - cash and
+#: equivalents ONLY; the valued company's bridge also counts its short-term investments as cash, and under audit E18
+#: its long-term investments. A cash-only peer multiple, applied to operating EBITDA and then topped up with the
+#: subject's whole investment book, counts the investments generously: China Mobile's peers sat at 7.2x cash-only,
+#: China Mobile at 1.8x on its own bridge, and its EV/EBITDA leg at 2.3x spot. The weekly refresh stores each
+#: member's investments as a share of its EV (`_ev_x_sti`, `_ev_x_inv`); a run sets PEER_EV_BASIS to its own bridge
+#: and every member read restates the EV multiples onto it. None = the feed's cash-only basis (any caller that is
+#: not valuing a company, and members stored before the refresh carried the shares).
+PEER_EV_BASIS: contextvars.ContextVar = contextvars.ContextVar("peer_ev_basis", default=None)
+_EV_BASIS_CELL = {"sti": "_ev_x_sti", "sti_lti": "_ev_x_inv"}
+EV_BASIS_LABEL = {"sti": "net of short-term investments",
+                  "sti_lti": "net of short- and long-term investments"}
+
+
+def investment_ev_shares(symbol: str, sector: Optional[str], industry: Optional[str],
+                         x_sti: Optional[float], x_lti: Optional[float]) -> tuple[Optional[float], Optional[float]]:
+    """(short-term investments / EV, short + long-term investments / EV) for a member, on the rules the valued
+    company's own bridge uses (dcf_agent._valuation_net_debt / _apply_lti_netting): nothing for financials,
+    claims-backed health plans or customer-fund holders; property keeps its long-term investments (operating
+    assets); healthcare counts long-term investments only for biotechnology. (None, None) = not on record."""
+    if x_sti is None and x_lti is None:
+        return None, None
+    sec, ind = str(sector or ""), str(industry or "").lower()
+    try:
+        from src.agents.analysis.dcf_agent import _CUSTOMER_FUND_HOLDERS as _cfh
+    except Exception:                                      # noqa: BLE001
+        _cfh = frozenset()
+    if sec == "Financial Services" or "healthcare plans" in ind or str(symbol or "").upper() in _cfh:
+        return 0.0, 0.0
+    s, lt = float(x_sti or 0.0), float(x_lti or 0.0)
+    if sec == "Real Estate" or (sec == "Healthcare" and "biotech" not in ind):
+        lt = 0.0
+    return s, s + lt
+
+
+def _store_investment_shares(vals: dict, symbol: str, sector: Optional[str], industry: Optional[str],
+                             mm: dict) -> None:
+    """Write the member's investment shares (never in band: they are not multiples), on its restated EV."""
+    xs, xi = investment_ev_shares(symbol, sector, industry, mm.get("ev_x_sti"), mm.get("ev_x_lti"))
+    if xs is None:
+        return
+    sc = float(mm.get("_ev_scale") or 1.0) or 1.0
+    vals["_ev_x_sti"] = {"value": xs / sc, "in_band": False}
+    vals["_ev_x_inv"] = {"value": xi / sc, "in_band": False}
+
+
+def on_subject_ev_basis(metrics: dict, basis: Optional[str] = None) -> dict:
+    """A member's stored multiples with the EV fields restated onto the valued company's bridge (PEER_EV_BASIS).
+    Unchanged with no basis set, or for a member stored without its investment shares. A restated cell carries
+    `ev_basis`; an EV that nets to zero or below gives no reading."""
+    basis = basis if basis is not None else PEER_EV_BASIS.get()
+    ck = _EV_BASIS_CELL.get(basis or "")
+    if not ck or not isinstance(metrics, dict):
+        return metrics
+    x = (metrics.get(ck) or {}).get("value")
+    if not isinstance(x, (int, float)):
+        return metrics
+    k = 1.0 - float(x)
+    out = dict(metrics)
+    for f in _EV_FIELDS:
+        cell = out.get(f)
+        v = cell.get("value") if isinstance(cell, dict) else None
+        if not isinstance(v, (int, float)):
+            continue
+        nv = v * k
+        lo, hi = _BANDS.get(f, (float("-inf"), float("inf")))
+        out[f] = {"value": nv, "in_band": bool(v > 0 and k > 0 and lo <= nv <= hi), "ev_basis": basis,
+                  "feed_value": v}
+    return out
+
+
 def _restate_at_listing_price(symbol: str, listing_cap, mm: dict, vals: dict) -> None:
     """Restate an HK member's multiples at its own quote when FMP computed them on a different line's price. In
     place on `vals` (the stored multiples) and `mm` (so the sanity check then compares like with like)."""
     if not str(symbol or "").upper().endswith(".HK"):
         return
-    km_cap, ev = _multiples_mcap(mm), _safe_float(mm.get("ev_multiples"))
+    # The first basket row overwrites mm's cap (below); keep the key-metrics cap so every later row of the same
+    # member (its "large" cohort, its sector basket) is restated too, not stored at the A-share price (2026-11-27).
+    km_cap = mm.get("_km_cap_original") or _multiples_mcap(mm)
+    mm["_km_cap_original"] = km_cap
+    ev = _safe_float(mm.get("ev_multiples"))
     try:
         cap = float(listing_cap) if listing_cap else None
     except (TypeError, ValueError):
@@ -1574,6 +1681,8 @@ def _restate_at_listing_price(symbol: str, listing_cap, mm: dict, vals: dict) ->
         vals[f] = {"value": nv, "in_band": lo <= nv <= hi}
     vals["_listing_restated"] = {"value": round(r, 4), "in_band": False}
     mm["mcap_multiples"] = cap
+    if ev_f:
+        mm["_ev_scale"] = ev_f
 
 
 def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
@@ -1598,6 +1707,7 @@ def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
                                    "in_band": f is not None and not math.isnan(f)
                                    and lo <= f <= hi}
                 _restate_at_listing_price(m["symbol"], m.get("market_cap"), mm, vals)
+                _store_investment_shares(vals, m["symbol"], m.get("sector"), m.get("industry"), mm)
                 # not a multiple (never in band): the cap the multiples were computed on, for mcap_mismatch
                 if _multiples_mcap(mm):
                     vals["_mcap_multiples"] = {"value": _multiples_mcap(mm), "in_band": False}
@@ -1643,7 +1753,7 @@ def load_members(exchange: str, level: str, key: str, cohort: str = "all") -> li
     out = []
     for r in rows or []:
         try:
-            metrics = json.loads(r["metrics_json"] or "{}")
+            metrics = on_subject_ev_basis(json.loads(r["metrics_json"] or "{}"))
         except (TypeError, ValueError):
             metrics = {}
         out.append({"symbol": r["symbol"], "name": r["name"],
@@ -1867,6 +1977,8 @@ def get_regional_multiples(
         # are frozen into the run. Too few left -> this rung does not price the field.
         mem = _members(rung)
         if not mem:
+            if field in _EV_FIELDS and PEER_EV_BASIS.get():
+                out["ev_basis"] = "cash only (stored median, no named members)"
             return out
         _cell = lambda m_: ((m_.get("metrics") or {}).get(field) or {})        # noqa: E731
         inband = [m_ for m_ in mem if _cell(m_).get("in_band") and _cell(m_).get("value") is not None]
@@ -1877,7 +1989,8 @@ def get_regional_multiples(
                              symbol_of=lambda m_: m_.get("symbol"), mcap_of=lambda m_: m_.get("market_cap"),
                              metrics_of=lambda m_: m_.get("metrics"))
         kept = [m_ for m_, _ in sm.get("kept") or []]
-        changed = bool(self_rows or no_mcap or sm.get("trimmed") or sm.get("mcap_mismatch"))
+        _restated = any(_cell(m_).get("ev_basis") for m_ in base)
+        changed = bool(self_rows or no_mcap or sm.get("trimmed") or sm.get("mcap_mismatch") or _restated)
         if changed:
             if len(kept) < floor:
                 why = []
@@ -1902,6 +2015,7 @@ def get_regional_multiples(
                 out["members_trimmed"] = [{"symbol": m_.get("symbol"), "name": m_.get("name"), "value": v_}
                                           for m_, v_ in sm["trimmed"]]
         frozen = kept if changed else inband
+        out.update(_ev_basis_note(field, [m_.get("metrics") for m_ in frozen]))
         out["members_used"] = [{"symbol": m_.get("symbol"), "name": m_.get("name"), "market_cap": m_.get("market_cap"),
                                 "value": float(_cell(m_)["value"])} for m_ in frozen]
         return out

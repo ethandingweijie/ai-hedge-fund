@@ -1761,6 +1761,18 @@ def _apply_lti_netting(nd: float, basis: dict, row: dict, sector: str, ticker: s
                       f"operating leg prices; net debt {float(nd) / 1e9:,.2f}bn -> {nd2 / 1e9:,.2f}bn")
 
 
+def _subject_peer_ev_basis(sector: str, ticker: str, net_debt_basis: dict, holdings_netted: bool) -> Optional[str]:
+    """The cash definition of the valued company's bridge, for restating its peers' EV multiples (owner,
+    2026-11-27, option A): "sti_lti" when its long-term investments or equity-accounted stakes sit in the bridge,
+    "sti" when only short-term investments count as cash, None (the feed's cash-only EV) for financials,
+    customer-fund holders and claims-backed insurers, whose investments are not spare cash."""
+    if ((sector or "") in {"Financials", "Insurance", "Banks", "Crypto"}
+            or str(ticker or "").upper() in _CUSTOMER_FUND_HOLDERS
+            or (net_debt_basis or {}).get("regulated_cash_excluded")):
+        return None
+    return "sti_lti" if holdings_netted else "sti"
+
+
 def _operating_earnings_for_netted_holdings(row: dict) -> Optional[str]:
     """Once long-term investments count as cash, the EV legs capitalise OPERATING EBITDA / EBIT (audit 2026-11-25
     HK/SG). FMP's EBITDA is pretax + interest + D&A, so it carries the associates' share of profit and the investment
@@ -13555,9 +13567,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     _sector_warning    = state["data"].get("sector_warning")
     dcf_range: dict[str, dict] = {}
 
+    from src.data.regional_comps import PEER_EV_BASIS as _PEER_EV_BASIS
     for ticker in tickers:
         # D2 (owner, 2026-11-27): no stake carries over from the previous ticker's bridge.
         _BRIDGE_NON_OPERATING_ASSETS.set(0.0)
+        _PEER_EV_BASIS.set(None)
         _bridge_stakes: Optional[dict] = None
         # Resolve per-ticker sector so WACC, TGR, and FCF floor reflect the correct industry
         sector = sectors_map.get(ticker, _primary_sector)
@@ -17004,6 +17018,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Holdings are on the balance-sheet side of the bridge (book LTI as cash, or the stakes at market): the
         # forecast carries no income from them (guidance_forecast non_operating_ratio_used = 0).
         _holdings_netted = bool(_lti_already or (_bridge_stakes and float(_bridge_stakes.get("value") or 0.0) > 0))
+        # Owner, 2026-11-27 (China Mobile trace, option A): every peer EV multiple is restated onto THIS bridge's
+        # cash definition before its median is taken (regional_comps.PEER_EV_BASIS).
+        try:
+            _ndb_for_peers = _net_debt_basis or {}
+        except NameError:
+            _ndb_for_peers = {}
+        _PEER_EV_BASIS.set(_subject_peer_ev_basis(sector, ticker, _ndb_for_peers, _holdings_netted))
 
         # ── Phase 1.1: CAGR-divergence gate (all profiles) ────────────────
         # Applied BEFORE the revenue-scale tier below and BEFORE the scenario
@@ -21538,5 +21559,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
     # D2: the last ticker's stakes never outlive the run (a reused worker thread keeps its context).
     _BRIDGE_NON_OPERATING_ASSETS.set(0.0)
+    _PEER_EV_BASIS.set(None)
     state["data"]["dcf_range"] = dcf_range
     return state
