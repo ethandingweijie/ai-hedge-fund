@@ -7741,9 +7741,17 @@ def _compute_residual_income_2stage(
     shares: float,
     profile_name: str,
     research_target_roe: Optional[float] = None,
+    scenario_sign: float = 0.0,
 ) -> Optional[float]:
     """
     Full 2-stage Residual Income model for banks (Damodaran/McKinsey standard).
+
+    `scenario_sign` (owner, 2026-11-27, D4): -1 bear, 0 base, +1 bull. The leg
+    moves its DRIVERS with the scenario exactly like the GGM leg (plan IN2):
+    current and target ROE x (1 + sign x _BANK_SCENARIO_ROE_SHIFT), cost of
+    equity - sign x _BANK_SCENARIO_COE_SHIFT. It used to return the same value
+    in all three scenarios (U11 40.33, D05 39.67), so 30-34% of a bank's blend
+    did not move with its bear or bull case.
 
     Stage 1 (5 years, or 7/10 for India/Neo): ROE fades linearly from current
              level to profile target. BVPS grows at retention × ROE per year.
@@ -7780,6 +7788,11 @@ def _compute_residual_income_2stage(
     target_roe  = research_target_roe if research_target_roe else cfg["target_roe"]
     fade_years  = cfg["fade_years"]
     retention   = bank_m["retention_rate"]
+    _sg = float(scenario_sign or 0.0)
+    if _sg:
+        roe_current = float(roe_current) * (1.0 + _sg * _BANK_SCENARIO_ROE_SHIFT)
+        target_roe = float(target_roe) * (1.0 + _sg * _BANK_SCENARIO_ROE_SHIFT)
+        coe = float(coe) - _sg * _BANK_SCENARIO_COE_SHIFT
 
     # Clamp current ROE to prevent pathological extremes (negative ROE, >50% ROE)
     roe_current = max(-0.05, min(0.50, roe_current))
@@ -10502,9 +10515,11 @@ def _compute_method_value(
         if (is_bank_sector(sector) and profile_name in _BANK_PROFILE_CALIBRATION) \
                 or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
             research_target_roe = most_recent.get("_bank_target_roe_research")
+            # D4 (owner, 2026-11-27): the scenario moves the RI leg's drivers, the same sign rule as the GGM leg.
+            _sg_ri = -1.0 if sm < 1.0 else (1.0 if sm > 1.0 else 0.0)
             iv = _compute_residual_income_2stage(
                 most_recent, shares=shares, profile_name=profile_name,
-                research_target_roe=research_target_roe,
+                research_target_roe=research_target_roe, scenario_sign=_sg_ri,
             )
             return iv
         # Non-bank path — keep legacy simple spread (for utility-company

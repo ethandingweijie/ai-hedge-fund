@@ -1970,3 +1970,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: owner 2026-11-27 (D3): a positive sector FCF-margin floor binds the terminal year only; earlier years below it are projected as modelled and flagged (leg_inputs.DCF.fcf_floor_breach_years + a forward flag). Moves: COST bear IV 343.39 -> 338.23 (DCF leg 271.44 -> 254.22, years 1-9 below the 2% floor), bear target 633.08 -> 630.50; BN4_SI DCF leg tv_pct / reverse-DCF text and flags only (years 1-3 below the floor; IV unchanged); every other fixture and every base IV unchanged
 
+## 2026-11-27T03:55:24+00:00
+
+- regenerated at HEAD: `0fd1fa95`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-27 (D4): the bank residual-income leg moves its drivers with the scenario like the GGM leg (ROE current/target x (1 +/- 10%), CoE -/+ 0.5pp). Moves: D05_SI RI bear/base/bull 39.67/39.67/39.67 -> 34.79/39.67/45.02, scenario IV bear 38.86 -> 37.20, bull 52.08 -> 53.90; 02888_HK RI 263.92 flat -> 235.35/263.92/294.73, IV bear 254.67 -> 245.59, bull 354.26 -> 364.04; base IVs unchanged
+
