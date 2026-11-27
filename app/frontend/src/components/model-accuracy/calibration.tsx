@@ -189,8 +189,8 @@ export function DiagnosticItem({ card, openProposals }: { card: DiagnosticCard; 
         <Chip>{CATEGORY_LABEL[card.category]}</Chip>
         <span className="text-xs uppercase tracking-wider text-muted-foreground">
           {card.action === 'code_change' ? 'Needs a code change'
-            : openProposals > 0 ? 'Addressed by a calibration proposal'
-            : 'A calibration would address this · none open'}
+            : card.action === 'calibration' && openProposals > 0 ? 'Addressed by a calibration proposal'
+            : 'No calibration proposal addresses it yet'}
         </span>
       </div>
       <p className="text-sm font-medium text-foreground">{card.title}</p>

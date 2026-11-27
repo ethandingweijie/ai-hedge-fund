@@ -49,6 +49,12 @@ SHARED_BIAS_SHARE = 0.5
 ROUTING_MIN_RUNS = 3
 ROUTING_BETTER_SHARE = 0.6
 MAX_DIAGNOSTICS = 20
+#: Horizons a diagnostic may call a verdict on: the 12-month targets are written for a
+#: year, so nothing shorter than 180 days judges them. Shorter price horizons give an
+#: early read only, labelled with n. The consensus label is neither.
+VERDICT_HORIZONS = ("px_365d", "px_180d")
+EARLY_READ_HORIZONS = ("px_90d", "px_30d")
+OVERVIEW_RECENT = 25
 
 _LABEL_NAMES = {vo.CONSENSUS: "Street consensus", "px_30d": "price 30 days later",
                 "px_90d": "price 90 days later", "px_180d": "price 180 days later",
@@ -230,19 +236,27 @@ def diagnostics(horizon: Optional[str] = None) -> tuple[Optional[str], list[dict
     attribution report on the longest horizon that has data."""
     from src.memory import valuation_attribution as va
     counts = _label_counts()
+    if horizon == vo.CONSENSUS:
+        return None, []                    # the Street's target is not an outcome
     if horizon is None:
-        horizon = next((h for h in (*reversed(tuple(vo.HORIZON_DAYS)), vo.CONSENSUS)
+        # A verdict needs a horizon the 12-month targets can be judged on: 180 days or
+        # more. Before those mature, the longest shorter price horizon gives an EARLY
+        # READ, labelled as such with its n. Consensus is never a diagnostic horizon.
+        horizon = next((h for h in (*VERDICT_HORIZONS, *EARLY_READ_HORIZONS)
                         if counts.get(h, 0) >= DIAG_MIN_N), None)
     if horizon is None:
         return None, []
+    early = horizon not in VERDICT_HORIZONS
     label = _LABEL_NAMES.get(horizon, horizon)
     cards: list[dict] = []
+    proposed_markets = _markets_with_proposal()
 
     card = vo.scorecard(("market",))
     for market, g in card["groups"].items():
         h = g["horizons"].get(horizon) or {}
         signed = h.get("median_signed_pct")
         if (h.get("n") or 0) >= DIAG_MIN_N and signed is not None and abs(signed) >= 10:
+            has_proposal = market in proposed_markets
             cards.append({
                 "id": _diag_id("bias", market, horizon), "kind": "diagnostic",
                 "category": "bias", "severity": abs(signed) / 100,
@@ -250,9 +264,12 @@ def diagnostics(horizon: Optional[str] = None) -> tuple[Optional[str], list[dict
                          f"{'above' if signed > 0 else 'below'} the {label}",
                 "detail": (f"Median over {h['n']} runs; typical miss {h.get('median_miss_factor')}x, "
                            f"direction right {round((h.get('direction_hit_rate') or 0) * 100)}% "
-                           f"of the time. A market-wide bias is what a calibration proposal "
-                           f"corrects — see the proposals above."),
-                "group": market, "horizon": horizon, "action": "calibration"})
+                           f"of the time. "
+                           + ("A calibration proposal for this market is listed above."
+                              if has_proposal else
+                              "No calibration proposal addresses it yet.")),
+                "group": market, "horizon": horizon, "n": h["n"],
+                "action": "calibration" if has_proposal else "no_proposal"})
 
     report = va.attribution_report(horizon, ("market", "profile"), worst_n=0)
     for group, g in report["groups"].items():
@@ -293,7 +310,27 @@ def diagnostics(horizon: Optional[str] = None) -> tuple[Optional[str], list[dict
                 "group": group, "horizon": horizon, "action": "code_change"})
 
     cards.sort(key=lambda c: c["severity"], reverse=True)
-    return horizon, cards[:MAX_DIAGNOSTICS]
+    cards = cards[:MAX_DIAGNOSTICS]
+    n_h = counts.get(horizon, 0)
+    for c in cards:
+        c["early_read"] = early
+        c.setdefault("n", None)
+        if early:
+            c["title"] = f"Early read, not a verdict: {c['title']}"
+            c["detail"] = (f"{c['detail']} (n={c['n'] if c['n'] is not None else n_h} on the "
+                           f"{label}; a verdict waits for the 180-day label.)")
+    return horizon, cards
+
+
+def _markets_with_proposal() -> set[str]:
+    """Markets an iv calibration in shadow or live would move -- the only case in which a
+    bias card may say a proposal addresses it."""
+    cf._ensure_tables()
+    out: set[str] = set()
+    for r in _db.query("SELECT params_json FROM calibration_versions "
+                       "WHERE status IN ('shadow', 'active') AND COALESCE(family, 'iv') = 'iv'"):
+        out |= set(((vo._loads(r["params_json"]) or {}).get("market_iv_multiplier") or {}))
+    return out
 
 
 # ── overview ────────────────────────────────────────────────────────────────
@@ -304,7 +341,13 @@ def overview() -> dict:
     rows = _db.query(
         "SELECT version_id, created_at, horizon, status, params_json, fit_json, "
         "backtest_json, promoted_at, family FROM calibration_versions ORDER BY created_at DESC")
-    cards = [version_card(r) for r in rows[:25]]
+    # Every live and in-shadow version, then the OVERVIEW_RECENT most recent of the rest.
+    # A plain rows[:25] hid the live calibration once 25 newer proposals had been fitted
+    # (prod had 81 iv versions by 2026-11-27) -- the page then said nothing was live.
+    pinned = [r for r in rows if r["status"] in ("active", "shadow")]
+    rest = [r for r in rows if r["status"] not in ("active", "shadow")][:OVERVIEW_RECENT]
+    keep = {r["version_id"] for r in pinned + rest}
+    cards = [version_card(r) for r in rows if r["version_id"] in keep]
     active = next((c for c in cards if c["status"] == "active" and c["family"] == "iv"), None)
     actives = {c["family"]: c for c in cards if c["status"] == "active"}
     horizon, diags = diagnostics()
@@ -316,6 +359,8 @@ def overview() -> dict:
         "proposals": [c for c in cards if c["status"] in ("shadow", "rejected")],
         "history": [c for c in cards if c["status"] not in ("shadow", "rejected", "active")],
         "diagnostics": diags, "diagnostics_horizon": horizon,
+        "diagnostics_early_read": bool(horizon) and horizon not in VERDICT_HORIZONS,
+        "versions_total": len(rows),
         "eligible_count": sum(1 for c in cards if c["actions"]["promote"]),
     }
 

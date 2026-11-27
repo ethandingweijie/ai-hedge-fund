@@ -16,6 +16,19 @@ The 12-month target is the prediction compared against every label -- it is
 the number written for a horizon -- with base IV scored alongside, because the
 IV-vs-consensus gap is the bias the HK/SG sweeps measured.
 
+Where a prediction is read from (2026-11-27): the run_features ledger, which every
+run writes at save time and which no report deletion touches; the archive tables
+(ticker_signals JOIN runs) fill in runs the ledger has not caught and supply the
+consensus recorded at run time. Before this the sweep read only the archive, so a
+run whose archive rows had gone could never receive a price label.
+
+One label per ticker per day: the day's LATEST run is its prediction, earlier
+same-day reruns are not scored (and a label written for one is removed).
+
+A horizon whose close never arrives -- the window long past and nothing traded
+since -- is recorded in valuation_outcome_terminal rather than retried forever
+or dropped without trace.
+
 What is deliberately NOT scored:
   * replayed dcf_range entries: flagged is_cache_copy, or content identical to
     an earlier run on the same ticker (rows that predate the flag). Counting
@@ -56,6 +69,8 @@ BLEND_WEIGHTS: dict[str, float] = {CONSENSUS: 1.0, "px_30d": 0.25,
 _LABEL_SANITY = 5.0
 _PRICE_WINDOW_DAYS = 7
 _CONSENSUS_FRESH_DAYS = 2
+#: Days past a horizon's price window before a missing close is recorded as terminal.
+TERMINAL_GRACE_DAYS = 14
 
 #: Keys that differ between a replay and its original without the prediction
 #: differing. Excluded from the content hash used to find pre-flag copies.
@@ -65,6 +80,10 @@ _VOLATILE_KEYS = frozenset({"is_cache_copy", "cache_source_run_at",
 
 _GROUPABLE = frozenset({"market", "sector", "profile", "routing_winner",
                         "param_version"})
+#: Provenance groupings, read from run_features beside each label (2026-11-27): which
+#: model ran the pipeline and researched, and which engine build. Scorecard only.
+_PROVENANCE_GROUPS = frozenset({"pipeline_model", "research_model", "research_tier",
+                                "engine_version"})
 
 _COLUMNS = ["outcome_key", "run_id", "ticker", "horizon", "run_date",
             "label_date", "label_value", "label_source", "price_at_run",
@@ -114,6 +133,26 @@ CREATE TABLE IF NOT EXISTS valuation_outcome_sweeps (
 )
 """
 
+#: Horizons that can never be labelled: no close in the window, the window long past,
+#: and nothing traded since (delisted / halted). Kept apart from valuation_outcomes so
+#: no reader of label_value ever meets a made-up label.
+_DDL_TERMINAL = """
+CREATE TABLE IF NOT EXISTS valuation_outcome_terminal (
+    outcome_key     TEXT PRIMARY KEY,
+    run_id          TEXT NOT NULL,
+    ticker          TEXT NOT NULL,
+    horizon         TEXT NOT NULL,
+    run_date        TEXT NOT NULL,
+    target_date     TEXT NOT NULL,
+    reason          TEXT NOT NULL,
+    last_close      REAL,
+    last_close_date TEXT,
+    recorded_at     TEXT NOT NULL
+)
+"""
+_TERMINAL_COLUMNS = ["outcome_key", "run_id", "ticker", "horizon", "run_date", "target_date",
+                     "reason", "last_close", "last_close_date", "recorded_at"]
+
 _tables_ready_key: Optional[tuple] = None
 
 
@@ -124,6 +163,7 @@ def _ensure_tables() -> None:
         return
     _db.ensure_table(_DDL)
     _db.ensure_table(_DDL_SWEEPS)
+    _db.ensure_table(_DDL_TERMINAL)
     _db.execute(_DDL_IDX)
     _tables_ready_key = key
 
@@ -325,13 +365,172 @@ def _iter_signal_rows(page_size: int) -> Iterator:
 
 # ── scoring ─────────────────────────────────────────────────────────────────
 
+def _ledger_rows() -> list[dict]:
+    """run_features, every row (the exclusions are counted here, not filtered in SQL).
+    Empty when the ledger is switched off or unreadable: the archive path still runs."""
+    try:
+        from src.memory import run_features as rf
+        return rf.rows(exclude_user=False)
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("valuation_outcomes: run_features unavailable: %s", exc)
+        return []
+
+
+def _ledger_prediction(f: dict) -> Optional[dict]:
+    """The prediction a run_features row recorded, shaped like _prediction's. The ledger
+    keeps the same figures the archive blobs hold (spot, base/bear/bull IV, the engine's
+    12-month target, the PM's target) and it outlives the archive tables."""
+    try:
+        run_date = date.fromisoformat(str(f.get("run_date") or "")[:10])
+    except ValueError:
+        return None
+    iv, pt, pm = _pos(f.get("iv_base")), _pos(f.get("pt_12m")), _pos(f.get("pm_target"))
+    if iv is None and pt is None and pm is None:
+        return None
+    ticker = (f.get("ticker") or "").upper()
+    return {
+        "run_id": f["run_id"], "ticker": ticker, "run_date": run_date,
+        "run_at": str(f.get("run_at") or run_date.isoformat()),
+        "price_at_run": _pos(f.get("spot")),
+        "base_iv": iv, "pt_12m": pt, "pm_target": pm,
+        "bear_iv": _pos(f.get("iv_bear")), "bull_iv": _pos(f.get("iv_bull")),
+        "market": f.get("market") or market_of(ticker),
+        "sector": f.get("sector"), "profile": f.get("profile"),
+        "routing_winner": f.get("routing_winner"),
+        "param_version": f.get("param_version"),
+    }
+
+
+def _canonical(preds: dict[str, dict]) -> tuple[dict[str, dict], set[str]]:
+    """One prediction per ticker per day.
+
+    The rule: of a ticker's runs on the same calendar day (UTC date of run_at), the
+    LATEST run is the day's prediction -- the one the owner was left looking at -- and
+    the earlier ones are reruns (a fix, a provider toggle, a retry). Ties on run_at go to
+    the larger run_id so the choice is stable. Without this a ticker re-run five times in
+    an afternoon carried five times the weight of one run once.
+
+    Returns (kept, superseded run|ticker keys)."""
+    best: dict[tuple[str, date], tuple[str, dict]] = {}
+    for key, p in preds.items():
+        day = (p["ticker"], p["run_date"])
+        cur = best.get(day)
+        if cur is None or (p.get("run_at") or "", p["run_id"]) > (cur[1].get("run_at") or "", cur[1]["run_id"]):
+            best[day] = (key, p)
+    kept = {k: p for k, p in best.values()}
+    return kept, set(preds) - set(kept)
+
+
+def _terminal_candidates_ok(series_by_ticker: dict[str, Optional[list]]) -> bool:
+    """A terminal label is only recorded when the price feed is demonstrably answering:
+    some ticker in the same sweep came back with closes. An empty answer for every name
+    is an outage, not a market full of delistings."""
+    return any(bool(v) for v in series_by_ticker.values())
+
+
+_REPORT_KEYS = ("runs_seen", "ledger_rows", "archive_only", "ledger_only",
+                "skipped_no_prediction", "skipped_unrated",
+                "skipped_override_carried", "skipped_cache_copy",
+                "skipped_same_day_rerun", "skipped_mis_scaled",
+                "no_consensus", "not_matured", "no_price", "terminal_no_price",
+                "superseded_removed")
+
+
+def _gather(page_size: int, report: dict) -> tuple[dict[str, dict], dict[str, dict], set[str]]:
+    """Every scoreable prediction, one per ticker per day: (preds by run|ticker, the
+    archive dcf_range by run|ticker for the consensus label, superseded run|ticker keys).
+    Counts each exclusion into `report`."""
+    preds: dict[str, dict] = {}
+    archive_dr: dict[str, dict] = {}
+    archive_copy: set[str] = set()
+
+    # 1. the archive: consensus-at-run, the content-hash copy check, and any run the
+    #    ledger lacks. OLDEST first so an original is seen before its replays.
+    seen: dict[str, set[str]] = {}
+    archive_preds: dict[str, dict] = {}
+    archive_skips: dict[str, str] = {}
+    for row in _iter_signal_rows(page_size):
+        ticker = (row["ticker"] or "").upper()
+        dr = _loads(row["dcf_range_json"])
+        rk = f"{row['run_id']}|{ticker}"
+        if not ticker or not isinstance(dr, dict) or not dr:
+            archive_skips[rk] = "skipped_no_prediction"
+            continue
+        archive_dr[rk] = dr
+        digest = _content_hash(dr)
+        if dr.get("is_cache_copy") or digest in seen.setdefault(ticker, set()):
+            archive_copy.add(rk)
+            archive_skips[rk] = "skipped_cache_copy"
+            continue
+        seen[ticker].add(digest)
+        pred = _prediction(row, ticker, dr)
+        if pred is None:
+            archive_skips[rk] = ("skipped_unrated" if is_unrated(dr) else
+                                 "skipped_override_carried" if dr.get("estimate_override_carried")
+                                 else "skipped_no_prediction")
+            continue
+        pred["run_at"] = str(row["run_at"])
+        archive_preds[rk] = pred
+
+    # 2. the ledger is the authority for every run it holds.
+    ledger_keys: set[str] = set()
+    for f in _ledger_rows():
+        rk = f"{f['run_id']}|{(f.get('ticker') or '').upper()}"
+        ledger_keys.add(rk)
+        report["ledger_rows"] += 1
+        if rk not in archive_dr and rk not in archive_skips:
+            report["ledger_only"] += 1
+        if int(f.get("cache_copy") or 0) or rk in archive_copy:
+            report["skipped_cache_copy"] += 1
+            continue
+        if int(f.get("unrated") or 0):
+            report["skipped_unrated"] += 1
+            continue
+        if int(f.get("override_carried") or 0):
+            report["skipped_override_carried"] += 1
+            continue
+        pred = _ledger_prediction(f)
+        if pred is None:
+            report["skipped_no_prediction"] += 1
+            continue
+        preds[rk] = pred
+    for rk, reason in archive_skips.items():
+        if rk not in ledger_keys:
+            report[reason] += 1
+    for rk, pred in archive_preds.items():
+        if rk not in ledger_keys:
+            report["archive_only"] += 1
+            preds[rk] = pred
+    report["runs_seen"] = len(ledger_keys | set(archive_dr) | set(archive_skips))
+
+    # 3. one prediction per ticker per day
+    preds, superseded = _canonical(preds)
+    report["skipped_same_day_rerun"] = len(superseded)
+    return preds, archive_dr, superseded
+
+
 def score_matured(*, today: Optional[date] = None,
                   closes_fn: Optional[Callable] = None,
                   consensus_fn: Optional[Callable] = None,
                   write: bool = True, page_size: int = 200) -> dict:
     """Label every run horizon that has matured and is not yet labelled.
 
-    Idempotent: a labelled (run, horizon) is never rescored. The first sweep
+    Where the prediction comes from: the run_features ledger first -- it holds every
+    run's spot, IVs and targets and is never deleted with a report -- and the archive
+    (ticker_signals JOIN runs) for any run the ledger has not caught yet. The archive
+    also supplies the consensus recorded at run time and the content-hash cache-copy
+    check. A run whose archive rows are gone is still labelled from the ledger.
+
+    One label per ticker per day (see _canonical); a label already written for a
+    superseded rerun is removed on a writing sweep.
+
+    A price horizon with no close in its window is retried while the window is recent.
+    Once it is TERMINAL_GRACE_DAYS past and the ticker has had no close since the target
+    date (delisted, halted, renamed), a terminal record is written to
+    valuation_outcome_terminal -- with the last close before the target where there was
+    one -- so the name is counted, not silently dropped, and is not refetched daily.
+
+    Idempotent: a labelled or terminal (run, horizon) is never rescored. The first sweep
     is therefore the backfill -- it labels all history at once."""
     _ensure_tables()
     today = today or datetime.now(timezone.utc).date()
@@ -340,12 +539,13 @@ def score_matured(*, today: Optional[date] = None,
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     existing = {r["outcome_key"]
                 for r in _db.query("SELECT outcome_key FROM valuation_outcomes")}
+    terminal = {r["outcome_key"]
+                for r in _db.query("SELECT outcome_key FROM valuation_outcome_terminal")}
 
-    report = {k: 0 for k in ("runs_seen", "skipped_no_prediction", "skipped_unrated",
-                             "skipped_cache_copy", "skipped_mis_scaled",
-                             "no_consensus", "not_matured", "no_price")}
+    report = {k: 0 for k in _REPORT_KEYS}
+    preds, archive_dr, superseded = _gather(page_size, report)
     out: list[dict] = []
-    seen: dict[str, set[str]] = {}
+
     needs: dict[str, list[tuple[dict, str, date]]] = {}
 
     def add(pred, horizon, label, label_date, source):
@@ -356,37 +556,19 @@ def score_matured(*, today: Optional[date] = None,
         out.append(_labelled_row(pred, horizon, label, label_date, source,
                                  now_iso))
 
-    for row in _iter_signal_rows(page_size):
-        report["runs_seen"] += 1
-        ticker = (row["ticker"] or "").upper()
-        dr = _loads(row["dcf_range_json"])
-        if not ticker or not isinstance(dr, dict) or not dr:
-            report["skipped_no_prediction"] += 1
-            continue
-        digest = _content_hash(dr)
-        if dr.get("is_cache_copy") or digest in seen.setdefault(ticker, set()):
-            report["skipped_cache_copy"] += 1
-            continue
-        seen[ticker].add(digest)
-        pred = _prediction(row, ticker, dr)
-        if pred is None and is_unrated(dr):
-            # Counted apart: a withheld valuation is a decision, not missing data.
-            report["skipped_unrated"] += 1
-            continue
-        if pred is None:
-            report["skipped_no_prediction"] += 1
-            continue
-
+    for rk, pred in sorted(preds.items(), key=lambda kv: (kv[1]["run_date"], kv[0])):
+        ticker = pred["ticker"]
         if _key(pred, CONSENSUS) not in existing:
-            label = _consensus_label(ticker, dr, pred["run_date"], today,
-                                     consensus_fn)
+            label = _consensus_label(ticker, archive_dr.get(rk) or {}, pred["run_date"],
+                                     today, consensus_fn)
             if label is None:
                 report["no_consensus"] += 1
             else:
                 add(pred, CONSENSUS, *label)
 
         for horizon, days in HORIZON_DAYS.items():
-            if _key(pred, horizon) in existing:
+            key = _key(pred, horizon)
+            if key in existing or key in terminal:
                 continue
             target = pred["run_date"] + timedelta(days=days)
             if target >= today:
@@ -394,31 +576,104 @@ def score_matured(*, today: Optional[date] = None,
                 continue
             needs.setdefault(ticker, []).append((pred, horizon, target))
 
+    # One fetch per ticker, from its earliest run date to today: it holds every window,
+    # and it is also what tells a data gap (closes after the target) from a name that
+    # stopped trading (none), and the last close before the target for the record.
+    series_by_ticker: dict[str, Optional[list]] = {}
+    misses: list[tuple[dict, str, date, list]] = []
     for ticker, items in needs.items():
-        start = min(t for _, _, t in items)
-        end = min(max(t for _, _, t in items)
-                  + timedelta(days=_PRICE_WINDOW_DAYS), today)
+        start = min(p["run_date"] for p, _, _ in items)
         try:
-            series = sorted(closes_fn(ticker, start.isoformat(),
-                                      end.isoformat()) or [])
+            series = sorted(closes_fn(ticker, start.isoformat(), today.isoformat()) or [])
         except Exception as exc:                           # noqa: BLE001
             logger.warning("valuation_outcomes: prices for %s failed: %s",
                            ticker, exc)
-            series = []
+            series = None
+        series_by_ticker[ticker] = series
         for pred, horizon, target in items:
-            hit = _close_on_or_after(series, target)
+            hit = _close_on_or_after(series or [], target)
             if hit is None:
-                report["no_price"] += 1
+                if series is not None:                     # a failed fetch is never terminal
+                    misses.append((pred, horizon, target, series))
+                else:
+                    report["no_price"] += 1
                 continue
             add(pred, horizon, hit[1], hit[0], "close")
 
+    # 4. terminal: past the grace period, and nothing has traded since the target date
+    terminal_rows: list[list] = []
+    feed_alive = _terminal_candidates_ok(series_by_ticker)
+    for pred, horizon, target, hist in misses:
+        overdue = today > target + timedelta(days=_PRICE_WINDOW_DAYS + TERMINAL_GRACE_DAYS)
+        after = [1 for d, c in hist if str(d)[:10] >= target.isoformat() and _pos(c)]
+        if not (overdue and feed_alive) or after:          # recent, an outage, or a data gap
+            report["no_price"] += 1
+            continue
+        before = [(d, c) for d, c in hist if str(d)[:10] < target.isoformat() and _pos(c)]
+        last_d, last_c = (str(before[-1][0])[:10], float(before[-1][1])) if before else (None, None)
+        report["terminal_no_price"] += 1
+        terminal_rows.append([_key(pred, horizon), pred["run_id"], pred["ticker"], horizon,
+                              pred["run_date"].isoformat(), target.isoformat(),
+                              "no_close_since_target" if before else "no_close_after_run",
+                              last_c, last_d, now_iso])
+
     report["labels"] = len(out)
+    report["terminal"] = len(terminal_rows)
     report["written"] = 0
-    if write and out:
-        _db.executemany(_upsert_sql("valuation_outcomes", "outcome_key", _COLUMNS),
-                        [[r[c] for c in _COLUMNS] for r in out])
-        report["written"] = len(out)
+    if write:
+        if out:
+            _db.executemany(_upsert_sql("valuation_outcomes", "outcome_key", _COLUMNS),
+                            [[r[c] for c in _COLUMNS] for r in out])
+            report["written"] = len(out)
+        if terminal_rows:
+            _db.executemany(_upsert_sql("valuation_outcome_terminal", "outcome_key",
+                                        _TERMINAL_COLUMNS), terminal_rows)
+        if superseded:
+            stale = [k.split("|", 1) for k in superseded]
+            labelled = {(r["run_id"], r["ticker"]) for r in _db.query(
+                "SELECT DISTINCT run_id, ticker FROM valuation_outcomes")}
+            gone = [[rid, t] for rid, t in stale if (rid, t) in labelled]
+            if gone:
+                _db.executemany("DELETE FROM valuation_outcomes WHERE run_id = ? AND ticker = ?",
+                                gone)
+            report["superseded_removed"] = len(gone)
     return report
+
+
+def terminal_counts() -> dict[str, int]:
+    """Terminal (unlabellable) horizons by horizon, for the scorecard and diagnostics."""
+    _ensure_tables()
+    return {r["horizon"]: int(r["n"]) for r in _db.query(
+        "SELECT horizon, COUNT(*) AS n FROM valuation_outcome_terminal GROUP BY horizon")}
+
+def label_plan(*, today: Optional[date] = None, page_size: int = 200) -> dict:
+    """What a sweep would have to label, with no price fetch: the canonical predictions,
+    how many have at least one matured price horizon not yet labelled or terminal, and
+    the count per horizon. The backfill script prints it before it fetches anything."""
+    _ensure_tables()
+    today = today or datetime.now(timezone.utc).date()
+    report = {k: 0 for k in _REPORT_KEYS}
+    preds, _dr, superseded = _gather(page_size, report)
+    done = {r["outcome_key"] for r in _db.query("SELECT outcome_key FROM valuation_outcomes")}
+    done |= {r["outcome_key"] for r in _db.query(
+        "SELECT outcome_key FROM valuation_outcome_terminal")}
+    by_h = {h: 0 for h in HORIZON_DAYS}
+    with_any = 0
+    for pred in preds.values():
+        hit = False
+        for horizon, days in HORIZON_DAYS.items():
+            if _key(pred, horizon) in done or pred["run_date"] + timedelta(days=days) >= today:
+                continue
+            by_h[horizon] += 1
+            hit = True
+        with_any += int(hit)
+    return {"today": today.isoformat(), "predictions": len(preds),
+            "same_day_reruns": len(superseded), "with_matured_horizon": with_any,
+            "matured_by_horizon": by_h,
+            "sources": {k: report[k] for k in ("ledger_rows", "ledger_only", "archive_only")},
+            "excluded": {k: report[k] for k in ("skipped_no_prediction", "skipped_unrated",
+                                                "skipped_override_carried", "skipped_cache_copy")}}
+
 
 
 def score_actions(*, today: Optional[date] = None,
@@ -502,14 +757,23 @@ def scorecard(group_by: tuple[str, ...] = ("market",)) -> dict:
     (and of base IV), bear-bull band coverage and direction hit rate.
     Blended: each run's available labels averaged with BLEND_WEIGHTS, then
     the median across runs."""
-    bad = [g for g in group_by if g not in _GROUPABLE]
+    allowed = _GROUPABLE | _PROVENANCE_GROUPS
+    bad = [g for g in group_by if g not in allowed]
     if bad:
-        raise ValueError(f"cannot group by {bad}; allowed: {sorted(_GROUPABLE)}")
+        raise ValueError(f"cannot group by {bad}; allowed: {sorted(allowed)}")
     _ensure_tables()
     cols = sorted(set(group_by) | {"run_id", "ticker", "horizon", "iv_log_err",
                                    "pt_log_err", "pm_log_err", "in_band",
                                    "direction_hit"})
-    rows = _db.query(f"SELECT {', '.join(cols)} FROM valuation_outcomes")
+    prov = [g for g in group_by if g in _PROVENANCE_GROUPS]
+    if prov:
+        from src.memory import run_features as rf
+        rf._ensure_tables()
+        select = ", ".join(f"f.{c}" if c in _PROVENANCE_GROUPS else f"o.{c}" for c in cols)
+        rows = _db.query(f"SELECT {select} FROM valuation_outcomes o LEFT JOIN run_features f "
+                         "ON f.run_id = o.run_id AND f.ticker = o.ticker")
+    else:
+        rows = _db.query(f"SELECT {', '.join(cols)} FROM valuation_outcomes")
 
     groups: dict[str, dict] = {}
     for r in rows:

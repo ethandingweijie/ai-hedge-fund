@@ -34,7 +34,8 @@ from src.memory import valuation_outcomes as vo
 
 logger = logging.getLogger(__name__)
 
-FEATURES_VERSION = 4          # 4: + fy0_end (the last reported annual period end; the scorers' anchor)
+FEATURES_VERSION = 5          # 5: + pipeline_model / research_model / engine_version (provenance, 2026-11-27)
+#          # 4: + fy0_end (the last reported annual period end; the scorers' anchor)
 #          # 2: + pt_calibration_version (Phase C); 3: FYE month from financials_used, balance-sheet families keep no forecast EPS / margin
 
 _DDL = """
@@ -80,7 +81,10 @@ CREATE TABLE IF NOT EXISTS run_features (
     override_carried     INTEGER NOT NULL DEFAULT 0,
     unrated              INTEGER NOT NULL DEFAULT 0,
     cache_copy           INTEGER NOT NULL DEFAULT 0,
-    recorded_at          TEXT NOT NULL
+    recorded_at          TEXT NOT NULL,
+    pipeline_model       TEXT,
+    research_model       TEXT,
+    engine_version       TEXT
 )
 """
 _DDL_IDX = (
@@ -101,7 +105,18 @@ COLUMNS = [
     "agent_eps_fy1_bear", "agent_eps_fy1_base", "agent_eps_fy1_bull",
     "agent_source", "cons_rg_fy1", "cons_eps_fy1", "guid_rg_mid", "guid_eps_mid", "guid_source",
     "override_carried", "unrated", "cache_copy", "recorded_at",
+    "pipeline_model", "research_model", "engine_version",
 ]
+
+#: Provenance columns (2026-11-27): which model ran the pipeline, which one researched,
+#: and which engine build valued it -- so a scorecard can split Qwen from Anthropic runs
+#: and one engine change from the next. Never overwritten by a backfill with a blank.
+PROVENANCE = ("pipeline_model", "research_model", "engine_version")
+#: Columns added to an existing table after it shipped. Each is also guarded in
+#: app/backend/database/schema_guard.py (ensure_learning_ledger_columns).
+ADDED_COLUMNS = (("pt_calibration_version", "TEXT"), ("fy0_end", "TEXT"),
+                 ("pipeline_model", "TEXT"), ("research_model", "TEXT"),
+                 ("engine_version", "TEXT"))
 
 #: The filter every learning reader applies: the agent's own, rated, original runs.
 AGENT_ONLY_WHERE = "override_carried = 0 AND unrated = 0 AND cache_copy = 0"
@@ -121,8 +136,8 @@ def _ensure_tables() -> None:
     if key == _tables_ready_key:
         return
     _db.ensure_table(_DDL)
-    _db.add_column_if_missing("run_features", "pt_calibration_version", "TEXT")
-    _db.add_column_if_missing("run_features", "fy0_end", "TEXT")
+    for col, typ in ADDED_COLUMNS:
+        _db.add_column_if_missing("run_features", col, typ)
     for ddl in _DDL_IDX:
         _db.execute(ddl)
     _tables_ready_key = key
@@ -340,12 +355,38 @@ def _guidance_mid(block: dict, field: str) -> Optional[float]:
     return lo if lo is not None else hi
 
 
+def engine_version(dr: dict, pipeline_version: Optional[str] = None,
+                   commit: Optional[str] = None) -> Optional[str]:
+    """'pipeline 2.0|dcf 3|ab12cd3': the archive's pipeline version, the DCF engine cache
+    version the dcf_range carries, and the deployed commit when one is known (Railway sets
+    RAILWAY_GIT_COMMIT_SHA). None when none of the three is known."""
+    parts = []
+    if pipeline_version:
+        parts.append(f"pipeline {pipeline_version}")
+    dcf_v = (dr or {}).get("_engine_cache_version") if isinstance(dr, dict) else None
+    if dcf_v is not None:
+        parts.append(f"dcf {dcf_v}")
+    if commit:
+        parts.append(str(commit)[:7])
+    return "|".join(parts) or None
+
+
+def deployed_commit() -> Optional[str]:
+    for var in ("RAILWAY_GIT_COMMIT_SHA", "GIT_COMMIT_SHA", "SOURCE_COMMIT"):
+        v = (os.environ.get(var) or "").strip()
+        if v:
+            return v[:7]
+    return None
+
+
 # ── extraction ───────────────────────────────────────────────────────────────
 
 def extract(run_id: str, ticker: str, dr: dict, scenario: Optional[dict], *,
             run_at: str, sector: Optional[str] = None, price_at_run=None,
             pm_target=None, research_tier: Optional[str] = None,
-            regime_risk: Optional[str] = None, cache_copy: bool = False) -> dict:
+            regime_risk: Optional[str] = None, cache_copy: bool = False,
+            pipeline_model: Optional[str] = None, research_model: Optional[str] = None,
+            pipeline_version: Optional[str] = None, commit: Optional[str] = None) -> dict:
     """Pure: the run_features row for one (run, ticker). Raises on a malformed dr."""
     if not isinstance(dr, dict) or not dr:
         raise ValueError("dcf_range entry missing")
@@ -413,6 +454,9 @@ def extract(run_id: str, ticker: str, dr: dict, scenario: Optional[dict], *,
         "unrated": int(vo.is_unrated(dr)),
         "cache_copy": int(bool(cache_copy or dr.get("is_cache_copy"))),
         "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "pipeline_model": (str(pipeline_model) if pipeline_model else None),
+        "research_model": (str(research_model) if research_model else None),
+        "engine_version": engine_version(dr, pipeline_version, commit),
     }
 
 
@@ -425,11 +469,13 @@ def _write(rows: list[dict]) -> int:
 
 
 def record(run_id: str, ticker: str, dr: dict, scenario: Optional[dict], **ctx) -> bool:
-    """Write one row at save time. Never raises: the daily backfill is the source of truth."""
+    """Write one row at save time. Never raises: the daily backfill is the source of truth.
+    The deployed commit is stamped into engine_version here (a backfill cannot know it)."""
     if not enabled():
         return False
     try:
         _ensure_tables()
+        ctx.setdefault("commit", deployed_commit())
         _write([extract(run_id, ticker, dr, scenario, **ctx)])
         return True
     except Exception as exc:                               # noqa: BLE001
@@ -447,7 +493,8 @@ def _iter_rows(page_size: int) -> Iterator:
     while True:
         page = run_archive._fetch(
             "SELECT ts.run_id, ts.ticker, r.run_at, r.sector, r.research_tier, "
-            "r.regime_risk_appetite, ts.price_at_run, ts.price_target, "
+            "r.regime_risk_appetite, r.model_name, r.pipeline_version, "
+            "ts.price_at_run, ts.price_target, "
             "ts.dcf_range_json, ts.scenario_json "
             "FROM ticker_signals ts JOIN runs r ON r.run_id = ts.run_id "
             "WHERE ts.dcf_range_json IS NOT NULL "
@@ -472,6 +519,10 @@ def backfill(*, page_size: int = 200, force: bool = False, write: bool = True) -
     _ensure_tables()
     current = {r["feature_key"] for r in _db.query(
         "SELECT feature_key FROM run_features WHERE features_version >= ?", [FEATURES_VERSION])}
+    # Provenance written at save time (the research model, the deployed commit) is not in
+    # the archive; a rewrite keeps it rather than blanking it.
+    kept = {r["feature_key"]: dict(r) for r in _db.query(
+        "SELECT feature_key, pipeline_model, research_model, engine_version FROM run_features")}
     seen: dict[str, set[str]] = {}
     out: list[dict] = []
     for row in _iter_rows(page_size):
@@ -495,7 +546,12 @@ def backfill(*, page_size: int = 200, force: bool = False, write: bool = True) -
                 row["run_id"], ticker, dr, vo._loads(row["scenario_json"]),
                 run_at=row["run_at"], sector=row["sector"], price_at_run=row["price_at_run"],
                 pm_target=row["price_target"], research_tier=row["research_tier"],
-                regime_risk=row["regime_risk_appetite"], cache_copy=copy))
+                regime_risk=row["regime_risk_appetite"], cache_copy=copy,
+                pipeline_model=row["model_name"], pipeline_version=row["pipeline_version"]))
+            prior = kept.get(key) or {}
+            for col in PROVENANCE:
+                if prior.get(col):
+                    out[-1][col] = prior[col]
         except Exception as exc:                           # noqa: BLE001
             report["errors"] += 1
             logger.warning("run_features: backfill %s skipped: %s", key, exc)

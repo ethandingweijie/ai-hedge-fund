@@ -1010,19 +1010,36 @@ def get_run_meta(run_id: str) -> Optional[dict]:
 
 # ── Delete helper ─────────────────────────────────────────────────────────────
 
+def _hide_from_history(run_id: str) -> bool:
+    """Add an archive run id to history_hidden_runs. False when it was already hidden."""
+    if _fetch_one("SELECT run_id FROM history_hidden_runs WHERE run_id = ?", [run_id]):
+        return False
+    _exec("INSERT INTO history_hidden_runs (run_id, hidden_at) VALUES (?, ?)",
+          [run_id, datetime.now(timezone.utc).isoformat(timespec="seconds")])
+    return True
+
+
 def delete_run(run_id: str, user_id: int = None) -> bool:
     """
-    Permanently delete a run from the archive.
+    Delete a run from the user's History -- a SOFT delete for the learning layer.
+
     Only the owner can delete a run. Legacy runs (user_id IS NULL) can be
     deleted by any authenticated user for backward compatibility.
-    Removes from web_runs first; if the row carries an archive_run_id,
-    cascades to the CLI archive tables (runs, ticker_signals, agent_signals).
-    Falls back to deleting directly from the CLI tables for CLI-only runs.
-    Returns True if anything was deleted, False if run_id not found or not owned.
+
+    What goes: the web_runs row (the report the user asked to remove).
+    What stays: the archive rows (runs, ticker_signals, agent_signals) and the
+    run_features ledger. They are the prediction the outcome sweep labels at
+    30/90/180/365 days; a hard delete here is how production lost every
+    Sep-Oct 2026 archive row before its first long-horizon label. The archive
+    run id is added to history_hidden_runs so History does not list it as a CLI
+    run in place of the deleted report.
+
+    Returns True if the run was removed from History, False if run_id was not
+    found, not owned, or already hidden.
     """
     _ensure_web_runs_table()
 
-    # ── 1. Check web_runs ────────────────────────────────────────────────
+    # ── 1. Web run ───────────────────────────────────────────────────────
     row = _fetch_one(
         "SELECT archive_run_id, user_id FROM web_runs WHERE run_id = ?", [run_id]
     )
@@ -1035,21 +1052,14 @@ def delete_run(run_id: str, user_id: int = None) -> bool:
 
         archive_id = row["archive_run_id"]
         _exec("DELETE FROM web_runs WHERE run_id = ?", [run_id])
-        # Cascade to CLI archive if this web run was also saved there
         if archive_id:
-            _exec("DELETE FROM agent_signals  WHERE run_id = ?", [archive_id])
-            _exec("DELETE FROM ticker_signals WHERE run_id = ?", [archive_id])
-            _exec("DELETE FROM runs           WHERE run_id = ?", [archive_id])
+            _hide_from_history(archive_id)
         return True
 
-    # ── 2. Fallback: CLI-only run (no web_runs entry) ────────────────────
-    affected = _exec("DELETE FROM runs WHERE run_id = ?", [run_id])
-    if affected:
-        _exec("DELETE FROM agent_signals  WHERE run_id = ?", [run_id])
-        _exec("DELETE FROM ticker_signals WHERE run_id = ?", [run_id])
-        return True
-
-    return False
+    # ── 2. CLI-only run (no web_runs entry): hide, never delete ──────────
+    if _fetch_one("SELECT run_id FROM runs WHERE run_id = ?", [run_id]) is None:
+        return False
+    return _hide_from_history(run_id)
 
 
 # ── Public read helpers ───────────────────────────────────────────────────────

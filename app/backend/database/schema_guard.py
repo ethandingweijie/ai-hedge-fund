@@ -142,13 +142,50 @@ def ensure_agent_lessons_scope(engine: sa.engine.Engine) -> None:
     logger.info("Schema guard: agent_lessons scope columns added (%d)", len(pending))
 
 
+#: Columns added to the self-learning ledgers after their tables shipped. The dual-mode
+#: modules (src/memory/run_features.py, estimate_outcomes.py) add the same columns lazily
+#: on first use; this guard covers a boot where something else reaches the table first.
+#: Keep in step with run_features.ADDED_COLUMNS.
+_LEARNING_COLUMNS: dict[str, tuple[tuple[str, str], ...]] = {
+    "run_features": (("pt_calibration_version", "TEXT"), ("fy0_end", "TEXT"),
+                     # 2026-11-27 provenance: split the scorecard by provider and build
+                     ("pipeline_model", "TEXT"), ("research_model", "TEXT"),
+                     ("engine_version", "TEXT")),
+    # 2026-11-27 point-in-time estimate scoring
+    "estimate_outcomes": (("lead_days", "INTEGER"), ("anchor_rule", "TEXT")),
+}
+
+
+def ensure_learning_ledger_columns(engine: sa.engine.Engine) -> None:
+    """run_features provenance columns and estimate_outcomes.lead_days / anchor_rule.
+    All nullable: existing rows read NULL (unknown provenance; an estimate row with no
+    anchor_rule is rescored by the next sweep)."""
+    inspector = sa.inspect(engine)
+    tables = set(inspector.get_table_names())
+    added: list[str] = []
+    for table, cols in _LEARNING_COLUMNS.items():
+        if table not in tables:
+            continue
+        have = {c["name"] for c in inspector.get_columns(table)}
+        pending = [(c, t) for c, t in cols if c not in have]
+        if not pending:
+            continue
+        with engine.begin() as conn:
+            for col, typ in pending:
+                conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {col} {typ}"))
+        added += [f"{table}.{c}" for c, _ in pending]
+    if added:
+        logger.info("Schema guard: learning ledger columns added: %s", added)
+
+
 def ensure_all(engine: sa.engine.Engine) -> None:
     """Run every runtime schema guard. Called at boot (main.py) and by
     scripts/sync_schema.py. Failures are logged, not raised — a startup
     crash loop is worse than serving with the diag endpoint reporting
     the missing columns."""
     for guard in (ensure_user_extensions, ensure_api_key_user_scope,
-                  ensure_calibration_family, ensure_agent_lessons_scope):
+                  ensure_calibration_family, ensure_agent_lessons_scope,
+                  ensure_learning_ledger_columns):
         try:
             guard(engine)
         except Exception:

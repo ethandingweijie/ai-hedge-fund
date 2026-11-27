@@ -912,14 +912,20 @@ def save_run(state: dict, decisions: dict) -> str:
             from src.memory import run_features as _rf
             if _rf.enabled():
                 _scen_all = data.get("scenario_analysis", {}) or {}
+                _dr_map = data.get("deep_research_map") or {}
                 for ticker in tickers:
+                    _res = _dr_map.get(ticker) if isinstance(_dr_map.get(ticker), dict) else {}
                     _rf.record(
                         run_id, ticker, dcf_range.get(ticker) or {}, _scen_all.get(ticker),
                         run_at=run_at, sector=data.get("sector"),
                         price_at_run=_prices_at_run.get(ticker),
                         pm_target=(decisions.get(ticker) or {}).get("price_target"),
-                        research_tier=data.get("research_tier"),
-                        regime_risk=regime.get("risk_appetite"))
+                        research_tier=_res.get("research_tier") or data.get("research_tier"),
+                        regime_risk=regime.get("risk_appetite"),
+                        # provenance (2026-11-27): split the scorecard by provider / build
+                        pipeline_model=meta.get("model_name"),
+                        research_model=_res.get("research_model") or data.get("research_model"),
+                        pipeline_version=PIPELINE_VERSION)
         except Exception as exc:                                   # noqa: BLE001
             logger.warning("[archive] run_features hook skipped: %s", exc)
         return run_id

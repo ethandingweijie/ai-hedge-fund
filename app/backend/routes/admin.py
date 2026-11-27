@@ -1341,8 +1341,9 @@ async def delete_row(request: Request, secret: str = "", db: str = "run_archive"
     if key_col not in allowed_keys:
         raise HTTPException(status_code=400, detail=f"key_col must be one of: {allowed_keys}")
 
-    # For web_runs, use the cascading delete that also cleans up
-    # runs, ticker_signals, agent_signals, and research_summary_cache
+    # For web_runs, use delete_run: it removes the report and hides its archive run
+    # from History but KEEPS runs / ticker_signals / agent_signals / run_features (the
+    # outcome labels are scored from them); also cleans research_summary_cache
     if table == "web_runs" and key_col == "run_id":
         from app.backend.services.analysis_service import delete_run
         success = delete_run(key_val)

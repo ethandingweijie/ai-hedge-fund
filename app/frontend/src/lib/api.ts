@@ -316,7 +316,11 @@ export interface DiagnosticCard {
   detail: string;
   group: string;
   horizon: string;
-  action: 'code_change' | 'calibration';
+  /** 'calibration' only when a proposal in shadow or live moves this group. */
+  action: 'code_change' | 'calibration' | 'no_proposal';
+  /** True below the 180-day verdict horizons: an early read, not a verdict. */
+  early_read?: boolean;
+  n?: number | null;
 }
 
 export interface ModelAccuracyOverview {
@@ -329,6 +333,9 @@ export interface ModelAccuracyOverview {
   history: CalibrationCard[];
   diagnostics: DiagnosticCard[];
   diagnostics_horizon: string | null;
+  /** The diagnostics horizon is shorter than 180 days. */
+  diagnostics_early_read?: boolean;
+  versions_total?: number;
   eligible_count: number;
 }
 

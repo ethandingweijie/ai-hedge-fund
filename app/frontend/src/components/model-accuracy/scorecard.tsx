@@ -203,7 +203,8 @@ export function ScorecardTab({ overview, learning, maturity }: {
       <div className="border-b border-border">
         <Section title="What the numbers say" count={diags.length}
           summary={diags[0]?.title}
-          hint={overview?.diagnostics_horizon ? `From runs scored against the ${HORIZON_LABEL[overview.diagnostics_horizon] ?? overview.diagnostics_horizon}.` : undefined}>
+          hint={overview?.diagnostics_horizon ? `From runs scored against the ${HORIZON_LABEL[overview.diagnostics_horizon] ?? overview.diagnostics_horizon}${
+            overview.diagnostics_early_read ? ' — an early read, not a verdict (the 12-month targets are judged at 180 days and later).' : '.'}` : undefined}>
           {diags.length === 0 ? (
             <Card className="p-4 text-sm text-muted-foreground">Nothing stands out yet — findings appear as outcomes accumulate.</Card>
           ) : (

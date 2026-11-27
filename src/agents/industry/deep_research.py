@@ -7110,6 +7110,11 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                 if t == primary_ticker else "USD"
             ),
         )
+        # Provenance for the learning ledger (run_features.research_model): the model this
+        # run asked to research with. A cached tier reused older research; research_tier
+        # says so beside it.
+        if isinstance(result, dict):
+            result.setdefault("research_model", _model)
         return t, result
 
     deep_research_map: dict[str, dict] = {}
@@ -7280,6 +7285,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     state["data"]["deep_research_annotated"]  = primary.get("deep_research_annotated", "")
     state["data"]["deep_research_sections"]   = primary.get("deep_research_sections", {})
     state["data"]["research_tier"]            = primary.get("research_tier", "none")
+    state["data"]["research_model"]           = primary.get("research_model")
     # M2 A2: content date of the primary ticker's research — archived on
     # runs.research_as_of by save_run and drives content-age reuse.
     state["data"]["research_as_of"]           = primary.get("research_as_of")

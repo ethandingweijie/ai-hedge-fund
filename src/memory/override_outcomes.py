@@ -284,8 +284,12 @@ def estimate_field_outcomes() -> dict:
         from src.data import estimate_override_store as store
         store.ensure_table()
         recs = _db.query("SELECT id, run_id, ticker, overrides_json FROM estimate_overrides WHERE active = 1")
+        from src.memory import estimate_outcomes as _eo
+        _eo._ensure_tables()
+        # the same point-in-time rows the agent's own scorecard reads (lead >= 90 days)
         scored = {(r["run_id"], r["ticker"], r["field"]): dict(r) for r in _db.query(
-            "SELECT run_id, ticker, field, agent_base, actual FROM estimate_outcomes WHERE period_kind = 'fy'")}
+            "SELECT run_id, ticker, field, agent_base, actual FROM estimate_outcomes "
+            f"WHERE period_kind = 'fy' AND {_eo.POINT_IN_TIME_WHERE}")}
     except Exception as exc:                               # noqa: BLE001
         logger.debug("estimate_field_outcomes unavailable: %s", exc)
         return out

@@ -59,7 +59,11 @@ L2 = 0.5
 FIT_STEPS = 150
 FIT_LR = 0.05
 SHADOW_MIN_DAYS = 28
-HORIZON_PREFERENCE = ("px_365d", "px_180d", "px_90d", "consensus_0d")
+#: Price horizons only. Owner rule: never learn toward consensus -- the Street's target
+#: is not an outcome, and fitting to it taught every IV calibration (81 versions in prod
+#: by 2026-11-27) to agree with the Street. With no horizon at MIN_CELL_RUNS the weekly
+#: fit records nothing ("insufficient_data").
+HORIZON_PREFERENCE = ("px_365d", "px_180d", "px_90d")
 
 # ── pt family (self-learning loops 3 and 4, 2026-10-04) ─────────────────────
 # The 12-month target is spot + capture x (IV - spot) per scenario, probability-weighted (x the D1 price-path carry
@@ -608,6 +612,8 @@ def fit_and_record(*, horizon: Optional[str] = None, today: Optional[date] = Non
     vo._ensure_tables()
     _ensure_tables()
     today = today or datetime.now(timezone.utc).date()
+    if horizon == vo.CONSENSUS:
+        raise ValueError("a calibration is never fitted toward the consensus label")
     if family == "pt":
         return _fit_and_record_pt(horizon=horizon, today=today, write=write)
     chosen, counts = _choose_horizon(horizon)
@@ -693,13 +699,19 @@ def shadow_report(version_id: str, *, today: Optional[date] = None) -> dict:
     markets = set(params.get("market_iv_multiplier") or {})
     days = (today - created).days
 
-    horizons = list(dict.fromkeys([row["horizon"], vo.CONSENSUS]))
+    # Price horizons only: a candidate is never judged on how close it sits to the Street
+    # (until 2026-11-27 the consensus label was scored here beside the fitted horizon). A
+    # version that was FITTED on consensus can never be promoted.
+    horizons = [h for h in [row["horizon"]] if h != vo.CONSENSUS]
     report = {"version_id": version_id, "status": row["status"],
               "created_at": created.isoformat(), "days_in_shadow": days,
               "horizons": {}}
     reasons: list[str] = []
     if days < SHADOW_MIN_DAYS:
         reasons.append(f"{days} day(s) in shadow; need {SHADOW_MIN_DAYS}")
+    if row["horizon"] == vo.CONSENSUS:
+        reasons.append("fitted toward Street consensus; a calibration is only fitted on "
+                       "realised prices")
 
     for h in horizons:
         rows = [r for r in wf.load_rows(h) if r["run_date"] > created]

@@ -133,7 +133,8 @@ def test_the_outcome_ledger_does_not_score_a_forecast_nobody_made():
     assert vo.is_unrated(dr) and vo._prediction(row, "SMR", dr) is None
     rated = {"base": {"intrinsic_value": 100.0}}
     assert not vo.is_unrated(rated) and not vo.is_unrated(None)
-    assert "skipped_unrated" in inspect.getsource(vo.score_matured)
+    assert "skipped_unrated" in inspect.getsource(vo._gather)          # score_matured gathers through it
+    assert "_gather(" in inspect.getsource(vo.score_matured)
 
 
 def test_nothing_that_formats_an_intrinsic_value_assumes_it_is_a_number():

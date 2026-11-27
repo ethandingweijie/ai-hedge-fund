@@ -63,6 +63,18 @@ ADJ_ABS_CAP = 0.10
 SHRINK = 10.0
 _Q_MATCH_DAYS = 20
 
+#: Point-in-time rule (2026-11-27). A row is a FORECAST only when the run was made at least
+#: MIN_LEAD_DAYS before the FY+1 year ended (lead_days = fy1_end - run_date) and the print
+#: it was scored against ended after the run. Anything else is a nowcast of a year that had
+#: (nearly) closed -- AAPL / SBUX / V run days after their September year end -- or a score
+#: against the year already reported (LULU, scored vs FY0 under the old label anchor). Such
+#: rows are stored with their lead_days but kept out of every scorecard, proposal and
+#: shadow test.
+MIN_LEAD_DAYS = 90
+#: The anchor rule a row was scored under. Rows scored under an older rule are rescored
+#: (and, until then, ignored by every reader). Bump when fy_window / the match changes.
+ANCHOR_RULE = "fy0_end+1y;lead>=90;v1"
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS estimate_outcomes (
     outcome_key       TEXT PRIMARY KEY,
@@ -83,7 +95,9 @@ CREATE TABLE IF NOT EXISTS estimate_outcomes (
     in_band           INTEGER,
     agent_closer_than_consensus INTEGER,
     archetype TEXT, confidence TEXT, profile TEXT, market TEXT, sector TEXT,
-    scored_at         TEXT NOT NULL
+    scored_at         TEXT NOT NULL,
+    lead_days         INTEGER,
+    anchor_rule       TEXT
 )
 """
 _DDL_IDX = ("CREATE INDEX IF NOT EXISTS idx_estimate_outcomes_grp "
@@ -94,8 +108,12 @@ _COLUMNS = ["outcome_key", "run_id", "ticker", "run_date", "fiscal_year_1", "fie
             "period_kind", "agent_bear", "agent_base", "agent_bull", "consensus", "guidance_mid",
             "actual", "actual_period_end", "actual_source", "err_base", "err_consensus",
             "in_band", "agent_closer_than_consensus", "archetype", "confidence", "profile",
-            "market", "sector", "scored_at"]
+            "market", "sector", "scored_at", "lead_days", "anchor_rule"]
 _tables_ready_key: Optional[tuple] = None
+
+#: The filter every READER applies: current anchor rule, a real lead, a print after the run.
+POINT_IN_TIME_WHERE = (f"anchor_rule = '{ANCHOR_RULE}' AND lead_days IS NOT NULL "
+                       f"AND lead_days >= {MIN_LEAD_DAYS} AND actual_period_end > run_date")
 
 
 def enabled() -> bool:
@@ -109,6 +127,10 @@ def _ensure_tables() -> None:
     if key == _tables_ready_key:
         return
     _db.ensure_table(_DDL)
+    # 2026-11-27 point-in-time columns. Also guarded in app/backend/database/schema_guard.py
+    # (ensure_learning_ledger_columns) for a boot where the ORM path reaches the table first.
+    _db.add_column_if_missing("estimate_outcomes", "lead_days", "INTEGER")
+    _db.add_column_if_missing("estimate_outcomes", "anchor_rule", "TEXT")
     for ddl in _DDL_IDX:
         _db.execute(ddl)
     _tables_ready_key = key
@@ -235,6 +257,22 @@ def _key(run_id: str, ticker: str, field: str, kind: str) -> str:
     return f"{run_id}|{ticker}|{field}|{kind}"
 
 
+def lead_days(feat: dict) -> Optional[int]:
+    """fy1_end - run_date in days, from the same window the scorer matches on."""
+    win = fy_window(feat)
+    run_d = _d(feat.get("run_date"))
+    if win is None or run_d is None:
+        return None
+    return (win[1] - run_d).days
+
+
+def is_point_in_time(row: dict) -> bool:
+    """The reader rule of POINT_IN_TIME_WHERE, for rows already in memory."""
+    ld = row.get("lead_days")
+    return (row.get("anchor_rule") == ANCHOR_RULE and ld is not None and int(ld) >= MIN_LEAD_DAYS
+            and str(row.get("actual_period_end") or "") > str(row.get("run_date") or ""))
+
+
 def _row(feat: dict, field: str, kind: str, actual: float, period_end: str, source: str,
          now_iso: str) -> Optional[dict]:
     short = {"revenue_growth": "rg", "ebitda_margin": "em", "eps": "eps"}[field]
@@ -263,6 +301,7 @@ def _row(feat: dict, field: str, kind: str, actual: float, period_end: str, sour
         "archetype": feat.get("archetype"), "confidence": feat.get("confidence"),
         "profile": feat.get("profile"), "market": feat.get("market"), "sector": feat.get("sector"),
         "scored_at": now_iso,
+        "lead_days": lead_days(feat), "anchor_rule": ANCHOR_RULE,
     }
 
 
@@ -316,7 +355,13 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
     annuals_fn = annuals_fn or _default_annuals
     quarters_fn = quarters_fn or _default_quarters
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    existing = {r["outcome_key"] for r in _db.query("SELECT outcome_key FROM estimate_outcomes")}
+    # A row scored under an older anchor rule is rescored: it is not "existing" here, and
+    # every reader ignores it until it is (the LULU row matched FY0 under the label anchor).
+    existing = {r["outcome_key"] for r in _db.query(
+        "SELECT outcome_key FROM estimate_outcomes WHERE anchor_rule = ?", [ANCHOR_RULE])}
+    report["stale_anchor"] = int((_db.query_one(
+        "SELECT COUNT(*) AS n FROM estimate_outcomes WHERE anchor_rule IS NULL OR anchor_rule != ?",
+        [ANCHOR_RULE]) or {"n": 0})["n"] or 0)
     feats = rf.rows(where="(fiscal_year_1 IS NOT NULL OR fy0_end IS NOT NULL) AND agent_rg_fy1_base IS NOT NULL")
     report["candidates"] = len(feats)
 
@@ -403,11 +448,17 @@ def score_matured(*, today: Optional[date] = None, annuals_fn: Optional[Callable
 
 # ── reading ──────────────────────────────────────────────────────────────────
 
-def _rows(where: str = "", params: Optional[list] = None) -> list[dict]:
+def _rows(where: str = "", params: Optional[list] = None, *,
+          point_in_time: bool = True) -> list[dict]:
+    """estimate_outcomes rows. point_in_time (the default, and what every scorecard,
+    proposal and shadow test reads) keeps only POINT_IN_TIME_WHERE rows."""
     _ensure_tables()
     sql = "SELECT * FROM estimate_outcomes"
-    if where:
-        sql += " WHERE " + where
+    clauses = [f"({where})"] if where else []
+    if point_in_time:
+        clauses.append(POINT_IN_TIME_WHERE)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
     return [dict(r) for r in _db.query(sql + " ORDER BY run_date ASC, outcome_key ASC",
                                        list(params or []))]
 
@@ -445,7 +496,10 @@ def scorecard(group_by: str = "archetype", *, period_kind: str = "fy") -> dict:
             bands = [r["in_band"] for r in rs if r["in_band"] is not None]
             cell["in_band_share"] = round(sum(bands) / len(bands), 3) if bands and len(errs) >= MIN_SCORECARD_N else None
             out[g][field] = cell
-    return {"group_by": group_by, "period_kind": period_kind, "n_rows": len(rows), "groups": out}
+    excluded = len(_rows("period_kind = ?", [period_kind], point_in_time=False)) - len(rows)
+    return {"group_by": group_by, "period_kind": period_kind, "n_rows": len(rows),
+            "excluded_not_point_in_time": excluded, "min_lead_days": MIN_LEAD_DAYS,
+            "anchor_rule": ANCHOR_RULE, "groups": out}
 
 
 def guidance_credibility(ticker: Optional[str] = None) -> dict:
@@ -664,7 +718,8 @@ def shadow_report(version_id: str, *, today: Optional[date] = None) -> dict:
 
 
 def counts() -> dict:
+    """Point-in-time rows per kind:field (what the scorecards read)."""
     _ensure_tables()
     rows = _db.query("SELECT period_kind, field, COUNT(*) AS n FROM estimate_outcomes "
-                     "GROUP BY period_kind, field")
+                     f"WHERE {POINT_IN_TIME_WHERE} GROUP BY period_kind, field")
     return {f"{r['period_kind']}:{r['field']}": int(r["n"]) for r in rows}

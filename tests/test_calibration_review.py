@@ -203,14 +203,44 @@ class TestDiagnostics:
     def test_cards_name_the_problem_and_what_fixes_it(self, monkeypatch):
         self._stub(monkeypatch)
         horizon, cards = review.diagnostics()
-        titles = {c["title"]: c for c in cards}
+        # px_90d is shorter than a verdict horizon: every card says so, with n
+        titles = {c["title"].replace("Early read, not a verdict: ", ""): c for c in cards}
         assert horizon == "px_90d"
+        assert all(c["early_read"] and c["title"].startswith("Early read, not a verdict")
+                   for c in cards)
         bias = titles["US 12-month targets run 25% below the price 90 days later"]
-        assert bias["action"] == "calibration"
+        # no proposal exists, so the card must not claim one addresses it
+        assert bias["action"] == "no_proposal"
+        assert "No calibration proposal addresses it yet" in bias["detail"]
+        assert "n=40" in bias["detail"]
         epv = titles["EPV misses by 7.1x on US / Mature SaaS runs"]
         assert epv["action"] == "code_change" and "22%" in epv["detail"]
         assert "US / Mature SaaS: every method missed the same way in 55% of runs" in titles
         assert any(t.startswith("US / Mature SaaS: another routing layer") for t in titles)
+
+    def test_a_bias_card_names_a_proposal_only_when_one_exists(self, monkeypatch):
+        self._stub(monkeypatch)
+        _store("v1", "shadow")                              # PARAMS moves US
+        _, cards = review.diagnostics()
+        bias = next(c for c in cards if c["category"] == "bias")
+        assert bias["action"] == "calibration" and "listed above" in bias["detail"]
+
+    def test_a_verdict_horizon_is_not_labelled_early(self, monkeypatch):
+        monkeypatch.setattr(review, "_label_counts", lambda: {"px_90d": 40, "px_180d": 30})
+        monkeypatch.setattr(review.vo, "scorecard", lambda group: {"groups": {"US": {"horizons": {
+            "px_180d": {"n": 30, "median_signed_pct": -20.0, "median_miss_factor": 1.4,
+                        "direction_hit_rate": 0.5}}}}})
+        from src.memory import valuation_attribution as va
+        monkeypatch.setattr(va, "attribution_report", lambda h, g, worst_n=0: {"groups": {}})
+        horizon, cards = review.diagnostics()
+        assert horizon == "px_180d"
+        assert cards and not cards[0]["early_read"]
+        assert not cards[0]["title"].startswith("Early read")
+
+    def test_consensus_is_never_a_diagnostic_horizon(self, monkeypatch):
+        monkeypatch.setattr(review, "_label_counts", lambda: {"consensus_0d": 200})
+        assert review.diagnostics() == (None, [])
+        assert review.diagnostics("consensus_0d") == (None, [])
 
     def test_thresholds_keep_noise_out(self, monkeypatch):
         self._stub(monkeypatch)
@@ -223,6 +253,51 @@ class TestDiagnostics:
     def test_no_labels_no_cards(self, monkeypatch):
         monkeypatch.setattr(review, "_label_counts", lambda: {})
         assert review.diagnostics() == (None, [])
+
+
+class TestOverview:
+    def test_an_old_active_calibration_is_never_hidden_by_newer_proposals(self, monkeypatch):
+        monkeypatch.setattr(review, "diagnostics", lambda: (None, []))
+        _store("v-live", "active", created="2026-01-01", promoted="2026-01-02")
+        _store("v-shadow-old", "shadow", created="2026-01-03")
+        for i in range(30):
+            _store(f"v-rej-{i:02d}", "rejected", created=f"2026-02-{i % 28 + 1:02d}")
+        monkeypatch.setattr(cf, "shadow_report", lambda vid, today=None: {
+            "eligible_for_promotion": False, "reasons": [], "days_in_shadow": 1, "horizons": {}})
+        out = review.overview()
+        assert out["active"] is not None and out["active"]["id"] == "v-live"
+        assert "v-shadow-old" in {c["id"] for c in out["proposals"]}
+        assert out["versions_total"] == 32
+        assert len([c for c in out["proposals"] if c["status"] == "rejected"]) == review.OVERVIEW_RECENT
+
+
+class TestNeverFitTowardConsensus:
+    def test_consensus_is_not_a_fit_horizon(self):
+        assert "consensus_0d" not in cf.HORIZON_PREFERENCE
+        assert set(cf.HORIZON_PREFERENCE) <= {"px_90d", "px_180d", "px_365d"}
+
+    def test_an_explicit_consensus_fit_is_refused(self):
+        with pytest.raises(ValueError):
+            cf.fit_and_record(horizon="consensus_0d", write=False)
+
+    def test_no_eligible_horizon_proposes_nothing(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(cf.wf, "load_rows", lambda h, **kw: seen.append(h) or [])
+        out = cf.fit_and_record(write=False)
+        assert out["status"] == "insufficient_data"
+        assert "consensus_0d" not in seen and "consensus_0d" not in out["rows_by_horizon"]
+
+    def test_a_version_fitted_on_consensus_is_never_eligible(self, monkeypatch):
+        from src.data import db
+        review._ensure_tables()
+        db.execute("INSERT INTO calibration_versions (version_id, created_at, horizon, status, "
+                   "params_json, fit_json, backtest_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   ["v-cons", "2025-01-01", "consensus_0d", "shadow", json.dumps(PARAMS), "{}", "{}"])
+        monkeypatch.setattr(cf.wf, "load_rows", lambda h, **kw: [])
+        rep = cf.shadow_report("v-cons", today=date(2026, 11, 27))
+        assert rep["eligible_for_promotion"] is False
+        assert "consensus_0d" not in rep["horizons"]
+        assert any("consensus" in r for r in rep["reasons"])
 
 
 OWNER = "owner@example.com"

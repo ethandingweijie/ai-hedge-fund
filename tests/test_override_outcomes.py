@@ -142,7 +142,8 @@ class TestReports:
         row = {c: None for c in eo._COLUMNS}
         row.update(outcome_key="a1|ZZCO|revenue_growth|fy", run_id="a1", ticker="ZZCO", run_date="2026-01-01",
                    fiscal_year_1=2026, field="revenue_growth", period_kind="fy", agent_base=0.08, actual=0.04,
-                   scored_at="2027-03-01T00:00:00")
+                   scored_at="2027-03-01T00:00:00", actual_period_end="2026-12-31",
+                   lead_days=364, anchor_rule=eo.ANCHOR_RULE)
         db.execute(vo._upsert_sql("estimate_outcomes", "outcome_key", eo._COLUMNS), [row[c] for c in eo._COLUMNS])
         out = oo.estimate_field_outcomes()
         assert out["n"] == 1 and out["user_closer"] == 1 and out["rows"][0]["actual"] == 0.04

@@ -91,7 +91,7 @@ QUARTERS = [{"period_end": "2026-09-30", "revenue": 290.0}, {"period_end": "2026
 
 
 def _rows(**where):
-    return eo._rows(" AND ".join(f"{k} = ?" for k in where), list(where.values()))
+    return eo._rows(" AND ".join(f"{k} = ?" for k in where), list(where.values()), point_in_time=False)
 
 
 class TestScoring:
@@ -224,6 +224,8 @@ def _seed_scored(n, *, actual_rg=0.10, agent_base=0.08, guid=0.09, archetype="IV
             "in_band": None, "agent_closer_than_consensus": None,
             "archetype": archetype, "confidence": "MEDIUM", "profile": "P", "market": market,
             "sector": sector, "scored_at": scored + "T00:00:00",
+            "lead_days": (date(2026, 12, 31) - date.fromisoformat(run_date)).days,
+            "anchor_rule": eo.ANCHOR_RULE,
         })
     db.executemany(vo._upsert_sql("estimate_outcomes", "outcome_key", eo._COLUMNS),
                    [[r[c] for c in eo._COLUMNS] for r in rows])
@@ -318,3 +320,61 @@ class TestProposal:
         card = review.overview()
         assert card["actives"]["est"]["family"] == "est" and card["active"] is None
         assert any("guided revenue growth" in c for c in card["actives"]["est"]["changes"])
+
+
+class TestPointInTime:
+    """2026-11-27: prod scored LULU against FY0 and AAPL / SBUX / V days after their year
+    end. Rows carry lead_days = fy1_end - run_date; readers keep lead >= 90 and a print that
+    ended after the run, under the current anchor rule."""
+
+    def test_lead_days_is_stored(self):
+        _feat("r1", run_date="2026-06-01", fy0_end="2025-12-31")
+        eo.score_matured(today=TODAY, annuals_fn=_annuals({"ZZCO": ANNUALS}), quarters_fn=lambda t, e: [])
+        r = _rows(field="revenue_growth", period_kind="fy")[0]
+        assert r["lead_days"] == (date(2026, 12, 31) - date(2026, 6, 1)).days
+        assert r["anchor_rule"] == eo.ANCHOR_RULE
+
+    def test_a_nowcast_is_stored_but_kept_out_of_the_scorecard(self):
+        # AAPL-style: run 2026-10-11, the year ended 2026-09-26 -- the "forecast" is history
+        _feat("aapl", ticker="AAPL", run_date="2026-10-11", fy0_end="2025-09-27")
+        aapl = [{"period_end": "2026-09-26", "revenue": 410.0, "ebitda": 140.0, "eps": 7.5},
+                {"period_end": "2025-09-27", "revenue": 390.0, "ebitda": 130.0, "eps": 6.9}]
+        rep = eo.score_matured(today=date(2026, 11, 27), annuals_fn=_annuals({"AAPL": aapl}),
+                               quarters_fn=lambda t, e: [])
+        assert rep["fy_written"] == 3
+        stored = _rows(ticker="AAPL", period_kind="fy")
+        assert stored and all(r["lead_days"] < 0 for r in stored)
+        assert eo._rows("ticker = 'AAPL'") == []                        # readers' default
+        card = eo.scorecard("market")
+        assert card["n_rows"] == 0 and card["excluded_not_point_in_time"] == 3
+        assert eo.counts() == {}
+
+    def test_a_short_lead_is_excluded(self):
+        _feat("r1", run_date="2026-11-15", fy0_end="2025-12-31")      # 46 days before year end
+        eo.score_matured(today=TODAY, annuals_fn=_annuals({"ZZCO": ANNUALS}), quarters_fn=lambda t, e: [])
+        assert _rows(period_kind="fy") and eo._rows("period_kind = 'fy'") == []
+
+    def test_a_row_scored_under_an_older_anchor_is_rescored(self):
+        """The LULU row: scored against the year ending Feb 2026 under the label anchor. Under
+        the current rule its FY+1 ends Jan 2027 -- it is rescored, and until then ignored."""
+        from src.data import db
+        from src.memory import valuation_outcomes as vo
+        _feat("lulu", ticker="LULU", run_date="2026-10-03", fy1=2026, fye=2, fy0_end="2026-02-01")
+        eo._ensure_tables()
+        row = {c: None for c in eo._COLUMNS}
+        row.update(outcome_key="lulu|LULU|revenue_growth|fy", run_id="lulu", ticker="LULU",
+                   run_date="2026-10-03", fiscal_year_1=2026, field="revenue_growth", period_kind="fy",
+                   agent_base=0.045, actual=0.038, actual_period_end="2026-02-01",
+                   err_base=0.01, scored_at="2026-10-04T00:00:00")          # no anchor_rule: old rule
+        db.execute(vo._upsert_sql("estimate_outcomes", "outcome_key", eo._COLUMNS),
+                   [row[c] for c in eo._COLUMNS])
+        assert eo.scorecard("market")["n_rows"] == 0                    # ignored while stale
+        annuals = [{"period_end": "2027-01-31", "revenue": 11500.0, "ebitda": 2760.0, "eps": 13.8},
+                   {"period_end": "2026-02-01", "revenue": 11000.0, "ebitda": 2750.0, "eps": 14.6}]
+        rep = eo.score_matured(today=date(2027, 4, 1), annuals_fn=_annuals({"LULU": annuals}),
+                               quarters_fn=lambda t, e: [])
+        assert rep["stale_anchor"] == 1
+        r = _rows(ticker="LULU", field="revenue_growth", period_kind="fy")[0]
+        assert r["anchor_rule"] == eo.ANCHOR_RULE and r["actual_period_end"] == "2027-01-31"
+        assert r["lead_days"] >= eo.MIN_LEAD_DAYS
+        assert len(eo._rows("ticker = 'LULU' AND field = 'revenue_growth'")) == 1
