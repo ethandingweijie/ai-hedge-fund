@@ -1866,6 +1866,10 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
         ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
     out += [pill, Spacer(1, 5)]
+    # Owner, 2026-11-27: what this report did with material news since the prior one.
+    _mu_s = (rv.get("material_update") or {}).get("sentence")
+    if _mu_s:
+        out += [Paragraph(_strip(str(_mu_s)), styles["RptBody"]), Spacer(1, 4)]
     # Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured under the rating.
     if decision.get("headline"):
         _hl_style = ParagraphStyle("_pm_headline", parent=styles["RptBody"], fontName="Helvetica-Bold",

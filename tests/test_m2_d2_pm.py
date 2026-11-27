@@ -162,11 +162,27 @@ def test_material_positive_delta_shifts_one_step_bullish(pm_llm):
              "events": [{"headline": "FDA approval, beats estimates",
                          "date": "2026-08-18", "relevance": "thesis boost"}],
              "verdict": "material positive change"}
-    # PT clears the BUY guard after the shift lands on BUY
+    # PT clears the BUY guard after the shift lands on BUY. Owner, 2026-11-27: the
+    # news is folded into this run's research (amended), so the rating stands.
+    state = _state(scenario=_scenario(0.0, pt_12m=120.0, ev=120.0),
+                   extra_data={"freshness_delta": {"TEST": delta},
+                               "material_update": {"TEST": {"status": "amended", "events": []}}})
+    d, _ = _run(state)
+    assert d["action"] == "BUY"
+
+
+def test_rated_name_with_unreflected_material_news_is_under_review(pm_llm):
+    """Owner, 2026-11-27: material news the research did not fold in -> Under Review, HOLD at zero."""
+    delta = {"material": True,
+             "events": [{"headline": "FDA approval, beats estimates",
+                         "date": "2026-08-18", "relevance": "thesis boost"}],
+             "verdict": "material positive change"}
     state = _state(scenario=_scenario(0.0, pt_12m=120.0, ev=120.0),
                    extra_data={"freshness_delta": {"TEST": delta}})
     d, _ = _run(state)
-    assert d["action"] == "BUY"
+    assert d["action"] == "HOLD" and d["position_size_pct"] == 0
+    assert d["research_view"]["rating_label"] == "Under Review"
+    assert d["research_view"]["material_update"]["status"] == "not_reflected"
 
 
 def test_gates_never_stack_beyond_one_step(pm_llm):

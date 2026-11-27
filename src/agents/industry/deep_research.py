@@ -328,6 +328,138 @@ def _delta_route(age_days: float, freshness_delta: dict | None) -> str:
     return "legacy"
 
 
+# ── Material news re-rate (owner, 2026-11-27) ────────────────────────────────
+# A rating may not stand on research the freshness check has flagged as out of
+# date. Material news routes a reused report through the amend path (sections
+# amended, extractors re-run, valuation repriced) even under RESEARCH_FORCE_REUSE.
+# MATERIAL_NEWS_AMEND=false restores reuse-with-addendum (the rating then shows
+# Under Review instead). Results/guidance news that leaves the estimates
+# untouched triggers one targeted search round on the specific events.
+_GUIDANCE_EVENT_RE = re.compile(
+    r"guidance|outlook|forecast|earnings|results|profit|revenue|margin|dividend|"
+    r"payout|ebit|eps|target", re.I)
+_EST_RATE_TOL = 0.0005
+_EST_EPS_TOL = 0.005
+
+
+def _material_amend_enabled() -> bool:
+    return os.environ.get("MATERIAL_NEWS_AMEND", "true").strip().lower() not in (
+        "0", "false", "no", "off", "")
+
+
+def _is_material(freshness_delta: dict | None) -> bool:
+    return (freshness_delta or {}).get("material") is True
+
+
+def _guidance_event(freshness_delta: dict | None) -> bool:
+    """True when the material events are about results or guidance -- news that
+    should move the estimates if the amendment captured its figures."""
+    fd = freshness_delta or {}
+    bits = [str(fd.get("verdict") or "")]
+    for e in fd.get("events") or []:
+        if isinstance(e, dict):
+            bits.append(f"{e.get('headline') or ''} {e.get('relevance') or ''}")
+    return bool(_GUIDANCE_EVENT_RE.search(" ".join(bits)))
+
+
+def _estimate_changes(prior: dict | None, new: dict | None) -> list[dict] | None:
+    """Base-case estimate fields that moved between two guidance_estimates blocks.
+    None when there is no prior block to compare against (cannot tell)."""
+    if not isinstance(prior, dict) or not prior:
+        return None
+    pb = ((prior.get("estimates") or {}).get("base") or {})
+    nb = (((new or {}).get("estimates") or {}).get("base") or {}) if isinstance(new, dict) else {}
+    out: list[dict] = []
+    for f in _GUIDANCE_RATE_FIELDS + _GUIDANCE_EPS_FIELDS:
+        a, b = pb.get(f), nb.get(f)
+        if a is None and b is None:
+            continue
+        if a is None or b is None:
+            out.append({"field": f, "prior": a, "new": b})
+            continue
+        tol = _EST_RATE_TOL if f in _GUIDANCE_RATE_FIELDS else max(abs(a) * _EST_EPS_TOL, 1e-9)
+        if abs(b - a) > tol:
+            out.append({"field": f, "prior": a, "new": b})
+    return out
+
+
+def _focus_queries(company_display: str, freshness_delta: dict | None,
+                   since_date: str, limit: int = 4) -> list[str]:
+    """One query per material event, asking for the figures behind it."""
+    qs: list[str] = []
+    for e in (freshness_delta or {}).get("events") or []:
+        if not isinstance(e, dict) or not e.get("headline"):
+            continue
+        d = str(e.get("date") or "").strip()
+        qs.append(f"{company_display} {str(e['headline'])[:120]} {d} exact figures: "
+                  f"revenue, EBITDA/EBIT, EPS, dividend, guidance ranges")
+        if len(qs) >= limit:
+            break
+    if not qs:
+        qs.append(f"{company_display} latest results and guidance figures since {since_date}")
+    return qs
+
+
+def _synthesize_delta_amendments(client, model: str, *, year: str, since_date: str,
+                                 company_display: str, sector: str, today: str,
+                                 snippets: str) -> str:
+    """Tools-free synthesis of [2X]-tagged amendments from search results."""
+    resp = client.messages.create(
+        model=model,
+        max_tokens=8000,
+        system=_build_delta_system(year, since_date, searches_already_run=True),
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Company: {company_display}\n"
+                f"Sector: {sector}\n"
+                f"Base research date: {since_date}\n"
+                f"Today: {today}\n\n"
+                f"Search results for developments since {since_date}:\n\n{snippets}\n\n"
+                f"State every reported figure and guidance range exactly as given "
+                f"(units and period). Produce the section-tagged amendments now."
+            ),
+        }],
+    )
+    text = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+    return _strip_narration(text)
+
+
+def _focus_search_snippets(client, model: str, *, base_url, company_display: str,
+                           freshness_delta: dict | None, since_date: str) -> str:
+    """The escalation search round: targeted at the flagged events' figures.
+    Qwen runs search natively (Responses web_search via qwen_web_search);
+    Anthropic runs use the server web_search tool. '' on nothing usable."""
+    queries = _focus_queries(company_display, freshness_delta, since_date)
+    if base_url:
+        return _run_qwen_delta_searches(company_display, since_date, queries=queries)
+    resp = client.messages.create(
+        model=model,
+        max_tokens=6000,
+        tools=[{"type": _WEB_SEARCH_TOOL_VERSION, "name": "web_search",
+                "max_uses": len(queries)}],
+        system=("You retrieve dated, factual equity-research figures. Run one search per "
+                "query given, then list every figure found with its date and source name."),
+        messages=[{"role": "user", "content": "Queries:\n" + "\n".join(f"- {q}" for q in queries)}],
+    )
+    return "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+
+
+def _material_update_record(status: str, freshness_delta: dict | None, *,
+                            route: str | None = None, escalated: bool = False,
+                            estimate_changes: list[dict] | None = None,
+                            reason: str | None = None) -> dict | None:
+    """What this run did with material news. None when there was none.
+    status: 'amended' (folded into the research + estimates), 'fresh' (full
+    research this run), 'not_reflected' (reused or degraded research)."""
+    if not _is_material(freshness_delta):
+        return None
+    evs = [{"date": str(e.get("date") or "")[:10], "headline": str(e.get("headline") or "")[:160]}
+           for e in (freshness_delta.get("events") or []) if isinstance(e, dict) and e.get("headline")][:5]
+    return {"status": status, "events": evs, "route": route, "escalated": escalated,
+            "estimate_changes": estimate_changes, "reason": reason}
+
+
 def _hash_research_text(text: str) -> str:
     """sha256 of research full text — R2 citation-registry persistence key."""
     import hashlib
@@ -2777,7 +2909,8 @@ Rules:
 """.strip()
 
 
-def _run_qwen_delta_searches(company_display: str, since_date: str) -> str:
+def _run_qwen_delta_searches(company_display: str, since_date: str,
+                             queries: list[str] | None = None) -> str:
     """M2 A4 — bounded native Qwen searches for the delta pass.
 
     Mirrors the four SEARCH TARGETS of _build_delta_system. Returns the
@@ -2786,7 +2919,7 @@ def _run_qwen_delta_searches(company_display: str, since_date: str) -> str:
     delta). Each call is wall-bounded; the shared qwen_throttle serializes
     against other Qwen consumers.
     """
-    queries = [
+    queries = list(queries or []) or [
         f"{company_display} earnings results revenue guidance since {since_date}",
         f"{company_display} M&A acquisition merger deal announcement since {since_date}",
         f"{company_display} regulatory government policy ruling since {since_date}",
@@ -4731,7 +4864,10 @@ def _research_one_ticker(
         #    OR R2 replay of a NOT-MATERIAL freshness verdict (the phase-2_9
         #    one search already confirmed nothing material changed — 0
         #    additional searches) ──────────────────────────────────────────
-        if _is_pure_cache_hit(_age) or _route == "replay":
+        # Owner, 2026-11-27: material news never takes the pure-cache branch
+        # (unless MATERIAL_NEWS_AMEND=false) -- it goes to the amend path below.
+        _material_amend = _is_material(freshness_delta) and _material_amend_enabled()
+        if (_is_pure_cache_hit(_age) and not _material_amend) or _route == "replay":
             progress.update_status(
                 agent_id, ticker,
                 f"Cache HIT ({_age:.1f}d old, tier={_cached['research_tier']}) "
@@ -4934,6 +5070,9 @@ def _research_one_ticker(
                 "deep_research_annotated":  _annotated_cached,
                 "deep_research_sections":   _cached["deep_research_sections"],
                 "research_tier":            "anthropic_web_cached",
+                "material_update":          _material_update_record(
+                    "not_reflected", freshness_delta,
+                    reason="reused research (MATERIAL_NEWS_AMEND=false)"),
                 # M2 A2: pure cache does NOT refresh content age — inherit the
                 # source run's content date (pre-M2 rows fall back to their
                 # run_at). Reuse windows stay keyed on how old the research
@@ -4981,12 +5120,13 @@ def _research_one_ticker(
                 timeout=CLIENT_TIMEOUT,
                 max_retries=4,
             )
+            _delta_resp = None
+            _delta_text_pre = ""
             if _route == "one_search":
                 # ── R2: one-search delta ──────────────────────────────────────
                 # Phase 2_9 already ran THE one web search and classified it
                 # MATERIAL; synthesize amendments from those carried snippets
-                # instead of re-running searches. Tools-free synthesis call —
-                # identical shape to the Qwen-routed legacy path below.
+                # instead of re-running searches.
                 _snippets = str((freshness_delta or {}).get("snippets") or "")
                 progress.update_status(
                     agent_id, ticker,
@@ -4994,26 +5134,11 @@ def _research_one_ticker(
                     f"phase-2_9 freshness snippets ({len(_snippets):,} chars) "
                     f"— 0 additional searches"
                 )
-                _delta_resp = _delta_client.messages.create(
-                    model=_synthesis_model,
-                    max_tokens=8000,
-                    system=_build_delta_system(
-                        _year, _cached["analysis_date"],
-                        searches_already_run=True,
-                    ),
-                    messages=[{
-                        "role": "user",
-                        "content": (
-                            f"Company: {_company_display}\n"
-                            f"Sector: {sector}\n"
-                            f"Base research date: {_cached['analysis_date']}\n"
-                            f"Today: {_today}\n\n"
-                            f"Search results for developments since "
-                            f"{_cached['analysis_date']}:\n\n{_snippets}\n\n"
-                            f"Produce the section-tagged amendments now."
-                        ),
-                    }],
-                )
+                _delta_text_pre = _synthesize_delta_amendments(
+                    _delta_client, _synthesis_model, year=_year,
+                    since_date=_cached["analysis_date"],
+                    company_display=_company_display, sector=sector,
+                    today=_today, snippets=_snippets)
             elif base_url:
                 # ── M2 A4: Qwen-routed delta ──────────────────────────────────
                 # The Anthropic server web_search tool does NOT work through
@@ -5078,10 +5203,13 @@ def _research_one_ticker(
                         ),
                     }],
                 )
-            _delta_text = "".join(
-                b.text for b in _delta_resp.content if hasattr(b, "text")
-            ).strip()
-            _delta_text = _strip_narration(_delta_text)
+            if _delta_resp is not None:
+                _delta_text = "".join(
+                    b.text for b in _delta_resp.content if hasattr(b, "text")
+                ).strip()
+                _delta_text = _strip_narration(_delta_text)
+            else:
+                _delta_text = _delta_text_pre
 
             _merged_sections, _merged_full = _merge_delta_into_sections(
                 _cached["deep_research_sections"], _delta_text, _today
@@ -5133,6 +5261,63 @@ def _research_one_ticker(
                 _merged_sections, _merged_full, ticker,
                 sector, profile_name, raw_financials,
             )
+            # Owner, 2026-11-27: did the news reach the estimates? Compare with
+            # the extraction persisted for the reused sections; results or
+            # guidance news that moved nothing gets one targeted search round
+            # on the flagged events, then the amendment and extractors rerun.
+            _prior_ge = None
+            try:
+                from src.memory.run_archive import (
+                    get_extractor_outputs as _get_prior_ext,
+                )
+                _prior_ext = _get_prior_ext(ticker, _hash_research_sections(
+                    _cached["deep_research_sections"], profile_name))
+                _prior_ge = ((_prior_ext or {}).get("results") or {}).get("guidance_estimates")
+            except Exception:
+                _prior_ge = None
+            _est_changes = _estimate_changes(_prior_ge, _ext_results_d.get("guidance_estimates"))
+            _escalated = False
+            if (_material_amend and _est_changes == [] and _guidance_event(freshness_delta)):
+                try:
+                    progress.update_status(
+                        agent_id, ticker,
+                        "Material results/guidance news left the estimates unchanged "
+                        "— targeted search for the figures")
+                    _focus = _focus_search_snippets(
+                        _delta_client, _synthesis_model, base_url=base_url,
+                        company_display=_company_display,
+                        freshness_delta=freshness_delta,
+                        since_date=_cached["analysis_date"])
+                    if _focus.strip():
+                        _carried = str((freshness_delta or {}).get("snippets") or "")
+                        _delta_text = _synthesize_delta_amendments(
+                            _delta_client, _synthesis_model, year=_year,
+                            since_date=_cached["analysis_date"],
+                            company_display=_company_display, sector=sector,
+                            today=_today,
+                            snippets=(_carried + "\n\n" + _focus).strip())
+                        _merged_sections, _merged_full = _merge_delta_into_sections(
+                            _cached["deep_research_sections"], _delta_text, _today)
+                        if _supplement:
+                            _merged_sections["recent_news"] = _supplement
+                            _merged_full = _merged_full + "\n\nRECENT NEWS SUPPLEMENT.\n" + _supplement
+                        _ext_results_d, _ext_failures_d = _run_extractor_fanout(
+                            _delta_client, _synthesis_model,
+                            _merged_sections, _merged_full, ticker,
+                            sector, profile_name, raw_financials,
+                        )
+                        # the registry must index the text that is published
+                        _cit_future_d = _cit_ex_d.submit(
+                            _extract_citation_registry, _delta_client,
+                            _fast_tier_model(_synthesis_model, qwen_routed=base_url is not None),
+                            _merged_full, ticker, edgar_filing_ref=edgar_filing_ref)
+                        _est_changes = _estimate_changes(
+                            _prior_ge, _ext_results_d.get("guidance_estimates"))
+                        _escalated = True
+                except Exception as _esc_exc:
+                    print(f"  [material] {ticker}: targeted search skipped: {_esc_exc!r}")
+            print(f"  [material] {ticker}: amended (route={_route}, escalated={_escalated}, "
+                  f"estimate changes={_est_changes})")
             _dcf_cal_d = _ext_results_d.get("dcf_calibration", {})
             _citations_d = _cit_future_d.result()
             _cit_ex_d.shutdown(wait=False)
@@ -5191,6 +5376,9 @@ def _research_one_ticker(
                 "deep_research":          _merged_full,
                 "deep_research_sections": _merged_sections,
                 "research_tier":          "archive_news_delta",
+                "material_update":        _material_update_record(
+                    "amended", freshness_delta, route=_route,
+                    escalated=_escalated, estimate_changes=_est_changes),
                 # M2 A2: delta pass brought the content current as of today.
                 "research_as_of":         _today,
                 "citation_registry":      _citations_d,
@@ -6648,6 +6836,12 @@ def _research_one_ticker(
         "deep_research_annotated":  annotated_report,
         "deep_research_sections":   sections,
         "research_tier":          research_tier,
+        # Owner, 2026-11-27: a live full pass searched today, so material news is in
+        # it; a knowledge-only / failed pass cannot have it.
+        "material_update":        _material_update_record(
+            "fresh" if research_tier in _LIVE_RESEARCH_TIERS and not _research_degraded
+            else "not_reflected", freshness_delta,
+            reason=(None if research_tier in _LIVE_RESEARCH_TIERS else f"research tier {research_tier}")),
         # M2 A2: a full LIVE pass searched the web today, so the content is
         # current as of today. knowledge_only / "none" did no live research —
         # leave NULL (readers fall back to run_at; those tiers never qualify
@@ -6863,6 +7057,11 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if ge:
             guidance_estimates_all[t] = ge
     state["data"]["guidance_estimates"] = guidance_estimates_all
+    # Owner, 2026-11-27: what each ticker's research did with material news
+    # (amended / fresh / not_reflected) -- the rating layer reads it.
+    state["data"]["material_update"] = {
+        t: res["material_update"] for t, res in deep_research_map.items()
+        if res.get("material_update")}
 
     # ── Per-ticker segment scenarios (for probabilistic SOTP 12m) ─────────────
     segment_scenarios_all: dict[str, dict] = {}

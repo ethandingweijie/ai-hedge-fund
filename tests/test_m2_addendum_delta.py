@@ -148,6 +148,9 @@ def _patch_cache_env(monkeypatch, cached_row):
 def test_pure_cache_appends_addendum_and_keeps_sections_hash(
         tmp_archive, monkeypatch):
     _patch_cache_env(monkeypatch, _CACHED_ROW)
+    # Owner, 2026-11-27: material news now takes the amend path; replay-with-addendum
+    # is the MATERIAL_NEWS_AMEND=false behaviour (and the rating shows Under Review).
+    monkeypatch.setenv("MATERIAL_NEWS_AMEND", "false")
     delta = {"material": True,
              "events": [{"headline": "Guidance raised", "date": "2026-08-14",
                          "relevance": "beats prior assumption"}],
@@ -162,6 +165,7 @@ def test_pure_cache_appends_addendum_and_keeps_sections_hash(
     )
 
     assert out["cache_hit"] is True
+    assert out["material_update"]["status"] == "not_reflected"
     # Addendum rides on the archived full text...
     assert LATEST_DEV_ADDENDUM_MARKER in out["deep_research"]
     assert "Guidance raised" in out["deep_research"]

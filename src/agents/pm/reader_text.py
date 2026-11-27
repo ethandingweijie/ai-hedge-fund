@@ -170,6 +170,51 @@ def lint_jargon(text: str) -> tuple[str, list[str]]:
     return out, hits
 
 
+# ── material news since the prior report (owner, 2026-11-27) ─────────────────
+
+_EST_LABELS = {"revenue_growth_fy1": ("FY+1 revenue growth", "pct"),
+               "revenue_growth_fy2": ("FY+2 revenue growth", "pct"),
+               "ebitda_margin_fy1": ("FY+1 EBITDA margin", "pct"),
+               "ebitda_margin_fy2": ("FY+2 EBITDA margin", "pct"),
+               "eps_fy1": ("FY+1 EPS", "eps"), "eps_fy2": ("FY+2 EPS", "eps")}
+
+
+def _est_fmt(v, kind: str, sym: str) -> str:
+    f = _num(v)
+    if f is None:
+        return "n/a"
+    return f"{f * 100:.1f}%" if kind == "pct" else f"{'-' if f < 0 else ''}{sym}{abs(f):,.2f}"
+
+
+def material_update_sentence(mu: Optional[dict], sym: str = "$") -> Optional[str]:
+    """One computed sentence on what this report did with material news since the
+    prior one: folded in (with the base-case estimate changes) or not yet reflected."""
+    if not mu or not mu.get("status"):
+        return None
+    evs = [e for e in (mu.get("events") or []) if e.get("headline")][:3]
+    heads = "; ".join((f"{e['date']}: " if e.get("date") else "") + str(e["headline"]) for e in evs)
+    if mu["status"] == "not_reflected":
+        return ("Rating under review: material news since our previous report"
+                + (f" ({heads})" if heads else "")
+                + " is not yet reflected in our estimates, so the target predates it.")
+    s = "This report incorporates material news since our previous report" + (f" ({heads})" if heads else "") + "."
+    ch = mu.get("estimate_changes")
+    if ch:
+        bits = []
+        for c in ch[:4]:
+            lab, kind = _EST_LABELS.get(c.get("field"), (str(c.get("field")), "pct"))
+            if c.get("prior") is None:
+                bits.append(f"{lab} newly estimated at {_est_fmt(c.get('new'), kind, sym)}")
+            elif c.get("new") is None:
+                bits.append(f"{lab} no longer estimated (was {_est_fmt(c.get('prior'), kind, sym)})")
+            else:
+                bits.append(f"{lab} {_est_fmt(c.get('prior'), kind, sym)} to {_est_fmt(c.get('new'), kind, sym)}")
+        s += " Base-case estimates changed: " + ", ".join(bits) + "."
+    elif ch == []:
+        s += " Our base-case estimates did not change."
+    return s
+
+
 # ── change attribution ───────────────────────────────────────────────────────
 
 _RATING_RANK = {"overweight": 2, "buy": 2, "neutral": 1, "hold": 1, "cover": 1,
@@ -186,8 +231,14 @@ def _rank(label) -> Optional[int]:
 
 
 def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, capture, target,
-                             rating_label, capture_reason: str = "", sym: str = "$") -> dict:
-    """Prior vs current report, decomposed on the target rule. Deterministic."""
+                             rating_label, capture_reason: str = "", sym: str = "$",
+                             material_update: Optional[dict] = None,
+                             rating_cause: Optional[str] = None) -> dict:
+    """Prior vs current report, decomposed on the target rule. Deterministic.
+
+    `rating_cause` (owner, 2026-11-27): a rule that set the rating this run (the Neutral
+    cap on an unreconciled valuation, Under Review). A rating change is then credited to
+    it, and a sentence crediting the change to news is removed by check_change_claims."""
     spot, iv1, c1, t1 = _num(spot), _num(blended_iv), _num(capture), _num(target)
     cur = {"spot": spot, "blended_iv": iv1, "capture": c1, "target": t1, "rating": rating_label,
            "capture_reason": capture_reason or None}
@@ -275,6 +326,12 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
                      "not change.")
     elif capture_changed is None and c1 is not None:
         parts.append(f"The target closes {c1:.0%} of the gap between price and intrinsic value.")
+    _cause = rating_cause if rc in ("upgrade", "downgrade") and rating_cause else None
+    if _cause:
+        parts.insert(1 if parts else 0, f"The rating change reflects {_cause}, not a change in our view of the business.")
+    _mu_s = material_update_sentence(material_update, sym)
+    if _mu_s:
+        parts.insert(0, _mu_s)
     sentence = " ".join(parts)
 
     rating_instr = {
@@ -283,6 +340,9 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
         "downgrade": f"The rating is a DOWNGRADE from {prior['rating']} to {r_now}.",
         "unknown": "The prior rating cannot be compared: do not write upgrade or downgrade.",
     }[rc]
+    if _cause:
+        rating_instr += (f" The cause of the rating change is {_cause}. Do NOT attribute the rating change to "
+                         "news, partnerships, results or any business development.")
     block = ("Change since the prior report (computed; the ONLY permitted explanation of any change in rating or "
              f"target -- add no other cause):\n{sentence}\n{rating_instr}")
     if c1 is not None:
@@ -290,7 +350,14 @@ def build_change_attribution(prior_recap: Optional[dict], *, spot, blended_iv, c
                   "Do not attribute it to the macro regime, volatility, sentiment or 'conservatism'.")
     if dominant == "intrinsic_value":
         block += "\nThe target move is driven mainly by our lower/higher intrinsic value: do not call it 'mechanical'."
-    return {"has_prior": True, "prior": prior, "current": cur, "rating_change": rc,
+    if _mu_s:
+        block += ("\nState the material-news sentence above in the rationale. The news may be cited as the reason "
+                  "the estimates moved, never as a reason beyond the computed target change.")
+    _evs = [str(e.get("headline") or "") for e in ((material_update or {}).get("events") or []) if e.get("headline")]
+    return {"has_prior": True, "material_update_sentence": _mu_s, "rating_cause": _cause,
+            "material_headlines": _evs,
+            "headline_fallback": (f"{r_now}: rating reflects {_cause}" + (f"; 12-month target {_money(t1, sym)}" if t1 else ""))
+            if _cause else None, "prior": prior, "current": cur, "rating_change": rc,
             "target_change": round(t1 - t0, 2) if (t0 and t1) else None,
             "target_change_pct": round((t1 / t0 - 1) * 100, 1) if (t0 and t1) else None,
             "drivers": drivers, "dominant_driver": dominant, "capture_changed": capture_changed,
@@ -317,20 +384,38 @@ def _claims_capture_change(s: str) -> bool:
     return False
 _MACRO_CAUSE_RE = re.compile(r"\b(regime|macro|risk-off|volatil\w*|sentiment|conservat\w*|caution\w*)\b", re.I)
 _MECHANICAL_RE = re.compile(r"\bmechanical\b", re.I)
+#: Business-news cues: a rating change credited to one of these is wrong when a rule set the rating.
+_NEWS_CAUSE_RE = re.compile(r"\b(partner\w*|launch\w*|contract\w*|acqui\w*|guidance|results?|announc\w*|"
+                            r"developments?|news|collaborat\w*|deal|rollout|stabili[sz]\w*|momentum|"
+                            r"cable|AI)\b", re.I)
+
+
+def _cites_news(s: str, headlines: list[str]) -> bool:
+    low = s.lower()
+    for h in headlines or []:
+        words = [w for w in re.findall(r"[a-z0-9]+", h.lower()) if len(w) > 3][:3]
+        if words and all(w in low for w in words):
+            return True
+    return bool(_NEWS_CAUSE_RE.search(s))
 #: A sentence that only continues a removed claim ("Those conditions cap conviction ...").
-_FOLLOW_ON_RE = re.compile(r"^(?:Those|These|This|That|Such)\s+(?:conditions|factors|reasons|dynamics|headwinds|"
+_FOLLOW_ON_RE = re.compile(r"^(?:Those|These|This|That|Such)\s+(?:conditions|factors|reasons|dynamics|headwinds|developments?|"
                            r"considerations|circumstances|cautions?)\b", re.I)
 
 
-def check_change_claims(text: str, attribution: dict) -> tuple[str, list[str]]:
+def check_change_claims(text: str, attribution: dict,
+                        replacement: Optional[str] = None) -> tuple[str, list[str]]:
     """Remove sentences whose change narrative contradicts the computed attribution.
-    The first offending sentence is replaced by the attribution sentence."""
+    The first offending sentence is replaced by `replacement` (default: the attribution
+    sentence)."""
     if not text or not attribution:
         return text, []
     rc = attribution.get("rating_change")
     cap_changed = attribution.get("capture_changed")
     cur_cap = (attribution.get("current") or {}).get("capture")
     dominant = attribution.get("dominant_driver")
+    cause = attribution.get("rating_cause")
+    heads = attribution.get("material_headlines") or []
+    repl = replacement if replacement is not None else attribution.get("sentence")
     hits: list[str] = []
     replaced = False
     prev_removed = False
@@ -354,11 +439,14 @@ def check_change_claims(text: str, attribution: dict) -> tuple[str, list[str]]:
                 why = "attributes the convergence share to a cause the target rule does not use"
             elif _MECHANICAL_RE.search(s) and dominant == "intrinsic_value":
                 why = "calls the revision mechanical, but a lower or higher intrinsic value drives it"
+            elif (cause and (_UP_RE.search(s) or _DOWN_RE.search(s)) and not _STREET_RE.search(s)
+                  and _cites_news(s, heads)):
+                why = f"credits the rating change to news, but {cause} set the rating"
             if why:
                 prev_removed = True
                 hits.append(f"{why}: {s[:160]!r}")
-                if not replaced and attribution.get("sentence"):
-                    kept.append(attribution["sentence"])
+                if not replaced and repl:
+                    kept.append(repl)
                     replaced = True
                 continue
             kept.append(s)

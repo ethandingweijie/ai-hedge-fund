@@ -63,6 +63,10 @@ def _state(ticker="BABA", scenario=None, prior=None, delta=None):
         state["data"]["prior_recap"] = {ticker: prior}
     if delta is not None:
         state["data"]["freshness_delta"] = {ticker: delta}
+        if delta.get("material") is True:
+            # Owner, 2026-11-27: material news folded into this run's research; unreflected
+            # news would put the rating Under Review (tests/test_material_news_rerate.py).
+            state["data"]["material_update"] = {ticker: {"status": "amended", "events": []}}
     return state
 
 

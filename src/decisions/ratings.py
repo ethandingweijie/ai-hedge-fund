@@ -132,6 +132,7 @@ def build_unrated_view(rating_state: dict, *, price: Optional[float] = None,
         "research_rating": ResearchRating.UNRATED.value,
         "rating_label": label,
         "under_review": False,
+        "material_unreflected": False,
         "valuation_unreconciled": None,
         "trade_action": TradeAction.HOLD.value,
         "tactical_rating": None,
@@ -260,6 +261,7 @@ def build_research_view(
     methodology_gap: Optional[str] = None,
     next_earnings: Optional[str] = None, sotp_per_share: Optional[float] = None,
     today: Optional[date] = None, unreconciled: Optional[dict] = None,
+    material_unreflected: Optional[dict] = None,
 ) -> Optional[dict]:
     """Everything the report header and the trade layer need, decided once.
 
@@ -332,6 +334,20 @@ def build_research_view(
         if status == "clean":
             status = "holdco_disclosure"
 
+    # Owner, 2026-11-27: material news the estimates do not yet reflect. The target
+    # predates the news, so the rating is not pinned: Under Review, trade HOLD at zero.
+    if material_unreflected:
+        heads = "; ".join(
+            (f"{e.get('date')}: " if e.get("date") else "") + str(e.get("headline") or "")[:100]
+            for e in (material_unreflected.get("events") or [])[:3] if e.get("headline"))
+        status = "under_review"
+        under_review = True
+        notes.insert(0, (
+            f"Rating Under Review: material news since the prior report"
+            + (f" ({heads})" if heads else "")
+            + f" is not yet reflected in our estimates; the 12-month target "
+            f"{float(target_12m):,.2f} predates it and is not current."))
+
     # Owner, 2026-11-25 (CFA review item 2): weighted legs that disagree by more than LEG_DISPERSION_CAP average values
     # on incompatible premises; the blended value is still published but carries no conviction, so the rating is
     # capped at Neutral until the outlier leg is fixed or the owner excludes it (valuation_constants
@@ -350,6 +366,7 @@ def build_research_view(
         "research_rating": headline.value,
         "rating_label": ("Under Review" if under_review else RATING_LABELS[headline]),
         "under_review": under_review,
+        "material_unreflected": bool(material_unreflected),
         "valuation_unreconciled": (dict(unreconciled) if capped else None),
         "trade_action": to_action(headline).value,
         "tactical_rating": tactical.value,

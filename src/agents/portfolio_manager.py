@@ -285,7 +285,12 @@ def _finalise_reader_text(d: dict, change_attr: dict | None, inputs_text: str) -
         rationale, change_hits = check_change_claims(rationale, change_attr)
     rationale, unit_hits = lint_units(rationale)
     rationale, jargon_hits = lint_jargon(rationale)
-    headline, h_unit = lint_units(str(d.get("headline") or ""))
+    headline = str(d.get("headline") or "")
+    if change_attr and change_attr.get("rating_cause"):
+        headline, h_change = check_change_claims(headline, change_attr,
+                                                 replacement=change_attr.get("headline_fallback"))
+        change_hits += [f"headline: {h}" for h in h_change]
+    headline, h_unit = lint_units(headline)
     headline, h_jargon = lint_jargon(headline)
     d["rationale"], d["headline"] = rationale, headline
     d["reader_text_lint"] = {"change_claims": change_hits, "units": unit_hits + h_unit,
@@ -1196,6 +1201,61 @@ def _unreconciled_for(ticker: str, dcf: dict) -> dict | None:
     return unreconciled_legs(((dcf or {}).get("base") or {}).get("leg_dispersion"), ticker)
 
 
+def _material_unreflected(state, ticker: str, delta: dict) -> dict | None:
+    """Owner, 2026-11-27: material fresh news that this run's research did NOT
+    fold into the estimates (reused, degraded or failed research). None when
+    there is no material news or it was amended in / researched fresh."""
+    if not (delta and delta.get("material") is True):
+        return None
+    mu = ((state["data"].get("material_update") or {}).get(ticker)) or {}
+    if mu.get("status") in ("amended", "fresh") and not _research_is_stale(state):
+        return None
+    if mu.get("events"):
+        return mu
+    return {"status": mu.get("status") or "not_reflected",
+            "events": [{"date": str(e.get("date") or "")[:10], "headline": str(e.get("headline") or "")[:160]}
+                       for e in (delta.get("events") or []) if isinstance(e, dict) and e.get("headline")][:5]}
+
+
+def _rating_cause(view: dict | None) -> str | None:
+    """The rule that set this run's rating, when one did (owner, 2026-11-27)."""
+    if not view:
+        return None
+    vu = view.get("valuation_unreconciled")
+    if vu:
+        try:
+            return (f"the Neutral cap while the valuation is unreconciled ({vu.get('hi_leg')} value "
+                    f"{float(vu.get('ratio')):.1f}x the {vu.get('lo_leg')} value)")
+        except (TypeError, ValueError):
+            return "the Neutral cap while the valuation is unreconciled"
+    if view.get("under_review"):
+        return "the rating being placed under review"
+    return None
+
+
+def _news_shift(state, ticker: str, delta: dict) -> tuple[str | None, str | None]:
+    """(direction, note) for the one-step material-news shift on the band path.
+    Owner, 2026-11-27: news already folded into the valuation (amended or fresh
+    research) is not counted a second time; the keyword shift is only the
+    fallback for news the valuation does not carry."""
+    d = _delta_direction(delta)
+    status = (((state["data"].get("material_update") or {}).get(ticker)) or {}).get("status")
+    if d and status in ("amended", "fresh"):
+        return None, "material news already in the valuation (no extra one-step shift)"
+    return d, None
+
+
+def _material_update_for_report(state, ticker: str, delta: dict) -> dict | None:
+    """The record the report discloses: the research's own record, or the
+    unreflected fallback when news was material but the research has none."""
+    unref = _material_unreflected(state, ticker, delta)
+    if unref:
+        return {**unref, "status": "not_reflected"}
+    if not (delta and delta.get("material") is True):
+        return None
+    return ((state["data"].get("material_update") or {}).get(ticker)) or None
+
+
 def _research_view_for(ticker: str, state, scenario: dict,
                        delta: dict) -> dict | None:
     """The research rating for this ticker, or None without a 12-month target.
@@ -1251,6 +1311,7 @@ def _research_view_for(ticker: str, state, scenario: dict,
             intrinsic_value=recon.get("blended_iv") or scenario.get("expected_value"),
             dps=dcf.get("dividends_per_share"),
             near_term_catalyst=catalyst, methodology_gap=gap,
+            material_unreflected=_material_unreflected(state, ticker, delta),
             next_earnings=next_earnings,
             sotp_per_share=(dcf.get("sotp_breakdown") or {}).get("per_share_reporting"),
             unreconciled=_unreconciled_for(ticker, dcf),
@@ -1404,7 +1465,9 @@ def run_advanced_portfolio_manager(state) -> dict:
             _idx = _band_idx
             # Gate 1 — material freshness delta: ONE-step adjustment with a
             # deterministic direction read (no LLM in the gate path).
-            _dir = _delta_direction(_delta)
+            _dir, _nudge_note = _news_shift(state, ticker, _delta)
+            if _nudge_note:
+                _gate_notes.append(_nudge_note)
             if _dir == "adverse" and _idx > 0:
                 _idx -= 1
                 _gate_notes.append(
@@ -1444,6 +1507,12 @@ def run_advanced_portfolio_manager(state) -> dict:
         elif research_view is not None:
             action, _gate_notes = _gate_rated_action(
                 research_view, trap_verdict, _research_is_stale(state))
+            if research_view.get("material_unreflected"):
+                # Under Review on unreflected news: no position until the estimates catch up.
+                action, _size_zero = "HOLD", True
+                _band_flag = "Under Review: material news not yet in the estimates; HOLD at zero weight"
+        # No 12-month target (band path): nothing is published to put under review;
+        # the one-step news shift above is the fallback for unreflected news.
 
         # ── M2 D2 step 2: qualitative conviction (sizing multiplier) ──────
         _reg_hits = _regulatory_watch_hits(_recent_news_txt, _delta)
@@ -1790,9 +1859,21 @@ def run_advanced_portfolio_manager(state) -> dict:
                 _prior_recap, spot=current_price, blended_iv=recon.get("blended_iv"),
                 capture=_bridge_t.get("capture"), target=price_target,
                 rating_label=(research_view or {}).get("rating_label") or action,
-                capture_reason=str(_bridge_t.get("capture_reason") or ""), sym=_sym_ca)
+                capture_reason=str(_bridge_t.get("capture_reason") or ""), sym=_sym_ca,
+                material_update=_material_update_for_report(state, ticker, _delta),
+                rating_cause=_rating_cause(research_view))
         except Exception:                                  # noqa: BLE001
             _change_attr = None
+        # Owner, 2026-11-27: the material-news sentence is shown with the rating (web,
+        # mobile and PDF) and is a disclosure the writer sees.
+        from src.agents.pm.reader_text import material_update_sentence as _mus
+        _mu_sentence = _mus(_material_update_for_report(state, ticker, _delta), _sym_ca)
+        if _mu_sentence and research_view is not None and research_view.get("research_rating") != "UNRATED":
+            research_view["material_update"] = {
+                "status": (_material_update_for_report(state, ticker, _delta) or {}).get("status"),
+                "sentence": _mu_sentence}
+            if not research_view.get("material_unreflected"):
+                research_view["compliance"]["notes"].append(_mu_sentence)
         _change_block = (_change_attr or {}).get("prompt_block") or "Change since the prior report: not available."
 
         # LLM writes the rationale as numbered thesis themes (Tier 2.7

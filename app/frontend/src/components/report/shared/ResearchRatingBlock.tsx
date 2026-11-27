@@ -96,6 +96,13 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
         <span className={`${small} text-content-muted`}>· trade action {view.trade_action}</span>
       </div>
 
+      {/* Owner, 2026-11-27: what this report did with material news since the prior one. */}
+      {view.material_update?.sentence && (
+        <p className={`${small} leading-relaxed ${view.material_update.status === 'not_reflected' ? 'text-content-high font-medium' : 'text-content-medium'}`}>
+          {view.material_update.sentence}
+        </p>
+      )}
+
       {/* Owner, 2026-10-03: the price / target / upside / dividend / TSR row is removed on web and mobile;
           those figures remain in the price-target panel, on the pin's hover title and in the PDF. */}
     </div>

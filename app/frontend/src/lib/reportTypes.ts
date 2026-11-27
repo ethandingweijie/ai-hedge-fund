@@ -884,6 +884,10 @@ export interface ResearchView {
   tsr_12m: number | null;
   excess_return_bps: number | null;
   unrated?: UnratedReason | null;
+  /** Owner, 2026-11-27: material news since the prior report -- folded into the
+   *  estimates ('amended' / 'fresh') or not yet ('not_reflected', rating Under Review). */
+  material_unreflected?: boolean;
+  material_update?: { status: 'amended' | 'fresh' | 'not_reflected' | null; sentence: string } | null;
   callout: string;
   rating_definition: string;
   disclaimer: string;
