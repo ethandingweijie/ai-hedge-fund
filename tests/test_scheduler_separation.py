@@ -53,10 +53,11 @@ def test_registry_shape():
     # screener cache warm. Plus the two news-ingest tiers and the daily
     # valuation outcome labels, and the weekly calibration fit.
     # 15 since 2026-09-21: the quarterly through-cycle comps history backfill.
-    assert len(specs) == 15
+    # 16 since 2026-11-28: the daily production health report.
+    assert len(specs) == 16
 
     names = [s.name for s in specs]
-    assert len(set(names)) == 15  # unique lock/job-id namespaces
+    assert len(set(names)) == 16  # unique lock/job-id namespaces
 
     catch_up = {s.name for s in specs if s.catch_up}
     # Only these two had startup catch-up in the web-era code — preserved.

@@ -809,6 +809,39 @@ async def run_maintenance_task(ctx: dict) -> dict:
     return {"ran": True, "deleted": deleted}
 
 
+async def _queue_snapshot() -> Optional[dict]:
+    """The /admin/diag `queue` section, from this process's Redis (None when Redis is absent)."""
+    try:
+        from app.backend.services import redis_client as _rc
+        if not await _rc.redis_ready(force=True):
+            return {"redis_ready": False}
+        r = await _rc.get_redis()
+        snap = {"redis_ready": True, "queued": await r.zcard("arq:queue"),
+                "worker_health": await r.get("arq:queue:health-check")}
+        keys = []
+        async for k in r.scan_iter(match="arq:in-progress:*", count=200):
+            keys.append(k)
+        snap["in_progress"] = keys[:25]
+        return snap
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def run_prod_health_task(ctx: dict) -> dict:
+    """Roadmap #4 -- the daily production health report: silent fallbacks (static multiples, static FX), engine
+    failures, comps and scheduled-job freshness, owner reviews due, worker heartbeat. Records one row and posts to
+    Slack only when a check warns or fails."""
+    from src.monitoring import prod_health
+    report = await asyncio.to_thread(prod_health.compute_health, await _queue_snapshot())
+    try:
+        await asyncio.to_thread(prod_health.record, report)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[sched] prod_health: record failed: %s", exc)
+    posted = await asyncio.to_thread(prod_health.post_to_slack, report)
+    logger.info("[sched] prod_health: %s (%s), slack=%s", report["status"], report["counts"], posted)
+    return {"ran": True, "status": report["status"], "counts": report["counts"], "slack": posted}
+
+
 def _log_publish_outcome(task: asyncio.Task) -> None:
     if not task.cancelled() and task.exception():
         logger.warning("worker: progress publish failed: %s", task.exception())
@@ -919,6 +952,8 @@ class WorkerSettings:
         # R3 — Assumption Steward weekly sweep (cron registered below only
         # when ASSUMPTION_STEWARD_SWEEP_HOUR is set)
         run_assumption_steward_sweep_task,
+        # Roadmap #4 -- daily production health report (scheduler_service: prod_health, 23:30 UTC)
+        run_prod_health_task,
     ]
     # R1.e — arq-native daily cron. Railway workers run UTC, so set
     # DRIVE_SYNC_CRON_HOUR to the UTC hour matching local 8am (this knob

@@ -86,7 +86,7 @@ async def migrate_to_postgres(request: Request, secret: str = "", dry_run: bool 
 
 
 @router.get("/admin/diag")
-async def admin_diag(request: Request, secret: str = ""):
+async def admin_diag(request: Request, secret: str = "", health: int = 0):
     """Read-only health probe for the storage stack (secret-gated).
 
     Reports, per layer, whether it works and the exception text when it does
@@ -254,6 +254,15 @@ async def admin_diag(request: Request, secret: str = ""):
             out["queue"]["in_progress"] = _in_prog[:10]
     except Exception:
         out["queue"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 8b. Roadmap #4: the production health report, on request (?health=1) -- it reads the day's run payloads.
+    if health:
+        try:
+            import asyncio as _aio_h
+            from src.monitoring import prod_health as _ph
+            out["health"] = await _aio_h.to_thread(_ph.compute_health, out.get("queue"))
+        except Exception:
+            out["health"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     # 9. Archive health (R2): abandoned checkpoint rows + final runs that
     # lost their archive link (save_run failed upstream). Both are the

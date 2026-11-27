@@ -33,6 +33,7 @@ Schedules (all fire times UTC — Railway containers run UTC)
   hundred_q_weekly_batch run_hundred_q_weekly_batch_task Sunday 01:00
   hundred_q_backstop    run_hundred_q_backstop_task    1st Jan/Apr/Jul/Oct 02:00
   maintenance           run_maintenance_task           daily 03:10 (R2)
+  prod_health           run_prod_health_task           daily 23:30 UTC = SGT 07:30 (roadmap #4)
 
 Next-fire computation is delegated to the existing scheduler modules'
 `_seconds_until_next_*` functions, so their HOUR_UTC / WEEKDAY env
@@ -227,6 +228,19 @@ def _seconds_until_vgpm_fire() -> float:
     """Seconds until the next 09:00 UTC boundary."""
     now = datetime.now(timezone.utc)
     target = now.replace(hour=VGPM_FIRE_HOUR_UTC, minute=0, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+#: Prod health report: daily 23:30 UTC (07:30 SGT), before the 00:00 UTC IV15 sweep, so the morning starts with it.
+PROD_HEALTH_FIRE_HOUR_UTC = 23
+PROD_HEALTH_FIRE_MINUTE_UTC = 30
+
+
+def _seconds_until_prod_health_fire() -> float:
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=PROD_HEALTH_FIRE_HOUR_UTC, minute=PROD_HEALTH_FIRE_MINUTE_UTC, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
     return (target - now).total_seconds()
@@ -499,6 +513,15 @@ def build_schedules() -> list[ScheduleSpec]:
             is_disabled=lambda: _env_flag("MAINTENANCE_DISABLED"),
             # No gate_fn on purpose: housekeeping is cheap and idempotent;
             # a missed prune simply runs tomorrow.
+        ),
+        ScheduleSpec(
+            name="prod_health",
+            task="run_prod_health_task",
+            next_fire_fn=_seconds_until_prod_health_fire,
+            slot_fn=_daily_slot,
+            lock_ttl_s=_TTL_DAILY_S,
+            is_disabled=lambda: _env_flag("PROD_HEALTH_DISABLED"),
+            # No gate: read-only apart from one report row; a missed day reports tomorrow.
         ),
     ]
 
