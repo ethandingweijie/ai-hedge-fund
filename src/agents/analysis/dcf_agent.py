@@ -16298,10 +16298,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _bm_label = "Insurer" if _bm_kind == "insurer" else "Bank"
             try:
                 from src.agents.analysis import bank_model as _bmod
-                _bm_open = _bmod.opening_from_line_items(
-                    {**most_recent, "ticker": ticker}, shares,
-                    most_recent.get("revenue") if _bm_kind == "insurer" else _bank_total_income(most_recent),
-                    fy_label=str(most_recent.get("report_period") or "")[:4])
+                # Owner, 2026-11-27 (HSBC): a bank opens on the latest year's total income under the SAME
+                # series rule the statements table uses (financial_statements.bank_total_income_series).
+                # The single-row derivation opened HSBC on $86.3bn for FY2025 -- a year the table withholds
+                # because the provider's revenue is on a gross basis in only 2 of 5 years. When the series
+                # rule withholds the latest year the model is not built: it takes no weight, and the reason
+                # is disclosed. (NII + fees would be the next fallback, but the provider gives no fee line.)
+                _bm_ti, _bm_ti_why = None, None
+                if _bm_kind == "insurer":
+                    _bm_ti = most_recent.get("revenue")
+                else:
+                    try:
+                        from src.tools.financial_statements import bank_total_income_series as _bti_series
+                        _bm_ti, _bm_ti_why = _bti_series(series)[-1]
+                    except Exception as _bti_exc:                # noqa: BLE001
+                        _bm_ti, _bm_ti_why = None, f"total income series failed ({type(_bti_exc).__name__})"
+                if _bm_kind == "bank" and not _bm_ti:
+                    _bm_open = None
+                    ticker_forward_flags.append(
+                        f"Bank earnings-and-capital model not built: latest-year total income is withheld "
+                        f"({_bm_ti_why or 'no interest lines to derive it'}); the model takes no weight")
+                else:
+                    _bm_open = _bmod.opening_from_line_items(
+                        {**most_recent, "ticker": ticker}, shares, _bm_ti,
+                        fy_label=str(most_recent.get("report_period") or "")[:4])
                 if _bm_open:
                     _bm_ggm = _bank_ggm_assumptions(ticker, profile_name, most_recent)
                     if _bm_kind == "insurer":
@@ -16314,6 +16334,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _sc in ("bear", "base", "bull"):
                         _bm_out = (_bmod.build_insurer if _bm_kind == "insurer" else _bmod.build_bank)(_bm_open, _bm_a, scenario=_sc)
                         if _bm_out and not _bm_out.get("skipped"):
+                            # Built on line items already converted to the listing currency; the
+                            # statements table is in the reporting currency (HSBC: USD vs HKD).
+                            _bm_out["currency"] = "valuation"
+                            _bm_out["fx_to_valuation"] = fx_rate
                             _bank_models[_sc] = _bm_out
                     _bm_base = _bank_models.get("base")
                     if _bm_base:

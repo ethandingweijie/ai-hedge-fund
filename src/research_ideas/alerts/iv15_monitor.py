@@ -51,6 +51,10 @@ def _band(name: str, default: float) -> float:
 
 TRIGGER_BAND = _band("IV15_ALERT_BAND", 1.00)
 REARM_BAND = _band("IV15_REARM_BAND", 1.05)
+# A stored P/IV15 below this is a broken input, not a bargain (2026-11-27:
+# Country Garden 0.04x on a stale positive EPS; China Taiping 0.28x on a P/E
+# of 2). Such names are reported as `implausible` and never alerted.
+MIN_PLAUSIBLE_P_IV15 = _band("IV15_MIN_PLAUSIBLE_P_IV15", 0.30)
 
 
 # ─── Candidate + fired-alert shapes ────────────────────────────────────────
@@ -91,6 +95,7 @@ class SweepResult:
     rearmed: list = field(default_factory=list)       # list[str] "cohort:ticker"
     skipped_no_quote: list = field(default_factory=list)  # list[str]
     errors: list = field(default_factory=list)        # list[str]
+    implausible: list = field(default_factory=list)   # list[str] "cohort:ticker" (stored P/IV15 too low to trust)
     posted_to_slack: bool = False
     baseline: bool = False   # silent re-baseline sweep: state persisted, nothing posted
 
@@ -144,7 +149,25 @@ def _hk50_quote_symbol(r: dict) -> str:
     hk = (r.get("hk_ticker") or "").strip()
     if route.startswith("ADR") and reported:
         return reported.upper()
+    # HK-routed rows were priced on the HK line. 2026-11-27: Yum China's row
+    # carries ticker=9987.HK and hk_ticker=YUMC (the US ADR), so preferring
+    # hk_ticker quoted USD against an HKD fair value (0.19x instead of 1.53x).
+    for sym in (hk, reported):
+        if sym.upper().endswith(".HK"):
+            return sym.upper()
     return (hk or reported).upper()
+
+
+def _quote_currency(symbol: str) -> str:
+    """Currency the live quote is in. Row prices and IV15 are in the quote
+    currency; the row's `currency` field is the REPORTING currency (CNY for
+    Tencent) and must not label an HKD price."""
+    sym = (symbol or "").upper()
+    if sym.endswith(".HK"):
+        return "HKD"
+    if sym.endswith(".SI"):
+        return "SGD"
+    return "USD"
 
 
 def load_hk50_candidates() -> list[AlertCandidate]:
@@ -158,6 +181,10 @@ def load_hk50_candidates() -> list[AlertCandidate]:
     for r in run.get("results", []):
         if r.get("error"):
             continue
+        # The run stores every eligible name (~105); the HK50 cohort is the
+        # in_cohort subset. Rows from runs before the flag existed have no key.
+        if r.get("in_cohort") is False:
+            continue
         iv15 = _safe_float(r.get("iv15"))
         sym = _hk50_quote_symbol(r)
         if not sym or not iv15 or iv15 <= 0:
@@ -170,7 +197,7 @@ def load_hk50_candidates() -> list[AlertCandidate]:
             name=r.get("name") or sym,
             iv15=iv15,
             stored_price=_safe_float(r.get("price")),
-            currency=r.get("currency") or "",
+            currency=_quote_currency(sym),
             aict=r.get("aict_tier") or "",
             conviction=qual.get("conviction") or "",
         ))
@@ -240,6 +267,10 @@ def run_iv15_sweep(*, dry_run: bool = False, baseline: Optional[bool] = None) ->
                 result.skipped_no_quote.append(f"{c.cohort}:{c.quote_symbol}")
                 continue
 
+            if c.stored_price and c.stored_price / c.iv15 < MIN_PLAUSIBLE_P_IV15:
+                result.implausible.append(f"{c.cohort}:{c.quote_symbol}")
+                continue
+
             live_price = float(q.price)
             live_p_iv15 = live_price / c.iv15
             result.checked += 1
@@ -306,6 +337,7 @@ def run_iv15_sweep(*, dry_run: bool = False, baseline: Optional[bool] = None) ->
                     "baseline": result.baseline,
                     "fired": [f"{a.cohort}:{a.display_ticker}" for a in result.fired],
                     "errors": result.errors[:20],
+                    "implausible": result.implausible,
                 },
             )
         except Exception as exc:

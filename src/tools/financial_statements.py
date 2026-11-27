@@ -826,6 +826,40 @@ def _capital_model_values(th: dict) -> dict:
     } if n else {"income": {}, "balance": {}, "cashflow": {}}
 
 
+def _capital_model_fx(th: dict, fs: dict) -> Optional[float]:
+    """The rate the bank / insurer model's money is in, relative to the statements; None when they agree.
+
+    Owner, 2026-11-27 (HSBC): the model is built on line items the valuation converted to the listing
+    currency (HKD) while the statements stay in the reporting currency (USD), so FY+1E net profit printed
+    193.9bn beside FY2025's 22.8bn. New runs carry `fx_to_valuation`; a stored run without it is inferred
+    from the model's opening equity against the same year's reported equity (the opening IS that year,
+    converted). Every capital-model value mapped onto the statements is money (EPS and BVPS per share).
+    """
+    if th.get("currency") == "valuation":
+        f = th.get("fx_to_valuation")
+        return float(f) if isinstance(f, (int, float)) and f > 0 and abs(f - 1.0) > 1e-9 else None
+    eq_model = (th.get("opening") or {}).get("equity")
+    periods = [str(x) for x in (fs.get("periods") or [])]
+    if not isinstance(eq_model, (int, float)) or eq_model <= 0 or not periods:
+        return None
+    def reported(sec, key):
+        for r in ((fs.get("statements") or {}).get(sec) or {}).get("rows") or []:
+            if r.get("key") == key:
+                v = (r.get("values") or {}).get(periods[-1])
+                return v if isinstance(v, (int, float)) and v > 0 else None
+        return None
+
+    eq_rep, ni_rep = reported("balance", "shareholders_equity"), reported("income", "net_income")
+    ni_model = (th.get("opening") or {}).get("net_income")
+    if not eq_rep or not ni_rep or not isinstance(ni_model, (int, float)) or ni_model <= 0:
+        return None
+    ratio, ratio_ni = eq_model / eq_rep, ni_model / ni_rep
+    # One conversion moves both lines by the same factor; a definitional gap (minorities) would not.
+    if abs(ratio - 1.0) <= 0.02 or abs(ratio_ni / ratio - 1.0) > 0.01:
+        return None
+    return ratio
+
+
 def forecast_labels(th: Optional[dict]) -> list[str]:
     """The forecast years the reported statements can carry: an operating company's three-statement model, or a
     bank or insurer's earnings-and-capital model on the rows it shares (owner, 2026-11-24); [] when withheld or none."""
@@ -873,6 +907,10 @@ def attach_forecast(fs: Optional[dict], th: Optional[dict], override: Optional[d
         return out
 
     fv = forecast_values(th)
+    fx = _capital_model_fx(th, out) if th.get("kind") in _CAPITAL_MODEL_KINDS else None
+    if fx:
+        fv = {sec: {k: ([(x / fx) if isinstance(x, (int, float)) else x for x in v] if v else v)
+                    for k, v in keyed.items()} for sec, keyed in fv.items()}
     filled = 0
     for sec, keyed in fv.items():
         for r in ((out.get("statements") or {}).get(sec) or {}).get("rows") or []:

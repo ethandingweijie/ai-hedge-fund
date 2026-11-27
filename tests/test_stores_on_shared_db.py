@@ -121,3 +121,39 @@ def test_dry_run_never_persists_baseline(tmp_archive, monkeypatch):
     from app.backend.services import iv15_alert_store as s
     assert s.get_all_states("hk50") == {} and s.last_sweep_at() is None
 
+
+
+# ── HK50 candidate hygiene (2026-11-27 prod dry run) ────────────────────────
+
+def test_hk50_quotes_the_hk_line_it_was_priced_on():
+    from src.research_ideas.alerts.iv15_monitor import _hk50_quote_symbol, _quote_currency
+    yum = {"ticker": "9987.HK", "hk_ticker": "YUMC", "route_label": "HK/FMP"}
+    assert _hk50_quote_symbol(yum) == "9987.HK"
+    assert _hk50_quote_symbol({"ticker": "BABA", "hk_ticker": "9988.HK", "route_label": "ADR/FMP"}) == "BABA"
+    assert _hk50_quote_symbol({"ticker": "0700.HK", "hk_ticker": "0700.HK", "route_label": "HK/FMP"}) == "0700.HK"
+    assert _quote_currency("0700.HK") == "HKD" and _quote_currency("BABA") == "USD"
+
+
+def test_hk50_loader_cohort_only_and_quote_currency(monkeypatch):
+    from src.research_ideas.alerts import iv15_monitor as m
+    from app.backend.services import hk50_storage
+    rows = [
+        {"ticker": "0700.HK", "hk_ticker": "0700.HK", "route_label": "HK/FMP", "currency": "CNY",
+         "iv15": 420.0, "price": 431.0, "in_cohort": True},
+        {"ticker": "2007.HK", "hk_ticker": "2007.HK", "route_label": "HK/FMP", "currency": "CNY",
+         "iv15": 3.7, "price": 0.14, "in_cohort": False},
+    ]
+    monkeypatch.setattr(hk50_storage, "get_latest_hk50_run", lambda: {"results": rows})
+    cands = m.load_hk50_candidates()
+    assert [c.quote_symbol for c in cands] == ["0700.HK"]
+    assert cands[0].currency == "HKD"          # labels an HKD price, not the CNY reporting ccy
+
+
+def test_implausible_fair_value_never_alerts(tmp_archive, monkeypatch):
+    m, posts = _fake_sweep_inputs(monkeypatch, {"0966.HK": 2.0})
+    from src.research_ideas.alerts import iv15_monitor as mm
+    cands = [mm.AlertCandidate(cohort="hk50", quote_symbol="0966.HK", display_ticker="0966.HK",
+                               name="x", iv15=10.0, stored_price=2.5)]   # stored P/IV15 0.25
+    monkeypatch.setattr(mm, "load_hk50_candidates", lambda: cands)
+    r = mm.run_iv15_sweep(baseline=False)
+    assert r.fired == [] and r.implausible == ["hk50:0966.HK"] and posts == []
