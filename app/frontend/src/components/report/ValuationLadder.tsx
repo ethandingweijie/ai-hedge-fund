@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card';
 import type { DcfRange } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
+import { dcfAssumptionsUsed } from '@/lib/dcfAssumptions';
 
 interface ValuationLadderProps {
   dcfRange?: DcfRange;
@@ -27,9 +28,9 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
   const current = currentPrice ?? 0;
 
   const cases = [
-    { label: 'Bull Case',  iv: dcfRange.bull?.intrinsic_value, growth: dcfRange.bull?.growth_rate, color: 'text-content-high' },
-    { label: 'Base Case',  iv: dcfRange.base?.intrinsic_value, growth: dcfRange.base?.growth_rate, color: 'text-brand'  },
-    { label: 'Bear Case',  iv: dcfRange.bear?.intrinsic_value, growth: dcfRange.bear?.growth_rate, color: 'text-content-high'   },
+    { label: 'Bull Case',  iv: dcfRange.bull?.intrinsic_value, growth: dcfAssumptionsUsed(dcfRange.bull).y1Growth, color: 'text-content-high' },
+    { label: 'Base Case',  iv: dcfRange.base?.intrinsic_value, growth: dcfAssumptionsUsed(dcfRange.base).y1Growth, color: 'text-brand'  },
+    { label: 'Bear Case',  iv: dcfRange.bear?.intrinsic_value, growth: dcfAssumptionsUsed(dcfRange.bear).y1Growth, color: 'text-content-high'   },
   ];
 
   // Compute bar widths relative to the max IV
@@ -76,7 +77,7 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
                 <span className={`ml-1 ${color}`}>{mos}</span>
               )}
               {growth != null && (
-                <span className="text-muted-foreground ml-1">@ {(growth * 100).toFixed(0)}% g</span>
+                <span className="text-muted-foreground ml-1" title="Year-1 revenue growth the DCF applied">@ {(growth * 100).toFixed(0)}% g</span>
               )}
             </div>
           </div>

@@ -1152,6 +1152,67 @@ def _margin_delta_abs(scenario: dict) -> float:
         return 0.0
 
 
+def _dcf_assumptions_used(scenario: dict) -> dict:
+    """The growth and FCF-margin figures the DCF leg actually discounted.
+
+    Owner rule: no display-only valuation. ``growth_rate`` / ``fcf_margin_start``
+    are the legacy single-value inputs; when the guidance forecast is active the
+    DCF runs on its own year-by-year schedules instead (Z74.SI base: legacy
+    4.5% / 17.7% vs Y1 growth 3.5%, 5-yr CAGR 2.7%, Y1 margin 8.3% used). The
+    used figures are ``leg_inputs.DCF.projection_rows`` (growth_pct,
+    fcf_margin per year — the rows pv_fcf is computed on). Growth falls back
+    to ``leg_inputs.DCF.growth_schedule``; the legacy fields are read only when
+    no schedule exists (archived runs). Mirrors app/frontend/src/lib/
+    dcfAssumptions.ts so web and PDF print the same numbers.
+
+    Returns ``{source: "schedule"|"legacy", y1_growth, cagr5, y1_margin,
+    terminal_margin, years}`` (fractions, None when unknown).
+    """
+    def _f(v):
+        try:
+            x = float(v)
+        except (TypeError, ValueError):
+            return None
+        return x if x == x and x not in (float("inf"), float("-inf")) else None
+
+    scenario = scenario or {}
+    leg = ((scenario.get("leg_inputs") or {}).get("DCF")) or {}
+    rows = leg.get("projection_rows") or []
+    if not isinstance(rows, list):
+        rows = []
+    growths = [_f((r or {}).get("growth_pct")) for r in rows if isinstance(r, dict)]
+    if not any(g is not None for g in growths) and isinstance(leg.get("growth_schedule"), list):
+        growths = [_f(g) for g in leg["growth_schedule"]]
+    margins = [_f((r or {}).get("fcf_margin")) for r in rows if isinstance(r, dict)]
+    has_g = bool(growths) and growths[0] is not None
+    has_m = bool(margins) and margins[0] is not None
+
+    if not has_g and not has_m:
+        return {
+            "source": "legacy",
+            "y1_growth": _f(scenario.get("growth_rate")),
+            "cagr5": None,
+            "y1_margin": _f(scenario.get("fcf_margin_start")),
+            "terminal_margin": None,
+            "years": 0,
+        }
+
+    cagr5 = None
+    if has_g and len(growths) >= 5 and all(g is not None for g in growths[:5]):
+        f = 1.0
+        for g in growths[:5]:
+            f *= 1.0 + g
+        cagr5 = f ** (1.0 / 5.0) - 1.0 if f > 0 else None
+    return {
+        "source": "schedule",
+        "y1_growth": growths[0] if has_g else _f(scenario.get("growth_rate")),
+        "cagr5": cagr5,
+        "y1_margin": margins[0] if has_m else _f(scenario.get("fcf_margin_start")),
+        "terminal_margin": margins[-1] if has_m else None,
+        "years": len(margins) if has_m else len(growths),
+    }
+
+
 # ── Markdown rendering helpers ──────────────────────────────────────────────
 
 def _md_inline(text: str) -> str:
@@ -1624,29 +1685,57 @@ def _section_2f(
         except Exception:
             return "—"
 
+    # Growth and margin rows: the figures the DCF leg discounted (its own
+    # projection rows) whenever a schedule exists -- the legacy single-value
+    # growth_rate / fcf_margin_start are superseded by the guidance forecast
+    # and printing them was display-only valuation (Z74.SI base read 4.5% /
+    # 17.7% while the DCF ran 3.5% / 8.3% in Year 1). Legacy rows only for
+    # archived runs with no schedule.
+    _used = {k: _dcf_assumptions_used(v) for k, v in (("bear", bear), ("base", base), ("bull", bull))}
+    if any(u["source"] == "schedule" for u in _used.values()):
+        _n_yrs = max((u["years"] for u in _used.values()), default=0)
+        _term_lbl = f"FCF Margin — terminal (Yr {_n_yrs})" if _n_yrs else "FCF Margin — terminal"
+
+        def _row(label, key):
+            return [Paragraph(label, styles["RptBody"])] + [
+                Paragraph(_pct(_used[s_][key]) if _used[s_][key] is not None else "—",
+                          styles["RptValue"])
+                for s_ in ("bear", "base", "bull")
+            ]
+        _growth_margin_rows = [
+            _row("Revenue Growth — Year 1", "y1_growth"),
+            _row("Revenue Growth — 5-yr CAGR (Y1–Y5)", "cagr5"),
+            _row("FCF Margin — Year 1", "y1_margin"),
+            _row(_term_lbl, "terminal_margin"),
+        ]
+    else:
+        _growth_margin_rows = [
+            [Paragraph("Revenue Growth (applied)", styles["RptBody"]),
+             Paragraph(_pct(bear_gr), styles["RptValue"]),
+             Paragraph(_pct(base_gr), styles["RptValue"]),
+             Paragraph(_pct(bull_gr), styles["RptValue"])],
+            # CHECK 2 FIX: split margin into base-year anchor + one-shot delta + Year-1 projected
+            [Paragraph("FCF Margin (base year, pre-delta)", styles["RptBody"]),
+             Paragraph(_pct(bear_fcf), styles["RptValue"]),
+             Paragraph(_pct(base_fcf), styles["RptValue"]),
+             Paragraph(_pct(bull_fcf), styles["RptValue"])],
+            [Paragraph("Margin delta (one-shot, Y1–Y10)", styles["RptBody"]),
+             Paragraph(_pct_delta(bear_md), styles["RptValue"]),
+             Paragraph(_pct_delta(base_md), styles["RptValue"]),
+             Paragraph(_pct_delta(bull_md), styles["RptValue"])],
+            [Paragraph("FCF Margin — Year 1 (projected)", styles["RptBody"]),
+             Paragraph(_pct_abs(bear_yr1_fcf), styles["RptValue"]),
+             Paragraph(_pct_abs(base_yr1_fcf), styles["RptValue"]),
+             Paragraph(_pct_abs(bull_yr1_fcf), styles["RptValue"])],
+        ]
+
     assump_rows = [
         assump_hdr,
         [Paragraph("Revenue Base", styles["RptBody"]),
          Paragraph(_fmt_billions(revenue_base), styles["RptValue"]),
          Paragraph(_fmt_billions(revenue_base), styles["RptValue"]),
          Paragraph(_fmt_billions(revenue_base), styles["RptValue"])],
-        [Paragraph("Revenue Growth (applied)", styles["RptBody"]),
-         Paragraph(_pct(bear_gr), styles["RptValue"]),
-         Paragraph(_pct(base_gr), styles["RptValue"]),
-         Paragraph(_pct(bull_gr), styles["RptValue"])],
-        # CHECK 2 FIX: split margin into base-year anchor + one-shot delta + Year-1 projected
-        [Paragraph("FCF Margin (base year, pre-delta)", styles["RptBody"]),
-         Paragraph(_pct(bear_fcf), styles["RptValue"]),
-         Paragraph(_pct(base_fcf), styles["RptValue"]),
-         Paragraph(_pct(bull_fcf), styles["RptValue"])],
-        [Paragraph("Margin delta (one-shot, Y1–Y10)", styles["RptBody"]),
-         Paragraph(_pct_delta(bear_md), styles["RptValue"]),
-         Paragraph(_pct_delta(base_md), styles["RptValue"]),
-         Paragraph(_pct_delta(bull_md), styles["RptValue"])],
-        [Paragraph("FCF Margin — Year 1 (projected)", styles["RptBody"]),
-         Paragraph(_pct_abs(bear_yr1_fcf), styles["RptValue"]),
-         Paragraph(_pct_abs(base_yr1_fcf), styles["RptValue"]),
-         Paragraph(_pct_abs(bull_yr1_fcf), styles["RptValue"])],
+        *_growth_margin_rows,
         [Paragraph("WACC", styles["RptBody"]),
          Paragraph(_pct(wacc), styles["RptValue"]),
          Paragraph(_pct(wacc), styles["RptValue"]),

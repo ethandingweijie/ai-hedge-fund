@@ -139,6 +139,19 @@ export interface DcfCase {
    *  so read it as a fallback. Do not scale by year. */
   margin_delta_per_year?: number;
   tv_pct?: number;                 // terminal value as a fraction of total intrinsic value
+  /** Per-leg inputs the blend used (dcf_agent `leg_inputs`). Only the DCF
+   *  projection is typed here — read via lib/dcfAssumptions.ts. */
+  leg_inputs?: {
+    DCF?: {
+      growth_schedule?: number[] | null;
+      projection_rows?: Array<{
+        year_label?: string;
+        growth_pct?: number | null;
+        fcf_margin?: number | null;
+      }> | null;
+    } | null;
+    [leg: string]: unknown;
+  } | null;
 }
 
 // ── REIT-specific breakdown ────────────────────────────────────────────────

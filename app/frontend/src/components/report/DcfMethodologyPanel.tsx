@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import type { DcfRange } from '@/lib/reportTypes';
 import { DCF_FAMILY_LEGS, inBlend, legValue } from '@/lib/blendLegs';
 import { currencySymbol } from '@/lib/utils';
+import { dcfAssumptionsUsed } from '@/lib/dcfAssumptions';
 
 interface DcfMethodologyPanelProps {
   dcfRange?: DcfRange | null;
@@ -120,6 +121,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   // Owner, 2026-09-27 (MOH): the DCF assumptions table is shown only when a DCF leg carries weight;
   // for a profile that excludes DCF those growth and margin paths value nothing.
   const hasScenarioData = SCENARIOS.some(({ key }) => dcfRange[key]) && inBlend(dcfRange, DCF_FAMILY_LEGS);
+  const anyLegacy = SCENARIOS.some(({ key }) => dcfRange[key] && dcfAssumptionsUsed(dcfRange[key]).source === 'legacy');
   const sym = currencySymbol(ticker);
   const fmtIv = (v: number | null | undefined) =>
     v == null || !Number.isFinite(v) ? '—'
@@ -202,9 +204,13 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
             <thead>
               <tr className="text-muted-foreground border-b border-border">
                 <th className="text-left font-medium py-1 pr-3">Scenario</th>
-                <th className="text-right font-medium py-1 px-3">Growth</th>
-                <th className="text-right font-medium py-1 px-3">FCF Margin (Yr 1)</th>
-                <th className="text-right font-medium py-1 px-3">Margin Δ (Y1–10)</th>
+                <th className="text-right font-medium py-1 px-3" title="Revenue growth the DCF applied in projection year 1">Growth (Yr 1)</th>
+                <th className="text-right font-medium py-1 px-3" title="Compound revenue growth over projection years 1-5, as the DCF ran it">Growth (5-yr CAGR)</th>
+                <th className="text-right font-medium py-1 px-3" title="FCF margin the DCF applied in projection year 1">FCF Margin (Yr 1)</th>
+                <th className="text-right font-medium py-1 px-3" title="FCF margin of the final projection year, the one the terminal value capitalises">FCF Margin (terminal)</th>
+                {anyLegacy && (
+                  <th className="text-right font-medium py-1 px-3">Margin Δ (Y1–10)</th>
+                )}
                 <th className="text-right font-medium py-1 px-3">Terminal Growth</th>
                 <th className="text-right font-medium py-1 pl-3">TV % of IV</th>
               </tr>
@@ -213,21 +219,27 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
               {SCENARIOS.map(({ key, label }) => {
                 const c = dcfRange[key];
                 if (!c) return null;
-                // One-shot absolute margin shift applied from Yr 1 and held to
-                // Yr 10 — not an annual drift. `margin_delta_absolute` is the
-                // accurate key; `margin_delta_per_year` is the earlier misnomer
-                // and is the only one archived runs carry, so both are read.
-                const md = c.margin_delta_absolute ?? c.margin_delta_per_year;
+                // The figures the DCF leg discounted (its own projection rows), not
+                // the legacy single-value growth_rate / fcf_margin_start, which the
+                // guidance forecast supersedes. Legacy only when no schedule exists.
+                const a = dcfAssumptionsUsed(c);
+                // Legacy only: one-shot absolute margin shift applied from Yr 1 and
+                // held to Yr 10 — not an annual drift.
+                const md = a.marginDelta;
                 return (
                   <tr key={key} className="border-b border-border/50 last:border-0">
                     <td className="py-1.5 pr-3 font-medium">{label}</td>
-                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.growth_rate)}</td>
-                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.fcf_margin_start)}</td>
-                    <td className="text-right py-1.5 px-3 tabular-nums">
-                      {md != null
-                        ? `${md >= 0 ? '+' : ''}${(md * 100).toFixed(2)}pp`
-                        : '—'}
-                    </td>
+                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(a.y1Growth)}</td>
+                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(a.cagr5)}</td>
+                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(a.y1Margin)}</td>
+                    <td className="text-right py-1.5 px-3 tabular-nums">{pct(a.terminalMargin)}</td>
+                    {anyLegacy && (
+                      <td className="text-right py-1.5 px-3 tabular-nums">
+                        {a.source === 'legacy' && md != null
+                          ? `${md >= 0 ? '+' : ''}${(md * 100).toFixed(2)}pp`
+                          : '—'}
+                      </td>
+                    )}
                     <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.tgr)}</td>
                     <td className="text-right py-1.5 pl-3 tabular-nums">{pct(c.tv_pct, 0)}</td>
                   </tr>
@@ -235,6 +247,11 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
               })}
             </tbody>
           </table>
+          {anyLegacy && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Archived run without a year-by-year projection: growth and Yr-1 margin are the single-value inputs.
+            </p>
+          )}
         </div>
       )}
 

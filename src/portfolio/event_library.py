@@ -225,7 +225,7 @@ EVENTS: list[EventSpec] = [
     ),
     EventSpec(
         key="euro_2011",
-        name="Eurozone Sovere Debt Crisis (2011)",
+        name="Eurozone Sovereign Debt Crisis (2011)",
         start="2011-05-02",
         end="2011-10-03",
         spy_return_pct=-19.3, spy_max_dd_pct=-19.3,

@@ -227,7 +227,8 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
 
   // ── Build one row per dimension ────────────────────────────────────────────
   const rows: DimRow[] = DIMENSIONS.map(dim => {
-    const score = (powerLaw[dim.scoreKey] as number | undefined) ?? 0;
+    // Same 0-10 scale as the header and the radar (legacy 0-2 runs rescaled).
+    const score = ((powerLaw[dim.scoreKey] as number | undefined) ?? 0) * scale;
 
     const note = resolveField(
       (powerLaw[dim.noteKey] as string | undefined) ?? '',
@@ -281,7 +282,7 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
             fill="#3b82f6"
             fillOpacity={0.35}
           />
-          <Tooltip formatter={(v) => [(Number(v) / 5).toFixed(1) + ' / 2', 'Score']} />
+          <Tooltip formatter={(v) => [Number(v).toFixed(1) + ' / 10', 'Score']} />
         </RadarChart>
       </ResponsiveContainer>
 
@@ -300,8 +301,8 @@ export function PowerLawRadar({ powerLaw }: PowerLawRadarProps) {
                 className="w-full flex items-center gap-2.5 px-1 py-2 text-left transition-colors rounded-sm hover:bg-muted/40"
               >
                 {/* Score badge */}
-                <span className={`shrink-0 text-xs font-bold tabular-nums w-8 text-right ${scoreColor(score * 5)}`}>
-                  {score}/2
+                <span className={`shrink-0 text-xs font-bold tabular-nums w-10 text-right ${scoreColor(score)}`}>
+                  {Number.isInteger(score) ? score : score.toFixed(1)}/10
                 </span>
 
                 {/* Label */}

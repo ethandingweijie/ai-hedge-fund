@@ -48,6 +48,7 @@ import type { FinancialStatementsPayload } from '@/components/report/FinancialSt
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import type { DdCardAudit } from '@/lib/reportTypes';
+import { dcfAssumptionsUsed } from '@/lib/dcfAssumptions';
 import { BriefReferences } from '@/components/report/IndustryBriefPanel';
 import { ChainOfThought } from '@/components/report/ChainOfThought';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
@@ -712,9 +713,9 @@ function V2ValuationLadder({
   const bullIV = dcfRange.bull?.intrinsic_value;
   const baseIV = dcfRange.base?.intrinsic_value;
   const bearIV = dcfRange.bear?.intrinsic_value;
-  const bullG  = dcfRange.bull?.growth_rate;
-  const baseG  = dcfRange.base?.growth_rate;
-  const bearG  = dcfRange.bear?.growth_rate;
+  const bullG  = dcfAssumptionsUsed(dcfRange.bull).y1Growth;
+  const baseG  = dcfAssumptionsUsed(dcfRange.base).y1Growth;
+  const bearG  = dcfAssumptionsUsed(dcfRange.bear).y1Growth;
 
   const maxIV = Math.max(current ?? 0, bullIV ?? 0, baseIV ?? 0, bearIV ?? 0, 1);
   const pct = (iv?: number) => {
@@ -762,7 +763,7 @@ function V2ValuationLadder({
               )}
             </div>
             {r.growth != null && (
-              <span className="text-xs text-muted-foreground/70 tabular-nums w-[38px] text-right">
+              <span className="text-xs text-muted-foreground/70 tabular-nums w-[38px] text-right" title="Year-1 revenue growth the DCF applied">
                 @ {(r.growth * 100).toFixed(0)}% g
               </span>
             )}
