@@ -865,6 +865,80 @@ def _statement_cache_put(key: tuple, value: tuple) -> None:
             _STATEMENT_CACHE.pop(oldest, None)
 
 
+# ── Statement data gaps ──────────────────────────────────────────────────────
+# A partial statement fetch (e.g. income present, balance sheet empty after a
+# 402/timeout) is NOT cached, but the caller still gets what was fetched: its
+# balance-sheet lines (total_debt, cash, equity) come back None. That must not
+# look like clean data, so each partial fetch is recorded here, per ticker, with
+# a wall-clock timestamp. The pipeline reads the gaps recorded since its run
+# started (statement_gaps(ticker, since=...)) into report_disclosures
+# data_limitations. Bounded: a few events per ticker, a capped ticker set.
+_STATEMENT_NAMES = ("income", "balance", "cashflow")
+_STATEMENT_LABELS = {"income": "income statement", "balance": "balance sheet",
+                     "cashflow": "cash-flow statement", "ratios": "financial ratios"}
+_STATEMENT_GAPS: dict[str, list[dict]] = {}
+_STATEMENT_GAPS_LOCK = _threading.Lock()
+_STATEMENT_GAPS_PER_TICKER = 16
+_STATEMENT_GAPS_MAX_TICKERS = 512
+
+
+def _record_statement_gap(ticker: str, period: str, missing: list[str]) -> None:
+    if not missing:
+        return
+    key = str(ticker or "").upper()
+    ev = {"period": period, "missing": list(missing), "at": time.time()}
+    with _STATEMENT_GAPS_LOCK:
+        evs = _STATEMENT_GAPS.setdefault(key, [])
+        evs.append(ev)
+        del evs[:-_STATEMENT_GAPS_PER_TICKER]
+        while len(_STATEMENT_GAPS) > _STATEMENT_GAPS_MAX_TICKERS:
+            oldest = min(_STATEMENT_GAPS, key=lambda k: _STATEMENT_GAPS[k][-1]["at"] if _STATEMENT_GAPS[k] else 0)
+            _STATEMENT_GAPS.pop(oldest, None)
+
+
+def statement_gaps(ticker: str, since: float | None = None) -> list[dict]:
+    """Partial FMP statement fetches recorded for `ticker` (optionally only
+    those at or after the wall-clock time `since`), merged per period:
+    [{"period": "annual", "missing": ["balance", ...]}]. [] when none."""
+    keys = {str(ticker or "").upper()}
+    # HK/SG requests reach the FMP body under the FMP symbol (try_fmp), so the
+    # gap is recorded under that symbol, not the run's ticker.
+    try:
+        from src.tools.intl_provider import fmp_symbol
+        _mkt = detect_market(ticker)
+        if _mkt:
+            _sym = fmp_symbol(ticker, _mkt)
+            if _sym:
+                keys.add(str(_sym).upper())
+    except Exception:                                      # noqa: BLE001
+        pass
+    with _STATEMENT_GAPS_LOCK:
+        evs = [ev for k in keys for ev in (_STATEMENT_GAPS.get(k) or [])]
+    by_period: dict[str, list[str]] = {}
+    for ev in evs:
+        if since is not None and ev["at"] < since:
+            continue
+        cur = by_period.setdefault(ev["period"], [])
+        for m in ev["missing"]:
+            if m not in cur:
+                cur.append(m)
+    return [{"period": p, "missing": m} for p, m in by_period.items() if m]
+
+
+def statement_gap_text(gaps: list[dict]) -> list[str]:
+    """Plain-English data-limitation lines for statement_gaps() output."""
+    out = []
+    for g in gaps or []:
+        names = [_STATEMENT_LABELS.get(m, m) for m in g.get("missing") or []]
+        if not names:
+            continue
+        per = "quarterly" if g.get("period") == "quarter" else "annual"
+        out.append(
+            f"The data provider did not return the {per} {', '.join(names)} for this run; "
+            "figures from it (such as debt, cash and equity) may be missing or estimated.")
+    return out
+
+
 def search_line_items(
     ticker: str,
     line_items: list[str],
@@ -936,10 +1010,19 @@ def search_line_items(
         ratios   = _fmp_get(f"{_STABLE}/ratios",
                             {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
         _stmts = (income, balance, cashflow, ratios)
-        # An empty income statement is a failed or unsupported fetch, not a
-        # fact worth remembering -- the next caller should try again.
-        if income:
+        # An empty statement is a failed or unsupported fetch, not a fact
+        # worth remembering -- the next caller should try again. Only a fetch
+        # with all three financial statements is cached; a partial one is
+        # returned uncached and recorded as a data gap so the report can say
+        # so (balance-sheet None values used to persist for the cache TTL and
+        # read as clean data).
+        _missing = [n for n, rows in zip(_STATEMENT_NAMES, (income, balance, cashflow)) if not rows]
+        if not _missing:
             _statement_cache_put(_stmt_key, _stmts)
+        else:
+            _record_statement_gap(ticker, fmp_p, _missing)
+            print(f"  [FMP] {ticker}: partial statements ({fmp_p}) -- missing "
+                  f"{', '.join(_missing)}; not cached")
     income, balance, cashflow, ratios = _stmts
 
     bal_by_date = {r["date"]: r for r in balance  if "date" in r}

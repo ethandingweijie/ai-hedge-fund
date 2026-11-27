@@ -27,6 +27,7 @@ import type { ProgressEvent } from '@/lib/reportTypes';
 import { ReportHero }          from '@/components/report/ReportHero';
 import { SectionAnchor }       from '@/components/report/SectionAnchor';
 import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
+import { DataLimitationsBanner } from '@/components/report/DataLimitationsBanner';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
 import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
@@ -1309,6 +1310,8 @@ export function ReportPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[liveTicker]}
           ticker={liveTicker}
         />
+        {/* Data limitations — degraded inputs the run disclosed (also in the PDF). */}
+        <DataLimitationsBanner data={data} ticker={liveTicker} className="mb-4" />
         <div className="pt-4">
           <ReportHero
             ticker={liveTicker}

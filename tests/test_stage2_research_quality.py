@@ -50,6 +50,15 @@ class _Block:
         self.citations = citations or []
 
 
+class _SearchResult:
+    """A web_search_tool_result block. content is a list of results on
+    success, or an error object (type web_search_tool_result_error)."""
+    def __init__(self, content=None):
+        self.type = "web_search_tool_result"
+        self.content = [object()] if content is None else content
+        self.citations = []
+
+
 class _Resp:
     def __init__(self, content, stop_reason="end_turn"):
         self.content = content
@@ -109,10 +118,10 @@ def test_c4_evidence_state_qwen_agent_search_is_live_not_degraded():
 
 def test_c4_coverage_nudge_reissues_report_and_counts_searches():
     nudge_resp = _Resp([
-        _Block(btype="server_tool_use", name="web_search"),
-        _Block(btype="server_tool_use", name="web_search"),
-        _Block(btype="server_tool_use", name="web_search"),
-        _Block(btype="server_tool_use", name="web_search"),
+        _Block(btype="server_tool_use", name="web_search"), _SearchResult(),
+        _Block(btype="server_tool_use", name="web_search"), _SearchResult(),
+        _Block(btype="server_tool_use", name="web_search"), _SearchResult(),
+        _Block(btype="server_tool_use", name="web_search"), _SearchResult(),
         _Block(text="RE-ISSUED full report",
                citations=[_Citation("https://new.example/a")]),
     ])
@@ -132,7 +141,7 @@ def test_c4_coverage_nudge_reissues_report_and_counts_searches():
 
 
 def test_c4_coverage_nudge_empty_keeps_original():
-    nudge_resp = _Resp([_Block(btype="server_tool_use", name="web_search")])
+    nudge_resp = _Resp([_Block(btype="server_tool_use", name="web_search"), _SearchResult()])
     client = _Client([nudge_resp])
 
     text, n = dr._coverage_nudge(

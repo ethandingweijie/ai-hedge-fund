@@ -393,6 +393,9 @@ def run_advanced_pipeline(
     Returns a result dict compatible with print_trading_output().
     """
     progress.start()
+    # Wall-clock run start: data gaps (partial FMP statement fetches) recorded
+    # from here on are this run's, and are disclosed in data_limitations.
+    _run_started_wall = time.time()
     # Owner, 2026-10-08: agency credit ratings for US tickers are researched in the background from the start of
     # the run; the DCF's cost of debt waits for them (src.data.credit_ratings).
     try:
@@ -1719,10 +1722,20 @@ def run_advanced_pipeline(
 
         # Owner, 2026-11-25 (CFA audit): disclosures, target methodology, the Street
         # comparison and the data limitations, per ticker -- read by the PDF and the web.
+        _fmp_data_gaps: dict = {}
+        try:
+            from src.tools.api import statement_gaps as _statement_gaps
+            for _t in (decisions or {}):
+                _g = _statement_gaps(_t, since=_run_started_wall)
+                if _g:
+                    _fmp_data_gaps[_t] = _g
+        except Exception as _gap_exc:                      # noqa: BLE001
+            print(f"  [disclosures] data-gap read skipped: {type(_gap_exc).__name__}: {_gap_exc}")
         try:
             from src.utils.report_disclosures import build_all as _build_disclosures
             _report_disclosures = _build_disclosures(
-                {**state["data"], "decisions": decisions, "dcf_range": _dcf_range_out, "model_name": model_name})
+                {**state["data"], "decisions": decisions, "dcf_range": _dcf_range_out, "model_name": model_name,
+                 "fmp_data_gaps": _fmp_data_gaps})
         except Exception as _rd_exc:                       # noqa: BLE001
             _report_disclosures = {}
             print(f"  [disclosures] skipped: {type(_rd_exc).__name__}: {_rd_exc}")
@@ -1730,6 +1743,9 @@ def run_advanced_pipeline(
         return {
             "decisions":          decisions,
             "report_disclosures": _report_disclosures,
+            # Partial FMP statement fetches during this run, per ticker
+            # (src.tools.api.statement_gaps); also in data_limitations.
+            "fmp_data_gaps":      _fmp_data_gaps,
             "analyst_signals":    state["data"]["analyst_signals"],
             "macro_regime":       state["data"].get("macro_regime"),
             "sector":             state["data"].get("sector"),

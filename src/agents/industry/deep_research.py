@@ -669,10 +669,17 @@ def _responses_search_sources(output, per_call: int = 5) -> tuple[int, list[str]
     deduped by URL, so the caller's registry treats both providers alike.
     Only each search's top `per_call` sources are kept: DashScope returns ~20
     per search (U11.SI: 200 over 9 searches, 168 registry rows), Anthropic
-    seeds only what it cited."""
+    seeds only what it cited.
+
+    Only searches whose output item reports status "completed" are counted
+    (and contribute queries/sources): a failed or still-searching call is not
+    evidence, and counting it would let a run with zero working searches clear
+    the live-search floor."""
     n, queries, cits, seen = 0, [], [], set()
     for item in output or []:
         if getattr(item, "type", "") != "web_search_call":
+            continue
+        if str(getattr(item, "status", "") or "").lower() != "completed":
             continue
         n += 1
         action = getattr(item, "action", None)
@@ -792,6 +799,47 @@ def _strip_narration(text: str) -> str:
             blank_run = 0
             result.append(ln)
     return "\n".join(result)
+
+
+# ── Search success accounting ─────────────────────────────────────────────────
+# A search only counts toward the live-search floor when it returned results.
+# Errored or empty searches are attempts, not evidence: counting them let a run
+# whose every search failed be labelled LIVE WEB DATA.
+
+_TAVILY_FAILURE_PREFIXES = ("Search error:", "No results found")
+
+
+def _tavily_result_ok(result) -> bool:
+    """True when a _search_web() return value carries real results (it
+    returns an error / no-results string instead of raising)."""
+    if not isinstance(result, str) or not result.strip():
+        return False
+    return not result.lstrip().startswith(_TAVILY_FAILURE_PREFIXES)
+
+
+def _anthropic_search_result_ok(block) -> bool:
+    """True for a web_search_tool_result block whose content is a non-empty
+    result list. An error result carries an object (type
+    web_search_tool_result_error, error_code e.g. max_uses_exceeded /
+    unavailable) instead of a list."""
+    if getattr(block, "type", None) != "web_search_tool_result":
+        return False
+    content = getattr(block, "content", None)
+    if isinstance(content, dict):
+        return False
+    if content is None or getattr(content, "error_code", None) is not None:
+        return False
+    if "error" in str(getattr(content, "type", "") or ""):
+        return False
+    try:
+        return len(content) > 0
+    except TypeError:
+        return False
+
+
+def _count_successful_web_searches(blocks) -> int:
+    """Number of server web searches in a response that returned results."""
+    return sum(1 for b in (blocks or []) if _anthropic_search_result_ok(b))
 
 
 # ── Tier 2: Tavily search helper ───────────────────────────────────────────────
@@ -4213,6 +4261,10 @@ def _hash_research_sections(sections: dict, profile_name: str = "") -> str:
 # Applying the numeric floor to that proxy would degrade EVERY Qwen run, so
 # these tiers are treated as live on their own evidence (non-empty report from
 # a search-enabled call) instead of a count they cannot report.
+# The Responses API path (_run_qwen_responses_search) DOES report completed
+# searches and their sources; the caller passes countable=True for it so the
+# floor (and a zero-citation check) applies. Only the chat fallback stays
+# uncountable.
 _UNCOUNTABLE_LIVE_TIERS = ("qwen_web",)
 
 
@@ -4255,23 +4307,36 @@ def divergence_degradation(divergences: dict | None) -> list[dict]:
     return out
 
 
-def _research_evidence_state(research_tier: str, search_count: int) -> tuple[bool, bool, str]:
+def _research_evidence_state(research_tier: str, search_count: int, *,
+                             countable: bool = False,
+                             citation_count: int | None = None) -> tuple[bool, bool, str]:
     """C4 live-data gate.
 
     Returns (is_live, is_degraded, label):
       is_live     — live tier AND confirmed searches >= floor (or an
                     uncountable agent-search tier with a report)
-      is_degraded — live tier but BELOW the search floor: the evidence base
-                    is too thin for the valuation model to trust blindly
+      is_degraded — live tier but BELOW the search floor, or (when the
+                    caller observed citations) with zero cited sources: the
+                    evidence base is too thin for the valuation model to
+                    trust blindly
       label       — progress suffix for the "Deep research complete" line
+
+    countable      — the tier is normally uncountable (qwen_web) but this run
+                     came from a surface that reports real completed searches
+                     (the Qwen Responses web_search tool), so the floor applies.
+    citation_count — sources the run actually returned; 0 degrades a live
+                     tier even when the search count clears the floor.
     """
-    if research_tier in _UNCOUNTABLE_LIVE_TIERS:
+    if research_tier in _UNCOUNTABLE_LIVE_TIERS and not countable:
         # Agent-search tier: count is a proxy, never degrade on it.
         return True, False, " [LIVE WEB DATA — agent search]"
-    is_live     = research_tier in _LIVE_RESEARCH_TIERS and search_count >= _MIN_LIVE_SEARCHES
-    is_degraded = research_tier in _LIVE_RESEARCH_TIERS and search_count < _MIN_LIVE_SEARCHES
+    _live_tier  = research_tier in _LIVE_RESEARCH_TIERS
+    _no_sources = citation_count is not None and citation_count <= 0
+    is_degraded = _live_tier and (search_count < _MIN_LIVE_SEARCHES or _no_sources)
+    is_live     = _live_tier and not is_degraded
     label = (
         " [LIVE WEB DATA]" if is_live else
+        " [DEGRADED — no cited sources]" if is_degraded and search_count >= _MIN_LIVE_SEARCHES else
         " [DEGRADED — below live-search floor]" if is_degraded else
         " [TRAINING DATA — no live searches]"
     )
@@ -4406,10 +4471,9 @@ def _coverage_nudge(
         return text, n_searches
 
     _more_text_raw = ""
+    # Only searches that returned results count (errored ones are attempts).
+    n_searches += _count_successful_web_searches(_more_resp.content)
     for block in _more_resp.content:
-        btype = getattr(block, "type", None)
-        if btype in ("server_tool_use", "tool_use") and getattr(block, "name", None) == "web_search":
-            n_searches += 1
         if hasattr(block, "text"):
             _more_text_raw += block.text
     _harvest_block_citations(_more_resp.content, seen_urls, server_citations)
@@ -5864,7 +5928,8 @@ def _research_one_ticker(
                 f"Tier 1 API stop_reason={_stop!r} — response may be incomplete"
             )
         text = ""
-        n_searches = 0
+        n_searches = 0          # searches that RETURNED results (the floor counts these)
+        _n_attempts = 0         # every server_tool_use web_search (progress + nudge gate)
         _seen_urls: set[str] = set()   # deduplicate citations by URL
         server_citations: list[dict] = []
 
@@ -5873,15 +5938,19 @@ def _research_one_ticker(
 
             # ── Count live searches ───────────────────────────────────────────
             # web_search_20260209 emits "server_tool_use" blocks (not "tool_use").
-            # Accept both for resilience across SDK versions.
-            if btype in ("server_tool_use", "tool_use") and getattr(block, "name", None) == "web_search":
+            # Accept both for resilience across SDK versions. Only a
+            # web_search_tool_result with a non-empty result list counts toward
+            # n_searches; an errored search is an attempt, not evidence.
+            if _anthropic_search_result_ok(block):
                 n_searches += 1
+            if btype in ("server_tool_use", "tool_use") and getattr(block, "name", None) == "web_search":
+                _n_attempts += 1
                 query = getattr(block, "input", {}).get("query", "")
                 progress.update_status(
                     agent_id, ticker,
-                    f"Web search {n_searches}/{MAX_SEARCHES}: {query[:60]}",
+                    f"Web search {_n_attempts}/{MAX_SEARCHES}: {query[:60]}",
                     partial_data={"live_search_query": {
-                        "index": n_searches,
+                        "index": _n_attempts,
                         "total": MAX_SEARCHES,
                         "query": query[:80],
                     }}
@@ -5917,8 +5986,17 @@ def _research_one_ticker(
         if n_searches == 0:
             progress.update_status(
                 agent_id, ticker,
-                "Tier 1: no web_search blocks detected in response — text may be "
-                "training-based (block type/name mismatch); using result anyway"
+                ("Tier 1: no web_search blocks detected in response — text may be "
+                 "training-based (block type/name mismatch); using result anyway")
+                if _n_attempts == 0 else
+                (f"Tier 1: {_n_attempts} web search(es) attempted, none returned "
+                 "results — research will be marked degraded")
+            )
+        elif n_searches < _n_attempts:
+            progress.update_status(
+                agent_id, ticker,
+                f"Tier 1: {_n_attempts - n_searches} of {_n_attempts} web searches "
+                "errored or returned nothing — not counted toward the live floor"
             )
         text = _strip_narration(text)
 
@@ -5929,7 +6007,7 @@ def _research_one_ticker(
         # This avoids the 20s retry wait and reuses the already-paid-for searches.
         # If the nudge itself fails (API error or still empty), text stays ""
         # and the caller's ValueError → normal retry/Tier-2 path fires as before.
-        if not text.strip() and n_searches > 0:
+        if not text.strip() and _n_attempts > 0:
             progress.update_status(
                 agent_id, ticker,
                 f"Tier 1: {n_searches} searches completed but no synthesis — "
@@ -6006,6 +6084,11 @@ def _research_one_ticker(
             )
 
         return text, n_searches, server_citations
+
+    # Which Qwen search surface produced Tier 1: the Responses web_search tool
+    # reports completed searches + sources (countable); the chat enable_search
+    # fallback cannot count and stays on the uncountable-tier treatment.
+    _qwen_surface: dict = {"countable": False}
 
     def _run_with_qwen_web_search() -> tuple[str, int, list[dict]]:
         """
@@ -6085,6 +6168,8 @@ def _research_one_ticker(
                     agent_id=agent_id, ticker=ticker,
                 )
                 if _rs is not None:
+                    # Countable surface: real completed-search count + sources.
+                    _qwen_surface["countable"] = True
                     return _rs
             except Exception as _rs_err:            # noqa: BLE001
                 progress.update_status(
@@ -6317,9 +6402,10 @@ def _research_one_ticker(
         """
         msgs: list[dict] = [{"role": "user", "content": human_msg}]
         text = ""
-        n_searches = 0
+        n_searches = 0       # successful, non-empty searches (the floor counts these)
+        n_attempts = 0       # every tool call (the MAX_SEARCHES cap counts these)
         tavily_citations: list[dict] = []
-        while n_searches < MAX_SEARCHES:
+        while n_attempts < MAX_SEARCHES:
             resp = sdk_client.messages.create(
                 model=_synthesis_model,
                 max_tokens=MAX_TOKENS,
@@ -6341,16 +6427,20 @@ def _research_one_ticker(
                         # Claude can batch multiple tool_use blocks in one response;
                         # without this check n_searches can exceed MAX_SEARCHES
                         # (observed as "12/10" when 3 calls arrive simultaneously).
-                        if n_searches >= MAX_SEARCHES:
+                        if n_attempts >= MAX_SEARCHES:
                             break
                         query = blk.input.get("query", "")
-                        n_searches += 1
+                        n_attempts += 1
                         progress.update_status(
                             agent_id, ticker,
-                            f"Tavily search {n_searches}/{MAX_SEARCHES}: {query[:60]}"
+                            f"Tavily search {n_attempts}/{MAX_SEARCHES}: {query[:60]}"
                         )
                         result = _search_web(query, tavily_key,
                                              citation_sink=tavily_citations)
+                        # _search_web returns an error / no-results string
+                        # instead of raising: only real results count.
+                        if _tavily_result_ok(result):
+                            n_searches += 1
                         tool_results.append({
                             "type": "tool_result",
                             "tool_use_id": blk.id,
@@ -6361,7 +6451,7 @@ def _research_one_ticker(
                 # the MAX_SEARCHES cap fires before any tool calls were processed.
                 if tool_results:
                     msgs.append({"role": "user", "content": tool_results})
-                if n_searches >= MAX_SEARCHES:
+                if n_attempts >= MAX_SEARCHES:
                     msgs.append({
                         "role": "user",
                         "content": (
@@ -6558,9 +6648,22 @@ def _research_one_ticker(
     # floor is "degraded": the evidence base is too thin for the valuation
     # model to trust blindly. The flag rides in the result dict so
     # downstream consumers can see it.
+    _countable_qwen = research_tier == "qwen_web" and _qwen_surface.get("countable", False)
     _is_live, _research_degraded, _evidence_label = _research_evidence_state(
-        research_tier, search_count
+        research_tier, search_count,
+        countable=_countable_qwen,
+        citation_count=len(server_citations) if _countable_qwen else None,
     )
+    # Plain-English cause, carried to research_degraded_reasons / data_limitations.
+    _research_degraded_text = None
+    if _research_degraded:
+        _research_degraded_text = (
+            "Live research returned no cited sources, so its narrative is unverified."
+            if search_count >= _MIN_LIVE_SEARCHES else
+            f"Live research completed {search_count} successful web search"
+            f"{'' if search_count == 1 else 'es'}, below the minimum of {_MIN_LIVE_SEARCHES}; "
+            "failed or empty searches were not counted."
+        )
     progress.update_status(
         agent_id, ticker,
         f"Deep research complete — tier={research_tier} | {search_count} web searches | "
@@ -6863,6 +6966,7 @@ def _research_one_ticker(
         "framework_metrics":      framework_metrics,
         "extractor_failures":     _extractor_failures,
         "research_degraded":      _research_degraded,
+        "research_degraded_text": _research_degraded_text,
         "research_financial_divergences": research_financial_divergences,
     }
 
@@ -7189,7 +7293,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     _deg_reasons: list[dict] = []
     if primary.get("research_degraded"):
         _deg_reasons.append({"source": "search_floor",
-                             "text": "Live research ran below the minimum number of confirmed web searches."})
+                             "text": primary.get("research_degraded_text")
+                             or "Live research ran below the minimum number of confirmed web searches."})
     _deg_reasons += divergence_degradation(primary.get("research_financial_divergences"))
     if _deg_reasons:
         state["data"]["research_degraded"] = True

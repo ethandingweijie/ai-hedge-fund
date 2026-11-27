@@ -26,6 +26,10 @@ def fmp(monkeypatch):
         if path.endswith("balance-sheet-statement"):
             return [{"date": "2025-12-31", "totalDebt": 300.0,
                      "cashAndCashEquivalents": 50.0}]
+        # All three statements present: only a complete fetch is cached
+        # (a partial one is recorded as a data gap and refetched).
+        if path.endswith("cash-flow-statement"):
+            return [{"date": "2025-12-31", "freeCashFlow": 80.0}]
         return []
 
     monkeypatch.setattr(api_mod, "_fmp_get", fake_get)

@@ -17,8 +17,8 @@ def test_anthropic_run_stays_on_claude_even_with_pipeline_model_set(monkeypatch)
     assert _resolve_run_models("claude-sonnet-4-6") == ("claude-sonnet-4-6", "Anthropic")
 
 
-def _call(query, urls):
-    return NS(type="web_search_call", action=NS(model_dump=lambda: {
+def _call(query, urls, status="completed"):
+    return NS(type="web_search_call", status=status, action=NS(model_dump=lambda: {
         "query": query, "queries": [query], "sources": [{"type": "url", "url": u} for u in urls]}))
 
 

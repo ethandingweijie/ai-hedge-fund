@@ -11,6 +11,7 @@ import { V2ReportView } from '@/components/v2/V2ReportView';
 import { ReportHero } from '@/components/report/ReportHero';
 import { SectionAnchor } from '@/components/report/SectionAnchor';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
+import { DataLimitationsBanner } from '@/components/report/DataLimitationsBanner';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
 import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
@@ -271,6 +272,8 @@ export function ReportViewPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[ticker]}
           ticker={ticker}
         />
+        {/* Data limitations — degraded inputs the run disclosed (also in the PDF). */}
+        <DataLimitationsBanner data={data} ticker={ticker} />
         <ReportHero
           ticker={ticker}
           runAt={result.run_at}

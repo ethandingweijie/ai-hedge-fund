@@ -47,6 +47,7 @@ import { FinancialStatements } from '@/components/report/FinancialStatements';
 import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
+import { DataLimitationsBanner } from '@/components/report/DataLimitationsBanner';
 import type { DdCardAudit } from '@/lib/reportTypes';
 import { dcfAssumptionsUsed } from '@/lib/dcfAssumptions';
 import { BriefReferences } from '@/components/report/IndustryBriefPanel';
@@ -285,6 +286,13 @@ export function V2ReportView({
         audit={(data.card_qa_audit as Record<string, DdCardAudit> | undefined)?.[ticker]}
         ticker={ticker}
       />
+      {/* Data limitations — mounted here as well as on the desktop path: the
+          mobile view bypasses the desktop JSX. */}
+      {!isRunning && (
+        <div className="px-4 pt-3">
+          <DataLimitationsBanner data={data} ticker={ticker} />
+        </div>
+      )}
 
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">

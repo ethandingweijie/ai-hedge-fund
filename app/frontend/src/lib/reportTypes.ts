@@ -718,8 +718,33 @@ export interface SectorCardPayload {
   source_priority?: string[];
 }
 
+/** data.report_disclosures[ticker] (src/utils/report_disclosures.py). Only the
+ *  fields the web reads are typed; the PDF renders the rest. */
+export interface ReportDisclosures {
+  horizon?: string;
+  as_of?: string | null;
+  model?: string | null;
+  data_sources?: string[];
+  limitations?: string[];
+  /** Plain-English degraded inputs for this run (research floor, missing
+   *  statements, failed checks). Rendered by DataLimitationsBanner. */
+  data_limitations?: string[];
+  error?: string;
+  [key: string]: unknown;
+}
+
+/** One partial FMP statement fetch (src/tools/api.py statement_gaps). */
+export interface FmpDataGap {
+  period: string;
+  missing: string[];
+}
+
 export interface PipelineData {
   tickers?: string[];
+  /** Disclosures + data limitations per ticker (owner, 2026-11-25). */
+  report_disclosures?: Record<string, ReportDisclosures>;
+  /** Partial FMP statement fetches during this run, per ticker. */
+  fmp_data_gaps?: Record<string, FmpDataGap[]>;
   macro_regime?: MacroRegime;
   agent_weights?: Record<string, number>;
   routing_decision?: Record<string, RoutingDecision>;

@@ -209,6 +209,12 @@ def data_limitations(data: dict, ticker: str) -> list[str]:
     tier = str(data.get("research_tier") or "").lower()
     if tier in ("none", "knowledge_only"):
         out.append("No live web research was available; the narrative relies on the model's background knowledge.")
+    # financial data gaps: a partial statement fetch from the data provider
+    try:
+        from src.tools.api import statement_gap_text
+        out.extend(statement_gap_text(_t(data, "fmp_data_gaps", ticker) or []))
+    except Exception:                                      # noqa: BLE001 -- a disclosure never sinks a run
+        pass
     divs = _t(data, "research_financial_divergences", ticker) or {}
     if divs and not data.get("research_degraded_reasons"):
         out.append("Some figures in the research narrative differ from reported financials; reported financials "
