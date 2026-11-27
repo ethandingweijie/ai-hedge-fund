@@ -47,8 +47,11 @@ def test_gated_on_both_acceptances():
     assert d.commodity_price_index("Z", 5, _doc()) is None
 
 
-def test_shipped_deck_is_proposed_so_nothing_moves():
-    assert d.commodity_price_index("COP", 5) is None
+def test_shipped_deck_prices_only_the_accepted_mixes():
+    # Owner accepted the deck and four mixes on 2026-11-27 (CME settlements, trade date 25 Nov 2026).
+    assert d.commodity_price_index("COP", 5) is not None
+    assert d.commodity_price_index("LEU", 5) is None        # no mix: never priced on the deck
+    assert d.commodity_price_index("FCX", 5) is None
 
 
 def test_operating_leverage_and_shut_in():

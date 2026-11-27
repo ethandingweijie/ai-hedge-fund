@@ -891,11 +891,11 @@
   },
   "commodity_price_deck": {
     "_doc": "Owner, 2026-11-27 (I2, option 3A): depleting-asset DCFs price on a futures strip for years 1-3, then a straight line to the owner's long-run price by year 5, against the trailing 12-month average already inside base revenue (base_price). Costs are per unit, so price moves fall to FCF; a year below cash cost is shut in. Applies only when this block AND the ticker's mix are ACCEPTED (dcf_agent.commodity_price_index). Reviewed quarterly; refresh with scripts/commodity_deck.py from CME (WTI, Henry Hub) and ICE Report Center (Brent, Newcastle) settlement downloads.",
-    "status": "PROPOSED",
+    "status": "ACCEPTED",
     "as_of": "2026-11-27",
     "reviewed": {
-      "last_reviewed": null,
-      "reviewer": null,
+      "last_reviewed": "2026-11-28",
+      "reviewer": "owner",
       "cadence": "quarterly"
     },
     "fade_to_long_run_by_year": 5,
@@ -904,43 +904,43 @@
         "unit": "USD/bbl",
         "spot": 95.76,
         "strip": {
-          "2027": 83.94,
-          "2028": 73.84,
-          "2029": 71.03
+          "2027": 83.5833,
+          "2028": 73.885,
+          "2029": 71.0592
         },
         "long_run": 70.0,
         "long_run_basis": "Cal-2030 strip 69.54; Dec-30 68.97",
-        "base_price": 87.61,
+        "base_price": 87.6037,
         "base_price_basis": "FMP BZUSD front-month, mean of daily closes 2025-11-27..2026-11-27",
-        "source": "Agent proposal 2026-11-27 from DELAYED QUOTE-SITE contract tables (investing.com 08:06 27-Nov), not exchange settlements: re-pull from CME/ICE settlement files with scripts/commodity_deck.py before acceptance."
+        "source": "CME Group Brent Last Day Financial (BZ) settlements, trade date 25 Nov 2026 (cmegroup.com settlements page, read 27 Nov 2026). CME showed zero volume and open interest: these settlements are reference values that track ICE Brent, not traded prices; replace with an ICE Report Center download when available."
       },
       "WTI": {
         "unit": "USD/bbl",
         "spot": 84.47,
         "strip": {
-          "2027": 77.63,
-          "2028": 69.24,
-          "2029": 66.33
+          "2027": 77.2408,
+          "2028": 69.2208,
+          "2029": 66.2767
         },
         "long_run": 65.0,
         "long_run_basis": "Cal-2030 strip 63.92",
-        "base_price": 81.97,
+        "base_price": 81.9631,
         "base_price_basis": "FMP CLUSD front-month, mean of daily closes 2025-11-27..2026-11-27",
-        "source": "Agent proposal 2026-11-27 from DELAYED QUOTE-SITE contract tables (investing.com 08:06 27-Nov), not exchange settlements: re-pull from CME/ICE settlement files with scripts/commodity_deck.py before acceptance."
+        "source": "CME Group NYMEX Light Sweet Crude (CL) settlements, trade date 25 Nov 2026 (cmegroup.com settlements page, read 27 Nov 2026)."
       },
       "HENRY_HUB": {
         "unit": "USD/MMBtu",
         "spot": 3.48,
         "strip": {
-          "2027": 2.92,
-          "2028": 3.56,
-          "2029": 3.61
+          "2027": 3.0011,
+          "2028": 3.5884,
+          "2029": 3.6145
         },
         "long_run": 3.6,
         "long_run_basis": "Cal-2030 strip 3.63 (EIA STEO Nov-26: 2027 2.88)",
-        "base_price": 3.22,
+        "base_price": 3.2204,
         "base_price_basis": "FMP NGUSD front-month, mean of daily closes 2025-11-27..2026-11-27",
-        "source": "Agent proposal 2026-11-27 from DELAYED QUOTE-SITE contract tables (investing.com 08:06 27-Nov), not exchange settlements: re-pull from CME/ICE settlement files with scripts/commodity_deck.py before acceptance."
+        "source": "CME Group NYMEX Henry Hub Natural Gas (NG) settlements, trade date 25 Nov 2026 (cmegroup.com settlements page, read 27 Nov 2026)."
       },
       "NEWCASTLE": {
         "unit": "USD/t",
@@ -969,34 +969,38 @@
     },
     "mixes": {
       "COP": {
-        "status": "PROPOSED",
+        "status": "ACCEPTED",
         "weights": {
           "WTI": 0.663,
           "HENRY_HUB": 0.15
         },
-        "source": "ConocoPhillips 10-K FY2025 (filed 2026-02-17), Sales and Other Operating Revenues by Product: crude 66.3%, gas 15.0%, NGL 6.3% and other 12.4% left unpriced (NGL has no deck benchmark). Gas not split Lower 48 vs LNG/TTF."
+        "source": "ConocoPhillips 10-K FY2025 (filed 2026-02-17), Sales and Other Operating Revenues by Product: crude 66.3%, gas 15.0%, NGL 6.3% and other 12.4% left unpriced (NGL has no deck benchmark). Gas not split Lower 48 vs LNG/TTF.",
+        "accepted": "owner, 2026-11-28"
       },
       "OXY": {
-        "status": "PROPOSED",
+        "status": "ACCEPTED",
         "weights": {
           "WTI": 0.796,
           "HENRY_HUB": 0.063
         },
-        "source": "Occidental 10-K FY2025 revenue disaggregation (continuing ops; OxyChem sold 2-Jan-2026): oil 79.6%, gas 6.3%; NGL 10.4% and midstream & marketing left unpriced."
+        "source": "Occidental 10-K FY2025 revenue disaggregation (continuing ops; OxyChem sold 2-Jan-2026): oil 79.6%, gas 6.3%; NGL 10.4% and midstream & marketing left unpriced.",
+        "accepted": "owner, 2026-11-28"
       },
       "00883.HK": {
-        "status": "PROPOSED",
+        "status": "ACCEPTED",
         "weights": {
           "BRENT": 0.703
         },
-        "source": "CNOOC FY2025 results: crude 70.3% (Brent-linked; realised $66.47 vs Brent $69.04); gas 14.0% is contract-priced and left unpriced, with marketing and other. Total revenue from a third-party summary (Quartr), unverified."
+        "source": "CNOOC FY2025 results: crude 70.3% (Brent-linked; realised $66.47 vs Brent $69.04); gas 14.0% is contract-priced and left unpriced, with marketing and other. Total revenue from a third-party summary (Quartr), unverified.",
+        "accepted": "owner, 2026-11-28"
       },
       "01088.HK": {
-        "status": "PROPOSED",
+        "status": "ACCEPTED",
         "weights": {
           "QHD_5500": 0.29
         },
-        "source": "China Shenhua 2025 annual results: coal 62.0% of external revenue; by tonnage 53.2% annual long-term contract (benchmark, left unpriced) and 46.8% monthly/spot/pithead (market-linked), so 62.0% x 46.8% ~ 29% QHD-linked. Power 30.1%, railway, chemicals, shipping, port unpriced. Assumes internal sales have the same contract mix."
+        "source": "China Shenhua 2025 annual results: coal 62.0% of external revenue; by tonnage 53.2% annual long-term contract (benchmark, left unpriced) and 46.8% monthly/spot/pithead (market-linked), so 62.0% x 46.8% ~ 29% QHD-linked. Power 30.1%, railway, chemicals, shipping, port unpriced. Assumes internal sales have the same contract mix.",
+        "accepted": "owner, 2026-11-28"
       }
     },
     "routing_notes": "LEU (Centrus Energy) is routed to Mining (Major) but is a uranium enrichment / fuel-services business (SWU 66.6% of FY2025 revenue): proposed to move off the depleting profile; no mix is proposed for it."
