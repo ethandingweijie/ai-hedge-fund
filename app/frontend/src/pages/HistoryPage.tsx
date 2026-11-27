@@ -16,7 +16,8 @@ import { getHistory, getCompanyNames, deleteRun } from '@/lib/api';
 import type { HistoryResponse, RunSummary } from '@/lib/reportTypes';
 import { useActiveRun } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
-import { parseBackendIso } from '@/lib/utils';
+import { currencySymbol, parseBackendIso } from '@/lib/utils';
+import { wordsFromAction } from '@/lib/ratingVocab';
 import {
   Search,
   X,
@@ -53,8 +54,8 @@ const SECTOR_OPTIONS = [
 type MarketOption = 'All markets' | 'US' | 'HK' | 'SG';
 const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG'];
 
-type ActionOption = 'Any action' | 'BUY' | 'HOLD' | 'SELL' | 'SHORT';
-const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'BUY', 'HOLD', 'SELL', 'SHORT'];
+type ActionOption = 'Any action' | 'Buy' | 'Hold' | 'Sell';
+const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'Buy', 'Hold', 'Sell'];
 
 /** Infer listing market from a ticker symbol. */
 function marketOf(ticker: string): MarketOption {
@@ -214,8 +215,8 @@ export function HistoryPage() {
       }
       // Action
       if (actionFilter !== 'Any action') {
-        const a = (r.final_action || '').toUpperCase();
-        if (!a.includes(actionFilter)) return false;
+        // Filter on the same Buy / Hold / Sell words the rows show (SHORT is a Sell).
+        if (wordsFromAction(r.final_action)?.primary !== actionFilter) return false;
       }
       return true;
     });
@@ -505,8 +506,11 @@ function HistoryRow({
           {row.price_target != null ? (
             <>
               <div className={`font-semibold text-foreground tabular-nums ${isDesktop ? 'text-[17px]' : 'text-[13px]'}`}>
-                ${row.price_target.toLocaleString(undefined, {
-                  maximumFractionDigits: row.price_target < 10 ? 2 : 0,
+                {/* Owner, 2026-11-27: the listing's currency (S$ / HK$), not a bare "$". */}
+                {currencySymbol(row.ticker)}{row.price_target.toLocaleString(undefined, {
+                  // Two decimals below 100 so the row matches the report (S$18.80, not S$19).
+                  minimumFractionDigits: row.price_target < 100 ? 2 : 0,
+                  maximumFractionDigits: row.price_target < 100 ? 2 : 0,
                 })}
               </div>
               <div className={isDesktop ? 'text-[12px]' : 'text-xs'}><Delta v={upside}/></div>

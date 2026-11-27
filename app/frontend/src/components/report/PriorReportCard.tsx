@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { currencySymbol } from '@/lib/utils';
 import type { FreshnessDelta, PriorRecap } from '@/lib/reportTypes';
 import { actionTone } from '@/lib/semanticColors';
+import { ratingWords } from '@/lib/ratingVocab';
 import { useI18n } from '@/i18n';
 
 interface Props {
@@ -21,7 +22,8 @@ interface Props {
 
 function fmtNum(v: number | null | undefined, sym: string): string {
   if (v == null || !isFinite(v)) return '—';
-  return `${sym}${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  // Two decimals always, so a S$3.50 target never reads as "S$3.5" beside a S$3.54 one.
+  return `${sym}${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 
@@ -33,7 +35,8 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
   const rj = prior.recap_json ?? {};
   const ageDays = prior.age_days != null ? t('{d}d old', { d: prior.age_days.toFixed(1) }) : '';
   const runDate = prior.run_at ? prior.run_at.slice(0, 10) : '';
-  const actionColor = actionTone(prior.final_action, 'text');
+  const priorWords = ratingWords({ rating_label: rj.rating_label, action: prior.final_action ?? rj.final_action });
+  const actionColor = actionTone(priorWords?.toneKey ?? prior.final_action, 'text');
 
   const events = delta?.events ?? [];
   const material = delta?.material;
@@ -51,12 +54,17 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
 
       {/* Prior decision summary */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-2">
-        <span className={`font-bold ${actionColor}`}>
-          {prior.final_action ? t(prior.final_action.toUpperCase()) : 'N/A'}
+        {/* Owner, 2026-11-27: the same Buy / Hold / Sell words as the header,
+            research word secondary. */}
+        <span className="inline-flex items-baseline gap-1.5">
+          <span className={`font-bold ${actionColor}`}>
+            {priorWords ? t(priorWords.primary) : 'N/A'}
+          </span>
+          {priorWords?.secondary && <span className="text-xs text-muted-foreground">{t(priorWords.secondary)}</span>}
         </span>
         {rj.price_target != null && (
           <span className="text-muted-foreground">
-            {t('PT')} {fmtNum(rj.price_target, sym)}
+            {t('Target')} {fmtNum(rj.price_target, sym)}
           </span>
         )}
         {prior.price_at_run != null && (

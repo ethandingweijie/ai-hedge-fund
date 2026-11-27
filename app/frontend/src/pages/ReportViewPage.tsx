@@ -286,6 +286,9 @@ export function ReportViewPage() {
           sector={sector}
           subSector={subSector}
           vgpm={vgpm}
+          runId={runId}
+          delta={data.freshness_delta?.[ticker]}
+          priorRunAt={data.prior_recap?.[ticker]?.run_at}
         />
 
         {/* ── M1 recency — what the last report said + what changed since ── */}
@@ -415,7 +418,7 @@ export function ReportViewPage() {
 
         {/* ── News (owner, 2026-10-04: its own tab, no longer inside Research) ── */}
         <SectionAnchor id="news" label="News" />
-        <NewsPanel ticker={ticker} />
+        <NewsPanel ticker={ticker} reportEvents={data.freshness_delta?.[ticker]?.events} />
 
       </div>
       {/* Export: Report (PDF) / Model (XLSX) */}

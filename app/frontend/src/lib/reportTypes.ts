@@ -450,6 +450,8 @@ export interface EstimateRecompute {
 }
 export interface EstimateAskResponse {
   answer: string; proposal: EstimateOverrides | null; proposal_valid: boolean; proposal_error: string | null; model: string;
+  /** Brief footnotes the answer drew on (the [n] markers are stripped from `answer`). */
+  sources?: { n: number | string; name: string; date?: string | null; url?: string | null }[];
 }
 
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
@@ -581,6 +583,8 @@ export interface PriorRecapJson {
   catalysts?: string[];
   risks?: string[];
   llm_used?: boolean;
+  /** The prior report's research rating label ("Underweight"), when it had one. */
+  rating_label?: string | null;
 }
 
 export interface PriorRecap {

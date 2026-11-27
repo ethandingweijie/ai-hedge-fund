@@ -7,7 +7,9 @@
  * the structural vs tactical views, the compliance notes, the rating definition and the
  * rating-to-action disclaimer are on hover and in the PDF.
  */
-import type { ResearchView } from '@/lib/reportTypes';
+import type { FreshnessDelta, ResearchView } from '@/lib/reportTypes';
+import { ratingOneLiner, ratingWords, wordsFromResearch } from '@/lib/ratingVocab';
+import { MaterialNewsLine } from '@/components/report/shared/MaterialNewsLine';
 import { actionTone } from '@/lib/semanticColors';
 import { cn, currencySymbol } from '@/lib/utils';
 import { useI18n } from '@/i18n';
@@ -34,25 +36,74 @@ export function TargetPill({ value, ticker, className = '' }: { value: number; t
   );
 }
 
-export function RatingPill({ view, className = '' }: { view: ResearchView; className?: string }) {
+/**
+ * Owner, 2026-11-27: one rating vocabulary. The pill says Buy / Hold / Sell;
+ * the research word (Overweight / Neutral / Underweight) follows as a
+ * secondary label. Under Review and Unrated keep their own words.
+ */
+export function RatingPill({ view, className = '', showSecondary = true }: { view: ResearchView; className?: string; showSecondary?: boolean }) {
   const { t } = useI18n();
-  const key = view.under_review ? 'UNDER_REVIEW' : view.research_rating;
+  const w = ratingWords({ research_rating: view.research_rating, rating_label: view.rating_label, under_review: view.under_review, action: view.trade_action });
+  const key = view.under_review ? 'UNDER_REVIEW' : (w?.toneKey ?? view.research_rating);
+  const label = w?.primary === 'Unrated' ? view.rating_label : (w?.primary ?? view.rating_label);
   return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${actionTone(key)} ${className}`}>
-      {t(view.rating_label)}
+    <span className="inline-flex items-center gap-2">
+      <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${actionTone(key)} ${className}`}>
+        {t(label)}
+      </span>
+      {showSecondary && w?.secondary && (
+        <span className="text-[13px] text-muted-foreground">{t(w.secondary)}</span>
+      )}
     </span>
   );
 }
 
-export function ResearchRatingBlock({ view, ticker, compact = false }: {
+/** "Hold = expected to roughly match the Straits Times Index over 12 months." */
+export function RatingOneLiner({ view, className = '' }: { view: ResearchView; className?: string }) {
+  const { t } = useI18n();
+  const w = ratingWords({ research_rating: view.research_rating, rating_label: view.rating_label, under_review: view.under_review, action: view.trade_action });
+  if (!w) return null;
+  return <p className={`text-[13px] leading-relaxed text-muted-foreground ${className}`}>{ratingOneLiner(w.primary, view.benchmark?.name, t)}</p>;
+}
+
+/** The reasons behind the rating, visible on request (they used to live in a 900-character hover title). */
+function WhyThisRating({ view, compact }: { view: ResearchView; compact: boolean }) {
+  const { t } = useI18n();
+  const notes = (view.compliance?.notes ?? []).filter((n) => !/incorporates material news|not yet reflected/i.test(n));
+  const diverges = view.structural_rating && view.structural_rating !== view.tactical_rating;
+  const items = [
+    view.callout,
+    ...notes,
+    view.structural_rating
+      ? `${t('Long-run view')}: ${t(wordsFromResearch(view.structural_rating)?.primary ?? title(view.structural_rating))}; ${t('12-month view')}: ${t(wordsFromResearch(view.tactical_rating)?.primary ?? title(view.tactical_rating))}${diverges ? ` (${t('the views differ')})` : ''}.`
+      : '',
+    view.benchmark ? `${t('Benchmark expected return')} ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).` : '',
+    view.rating_definition,
+    view.disclaimer,
+  ].filter(Boolean);
+  if (items.length === 0) return null;
+  return (
+    <details className={`${compact ? 'text-[12.5px]' : 'text-[13px]'} group`}>
+      <summary className="cursor-pointer select-none text-foreground underline underline-offset-2 w-fit">{t('Why this rating')}</summary>
+      <ul className="mt-2 space-y-1.5 border-l border-border pl-3 text-foreground/80 leading-relaxed">
+        {items.map((s, i) => <li key={i}>{s}</li>)}
+      </ul>
+    </details>
+  );
+}
+
+export function ResearchRatingBlock({ view, ticker, compact = false, delta, priorRunAt }: {
   view: ResearchView;
   ticker: string;
   compact?: boolean;
+  /** Freshness check since the prior report (its events feed the "what's new" line). */
+  delta?: FreshnessDelta | null;
+  priorRunAt?: string | null;
 }) {
   const sym = currencySymbol(ticker);
   const text = compact ? 'text-[12px]' : 'text-sm';
   const small = compact ? 'text-xs' : 'text-xs';
-  const diverges = view.structural_rating && view.structural_rating !== view.tactical_rating;
+  const { t } = useI18n();
 
   // Unrated / Pre-Revenue: no target, no upside, no TSR, no benchmark. The
   // block shows the state and WHY, and nothing that reads like a valuation.
@@ -88,20 +139,18 @@ export function ResearchRatingBlock({ view, ticker, compact = false }: {
 
   return (
     <div className={`flex flex-col gap-3 ${text}`}>
-      <div className="flex items-center gap-2 flex-wrap" title={[view.callout, view.structural_rating ? `Structural: ${title(view.structural_rating)}; tactical (12M): ${title(view.tactical_rating)}${diverges ? ' (views differ, see disclosure)' : ''}.` : '',
-        ...(view.compliance?.notes ?? []), view.rating_definition, view.benchmark ? `Benchmark expected return ${(view.benchmark.expected_return * 100).toFixed(1)}% (${view.benchmark.basis}).` : '', view.disclaimer].filter(Boolean).join(' | ')}>
+      <div className="flex items-center gap-2 flex-wrap">
         <RatingPill view={view} />
         {view.target_12m != null && <TargetPill value={view.target_12m} ticker={ticker} />}
-        {view.benchmark && <span className="text-content-medium">vs {view.benchmark.name}</span>}
-        <span className={`${small} text-content-muted`}>· trade action {view.trade_action}</span>
+        {view.benchmark && <span className="text-content-medium">{t('vs {b}', { b: view.benchmark.name })}</span>}
       </div>
+      {/* Owner, 2026-11-27: the rating word explained in one visible line. */}
+      <RatingOneLiner view={view} className="-mt-1" />
 
-      {/* Owner, 2026-11-27: what this report did with material news since the prior one. */}
-      {view.material_update?.sentence && (
-        <p className={`${small} leading-relaxed ${view.material_update.status === 'not_reflected' ? 'text-content-high font-medium' : 'text-content-medium'}`}>
-          {view.material_update.sentence}
-        </p>
-      )}
+      {/* Owner, 2026-11-27: what this report did with material news since the prior one, in plain words. */}
+      <MaterialNewsLine view={view} delta={delta} priorRunAt={priorRunAt} compact={compact} />
+
+      <WhyThisRating view={view} compact={compact} />
 
       {/* Owner, 2026-10-03: the price / target / upside / dividend / TSR row is removed on web and mobile;
           those figures remain in the price-target panel, on the pin's hover title and in the PDF. */}

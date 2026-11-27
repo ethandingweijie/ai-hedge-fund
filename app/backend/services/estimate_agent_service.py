@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -25,14 +26,26 @@ logger = logging.getLogger(__name__)
 
 AGENT_MODEL_NAME = "deepseek-v4-flash"      # override: ESTIMATE_AGENT_MODEL env
 
-_SYSTEM = """You are the valuation agent behind an institutional equity report. The user is reading the
-estimates you built from management guidance and may disagree with them. Answer from the CONTEXT
-only: the guidance block, the step-by-step forecast trace, the invariants, the DCF leg, the blend
-weights, the target bridge and the industry brief with its numbered footnotes.
+_SYSTEM = """You are the AI analyst behind an equity research report. The person asking may be a
+beginner investor or a professional; write so a beginner understands without dumbing down the
+analyst view. Answer from the CONTEXT only: the published rating and why it was set (including any
+rule that capped it), the previous report and what changed since, the news checked since then, the
+thesis, the risks, the guidance block, the forecast trace, the DCF leg, the blend weights, the
+target bridge and the industry brief.
 
 Rules:
-- Answer in plain analyst prose, at most 120 words, no headings, no bullet lists. Name the step of
-  the trace you are reading from. Cite brief footnotes as [n] where a claim comes from the brief.
+- Plain words first. Open with the direct answer in one or two everyday sentences, then the reason.
+  At most 120 words (160 when explaining several terms), no headings, no bullet lists, no markdown.
+- Explain any finance term you use in a few words the first time (e.g. "intrinsic value, our
+  estimate of what a share is worth"). Use Buy / Hold / Sell for the rating, with the research word
+  (Overweight / Neutral / Underweight) in brackets once, word first: "Hold (Neutral)", never "Neutral (Hold)".
+- No formulas, equations or model-step names unless the user asks how something is calculated.
+- "Should I buy?": you cannot give personal advice; say what the report's rating means, what would
+  have to happen for the view to change, and that the decision depends on their own situation.
+- "Why this rating?" / rating changes: use RATING, RATING CAP / RULES and PREVIOUS REPORT. If a rule
+  capped or set the rating, say so plainly; do not credit news that the NEWS CHECK says changed nothing.
+- Never write bracketed footnote markers such as [3]. When a claim comes from the brief, name the
+  source in words ("Singtel's Q1 FY2025 investor presentation").
 - Numbers you quote must appear in the context or follow from it by arithmetic you state.
 - When the user proposes a change, asks "what if", or asks you to change an estimate, return a
   `proposal`: the override object in this exact shape, with only the fields that change:
@@ -67,6 +80,97 @@ def _n(v, d=2) -> str:
         return "n/a"
 
 
+def _clip(s, n: int) -> str:
+    s = str(s or "").strip()
+    return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+
+
+def _report_context(payload: dict, ticker: str) -> list[str]:
+    """What a reader asks about first (owner, 2026-11-27): the published rating and the rule that
+    set or capped it, the decision text, the previous report, and the news checked since. The agent
+    could not explain a rating change without these."""
+    data = payload.get("data") or {}
+    dec = ((payload.get("decisions") or {}).get(ticker)) or {}
+    rv = dec.get("research_view") or {}
+    out: list[str] = []
+    if rv:
+        bm = rv.get("benchmark") or {}
+        out.append(
+            f"RATING: {rv.get('rating_label')} (trade action {rv.get('trade_action')}; Overweight = Buy, Neutral = Hold, "
+            f"Underweight = Sell); benchmark {bm.get('name')} expected return {_pc(bm.get('expected_return'))}; "
+            f"price {_n(rv.get('price'))} on {rv.get('price_as_of')}; 12-month target {_n(rv.get('target_12m'))}; "
+            f"intrinsic value {_n(rv.get('intrinsic_value'))}; expected 12-month total shareholder return {_pc(rv.get('tsr_12m'))} "
+            f"(price {_pc(rv.get('capital_gain_12m'))} + dividend {_pc(rv.get('dividend_yield'))}); "
+            f"long-run view {rv.get('structural_rating')}, 12-month view {rv.get('tactical_rating')}.")
+        if rv.get("callout"):
+            out.append(f"RATING BASIS: {_clip(rv.get('callout'), 400)}")
+        notes = (rv.get("compliance") or {}).get("notes") or []
+        if notes or rv.get("valuation_unreconciled") or rv.get("under_review"):
+            out.append("RATING CAP / RULES: " + " ".join(_clip(n, 400) for n in notes[:4])
+                       + (" The rating is Under Review." if rv.get("under_review") else ""))
+        if rv.get("rating_definition"):
+            out.append(f"RATING DEFINITION: {_clip(rv.get('rating_definition'), 400)}")
+        mu = rv.get("material_update") or {}
+        if mu.get("sentence"):
+            out.append(f"NEWS SINCE LAST REPORT, EFFECT ON ESTIMATES: {_clip(mu.get('sentence'), 600)}")
+    elif dec.get("action"):
+        out.append(f"DECISION: {dec.get('action')}; price target {_n(dec.get('price_target'))}.")
+    di = (dec.get("decision_inputs") or {}).get("quantitative") or {}
+    if di.get("band_action"):
+        out.append(f"VALUATION BAND (long-run value check, price vs intrinsic value only): {di.get('band_action')}; "
+                   f"upside to intrinsic value {di.get('upside_to_iv_pct')}%. The rating can differ from the band.")
+    if dec.get("headline"):
+        out.append(f"HEADLINE: {_clip(dec.get('headline'), 200)}")
+    if dec.get("rationale"):
+        out.append(f"THESIS: {_clip(dec.get('rationale'), 1600)}")
+    vt = ((data.get("value_trap_analysis") or {}).get(ticker)) or {}
+    pl = ((data.get("power_law_analysis") or {}).get(ticker)) or {}
+    if vt or pl:
+        out.append(f"RISK CHECKS: value-trap verdict {vt.get('verdict') or vt.get('overall_verdict')}; "
+                   f"power-law score {pl.get('score') or pl.get('total_score')}/10.")
+    pr = ((data.get("prior_recap") or {}).get(ticker)) or {}
+    if pr:
+        pj = pr.get("recap_json") or {}
+        out.append(f"PREVIOUS REPORT ({str(pr.get('run_at') or '')[:10]}): rating {pj.get('rating_label') or pr.get('final_action')} "
+                   f"(trade action {pr.get('final_action')}); target {_n(pj.get('price_target'))} at price {_n(pr.get('price_at_run'))}; "
+                   f"intrinsic value {_n(pj.get('blended_iv') or pj.get('dcf_base_iv'))}. Summary: {_clip(pr.get('recap_text'), 700)}")
+    fd = ((data.get("freshness_delta") or {}).get(ticker)) or {}
+    if fd:
+        evs = "; ".join(f"{e.get('date') or ''} {e.get('headline') or ''}: {_clip(e.get('relevance'), 220)}".strip()
+                        for e in (fd.get("events") or [])[:5])
+        out.append(f"NEWS CHECK SINCE PREVIOUS REPORT: material {fd.get('material')}; events {evs or 'none'}; "
+                   f"verdict {_clip(fd.get('verdict'), 400)}")
+    chg = dec.get("change_attribution") or {}
+    if chg.get("sentence"):
+        out.append(f"WHAT CHANGED VS PREVIOUS REPORT: {_clip(chg.get('sentence'), 900)}")
+    return out
+
+
+_FOOTNOTE_RE = re.compile(r"\s?\[(\d{1,3})(?:\s*[,–-]\s*\d{1,3})*\]")
+
+
+def strip_footnotes(answer: str, footnotes: list[dict]) -> tuple[str, list[dict]]:
+    """Bare [n] markers are invisible to a reader (nothing on the page resolves them). Remove them
+    from the answer and return the cited footnotes as named sources, with a link when one exists."""
+    by_id = {str(e.get("ref_id") or e.get("n")): e for e in (footnotes or [])}
+    cited: list[str] = []
+    for m in _FOOTNOTE_RE.finditer(answer or ""):
+        for k in re.findall(r"\d{1,3}", m.group(0)):
+            if k not in cited:
+                cited.append(k)
+    text = _FOOTNOTE_RE.sub("", answer or "")
+    text = re.sub(r"\s+([.,;:])", r"\1", text).strip()
+    sources = []
+    for k in cited:
+        e = by_id.get(k)
+        if not e:
+            continue
+        name = str(e.get("source_name") or e.get("source") or "").strip().rstrip(".")
+        if name:
+            sources.append({"n": e.get("ref_id") or e.get("n"), "name": name, "date": e.get("date") or None, "url": e.get("url") or None})
+    return text, sources
+
+
 def build_context(payload: dict, ticker: str, max_brief_chars: int = 3500) -> str:
     """The agent's working context, compact and numbered so answers can point at it."""
     data = payload.get("data") or {}
@@ -79,6 +183,7 @@ def build_context(payload: dict, ticker: str, max_brief_chars: int = 3500) -> st
     pb = dr.get("pt_bridge") or {}
     sa = (data.get("scenario_analysis") or {}).get(ticker) or {}
     lines = [f"TICKER {ticker}; profile {dr.get('profile')}; sector {data.get('sector')}; reporting currency {dr.get('reported_currency')}."]
+    lines.extend(_report_context(payload, ticker))
     g = ge.get("guidance") or {}
     lines.append("GUIDANCE AS STATED (" + str(ge.get("fiscal_year_1") or "FY+1") + "): " + json.dumps(
         {k: g.get(k) for k in ("revenue_growth", "revenue", "ebitda_margin", "eps", "basis", "status", "source") if g.get(k) is not None}, default=str)
@@ -171,7 +276,8 @@ def ask(payload: dict, ticker: str, question: str, history: Optional[list[dict]]
             valid = True
         except ValueError as exc:
             proposal, err = out.proposal, str(exc)
-    return {"answer": (out.answer or "").strip(), "proposal": proposal, "proposal_valid": valid, "proposal_error": err,
+    answer, sources = strip_footnotes((out.answer or "").strip(), (payload.get("data") or {}).get("industry_footnotes") or [])
+    return {"answer": answer, "sources": sources, "proposal": proposal, "proposal_valid": valid, "proposal_error": err,
             "model": os.environ.get("ESTIMATE_AGENT_MODEL", AGENT_MODEL_NAME)}
 
 

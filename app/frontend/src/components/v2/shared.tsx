@@ -11,6 +11,7 @@
 import React, { useRef, useState } from 'react';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { useI18n } from '@/i18n';
+import { wordsFromAction } from '@/lib/ratingVocab';
 
 // Resolves through the --brand token, so it tracks the theme (cobalt
 // #2563EB light / #3B82F6 dark) and stays in step with `text-brand`.
@@ -88,9 +89,15 @@ export const Divider = ({ className = '' }: { className?: string }) =>
 
 export function ActionPill({ action, size = 'sm' }: { action?: string | null; size?: 'sm' | 'lg' }) {
   const { t } = useI18n();
-  const base = actionTone(action);
+  // Owner, 2026-11-27: one vocabulary, Buy / Hold / Sell (a SHORT reads Sell, its detail on hover).
+  const w = wordsFromAction(action);
+  const base = actionTone(w?.toneKey ?? action);
   const sz = size === 'lg' ? 'text-xs px-2.5 py-1' : 'text-xs px-1.5 py-0.5';
-  return <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`}>{action ? t(action.toUpperCase()) : '—'}</span>;
+  return (
+    <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`} title={w?.secondary ? t(w.secondary) : undefined}>
+      {w ? t(w.primary) : action ? t(action.toUpperCase()) : '—'}
+    </span>
+  );
 }
 
 

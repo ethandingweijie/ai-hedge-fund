@@ -12,7 +12,8 @@ interface ValuationLadderProps {
 function pct(iv: number | undefined, current: number): string {
   if (!iv || !current) return '';
   const p = ((iv - current) / current) * 100;
-  return `${p > 0 ? '+' : ''}${p.toFixed(1)}%`;
+  // Explicit sign either way: a true minus, so "−35.8%" never reads as "35.8%".
+  return `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p).toFixed(1)}%`;
 }
 
 export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLadderProps) {

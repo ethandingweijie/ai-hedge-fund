@@ -328,6 +328,39 @@ def test_ask_answers_from_the_trace_and_proposes_in_the_accepted_shape(client, m
     assert client.post("/analysis/runs/run-1/estimates/ask", json={"ticker": "MOH", "question": "q"}, headers={"Authorization": "Bearer t1"}).status_code == 503
 
 
+def test_ask_speaks_plainly_sees_the_rating_cap_and_prior_report_and_names_its_sources():
+    """Owner, 2026-11-27 (novice review): the agent answered beginners with formulas and invisible [n]
+    markers, and could not explain a rating change. The prompt now asks for plain words first, the
+    context carries the rating, its cap, the prior report and the news check, and [n] markers are
+    stripped into named sources."""
+    p = _payload()
+    p["decisions"]["MOH"]["research_view"] = {
+        "rating_label": "Neutral", "trade_action": "HOLD", "research_rating": "NEUTRAL",
+        "benchmark": {"name": "S&P 500", "expected_return": 0.09}, "price": 190.0, "target_12m": 200.0, "tsr_12m": 0.06,
+        "structural_rating": "UNDERWEIGHT", "tactical_rating": "UNDERWEIGHT", "callout": "TSR vs benchmark.",
+        "compliance": {"notes": ["Rating capped at Neutral (tactical Underweight): valuation unreconciled."]},
+        "material_update": {"status": "amended", "sentence": "This report incorporates material news since our previous report."}}
+    p["decisions"]["MOH"]["decision_inputs"] = {"quantitative": {"band_action": "SELL", "upside_to_iv_pct": -20.0}}
+    p["data"]["prior_recap"] = {"MOH": {"run_at": "2026-10-01T00:00:00", "final_action": "SELL", "price_at_run": 185.0, "recap_text": "Prior thesis.",
+                                        "recap_json": {"rating_label": "Underweight", "price_target": 170.0}}}
+    p["data"]["freshness_delta"] = {"MOH": {"material": True, "events": [{"date": "2026-10-02", "headline": "Guidance cut", "relevance": "no change"}],
+                                            "verdict": "Prior view current."}}
+    seen = {}
+
+    def fake_llm(system, user):
+        seen["system"], seen["user"] = system, user
+        return ea._AskOut(answer="We rate it Hold (Neutral) because a rule capped it [1]. Guidance fell 7.5% [1, 2].", proposal=None)
+
+    out = ea.ask(p, "MOH", "Why this rating?", llm_caller=fake_llm)
+    assert "Plain words first" in seen["system"] and "No formulas" in seen["system"] and "Never write bracketed footnote markers" in seen["system"]
+    u = seen["user"]
+    assert "RATING: Neutral" in u and "RATING CAP / RULES: Rating capped at Neutral" in u
+    assert "PREVIOUS REPORT (2026-10-01): rating Underweight" in u and "NEWS CHECK SINCE PREVIOUS REPORT: material True" in u
+    assert "VALUATION BAND (long-run value check" in u and "THESIS: x" in u
+    assert "[" not in out["answer"] and out["answer"].endswith("Guidance fell 7.5%.")
+    assert out["sources"] == [{"n": 1, "name": "Q2 call", "date": "2026-07-24", "url": None}]
+
+
 def test_regenerate_rewrites_the_pm_text_on_the_overridden_run_and_applies_it_on_read(client, monkeypatch):
     h = {"Authorization": "Bearer t1"}
     assert client.post("/analysis/runs/run-1/estimates/regenerate?ticker=MOH", headers=h).status_code == 409      # no override yet

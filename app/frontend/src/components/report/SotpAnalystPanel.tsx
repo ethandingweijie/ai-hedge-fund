@@ -22,6 +22,7 @@
 import { Card } from '@/components/ui/card';
 import type { SotpBreakdown, SotpElasticity, SotpRevision } from '@/lib/reportTypes';
 import { ClampText } from '@/components/report/shared/ClampText';
+import { plainKey } from '@/lib/glossary';
 
 const CCY_SYM: Record<string, string> = {
   USD: '$', HKD: 'HK$', CNY: 'RMB', RMB: 'RMB', SGD: 'S$',
@@ -443,7 +444,8 @@ export function SotpAnalystPanel({ breakdown, weight }: { breakdown: SotpBreakdo
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(sources).map(([k, v]) => (
                 <span key={k} className="inline-flex items-center rounded bg-muted/70 px-1.5 py-0.5 text-xs text-muted-foreground">
-                  {k}: {String(v)}
+                  {/* Owner, 2026-11-27: internal keys ("all: holdco_template") shown as plain labels. */}
+                  {plainKey(k)}: {plainKey(String(v))}
                 </span>
               ))}
             </div>

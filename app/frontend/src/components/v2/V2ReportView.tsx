@@ -81,6 +81,9 @@ import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/Rese
 import { Markdown } from '@/components/report/shared/Markdown';
 import { currencySymbol } from '@/lib/utils';
 import { useI18n } from '@/i18n';
+import { AskAiButton } from '@/components/report/AskAiPanel';
+import { TermLabel } from '@/components/report/shared/InfoTip';
+import { alignTargetInText, ratingOneLiner, wordsFromAction } from '@/lib/ratingVocab';
 
 type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials' | 'news';
 
@@ -229,15 +232,20 @@ export function V2ReportView({
               {[companyName, sector ? tr(sector) : null].filter(Boolean).join(' · ')}
             </p>
           </div>
+          {/* Owner, 2026-11-27: "Ask AI" leads (the agent answers); the forum is
+              a secondary, plainly-labelled community button. */}
           {ticker && (
-            <Link
-              to={`/discuss/${ticker}`}
-              title={`Discuss ${ticker}`}
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-full bg-brand text-brand-foreground text-[13px] font-semibold active:bg-brand/90 shrink-0"
-            >
-              <MessageSquare size={14} />
-              {tr('Discuss')}
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to={`/discuss/${ticker}`}
+                title={tr('Community discussion')}
+                aria-label={tr('Community discussion')}
+                className="flex items-center justify-center h-9 w-9 rounded-full border border-border text-foreground active:bg-muted shrink-0"
+              >
+                <MessageSquare size={15} />
+              </Link>
+              <AskAiButton runId={isComplete && !isRunning ? runId : null} ticker={ticker} />
+            </div>
           )}
         </div>
 
@@ -358,7 +366,7 @@ export function V2ReportView({
             statements={data.financial_statements as FinancialStatementsPayload | undefined}
           />
         )}
-        {tab === 'news' && <NewsBody ticker={ticker} />}
+        {tab === 'news' && <NewsBody ticker={ticker} reportEvents={freshnessDelta?.events} />}
       </div>
       {/* Export (saved run only): Report (PDF) / Model (XLSX), above the nav pill. */}
       {!isRunning && runId && <ExportFab runId={runId} ticker={ticker} />}
@@ -441,6 +449,7 @@ function SummaryBody({
   const target = typeof decision?.price_target === 'number' && decision.price_target > 0 ? decision.price_target : null;
   const upside = target != null && runPrice ? (target / runPrice - 1) * 100 : null;
   const position = typeof decision?.position_size_pct === 'number' ? decision.position_size_pct * 100 : null;
+  const actionWords = wordsFromAction(decision?.action);
   const grades = [
     { key: 'valuation', label: 'Value' },
     { key: 'growth', label: 'Growth' },
@@ -459,8 +468,8 @@ function SummaryBody({
           <MobileSectionTitle
             right={decision && !decision.research_view
               ? <span className="flex items-center gap-2">
-                  <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(decision.action)}`}>
-                    {tr(capWord(String(decision.action ?? '').toLowerCase())) || '—'}
+                  <span className={`inline-flex items-center h-9 px-4 rounded-full text-[16px] font-bold ${actionTone(actionWords?.toneKey ?? decision.action)}`}>
+                    {tr(actionWords?.primary ?? capWord(String(decision.action ?? '').toLowerCase())) || '—'}
                   </span>
                   {target != null && <TargetPill value={target} ticker={ticker} className="h-9 py-0 text-[15px]" />}
                 </span>
@@ -478,8 +487,14 @@ function SummaryBody({
               {decision.research_view ? (
                 /* Rated runs lead with the research rating and its disclosure
                    checklist; shared with the desktop hero. */
-                <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact />
+                <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact delta={delta} priorRunAt={prior?.run_at} />
               ) : (
+                <>
+                {actionWords && (
+                  <p className="-mt-1 mb-4 text-[13px] text-muted-foreground">
+                    {actionWords.secondary ? `${tr(actionWords.secondary)} · ` : ''}{ratingOneLiner(actionWords.primary, null, tr)}
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-5">
                   {upside != null && (
                     <MobileFigure
@@ -494,11 +509,12 @@ function SummaryBody({
                       sub={regime.volatility_regime ? tr('{v} vol', { v: tr(regime.volatility_regime) }) : undefined} />
                   )}
                 </div>
+                </>
               )}
               {/* Owner, 2026-10-03: the PM's one-line headline (at most 18 words), featured. */}
               {decision.headline && (
                 <p className="mt-6 text-[19px] font-semibold leading-snug tracking-tight text-foreground">
-                  {String(decision.headline)}
+                  {alignTargetInText(String(decision.headline), target, currencySymbol(ticker))}
                 </p>
               )}
               {decision.rationale && (
@@ -541,7 +557,7 @@ function SummaryBody({
                   {dim?.grade
                     ? <p className={`text-[28px] font-bold leading-none ${gradeTone(dim.grade, 'text')}`}>{dim.grade}</p>
                     : <div className="h-7 flex items-center">{isRunning ? <LoadingSpinner size={14} /> : <span className="text-muted-foreground">—</span>}</div>}
-                  <p className="mt-1.5 text-[12px] text-muted-foreground">{tr(label)}</p>
+                  <p className="mt-1.5 text-[12px] text-muted-foreground"><TermLabel label={label} /></p>
                 </div>
               );
             })}
@@ -679,7 +695,7 @@ function ValuationBody({
             saasMetrics={saasMetrics}
           />
         ) : (
-          <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
+          <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} ticker={ticker} />
         )
       ) : (
         <LoadingCard label="Fair Value Ladder" minH={160} />
@@ -716,12 +732,14 @@ function ValuationBody({
 
 /* ───────── V2 DCF Valuation Ladder ───────── */
 function V2ValuationLadder({
-  dcfRange, current, wacc,
+  dcfRange, current, wacc, ticker,
 }: {
   dcfRange: DcfRange;
   current?: number;
   wacc?: number | null;
+  ticker: string;
 }) {
+  const sym = currencySymbol(ticker);
   const bullIV = dcfRange.bull?.intrinsic_value;
   const baseIV = dcfRange.base?.intrinsic_value;
   const bearIV = dcfRange.bear?.intrinsic_value;
@@ -765,12 +783,13 @@ function V2ValuationLadder({
               />
             </div>
             <div className="flex items-baseline gap-1.5 min-w-[100px] justify-end">
+              {/* Owner, 2026-11-27: the listing's currency (S$4.29, not $4.29) and a true minus sign. */}
               <span className="text-[12.5px] font-semibold text-foreground tabular-nums">
-                ${r.value.toFixed(2)}
+                {sym}{r.value.toFixed(2)}
               </span>
               {r.delta != null && (
                 <span className={`text-xs font-medium tabular-nums ${r.delta >= 0 ? 'text-gain' : 'text-loss'}`}>
-                  {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(1)}%
+                  {r.delta >= 0 ? '+' : '−'}{Math.abs(r.delta).toFixed(1)}%
                 </span>
               )}
             </div>
@@ -1236,10 +1255,10 @@ function StreamingResearchSummary({
    pipeline phase, so it renders while a run is still in progress. Mounted here as well as
    on the desktop pages: the desktop JSX is bypassed on this path, so a card added only
    there is invisible on mobile. */
-function NewsBody({ ticker }: { ticker: string }) {
+function NewsBody({ ticker, reportEvents }: { ticker: string; reportEvents?: FreshnessDelta['events'] }) {
   return (
     <div className="px-4 pt-5 pb-10 space-y-5">
-      {ticker ? <NewsPanel ticker={ticker} /> : <LoadingCard label="News" minH={160} />}
+      {ticker ? <NewsPanel ticker={ticker} reportEvents={reportEvents} /> : <LoadingCard label="News" minH={160} />}
     </div>
   );
 }
@@ -1575,7 +1594,6 @@ function V2StockChart({ ticker }: { ticker: string }) {
 
 /* ───────── V2 Key Stats (flat, label above value, 2-col grid) ───────── */
 function V2KeyStats({ metrics, ticker }: { metrics: Record<string, number | undefined>; ticker: string }) {
-  const { t: tr } = useI18n();
   const sym = currencySymbol(ticker);
   // Sign before the currency symbol: "−S$631M", never "S$-631M".
   const fmtMoney = (v: number | undefined) => {
@@ -1645,7 +1663,7 @@ function V2KeyStats({ metrics, ticker }: { metrics: Record<string, number | unde
       <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
         {shown.map((r) => (
           <div key={r.k}>
-            <dt className="text-[13px] text-muted-foreground">{tr(r.k)}</dt>
+            <dt className="text-[13px] text-muted-foreground"><TermLabel label={r.k} /></dt>
             <dd className="mt-0.5 text-[17px] font-semibold tabular-nums text-foreground">{r.v}</dd>
           </div>
         ))}

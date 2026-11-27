@@ -1325,6 +1325,9 @@ export function ReportPage() {
             sector={sector}
             subSector={subSector}
             vgpm={vgpm}
+            runId={state === 'complete' ? runId : null}
+            delta={(data.freshness_delta as Record<string, import('@/lib/reportTypes').FreshnessDelta> | undefined)?.[liveTicker]}
+            priorRunAt={(data.prior_recap as Record<string, import('@/lib/reportTypes').PriorRecap> | undefined)?.[liveTicker]?.run_at}
           />
         </div>
 
@@ -1526,7 +1529,8 @@ export function ReportPage() {
 
         {/* ── News (owner, 2026-10-04: its own tab) ───────────────────────── */}
         <SectionAnchor id="news" label="News" />
-        {liveTicker ? <NewsPanel ticker={liveTicker} /> : null}
+        {liveTicker ? <NewsPanel ticker={liveTicker}
+          reportEvents={(data.freshness_delta as Record<string, import('@/lib/reportTypes').FreshnessDelta> | undefined)?.[liveTicker]?.events} /> : null}
 
         {/* Bottom padding */}
         <div className="h-16" />

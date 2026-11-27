@@ -13,12 +13,18 @@ import { Card } from '@/components/ui/card';
 import { getCompanyNews, type NewsArticle } from '@/lib/api';
 import { NewsItemRow } from '@/components/report/NewsItemRow';
 import { useNewsStream } from '@/hooks/useNewsStream';
+import type { FreshnessDeltaEvent } from '@/lib/reportTypes';
+import { useI18n } from '@/i18n';
 
 interface NewsPanelProps {
   ticker: string;
+  /** News the report itself reviewed (freshness_delta events); shown when the live feed is empty. */
+  reportEvents?: FreshnessDeltaEvent[] | null;
 }
 
-export function NewsPanel({ ticker }: NewsPanelProps) {
+export function NewsPanel({ ticker, reportEvents: reportEventsIn }: NewsPanelProps) {
+  const { t } = useI18n();
+  const reportEvents = (reportEventsIn ?? []).filter((e) => e.headline);
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,9 +83,32 @@ export function NewsPanel({ ticker }: NewsPanelProps) {
         <p className="text-xs text-content-high py-2">{error}</p>
       )}
 
-      {!loading && !error && articles.length === 0 && (
+      {/* Owner, 2026-11-27: the feed can be empty (no coverage for many SG/HK
+          names) while the report itself reviewed news; say so and list what
+          the report read instead of a flat "No recent news". */}
+      {!loading && !error && articles.length === 0 && reportEvents.length > 0 && (
+        <div className="py-1">
+          <p className="text-xs text-muted-foreground">
+            {t('Our live news feed has no items for {ticker} yet. This report reviewed these:', { ticker })}
+          </p>
+          <ul className="mt-2 flex flex-col divide-y divide-border/40">
+            {reportEvents.map((e, i) => (
+              <li key={i} className="py-2">
+                <p className="text-[13px] font-medium text-foreground leading-snug">{e.headline}</p>
+                {(e.date || e.relevance) && (
+                  <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                    {e.date}{e.date && e.relevance ? ' · ' : ''}{e.relevance}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {!loading && !error && articles.length === 0 && reportEvents.length === 0 && (
         <p className="text-xs text-muted-foreground py-2">
-          No recent news for {ticker}.
+          {t('No recent news for {ticker}.', { ticker })}
         </p>
       )}
 

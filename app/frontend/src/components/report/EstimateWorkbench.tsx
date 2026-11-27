@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { askEstimateAgent, clearEstimateOverride, previewEstimateOverride, regeneratePmText, saveEstimateOverride } from '@/lib/api';
 import type {
-  DcfRange, EstimateOverrides, EstimateRecompute, ForecastContext, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
+  DcfRange, EstimateAskResponse, EstimateOverrides, EstimateRecompute, ForecastContext, GuidanceEstimates, GuidanceForecast, GuidanceScenarioRow, RunResult,
 } from '@/lib/reportTypes';
 
 const LABEL_CLS = 'text-[14px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70';
@@ -189,8 +189,9 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
   const [busy, setBusy] = useState<'preview' | 'save' | 'revert' | 'ask' | 'pm' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState('');
-  const [thread, setThread] = useState<{ role: 'user' | 'agent'; content: string; proposal?: EstimateOverrides | null; proposalError?: string | null }[]>([]);
+  const [thread, setThread] = useState<ThreadMsg[]>([]);
   const override = dcfRange?.estimate_override ?? null;
+  const [advancedOpen, setAdvancedOpen] = useState<boolean>(!!override);
   const modelKind = (dcfRange?.forecast_context as { bank_model?: { kind?: string } } | undefined)?.bank_model?.kind ?? null;
   const fy1 = block?.fiscal_year_1 ?? dcfRange?.forecast_context?.fiscal_year_1 ?? 'FY+1';
   const fy2 = block?.fiscal_year_2 ?? dcfRange?.forecast_context?.fiscal_year_2 ?? 'FY+2';
@@ -242,7 +243,7 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
     setQuestion('');
     try {
       const r = await askEstimateAgent(runId, ticker, q, history);
-      setThread((t) => [...t, { role: 'agent', content: r.answer, proposal: r.proposal_valid ? r.proposal : null, proposalError: r.proposal_valid ? null : r.proposal_error }]);
+      setThread((t) => [...t, { role: 'agent', content: r.answer, sources: r.sources, proposal: r.proposal_valid ? r.proposal : null, proposalError: r.proposal_valid ? null : r.proposal_error }]);
     } catch (e) {
       setThread((t) => [...t, { role: 'agent', content: `The agent did not answer: ${e instanceof Error ? e.message.replace(/^HTTP \d+: /, '') : String(e)}` }]);
     } finally { setBusy(null); }
@@ -253,11 +254,22 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
 
   return (
     <div className="mt-5 border-t border-border/60 pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={LABEL_CLS}>Work the estimate with the agent</span>
-          {override ? <Badge variant="outline" className="text-[14px]">user override in force{override.created_at ? ` · ${override.created_at.slice(0, 10)}` : ''}</Badge> : null}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={LABEL_CLS}>Work the estimate with the agent</span>
+        {override ? <Badge variant="outline" className="text-[14px]">user override in force{override.created_at ? ` · ${override.created_at.slice(0, 10)}` : ''}</Badge> : null}
+      </div>
+
+      {/* Owner, 2026-11-27: the conversation leads; the ~20 engine inputs sit
+          under "Advanced (model inputs)", collapsed unless an override is in force. */}
+      <AskSection thread={thread} question={question} setQuestion={setQuestion} busy={busy} ask={ask} fy2={fy2}
+        onLoad={(p) => { setForm((f) => applyProposal(f, p)); setPreview(null); setAdvancedOpen(true); if (p.rationale && !note) setNote(p.rationale); }} />
+
+      <details className="mt-4 group" open={advancedOpen} onToggle={(e) => setAdvancedOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer select-none text-[15px] font-semibold text-foreground">
+        Advanced (model inputs)
+        <span className="ml-2 text-[14px] font-normal text-muted-foreground">edit the estimates, recompute the value, save an override</span>
+      </summary>
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
         <div className="flex gap-1">
           {SCENARIOS.map((s) => (
             <button key={s} type="button" onClick={() => setScenario(s)}
@@ -384,29 +396,47 @@ export function EstimateWorkbench({ runId, ticker, block, forecast, dcfRange, on
         </div>
       ) : null}
 
-      {/* 3. ask the agent */}
-      <div className="mt-4">
-        <div className={LABEL_CLS}>Ask the agent</div>
-        <div className="mt-1 space-y-2 text-[16px]">
-          {thread.map((m, i) => (
-            <div key={i} className={m.role === 'user' ? 'text-foreground' : 'rounded border border-border/60 p-2 text-foreground/85'}>
-              <span className="mr-1 font-mono text-[14px] uppercase text-muted-foreground">{m.role}</span>{m.content}
-              {m.proposal ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <span className="text-[15px] text-muted-foreground">Proposed: {describe(m.proposal)}{m.proposal.rationale ? ` — ${m.proposal.rationale}` : ''}</span>
-                  <Button size="sm" variant="outline" onClick={() => { setForm((f) => applyProposal(f, m.proposal!)); setPreview(null); if (m.proposal?.rationale && !note) setNote(m.proposal.rationale); }}>Load into the form</Button>
-                </div>
-              ) : null}
-              {m.proposalError ? <div className="mt-1 text-[15px] text-muted-foreground">The agent's proposal was not in the accepted shape ({m.proposalError}); nothing loaded.</div> : null}
-            </div>
-          ))}
-        </div>
-        <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
-          <input className="h-8 flex-1 rounded border border-input bg-background px-2 text-[16px]" placeholder={`Why this margin path? What if ${fy2} growth is 4%?`} value={question} onChange={(e) => setQuestion(e.target.value)} disabled={busy === 'ask'} />
-          <Button size="sm" variant="outline" type="submit" disabled={busy !== null || !question.trim()}>{busy === 'ask' ? 'Thinking…' : 'Ask'}</Button>
-        </form>
-        <div className="mt-1 text-[14.5px] text-muted-foreground">The agent answers from this run's trace and the brief's footnotes. It proposes; only you save.</div>
+      </details>
+    </div>
+  );
+}
+
+type ThreadMsg = { role: 'user' | 'agent'; content: string; proposal?: EstimateOverrides | null; proposalError?: string | null; sources?: EstimateAskResponse['sources'] };
+
+/** Ask the agent: plain answers, sources by name (no bare [n] markers), proposals loadable into the advanced form. */
+function AskSection({ thread, question, setQuestion, busy, ask, fy2, onLoad }: {
+  thread: ThreadMsg[]; question: string; setQuestion: (s: string) => void; busy: string | null;
+  ask: () => Promise<void>; fy2: string; onLoad: (p: EstimateOverrides) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <div className={LABEL_CLS}>Ask the agent</div>
+      <div className="mt-1 space-y-2 text-[16px]">
+        {thread.map((m, i) => (
+          <div key={i} className={m.role === 'user' ? 'text-foreground' : 'rounded border border-border/60 p-2 text-foreground/85'}>
+            <span className="mr-1 font-mono text-[14px] uppercase text-muted-foreground">{m.role}</span>{m.content}
+            {m.sources && m.sources.length > 0 ? (
+              <div className="mt-1 text-[14px] text-muted-foreground">
+                Sources: {m.sources.map((s, j) => (
+                  <span key={j}>{j > 0 ? '; ' : ''}{s.url ? <a className="underline underline-offset-2" href={s.url} target="_blank" rel="noopener noreferrer">{s.name}</a> : s.name}{s.date ? ` (${s.date})` : ''}</span>
+                ))}
+              </div>
+            ) : null}
+            {m.proposal ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <span className="text-[15px] text-muted-foreground">Proposed: {describe(m.proposal)}{m.proposal.rationale ? ` — ${m.proposal.rationale}` : ''}</span>
+                <Button size="sm" variant="outline" onClick={() => onLoad(m.proposal!)}>Load into the form</Button>
+              </div>
+            ) : null}
+            {m.proposalError ? <div className="mt-1 text-[15px] text-muted-foreground">The agent's proposal was not in the accepted shape ({m.proposalError}); nothing loaded.</div> : null}
+          </div>
+        ))}
       </div>
+      <form className="mt-2 flex gap-2" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
+        <input className="h-8 flex-1 rounded border border-input bg-background px-2 text-[16px]" placeholder={`Why this margin path? What if ${fy2} growth is 4%?`} value={question} onChange={(e) => setQuestion(e.target.value)} disabled={busy === 'ask'} />
+        <Button size="sm" variant="outline" type="submit" disabled={busy !== null || !question.trim()}>{busy === 'ask' ? 'Thinking…' : 'Ask'}</Button>
+      </form>
+      <div className="mt-1 text-[14.5px] text-muted-foreground">The agent answers from this report in plain words. It proposes; only you save.</div>
     </div>
   );
 }

@@ -24,7 +24,10 @@ import { currencySymbol } from '@/lib/utils';
 import { formatSector } from '@/lib/gradeColors';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
 import { useCompanyProfile } from '@/hooks/use-company-name';
-import type { MacroRegime, PortfolioDecision, VgpmResult } from '@/lib/reportTypes';
+import type { FreshnessDelta, MacroRegime, PortfolioDecision, VgpmResult } from '@/lib/reportTypes';
+import { AskAiEntry } from '@/components/report/AskAiPanel';
+import { TermLabel } from '@/components/report/shared/InfoTip';
+import { alignTargetInText, ratingOneLiner, wordsFromAction } from '@/lib/ratingVocab';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { ResearchRatingBlock, TargetPill } from '@/components/report/shared/ResearchRatingBlock';
 import { HeroSectionTitle } from '@/components/report/SectionAnchor';
@@ -76,10 +79,15 @@ interface ReportHeroProps {
   sector?: string;
   subSector?: string;
   vgpm?: VgpmResult;
+  /** Owner, 2026-11-27: the run the AI answers about (absent while a live run is still going). */
+  runId?: string | null;
+  /** Freshness check since the prior report, and the prior report's date (the "what's new" line). */
+  delta?: FreshnessDelta | null;
+  priorRunAt?: string | null;
 }
 
 export function ReportHero({
-  ticker, runAt, modelName, decision, regime, currentPrice, sector, subSector, vgpm,
+  ticker, runAt, modelName, decision, regime, currentPrice, sector, subSector, vgpm, runId, delta, priorRunAt,
 }: ReportHeroProps) {
   const { t } = useI18n();
   const sym = currencySymbol(ticker);
@@ -132,6 +140,8 @@ export function ReportHero({
   const upside = target != null && currentPrice ? (target / currentPrice - 1) * 100 : null;
   const position = decision?.position_size_pct != null ? decision.position_size_pct * 100 : null;
   const rated = !!decision?.research_view;
+  // Owner, 2026-11-27: runs without a research rating still say Buy / Hold / Sell.
+  const actionWords = wordsFromAction(decision?.action);
 
   const stats = stock
     ? METRICS
@@ -139,7 +149,7 @@ export function ReportHero({
           const v = stock.metrics[key];
           if (v == null) return null;
           const f = currency ? fmtLarge : price ? fmtPrice : (fmt ?? (() => '—'));
-          return { key, label: t(STAT_LABEL[key] ?? key), value: f(v) };
+          return { key, label: STAT_LABEL[key] ?? key, value: f(v) };
         })
         .filter((s): s is { key: keyof StockData['metrics']; label: string; value: string } => s != null)
     : [];
@@ -237,11 +247,14 @@ export function ReportHero({
           <section>
             <HeroSectionTitle>Our verdict</HeroSectionTitle>
             {rated ? (
-              <ResearchRatingBlock view={decision.research_view!} ticker={ticker} />
+              <ResearchRatingBlock view={decision.research_view!} ticker={ticker} delta={delta} priorRunAt={priorRunAt} />
             ) : (
               <div className="flex flex-wrap items-center gap-x-10 gap-y-5">
-                <span className={`inline-flex items-center h-10 px-5 rounded-full text-lg font-bold ${actionTone(decision.action)}`}>
-                  {t(cap(decision.action?.toLowerCase()))}
+                <span className="inline-flex items-center gap-2">
+                  <span className={`inline-flex items-center h-10 px-5 rounded-full text-lg font-bold ${actionTone(actionWords?.toneKey ?? decision.action)}`}>
+                    {t(actionWords?.primary ?? cap(decision.action?.toLowerCase()))}
+                  </span>
+                  {actionWords?.secondary && <span className="text-[13px] text-muted-foreground">{t(actionWords.secondary)}</span>}
                 </span>
                 {target != null && <TargetPill value={target} ticker={ticker} className="h-10 px-5 py-0 text-lg" />}
                 {upside != null && (
@@ -271,9 +284,12 @@ export function ReportHero({
               </div>
             )}
 
+            {!rated && actionWords && (
+              <p className="mt-3 text-[13px] text-muted-foreground">{ratingOneLiner(actionWords.primary, null, t)}</p>
+            )}
             {decision.headline && (
               <p className="mt-8 max-w-[40ch] text-2xl font-semibold leading-snug tracking-tight text-foreground">
-                {decision.headline}
+                {alignTargetInText(decision.headline, target, sym)}
               </p>
             )}
             {decision.rationale && (
@@ -300,7 +316,7 @@ export function ReportHero({
             <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-6">
               {stats.map(s => (
                 <div key={s.key} className="min-w-0">
-                  <dt className="text-[13px] text-muted-foreground">{s.label}</dt>
+                  <dt className="text-[13px] text-muted-foreground"><TermLabel label={s.label} /></dt>
                   <dd className="mt-1 text-[17px] font-semibold tabular-nums text-foreground">{s.value}</dd>
                 </div>
               ))}
@@ -318,9 +334,9 @@ export function ReportHero({
                 if (!dim?.grade) return <div key={key} />;
                 const tip = [`${label}: ${dim.score}/100`, ...(dim.subs ?? [])].join('\n');
                 return (
-                  <div key={key} title={tip} className="cursor-help">
+                  <div key={key} title={tip}>
                     <p className={`text-[32px] font-bold leading-none ${gradeTone(dim.grade, 'text')}`}>{dim.grade}</p>
-                    <p className="mt-2 text-[13px] text-muted-foreground">{t(label)}</p>
+                    <p className="mt-2 text-[13px] text-muted-foreground"><TermLabel label={label} /></p>
                   </div>
                 );
               })}
@@ -337,13 +353,16 @@ export function ReportHero({
             {t('Report run {date}', { date: runDate })}
           </p>
         )}
+        {/* Owner, 2026-11-27: the AI agent leads; the forum is named for what it is. */}
+        <div className="mt-2"><AskAiEntry runId={runId} ticker={ticker} /></div>
         <Link
           to={`/discuss/${ticker}`}
-          className="mt-2 inline-flex items-center justify-center gap-2 h-12 rounded-full bg-brand text-brand-foreground text-[15px] font-semibold hover:bg-brand/90 transition-colors"
+          className="inline-flex items-center justify-center gap-2 h-10 rounded-full border border-border text-[14px] font-medium text-foreground hover:bg-muted transition-colors"
         >
-          <MessageSquare size={16} />
-          {t('Discuss this report')}
+          <MessageSquare size={15} />
+          {t('Community discussion')}
         </Link>
+        <p className="-mt-1 text-[12px] text-muted-foreground text-center">{t('Other readers, not the AI')}</p>
       </aside>
     </div>
   );
