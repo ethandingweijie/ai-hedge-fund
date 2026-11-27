@@ -2018,3 +2018,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: 2026-11-27 terminal-growth flag fix: the cap at the risk-free rate appended to forward_flags before the scenario's list existed (UnboundLocalError on the first scenario, Q0F.SI) and filed it in the previous scenario's list otherwise. The flag is now held and added to its own scenario. Expected moves, and only these: C38U_SI and U96_SI scenarios.bear/bull.forward_flags gain the 'Terminal growth ... capped at the risk-free rate' line. No value moves on any name.
 
+## 2026-11-27T15:30:58+00:00
+
+- regenerated at HEAD: `b17cfb09`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: owner 2026-11-27 (MELI trace, 4A): GATE_CASH_CONVERSION is APPLIED for customer-fund holders (_CUSTOMER_FUND_HOLDERS: MELI, SE, PYPL, NU ...), whose reported FCF carries the growth of a credit book or payments float -- the financials-like population the backtest validated (Beta 0.85); it stays observed elsewhere (marketplaces Beta 0.29). Expected moves, and only on MELI: the DCF (FCF+) leg's FCF margin is capped at the repeatable basis (base 30.3% -> ~15.9% on the live run), so iv_dcf and the blended IV fall in every scenario; the gate record reads applied=true and the flag text changes. No other fixture is a customer-fund holder.
+

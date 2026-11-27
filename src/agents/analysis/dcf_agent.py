@@ -367,6 +367,63 @@ def _owner_registry(block: str, ticker: Optional[str] = None) -> dict:
         return {}
 
 
+def commodity_price_index(ticker: Optional[str], years: int, doc: Optional[dict] = None) -> Optional[dict]:
+    """Owner, 2026-11-27 (I2, option 3A): the revenue-weighted commodity price index for a depleting asset, one value
+    per projection year, against the trailing prices already inside its base revenue. Futures strip for the years
+    it covers, then a straight line to the owner's long-run price by `fade_to_long_run_by_year`; a commodity with no
+    strip fades from spot. None unless the deck AND the ticker's mix are ACCEPTED (valuation_constants
+    commodity_price_deck), so an unreviewed deck never prices anything.
+
+    Returns {"index": [...], "mix": {...}, "unpriced_share": x, "as_of": ..., "path": {commodity: [prices]}}."""
+    try:
+        from src.data import valuation_constants as _vc
+        deck = (doc or _vc.load()).get("commodity_price_deck") or {}
+    except Exception:                                      # noqa: BLE001
+        return None
+    if str(deck.get("status") or "").upper() != "ACCEPTED" or not ticker:
+        return None
+    mix = ((deck.get("mixes") or {}).get(str(ticker).upper())) or {}
+    if str(mix.get("status") or "").upper() != "ACCEPTED":
+        return None
+    weights = {k: float(v) for k, v in (mix.get("weights") or {}).items() if isinstance(v, (int, float)) and v > 0}
+    comms = deck.get("commodities") or {}
+    if not weights or any(k not in comms for k in weights):
+        return None
+    fade_to = int(deck.get("fade_to_long_run_by_year") or 5)
+    paths: dict[str, list[float]] = {}
+    for c in weights:
+        spec = comms[c]
+        base, lr = spec.get("base_price"), spec.get("long_run")
+        if not (isinstance(base, (int, float)) and base > 0 and isinstance(lr, (int, float)) and lr > 0):
+            return None
+        strip = [float(v) for _, v in sorted((spec.get("strip") or {}).items()) if isinstance(v, (int, float))]
+        start = strip[-1] if strip else spec.get("spot")
+        if not isinstance(start, (int, float)) or start <= 0:
+            return None
+        n0 = len(strip)
+        out = []
+        for t in range(1, years + 1):
+            if t <= n0:
+                out.append(strip[t - 1])
+            elif t >= fade_to or fade_to <= n0:
+                out.append(float(lr))
+            else:
+                out.append(float(start) + (float(lr) - float(start)) * (t - n0) / (fade_to - n0))
+        paths[c] = out
+    unpriced = max(0.0, 1.0 - sum(weights.values()))
+    index = [unpriced + sum(w * paths[c][t] / float(comms[c]["base_price"]) for c, w in weights.items())
+             for t in range(years)]
+    return {"index": index, "mix": weights, "unpriced_share": unpriced, "as_of": deck.get("as_of"),
+            "path": paths, "fade_to_long_run_by_year": fade_to}
+
+
+def _depleting_fcf(revenue_base: float, q: float, margin: float, price_index: float) -> float:
+    """One depleting year's FCF at a price `price_index` x the base: costs are per unit produced (the base margin's
+    cost share moves with volume, not price), so price moves fall straight to FCF; a year below cash cost is shut in
+    (zero, not negative)."""
+    return max(float(revenue_base) * float(q) * (float(price_index) - (1.0 - float(margin))), 0.0)
+
+
 def _concession_value(entry: dict, *, revenue_base: float, growth: float, fcf_margin: float, capex_pct: float,
                       wacc: float, tgr: float, net_debt: float, shares: float) -> Optional[dict]:
     """Cross-sector audit I1 (owner, 2026-10-10): each asset runs off at its filed term -- revenue on the engine's growth
@@ -9031,12 +9088,18 @@ def _compute_method_value(
     if method_name == _DEPLETING_DCF and _owner_registry("reserves", ticker):
         _idx = _depletion_profile(_owner_registry("reserves", ticker))
         if _idx and shares > 0:
-            # price held at today's realised level (revenue / production): no house deck inside the engine
+            # price: the owner's accepted deck when there is one (3A), else held at today's realised level
+            _deck = commodity_price_index(ticker, len(_idx))
             _rows_r, _pv = [], 0.0
             for t, q in enumerate(_idx, start=1):
-                _fcf = float(revenue_base) * q * float(fcf_margin_base)
+                _p = _deck["index"][t - 1] if _deck else 1.0
+                _fcf = _depleting_fcf(revenue_base, q, fcf_margin_base, _p) if _deck else float(revenue_base) * q * float(fcf_margin_base)
                 _pv += _fcf / (1.0 + float(wacc)) ** t
-                _rows_r.append({"year": t, "production_index": q, "revenue": float(revenue_base) * q, "fcf": _fcf})
+                _rows_r.append({"year": t, "production_index": q, "price_index": _p,
+                                "revenue": float(revenue_base) * q * _p, "fcf": _fcf})
+            if _deck:
+                _leg_trace(price_deck={k: _deck[k] for k in ("as_of", "mix", "unpriced_share", "fade_to_long_run_by_year")},
+                           price_basis="owner-accepted commodity deck (futures strip, then fade to long run)")
             _v = (_pv - float(net_debt or 0.0)) / shares
             _leg_trace(kind="depleting_dcf", rows=_rows_r, years=len(_idx), reserves_basis="accepted 2P reserves",
                        fcf_margin_base=float(fcf_margin_base), wacc=float(wacc), net_debt=float(net_debt or 0.0),
@@ -9053,12 +9116,17 @@ def _compute_method_value(
         _decl = _depletion_default_decline(profile_name)
         _m = max(float(fcf_margin_base), float(fcf_floor))
         _rows_d, _pv = [], 0.0
+        _deck = commodity_price_index(ticker, _DEPLETING_HORIZON_YEARS)
         for t in range(1, _DEPLETING_HORIZON_YEARS + 1):
             _q = (1.0 - _decl) ** t
-            _rev_t = float(revenue_base) * _q
-            _fcf = _rev_t * _m
+            _p = _deck["index"][t - 1] if _deck else 1.0
+            _rev_t = float(revenue_base) * _q * _p
+            _fcf = _depleting_fcf(revenue_base, _q, _m, _p) if _deck else _rev_t * _m
             _pv += _fcf / (1.0 + float(wacc)) ** t
-            _rows_d.append({"year": t, "production_index": _q, "revenue": _rev_t, "fcf": _fcf})
+            _rows_d.append({"year": t, "production_index": _q, "price_index": _p, "revenue": _rev_t, "fcf": _fcf})
+        if _deck:
+            _leg_trace(price_deck={k: _deck[k] for k in ("as_of", "mix", "unpriced_share", "fade_to_long_run_by_year")},
+                       price_basis="owner-accepted commodity deck (futures strip, then fade to long run)")
         _mi, _pf = _minority_interest(most_recent), _preferred_equity(most_recent)
         iv = (_pv - float(net_debt or 0.0) - float(_mi or 0.0) - float(_pf or 0.0)) / shares
         # Cross-sector audit E7 (2026-10-10): the path this leg values is traced, so the workbook shows it.
@@ -14045,8 +14113,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # in USD -- a silent ~27% overstatement on some of the largest names
         # on the exchange. Ask what the line actually trades in.
         _venue_ccy = "HKD" if _is_hk else ("SGD" if _is_sg else "USD")
+        # 2026-11-27: every other suffixed listing asks too. IHH's 5225.KL took the USD default and was valued in
+        # USD against its MYR 7.90 spot (IV 1.21 read as MYR, about 4.98 in fact); Tokyo, Seoul, Shanghai and
+        # Bangkok lines would have done the same.
+        _foreign = "." in str(ticker or "") and not (_is_hk or _is_sg)
+        if _foreign:
+            from src.tools.api import _VENUE_CCY as _vc
+            _venue_ccy = next((c for suf, c in _vc.items() if str(ticker).upper().endswith(suf)), "USD")
         _target_ccy = _venue_ccy
-        if _is_hk or _is_sg:
+        if _is_hk or _is_sg or _foreign:
             try:
                 from src.tools.api import get_listing_currency
                 _target_ccy = get_listing_currency(ticker, api_key) or _venue_ccy
@@ -15088,12 +15163,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _cc_ratio = (
                     (_cc_trailing / _cc_cap) if _cc_cap else float("inf")
                 )
+                # Owner, 2026-11-27 (MELI trace, 4A): APPLIED for the customer-fund holders (_CUSTOMER_FUND_HOLDERS:
+                # MELI, SE, PYPL, NU ...), whose reported FCF carries the growth of a credit book or a payments float
+                # -- the financials-like population the backtest validated (Beta 0.85). Everywhere else it stays
+                # observed: on plain marketplaces the backtest found it wrong (Beta 0.29). MELI: 30.3% FCF margin
+                # against 15.9% repeatable, on consensus EPS of ~$1.85bn.
+                _cc_apply = str(ticker or "").upper() in _CUSTOMER_FUND_HOLDERS
                 ticker_forward_flags.append(
-                    f"Cash-conversion (observed, not applied): FCF margin "
-                    f"{fcf_margin_base:.1%} vs "
-                    f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
-                    f"a repeatable basis supports ({_cc_basis}), so the "
-                    f"excess is not projected"
+                    (f"Cash-conversion (APPLIED, customer-fund holder): FCF margin {fcf_margin_base:.1%} capped at "
+                     f"{_cc_cap:.1%} -- reported FCF is {_cc_ratio:.1f}x what a repeatable basis supports "
+                     f"({_cc_basis}); a credit book's or float's growth is not owner earnings")
+                    if _cc_apply else
+                    (f"Cash-conversion (observed, not applied): FCF margin "
+                     f"{fcf_margin_base:.1%} vs "
+                     f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
+                     f"a repeatable basis supports ({_cc_basis}), so the "
+                     f"excess is not projected")
                 )
                 gate_evaluations.append({
                     "gate_id": "GATE_CASH_CONVERSION",
@@ -15102,8 +15187,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "gated_output_path_b": round(float(_cc_cap), 6),
                     "basis": _cc_basis,
                     "deep_cut": bool(_cc_deep_cut),
-                    "applied": False,
+                    "applied": bool(_cc_apply),
                 })
+                if _cc_apply:
+                    fcf_margin_base = float(_cc_cap)
+                    if _cascade_fade is not None:
+                        _cascade_fade = [min(m_, float(_cc_cap)) for m_ in _cascade_fade]
+                    if _capex_fade is not None:
+                        _capex_fade = [min(m_, float(_cc_cap)) for m_ in _capex_fade]
                 # OBSERVED, NOT APPLIED.
                 #
                 # Backtested over 329 ticker-dates across two independent

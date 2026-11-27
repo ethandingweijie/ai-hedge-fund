@@ -413,7 +413,7 @@ class TestTheInvariantsAreNotDuplicated:
         # do with this count being a fact about the whole file rather than about
         # this gate — which is why an unrelated change reddens a test whose name
         # says "not applied and publishes both gates".
-        assert src.count('"applied": False,') == 9   # +GATE_REIT_MULTIPLE_OUTLIER (Wave 8c verdict A, flag only)   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
+        assert src.count('"applied": False,') == 8   # -GATE_CASH_CONVERSION (2026-11-27: applied for customer-fund holders, `"applied": bool(_cc_apply)`)   # +GATE_REIT_MULTIPLE_OUTLIER (Wave 8c verdict A, flag only)   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
         # SIX, not five, since GATE_SCENARIO_ORDERING landed with a literal
         # `"applied": True,`. This is the SECOND copy of that count — the first
         # is in `test_consumer_discretionary_gates.py::

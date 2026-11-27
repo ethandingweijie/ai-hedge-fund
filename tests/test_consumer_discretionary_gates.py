@@ -531,7 +531,7 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     # file, so it lives nowhere in particular and breaks everywhere. If you are
     # reading this because it failed, the second copy is in
     # `test_reinvestment_scope_and_cap.py` and both have to move together.
-    assert src.count('"applied": False,') == 9   # +GATE_REIT_MULTIPLE_OUTLIER (Wave 8c verdict A, flag only)   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
+    assert src.count('"applied": False,') == 8   # -GATE_CASH_CONVERSION (2026-11-27: applied for customer-fund holders, `"applied": bool(_cc_apply)`)   # +GATE_REIT_MULTIPLE_OUTLIER (Wave 8c verdict A, flag only)   # +GATE_SOTP_EXTRACTOR_CROSSCHECK, +GATE_GROWTH_INFLECTION, +GATE_STRUCTURAL_FLAG, +GATE_BANK_IMPLIED_COE (Wave 6)
     assert '"applied": _s_to_c is not None' not in src
 
     # ── the eleventh gate's named facts ──────────────────────────────────────

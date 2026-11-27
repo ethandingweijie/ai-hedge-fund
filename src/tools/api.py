@@ -2822,7 +2822,10 @@ _LISTING_CCY_CACHE: dict[str, str | None] = {}
 
 #: Venue default -- correct for the large majority of lines on each venue.
 _VENUE_CCY = {".HK": "HKD", ".SI": "SGD", ".JK": "IDR", ".SS": "CNY",
-              ".SZ": "CNY", ".T": "JPY", ".L": "GBp", ".AX": "AUD"}
+              ".SZ": "CNY", ".T": "JPY", ".L": "GBp", ".AX": "AUD",
+              # 2026-11-27: IHH's 5225.KL was valued in USD against a MYR spot (see dcf_agent _target_ccy)
+              ".KL": "MYR", ".BK": "THB", ".KS": "KRW", ".KQ": "KRW", ".TW": "TWD", ".NS": "INR", ".BO": "INR",
+              ".PS": "PHP"}
 
 #: SGX lists a material set of counters in USD, not SGD -- Jardine Matheson,
 #: Hongkong Land, DFI Retail, HPH Trust and the US-asset REITs among them.
