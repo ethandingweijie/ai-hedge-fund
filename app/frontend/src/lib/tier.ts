@@ -29,7 +29,7 @@ export interface PlanInfo {
 }
 
 /** Credits a run spends: covered ticker (stored research), first-ever ticker, any Anthropic-model run. */
-export interface CreditCosts { covered: number; new: number; premium: number }
+export interface CreditCosts { covered: number; new: number; limited?: number; premium: number }
 
 export interface PlansResponse {
   plans: PlanInfo[];

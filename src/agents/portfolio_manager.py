@@ -1327,6 +1327,11 @@ def _research_view_for(ticker: str, state, scenario: dict,
         if _view is not None:
             _view["provenance"] = _research_provenance(state, delta)
             _view["publication"] = _publication(scenario, _unreconciled_for(ticker, dcf))
+            try:
+                from src.data.coverage import coverage as _coverage
+                _view["coverage"] = _coverage(ticker)          # D8: tuned | limited, labelled on the report
+            except Exception:                                  # noqa: BLE001
+                pass
         return _view
     except Exception:
         return None

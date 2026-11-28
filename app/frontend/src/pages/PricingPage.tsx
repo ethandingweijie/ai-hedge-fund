@@ -181,7 +181,10 @@ export function PricingPage() {
           {plans?.credit_costs && (
             <div className="mb-6 text-sm text-center text-muted-foreground">
               {`An analysis of a ticker we already cover uses ${plural(plans.credit_costs.covered, 'credit')}; `
-                + `a first analysis of a new ticker, ${plans.credit_costs.new}. `
+                + `a first analysis of a new ticker, ${plans.credit_costs.new}`
+                + (plans.credit_costs.limited != null
+                    ? ` (${plans.credit_costs.limited} for a company outside our tuned coverage, labelled on the report). `
+                    : '. ')
                 + 'A failed run uses none, and re-opening a recent run is free.'}
             </div>
           )}

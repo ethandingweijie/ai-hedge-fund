@@ -21,6 +21,8 @@ def store(tmp_path, monkeypatch):
     _db.close_all_connections()
     monkeypatch.setitem(b._READY, "v", False)
     monkeypatch.setattr(b, "_is_covered", lambda t: True)               # covered (1 credit) unless a test says
+    from src.data import coverage as _cov
+    monkeypatch.setattr(_cov, "is_tuned", lambda t: True)               # fixture tickers are tuned (D8 tested apart)
     _db.ensure_table("CREATE TABLE IF NOT EXISTS web_runs (run_id TEXT PRIMARY KEY, run_at TEXT, ticker TEXT, "
                      "user_id INTEGER, is_checkpoint INTEGER DEFAULT 0)")
     yield _db
@@ -50,7 +52,7 @@ def test_public_plans_carry_prices_and_limits_monthly_only():
     for p in got.values():                                  # owner 2026-11-28: no annual plan, no discount
         assert "price_annual" not in p and "annual_saving_pct" not in p
     assert got["free"]["credits"] == 3 and got["free"]["credit_period"] == "month"
-    assert pub["credit_costs"] == {"covered": 1, "new": 2, "premium": 4}
+    assert pub["credit_costs"] == {"covered": 1, "new": 2, "limited": 1, "premium": 4}
     for p in got.values():
         assert not {"agent_selection", "batch_tickers", "priority_queue", "api_access"} & set(p)
 

@@ -926,6 +926,8 @@ export interface ResearchProvenance {
 export interface Publication { mode: 'point' | 'range'; low?: number; high?: number; reason?: string }
 
 export interface ResearchView {
+  /** D8 (owner, 2026-11-28): tuned = owner-pinned sector profile; limited = general industry defaults. */
+  coverage?: { level: 'tuned' | 'limited'; note?: string | null } | null;
   provenance?: ResearchProvenance | null;
   publication?: Publication | null;
   /** UNRATED is the absence of an opinion, not a fourth one: every figure

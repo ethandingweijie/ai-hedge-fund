@@ -197,6 +197,10 @@ export function ResearchRatingBlock({ view, ticker, compact = false, delta, prio
         </p>
       )}
 
+      {view.coverage?.level === 'limited' && view.coverage.note && (
+        <p className={`${compact ? 'text-xs' : 'text-[12.5px]'} text-foreground -mt-1`}>{t(view.coverage.note)}</p>
+      )}
+
       {/* D2 (owner, 2026-11-28): research age and the span the news check covered, always visible. */}
       <ProvenanceLine p={view.provenance} compact={compact} />
 

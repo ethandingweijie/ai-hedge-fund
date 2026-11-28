@@ -79,7 +79,9 @@ EVERY_RUN = (
 #:   covered  stored research + one freshness search      ~$0.03-0.10 on Qwen
 #:   new      first-ever ticker, full research            ~$0.10-0.30 on Qwen
 #:   premium  any run on the Anthropic model              ~$0.40-3.00
-CREDIT_COSTS = {"covered": 1, "new": 2, "premium": 4}
+CREDIT_COSTS = {"covered": 1, "new": 2, "limited": 1, "premium": 4}
+#: D8 (owner, 2026-11-28): a first analysis of a company outside the tuned coverage (src/data/coverage.py) is
+#: "limited" -- valued on general industry defaults, labelled so on the report -- and costs 1 credit, not 2.
 CREDITS_PER_RUN = CREDIT_COSTS["covered"]    # the smallest charge
 RESERVATION_HOLD_MIN = 60
 #: a completed run is matched to a reservation started up to this long before the run's own run_at.
@@ -282,7 +284,8 @@ def _is_covered(ticker: str) -> bool:
 
 
 def run_type(ticker: str, model_name: Optional[str] = None, covered=None) -> str:
-    """covered | new | premium. A coverage-lookup error charges the covered rate (in the customer's favour)."""
+    """covered | new | limited | premium. A coverage-lookup error charges the covered rate (in the customer's
+    favour); a tuned-coverage lookup error charges the limited rate (also in the customer's favour)."""
     if str(model_name or "").strip() and not str(model_name).strip().lower().startswith("qwen"):
         return "premium"
     try:
@@ -290,7 +293,14 @@ def run_type(ticker: str, model_name: Optional[str] = None, covered=None) -> str
     except Exception as exc:  # noqa: BLE001
         logger.warning("billing: coverage lookup failed for %s (%s) -- charging the covered rate", ticker, exc)
         hit = True
-    return "covered" if hit else "new"
+    if hit:
+        return "covered"
+    try:
+        from src.data.coverage import is_tuned
+        return "new" if is_tuned(ticker) else "limited"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("billing: tuned-coverage lookup failed for %s (%s) -- charging the limited rate", ticker, exc)
+        return "limited"
 
 
 def run_credits(ticker: str, model_name: Optional[str] = None, covered=None) -> int:
@@ -381,6 +391,7 @@ def reserve_run(user, ticker: str, now: Optional[datetime] = None, model_name: O
 
 
 _RUN_LABEL = {"covered": "This analysis", "new": "A first analysis of this ticker",
+              "limited": "A first analysis of a company outside our tuned coverage",
               "premium": "An analysis on the Anthropic model"}
 
 
