@@ -148,7 +148,12 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         # The page is UTF-8 but sends no charset, so requests guesses Latin-1 and the yuan / won signs arrive as
         # mojibake ("Â¥") -- the target sentence then fails to parse.
         _raw = getattr(resp, "content", None)
-        body = _raw.decode("utf-8", errors="replace") if isinstance(_raw, bytes) else resp.text
+        if isinstance(_raw, bytes):
+            body = _raw.decode("utf-8", errors="replace")
+        else:
+            if hasattr(resp, "encoding") and (resp.encoding or "").lower() in ("", "iso-8859-1"):
+                resp.encoding = "utf-8"
+            body = resp.text
     except Exception:                                      # noqa: BLE001
         return None
 

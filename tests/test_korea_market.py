@@ -195,7 +195,7 @@ def test_target_price_parses_won(monkeypatch, tmp_path):
 
 def test_outcome_labels_consult_korean_consensus():
     src = (ROOT / "src/memory/valuation_outcomes.py").read_text(encoding="utf-8")
-    assert '".HK", ".SI", ".KS", ".KQ"' in src
+    assert '".T", ".KS", ".KQ"' in src
     from src.memory.valuation_outcomes import market_of
     assert market_of("005930.KS") == "KR" and market_of("247540.KQ") == "KR"
 

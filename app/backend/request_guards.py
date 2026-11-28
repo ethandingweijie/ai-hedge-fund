@@ -30,7 +30,8 @@ from fastapi import HTTPException
 # full-width and other Unicode letters.
 # An optional venue prefix of 2-6 letters ("KRX:005930", "KOSDAQ:247540", "TYO:7203", "TSE:7203") is admitted and
 # resolved by canonical_ticker; it is still plain ASCII and cannot carry a path or a second suffix.
-TICKER_RE = re.compile(r"(?:[A-Za-z]{2,6}:)?[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,5})?")
+# Exchange prefixes are an allowlist (Tokyo TYO/TSE/JPX/JP, Korea KRX/KOSPI/KOSDAQ/KS/KQ) -- "ABC:XYZ" is rejected.
+TICKER_RE = re.compile(r"(?:(?i:TYO|TSE|JPX|JP|KRX|KOSPI|KOSDAQ|KS|KQ):)?[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,5})?")
 TICKER_MAX_LEN = 16
 
 # Model ids are things like "claude-sonnet-4-6", "qwen3.8-flash".

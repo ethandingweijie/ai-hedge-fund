@@ -59,7 +59,7 @@ def test_the_thresholds_are_owner_set_and_read_from_the_constants_file():
 def test_the_producer_removes_the_headline_figures_and_keeps_the_evidence():
     src = inspect.getsource(dcf_agent.run_dcf_agent)
     at = src.index("_vc_unr.unrated_verdict(")
-    block = src[at: at + 2600]
+    block = src[at: at + 3600]   # China (D-CN-6) + Korea (decision 5) verdicts sit inside the block
     assert 'scenario_results[_s]["intrinsic_value"] = None' in block
     assert '_12m_targets = {"bear": None, "base": None, "bull": None}' in block
     assert '"indicative_iv"' in block and "NOT a valuation" in block
