@@ -16871,6 +16871,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _crp = _crp_of(reported_currency)
         except Exception:                                  # noqa: BLE001
             _crp = 0.0
+        # Owner, 2026-11-28 (China A-shares, D-CN-3/4): an SSE/SZSE listing carries the market registry's country
+        # premium (SHH/SHZ 1.5%), here and therefore in the firm CAPM, the market CAPM and the CSI 300 benchmark.
+        # HK-listed CNY reporters keep the currency row (CNY 0%, owner 2026-09-26).
+        try:
+            from src.markets.china import a_share_crp as _cn_crp
+            _cn = _cn_crp(ticker)
+            if _cn is not None:
+                _crp = float(_cn)
+        except Exception:                                  # noqa: BLE001
+            pass
         # The owner's figure is the TOTAL country premium in the rate. The HK
         # sector WACC table embeds 150bps of its own (`crp_embedded`), so the
         # engine adds only the difference -- and when the owner's total is
@@ -21487,6 +21497,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _lst_ccy = "HKD" if _is_hk else (locals().get("_target_ccy") or _output_currency)
                 _verdict = _ccy_verdict(_output_currency, _lst_ccy, reported_currency,
                                         _base_sr.get("intrinsic_value"), _spot_price)
+            if not _verdict:                     # D-CN-6: A-share life insurer without an accepted EV input
+                from src.markets.china import ev_withhold_verdict as _cn_ev
+                _verdict = _cn_ev(ticker, profile_name, _base_sr)
             if _verdict:
                 _rating_state = {
                     "state": "unrated", **_verdict,

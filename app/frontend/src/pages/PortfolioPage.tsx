@@ -376,7 +376,7 @@ export function PortfolioPage() {
                 <input
                   value={ticker} onChange={e => setTicker(e.target.value)}
                   placeholder={t("AAPL · 9988 · D05")}
-                  title={t("US tickers, HK codes (9988 or 9988.HK), SGX codes (D05 or D05.SI) and China A-shares (600519 or 600519.SS). Enter avg cost in the stock's trading currency.")}
+                  title={t("US tickers, HK codes (9988 or 9988.HK), SGX codes (D05 or D05.SI) and China A-shares (600519.SS or SH600519). Enter avg cost in the stock's trading currency.")}
                   className="w-36 h-11 rounded-lg border border-input bg-background px-3 text-sm uppercase"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />

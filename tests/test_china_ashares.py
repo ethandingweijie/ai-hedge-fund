@@ -17,10 +17,10 @@ from src.markets import china
 
 @pytest.mark.parametrize("raw,want", [
     ("600519.SS", "600519.SS"), ("600519.ss", "600519.SS"), ("600519.SH", "600519.SS"), ("600519.SHH", "600519.SS"),
-    ("SH600519", "600519.SS"), ("sh.600519", "600519.SS"), ("600519", "600519.SS"),
-    ("688981", "688981.SS"), ("605499", "605499.SS"),
-    ("000858", "000858.SZ"), ("SZ000858", "000858.SZ"), ("000858.SHZ", "000858.SZ"), ("300750.SZ", "300750.SZ"),
-    ("301269", "301269.SZ"), ("002594", "002594.SZ"), ("003816", "003816.SZ"),
+    ("SH600519", "600519.SS"), ("sh.600519", "600519.SS"),
+    ("688981.SS", "688981.SS"), ("SH605499", "605499.SS"),
+    ("SZ000858", "000858.SZ"), ("000858.SHZ", "000858.SZ"), ("300750.SZ", "300750.SZ"),
+    ("SZ301269", "301269.SZ"), ("002594.SZ", "002594.SZ"), ("003816.sz", "003816.SZ"),
 ])
 def test_normalize_accepted_forms(raw, want):
     assert china.normalize(raw) == want
@@ -36,6 +36,8 @@ def test_normalize_accepted_forms(raw, want):
     "200002", "200002.SZ",   # Shenzhen B-share (HKD)
     "830799", "430047", "920001",   # Beijing Stock Exchange
     "005930",       # Samsung (Korea): not an SZSE prefix
+    # Owner, 2026-11-28 (D-CN-1): bare six digits are ambiguous with Korea and are never canonicalised.
+    "600519", "000858", "300750", "000660",
     "60051", "6005190", "", None, "AAPL", "0700.HK", "D05.SI",
 ])
 def test_normalize_rejects(raw):
@@ -44,7 +46,9 @@ def test_normalize_rejects(raw):
 
 def test_canonical_ticker_routes_a_shares_and_leaves_hk_sg_alone():
     from src.tools.ticker_canonical import canonical_ticker, ticker_match_forms
-    assert canonical_ticker("600519") == "600519.SS"
+    assert canonical_ticker("600519") == "600519"            # bare digits stay as typed (D-CN-1)
+    assert canonical_ticker("000660") == "000660"            # SK Hynix's KRX code, not Shenzhen
+    assert canonical_ticker("SH600519") == "600519.SS"
     assert canonical_ticker("SZ000858") == "000858.SZ"
     assert canonical_ticker("600519.sh") == "600519.SS"
     assert canonical_ticker("2888") == "02888.HK"
@@ -63,8 +67,9 @@ def test_fmp_symbol_is_canonical_form():
 
 
 def test_exchange_board_and_price_limit():
-    assert china.exchange_code("600519") == "SHH"
-    assert china.exchange_code("300750") == "SHZ"
+    assert china.exchange_code("600519.SS") == "SHH"
+    assert china.exchange_code("SZ300750") == "SHZ"
+    assert china.exchange_code("600519") is None
     assert china.board("688981.SS") == "STAR Market"
     assert china.board("300750.SZ") == "ChiNext"
     assert china.board("000858.SZ") == "SZSE Main Board"
@@ -98,9 +103,18 @@ def test_resolve_market_and_benchmark():
     from src.data.sector_profiles import resolve_market
     from src.decisions.ratings import resolve_benchmark
     assert resolve_market("600519.SS") == "SHH" and resolve_market("300750.SZ") == "SHZ"
-    capm = {"rf": 0.0159, "erp": 0.0441, "crp": 0.0}
+    capm = {"rf": 0.0159, "erp": 0.0441, "crp": 0.015}
     b = resolve_benchmark("300750.SZ", "Industrials", capm=capm)
-    assert b["code"] == "CSI300" and b["expected_return"] == pytest.approx(0.06)
+    assert b["code"] == "CSI300" and b["expected_return"] == pytest.approx(0.075)
+    # The fallback (no CAPM on the run) carries the same registry 1.5% (owner, 2026-11-28, D-CN-3/4).
+    assert resolve_benchmark("600519.SS", "Consumer")["country_risk_premium"] == pytest.approx(0.015)
+
+
+def test_a_share_crp_is_the_registry_premium():
+    from src.data.sector_profiles import market_crp
+    assert china.a_share_crp("600519.SS") == market_crp("SHH") == pytest.approx(0.015)
+    assert china.a_share_crp("SZ300750") == market_crp("SHZ") == pytest.approx(0.015)
+    assert china.a_share_crp("00700.HK") is None and china.a_share_crp("600519") is None
 
 
 def test_valuation_constants_market_key_never_falls_to_us():
@@ -118,27 +132,17 @@ def test_industry_map_market_of_cn_has_no_borrowed_table():
     assert market_map("CN") == {}
 
 
-def test_capm_tax_and_rf_proposal_is_inert(monkeypatch):
+def test_capm_tax_and_accepted_cgb_rate():
     from src.data import capm, valuation_constants as vc
     assert capm._TAX["CN"] == 0.25
-    doc = vc.load()
-    rb = doc["risk_free_by_market"]
-    if "CN" not in rb["markets"]:
-        # PROPOSED only: the engine must not read it.
-        assert rb["proposed"]["CN"]["status"] == "PROPOSED"
-        monkeypatch.setenv("CAPM_LIVE_RF", "off")
-        rf, src = capm.risk_free("CN")
-        assert rf == capm.RF_FALLBACK and "owner-set" not in src
-    # Once accepted (moved into markets), the CGB rate and its floor apply.
-    accepted = json.loads(json.dumps(doc))
-    accepted["risk_free_by_market"]["markets"]["CN"] = rb.get("proposed", {}).get("CN") or rb["markets"]["CN"]
-    monkeypatch.setattr(vc, "load", lambda *a, **k: accepted)
+    cn = vc.load()["risk_free_by_market"]["markets"]["CN"]       # owner-accepted 2026-11-28 (D-CN-2)
+    assert cn["value"] == 0.0159 and cn["min_spread_over_rf"] == 0.03 and cn["reviewer"] == "owner"
     rf, src = capm.risk_free("CN")
     assert rf == pytest.approx(0.0159) and "owner-set" in src
     assert capm.local_min_spread("CN") == pytest.approx(0.03)
     w = capm.firm_wacc(profile="Food & Beverage", net_debt=0.0, market_cap=1e12, cost_of_debt=None, market="CN",
-                       own_beta=0.4)
-    assert w["rf"] == pytest.approx(0.0159) and w["tax_rate"] == 0.25
+                       own_beta=0.4, crp=0.015)
+    assert w["rf"] == pytest.approx(0.0159) and w["tax_rate"] == 0.25 and w["crp"] == pytest.approx(0.015)
     assert w["cost_of_equity"] >= 0.0159 + 0.03 - 1e-9          # floored on the local curve
 
 
@@ -152,32 +156,48 @@ def test_listing_currency_default_is_cny(monkeypatch):
 
 # ── coverage / billing / pins ───────────────────────────────────────────────
 
-def test_a_shares_are_limited_until_a_pin_is_accepted(monkeypatch):
+def test_accepted_pins_make_a_shares_tuned():
     from src.data import coverage
     from src.data.sector_profiles import get_wacc_profile_for_ticker
     from app.backend.services import billing
-    assert china.CN_TICKER_SECTOR_LOOKUP == {}              # proposals are inert
-    assert coverage.coverage("600519")["level"] == "limited"
-    assert billing.run_type("600519.SS", covered=False) == "limited"
-    assert get_wacc_profile_for_ticker("600519.SS") == ("Tech", "")
-    monkeypatch.setitem(china.CN_TICKER_SECTOR_LOOKUP, "600519.SS", ("Consumer", "Food & Beverage", "", "test"))
-    assert coverage.is_tuned("600519") is True
+    assert len(china.CN_TICKER_SECTOR_LOOKUP) == len(china.CN_PROFILE_PINS) == 46   # owner-accepted 2026-11-28
+    assert coverage.coverage("600519.SS")["level"] == "tuned"
+    assert coverage.is_tuned("SH600519") is True
     assert billing.run_type("600519.SS", covered=False) == "new"
-    assert get_wacc_profile_for_ticker("600519.SS") == ("Consumer", "Food & Beverage")
     assert billing.run_type("600519.SS", covered=True) == "covered"
+    assert get_wacc_profile_for_ticker("600519.SS") == ("Consumer", "Food & Beverage")
+    assert get_wacc_profile_for_ticker("601318.SS") == ("Financials", "Insurance")      # life insurer (H pin)
+    # An unpinned A-share is limited coverage.
+    assert coverage.coverage("002415.SZ")["level"] == "limited"
+    assert billing.run_type("002415.SZ", covered=False) == "limited"
 
 
-def test_proposed_pins_resolve_and_match_the_h_share_pins():
+def test_pins_resolve_and_match_the_h_share_pins():
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES, TICKER_SECTOR_LOOKUP
-    assert len(china.PROPOSED_PROFILE_PINS) >= 30
-    for t, (sector, profile, basis) in china.PROPOSED_PROFILE_PINS.items():
+    for t, (sector, profile, basis) in china.CN_PROFILE_PINS.items():
         assert china.normalize(t) == t
         assert INDUSTRY_VALUATION_PROFILES.get(sector, {}).get(profile), (t, sector, profile)
         if basis.startswith("H pin"):
             h = basis.split()[2]
             assert china.h_share_for(t) == h
             assert TICKER_SECTOR_LOOKUP[h][:2] == (sector, profile), (t, h)
-    assert not set(china.PROPOSED_PROFILE_PINS) & set(china.NO_PIN_PROPOSED)
+    assert not set(china.CN_PROFILE_PINS) & set(china.NO_PIN_PROPOSED)
+
+
+def test_life_insurer_without_ev_input_is_withheld():
+    why = china.ev_input_withhold_reason("601318.SS", "Insurance", embedded_value_computed=False)
+    assert why and "embedded value" in why and "02318.HK" in why
+    assert china.ev_input_withhold_reason("601318.SS", "Insurance", embedded_value_computed=True) is None
+    assert china.ev_input_withhold_reason("601318.SS", "Insurance (P&C)", embedded_value_computed=False) is None
+    assert china.ev_input_withhold_reason("02318.HK", "Insurance", embedded_value_computed=False) is None
+    from src.data import valuation_constants as vc
+    assert vc.UNRATED_REASONS["input_required"].startswith("Unrated")
+    base = {"effective_weights": [{"method": "P/BV", "weight": 0.53}, {"method": "DDM", "weight": 0.06}]}
+    v = china.ev_withhold_verdict("601318.SS", "Insurance", base)
+    assert v["code"] == "input_required" and "601318.SS" in v["reason"]
+    base["effective_weights"].append({"method": "Embedded Value", "weight": 0.4})
+    assert china.ev_withhold_verdict("601318.SS", "Insurance", base) is None
+    assert china.ev_withhold_verdict("600519.SS", "Food & Beverage", {}) is None
 
 
 # ── A/H dual listings ───────────────────────────────────────────────────────
@@ -188,7 +208,7 @@ def test_ah_pairs_roundtrip_and_premium():
         if meta["h"]:
             assert meta["h"].endswith(".HK") and len(meta["h"]) == 8
             assert china.a_share_for(meta["h"]) == a
-    assert china.h_share_for("601318") == "02318.HK"
+    assert china.h_share_for("601318.SS") == "02318.HK"
     assert china.a_share_for("2318") == "601318.SS"
     assert china.h_share_for("600519.SS") is None
     # China Life 2026-11-27: A RMB 35.90, H HK$23.26, CNYHKD 1.17855 -> +82% A premium.
@@ -209,8 +229,11 @@ def test_search_local_finds_chinese_names_and_codes():
     assert china.search_local("宁德")[0]["ticker"] == "300750.SZ"
     assert china.search_local("moutai")[0]["ticker"] == "600519.SS"
     assert china.search_local("SZ300750")[0]["ticker"] == "300750.SZ"
+    # A bare code is OFFERED as a pick-list candidate, never canonicalised (D-CN-1).
     assert china.search_local("603999")[0] == {"ticker": "603999.SS", "name": "603999.SS", "exchange": "SHH",
                                                  "type": "equity"}
+    assert china.search_local("600519")[0]["ticker"] == "600519.SS"
+    assert china.bare_code_candidate("600519") == "600519.SS" and china.bare_code_candidate("005930") is None
     assert china.search_local("ab") == []
 
 
@@ -296,7 +319,7 @@ def test_cninfo_periodic_reports_filter_and_beijing_dates(fake_cninfo):
 
 def test_cninfo_filing_refs_shape(fake_cninfo):
     from src.tools import cninfo_api as c
-    ref = c.get_cninfo_filing_refs("601318")
+    ref = c.get_cninfo_filing_refs("SH601318")
     assert ref["exchange"] == "CNINFO" and ref["fiscal_year"] == "2025" and ref["filing_date"] == "2026-03-27"
     assert ref["filing_url"].endswith("/5.PDF") and ref["period_of_report"] == "2025-12-31"
     assert ref["is_stub"] is False and ref["cik"] is None

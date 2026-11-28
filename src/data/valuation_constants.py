@@ -143,6 +143,9 @@ UNRATED_REASONS = {
     "pre_revenue": "Unrated — pre-revenue",
     "no_valuation": "Unrated — no method could value it",
     "insufficient_methods": "Unrated — too little of the method set could be computed",
+    # Owner, 2026-11-28 (China A-shares, D-CN-6): the profile's anchor needs a company input no one has accepted yet
+    # (an A-share life insurer's embedded value); a fallback leg is not published in its place.
+    "input_required": "Unrated — awaiting an accepted company input",
 }
 
 

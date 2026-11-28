@@ -898,7 +898,7 @@ export interface DecisionInputs {
  *  12-month target. */
 /** Why a valuation was withheld (dcf_range.rating_state, ratings.build_unrated_view). */
 export interface UnratedReason {
-  code?: 'pre_revenue' | 'no_valuation' | 'insufficient_methods' | null;
+  code?: 'pre_revenue' | 'no_valuation' | 'insufficient_methods' | 'input_required' | null;
   label?: string | null;
   reason?: string | null;
   weight_surviving?: number | null;

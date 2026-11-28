@@ -228,7 +228,7 @@ export const ZH: Record<string, string> = {
   'No positions yet — add your first holding above.': '暂无持仓——在上方添加第一笔持仓。',
   'Refresh prices & signals': '刷新价格与信号',
   "In the stock's trading currency (HK$ for HK, S$ for most SGX lines)": '以该股票的交易货币计（港股为港元，多数新加坡股票为新元）',
-  "US tickers, HK codes (9988 or 9988.HK), SGX codes (D05 or D05.SI) and China A-shares (600519 or 600519.SS). Enter avg cost in the stock's trading currency.": '支持美股代码、港股代码（9988 或 9988.HK）、新加坡代码（D05 或 D05.SI）和A股代码（600519 或 600519.SS）。平均成本请以该股票的交易货币填写。',
+  "US tickers, HK codes (9988 or 9988.HK), SGX codes (D05 or D05.SI) and China A-shares (600519.SS or SH600519). Enter avg cost in the stock's trading currency.": '支持美股代码、港股代码（9988 或 9988.HK）、新加坡代码（D05 或 D05.SI）和A股代码（600519.SS 或 SH600519）。平均成本请以该股票的交易货币填写。',
   'Price, cost, value and P&L per line are in its trading currency; fair values are in the same currency as the price. Signals are the latest saved analysis per ticker, not new valuations.': '每行的价格、成本、市值和盈亏均以其交易货币计；公允价值与价格货币相同。信号来自每只股票最近保存的分析，并非新的估值。',
   'Add positions first to enable replays.': '请先添加持仓以使用回放。',
   'Event library': '事件库',

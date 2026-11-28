@@ -2,6 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# CJK fonts for the PDF report (Chinese / Japanese / Korean company names and research text). ReportLab can only
+# EMBED TrueType outlines, so src/utils/cjk_font.py uses WenQuanYi Micro Hei (TrueType, covers Hanzi, kana and Hangul);
+# Noto Sans CJK is CFF-outline OpenType -- installed for any helper that renders through it, not embeddable by
+# ReportLab. Without either, cjk_font falls back to the built-in, non-embedded STSong-Light CID font.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-wqy-microhei fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONPATH=/app
 
 # Install Poetry

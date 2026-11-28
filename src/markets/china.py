@@ -1,29 +1,31 @@
 """China A-shares: Shanghai (SSE, ".SS", FMP exchange SHH) and Shenzhen (SZSE, ".SZ", FMP exchange SHZ).
 
 Everything China-specific lives here; shared files carry one-line hooks into this module so the Korea and Japan
-branches merge cleanly. See docs/markets/CHINA.md for what was verified, the PROPOSED constants and the owner
+branches merge cleanly. See docs/markets/CHINA.md for what was verified, the accepted constants and the owner
 decisions still open.
 
 Ticker rules
 ------------
 Canonical form is the 6-digit code plus the venue suffix FMP and Yahoo use: "600519.SS", "300750.SZ". Accepted
-inputs (case-insensitive):
+inputs (case-insensitive) always name the venue:
 
-    600519.SS  600519.SH  600519.SHH  SH600519  SH.600519  600519      -> 600519.SS
-    000858.SZ  000858.SHZ  SZ000858   SZ.000858  000858                -> 000858.SZ
+    600519.SS  600519.SH  600519.SHH  SH600519  SH.600519      -> 600519.SS
+    000858.SZ  000858.SHZ  SZ000858   SZ.000858                -> 000858.SZ
 
-A plain 6-digit code is routed by its prefix (the exchanges' own code allocation):
+The code must sit in that venue's range (the exchanges' own allocation):
 
     SSE   600 601 603 605 (main board)   688 689 (STAR Market)
     SZSE  000 001 002 003 (main board)   300 301 (ChiNext)
+
+A BARE six-digit code ("600519", "000660") is NOT canonicalised (owner, 2026-11-28, D-CN-1): Korean codes are six
+digits too ("000660" is SK Hynix), so a bare code stays exactly as typed and the landing search offers the
+listings to pick from (search_local returns the A-share candidate implied by the prefix).
 
 NOT supported (normalize returns None, so the ticker is left exactly as typed): B-shares (900xxx.SS quote in USD,
 200xxx.SZ in HKD), the Beijing Stock Exchange (4xxxxx / 8xxxxx / 920xxx), and index codes (000001.SS is the SSE
 Composite, 000300.SS the CSI 300 -- a ".SS" suffix on a 0-prefixed code is an index, never a stock).
 
-Merge note for the Korea branch: Korean codes are also six digits ("005930", "000660"). A plain code in 000xxx-003xxx
-or 300xxx-301xxx is read as Shenzhen here; 005930 (Samsung) is not an SZSE prefix and stays untouched. Which market
-owns bare digits in the colliding ranges is an owner decision (docs/markets/CHINA.md, D-CN-1).
+Merge note for the Korea branch: neither market claims bare digits; both offer them as search candidates.
 """
 from __future__ import annotations
 
@@ -32,10 +34,10 @@ from datetime import date
 from typing import Optional
 
 __all__ = [
-    "normalize", "is_cn_ticker", "to_canonical", "to_fmp_code", "exchange_code", "board", "price_limit",
+    "normalize", "bare_code_candidate", "is_cn_ticker", "to_canonical", "to_fmp_code", "exchange_code", "board", "price_limit",
     "LISTING_CURRENCY", "CURRENCY_LABEL", "CAPM_MARKET", "STATUTORY_TAX", "TOP_A_SHARES", "h_share_for",
-    "a_share_for", "ah_premium", "search_local", "PROPOSED_PROFILE_PINS", "CN_TICKER_SECTOR_LOOKUP",
-    "PROPOSED_CONSTANTS", "statutory_deadlines", "next_statutory_deadline", "research_context", "company_name_zh",
+    "a_share_for", "ah_premium", "search_local", "CN_PROFILE_PINS", "CN_TICKER_SECTOR_LOOKUP",
+    "ACCEPTED_CONSTANTS", "a_share_crp", "ev_input_withhold_reason", "ev_withhold_verdict", "statutory_deadlines", "next_statutory_deadline", "research_context", "company_name_zh",
 ]
 
 # ── tickers ─────────────────────────────────────────────────────────────────
@@ -83,10 +85,17 @@ def normalize(ticker: Optional[str]) -> Optional[str]:
         want = "SS" if m.group(1) == "SH" else "SZ"
         code = m.group(2)
         return f"{code}.{want}" if _venue_for_code(code) == want else None
-    if _PLAIN_FORM.match(t):
-        venue = _venue_for_code(t)
-        return f"{t}.{venue}" if venue else None
-    return None
+    return None                      # bare digits stay ambiguous (D-CN-1)
+
+
+def bare_code_candidate(ticker: Optional[str]) -> Optional[str]:
+    """The A-share listing a BARE six-digit code could be ("600519" -> "600519.SS"), for the search pick list only --
+    never a canonicalisation."""
+    t = (ticker or "").strip().upper()
+    if not _PLAIN_FORM.match(t):
+        return None
+    venue = _venue_for_code(t)
+    return f"{t}.{venue}" if venue else None
 
 
 def is_cn_ticker(ticker: Optional[str]) -> bool:
@@ -240,7 +249,7 @@ def search_local(query: str, limit: int = 8) -> list[dict]:
     if not q:
         return []
     out: list[dict] = []
-    canon = normalize(q)
+    canon = normalize(q) or bare_code_candidate(q)     # a bare code is OFFERED, never assumed
     ql = q.lower()
     for t, v in TOP_A_SHARES.items():
         hit = (canon == t) or (v["zh"] and v["zh"] in q) or (q in v["zh"]) or (len(ql) >= 3 and ql in v["name"].lower())
@@ -252,18 +261,15 @@ def search_local(query: str, limit: int = 8) -> list[dict]:
     return out[:limit]
 
 
-# ── sector pins: PROPOSED, inert until the owner accepts ────────────────────
+# ── sector pins: ACCEPTED by the owner 2026-11-28 (D-CN-5) ──────────────────
 #
-# Accepted pins go in CN_TICKER_SECTOR_LOOKUP (same 4-tuple shape as TICKER_SECTOR_LOOKUP). It is EMPTY on purpose:
-# get_wacc_profile_for_ticker and coverage.is_tuned read it, so accepting a pin is a one-line move from the table
-# below and makes the name "tuned" (billing "new", 2 credits) instead of "limited".
+# CN_PROFILE_PINS -> CN_TICKER_SECTOR_LOOKUP (same 4-tuple shape as TICKER_SECTOR_LOOKUP), read by
+# get_wacc_profile_for_ticker and coverage.is_tuned: these names are "tuned" (billing "new", 2 credits).
 #
 # Basis column: "H pin" = the owner's existing pin for the same issuer's HK line in TICKER_SECTOR_LOOKUP (same
 # company, same accounts -- the strongest evidence available); "map" = the industry_profile_map row for the FMP
 # label; "judgement" = the FMP label routes somewhere wrong and the row says why.
-CN_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {}
-
-PROPOSED_PROFILE_PINS: dict[str, tuple[str, str, str]] = {
+CN_PROFILE_PINS: dict[str, tuple[str, str, str]] = {
     "600519.SS": ("Consumer", "Food & Beverage", "map (Beverages - Alcoholic); owner: or Luxury Goods?"),
     "000858.SZ": ("Consumer", "Food & Beverage", "map (Beverages - Wineries & Distilleries)"),
     "600887.SS": ("Consumer", "Food & Beverage", "map (Packaged Foods)"),
@@ -311,7 +317,10 @@ PROPOSED_PROFILE_PINS: dict[str, tuple[str, str, str]] = {
     "601186.SS": ("Industrials", "Long-Cycle E&C", "H pin 01186.HK"),
     "601668.SS": ("Industrials", "Long-Cycle E&C", "map (Engineering & Construction)"),
 }
-#: Large caps with NO pin proposed: the only rows that fit are archetypes built for something else.
+CN_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
+    t: (s, p, "", f"owner-accepted 2026-11-28; basis: {b}") for t, (s, p, b) in CN_PROFILE_PINS.items()}
+
+#: Large caps with NO pin: the only rows that fit are archetypes built for something else (limited coverage).
 NO_PIN_PROPOSED: dict[str, str] = {
     "002415.SZ": "FMP 'Computer Hardware' -> Mature Platform; Hikvision is security/video equipment -- no archetype fits",
     "601138.SS": "Contract manufacturing (EMS); the only EMS profile is SG-calibrated ('Tech Manufacturing / EMS (SG)')",
@@ -319,10 +328,52 @@ NO_PIN_PROPOSED: dict[str, str] = {
 }
 
 
-# ── PROPOSED constants (owner decides; nothing here is read by the engine) ──
+# ── constants: ACCEPTED by the owner 2026-11-28. The engine reads valuation_constants.json; this records the
+#    derivation next to the values. ─────────────────────────────────────────
 
-PROPOSED_CONSTANTS: dict = {
-    "risk_free_by_market.markets.CN": {
+#: Owner, 2026-11-28 (D-CN-3/4): A-shares carry the market registry's country risk premium (SHH/SHZ 1.5%) in the
+#: WACC, the market cost of equity and the rating benchmark alike -- not the CNY-currency 0% that HK-listed CNY
+#: reporters keep. Read through sector_profiles.market_crp so the two cannot drift.
+def a_share_crp(ticker: str) -> Optional[float]:
+    """The country risk premium for an A-share listing, or None when the ticker is not one."""
+    t = normalize(ticker)
+    if not t:
+        return None
+    from src.data.sector_profiles import market_crp
+    return market_crp(exchange_code(t))
+
+
+#: Owner, 2026-11-28 (D-CN-6): a life insurer is valued on Embedded Value x the cohort P/EV. Until an EV input is
+#: accepted for the A-share line itself the valuation is WITHHELD (unrated) rather than published off a fallback leg
+#: (Ping An: P&C GGM 117 / P/BV fallback 45 vs a 55 spot, neither a valuation).
+EV_REQUIRED_PROFILES = frozenset({"Insurance"})
+
+
+def ev_input_withhold_reason(ticker: str, profile: Optional[str], embedded_value_computed: bool) -> Optional[str]:
+    """The unrated reason for an A-share life insurer whose Embedded Value leg could not be computed, else None."""
+    t = normalize(ticker)
+    if not t or profile not in EV_REQUIRED_PROFILES or embedded_value_computed:
+        return None
+    h = h_share_for(t)
+    return ("valuation withheld: a life insurer is valued on embedded value and no embedded-value input has been "
+            f"accepted for {t}" + (f" (the accepted input for its H-share {h} is not reused across listings)" if h
+                                    else "") + ".")
+
+
+def ev_withhold_verdict(ticker: str, profile: Optional[str], base_result: Optional[dict]) -> Optional[dict]:
+    """The unrated verdict ({code, label, reason}) dcf_agent applies when an A-share life insurer's Embedded Value leg
+    did not compute -- it is withheld, not published off its P/BV / P&C fallback (Ping An: 45 / 117 vs 55)."""
+    ew = (base_result or {}).get("effective_weights") or []
+    ev_ok = any(isinstance(e, dict) and e.get("method") == "Embedded Value" for e in ew)
+    why = ev_input_withhold_reason(ticker, profile, ev_ok)
+    if not why:
+        return None
+    from src.data.valuation_constants import UNRATED_REASONS
+    return {"code": "input_required", "label": UNRATED_REASONS["input_required"], "reason": why}
+
+
+ACCEPTED_CONSTANTS: dict = {
+    "risk_free_by_market.markets.CN": {   # accepted 2026-11-28
         "value": 0.0159,
         "basis": "10Y China Government Bond (CGB)",
         "source": "ADB AsianBondsOnline market watch, close 2026-11-26 (1.591%); 1.594% at the 2026-11-18 close",
@@ -335,10 +386,9 @@ PROPOSED_CONSTANTS: dict = {
     },
     "rating_benchmark.CN": {
         "index": "CSI 300 (already in ratings._BENCHMARKS for SHH/SHZ)",
-        "expected_return": "rf + ERP + CRP on the valuation's own CAPM inputs (D1): 1.59% + 4.41% + 0.0% = 6.00%",
-        "derivation": ("No new constant: the benchmark follows the CAPM inputs. Today (rf not accepted) an A-share is "
-                       "rated against 4.x% UST + 4.41% = the US hurdle, the same mismatch the SG audit removed. "
-                       "Tech names: no STAR 50 / ChiNext tech benchmark proposed -- FMP carries neither index."),
+        "expected_return": "rf + ERP + CRP on the valuation's own CAPM inputs (D1): 1.59% + 4.41% + 1.50% = 7.50%",
+        "derivation": ("No new constant: the benchmark follows the CAPM inputs (CGB rf, US ERP, registry CRP 1.5%). "
+                       "Tech names: no STAR 50 / ChiNext tech benchmark -- FMP carries neither index."),
     },
 }
 

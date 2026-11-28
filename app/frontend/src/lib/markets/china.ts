@@ -29,10 +29,8 @@ export function cnCanonical(ticker: string): string | null {
     const want = m[1] === 'SH' ? 'SS' : 'SZ';
     return venueForCode(m[2]) === want ? `${m[2]}.${want}` : null;
   }
-  if (/^\d{6}$/.test(t)) {
-    const v = venueForCode(t);
-    return v ? `${t}.${v}` : null;
-  }
+  // A bare six-digit code is NOT an A-share by itself (owner, 2026-11-28): Korea uses six digits too, so the
+  // user picks the listing from the search list.
   return null;
 }
 

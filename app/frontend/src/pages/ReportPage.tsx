@@ -670,7 +670,7 @@ export function ReportPage() {
   // a short form like "3690" or "03690", liveTicker won't match. Compute the
   // canonical key so lookups succeed before liveResult arrives.
   function _hkCanonical(t: string): string {
-    const cn = cnCanonical(t);              // China A-share ("600519" -> "600519.SS"); six digits never match HK
+    const cn = cnCanonical(t);              // China A-share ("SH600519" -> "600519.SS"); six digits never match HK
     if (cn) return cn;
     const m = t.match(/^(\d{1,5})(\.HK)?$/i);
     if (!m) return t;

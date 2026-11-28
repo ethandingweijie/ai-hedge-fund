@@ -37,8 +37,10 @@ Examples
 '80700.HK'
 >>> canonical_ticker("d05")
 'D05.SI'
->>> canonical_ticker("600519")      # China A-share, routed by prefix
+>>> canonical_ticker("600519.SH")   # China A-share: the venue must be named
 '600519.SS'
+>>> canonical_ticker("600519")      # bare six digits stay ambiguous (Korea uses them too)
+'600519'
 >>> canonical_ticker("SZ000858")
 '000858.SZ'
 >>> canonical_ticker("aapl")
@@ -66,8 +68,8 @@ def canonical_ticker(ticker: str | None) -> str:
     from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
     from src.markets.china import normalize as _cn_normalize
 
-    # China A-shares: six digits with a venue (600519.SS / .SH / SH600519) or a bare code routed by prefix. HK
-    # codes are 1-5 digits, so a six-digit code never reaches the HK rule ambiguously.
+    # China A-shares: six digits WITH a venue (600519.SS / .SH / SH600519). A bare six-digit code is left as typed
+    # (owner, 2026-11-28: Korea uses six digits too); HK codes are 1-5 digits, so six never reach the HK rule.
     _cn = _cn_normalize(t)
     if _cn:
         return _cn
