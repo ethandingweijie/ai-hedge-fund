@@ -279,6 +279,15 @@ def _force_reuse_enabled() -> bool:
         "0", "false", "no", "off", "")
 
 
+def _research_max_age_days() -> int:
+    """D2: the oldest archived research a run may reuse. Beyond it, full fresh research."""
+    try:
+        v = int(float(os.environ.get("RESEARCH_MAX_AGE_DAYS", "90")))
+        return v if v > 0 else 90
+    except (TypeError, ValueError):
+        return 90
+
+
 def _is_pure_cache_hit(age_days: float, force_reuse: bool | None = None) -> bool:
     """Archive-gate branch decision for one cached result. `force_reuse=None`
     reads the kill switch; pass explicit True/False in tests."""
@@ -4931,7 +4940,8 @@ def _research_one_ticker(
         ticker, resume_research=resume_research,
         # L1 fast path: no age cap — any qualifying archive hit is reused.
         # RESEARCH_FORCE_REUSE=false restores the M2 _FRESH_DAYS cap.
-        max_age_days=None if _force_reuse_enabled() else _FRESH_DAYS,
+        # D2 (owner, 2026-11-28): reuse is capped at RESEARCH_MAX_AGE_DAYS (default 90) -- older research is redone.
+        max_age_days=_research_max_age_days() if _force_reuse_enabled() else _FRESH_DAYS,
     )
 
     if _cached is not None:

@@ -913,7 +913,17 @@ export interface RatingState extends UnratedReason {
   note?: string | null;
 }
 
+/** D2 (owner, 2026-11-28): what the report stands on, disclosed beside the rating. */
+export interface ResearchProvenance {
+  research_as_of?: string | null;     // core research date
+  research_tier?: string | null;
+  news_from?: string | null;          // freshness check window
+  news_to?: string | null;
+  earnings_since_prior?: string | null;
+}
+
 export interface ResearchView {
+  provenance?: ResearchProvenance | null;
   /** UNRATED is the absence of an opinion, not a fourth one: every figure
    *  below that depends on a target is then null. */
   research_rating: 'OVERWEIGHT' | 'NEUTRAL' | 'UNDERWEIGHT' | 'UNRATED';

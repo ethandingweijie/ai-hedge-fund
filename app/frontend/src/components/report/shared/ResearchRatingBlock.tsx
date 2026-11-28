@@ -66,6 +66,26 @@ export function RatingOneLiner({ view, className = '' }: { view: ResearchView; c
   return <p className={`text-[13px] leading-relaxed text-muted-foreground ${className}`}>{ratingOneLiner(w.primary, view.benchmark?.name, t)}</p>;
 }
 
+function fmtDay(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** "Research dated 12 Oct 2026 · news checked 14 Nov – 28 Nov 2026" */
+export function ProvenanceLine({ p, compact = false }: { p?: { research_as_of?: string | null; news_from?: string | null; news_to?: string | null } | null; compact?: boolean }) {
+  const { t } = useI18n();
+  const r = fmtDay(p?.research_as_of);
+  const f = fmtDay(p?.news_from);
+  const to = fmtDay(p?.news_to);
+  if (!r && !(f && to)) return null;
+  const parts = [
+    r ? t('Research dated {d}', { d: r }) : null,
+    f && to ? t('news checked {a} – {b}', { a: f, b: to }) : null,
+  ].filter(Boolean);
+  return <p className={`${compact ? 'text-xs' : 'text-[12.5px]'} text-muted-foreground -mt-1`}>{parts.join(' · ')}</p>;
+}
+
 /** The reasons behind the rating, visible on request (they used to live in a 900-character hover title). */
 function WhyThisRating({ view, compact }: { view: ResearchView; compact: boolean }) {
   const { t } = useI18n();
@@ -149,6 +169,9 @@ export function ResearchRatingBlock({ view, ticker, compact = false, delta, prio
 
       {/* Owner, 2026-11-27: what this report did with material news since the prior one, in plain words. */}
       <MaterialNewsLine view={view} delta={delta} priorRunAt={priorRunAt} compact={compact} />
+
+      {/* D2 (owner, 2026-11-28): research age and the span the news check covered, always visible. */}
+      <ProvenanceLine p={view.provenance} compact={compact} />
 
       <WhyThisRating view={view} compact={compact} />
 

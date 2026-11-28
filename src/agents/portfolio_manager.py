@@ -1305,7 +1305,7 @@ def _research_view_for(ticker: str, state, scenario: dict,
             next_earnings = None
 
     try:
-        return build_research_view(
+        _view = build_research_view(
             ticker=ticker, sector=sector, price=float(price),
             price_as_of=data.get("end_date"), target_12m=float(pt),
             intrinsic_value=recon.get("blended_iv") or scenario.get("expected_value"),
@@ -1324,8 +1324,25 @@ def _research_view_for(ticker: str, state, scenario: dict,
             user_development=(delta or {}).get("user_development"),
             user_development_review=_user_dev_review(state, ticker, delta, pt),
         )
+        if _view is not None:
+            _view["provenance"] = _research_provenance(state, delta)
+        return _view
     except Exception:
         return None
+
+
+def _research_provenance(state, delta: dict | None) -> dict:
+    """D2 (owner, 2026-11-28): what the report stands on -- the core research date and the span the news check
+    covered -- disclosed beside the rating."""
+    d = state["data"]
+    fd = delta or {}
+    return {
+        "research_as_of": str(d.get("research_as_of") or "")[:10] or None,
+        "research_tier": d.get("research_tier"),
+        "news_from": str(fd.get("since") or "")[:10] or None,
+        "news_to": str(fd.get("checked_to") or d.get("end_date") or "")[:10] or None,
+        "earnings_since_prior": fd.get("earnings_since_prior"),
+    }
 
 
 def _user_dev_review(state, ticker: str, delta: dict, new_target) -> dict | None:

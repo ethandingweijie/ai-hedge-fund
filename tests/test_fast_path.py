@@ -145,7 +145,7 @@ def test_is_pure_cache_hit_truth_table(monkeypatch):
 def test_research_one_ticker_call_site_is_force_reuse_gated():
     """The archive lookup + branch gate stay wired to the kill switch."""
     src = inspect.getsource(dr._research_one_ticker)
-    assert "max_age_days=None if _force_reuse_enabled() else _FRESH_DAYS" in src
+    assert "max_age_days=_research_max_age_days() if _force_reuse_enabled() else _FRESH_DAYS" in src
     assert "_is_pure_cache_hit(_age)" in src
 
 
@@ -341,13 +341,13 @@ def _capture_since(monkeypatch):
     return captured
 
 
-def test_old_prior_clamped_to_3_day_window(monkeypatch):
-    """A 20d-old report must NOT open a 20d search window — since is
-    clamped to now − FRESHNESS_SEARCH_WINDOW_DAYS (default 3)."""
+def test_old_prior_window_reaches_back_to_the_report(monkeypatch):
+    """D2 (owner, 2026-11-28; supersedes L5's 3-day clamp): a 20d-old report opens a 20d window, so news between
+    the report and the last 3 days is searched (the clamp missed earnings prints in that gap)."""
     captured = _capture_since(monkeypatch)
     prior = _prior(run_at=(datetime.now() - timedelta(days=20)).isoformat())
     out = freshness.run_freshness_search("CRWD", prior)
-    want = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+    want = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
     assert captured["since"] == want
     assert out["since"] == want
 
@@ -362,7 +362,8 @@ def test_fresh_prior_keeps_report_date_anchor(monkeypatch):
 
 
 def test_window_env_override(monkeypatch):
-    monkeypatch.setenv("FRESHNESS_SEARCH_WINDOW_DAYS", "5")
+    """D2: the lookback cap bounds an old report's window (FRESHNESS_MAX_LOOKBACK_DAYS)."""
+    monkeypatch.setenv("FRESHNESS_MAX_LOOKBACK_DAYS", "5")
     captured = _capture_since(monkeypatch)
     prior = _prior(run_at=(datetime.now() - timedelta(days=20)).isoformat())
     freshness.run_freshness_search("CRWD", prior)
@@ -398,7 +399,7 @@ def test_query_prioritises_earnings_and_product_launches(monkeypatch):
                         lambda p, **k: prompts.append(p) or "text")
     monkeypatch.setattr(freshness, "classify_delta",
                         lambda t, p, s, since="": None)
-    since = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+    since = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")       # D2: back to the prior report
     freshness.run_freshness_search(
         "CRWD", _prior(run_at=(datetime.now() - timedelta(days=20)).isoformat()))
     q = prompts[0].lower()

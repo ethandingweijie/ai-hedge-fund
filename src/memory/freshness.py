@@ -50,6 +50,59 @@ def _window_days() -> float:
         return 3.0
 
 
+def _max_lookback_days() -> float:
+    """D2 (owner, 2026-11-28): the one freshness search reaches back to the prior report, capped here (default
+    120 days). FRESHNESS_MAX_LOOKBACK_DAYS overrides."""
+    try:
+        v = float(os.environ.get("FRESHNESS_MAX_LOOKBACK_DAYS", "120"))
+        return v if v > 0 else 120.0
+    except (TypeError, ValueError):
+        return 120.0
+
+
+def search_since(prior: dict | None, now: datetime | None = None) -> str:
+    """Start of the freshness window: the prior report's date, never earlier than the lookback cap; no prior -> the
+    short window. Before D2 it was max(prior, now - 3 days), so news between an old report and the last 3 days was
+    never searched (review 2026-11-28)."""
+    now = now or datetime.now()
+    window_start = (now - timedelta(days=_window_days())).strftime("%Y-%m-%d")
+    floor = (now - timedelta(days=_max_lookback_days())).strftime("%Y-%m-%d")
+    prior_date = str((prior or {}).get("run_at") or "")[:10]
+    if not prior_date:
+        return window_start
+    return max(prior_date, floor)
+
+
+def apply_earnings_trigger(ticker: str, delta: dict, since: str, latest=None) -> dict:
+    """D2: results reported since the prior report make the delta MATERIAL (amend path: sections amended,
+    extractors re-run, valuation repriced) even when the classifier missed it. FRESHNESS_EARNINGS_TRIGGER=false off."""
+    if os.environ.get("FRESHNESS_EARNINGS_TRIGGER", "true").strip().lower() in ("0", "false", "no", "off"):
+        return delta
+    try:
+        if latest is None:
+            from src.memory.assumption_extract import latest_earnings_event
+            latest = latest_earnings_event(ticker)
+    except Exception:                                      # noqa: BLE001
+        latest = None
+    if not latest or not since or str(latest)[:10] <= str(since)[:10]:
+        return delta
+    when = str(latest)[:10]
+    if when > datetime.now().strftime("%Y-%m-%d"):
+        return delta
+    evs = [e for e in (delta.get("events") or []) if isinstance(e, dict)]
+    if not any("result" in str(e.get("headline") or "").lower() or "earning" in str(e.get("headline") or "").lower()
+               for e in evs):
+        evs.insert(0, {"headline": f"Results reported on {when}", "date": when,
+                       "relevance": "an earnings report since the prior report: estimates must reflect it",
+                       "source": "earnings_calendar"})
+    delta["events"] = evs[:5]
+    delta["material"] = True
+    delta["earnings_since_prior"] = when
+    v = str(delta.get("verdict") or "").strip()
+    delta["verdict"] = (f"Results reported on {when} since the prior report" + (f". {v}" if v else ""))
+    return delta
+
+
 def base_delta(prior: dict | None) -> dict:
     """Well-formed soft-fail shape every consumer can rely on."""
     prior = prior or {}
@@ -239,28 +292,23 @@ def run_freshness_search(
     if since_date:
         since = since_date
     else:
-        _prior_date = str((prior or {}).get("run_at") or "")[:10]
-        _window_start = (
-            datetime.now() - timedelta(days=_window_days())
-        ).strftime("%Y-%m-%d")
-        # ISO dates compare lexicographically; the later of the two anchors
-        # the window. No prior at all → search the bare window.
-        since = max(_prior_date, _window_start) if _prior_date else _window_start
+        since = search_since(prior)
     base["since"] = since
+    base["checked_to"] = datetime.now().strftime("%Y-%m-%d")
     if tavily_key is None:
         tavily_key = os.environ.get("TAVILY_API_KEY") or None
     try:
         snippets = _search_fresh_snippets(ticker, since, tavily_key, request_timeout_s)
         if not snippets:
             base["verdict"] = "no fresh results"
-            return base
+            return apply_earnings_trigger(ticker, base, since) if prior else base
         # R2: keep what the classification saw so the delta route can
         # synthesize amendments from THE one search instead of re-searching.
         base["snippets"] = snippets[:_SNIPPETS_KEEP_CHARS]
         classified = classify_delta(ticker, prior or {}, snippets, since=since)
         if classified:
             base.update(classified)
-        return base
+        return apply_earnings_trigger(ticker, base, since) if prior else base
     except Exception as exc:
         print(f"  [freshness] {ticker}: freshness check failed: {exc}")
         return base
