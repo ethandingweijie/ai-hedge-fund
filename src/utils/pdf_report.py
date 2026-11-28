@@ -95,6 +95,10 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+# Chinese company names and research text (A-shares, H-shares): Helvetica has no CJK glyphs, so every Paragraph
+# wraps CJK runs in an embedded/CID CJK font (src/utils/cjk_font.py).
+from src.utils.cjk_font import cjk_paragraph as _cjk_paragraph
+Paragraph = _cjk_paragraph(Paragraph)
 
 # ── Company name lookup (FMP /stable/profile, cached) ──────────────────────────
 # _fetch_company_name is now provided by src.utils.company_name (shared with
@@ -1923,6 +1927,13 @@ def _company_label(ticker: str, raw_financials: dict) -> str:
     except Exception:  # noqa: BLE001
         name = None
     if name and name != ticker:
+        try:                                       # A-shares carry their Chinese short name (贵州茅台) too
+            from src.markets.china import company_name_zh
+            _zh = company_name_zh(ticker)
+            if _zh and _zh not in name:
+                name = f"{name} {_zh}"
+        except Exception:  # noqa: BLE001
+            pass
         return _strip(name)
     stored = (raw_financials or {}).get("company") if isinstance(raw_financials, dict) else None
     return _strip(stored) if stored else ticker

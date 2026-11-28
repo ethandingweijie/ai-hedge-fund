@@ -4,6 +4,7 @@ Phase 2.7 — EDGAR_HKEX Resolver  (lightweight, no LLM, ~0.5 s per ticker)
 Resolves annual filing references for all tickers:
   • US / ADR tickers  → SEC EDGAR submissions API (10-K / 20-F)
   • HK-listed tickers → HKEXnews titleSearchServlet (Annual Report / 年報)
+  • China A-shares   → cninfo hisAnnouncement (年度报告), src/tools/cninfo_api.py
   • SG-listed tickers → skipped; there is no SGXNet client, and querying
     SEC EDGAR for an SGX company can only ever miss
 
@@ -36,6 +37,8 @@ from src.tools.api import get_edgar_filing_refs
 from src.tools.hk.ticker import is_hk_ticker
 from src.tools.hkex_api import get_hkex_filing_refs
 from src.tools.sg.ticker import is_sg_ticker
+from src.markets.china import is_cn_ticker
+from src.tools.cninfo_api import get_cninfo_filing_refs
 from src.utils.progress import progress
 
 
@@ -95,6 +98,18 @@ def run_edgar_hkex_resolver(state: AgentState) -> AgentState:
         # app/frontend/src/lib/phaseLabels.ts derives the venue name from it,
         # so naming SGX here is what stops the UI reading "SEC filings
         # resolved" on a Singapore ticker.
+        # ── China A-shares: cninfo (巨潮资讯), the CSRC-designated site ───
+        if is_cn_ticker(ticker):
+            progress.update_status(agent_id, ticker, "Resolving cninfo Annual Report (年度报告)...")
+            ref = get_cninfo_filing_refs(ticker)
+            edgar_refs[ticker] = ref or {}
+            progress.update_status(
+                agent_id, ticker,
+                (f"cninfo OK: {ref['filing_type']} | filed={ref['filing_date']} | FY={ref['fiscal_year']} | "
+                 f"url={ref['filing_url']}") if ref and ref.get("filing_url") else
+                "cninfo: no Annual Report found — FMP attribution will be used")
+            continue
+
         if is_sg_ticker(ticker):
             edgar_refs[ticker] = {}
             progress.update_status(

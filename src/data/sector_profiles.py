@@ -6671,6 +6671,12 @@ def get_wacc_profile_for_ticker(ticker: str) -> tuple[str, str]:
     entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
     if entry:
         return entry[0], entry[1]
+    # China A-shares: owner-ACCEPTED pins only (src/markets/china.py; the proposals there are inert).
+    if ticker.upper().endswith((".SS", ".SZ")):
+        from src.markets.china import CN_TICKER_SECTOR_LOOKUP
+        cn = CN_TICKER_SECTOR_LOOKUP.get(ticker.upper())
+        if cn:
+            return cn[0], cn[1]
 
     # SGX fallback. SGX_TICKER_SECTOR_LOOKUP's field [1] is primarily
     # screener-display metadata and many hints ("Airline", "AssetMgmt",

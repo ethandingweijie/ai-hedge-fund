@@ -1077,7 +1077,7 @@ def _fmt_fmp(val, symbol: str = "$") -> str:
 # M2 B2 — display symbol for common reporting currencies; unknown currencies
 # fall back to an ISO-code prefix ("CHF 1.2B") so figures are never unlabeled.
 _CURRENCY_SYMBOLS = {
-    "USD": "$", "CNY": "¥", "RMB": "¥", "EUR": "€", "GBP": "£", "JPY": "¥",
+    "USD": "$", "CNY": "RMB ", "RMB": "RMB ", "EUR": "€", "GBP": "£", "JPY": "¥",   # RMB: "¥" is also the yen
     "HKD": "HK$", "CAD": "C$", "AUD": "A$", "SGD": "S$", "NZD": "NZ$",
     "KRW": "₩", "INR": "₹", "TWD": "NT$", "CHF": "CHF ", "SEK": "SEK ",
     "NOK": "NOK ", "DKK": "DKK ", "ILS": "₪", "BRL": "R$", "ZAR": "R",
@@ -3887,7 +3887,8 @@ def _extract_citation_registry(
     _acc     = _edgar.get("accession_number")
     _is_ipo  = _edgar.get("is_ipo_prospectus", False)
     _is_stub = _edgar.get("is_stub", False)
-    _is_hkex = _edgar.get("exchange") == "HKEX"
+    _is_hkex = _edgar.get("exchange") in ("HKEX", "CNINFO")     # CNINFO: China A-share annual report
+    _venue_reg = "cninfo" if _edgar.get("exchange") == "CNINFO" else "HKEX"
 
     if _is_hkex and _edgar.get("filing_url"):
         # HKEX Annual Report — filing_url is the direct PDF from HKEXnews
@@ -3897,12 +3898,13 @@ def _extract_citation_registry(
         _filing_url   = _edgar.get("filing_url", "")
         _viewer_url_ctx = _edgar.get("viewer_url", "")
         _filing_ctx   = (
-            f"HKEX PRIMARY SOURCE FOR {ticker}:\n"
+            f"{_venue_reg} PRIMARY SOURCE FOR {ticker}:\n"
             f"  Company: {_co_name}\n"
             f"  Annual Report FY{_fy}"
             + (f" | Period: {_period}" if _period else "")
             + f"\n  Annual Report PDF: {_filing_url}\n"
-            + (f"  HKEXnews annual report search: {_viewer_url_ctx}\n" if _viewer_url_ctx else "")
+            + (f"  {'cninfo company disclosures' if _venue_reg == 'cninfo' else 'HKEXnews annual report search'}: "
+               f"{_viewer_url_ctx}\n" if _viewer_url_ctx else "")
             + f"\n"
             f"ATTRIBUTION RULES — apply these for {ticker}:\n"
             f"  • Revenue, net income, free cash flow, capex, net debt, EPS, margins → "
@@ -5523,9 +5525,17 @@ def _research_one_ticker(
         f"Sector: {sector}\n"
         f"Analysis date: {today}\n\n"
     )
+    # China A-shares: Chinese-language primary sources, the A/H rule and the CAS basis (src/markets/china.py).
+    try:
+        from src.markets.china import is_cn_ticker as _is_cn, research_context as _cn_ctx
+        if _is_cn(ticker):
+            _base_context += _cn_ctx(ticker, company_name, edgar_filing_ref)
+    except Exception:                                      # noqa: BLE001
+        pass
 
     # ── Filing reference (EDGAR for US/ADR; HKEX for HK-listed) ─────────────────
     _edgar        = edgar_filing_ref or {}
+    _is_cninfo    = _edgar.get("exchange") == "CNINFO"           # China A-share (src/tools/cninfo_api.py)
     _is_hkex      = _edgar.get("exchange") == "HKEX"
     _filing_type  = _edgar.get("filing_type", "Annual Report")
     _accession    = _edgar.get("accession_number") or ""
@@ -5549,6 +5559,12 @@ def _research_one_ticker(
         _fin_cite_as        = f"({_co_name} {_filing_type} FY{_fy}, HKEXnews)"
         _insider_cite_label = "[source: HKEX disclosure filings / AKShare insider data]"
         _insider_cite_as    = "(HKEX disclosure filings)"
+    elif _is_cninfo and _filing_url:
+        _fin_cite_label = (f"[PRIMARY SOURCE: {_co_name} {_filing_type} FY{_fy} "
+                           f"(cninfo, filed: {_filing_date}) — {_filing_url}]")
+        _fin_cite_as        = f"({_co_name} Annual Report FY{_fy}, cninfo)"
+        _insider_cite_label = "[source: SSE/SZSE shareholding-change disclosures (cninfo)]"
+        _insider_cite_as    = "(exchange shareholding-change disclosures)"
     elif _edgar and _accession and not _is_stub:
         if _is_ipo:
             # IPO prospectus — valid primary source, different label
@@ -5596,6 +5612,15 @@ def _research_one_ticker(
             f"  NOTE: Use PREFERRED sources: Annual Report PDF ({_filing_url}), "
             f"HKEXnews annual reports (年報) at the search link above, "
             f"and HKEX exchange filings. SEC EDGAR is NOT applicable for this HKEX-listed company.\n\n"
+        )
+    elif _is_cninfo and _filing_url:
+        _base_context += (
+            f"\nCNINFO PRIMARY SOURCE — {_co_name}:\n"
+            f"  {_filing_type} FY{_fy}" + (f" | Period: {_period}" if _period else "")
+            + f"\n  Annual Report PDF (Chinese full text): {_filing_url}\n"
+            f"  cninfo company disclosures: {_viewer_url}\n"
+            f"  → Cite ALL financial statement figures as:\n    {_fin_cite_as}\n"
+            f"  NOTE: SEC EDGAR is NOT applicable for this SSE/SZSE-listed company.\n\n"
         )
     elif _edgar and _accession and not _is_stub:
         _base_context += (

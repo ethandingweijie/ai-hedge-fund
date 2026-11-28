@@ -7579,7 +7579,8 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     try:
         from src.data.capm import risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
-        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US")[0]
+        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else
+                        "CN" if _t_up.endswith((".SS", ".SZ")) else "US")[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -12585,8 +12586,8 @@ def _consensus_at_run(ticker: str, consensus_pt: Optional[dict]) -> dict:
     """The Street reference as it stood when this run was made."""
     from datetime import datetime as _dt, timezone as _tz
     t = (ticker or "").upper()
-    if t.endswith((".HK", ".SI")):
-        # FMP has no consensus for HKEX/SGX. The S&P figure comes from a page
+    if t.endswith((".HK", ".SI", ".SS", ".SZ")):
+        # FMP has no consensus for HKEX/SGX (nor SSE/SZSE: price-target-consensus is empty, 2026-11-28). The S&P figure comes from a page
         # scrape (target_price.py, 25 s timeout) that does not belong on the
         # live path; the daily outcome job records it on the run's own day.
         return {"status": "deferred", "source": "stockanalysis.com",
@@ -16933,7 +16934,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
-                    market=("HK" if _is_hk else "SG" if _is_sg else "US"),
+                    market=("HK" if _is_hk else "SG" if _is_sg else
+                            "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -16957,7 +16959,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
         try:
             from src.data import capm as _capm_mkt
-            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "US"
+            _mkt_code = ("HK" if _is_hk else "SG" if _is_sg else
+                         "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US")
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:

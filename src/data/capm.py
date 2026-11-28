@@ -143,7 +143,7 @@ PROFILE_INDUSTRY: dict[str, str] = {
     "Memory / DRAM-NAND": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
 }
 
-_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17}
+_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25}   # CN: PRC EIT statutory (src/markets/china.py)
 
 
 def live_rf_enabled() -> bool:

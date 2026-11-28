@@ -1566,6 +1566,15 @@ async def search_companies(q: str = Query(default="", min_length=1), limit: int 
     seen: set[str] = set()
     results: list[dict] = []
 
+    # ── 0. China A-shares: Chinese names / codes FMP and Yahoo miss ("贵州茅台", "SH600519") ─
+    try:
+        from src.markets.china import search_local as _cn_search
+        for _row in _cn_search(q, limit):
+            seen.add(_row["ticker"])
+            results.append(_row)
+    except Exception:
+        pass
+
     # ── 1. yfinance Search — primary, handles name + symbol ──────────────────
     def _yf_search() -> list[dict]:
         import yfinance as yf
@@ -1586,7 +1595,7 @@ async def search_companies(q: str = Query(default="", min_length=1), limit: int 
         return out
 
     try:
-        results = await asyncio.to_thread(_yf_search)
+        results = results + await asyncio.to_thread(_yf_search)
     except Exception:
         pass
 
@@ -1800,6 +1809,8 @@ async def get_stock_data(ticker: str, period: str = "1y"):
         _sg = False
     if _sg:
         use_fmp_for_us = False   # SG → yfinance only
+    if sym.endswith((".SS", ".SZ")):
+        use_fmp_for_us = True    # China A-shares: FMP covers quotes, history and TTM metrics (verified 2026-11-28)
 
     # Map FMP period param (we only need a couple of lookbacks; FMP returns full history)
     _fmp_days = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730,

@@ -887,6 +887,12 @@
     "markets": {
       "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)",
              "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."}
+    },
+    "proposed": {
+      "_doc": "PROPOSED, not read by the engine (capm.risk_free reads `markets` only). Accept by moving the entry into `markets` with a reviewer. Derivation: docs/markets/CHINA.md.",
+      "CN": {"value": 0.0159, "basis": "10Y China Government Bond (CGB)", "source": "ADB AsianBondsOnline market watch, close 2026-11-26 (1.591%)",
+             "min_spread_over_rf": 0.03, "min_spread_note": "PROPOSED 2026-11-28 on the SG precedent: on 1.59% a 0.6-beta A-share takes Ke 1.59% + 0.6 x 4.41% = 4.2% without a floor.",
+             "status": "PROPOSED", "proposed_by": "China A-share support branch, 2026-11-28"}
     }
   },
   "commodity_price_deck": {
