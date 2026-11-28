@@ -11,7 +11,7 @@ Two extractors:
     vision-capable) → analyst_reports row fields.
 
 Model discipline (lessons from Workstream Q1 live gates):
-  * qwen3.6-plus via ALIBABA (env ASSUMPTION_MODEL override), resolved by
+  * qwen3.8-flash via ALIBABA (qwen3.6-plus until 2026-11-28) (env ASSUMPTION_MODEL override), resolved by
     get_model so DEEP_RESEARCH_API_KEY flows from env;
   * dedicated client timeout=480/max_retries=0 — hidden in-call retry
     chains only add latency; raw-retry + salvage catches parse failures;
@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
-ASSUMPTION_MODEL_NAME = os.environ.get("ASSUMPTION_MODEL", "qwen3.6-plus")
+ASSUMPTION_MODEL_NAME = os.environ.get("ASSUMPTION_MODEL", "qwen3.8-flash")  # owner 2026-11-28: the whole pipeline runs on qwen3.8-flash
 _BUNDLE_TIMEOUT_S = 480
 _BUNDLE_MAX_TOKENS = 12000
 _BUNDLE_EXTRA_BODY = {"enable_thinking": False}

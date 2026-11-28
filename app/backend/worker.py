@@ -920,6 +920,9 @@ async def run_assumption_steward_sweep_task(ctx: dict) -> dict:
 # ── WorkerSettings — arq entry point ──────────────────────────────────────────
 
 async def _on_startup(ctx: dict) -> None:
+    # Per-run LLM cost metering (pricing 2026-11-28): pipelines run in this process.
+    from src.llm import cost_meter as _cost_meter
+    _cost_meter.install()
     logger.info(
         "arq worker started: queue=%s max_jobs=%d job_timeout=%ds",
         QUEUE_NAME, WorkerSettings.max_jobs, WorkerSettings.job_timeout,
@@ -928,7 +931,9 @@ async def _on_startup(ctx: dict) -> None:
 
 async def _on_shutdown(ctx: dict) -> None:
     from app.backend.services.redis_client import close_redis
+    from src.llm import cost_meter as _cost_meter
 
+    await asyncio.to_thread(_cost_meter.flush_unattributed)
     await close_redis()
     logger.info("arq worker stopped")
 

@@ -39,7 +39,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 /** Start a pipeline run — returns the raw Response so the caller can stream SSE. */
 export function startAnalysisRun(
   ticker: string,
-  model = 'claude-sonnet-4-6',
+  model = 'qwen3.8-flash',
 ): Promise<Response> {
   // M2 Track E: the investor committee is decommissioned — the run body
   // carries ticker + model only. Old servers tolerated the extra key;

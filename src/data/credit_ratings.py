@@ -122,7 +122,7 @@ def _json(text: Optional[str]):
 
 
 def _default_search(prompt: str) -> Optional[str]:
-    """One DashScope native-search call. Tested 2026-10-08: qwen3.6-plus with the "agent" strategy found the ratings
+    """One DashScope native-search call. Tested 2026-10-08 on qwen3.6-plus (the default until 2026-11-28; now qwen3.8-flash): the "agent" strategy found the ratings
     (3-7 minutes a ticker); qwen3.8-flash answered null for rated issuers with thinking off and did not finish in
     400s with it on, and does not support "agent". Hence the slow model, started in the background at run start."""
     from src.research_ideas.complacency import qwen_throttle
@@ -135,10 +135,17 @@ def _default_search(prompt: str) -> Optional[str]:
     except Exception:                                      # noqa: BLE001
         pass
     qwen_throttle.acquire(weight=2.0)
+    # owner 2026-11-28: the whole pipeline runs on qwen3.8-flash. Flash thinks by default and searches with the
+    # "pro" strategy; deep research's search body sets both (thinking off, strategy by tier).
+    from src.agents.industry.deep_research import _qwen_search_extra_body
+    model = os.getenv("CREDIT_RATING_MODEL", "qwen3.8-flash")
+    extra = _qwen_search_extra_body(model)
+    if os.getenv("CREDIT_RATING_SEARCH"):
+        extra["search_options"]["search_strategy"] = os.getenv("CREDIT_RATING_SEARCH")
     stream = client.chat.completions.create(
-        model=os.getenv("CREDIT_RATING_MODEL", "qwen3.6-plus"),
+        model=model,
         messages=[{"role": "system", "content": _SYS}, {"role": "user", "content": prompt}],
-        extra_body={"enable_search": True, "search_options": {"search_strategy": os.getenv("CREDIT_RATING_SEARCH", "agent")}},
+        extra_body=extra,
         stream=True)
     text = ""
     for chunk in stream:

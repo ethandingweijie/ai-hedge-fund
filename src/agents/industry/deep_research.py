@@ -35,6 +35,8 @@ import anthropic
 
 from src.graph.state import AgentState
 from src.utils.progress import progress
+# Per-run LLM cost metering: carries the run's meter (only) into this module's bare executor workers.
+from src.llm.cost_meter import bind as _cost_meter_bind
 from src.utils.company_name import fetch_company_name as _fetch_company_name
 # M2 A3: marker identifying the freshness addendum appended to reused
 # research text — cut before section parsing so the C2 extractor hash
@@ -4685,7 +4687,7 @@ def _run_extractor_fanout(
 
     if _to_run:
         with ThreadPoolExecutor(max_workers=6) as _ex:
-            _collect({_ex.submit(fn, ""): name for name, fn in _to_run.items()})
+            _collect({_ex.submit(_cost_meter_bind(fn), ""): name for name, fn in _to_run.items()})
 
     # ── C3 retry-on-empty: one sharper-prompt retry for eligible extractors
     _retry_tasks = {
@@ -4702,7 +4704,7 @@ def _run_extractor_fanout(
         )
         with ThreadPoolExecutor(max_workers=len(_retry_tasks)) as _ex:
             _futures = {
-                _ex.submit(fn, _EXTRACTOR_RETRY_DIRECTIVE): name
+                _ex.submit(_cost_meter_bind(fn), _EXTRACTOR_RETRY_DIRECTIVE): name
                 for name, fn in _retry_tasks.items()
             }
             for _fut in as_completed(_futures):
@@ -5016,7 +5018,7 @@ def _research_one_ticker(
             if _citations_persisted is None:
                 _cit_ex = _B8Pool(max_workers=1)
                 _cit_future = _cit_ex.submit(
-                    _extract_citation_registry,
+                    _cost_meter_bind(_extract_citation_registry),
                     _cit_client_cache, _cit_model, _cached_text, ticker,
                     edgar_filing_ref=edgar_filing_ref,
                 )
@@ -5296,7 +5298,7 @@ def _research_one_ticker(
             from concurrent.futures import ThreadPoolExecutor as _B8Pool
             _cit_ex_d = _B8Pool(max_workers=1)
             _cit_future_d = _cit_ex_d.submit(
-                _extract_citation_registry,
+                _cost_meter_bind(_extract_citation_registry),
                 _delta_client,
                 _fast_tier_model(_synthesis_model, qwen_routed=base_url is not None),
                 _merged_full, ticker,
@@ -5372,7 +5374,7 @@ def _research_one_ticker(
                         )
                         # the registry must index the text that is published
                         _cit_future_d = _cit_ex_d.submit(
-                            _extract_citation_registry, _delta_client,
+                            _cost_meter_bind(_extract_citation_registry), _delta_client,
                             _fast_tier_model(_synthesis_model, qwen_routed=base_url is not None),
                             _merged_full, ticker, edgar_filing_ref=edgar_filing_ref)
                         _est_changes = _estimate_changes(
@@ -6725,7 +6727,7 @@ def _research_one_ticker(
     from concurrent.futures import ThreadPoolExecutor as _B8Pool
     _cit_ex_f = _B8Pool(max_workers=1)
     _cit_future_f = _cit_ex_f.submit(
-        _extract_citation_registry,
+        _cost_meter_bind(_extract_citation_registry),
         sdk_client, _synthesis_model, final_report, ticker,
         edgar_filing_ref=edgar_filing_ref,
     )

@@ -59,13 +59,12 @@ function highlights(p: PlanInfo): string[] {
   return out;
 }
 
-function TierCard({ plan, current, billing, signedIn, paymentsEnabled, hasBillingAccount, busy, onChoose, onManage }: {
-  plan: PlanInfo; current: boolean; billing: 'monthly' | 'annual'; signedIn: boolean;
+function TierCard({ plan, current, signedIn, paymentsEnabled, hasBillingAccount, busy, onChoose, onManage }: {
+  plan: PlanInfo; current: boolean; signedIn: boolean;
   paymentsEnabled: boolean; hasBillingAccount: boolean; busy: boolean;
   onChoose: () => void; onManage: () => void;
 }) {
   const free = plan.id === 'free';
-  const perMonth = billing === 'annual' && !free ? Math.round(plan.price_annual / 12) : plan.price_monthly;
   const featured = plan.id === 'professional';
 
   let cta: React.ReactNode;
@@ -104,13 +103,8 @@ function TierCard({ plan, current, billing, signedIn, paymentsEnabled, hasBillin
       <div className="mb-4">
         <h3 className="text-lg font-bold">{plan.name}</h3>
         <div className="mt-2">
-          <span className="text-3xl font-bold tabular-nums">${perMonth}</span>
+          <span className="text-3xl font-bold tabular-nums">${plan.price_monthly}</span>
           <span className="text-muted-foreground text-sm ml-1">{free ? '/ forever' : '/ mo'}</span>
-          {billing === 'annual' && !free && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Billed ${plan.price_annual}/year · save {plan.annual_saving_pct}%
-            </p>
-          )}
         </div>
       </div>
       <ul className="space-y-2.5 mb-6 flex-1">
@@ -128,7 +122,6 @@ function TierCard({ plan, current, billing, signedIn, paymentsEnabled, hasBillin
 
 export function PricingPage() {
   const { plans, me, error, refresh } = useBilling();
-  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
@@ -159,7 +152,6 @@ export function PricingPage() {
   const ordered = plans?.plans ?? [];
   const current: Tier = me?.plan ?? 'free';
   const currentPlan = ordered.find(p => p.id === current);
-  const maxSaving = Math.max(0, ...ordered.map(p => p.annual_saving_pct));
   const categories = Array.from(new Set(ROWS.map(r => r.category)));
   const u = me?.usage;
 
@@ -171,24 +163,7 @@ export function PricingPage() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold mb-2">Plans</h1>
             <p className="text-muted-foreground text-sm">Analyst-style valuations of any listed company, on demand.</p>
-            <div className="flex items-center justify-center gap-3 mt-5">
-              <button className={`text-sm font-medium ${billing === 'monthly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      onClick={() => setBilling('monthly')}>Monthly</button>
-              <button className={`relative w-10 h-5 rounded-full transition-colors ${billing === 'annual' ? 'bg-foreground' : 'bg-muted'}`}
-                      onClick={() => setBilling(b => (b === 'monthly' ? 'annual' : 'monthly'))}
-                      aria-label="Toggle billing period">
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform ${billing === 'annual' ? 'translate-x-5' : ''}`} />
-              </button>
-              <button className={`text-sm font-medium ${billing === 'annual' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      onClick={() => setBilling('annual')}>
-                Annual
-                {maxSaving > 0 && (
-                  <span className="ml-1.5 text-xs bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
-                    SAVE UP TO {maxSaving}%
-                  </span>
-                )}
-              </button>
-            </div>
+            <p className="text-muted-foreground text-xs mt-1">Billed monthly. Cancel any time.</p>
           </div>
 
           {notice && (
@@ -206,18 +181,17 @@ export function PricingPage() {
           {plans?.credit_costs && (
             <div className="mb-6 text-sm text-center text-muted-foreground">
               {`An analysis of a ticker we already cover uses ${plural(plans.credit_costs.covered, 'credit')}; `
-                + `a first analysis of a new ticker, ${plans.credit_costs.new}; `
-                + `any analysis on the Anthropic model, ${plans.credit_costs.premium}. `
+                + `a first analysis of a new ticker, ${plans.credit_costs.new}. `
                 + 'A failed run uses none, and re-opening a recent run is free.'}
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
             {ordered.map(p => (
-              <TierCard key={p.id} plan={p} current={signedIn && current === p.id} billing={billing}
+              <TierCard key={p.id} plan={p} current={signedIn && current === p.id}
                         signedIn={signedIn} paymentsEnabled={!!plans?.payments_enabled}
                         hasBillingAccount={!!me?.has_billing_account} busy={busy}
-                        onChoose={() => go(() => startCheckout(p.id, billing))}
+                        onChoose={() => go(() => startCheckout(p.id, 'monthly'))}
                         onManage={() => go(openBillingPortal)} />
             ))}
           </div>

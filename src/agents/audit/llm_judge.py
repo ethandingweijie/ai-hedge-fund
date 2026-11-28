@@ -237,7 +237,7 @@ def call_qwen_capped(
                        builds one from env vars (DEEP_RESEARCH_API_KEY/_BASE_URL).
                        Tests inject a Mock here.
       model_name:      Qwen model id; defaults to DEEP_RESEARCH_MODEL env or
-                       'qwen3.6-plus'.
+                       'qwen3.8-flash' (qwen3.6-plus until 2026-11-28).
     """
     # Heartbeat: refuse the call if budget exhausted.
     if not cost_cap.check_headroom():
@@ -272,7 +272,7 @@ def call_qwen_capped(
     if model_name is None:
         model_name = run_config.getenv("DEEP_RESEARCH_SYNTHESIS_MODEL") \
             or run_config.getenv("DEEP_RESEARCH_MODEL") \
-            or "qwen3.6-plus"
+            or "qwen3.8-flash"
 
     # Late import to avoid pulling deep_research module on every audit import
     from src.agents.industry.deep_research import _call_llm_with_rate_retry  # type: ignore

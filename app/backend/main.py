@@ -63,6 +63,10 @@ async def startup_event():
     from re-triggering catch-up work and makes the web tier horizontally
     scalable.
     """
+    # Per-run LLM cost metering (pricing 2026-11-28): hooks httpx / requests once per process.
+    from src.llm import cost_meter as _cost_meter
+    _cost_meter.install()
+
     if os.environ.get("DISABLE_OLLAMA", "").lower() in ("1", "true", "yes"):
         logger.info("Ollama disabled via DISABLE_OLLAMA env var — skipping check")
     else:

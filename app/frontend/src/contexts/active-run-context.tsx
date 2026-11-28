@@ -881,7 +881,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker]);
 
-  const startStream = useCallback(async (ticker: string, model = 'claude-sonnet-4-6') => {
+  const startStream = useCallback(async (ticker: string, model = 'qwen3.8-flash') => {
     const T = ticker.toUpperCase();
     // Per-ticker abort: only kill THIS ticker's previous stream (if any).
     // Other tickers' streams continue uninterrupted. Before 2026-04-25 this

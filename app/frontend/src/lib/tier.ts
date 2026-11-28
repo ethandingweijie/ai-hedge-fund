@@ -17,9 +17,7 @@ export const UNLIMITED = -1;
 export interface PlanInfo {
   id: Tier;
   name: string;
-  price_monthly: number;
-  price_annual: number;
-  annual_saving_pct: number;
+  price_monthly: number;      // monthly billing only (owner, 2026-11-28: no annual plan)
   credits: number;
   credit_period: 'lifetime' | 'month';
   watchlist_limit: number;   // UNLIMITED = -1
@@ -95,7 +93,7 @@ export async function errorFromResponse(res: Response): Promise<Error> {
 export const fetchPlans = () => getJson<PlansResponse>('/billing/plans');
 export const fetchBillingMe = () => getJson<BillingMe>('/billing/me');
 
-export async function startCheckout(plan: Tier, interval: 'monthly' | 'annual' | 'addon'): Promise<void> {
+export async function startCheckout(plan: Tier, interval: 'monthly' | 'addon'): Promise<void> {
   const { url } = await getJson<{ url: string }>('/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

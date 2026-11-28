@@ -29,7 +29,7 @@ _FAST_TIER_AGENT_NAMES = frozenset({"scenario_agent", "power_law_agent", "value_
 # cheap tier already proven for high-volume roles (card-QA DEFAULT_QA_MODEL).
 # The ALIBABA client branch carries timeout=120 + max_retries=3 tuned for
 # DashScope's limit_burst_rate 429s. Rollback: PIPELINE_FAST_MODEL=claude-haiku-4-5.
-_DEFAULT_FAST_MODEL = "qwen3.6-plus"
+_DEFAULT_FAST_MODEL = "qwen3.8-flash"  # owner 2026-11-28: the whole pipeline runs on qwen3.8-flash
 
 
 def _resolve_env_model(model_name: str) -> tuple[str, str | None]:

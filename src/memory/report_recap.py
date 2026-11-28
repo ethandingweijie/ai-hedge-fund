@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 # Fast-tier model for the compression pass (same default as the complacency
 # qual layer — cheap, and DEEP_RESEARCH_API_KEY resolves from env).
-RECAP_MODEL_NAME = os.environ.get("RECAP_MODEL", "qwen3.6-plus")
+RECAP_MODEL_NAME = os.environ.get("RECAP_MODEL", "qwen3.8-flash")  # owner 2026-11-28: the whole pipeline runs on qwen3.8-flash
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS report_recaps (

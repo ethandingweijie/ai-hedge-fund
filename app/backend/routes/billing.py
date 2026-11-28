@@ -3,7 +3,7 @@ app/backend/routes/billing.py
 ==============================
 GET  /billing/plans     public: the plans the pricing page renders (prices, credits, limits, features)
 GET  /billing/me        the caller's plan and usage this period
-POST /billing/checkout  {plan, interval: monthly|annual|addon} -> {url} (Stripe Checkout)
+POST /billing/checkout  {plan, interval: monthly|addon} -> {url} (Stripe Checkout; monthly billing only)
 POST /billing/portal    -> {url} (Stripe customer portal: change plan, card, cancel)
 POST /billing/webhook   public, signature-verified: the only writer of a paid plan
 """
@@ -42,8 +42,8 @@ async def get_me(user=Depends(require_user)):
 async def checkout(body: dict, user=Depends(require_user)):
     plan = str((body or {}).get("plan") or "")
     kind = str((body or {}).get("interval") or "monthly")
-    if kind not in ("monthly", "annual", "addon") or plan not in billing.PLANS or plan == "free":
-        raise HTTPException(status_code=422, detail="plan must be a paid plan; interval monthly | annual | addon")
+    if kind not in ("monthly", "addon") or plan not in billing.PLANS or plan == "free":
+        raise HTTPException(status_code=422, detail="plan must be a paid plan; interval monthly | addon")
     if not billing.payments_enabled():
         raise HTTPException(status_code=503, detail="Payments are not enabled yet.")
     try:

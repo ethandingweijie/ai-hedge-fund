@@ -86,7 +86,7 @@ async def migrate_to_postgres(request: Request, secret: str = "", dry_run: bool 
 
 
 @router.get("/admin/diag")
-async def admin_diag(request: Request, secret: str = "", health: int = 0, canary: int = 0):
+async def admin_diag(request: Request, secret: str = "", health: int = 0, canary: int = 0, costs: int = 0):
     """Read-only health probe for the storage stack (secret-gated).
 
     Reports, per layer, whether it works and the exception text when it does
@@ -263,6 +263,17 @@ async def admin_diag(request: Request, secret: str = "", health: int = 0, canary
             out["health"] = await _aio_h.to_thread(_ph.compute_health, out.get("queue"))
         except Exception:
             out["health"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 8d. Measured LLM cost per run type vs the credit weights (pricing 2026-11-28): ?costs=<days>.
+    if costs:
+        try:
+            import asyncio as _aio_k
+            from src.llm import cost_meter as _cm
+            await _aio_k.to_thread(_cm.flush_unattributed)
+            out["costs"] = await _aio_k.to_thread(_cm.cost_report, int(costs) if int(costs) > 1 else 30)
+        except Exception:
+            import traceback as _tb
+            out["costs"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     # 8c. Roadmap #4 part 2: the valuation canary on demand (?canary=1 live drift only; ?canary=2 also replays the
     # golden fixtures on this container, ~1 min). Not recorded: the nightly job owns the canary_runs rows.

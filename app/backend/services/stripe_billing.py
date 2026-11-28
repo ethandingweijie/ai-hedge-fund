@@ -74,7 +74,7 @@ def _app_url(fragment: str) -> str:
 # ── Checkout + portal ──────────────────────────────────────────────────────
 
 def checkout_url(user, plan: str, kind: str) -> str:
-    """kind: monthly | annual (a subscription) | addon (a one-off credit pack for the user's current plan)."""
+    """kind: monthly (a subscription) | addon (a one-off credit pack for the user's current plan)."""
     if plan not in billing.PLANS or plan == "free":
         raise ValueError("unknown plan")
     pid = billing.price_id(plan, kind)

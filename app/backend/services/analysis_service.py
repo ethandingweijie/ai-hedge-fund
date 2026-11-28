@@ -1964,18 +1964,29 @@ async def run_analysis_pipeline(
                     " — seeding phase caches, decision phases rerun fresh"
                 )
 
-            state = run_advanced_pipeline(
-                tickers=[ticker.upper()],
-                start_date="2020-01-01",
-                end_date=end_date,
-                portfolio=portfolio,
-                model_name=_pipeline_model,
-                model_provider=_provider,
-                show_reasoning=True,
-                enable_post_trade_review=False,
-                on_checkpoint=_on_checkpoint,
-                resume_bundle=resume_bundle,
-            )
+            # Measured cost of this run (pricing 2026-11-28): every LLM / search call made in this thread and
+            # in the threads it spawns through run_config is attributed to run_id and saved to run_costs.
+            # run_type is the billing classification (covered | new | premium), taken before research runs.
+            from src.llm import cost_meter as _cost_meter
+            try:
+                from app.backend.services.billing import run_type as _billing_run_type
+                _run_type = _billing_run_type(ticker.upper(), model_name)
+            except Exception:  # noqa: BLE001
+                _run_type = None
+            with _cost_meter.metered_run(run_id, user_id=user_id, ticker=ticker.upper(),
+                                         model_name=model_name, run_type=_run_type):
+                state = run_advanced_pipeline(
+                    tickers=[ticker.upper()],
+                    start_date="2020-01-01",
+                    end_date=end_date,
+                    portfolio=portfolio,
+                    model_name=_pipeline_model,
+                    model_provider=_provider,
+                    show_reasoning=True,
+                    enable_post_trade_review=False,
+                    on_checkpoint=_on_checkpoint,
+                    resume_bundle=resume_bundle,
+                )
             result_container["state"] = state
         except Exception as e:
             error_container["error"] = str(e)

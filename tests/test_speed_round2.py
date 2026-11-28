@@ -139,7 +139,8 @@ class TestFastTierRouting:
         "scenario_agent", "power_law_agent", "value_trap_agent",
     ])
     def test_fast_tier_defaults_to_alibaba_fast_model(self, clean_model_env, agent):
-        assert get_agent_model_config(_RUN_STATE, agent) == ("qwen3.6-plus", "Alibaba")
+        # owner 2026-11-28: the whole pipeline (fast tier included) runs on qwen3.8-flash
+        assert get_agent_model_config(_RUN_STATE, agent) == ("qwen3.8-flash", "Alibaba")
 
     def test_decommissioned_investor_names_fall_to_run_model(self, clean_model_env):
         # The investor_ prefix left the fast tier with the committee (M2 E):
@@ -169,7 +170,7 @@ class TestFastTierRouting:
     def test_unknown_agent_model_env_falls_through(self, clean_model_env):
         clean_model_env.setenv("AGENT_MODEL_SCENARIO_AGENT", "no-such-model-xyz")
         assert get_agent_model_config(_RUN_STATE, "scenario_agent") == (
-            "qwen3.6-plus", "Alibaba")
+            "qwen3.8-flash", "Alibaba")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

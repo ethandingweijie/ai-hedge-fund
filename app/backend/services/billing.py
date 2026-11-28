@@ -14,8 +14,10 @@ Storage: two NEW tables (CREATE IF NOT EXISTS; no ALTER on `users`, so no schema
 
 Metering (`reserve_run`): a pipeline start reserves credits by run type (CREDIT_COSTS, `run_credits`): 1 for a
 covered ticker (stored research + one freshness search), 2 for a first-ever ticker (full research), 4 for any run on
-the Anthropic model. Price points 2026-11-28 (owner): $29 / $79, 15 / 50 credits a month, ~20% off annual. A reservation SETTLES lazily: it counts while it is younger than
-RESERVATION_HOLD_MIN, and after that only if the user has a completed (non-checkpoint) run of that ticker started
+the Anthropic model (unreachable for users since runs were pinned to Qwen, 2026-11-28). Price points 2026-11-28
+(owner): $29 / $79 a month, 15 / 50 credits, MONTHLY ONLY (the annual discount was removed the same day).
+
+A reservation SETTLES lazily: it counts while it is younger than RESERVATION_HOLD_MIN, and after that only if the user has a completed (non-checkpoint) run of that ticker started
 since -- so a failed or cancelled run is never charged, without hooking every pipeline exit path. A second start of
 the same ticker inside the hold window reuses the first reservation (the dedup path serves it the same run).
 
@@ -39,25 +41,26 @@ UNLIMITED = -1
 #: STRIPE_PRICE_<PLAN>_ADDON). Every claim the pricing page makes is a field here, and every field is enforced
 #: (or is true of every run) -- nothing on the page is decoration.
 PLANS: dict[str, dict[str, Any]] = {
-    # Price points 2026-11-28 (owner, from the pricing review): $29 / $79 sit at Fiscal.ai and Koyfin; annual is
-    # ~20% off (279 and 759 both round to 20%). Allowances are CREDITS weighted by run cost (CREDIT_COSTS), so Pro's
+    # Price points 2026-11-28 (owner, from the pricing review): $29 / $79 sit at Fiscal.ai and Koyfin. Monthly
+    # billing only: the owner removed the ~20% annual discount, and an undiscounted annual plan offers nothing, so
+    # there is no annual price. Allowances are CREDITS weighted by run cost (CREDIT_COSTS), so Pro's
     # 50 is 50 covered runs, 25 new tickers or 12 Anthropic runs: the worst case still clears ~50% gross margin,
     # the Qwen default ~95%. Add-ons price a credit at $1.20 / $1.00, above the worst-case ~$0.75 a credit of an
     # Anthropic full-research run.
     "free": {
-        "name": "Free", "price_monthly": 0, "price_annual": 0,
+        "name": "Free", "price_monthly": 0,
         "credits": 3, "credit_period": "month",
         "watchlist_limit": 5, "history_months": 1,
         "pdf_export": False, "excel_export": False, "addon": None,
     },
     "starter": {
-        "name": "Starter", "price_monthly": 29, "price_annual": 279,
+        "name": "Starter", "price_monthly": 29,
         "credits": 15, "credit_period": "month",
         "watchlist_limit": 30, "history_months": 12,
         "pdf_export": True, "excel_export": False, "addon": {"credits": 10, "price": 12},
     },
     "professional": {
-        "name": "Professional", "price_monthly": 79, "price_annual": 759,
+        "name": "Professional", "price_monthly": 79,
         "credits": 50, "credit_period": "month",
         "watchlist_limit": UNLIMITED, "history_months": UNLIMITED,
         "pdf_export": True, "excel_export": True, "addon": {"credits": 25, "price": 25},
@@ -483,8 +486,6 @@ def public_plans() -> dict:
     for pid in PLAN_ORDER:
         p = dict(PLANS[pid])
         p["id"] = pid
-        p["annual_saving_pct"] = (round((1 - p["price_annual"] / (12 * p["price_monthly"])) * 100)
-                                  if p["price_monthly"] else 0)
         p["purchasable"] = bool(pid != "free" and price_id(pid, "monthly"))
         out.append(p)
     return {"plans": out, "every_run": list(EVERY_RUN), "unlimited": UNLIMITED, "credit_costs": dict(CREDIT_COSTS),
@@ -494,7 +495,8 @@ def public_plans() -> dict:
 # ── Stripe config ──────────────────────────────────────────────────────────
 
 def price_id(plan: str, kind: str) -> Optional[str]:
-    """kind: monthly | annual | addon."""
+    """kind: monthly | addon. (`annual` still resolves an env price id so a legacy annual subscription maps to
+    its plan in the webhook; checkout no longer offers it.)"""
     return (os.environ.get(f"STRIPE_PRICE_{plan.upper()}_{kind.upper()}") or "").strip() or None
 
 

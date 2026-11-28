@@ -41,14 +41,14 @@ def _complete(db, uid, ticker, at):
 
 # ── plans: every page claim is a field ──────────────────────────────────────
 
-def test_public_plans_carry_prices_limits_and_the_true_annual_saving():
+def test_public_plans_carry_prices_and_limits_monthly_only():
     pub = b.public_plans()
     got = {p["id"]: p for p in pub["plans"]}
     assert [*got] == ["free", "starter", "professional"]
-    assert (got["starter"]["price_monthly"], got["starter"]["price_annual"], got["starter"]["credits"]) == (29, 279, 15)
-    assert (got["professional"]["price_monthly"], got["professional"]["price_annual"],
-            got["professional"]["credits"]) == (79, 759, 50)
-    assert got["starter"]["annual_saving_pct"] == 20 and got["professional"]["annual_saving_pct"] == 20
+    assert (got["starter"]["price_monthly"], got["starter"]["credits"]) == (29, 15)
+    assert (got["professional"]["price_monthly"], got["professional"]["credits"]) == (79, 50)
+    for p in got.values():                                  # owner 2026-11-28: no annual plan, no discount
+        assert "price_annual" not in p and "annual_saving_pct" not in p
     assert got["free"]["credits"] == 3 and got["free"]["credit_period"] == "month"
     assert pub["credit_costs"] == {"covered": 1, "new": 2, "premium": 4}
     for p in got.values():
@@ -325,3 +325,12 @@ def test_every_single_run_path_checks_the_history_window():
     from app.backend.routes import analysis as a
     for fn in (a.get_run, a.get_run_workbook, a.get_run_report_pdf, a._owned_run_or_404):
         assert "_run_in_plan_history" in inspect.getsource(fn), fn.__name__
+
+
+def test_checkout_offers_monthly_and_addon_only():
+    import asyncio
+    from fastapi import HTTPException
+    from app.backend.routes import billing as rb
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(rb.checkout({"plan": "starter", "interval": "annual"}, user=_user()))
+    assert e.value.status_code == 422

@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 QA_VERSION = "v1"
-DEFAULT_QA_MODEL = "qwen3.6-plus"
+DEFAULT_QA_MODEL = "qwen3.8-flash"  # owner 2026-11-28: the whole pipeline runs on qwen3.8-flash
 
 
 # ── R5 delta check (Workstream E speed round 2) ─────────────────────────────

@@ -34,7 +34,15 @@ from app.backend.services.auth_service import get_user_from_token
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_RUN_MODEL = "claude-sonnet-4-6"
+#: Every run -- research and every pipeline phase -- is on Qwen (owner, 2026-11-28: the landing-page
+#: Qwen/Anthropic toggle is removed). The server PINS the model: a `model` in the request body is shape-checked for
+#: old clients and otherwise ignored, so no client (or stale bundle defaulting to Claude) can start an Anthropic run.
+#: RUN_MODEL is the owner's rollback lever.
+_DEFAULT_RUN_MODEL = "qwen3.8-flash"
+
+
+def _run_model() -> str:
+    return (os.environ.get("RUN_MODEL") or "").strip() or _DEFAULT_RUN_MODEL
 
 
 # ── Per-ticker deduplication: one pipeline at a time per ticker ──────────────
@@ -162,7 +170,8 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     if not isinstance(body, dict):
         raise HTTPException(status_code=422, detail="request body must be an object")
     _raw_ticker = validate_ticker_input(body.get("ticker"))
-    model_name = validate_model_input(body.get("model"), _DEFAULT_RUN_MODEL)
+    validate_model_input(body.get("model"), _DEFAULT_RUN_MODEL)   # shape check only; the server picks the model
+    model_name = _run_model()
     # Normalise HK/SG tickers to their canonical form so the routing cache
     # and web_runs DB always see a consistent key regardless of input format.
     ticker = canonical_ticker(_raw_ticker)

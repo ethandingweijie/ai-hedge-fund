@@ -40,7 +40,7 @@ export function useRunStream(): UseRunStreamResult {
     setError(null);
   }, []);
 
-  const start = useCallback(async (ticker: string, model = 'claude-sonnet-4-6') => {
+  const start = useCallback(async (ticker: string, model = 'qwen3.8-flash') => {
     // Cancel any in-progress run
     abortRef.current?.abort();
     const controller = new AbortController();
