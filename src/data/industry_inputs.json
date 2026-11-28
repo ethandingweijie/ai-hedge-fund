@@ -510,6 +510,277 @@
     "value_usd": 21598117500.0
    }
   },
+  "005930.KS": {
+   "sotp": {
+    "anchors": {
+     "reported_currency": "KRW",
+     "revenue_latest_usd_bn": 250.1,
+     "revenue_next_fy_period": "2026-12-31",
+     "revenue_next_fy_usd_bn": 542.87
+    },
+    "basis": "estimate",
+    "built_at": "2026-11-28T10:59:59+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "sotp / revenue",
+      "detail": "2.26x (plausible 0.6x to 1.6x)",
+      "ok": false,
+      "ratio": 2.2611
+     },
+     {
+      "check": "segment revenue vs group revenue",
+      "detail": "segments sum to 565.5bn USD vs FMP FY+1 consensus revenue 542.9bn (+4.2%; may not exceed by more than 5%)",
+      "ok": true,
+      "ratio": 1.0417
+     },
+     {
+      "check": "segment revenue periods",
+      "detail": "FY2026E (fiscal_year FY2026E); all forward of the latest reported year",
+      "ok": true
+     },
+     {
+      "check": "segments with a cited multiple range",
+      "detail": "4 usable; dropped none",
+      "ok": true
+     },
+     {
+      "check": "sources resolve to canonical URLs",
+      "detail": "3 of 3 grounding wrapper(s) resolved",
+      "ok": true
+     },
+     {
+      "check": "segments price in the engine",
+      "detail": "all 4 segment(s) price (P/E, P/E, P/E, P/E)",
+      "ok": true
+     }
+    ],
+    "company": "Samsung Electronics Co., Ltd.",
+    "data": {
+     "associates_investments": {
+      "currency": "KRW",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+      "period": "2026-07-07",
+      "quote": "Equity stake value (Wtr). 136.1. Listed. 82.5. Samsung Biologics. 59.9. 31.2. 18.7. Samsung Epis Holdings. 10.3. 31.2. 3.2. SEMCO. 166.4. 23.7. 39.4. Samsung SDI. 43.0. 19.4. 8.3. Samsung SDS. 16.1. 22.6. 3.6. Other. 9.2. Unlisted. 53.6.",
+      "scale": "tn",
+      "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+      "value": 136.1
+     },
+     "fiscal_year": "FY2026E",
+     "holdco_basis": "Standard Korean brokerage practice applies a 30% to 50% holding-company discount to equity stakes in listed affiliates (including Samsung Biologics, Samsung Electro-Mechanics, Samsung SDI, and Samsung SDS) to account for corporate taxation on distributions and conglomerate holding structure.",
+     "holdco_discount_pct": 0.5,
+     "listed_investments_at_market": {
+      "currency": "KRW",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+      "period": "2026-07-07",
+      "quote": "Equity stake value (Wtr). 136.1. Listed. 82.5.",
+      "scale": "tn",
+      "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+      "value": 82.5
+     },
+     "net_cash": {
+      "currency": "KRW",
+      "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGTset7tZ41nxs108j-AUKNMr5mzhYhMnLEEM2GBbHDujEyzw4p3no9TRGwMqSgzH16o8qWgCdFGW3B8SkjBGfb1tXRQiapGayR3zcwUMdkmCPaCzS_-CCo9DCuh6GtpQzJNDRdo6PzO_cRB5NBkKH-3ZzwmSptZ0OYe4F3xrcYDtjVCpJO6SGGtdejAd8cEJt_sSq0FmTmu9FkkCmzCWVJPGPRzllpHDVwS0kLUcRW2yYgeX6ZrS9LkA==",
+      "period": "2026-06-30",
+      "quote": "Samsung's net cash stood at about 167 trillion won by the end of the second quarter.",
+      "scale": "tn",
+      "source_url": "https://www.koreajoongangdaily.com/business/samsungs-cash-pile-raises-stakes-for-shareholder-returns-after-sk-hynix-buyback/12835183",
+      "value": 167.0
+     },
+     "segments": [
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "DS. 71.8. 62.6. 9.1. 75.3. 70.3. 5.0.",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 0.753
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Analyst SOTP valuation frameworks assign 8x to 12x P/E (EBIT) to Samsung's semiconductor division across bear, base, and bull cycle scenarios, benchmarked against memory and foundry peers such as SK Hynix, Micron, and TSMC.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr7fhMJ_SNWzegfQZIBIxE_2QXJ0ydabSFtcKXp43d_2RS6YDgavOUZ1uIb8pBlGgzF9N4GIxVDEeFeDEWgGed0aTrRo2I1YAnjGxbYEk_wqmBomoh5D8hk5W0KgLPHVCUNytcJIdI_evz",
+       "multiple_high": 12.0,
+       "multiple_low": 8.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.compassingai.com/zh-hant/company/samsung/",
+       "name": "Device Solutions (DS)",
+       "revenue_fwd": {
+        "currency": "KRW",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "DS. 119.8. 131.2. -8.6. 509.8. 526.9. -3.3.",
+        "scale": "tn",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 509.8
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "DX. 4.3. 2.4. 1.9. 4.1. 3.6. 0.5.",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 0.041
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 10x to 12x P/E (EBIT) based on consumer tech and mobile device peers (Apple, Xiaomi) adjusted for consumer hardware margins and a conglomerate discount.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr7fhMJ_SNWzegfQZIBIxE_2QXJ0ydabSFtcKXp43d_2RS6YDgavOUZ1uIb8pBlGgzF9N4GIxVDEeFeDEWgGed0aTrRo2I1YAnjGxbYEk_wqmBomoh5D8hk5W0KgLPHVCUNytcJIdI_evz",
+       "multiple_high": 12.0,
+       "multiple_low": 10.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.compassingai.com/zh-hant/company/samsung/",
+       "name": "Device eXperience (DX)",
+       "revenue_fwd": {
+        "currency": "KRW",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "DX. 48.7. 45.5. 7.0. 196.6. 191.4. 2.7.",
+        "scale": "tn",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 196.6
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "Samsung Display. 9.9. 6.9. 3.0. 12.4. 11.9. 0.6.",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 0.124
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 8x to 10x P/E (EBIT) based on display panel peers Innolux, BOE, and AU Optronics, reflecting OLED leadership and exposure to major smartphone OEMs.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr7fhMJ_SNWzegfQZIBIxE_2QXJ0ydabSFtcKXp43d_2RS6YDgavOUZ1uIb8pBlGgzF9N4GIxVDEeFeDEWgGed0aTrRo2I1YAnjGxbYEk_wqmBomoh5D8hk5W0KgLPHVCUNytcJIdI_evz",
+       "multiple_high": 10.0,
+       "multiple_low": 8.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.compassingai.com/zh-hant/company/samsung/",
+       "name": "Samsung Display (SDC)",
+       "revenue_fwd": {
+        "currency": "KRW",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "Samsung Display. 6.7. 6.1. 10.5. 30.4. 29.8. 2.1.",
+        "scale": "tn",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 30.4
+       }
+      },
+      {
+       "ebit_margin": {
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "Harman. 13.2. 8.8. 4.4. 9.2. 8.1. 1.2.",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 0.092
+       },
+       "ev_sales_high": null,
+       "ev_sales_low": null,
+       "ev_sales_source_url": null,
+       "multiple_basis": "Valued at 8x to 10x P/E (EBIT) based on automotive electronics and Tier-1 suppliers including Hyundai Mobis and HL Mando.",
+       "multiple_grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGr7fhMJ_SNWzegfQZIBIxE_2QXJ0ydabSFtcKXp43d_2RS6YDgavOUZ1uIb8pBlGgzF9N4GIxVDEeFeDEWgGed0aTrRo2I1YAnjGxbYEk_wqmBomoh5D8hk5W0KgLPHVCUNytcJIdI_evz",
+       "multiple_high": 10.0,
+       "multiple_low": 8.0,
+       "multiple_metric": "pe",
+       "multiple_source_url": "https://www.compassingai.com/zh-hant/company/samsung/",
+       "name": "Harman",
+       "revenue_fwd": {
+        "currency": "KRW",
+        "grounding_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPUzbsYsH83oQgpHvqnK5jQAQhVd0JrLmHaLyCcIE2d7grhKbjU4woCkvvJ3aPIVCT8uF5X3UhHF90Jta16Q4lUvPc_CeTi_-gMUGY-JaOignuDElJpUJD8mT0ymmo-AZQzOFA6g4bp_AibTn13tdApqnPdYncTkD-SWQxGS1Nyl3JvFo=",
+        "period": "FY2026E",
+        "quote": "Harman. 4.6. 4.6. 0.0. 17.5. 17.5. 0.0.",
+        "scale": "tn",
+        "source_url": "https://securities.miraeasset.com/bbs/download/2145732.pdf?attachmentId=2145732",
+        "value": 17.5
+       }
+      }
+     ]
+    },
+    "engine_preview": {
+     "checks": {
+      "citation_coverage": 1.0,
+      "clamped": [
+       "Device Solutions (DS) margin 0.753"
+      ],
+      "currencies": [
+       "KRW tn",
+       "KRW tn",
+       "KRW tn",
+       "KRW tn"
+      ],
+      "dropped_fields": [],
+      "dropped_segments": []
+     },
+     "segments": [
+      {
+       "ebit_margin": 0.6,
+       "ev_rev_multiple": null,
+       "name": "Device Solutions (DS)",
+       "pe_multiple": 10.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 8.0-12.0x: Analyst SOTP valuation frameworks assign 8x to 12x P/E (EBIT) to Samsung's semiconductor division across bear, base, and bull cycle scenarios, benchmarked against memory and foundry peers such as SK Hynix, Micron, and TSMC.",
+       "revenue_fwd": 382187570073.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.041,
+       "ev_rev_multiple": null,
+       "name": "Device eXperience (DX)",
+       "pe_multiple": 11.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 10.0-12.0x: Valued at 10x to 12x P/E (EBIT) based on consumer tech and mobile device peers (Apple, Xiaomi) adjusted for consumer hardware margins and a conglomerate discount.",
+       "revenue_fwd": 147387360291.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.124,
+       "ev_rev_multiple": null,
+       "name": "Samsung Display (SDC)",
+       "pe_multiple": 9.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 8.0-10.0x: Valued at 8x to 10x P/E (EBIT) based on display panel peers Innolux, BOE, and AU Optronics, reflecting OLED leadership and exposure to major smartphone OEMs.",
+       "revenue_fwd": 22790314104.0,
+       "source": "gemini_grounded"
+      },
+      {
+       "ebit_margin": 0.092,
+       "ev_rev_multiple": null,
+       "name": "Harman",
+       "pe_multiple": 9.0,
+       "period_label": "FY2026E",
+       "rationale": "pe 8.0-10.0x: Valued at 8x to 10x P/E (EBIT) based on automotive electronics and Tier-1 suppliers including Hyundai Mobis and HL Mando.",
+       "revenue_fwd": 13119424237.5,
+       "source": "gemini_grounded"
+      }
+     ]
+    },
+    "fmp_context_usd": {
+     "company": "Samsung Electronics Co., Ltd.",
+     "depreciation_and_amortization": 35179992483.889915,
+     "market_cap": 874343037227.2974,
+     "net_ppe": 161409988666.24582,
+     "operating_cash_flow": 63959178314.11998,
+     "period": "2025-12-31",
+     "revenue": 250098161644.06412,
+     "shares": 6511927292.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 161.1,
+    "value_usd": 565484668705.5
+   }
+  },
   "00688.HK": {
    "nav": {
     "anchors": {

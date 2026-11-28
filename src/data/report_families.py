@@ -146,7 +146,7 @@ REPORT_FAMILIES: dict[str, dict] = {
         "profiles": ["AI Infrastructure / Neocloud", "Consumer Electronics / Hardware Ecosystem", "China Internet Platform",
                      "Tech Manufacturing / EMS (SG)", "Growth SaaS", "Hyperscaler / Tech Conglomerate", "Consumer Technology Ecosystem",
                      "Cybersecurity / Mission-Critical SaaS", "Mature SaaS", "Hyper-Growth Platform",
-                     "Mature Platform", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND",
+                     "Mature Platform", "Fabless", "IDM / Foundry", "Memory / DRAM-NAND", "Memory-led Tech Conglomerate (SOTP)",
                      "Equipment / EDA", "Telco / Infrastructure (SG)", "Ad / Consulting",
                      "IT Services", "BTC Treasury / Proxy",
                      "Analog / Mixed-signal IDM", "Media & Streaming", "Networking & Communication Equipment", "Telecom Carrier"],   # Wave 7

@@ -30,6 +30,14 @@ RUN poetry config virtualenvs.create false \
     && poetry config installer.parallel false \
     && poetry install --no-interaction --no-ansi
 
+# CJK fonts for the PDF report (src/utils/cjk_font.py embeds them; without them Korean / Japanese / Chinese text
+# falls back to non-embedded Adobe CID fonts). TrueType-outline packages on purpose: ReportLab cannot read the
+# OpenType/CFF outlines of fonts-noto-cjk. Placed AFTER `poetry install` so this layer never invalidates the
+# dependency layer cache (railway dep-drift incident, 2026-08-15).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-nanum fonts-ipafont-gothic fonts-wqy-zenhei \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy rest of the source code (bust cache v2)
 COPY . /app/
 

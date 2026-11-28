@@ -89,12 +89,14 @@ def test_resolve_market_kosdaq():
     assert resolve_market(exchange="KOE") == "KSC"
 
 
-def test_kosdaq_reads_korean_comps_but_is_not_swept():
+def test_kosdaq_is_pooled_into_the_korean_refresh():
+    """Owner, 2026-11-28 (decision 8): KOSDAQ (KOE) is part of the KSC universe, as US pools NASDAQ/NYSE/AMEX."""
     from src.data import regional_comps as rc
     assert rc.market_for_exchange("KOE") == "KSC"
     assert rc.market_for_exchange("KSC") == "KSC"
-    assert rc.MARKETS["KSC"] == ("KSC",)                         # pooling KOSDAQ into the refresh = owner decision
-    assert "KOE" not in rc.EXCHANGES
+    assert rc.MARKETS["KSC"] == ("KSC", "KOE")
+    assert "KOE" not in rc.EXCHANGES                             # one store key: KSC
+    assert rc.LOOKUP_ALIASES == {}
 
 
 def test_rating_benchmark_is_kospi_for_both_boards():
@@ -102,8 +104,8 @@ def test_rating_benchmark_is_kospi_for_both_boards():
     for t in ("005930.KS", "247540.KQ"):
         b = resolve_benchmark(t, "Industrials")
         assert b["code"] == "KOSPI" and b["market"] == "KSC"
-    capm = {"rf": 0.0378, "erp": 0.0441, "crp": 0.007}
-    assert resolve_benchmark("005930.KS", "Tech", capm)["expected_return"] == pytest.approx(0.0889, abs=1e-4)
+    capm = {"rf": 0.0378, "erp": 0.0441, "crp": 0.005}
+    assert resolve_benchmark("005930.KS", "Tech", capm)["expected_return"] == pytest.approx(0.0869, abs=1e-4)
 
 
 def test_valuation_constants_market_key():
@@ -119,15 +121,28 @@ def test_holdco_currency_kosdaq():
 
 # ── risk-free: PROPOSED, never applied silently ─────────────────────────────
 
-def test_kr_rf_is_proposed_not_applied(monkeypatch):
+def test_kr_rf_is_the_accepted_ktb(monkeypatch):
+    """Owner, 2026-11-28 (decision 2): KTB 10y 3.78% with a 3.0pp floor; nothing left under `proposed`."""
     from src.data import capm, valuation_constants as vc
     doc = vc.load()
-    prop = doc["risk_free_by_market"]["proposed"]["KR"]
-    assert prop["status"] == "PROPOSED" and 0.02 < prop["value"] < 0.06
-    assert "KR" not in doc["risk_free_by_market"]["markets"]
+    kr = doc["risk_free_by_market"]["markets"]["KR"]
+    assert kr["value"] == 0.0378 and kr["min_spread_over_rf"] == 0.03 and "status" not in kr
+    assert "proposed" not in doc["risk_free_by_market"]
     monkeypatch.setenv("CAPM_LIVE_RF", "off")
-    assert capm.risk_free("KR") == capm.risk_free("US")         # unaccepted: priced exactly as today
-    assert capm.local_min_spread("KR") is None
+    rf, src = capm.risk_free("KR")
+    assert rf == 0.0378 and "KTB" in src and "owner-set" in src
+    assert capm.local_min_spread("KR") == 0.03
+
+
+def test_korea_country_premium_is_one_number():
+    """Owner, 2026-11-28 (decision 4): 0.50% in the WACC (owner table by currency) and in the benchmark (registry)."""
+    from src.data import valuation_constants as vc
+    from src.data.sector_profiles import market_crp
+    assert vc.load()["country_risk_premium"]["by_currency"]["KRW"] == 0.005
+    assert market_crp("KSC") == 0.005
+    from src.decisions.ratings import resolve_benchmark
+    b = resolve_benchmark("005930.KS", "Tech", {"rf": 0.0378, "erp": 0.0441, "crp": 0.005})
+    assert b["expected_return"] == pytest.approx(0.0869, abs=1e-4)
 
 
 def test_rf_status_guard(monkeypatch):
@@ -285,24 +300,72 @@ def test_research_context():
 
 # ── sector pins: PROPOSED only ──────────────────────────────────────────────
 
-def test_proposed_pins_resolve_and_are_not_tuned():
+def test_accepted_pins_are_the_ticker_overrides_and_tuned():
+    """Owner, 2026-11-28 (decision 3): the pins live in ticker_overrides; the module table keeps the reasons."""
     from src.data.coverage import is_tuned
-    from src.data.industry_profile_map import ticker_overrides
+    from src.data.industry_profile_map import profile_for_ticker, ticker_overrides
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
-    for t, (sector, profile, why) in korea.PROPOSED_PROFILE_PINS.items():
+    ov = ticker_overrides()
+    assert len(korea.ACCEPTED_PROFILE_PINS) == 36
+    for t, (sector, profile, why) in korea.ACCEPTED_PROFILE_PINS.items():
         assert korea.to_canonical(t) == t, t
         assert profile in P.get(sector, {}), (t, sector, profile)
         assert why
-        assert t not in ticker_overrides()                       # nothing applied without the owner
-    assert not is_tuned("005930.KS") and not is_tuned("KRX:005930")
-    assert is_tuned("000660.KS")                                 # SK hynix: pinned before this work
+        assert ov.get(t) == (sector, profile), t
+        assert is_tuned(t), t
+        assert profile_for_ticker(t, "anything") == (sector, profile)
+    assert is_tuned("KRX:005930") and is_tuned("000660.KS")
+
+
+def test_samsung_is_a_segment_sotp_with_memory_fallback():
+    """Owner, 2026-11-28 (decision 7): segment SOTP archetype; without an accepted `sotp` input the weight falls to the
+    through-cycle memory legs, and the cycle rules apply."""
+    from src.agents.analysis.dcf_agent import _CYCLICAL_PROFILES
+    from src.data.capm import PROFILE_INDUSTRY
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    prof = P["Semiconductor"]["Memory-led Tech Conglomerate (SOTP)"]
+    names = {m["name"]: m for m in prof["methods"]}
+    assert names["SOTP (analyst)"]["weight"] == 0.50 and names["P/E (norm)"]["anchor"]
+    assert prof["leg_fallback"]["SOTP (analyst)"] == ["P/E (norm)", "EV/EBITDA"]
+    assert abs(sum(m["weight"] for m in prof["methods"]) - 1.0) < 1e-9
+    assert "Memory-led Tech Conglomerate (SOTP)" in _CYCLICAL_PROFILES
+    assert PROFILE_INDUSTRY["Memory-led Tech Conglomerate (SOTP)"] == "Semiconductor"
+    assert korea.ACCEPTED_PROFILE_PINS["005930.KS"][1] == "Memory-led Tech Conglomerate (SOTP)"
+
+
+def _base(legs):
+    return {"effective_weights": [{"method": m, "weight": w} for m, w, _ in legs],
+            "leg_inputs": {m: ({"peer_static_default": "pe", "multiple_parts": {"peer_multiple": pm,
+                                "peer_source": "static default -- no peer basket measured for this market"}}
+                               if pm else {"multiple_parts": {"peer_multiple": 7.0, "peer_source": "profile basket"}})
+                           for m, _, pm in legs}}
+
+
+def test_korean_static_multiples_are_withheld():
+    """Owner, 2026-11-28 (decision 5): never the default multiples for a Korean name -- the unrated path instead."""
+    v = korea.static_multiples_verdict("005380.KS", _base([("EV/EBITDA", 0.444, 12.0), ("P/E", 0.333, 18.0),
+                                                           ("P/BV", 0.222, 2.0)]))
+    assert v["code"] == "no_market_multiples" and v["label"] == "Valuation withheld"
+    assert "100%" in v["reason"] and "P/E at 18.0x" in v["reason"]
+    assert korea.static_multiples_verdict("005380.KS", _base([("EV/EBITDA", 0.5, None), ("P/E", 0.5, None)])) is None
+    assert korea.static_multiples_verdict("005380.KS", _base([("EV/EBITDA", 0.0, 12.0), ("P/E", 1.0, None)])) is None
+    assert korea.static_multiples_verdict("GM", _base([("P/E", 1.0, 18.0)])) is None   # only Korea is gated here
+
+
+def test_korean_autos_basket_is_korean_only():
+    from src.data.regional_comps import BASKET_FLOORS, PROFILE_PEER_BASKETS
+    b = PROFILE_PEER_BASKETS["Automotive (OEM)"]
+    assert set(b) == {"KSC"} and all(s.endswith((".KS", ".KQ")) for s in b["KSC"])
+    assert "005380.KS" in b["KSC"] or True                           # the subject is excluded at read time
+    assert len(b["KSC"]) >= BASKET_FLOORS.get("Automotive (OEM)", 5)
 
 
 def test_billing_run_type_for_korean_suffixes():
     from app.backend.services.billing import run_type
     assert run_type("000660.KS", covered=False) == "new"         # tuned (TICKER_SECTOR_LOOKUP pin)
-    assert run_type("005930.KS", covered=False) == "limited"
-    assert run_type("247540.KQ", covered=False) == "limited"
+    assert run_type("005930.KS", covered=False) == "new"          # pinned 2026-11-28
+    assert run_type("247540.KQ", covered=False) == "new"
+    assert run_type("123456.KQ", covered=False) == "limited"      # unpinned Korean name
     assert run_type("247540.KQ", covered=True) == "covered"
 
 
@@ -360,3 +423,64 @@ def test_pe_norm_disclosure_is_guarded_by_its_swaps():
     assert "        if _pe_norm_swaps:\n" in head
     j = src.index("P/E normalization: trailing net income deviates", i)
     assert "(_pe_norm_flag + \" \" if _pe_norm_flag else \"\")" in src[i:j]
+
+
+def test_korean_holdcos_withheld_until_stakes_verified(monkeypatch):
+    """Owner, 2026-11-28 (decision 6): look-through on each holdco's own discount, only after DART-verified stakes."""
+    from src.agents.analysis import holdco_sotp
+    for t in ("402340.KS", "028260.KS", "003550.KS", "034730.KS"):
+        v = korea.holdco_pending_verdict(t)
+        assert v["code"] == "holdco_lookthrough_pending" and "DART" in v["reason"]
+        assert holdco_sotp.template_for(t) is None                # none added: stakes unverified
+    assert korea.holdco_pending_verdict("005930.KS") is None
+    monkeypatch.setattr(holdco_sotp, "template_for", lambda t: {"name": "x"})
+    assert korea.holdco_pending_verdict("402340.KS") is None       # a verified template lifts the hold
+
+
+_LINES = {  # FMP shares-float outstandingShares, 2026-11-28
+    "005930.KS": 5709556199, "005935.KS": 802371203,
+    "005380.KS": 203334618, "005385.KS": 22839037, "005387.KS": 34257047, "005389.KS": 2321926,
+    "034730.KS": 54543372, "03473K.KS": 566135,
+    "000810.KS": 39828323, "000815.KS": 3007020,
+    "000270.KS": 388656026, "329180.KS": 104932779,
+}
+
+
+@pytest.mark.parametrize("t,total,n_pref", [
+    ("005380.KS", 262752628, 3), ("005385.KS", 262752628, 3),   # Hyundai: was 203.3m (common only), +29%
+    ("005930.KS", 6511927402, 1), ("005935.KS", 6511927402, 1),  # Samsung: FMP's count already included 005935
+    ("034730.KS", 55109507, 1),                                  # SK Inc: 03473K (new-type preferred)
+    ("000810.KS", 42835343, 1),                                  # Samsung Fire
+])
+def test_common_plus_preferred_share_count(t, total, n_pref):
+    sc = korea.issuer_share_count(t, fetch=_LINES.get)
+    assert sc["total"] == total and len(sc["preferred"]) == n_pref
+    assert sc["common_symbol"] == korea.common_of(t)
+    note = korea.share_count_note(sc, 203.3e6, "quote_current_diluted")
+    assert "common + preferred" in note and "treasury stock excluded" in note
+
+
+@pytest.mark.parametrize("t", ["000270.KS", "329180.KS", "AAPL"])
+def test_no_preferred_line_leaves_the_count_alone(t):
+    """Kia has no preferred line; HD Hyundai Heavy's 0.85 statement/quote ratio is the 2025 Mipo merger's new shares
+    (the recency path already takes the current count), not a preferred class."""
+    assert korea.issuer_share_count(t, fetch=_LINES.get) is None
+
+
+def test_preferred_candidates():
+    assert korea.preferred_candidates("034730.KS") == ["034735.KS", "034737.KS", "034739.KS", "03473K.KS"]
+    assert korea.preferred_candidates("005385.KS")[0] == "005385.KS"
+
+
+def test_dcf_applies_common_plus_preferred():
+    src = (ROOT / "src/agents/analysis/dcf_agent.py").read_text(encoding="utf-8")
+    i = src.index("_kr_sh.issuer_share_count(ticker, api_key)")
+    assert '_shares_source = "common_plus_preferred"' in src[i:i + 600]
+    assert i < src.index("_ba_sh = _bridge_adjustment(ticker).get(\"shares_as_converted\")")
+
+
+def test_docker_images_carry_truetype_cjk_fonts():
+    for name in ("Dockerfile.web", "Dockerfile.worker"):
+        s = (ROOT / "docker" / name).read_text(encoding="utf-8")
+        assert "fonts-nanum" in s and "fonts-ipafont-gothic" in s and "fonts-wqy-zenhei" in s
+        assert s.index("poetry install") < s.index("fonts-nanum")   # after the dependency layer

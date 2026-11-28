@@ -5,7 +5,140 @@ deployed. All engine numbers are local runs on a temp sqlite archive seeded with
 snapshot of 2026-11-28** (KSC 931 rows, refreshed 2026-11-28 02:56 UTC, comp age 0.3 days). The local store was 52
 days stale, and any local Korean number taken without that seed would be priced on static tables.
 
-Every constant below is **PROPOSED**: none of them changes what the engine computes until the owner accepts it.
+Sections 1-7 below are the first pass (everything PROPOSED). The owner's decisions of 2026-11-28 — relayed by the
+lead, not seen first-hand by this agent — are applied in **section 0**, which supersedes the proposals where they
+differ.
+
+---
+
+## 0. Owner decisions applied (2026-11-28)
+
+| # | Decision | Applied as |
+|---|---|---|
+| 1 | Bare 6-digit codes are never Korean | unchanged: `.KS/.KQ` or a `KRX:/KS:/KQ:/KOSPI:/KOSDAQ:` prefix required; `canonical_ticker("000660")` returns `000660` |
+| 2 | KTB 10y 3.78% + 3.0pp floor | `valuation_constants.risk_free_by_market.markets.KR` (the `proposed` block is gone). Tax 26.4% stays proposed, unwired |
+| 3 | Accept the sector pins | **36** pins (the first report said 37: a miscount) in `industry_profile_map.json` `ticker_overrides` (map v26); `korea.ACCEPTED_PROFILE_PINS` keeps the reasons; all 36 are TUNED for billing |
+| 4 | CRP 0.50% everywhere | `country_risk_premium.by_currency.KRW` 0.70% → **0.50%**, now equal to `MARKET_REGISTRY["KSC"]["crp"]`. KOSPI hurdle = 3.78% + 4.41% + 0.50% = **8.69%** (was 10.05% on the UST) |
+| 5 | Korean autos basket, else withhold | `PROFILE_PEER_BASKETS["Automotive (OEM)"]["KSC"]` (below); plus a Korea-wide rule: a weighted leg on the static default multiples withholds the valuation (`korea.static_multiples_verdict`, unrated path, code `no_market_multiples`) |
+| 6 | Holdcos on their own measured discount, only with verified stakes | stakes NOT verifiable from DART here (no API key; press figures disagree, below). No templates added; the four holdcos are **withheld** (`korea.holdco_pending_verdict`, code `holdco_lookthrough_pending`) until a verified template exists |
+| 7 | Samsung = segment SOTP | new profile `Semiconductor / Memory-led Tech Conglomerate (SOTP)`: SOTP (analyst) 0.50, P/E (norm) 0.30 anchor, EV/EBITDA 0.20, SOTP falls back to the memory legs; cyclical rules apply. Gemini `sotp` pre-fill built and **pending owner acceptance** in `industry_inputs.json`; comps-derived segment multiples below |
+| 8 | Pool KOSDAQ into the KSC refresh | `regional_comps.MARKETS["KSC"] = ("KSC", "KOE")`; the read-only alias is now empty. Effect measured below |
+| — | CJK fonts in the image | `fonts-nanum`, `fonts-ipafont-gothic`, `fonts-wqy-zenhei` in `docker/Dockerfile.web` and `Dockerfile.worker`, AFTER `poetry install`. Not `fonts-noto-cjk`: its OpenType/CFF outlines cannot be read by ReportLab's TTFont, so it would install ~100MB the PDF cannot use. `cjk_font.py` already looks for these three paths. The image build itself was not run here |
+
+### Before / after (engine only, no LLM, FMP live 2026-11-28; KRW per share)
+
+"Before" = first pass (prod comps snapshot, UST rf 4.94%, CRP 0.70%, no Korean pins). "After" = all eight decisions,
+on a local KSC+KOE refresh (984 rows, 1,698 members, written to the temp archive only).
+
+| Ticker | Spot | Before: profile / base IV / WACC | After: profile / base IV / WACC | What moved it |
+|---|---|---|---|---|
+| 005930.KS Samsung | 179,100 | Consumer Electronics / Hardware Ecosystem · 403,928 · 11.46% | Memory-led Tech Conglomerate (SOTP) · **withheld** (indicative 154,011) · 10.50% | no Korean basket for the archetype: P/E (norm) and EV/EBITDA would read the 18x / 12x literals (KSC has no Consumer Electronics basket; the cyclical profile blocks the sector rung), and the SOTP leg awaits the accepted `sotp` input |
+| 000660.KS SK hynix | 1,110,000 | Memory / DRAM-NAND · 345,611 · 13.24% | same · **680,090** (bear 516,394 / bull 859,924; 12m 999,413) · 11.88% | rf + CRP alone: 345,611 → ~348,800 (in-memory test). The rest is KOSDAQ pooling: its KSC `Semiconductors` basket went from 7-10 KOSPI names (P/E 10.55x, EV/EBITDA 5.65x) to 18 (P/E 25.43x, EV/EBITDA 18.28x) — KOSDAQ HBM/equipment names, not memory makers. See D-new-1 |
+| 005380.KS Hyundai Motor | 269,000 | Automotive (OEM) · 826,228 (static 18x / 2.0x / 12x) · 7.33% | same · 264,991 on the basket (12m 298,518), then **218,286** (12m 280,282) once common + preferred shares are counted · 6.78% (floor) | legs on the Korean autos basket (EV/EBITDA, P/E, P/BV); shares 203.3m → 262.8m (next section) |
+| 015760.KS KEPCO | 26,150 | Regulated Utility · 48,365 · 5.94% | same · **33,027** · 6.78% (KTB + 3.0pp floor binds) | the floor and the Korean-curve cost of debt |
+| 247540.KQ EcoPro BM | 92,000 | Capital Goods · 5,018 | Battery & Energy Storage · 18,576 | the pin |
+| 196170.KQ Alteogen | 186,300 | Pre-approval Biotech · 45,829 | routed Commercial Biotech, then sent back to Pre-approval Biotech by the biopharma method layer · 45,240 | the pin is overridden downstream (D-new-3) |
+| 035420.KS NAVER | 163,400 | Mature Platform · 274,652 | same · 297,698 | rf / CRP |
+| 105560.KS KB Financial | 145,000 | Super-Regional Bank · 194,746 | Money Center Bank · 230,288 | the pin |
+| 028260 / 402340 / 003550 / 034730 holdcos | — | various | **withheld** (look-through pending verified stakes) | decision 6 |
+
+### Korean autos basket (decision 5) — derivation
+
+Members (KSC store after the KSC+KOE refresh; Hyundai excluded as the subject): Kia 000270.KS, KG Mobility 003620.KS,
+Hyundai Mobis 012330.KS, Hanon Systems 018880.KS, HL Mando 204320.KS, Hyundai Wia 011210.KS, Hankook Tire 161390.KS.
+Why: KSC's `Auto - Manufacturers` label holds Hyundai, Kia, KG Mobility and LVMC Holdings (below the floor of 5),
+so the OEMs are pooled with the large tier-1 suppliers that sell into them.
+
+| Field | Kia | KGM | Mobis | Hanon | Mando | Wia | Hankook | **Median (n)** |
+|---|---|---|---|---|---|---|---|---|
+| P/E | 5.34 | −5.95 (out) | 9.13 | −10.53 (out) | 16.63 | 23.66 | 6.99 | **9.13x (5)** |
+| NTM P/E | 5.03 | – | 7.19 | 7.89 | 7.05 | 8.14 | 7.56 | **7.38x (6)** |
+| EV/EBITDA | 2.87 | 8.49 | 7.62 | 5.07 | 4.67 | 3.77 | 3.28 | **4.67x (7)** |
+| NTM EV/EBITDA | 1.78 | – | 3.82 | 4.67 | 4.43 | 3.04 | 3.46 | **3.64x (6)** |
+| P/B | 0.59 | 0.29 | 0.62 | 0.91 | 0.69 | 0.38 | 0.43 | **0.59x (7)** |
+
+(Hyundai's own: P/E 9.32x, EV/EBITDA 12.2x — its EV carries the captive finance arm's debt, so its EV/EBITDA leg
+comes out low at 146,639; the auto captive SOTP remains the proper fix, as proposed in D4.)
+
+### KOSDAQ pooling (decision 8) — effect on the KSC medians
+
+Universe 747 → 1,174 names; industries 102 → 116; stored rows 816 → 984. Of the 313 (key, cohort, field) cells
+present both before and after (P/E, EV/EBITDA, P/B and their NTM forms), 119 are unchanged, 96 moved by more than
+10%, median absolute move 3.4%; 71 cells are new (e.g. Biotechnology, Software - Application, Communication
+Equipment, Semiconductors large cohort) and 8 dropped. The big movers (all-cohort, KSC-only → pooled):
+
+| Basket | P/E | EV/EBITDA | P/B |
+|---|---|---|---|
+| Semiconductors (industry) | 10.55x (7) → **25.43x (18)** | 5.65x (8) → **18.28x (18)** | 1.34x → 4.10x |
+| Technology (sector) | 14.31x → 22.94x | 7.38x → 15.54x | 1.42x → 3.11x |
+| Healthcare (sector) | 9.87x → 20.04x | 8.20x → 16.83x | 0.84x → 3.75x |
+| Biotechnology (industry) | 34.76x (5) → 36.61x (6) | 23.75x → 25.42x | 2.14x → 7.27x |
+| Chemicals - Specialty | 9.78x → 23.86x | 10.16x → 10.21x | 0.52x → 0.81x |
+| Auto - Parts | 6.99x → 5.83x | 4.25x → 3.68x | 0.42x → 0.42x |
+| Consumer Cyclical, Industrials, Banks | within ±0.4x | ≈ | ≈ |
+
+### Samsung segment SOTP (decision 7) — inputs
+
+* **Gemini pre-fill** (grounded, Mirae Asset Securities note, FY2026E, **pending** acceptance; one check failed:
+  SOTP / revenue 2.26x against a 0.6-1.6x plausibility band): DS revenue KRW 509.8tn at 75.3% EBIT margin, P/E 8-12x;
+  DX 196.6tn at 4.1%, 10-12x; Samsung Display 30.4tn at 12.4%, 8-10x; Harman 17.5tn at 9.2%, 8-10x; net cash KRW
+  167tn. The DS figures are the research's, and the 75% margin is what trips the check — review before accepting.
+* **Comps-derived multiples** (KSC store after pooling) to set against the broker's ranges:
+  DS (memory) — the only Korean memory peer, SK hynix, trades at P/E 4.18x / NTM 2.09x; the KSC `Semiconductors`
+  large cohort (NTM P/E 18.69x, n=9) is equipment and HBM-supply names, not a memory basket.
+  DX (handsets, TVs, appliances) — LG Electronics NTM P/E 9.02x; KSC `Hardware, Equipment & Parts` large NTM P/E
+  11.83x (n=6). Display — LG Display NTM EV/EBITDA 2.68x (loss-making, no P/E). Harman — KSC `Auto - Parts` large
+  NTM P/E 7.19x (n=7). The broker's 8-12x on DS sits far above the one Korean memory peer at the trough-of-multiple
+  the market is paying for peak earnings; that gap is the owner's call at acceptance.
+
+### Holdco stakes (decision 6) — why pending
+
+Press reports citing DART disagree: SK Square's SK hynix stake is given as 20.0% (Edaily, 31 Jul 2026) and 20.5%
+(Korean press, 2026), ~146.1m shares; SK Inc's stake in SK Square as 32.2% (I had used 31.55%). The DART OpenAPI
+needs the key (D7), so no template was added. Once stakes are verified, each holdco's discount should be measured
+the way section 4 D5 does it (market cap vs listed-stake GAV, net of parent debt), never set as a constant.
+
+### Common + preferred share count (lead's data audit, 2026-11-28)
+
+FMP's quote marketCap is inconsistent across Korean issuers with listed preferred shares: Samsung's is the common price
+× common + preferred shares (6,511.9m = 5,709.6m + 802.4m), but Hyundai's (203.3m), LG Chem's (70.6m) and LG
+Electronics' (162.3m) cover the common only, so the engine divided equity by common shares and inflated the
+per-share value. Rule now (`korea.issuer_share_count`, applied in `dcf_agent` after the cross-check, before any owner
+as-converted override): an issuer with any listed preferred line (common code ending 5 / 7 / 9 / K) is valued on
+the SUM of each line's FMP `shares-float` outstanding shares (treasury stock excluded), `shares_source =
+"common_plus_preferred"`, with a disclosure flag; the per-share value applies to the common and to each preferred
+line (the preferred keeps its discount disclosure). Same inputs, rule off vs on:
+
+| Ticker | Shares before → after | Base IV before → after | 12m target before → after | Note |
+|---|---|---|---|---|
+| 005930.KS Samsung | 6,511.9m (quote) → 6,511.9m | withheld either way (indicative 154,011) | — | FMP's count already included 005935 |
+| 005380.KS Hyundai | 203.3m → **262.8m** (+ 005385 22.8m, 005387 34.3m, 005389 2.3m) | 264,991 → **218,286** (−17.6%) | 298,518 → 280,282 | the audit's 1.28 ratio confirmed |
+| 005385.KS Hyundai 1st pref | 203.3m → 262.8m | 264,991 → 218,286 | 217,529 → 183,727 | valued per economic share, spot 142,200 |
+| 034730.KS SK Inc | 54.5m → 55.1m (+ 03473K 0.57m) | withheld (holdco) | — | the audit's 1.34 ratio (73.1m statements) is mostly **treasury stock**, not preferred: outstanding is 54.5m common + 0.57m preferred |
+| 000810.KS Samsung Fire | 39.8m → 42.8m (+ 000815 3.0m) | 449,957 → 440,366 (−2.1%) | 527,266 → 523,713 | statements' 49.1m also includes treasury stock; insurer legs read per-share book, so the move is smaller than the count |
+| 051910.KS LG Chem | 71.1m → 78.3m | 327,640 → 318,088 | 281,263 → 277,618 | |
+| 066570.KS LG Electronics | 162.3m → 179.5m | 205,527 → 192,883 | 193,442 → 186,460 | |
+
+329180.KS HD Hyundai Heavy (statements 88.8m vs 104.9m outstanding, ratio 0.85) has no preferred line: the gap is
+the shares issued for the Dec-2025 HD Hyundai Mipo merger, and the recency path already uses the current count.
+
+**Tests after the decisions pass:** `tests/test_korea_market.py` 84 tests; full suite with `set -o pipefail`:
+**7,265 passed, 80 skipped, 4 xfailed, 0 failed**. Goldens re-baselined for the constants hash only (14 names, every
+value unchanged; reason in `tests/golden/CHANGELOG.md`); five profile-census tests moved 148 → 149 profiles.
+
+### New owner questions raised by applying the decisions
+
+* **D-new-1 SK hynix basket.** Pooling KOSDAQ doubled SK hynix's IV through the label basket (Semiconductors
+  25.4x P/E). Proposal: a KSC memory basket for `Memory / DRAM-NAND`, or an XMKT memory set (SK hynix, Samsung,
+  Micron, Kioxia, Nanya), so a memory maker is not priced on equipment names.
+* **D-new-2 Samsung's group legs.** Even with the `sotp` input accepted, P/E (norm) and EV/EBITDA (50%) have no
+  Korean basket, so Samsung stays withheld. It needs a basket for the archetype (e.g. SK hynix, LG Electronics,
+  Samsung Electro-Mechanics, LG Innotek, LG Display) or the memory basket in D-new-1.
+* **D-new-3 Alteogen.** The pin to Commercial Biotech is overridden by the biopharma method layer back to
+  Pre-approval Biotech, so the accepted pin does not take effect for this name.
+* **D-new-4 Store floor in won.** The comps universe floor (`MIN_MARKET_CAP` 300m) is applied in the listing
+  currency, i.e. KRW 300m (~US$0.2m) for Korea, so the floor does nothing there; the top-20 / top-40 caps keep
+  micro-caps out of the medians but not out of the universe.
 
 ---
 
@@ -262,6 +395,14 @@ Full suite with `set -o pipefail`: 7,243 passed, 80 skipped, 4 xfailed, 1 failed
 | `app/frontend/src/lib/phaseLabels.ts` | DART venue pattern |
 | `tests/conftest.py` | `DART_API_KEY` in `_SENSITIVE_ENV_KEYS` |
 | `docs/LAUNCH_TODO.md` | Korea counsel questions (new section at the end) |
+| *(decisions pass)* `src/data/industry_profile_map.json` | v26: 36 Korean `ticker_overrides` + a `_doc` line |
+| `src/data/sector_profiles.py` | new profile `Memory-led Tech Conglomerate (SOTP)` (Semiconductor) |
+| `src/agents/analysis/dcf_agent.py` | the new profile in both cyclical sets; Korean holdco / static-multiple verdicts in the unrated chain |
+| `src/data/capm.py`, `src/data/report_families.py` | the new profile's industry beta row and report family |
+| `src/data/regional_comps.py` | `MARKETS["KSC"] = ("KSC", "KOE")`; `LOOKUP_ALIASES` emptied; `PROFILE_PEER_BASKETS["Automotive (OEM)"]["KSC"]` |
+| `src/data/valuation_constants.json` | KR rf in `markets`; KRW CRP 0.50% |
+| `src/data/industry_inputs.json` | Samsung `sotp` pre-fill (pending; pure addition, LF kept) |
+| `docker/Dockerfile.web`, `docker/Dockerfile.worker` | TrueType CJK font packages after `poetry install` |
 
 New files: `src/markets/__init__.py`, `src/markets/korea.py`, `src/markets/korea_dart.py`, `src/utils/cjk_font.py`
 (shared helper — China / Japan should import it rather than add their own), `tests/test_korea_market.py`,

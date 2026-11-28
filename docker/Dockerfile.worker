@@ -16,6 +16,11 @@ RUN poetry config virtualenvs.create false \
     && poetry config installer.parallel false \
     && poetry install --no-interaction --no-ansi
 
+# CJK fonts for the PDF report (see docker/Dockerfile.web): TrueType packages, after the dependency layer.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-nanum fonts-ipafont-gothic fonts-wqy-zenhei \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy rest of the source code
 COPY . /app/
 

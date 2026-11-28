@@ -281,6 +281,7 @@ def test_the_cyclical_profiles_are_the_ones_the_plans_name():
     # of Wave 1 oil, gas & coal (owner-approved 2026-09-20).
     assert _CYCLICAL_PROFILES == frozenset({
         "Memory / DRAM-NAND", "Mining (Major)", "Upstream Oil & Gas",
+        "Memory-led Tech Conglomerate (SOTP)",   # Korea decision 7 (owner, 2026-11-28): Samsung, memory-led
         "Steel / Metals", "Specialty Chemicals", "Airlines",
         "Automotive (OEM)", "Digital Asset Mining",
         "Integrated Oil & Gas", "Refining & Marketing",

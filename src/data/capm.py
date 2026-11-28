@@ -140,7 +140,7 @@ PROFILE_INDUSTRY: dict[str, str] = {
     # Services and semiconductors
     "Ad / Consulting": "Advertising", "IT Services": "Computer Services",
     "Analog / Mixed-signal IDM": "Semiconductor", "Fabless": "Semiconductor", "IDM / Foundry": "Semiconductor",
-    "Memory / DRAM-NAND": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
+    "Memory / DRAM-NAND": "Semiconductor", "Memory-led Tech Conglomerate (SOTP)": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
 }
 
 _TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17}

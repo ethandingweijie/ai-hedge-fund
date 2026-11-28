@@ -924,6 +924,7 @@ _BACKLOG_VISIBILITY_PROFILES: frozenset[str] = frozenset({
 #: profiles mid-cycle legs and routes them to P/B-ROE at peak.
 _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Memory / DRAM-NAND",
+    "Memory-led Tech Conglomerate (SOTP)",                    # Korea decision 7 (owner, 2026-11-28)
     "Mining (Major)",
     # Wave 9 (owner, 2026-09-27): the peak-rate multiple is prohibited on these (the shipping clamp, the
     # feedstock and metal cycles, containerboard); the fade and the peak trigger apply.
@@ -1025,6 +1026,7 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Base Metals", "Precious Metals", "Diversified Miners",                                # Wave 9
     "Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",              # Wave 10
     "Memory / DRAM-NAND",
+    "Memory-led Tech Conglomerate (SOTP)",
     "Digital Asset Mining",
     # Wave 2: a policy-cycle hardware maker. Every cyclical gets the fade
     # (tests/test_growth_convergence.py) -- a one-year consensus jump on an
@@ -14077,6 +14079,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     shares = _shares_implied
                     _shares_source = "quote_current_basic"
 
+        # Korea (lead's data audit, 2026-11-28): an issuer with LISTED preferred shares is valued on common + preferred
+        # outstanding, never on the common-only count FMP's marketCap / price can imply (Hyundai 203.3m vs 262.8m).
+        try:
+            from src.markets import korea as _kr_sh
+            _kr_sc = _kr_sh.issuer_share_count(ticker, api_key)
+            if _kr_sc and _kr_sc.get("total"):
+                _kr_sc_note = _kr_sh.share_count_note(_kr_sc, shares, _shares_source)
+                shares = float(_kr_sc["total"])
+                _shares_source = "common_plus_preferred"
+                _kr_pref_note = (_kr_pref_note + " " if _kr_pref_note else "") + _kr_sc_note
+        except Exception:                                  # noqa: BLE001
+            pass
+
         # Owner-set as-converted share count (valuation_constants.bridge_adjustments, ACCEPTED only):
         # the count when convertible share classes sit outside the feed's figure.
         _ba_sh = _bridge_adjustment(ticker).get("shares_as_converted")
@@ -21501,6 +21516,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _lst_ccy = "HKD" if _is_hk else (locals().get("_target_ccy") or _output_currency)
                 _verdict = _ccy_verdict(_output_currency, _lst_ccy, reported_currency,
                                         _base_sr.get("intrinsic_value"), _spot_price)
+            if not _verdict:
+                # Owner, 2026-11-28 (Korea decision 5): a Korean valuation never prices on the static default
+                # multiples (src/markets/korea.static_multiples_verdict).
+                from src.markets.korea import holdco_pending_verdict as _kr_holdco_verdict
+                from src.markets.korea import static_multiples_verdict as _kr_static_verdict
+                _verdict = _kr_holdco_verdict(ticker) or _kr_static_verdict(ticker, _base_sr)
             if _verdict:
                 _rating_state = {
                     "state": "unrated", **_verdict,

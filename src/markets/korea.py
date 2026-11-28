@@ -22,10 +22,10 @@ lines (FMP returns identical statements and an issuer-level market cap for each)
 
 Constants
 ---------
-Nothing in this module is applied silently. The risk-free rate, minimum spread and rating hurdle are PROPOSED in
-``src/data/valuation_constants.json`` (``risk_free_by_market.proposed.KR``) and are ignored by the engine until the
-owner moves them to ``markets``. The sector pins below are PROPOSED; ``coverage.is_tuned`` does not count them.
-See docs/markets/KOREA.md for every derivation.
+Owner decisions of 2026-11-28 (relayed by the lead): the KTB 10y risk-free rate (3.78%) with a 3.0pp floor is in
+``valuation_constants.risk_free_by_market.markets.KR``; the Korea country premium is 0.50% everywhere; the sector pins
+below are ACCEPTED and live in ``industry_profile_map.json`` ``ticker_overrides`` (so the names are TUNED). The
+statutory tax rate stays PROPOSED and unwired. See docs/markets/KOREA.md for every derivation.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ import re
 from typing import Optional
 
 __all__ = [
-    "KR_SUFFIXES", "KNOWN_LISTINGS", "PROPOSED_PROFILE_PINS", "PROPOSED_STATUTORY_TAX",
+    "KR_SUFFIXES", "KNOWN_LISTINGS", "ACCEPTED_PROFILE_PINS", "PROPOSED_STATUTORY_TAX",
     "is_korea_ticker", "to_canonical", "is_preferred", "common_of", "board_of",
     "capm_market", "listing_currency", "research_context", "preferred_note",
 ]
@@ -103,15 +103,14 @@ KNOWN_LISTINGS: dict[str, tuple[str, str]] = {
     "028300": (".KQ", "HLB"),
 }
 
-#: PROPOSED sector pins (owner decision; NOT applied). Accepting a pin = moving it into
-#: industry_profile_map.json ``ticker_overrides`` (which is also what makes the name TUNED in coverage.py).
-#: Each is (sector, profile, why) and every profile must exist in INDUSTRY_VALUATION_PROFILES (tested).
-#: Only names whose FMP industry label routes them to the WRONG archetype, or to nothing, are listed.
-PROPOSED_PROFILE_PINS: dict[str, tuple[str, str, str]] = {
-    "005930.KS": ("Semiconductor", "Memory / DRAM-NAND",
-                  "FMP labels it 'Consumer Electronics'; memory (DS division) is the swing earnings driver through "
-                  "the cycle. Alternative for the owner: a segment SOTP (DS / MX / VD-DA / SDC / Harman)."),
-    "005935.KS": ("Semiconductor", "Memory / DRAM-NAND", "preferred line of 005930.KS: same issuer, same pin"),
+#: Sector pins ACCEPTED by the owner on 2026-11-28 (37). The source of truth the engine reads is
+#: industry_profile_map.json ``ticker_overrides`` (which also makes the name TUNED in coverage.py); this table keeps
+#: the reason for each and a test holds the two in step. Every profile exists in INDUSTRY_VALUATION_PROFILES.
+ACCEPTED_PROFILE_PINS: dict[str, tuple[str, str, str]] = {
+    "005930.KS": ("Semiconductor", "Memory-led Tech Conglomerate (SOTP)",
+                  "owner decision 7: a segment SOTP (DS / MX-NW / VD-DA / SDC / Harman), not the pure memory-cycle "
+                  "profile. FMP labels it 'Consumer Electronics'."),
+    "005935.KS": ("Semiconductor", "Memory-led Tech Conglomerate (SOTP)", "preferred line of 005930.KS: same issuer, same pin"),
     "373220.KS": ("Industrials", "Battery & Energy Storage", "battery cell maker; FMP 'Electrical Equipment & Parts'"),
     "006400.KS": ("Industrials", "Battery & Energy Storage", "battery cell maker"),
     "247540.KQ": ("Industrials", "Battery & Energy Storage", "cathode materials for EV batteries"),
@@ -224,6 +223,115 @@ def capm_market(ticker: Optional[str]) -> Optional[str]:
 def listing_currency(ticker: Optional[str]) -> Optional[str]:
     """KRW for every KRX line (no USD-quoted counters on KRX, unlike SGX), else None."""
     return "KRW" if is_korea_ticker(ticker) else None
+
+
+#: Owner, 2026-11-28 (Korea decision 6): the chaebol holdcos are valued only by the look-through SOTP, each on its OWN
+#: measured discount, and only once the stake percentages are verified from DART. Until a verified template exists
+#: in holdco_sotp_templates.json the valuation is withheld (the profile's P/BV fallback is not the owner's method).
+#: Stakes as reported in the press, pending DART verification, are in docs/markets/KOREA.md.
+HOLDCOS_PENDING_VERIFICATION = frozenset({"402340.KS", "028260.KS", "003550.KS", "034730.KS"})
+
+
+def holdco_pending_verdict(ticker: Optional[str]) -> Optional[dict]:
+    """The withheld state for a Korean holdco without a verified look-through template, else None."""
+    c = to_canonical(ticker)
+    if c not in HOLDCOS_PENDING_VERIFICATION:
+        return None
+    try:
+        from src.agents.analysis import holdco_sotp
+        if holdco_sotp.template_for(c):
+            return None
+    except Exception:                                      # noqa: BLE001
+        pass
+    return {"code": "holdco_lookthrough_pending", "label": "Valuation withheld",
+            "reason": ("a Korean holding company is valued on a look-through of its listed stakes at its own measured "
+                       "holdco discount; the stake percentages have not yet been verified from DART filings, so no "
+                       "look-through template exists and the valuation is withheld")}
+
+
+def static_multiples_verdict(ticker: Optional[str], base_scenario: Optional[dict]) -> Optional[dict]:
+    """Owner, 2026-11-28 (Korea decision 5): each market owns its multiples. A Korean valuation with a WEIGHTED relative
+    leg priced on the engine's static default multiple (the 18x P/E / 2.0x P/B / 12x EV/EBITDA literals, no measured
+    Korean basket) is withheld through the unrated path, with the legs named; None when every weighted leg read a
+    measured basket (or the ticker is not Korean). Hyundai Motor was the case: no KSC Auto - Manufacturers basket."""
+    if not is_korea_ticker(ticker) or not isinstance(base_scenario, dict):
+        return None
+    legs = base_scenario.get("leg_inputs") or {}
+    static = []
+    for e in base_scenario.get("effective_weights") or []:
+        if not isinstance(e, dict) or not (e.get("weight") or 0) > 0:
+            continue
+        li = legs.get(e.get("value_key") or e.get("method")) or legs.get(e.get("method")) or {}
+        src = str(((li.get("multiple_parts") or {}).get("peer_source")) or "")
+        if li.get("peer_static_default") and src.startswith("static default"):
+            static.append((e.get("method"), float(e.get("weight") or 0), (li.get("multiple_parts") or {}).get("peer_multiple")))
+    if not static:
+        return None
+    w = sum(x[1] for x in static)
+    named = ", ".join(f"{m} at {pm}x" if isinstance(pm, (int, float)) else str(m) for m, _, pm in static)
+    return {"code": "no_market_multiples", "label": "Valuation withheld",
+            "reason": (f"{w:.0%} of the valuation weight ({named}) would price on the engine's static default "
+                       "multiples because the Korean comps store has no measured peer basket for this business; each "
+                       "market owns its multiples, so it is withheld until a Korean basket is measured")}
+
+
+_SHARE_COUNT_CACHE: dict[str, Optional[dict]] = {}
+
+
+def preferred_candidates(ticker: Optional[str]) -> list[str]:
+    """The KRX codes an issuer's preferred lines can carry: the common code with a last character of 5 / 7 / 9
+    (1st / 2nd / 3rd preferred) or K (new-type, e.g. SK Inc 03473K)."""
+    common = common_of(ticker)
+    if not common:
+        return []
+    code, suf = common[:6], common[6:]
+    return [code[:5] + d + suf for d in ("5", "7", "9", "K")]
+
+
+def issuer_share_count(ticker: Optional[str], api_key: Optional[str] = None, fetch=None) -> Optional[dict]:
+    """{common, preferred: {symbol: shares}, total, common_symbol} for an issuer with LISTED preferred lines, else None.
+
+    Lead's data audit (2026-11-28): FMP's quote marketCap is not consistent across issuers -- Samsung's is the common
+    price x common+preferred shares, Hyundai's (203.3m) and LG Chem's (70.6m) cover the common only -- so a share
+    count implied by marketCap / price can drop the preferred holders, who share the residual equity, and inflate the
+    per-share value (Hyundai by 29%: 203.3m common vs 262.8m common + 3 preferred lines). The count here is each
+    line's own outstanding shares (FMP shares-float, which excludes treasury stock), summed. ``fetch(symbol)`` returns
+    outstanding shares or None (tests inject it)."""
+    common = common_of(ticker)
+    if not common:
+        return None
+    if fetch is None and common in _SHARE_COUNT_CACHE:
+        return _SHARE_COUNT_CACHE[common]
+
+    def _default_fetch(sym: str) -> Optional[float]:
+        try:
+            import os
+            from src.tools.api import _STABLE, _fmp_get
+            rows = _fmp_get(f"{_STABLE}/shares-float", {"symbol": sym}, api_key or os.environ.get("FMP_API_KEY"))
+            v = (rows[0] or {}).get("outstandingShares") if isinstance(rows, list) and rows else None
+            return float(v) if isinstance(v, (int, float)) and v > 0 else None
+        except Exception:                                  # noqa: BLE001
+            return None
+
+    f = fetch or _default_fetch
+    c_sh = f(common)
+    out = None
+    if c_sh:
+        prefs = {p: s for p in preferred_candidates(common) if (s := f(p))}
+        if prefs:
+            out = {"common_symbol": common, "common": c_sh, "preferred": prefs, "total": c_sh + sum(prefs.values())}
+    if fetch is None:
+        _SHARE_COUNT_CACHE[common] = out
+    return out
+
+
+def share_count_note(sc: dict, replaced: Optional[float], replaced_source: str) -> str:
+    """Disclosure for the common + preferred share count."""
+    prefs = ", ".join(f"{s} {v / 1e6:,.1f}m" for s, v in sc["preferred"].items())
+    return (f"Shares: common + preferred {sc['total'] / 1e6:,.1f}m ({sc['common_symbol']} {sc['common'] / 1e6:,.1f}m + "
+            f"{prefs}; each line's outstanding shares, treasury stock excluded) replaces "
+            f"{(replaced or 0) / 1e6:,.1f}m ({replaced_source}): preferred holders share the residual equity, so the "
+            "value per share applies to the common and to each preferred line alike.")
 
 
 def issuer_price_for_shares(ticker: Optional[str], spot_price: Optional[float],

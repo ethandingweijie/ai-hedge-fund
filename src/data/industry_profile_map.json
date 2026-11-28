@@ -35,9 +35,10 @@
     "v22: Wave 8 real estate (owner decisions 2026-09-27, all seven; decision 1 amended to keep every name, decision 3 both). Twelve labels enter routing_scope: the eight REIT labels -> RealEstate / REIT (REIT - Mortgage stays out: a levered spread business for a Financials wave); Real Estate - Development -> Homebuilder / Land Developer (US) and Property Developer (HK / China) by the HK market map; Real Estate - Diversified -> REIT (US) and Landlord / Investment Property (HK); Real Estate - Services -> Real Estate Services (US, HK) with the SG agency row kept; Residential Construction -> Homebuilder / Land Developer. The SG market map already routes S-REITs and developers and now applies (labels in scope). REIT sub-type comes from the label and dcf_agent._REIT_SUBTYPE_PINS, not the keyword classifier.",
     "v23: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27). Thirty-two labels enter routing_scope (the 29 rows of the Stage 1 table cover 32 FMP labels). Conglomerates -> Blended Industrial OpCo in the US and Asian Holding Company (Look-Through) on HK and SG; Industrial Materials -> Diversified Miners; Specialty Business Services -> Industrial Route & Uniform Services with RELX / TRI (Information Services) and Copart / RB Global (Marketplace) pinned; Marine Shipping -> Container & Bulk Shipping; Integrated Freight & Trucking -> Trucking & Parcel Logistics; metals split into Base Metals, Precious Metals and Diversified Miners.",
     "v24: Wave 10 (owner, 2026-09-27, decisions 1-3 and 5-7). Seventeen labels whose rows sat outside routing_scope enter it. Travel & Dining split: Restaurants, Casinos & Integrated Resorts, Lodging (Asset-Light) with an HK row to Hotel Owner-Operator (HK), and Travel Services -> Online Travel (cruise lines pinned). Auto - Manufacturers -> Automotive (OEM); Auto - Parts -> Auto Parts & Suppliers; Leisure -> Leisure Products & Brands; the two pharma labels -> Specialty & Generic Pharma; HK Regulated Gas -> City Gas Distribution (HK / China). The dead Other Industrial Metals & Mining row is deleted.",
-    "v25: HK/SG audit (owner, 2026-11-25). S68.SI's comps_exchange_overrides entry to the US Financial - Data & Stock Exchanges label is removed: that label is mostly ratings and data firms (SPGI, MCO, MSCI, TRU, FDS, MORN). SGX now prices on the owner's cross-market exchanges basket (regional_comps.CROSS_MARKET_BASKETS 'Market Infrastructure (SG)')."
+    "v25: HK/SG audit (owner, 2026-11-25). S68.SI's comps_exchange_overrides entry to the US Financial - Data & Stock Exchanges label is removed: that label is mostly ratings and data firms (SPGI, MCO, MSCI, TRU, FDS, MORN). SGX now prices on the owner's cross-market exchanges basket (regional_comps.CROSS_MARKET_BASKETS 'Market Infrastructure (SG)').",
+    "v26: Korea (owner, 2026-11-28, relayed by the lead). 36 KOSPI/KOSDAQ pins accepted (src/markets/korea.ACCEPTED_PROFILE_PINS carries the reason for each): Samsung Electronics (and its preferred line) -> the new Memory-led Tech Conglomerate (SOTP); battery makers -> Battery & Energy Storage; Samsung Biologics -> CDMO; Alteogen -> Commercial Biotech; NAVER / Kakao -> Mature Platform; the four bank groups -> Money Center Bank; the chaebol holdcos -> Asian Holding Company (Look-Through), which routes only once an owner-verified look-through template exists; shipbuilders -> Long-Cycle E&C; KEPCO -> Regulated Utility; SKT / KT -> Telecom Carrier; KT&G -> Tobacco."
   ],
-  "version": 25,
+  "version": 26,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -684,6 +685,150 @@
     "S59.SI": [
       "Industrials",
       "Aviation & Marine (SG)"
+    ],
+    "005930.KS": [
+      "Semiconductor",
+      "Memory-led Tech Conglomerate (SOTP)"
+    ],
+    "005935.KS": [
+      "Semiconductor",
+      "Memory-led Tech Conglomerate (SOTP)"
+    ],
+    "373220.KS": [
+      "Industrials",
+      "Battery & Energy Storage"
+    ],
+    "006400.KS": [
+      "Industrials",
+      "Battery & Energy Storage"
+    ],
+    "247540.KQ": [
+      "Industrials",
+      "Battery & Energy Storage"
+    ],
+    "207940.KS": [
+      "Biopharma",
+      "CDMO / Life Science Tools"
+    ],
+    "068270.KS": [
+      "Biopharma",
+      "Specialty & Generic Pharma"
+    ],
+    "196170.KQ": [
+      "Biopharma",
+      "Commercial Biotech"
+    ],
+    "035420.KS": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "035720.KS": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "259960.KS": [
+      "Tech",
+      "Media & Streaming"
+    ],
+    "105560.KS": [
+      "Financials",
+      "Money Center Bank"
+    ],
+    "055550.KS": [
+      "Financials",
+      "Money Center Bank"
+    ],
+    "086790.KS": [
+      "Financials",
+      "Money Center Bank"
+    ],
+    "316140.KS": [
+      "Financials",
+      "Money Center Bank"
+    ],
+    "323410.KS": [
+      "Financials",
+      "Bank / Lending Institution"
+    ],
+    "032830.KS": [
+      "Financials",
+      "Insurance"
+    ],
+    "000810.KS": [
+      "Financials",
+      "Insurance (P&C)"
+    ],
+    "028260.KS": [
+      "Financials",
+      "Asian Holding Company (Look-Through)"
+    ],
+    "003550.KS": [
+      "Financials",
+      "Asian Holding Company (Look-Through)"
+    ],
+    "034730.KS": [
+      "Financials",
+      "Asian Holding Company (Look-Through)"
+    ],
+    "402340.KS": [
+      "Financials",
+      "Asian Holding Company (Look-Through)"
+    ],
+    "005490.KS": [
+      "Materials",
+      "Steel / Metals"
+    ],
+    "010130.KS": [
+      "Resources",
+      "Base Metals"
+    ],
+    "011200.KS": [
+      "Transportation",
+      "Container & Bulk Shipping"
+    ],
+    "329180.KS": [
+      "Industrials",
+      "Long-Cycle E&C"
+    ],
+    "009540.KS": [
+      "Industrials",
+      "Long-Cycle E&C"
+    ],
+    "042660.KS": [
+      "Industrials",
+      "Long-Cycle E&C"
+    ],
+    "010140.KS": [
+      "Industrials",
+      "Long-Cycle E&C"
+    ],
+    "012450.KS": [
+      "Industrials",
+      "Defense Primes"
+    ],
+    "047810.KS": [
+      "Industrials",
+      "Defense Primes"
+    ],
+    "015760.KS": [
+      "Energy",
+      "Regulated Utility"
+    ],
+    "017670.KS": [
+      "Telco",
+      "Telecom Carrier"
+    ],
+    "030200.KS": [
+      "Telco",
+      "Telecom Carrier"
+    ],
+    "033780.KS": [
+      "Consumer",
+      "Tobacco"
+    ],
+    "018260.KS": [
+      "ProfessionalServices",
+      "IT Services"
     ]
   },
   "markets": {

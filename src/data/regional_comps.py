@@ -100,19 +100,18 @@ MARKETS: dict[str, tuple[str, ...]] = {
     "SES": ("SES",),
     "US": ("NASDAQ", "NYSE", "AMEX"),
     "JPX": ("JPX",),
-    "KSC": ("KSC",),
+    # Korea pools KOSPI (KSC) and KOSDAQ (KOE), as US pools NASDAQ/NYSE/AMEX: one market, one currency, one risk
+    # pricing (owner, 2026-11-28). The effect on the KSC medians is measured in docs/markets/KOREA.md.
+    "KSC": ("KSC", "KOE"),
     "SHH": ("SHH",),
     "SHZ": ("SHZ",),
 }
 
 EXCHANGES = tuple(MARKETS)
 
-#: Exchanges READ under another market's key without being swept into its refresh universe. KOSDAQ (FMP "KOE")
-#: names price on the Korean (KSC) cohort: the same market, currency and risk pricing, rather than on no comps at
-#: all (2026-11-28: every .KQ name fell to the static tables). Pooling KOSDAQ INTO the KSC refresh universe would
-#: change the KSC medians every existing Korean valuation reads, so that is left as an owner decision
-#: (docs/markets/KOREA.md).
-LOOKUP_ALIASES: dict[str, str] = {"KOE": "KSC"}
+#: Exchanges READ under another market's key without being part of its refresh universe. Empty since KOSDAQ (KOE)
+#: joined the KSC universe (owner, 2026-11-28); kept so a future read-only alias has one place to go.
+LOOKUP_ALIASES: dict[str, str] = {}
 
 # FMP exchangeShortName -> storage key.
 _EXCHANGE_TO_MARKET: dict[str, str] = {
@@ -354,6 +353,14 @@ PROFILE_PEER_BASKETS: dict[str, dict[str, tuple[str, ...]]] = {
     # COST at 52.5x). Live 2026-11-25 ex-COST: P/E 32.3x, NTM EV/EBITDA 13.4x, FCF yield 1.8%. Three names
     # is the whole like-for-like set, so the basket carries its own floor (BASKET_FLOORS).
     "Membership / Subscription Retail": {"US": ("COST", "WMT", "PSMT", "BJ")},
+    # Owner, 2026-11-28 (Korea decision 5): Korea has two listed car makers worth the name (Hyundai, Kia; KG Mobility
+    # is loss-making at KRW 0.4tn), below the KSC "Auto - Manufacturers" floor, so Hyundai priced on the engine's
+    # 18x / 2.0x / 12x literals. A Korean autos basket from the KSC store instead: the OEMs plus the large tier-1
+    # suppliers that sell into them (Mobis, Hanon, HL Mando, Hyundai Wia, Hankook Tire). Measured on the KSC+KOE
+    # refresh of 2026-11-28 ex-Hyundai: P/E 9.13x (n=5), EV/EBITDA 4.67x (n=7), P/B 0.59x (n=7), NTM P/E 7.38x,
+    # NTM EV/EBITDA 3.64x (n=6). Korea only: other markets keep their own label baskets.
+    "Automotive (OEM)":            {"KSC": ("000270.KS", "003620.KS", "012330.KS", "018880.KS", "204320.KS",
+                                            "011210.KS", "161390.KS")},
 }
 
 #: Owner-approved thin baskets: the peer floor a named basket clears instead of MIN_INDUSTRY_PEERS. A
