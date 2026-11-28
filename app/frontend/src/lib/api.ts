@@ -1294,6 +1294,12 @@ export async function askMarket(question: string, ticker?: string, signal?: Abor
   return res.json();
 }
 
+/** PDPA self-service deletion (owner, 2026-11-28): erases the signed-in user's personal data. */
+export async function deleteAccount(): Promise<void> {
+  const res = await fetch(`${BASE}/auth/me`, { method: 'DELETE', headers: { ..._authHeaders() } });
+  if (!res.ok) throw await errorFromResponse(res);
+}
+
 /** Resolve a ticker symbol to its company profile (name, sector, industry). */
 export function getCompanyName(ticker: string): Promise<{ ticker: string; name: string; sector?: string | null; industry?: string | null }> {
   return fetchJson(`${BASE}/analysis/company/${encodeURIComponent(ticker.toUpperCase())}`);

@@ -142,6 +142,18 @@ async def login_apple(body: TokenRequest, db: Session = Depends(get_db)):
     )
 
 
+@router.delete("/me")
+def delete_me(user=Depends(_current_user), db: Session = Depends(get_db)):
+    """PDPA self-service deletion (owner, 2026-11-28): erase the signed-in user's personal data and the account.
+    See services/account_deletion.py for what is erased, detached and kept."""
+    from app.backend.services import account_deletion as _ad
+    try:
+        out = _ad.delete_account(user, db)
+    except _ad.DeletionRefused as exc:
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+    return {"deleted": out["deleted"]}
+
+
 @router.get("/me", response_model=UserResponse)
 def get_me(user=Depends(_current_user)):
     """Return the currently authenticated user."""

@@ -1278,6 +1278,11 @@ function WhatIfSection({
                 : 'Runs against your current holdings on a cost basis.'}
           </span>
         </div>
+        {/* Owner, 2026-11-28 (PDPA): say where the holdings go before the user sends them. */}
+        <p className="text-[11px] text-muted-foreground mt-2">
+          {t('The scenario narrative is written by DeepSeek, which receives the tickers and weights of your holdings.')}{' '}
+          <a href="#/legal/privacy" className="underline underline-offset-2 hover:text-foreground">{t('Privacy Policy')}</a>
+        </p>
       </Card>
 
       {error && (

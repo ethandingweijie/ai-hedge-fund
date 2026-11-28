@@ -347,7 +347,10 @@ export function LoginPage() {
           </div>
 
           <p className="text-xs text-muted-foreground/70 text-center mt-6 leading-relaxed">
-            By signing in you agree to the Terms &amp; Privacy. Your searches are private to your account.
+            By signing in you agree to the{' '}
+            <a href="#/legal/terms" className="underline underline-offset-2 hover:text-foreground">Terms</a>{' '}&amp;{' '}
+            <a href="#/legal/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</a>.
+            Your searches are private to your account.
           </p>
         </div>
       </div>

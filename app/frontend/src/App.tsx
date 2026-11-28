@@ -18,6 +18,7 @@ import { HundredQPage } from './pages/HundredQPage';
 import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
 import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
+import { LegalPage } from './pages/LegalPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { LoginPage } from './pages/LoginPage';
 import { RoboStrategyPage } from './pages/RoboStrategyPage';
@@ -93,6 +94,8 @@ export default function App() {
           <Route path="/research-ideas/idea-of-the-day/:ideaId" element={<RequireAuth><IdeaOfTheDayPage /></RequireAuth>} />
           <Route path="/research-ideas/shortlist" element={<RequireAuth><ShortlistedIdeasPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
+          {/* Terms / Privacy / Refunds: public, readable before sign-in (owner, 2026-11-28). */}
+          <Route path="/legal/:doc" element={<LegalPage />} />
           <Route path="/menu" element={<RequireAuth><MenuPage /></RequireAuth>} />
 
           {/* Default: redirect to login (will redirect to /report after auth) */}

@@ -18,8 +18,9 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Plus, BarChart2, MessageSquare, Zap, LogOut,
-  Sun, Moon, Monitor, User, PieChart, BookMarked, Newspaper, type LucideIcon,
+  Sun, Moon, Monitor, User, PieChart, BookMarked, Newspaper, FileText, Trash2, type LucideIcon,
 } from 'lucide-react';
+import { deleteAccount } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type Theme } from '@/contexts/theme-context';
@@ -53,6 +54,40 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] overflow-hidden divide-y divide-border/60">
       {children}
+    </div>
+  );
+}
+
+/** PDPA self-service deletion: a typed confirmation, then DELETE /auth/me. */
+function DeleteAccountRow({ onDeleted }: { onDeleted: () => void }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (!open) return <Row icon={Trash2} label="Delete account" muted onClick={() => setOpen(true)} />;
+  const go = async () => {
+    setBusy(true); setErr(null);
+    try { await deleteAccount(); onDeleted(); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); setBusy(false); }
+  };
+  return (
+    <div className="px-4 py-3 space-y-2">
+      <p className="text-sm font-semibold text-foreground">{t('Delete your account?')}</p>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        {t('This permanently erases your profile, holdings, watchlist, chat posts, saved scenarios and your reports. Billing records are kept for five years as the law requires. This cannot be undone.')}
+      </p>
+      <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={t('Type DELETE to confirm')}
+             className="w-full h-9 px-3 text-sm rounded-md bg-card border border-border focus:outline-none focus:border-foreground" />
+      {err && <p className="text-xs text-foreground">{err}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={() => { setOpen(false); setTyped(''); setErr(null); }}
+                className="h-8 px-3 rounded-full text-xs font-semibold border border-border">{t('Cancel')}</button>
+        <button type="button" disabled={typed.trim() !== 'DELETE' || busy} onClick={go}
+                className="h-8 px-3 rounded-full text-xs font-semibold bg-primary text-primary-foreground disabled:opacity-40">
+          {busy ? t('Deleting…') : t('Delete permanently')}
+        </button>
+      </div>
     </div>
   );
 }
@@ -213,6 +248,15 @@ export function MenuPage() {
               <LanguageToggle />
             </div>
             <Row icon={LogOut} label="Sign out" muted onClick={() => logout()} />
+          </Card>
+        </section>
+
+        {/* Owner, 2026-11-28 (PDPA): legal documents and self-service account deletion. */}
+        <section>
+          <SectionLabel>Account</SectionLabel>
+          <Card>
+            <Row icon={FileText} label="Terms & Privacy" onClick={() => navigate('/legal/terms')} />
+            <DeleteAccountRow onDeleted={() => logout()} />
           </Card>
         </section>
 

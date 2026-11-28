@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   User, LogOut, Zap, Sun, Moon, Monitor, Smartphone,
-  ChevronsLeft, ChevronsRight,
+  ChevronsLeft, ChevronsRight, FileText,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -217,6 +217,14 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             >
               <Zap size={16} className="text-warning" />
               <span className="text-sm font-medium">{t('Pricing')}</span>
+            </a>
+            {/* Owner, 2026-11-28 (PDPA): Terms, Privacy, Refunds and account deletion live on the Menu page. */}
+            <a
+              href={user ? '#/menu' : '#/legal/terms'}
+              className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors"
+            >
+              <FileText size={16} className="text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">{t('Account & legal')}</span>
             </a>
             {user && (
               <button

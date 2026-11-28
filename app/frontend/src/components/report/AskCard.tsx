@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { askMarket, type AskResult, type AskTicker } from '@/lib/api';
 import { currencySymbol } from '@/lib/utils';
 import { actionTone } from '@/lib/semanticColors';
+import { RESEARCH_NOTICE } from '@/lib/legal';
 
 interface Props {
   question: string;
@@ -132,6 +133,7 @@ export function AskCard({ question, nonce, onOpenReport, onUpdate, onClose }: Pr
               {res.tickers.map(r => (
                 <TickerRow key={r.ticker} row={r} askId={res.ask_id} onOpenReport={onOpenReport} onUpdate={onUpdate} />
               ))}
+              <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">{RESEARCH_NOTICE}</p>
               {res.tickers.some(r => r.can_update) && (
                 <p className="text-xs text-muted-foreground mt-2">
                   An update folds this development into the analysis, and the new report replaces the latest one for everyone.

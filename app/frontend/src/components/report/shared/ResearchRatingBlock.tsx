@@ -13,6 +13,7 @@ import { MaterialNewsLine } from '@/components/report/shared/MaterialNewsLine';
 import { actionTone } from '@/lib/semanticColors';
 import { cn, currencySymbol } from '@/lib/utils';
 import { useI18n } from '@/i18n';
+import { RESEARCH_NOTICE } from '@/lib/legal';
 
 const title = (s?: string | null) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '—');
 
@@ -205,6 +206,12 @@ export function ResearchRatingBlock({ view, ticker, compact = false, delta, prio
       <ProvenanceLine p={view.provenance} compact={compact} />
 
       <WhyThisRating view={view} compact={compact} />
+
+      {/* Owner, 2026-11-28 (trust review): the web report carries the same notice the PDF does, on both render paths. */}
+      <p className={`${compact ? 'text-[11px]' : 'text-xs'} text-muted-foreground leading-relaxed`}>
+        {t(RESEARCH_NOTICE)}{' '}
+        <a href="#/legal/terms" className="underline underline-offset-2 hover:text-foreground">{t('Terms')}</a>
+      </p>
 
       {/* Owner, 2026-10-03: the price / target / upside / dividend / TSR row is removed on web and mobile;
           those figures remain in the price-target panel, on the pin's hover title and in the PDF. */}
