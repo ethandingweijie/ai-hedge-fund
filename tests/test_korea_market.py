@@ -21,17 +21,16 @@ ROOT = Path(__file__).resolve().parents[1]
     ("KRX:005930", "005930.KS"), ("kospi:005930", "005930.KS"), ("KS:000660", "000660.KS"),
     ("KOSDAQ:247540", "247540.KQ"), ("KQ:196170", "196170.KQ"), ("KRX:247540", "247540.KQ"),
     ("247540.KQ", "247540.KQ"), ("005930.KQ", "005930.KS"),        # a known code is on its own board
-    ("005930", "005930.KS"), ("000660", "000660.KS"), ("005935", "005935.KS"),
     ("123456.KQ", "123456.KQ"), ("KRX:123456", "123456.KS"),
 ])
 def test_to_canonical(raw, canon):
     assert korea.to_canonical(raw) == canon
 
 
-@pytest.mark.parametrize("raw", ["600519", "000001", "123456", "AAPL", "00700", "0700.HK", "D05.SI", "", None,
+@pytest.mark.parametrize("raw", ["005930", "000660", "005935", "600519", "000001", "123456", "AAPL", "00700", "0700.HK", "D05.SI", "", None,
                                  "005930.HK", "KRX:", "ABCDEF"])
 def test_not_korean(raw):
-    """A bare 6-digit code that the registry does not know may be a China A-share: it is left alone."""
+    """A BARE 6-digit code is never Korean, even a known one (000660 is also a Shenzhen code): the search list picks."""
     assert korea.to_canonical(raw) is None
     assert not korea.is_korea_ticker(raw)
 
@@ -56,11 +55,11 @@ def test_board_currency_market():
 def test_canonical_ticker_integration():
     from src.tools.ticker_canonical import canonical_ticker, ticker_match_forms
     assert canonical_ticker("KRX:005930") == "005930.KS"
-    assert canonical_ticker("005930") == "005930.KS"
-    assert canonical_ticker("600519") == "600519"                 # unknown 6-digit: untouched
+    assert canonical_ticker("KS:005930") == "005930.KS"
+    assert canonical_ticker("005930") == "005930"                 # bare 6-digit: not claimed by Korea
     assert canonical_ticker("2888") == "02888.HK"                 # HK unchanged
     assert canonical_ticker("d05") == "D05.SI"                    # SG unchanged
-    assert ticker_match_forms("005930") == ["005930", "005930.KS"]
+    assert ticker_match_forms("KRX:005930") == ["KRX:005930", "005930.KS"]
 
 
 @pytest.mark.parametrize("t", ["005930.KS", "247540.KQ", "KRX:005930", "KOSDAQ:247540", "00088K.KS"])

@@ -11,9 +11,9 @@ Accepted on input and canonicalised:
 * ``005930.KS`` / ``005930.KQ``  -- as is (upper-cased); a short code is zero-padded to 6 (``5930.KS``)
 * ``KRX:005930``, ``KOSPI:005930``, ``KS:005930`` -> ``.KS``; ``KOSDAQ:247540``, ``KQ:247540`` -> ``.KQ``.
   ``KRX:`` covers both boards; a code this module knows to be on KOSDAQ takes ``.KQ``, anything else ``.KS``.
-* a plain 6-digit code (``005930``) ONLY when it is in ``KNOWN_LISTINGS``. A bare 6-digit number is NOT unambiguous
-  in general: China A-shares are also 6 digits (000001.SZ, 600519.SS), and ``000660`` is SK hynix on KRX but a
-  Shenzhen code as well. An unknown plain code is left alone for another market's resolver (or the user) to settle.
+* a BARE 6-digit code (``005930``) is NOT accepted: China A-shares are also 6 digits (000001.SZ, 600519.SS) and
+  ``000660`` is SK hynix on KRX and a Shenzhen code too. A bare code is left untouched by this module; the landing
+  search returns both listings and the user picks one. ``KNOWN_LISTINGS`` only decides the BOARD of a ``KRX:`` code.
 
 Preferred shares are separate listings with their own price: ``005935.KS`` is Samsung Electronics' preferred line,
 ``005385.KS`` Hyundai Motor's. On KRX a common share's code ends in ``0``; a preferred line ends in ``5`` (first
@@ -43,14 +43,13 @@ KR_SUFFIXES = (".KS", ".KQ")
 #: Prefix forms users paste from Google Finance / Bloomberg-style quotes.
 _PREFIX_SUFFIX = {"KRX": None, "KOSPI": ".KS", "KS": ".KS", "KSE": ".KS", "KOSDAQ": ".KQ", "KQ": ".KQ"}
 
-#: A KRX short code: six characters, digits with an optional trailing K (new-type preferred) and the newer
-#: alphanumeric codes KRX has issued since 2024 (letters in positions 4-6).
-_CODE = re.compile(r"^[0-9][0-9A-Z]{5}$")
+#: A KRX short code: up to six characters, digits with an optional trailing K (new-type preferred) and the newer
+#: alphanumeric codes KRX has issued since 2024 (letters in positions 4-6); zero-padded to six.
 _SUFFIXED = re.compile(r"^([0-9][0-9A-Z]{0,5})\.(KS|KQ)$")
 _PREFIXED = re.compile(r"^(KRX|KOSPI|KSE|KS|KOSDAQ|KQ):([0-9][0-9A-Z]{0,5})$")
 
-#: code -> (board suffix, English name). The large caps a user is likely to type as a bare code, plus the preferred
-#: lines that trade at size. It is the ONLY basis on which a plain 6-digit code is treated as Korean.
+#: code -> (board suffix, English name): the large caps and the preferred lines that trade at size. Used to put a
+#: ``KRX:`` code (either board) or a mis-boarded suffix on its board. It never makes a BARE code Korean.
 KNOWN_LISTINGS: dict[str, tuple[str, str]] = {
     "005930": (".KS", "Samsung Electronics"),
     "005935": (".KS", "Samsung Electronics (preferred)"),
@@ -184,8 +183,9 @@ def to_canonical(ticker: Optional[str]) -> Optional[str]:
         if suf is None:                       # KRX: covers both boards
             suf = (KNOWN_LISTINGS.get(code) or (".KS", ""))[0]
         return code + suf
-    if _CODE.match(t) and t in KNOWN_LISTINGS:
-        return t + KNOWN_LISTINGS[t][0]
+    # A BARE 6-digit code is never claimed (lead, 2026-11-28): the China branch maps bare 0xxxxx/3xxxxx/6xxxxx to
+    # .SZ/.SS, and 000660 is both SK hynix and a Shenzhen code. The landing search lists both listings and the user
+    # picks one; an explicit marker (.KS/.KQ, KRX:, KS:, KQ:, KOSPI:, KOSDAQ:) is required here.
     return None
 
 

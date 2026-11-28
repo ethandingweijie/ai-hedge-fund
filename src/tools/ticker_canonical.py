@@ -69,8 +69,8 @@ def canonical_ticker(ticker: str | None) -> str:
         return _hk_canonical(t)
     if is_sg_ticker(t):
         return _sg_canonical(t)
-    # Korea (KOSPI .KS / KOSDAQ .KQ): suffixed, KRX:/KOSDAQ: prefixed, or a plain 6-digit code only when
-    # src.markets.korea knows it (a bare 6-digit number may be a China A-share).
+    # Korea (KOSPI .KS / KOSDAQ .KQ): only with an explicit marker -- a .KS/.KQ suffix or a KRX:/KS:/KQ:/KOSPI:/
+    # KOSDAQ: prefix. A bare 6-digit code is never claimed here (it may be a China A-share).
     from src.markets.korea import to_canonical as _kr_canonical
     kr = _kr_canonical(t)
     if kr:
