@@ -259,7 +259,7 @@ def _supported_symbol(sym: str) -> Optional[str]:
     s = str(sym or "").strip().upper()
     if not s:
         return None
-    if s.endswith(".HK") or s.endswith(".SI"):
+    if s.endswith(".HK") or s.endswith(".SI") or s.endswith(".KS") or s.endswith(".KQ"):
         return canonical_ticker(s) or None
     return s if _US_SYM.match(s) else None
 

@@ -95,6 +95,16 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+from reportlab.platypus import Paragraph as _RLParagraph
+
+from src.utils.cjk_font import cjk_markup as _cjk_markup
+
+
+class Paragraph(_RLParagraph):
+    """Helvetica draws no Hangul / kana / Han: every CJK run is drawn in a CJK font (src/utils/cjk_font.py)."""
+
+    def __init__(self, text, *args, **kwargs):
+        super().__init__(_cjk_markup(text), *args, **kwargs)
 
 # ── Company name lookup (FMP /stable/profile, cached) ──────────────────────────
 # _fetch_company_name is now provided by src.utils.company_name (shared with
@@ -147,6 +157,9 @@ _CCY_SYMBOLS = {"USD": "$", "HKD": "HK$", "SGD": "S$", "CNY": "RMB ", "CNH": "RM
                 "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "\u00a5", "KRW": "KRW ",
                 "TWD": "NT$", "AUD": "A$", "CAD": "C$", "INR": "INR "}
 _PX_SYM = "$"
+#: Currencies with no minor unit in practice: a KRW 1,110,000 share price is not printed as "1110000.00".
+_ZERO_DP_CCY = frozenset({"KRW", "JPY", "IDR", "VND"})
+_PX_DP: "int | None" = None
 
 
 def _cs() -> str:
@@ -154,9 +167,10 @@ def _cs() -> str:
 
 
 def _set_price_currency(ccy) -> None:
-    global _PX_SYM
+    global _PX_SYM, _PX_DP
     code = str(ccy or "USD").upper()
     _PX_SYM = _CCY_SYMBOLS.get(code, f"{code} ")
+    _PX_DP = 0 if code in _ZERO_DP_CCY else None
 
 # ── Helper: bold text for table header cells (light-gray background) ───────────
 # All data table headers now use C_PALE background with dark bold text.
@@ -1625,9 +1639,9 @@ def _section_2f(
         method_rows.append([
             Paragraph("Current price", styles["RptBody"]),
             Paragraph("—", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
             Paragraph("—", styles["RptValue"]),
         ])
         method_rows.append([
@@ -1889,7 +1903,7 @@ def _section_2f(
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
-                    Paragraph(f"<b>{_cs()}{base_iv:.2f}</b>", styles["RptLabel"]),
+                    Paragraph(f"<b>{_money(base_iv)}</b>", styles["RptLabel"]),
                 ])
 
         pw = [page_w * 0.10, page_w * 0.15, page_w * 0.10, page_w * 0.13,
@@ -1930,6 +1944,7 @@ def _company_label(ticker: str, raw_financials: dict) -> str:
 
 def _money(v, dp: int = 2) -> str:
     try:
+        dp = dp if _PX_DP is None else _PX_DP
         return f"{_cs()}{float(v):,.{dp}f}"
     except (TypeError, ValueError):
         return "—"

@@ -7577,9 +7577,9 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     # Phillip's 3.3% against a 2.29% SGS 10y -- a bank growing faster than the risk-free rate forever. The published
     # broker targets the method was calibrated to used the uncapped rates; the cap is the house view.
     try:
-        from src.data.capm import risk_free as _rf_mkt
+        from src.data.capm import market_code as _mkt_of, risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
-        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US")[0]
+        _rf_g = _rf_mkt(_mkt_of(_t_up, "SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US"))[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -14005,11 +14005,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # marketCap/price is market-observed and cannot carry unit errors.
         # Skipped automatically for HK/SG tickers (no quote fetched above).
         _shares_source = "line_items"
+        _kr_pref_note = None
         if (
             _quote_mcap and _spot_price and _spot_price > 0
             and shares and shares > 0
         ):
             _shares_implied = _quote_mcap / _spot_price
+            # Korea: a PREFERRED line's FMP marketCap is the issuer's, on the COMMON price (src/markets/korea.py);
+            # the count is the issuer's economic shares, so the preferred line is valued per share like the common.
+            try:
+                from src.markets import korea as _kr
+                _px_issuer = _kr.issuer_price_for_shares(ticker, _spot_price, api_key)
+                if _px_issuer:
+                    _shares_implied = _quote_mcap / _px_issuer
+                    _kr_pref_note = _kr.preferred_note(ticker, _spot_price, _px_issuer)
+            except Exception:                              # noqa: BLE001
+                pass
             _shares_div = abs(_shares_implied - shares) / shares
             if _shares_div > 0.25 and _shares_implied > 0:
                 _log.warning(
@@ -14235,6 +14246,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
         ticker_forward_flags: list[str] = []
+        if _kr_pref_note:
+            ticker_forward_flags.append(_kr_pref_note)
         if _bs_flag:
             ticker_forward_flags.append(_bs_flag)
         if most_recent.get("_shares_override_flag"):
@@ -16933,7 +16946,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
-                    market=("HK" if _is_hk else "SG" if _is_sg else "US"),
+                    market=_capmm.market_code(ticker, "HK" if _is_hk else "SG" if _is_sg else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -16957,7 +16970,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
         try:
             from src.data import capm as _capm_mkt
-            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "US"
+            _mkt_code = _capm_mkt.market_code(ticker, "HK" if _is_hk else "SG" if _is_sg else "US")
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:
@@ -17565,6 +17578,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"Margin peak: operating margin {_mp9['latest']:.1%} is above its {_mp9['years']}-year median "
                         f"{_mp9['median']:.1%} + {_MARGIN_PEAK_SIGMA} sigma ({_mp9['threshold']:.1%}); "
                         + ", ".join(f"{s['from']} -> {s['to']}" for s in _mp_swaps) + " (GATE_MARGIN_PEAK)")
+        if _pe_norm_swaps:
+            # The P/E-normalisation disclosure belongs to its swaps (pre-Wave 9 placement). Wave 9 left it
+            # under the margin-peak `if`, where it overwrote the cycle/margin-peak flags and raised on a None
+            # deviation (any margin-peak-gate profile without five years of earnings: 247540.KQ, 2026-11-28).
             _legs_txt = ", ".join(
                 f"{s['from']}→{s['to']} w={s['weight']:.2f}"
                 + (" (anchor)" if s["anchor"] else "")
@@ -17586,7 +17603,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if isinstance(m, dict)
                 and m.get("proxy") in _PE_NORM_SWAP_LEGS
                 and not m.get("implementable", True))
-            _pe_norm_flag = (
+            _pe_norm_flag = (_pe_norm_flag + " " if _pe_norm_flag else "") + (
                 f"P/E normalization: trailing net income deviates "
                 f"{_pe_norm_dev:+.0%} from its 5-year norm "
                 f"(|dev| > {_PE_NORM_SWAP_DEVIATION:.0%}) → {_legs_txt}"

@@ -1773,7 +1773,7 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     # canonical symbol stored + returned to the client stays the user input.
     if hk:
         yf_sym = to_yfinance_code(sym)
-    elif "." in sym and not sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T")):
+    elif "." in sym and not sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T", ".KS", ".KQ")):
         yf_sym = sym.replace(".", "-")
     else:
         yf_sym = sym
@@ -1791,7 +1791,7 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     km: dict = {}
     rt: dict = {}
     q: dict = {}
-    use_fmp_for_us = (not hk) and ("." not in sym or sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T")) is False)
+    use_fmp_for_us = (not hk) and ("." not in sym or sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T", ".KS", ".KQ")) is False)
     # Detect SG: FMP doesn't cover .SI tickers, fall through to yf-only path
     try:
         from src.tools.sg.ticker import is_sg_ticker as _is_sg

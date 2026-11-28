@@ -200,10 +200,12 @@ function SectionCompleteBadge() {
 // The pipeline covers US / HK / SG listings only. Suggestions outside those
 // markets are greyed out and unclickable; ETFs listed on the three supported
 // markets are greyed out too but carry a blue WIP tag.
-function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
+function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | 'KR' | null {
   const t  = (s.ticker || '').toUpperCase();
   if (t.endsWith('.HK')) return 'HK';
   if (t.endsWith('.SI')) return 'SG';
+  // Korea: KOSPI (.KS) and KOSDAQ (.KQ). Yahoo labels the venues "KSE" / "KOSDAQ"; FMP "KSC" / "KOE".
+  if (t.endsWith('.KS') || t.endsWith('.KQ')) return 'KR';
   const ex = (s.exchange || '').toUpperCase();
   if (ex.includes('HKSE') || ex.includes('HKEX') || ex.includes('HONG KONG')) return 'HK';
   if (ex === 'SES' || ex.includes('SGX') || ex.includes('SINGAPORE')) return 'SG';
@@ -226,7 +228,7 @@ function suggestionDisabled(s: CompanySearchResult): boolean {
 // order (name matches). Stable within each band.
 export function rankSuggestions(data: CompanySearchResult[], typed: string): CompanySearchResult[] {
   const q = typed.trim().toUpperCase();
-  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI)$/, '').replace(/^0+(?=\d)/, '');
+  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI|KS|KQ)$/, '').replace(/^0+(?=\d)/, '');
   const qb = base(q);
   const band = (s: CompanySearchResult) => {
     const t = s.ticker.toUpperCase();

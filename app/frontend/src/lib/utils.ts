@@ -81,6 +81,8 @@ export function currencySymbol(ticker: string): string {
   const upper = ticker.trim().toUpperCase();
   // SG: ends with .SI
   if (upper.endsWith('.SI')) return 'S$';
+  // Korea: KOSPI .KS / KOSDAQ .KQ (KRW, no minor unit)
+  if (upper.endsWith('.KS') || upper.endsWith('.KQ')) return '₩';
   // HK: purely numeric
   const cleanHK = upper.replace(/\.HK$/, '');
   if (/^\d{1,5}$/.test(cleanHK)) return 'HK$';

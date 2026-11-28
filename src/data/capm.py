@@ -146,6 +146,24 @@ PROFILE_INDUSTRY: dict[str, str] = {
 _TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17}
 
 
+def market_code(ticker: Optional[str], base: str = "US") -> str:
+    """The rf / CAPM market of a ticker: ``base`` (the caller's HK / SG / US) unless the ticker belongs to a market
+    with its own module (Korea -> 'KR'). KR has no `_TAX` row and no accepted rf, so until the owner accepts
+    risk_free_by_market.proposed.KR it prices exactly as 'US' does -- the code only names the market."""
+    if base == "US":
+        try:
+            from src.markets.korea import capm_market as _kr
+            return _kr(ticker) or base
+        except Exception:                                  # noqa: BLE001
+            return base
+    return base
+
+
+def _accepted(entry: dict) -> bool:
+    """A risk_free_by_market row prices only when it is not marked PROPOSED (proposals live under `proposed`)."""
+    return str((entry or {}).get("status") or "ACCEPTED").upper() != "PROPOSED"
+
+
 def live_rf_enabled() -> bool:
     """CAPM_LIVE_RF=off uses the fallback (golden replay pins it off: its fixtures hold no DGS10 call)."""
     return os.environ.get("CAPM_LIVE_RF", "on").strip().lower() not in ("0", "false", "no", "off")
@@ -158,7 +176,7 @@ def risk_free(market: str = "US") -> tuple[float, str]:
         from src.data import valuation_constants as _vc
         _m = (((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "US") or {})
         _v = _m.get("value")
-        if isinstance(_v, (int, float)) and 0.0 < _v < 0.15:
+        if isinstance(_v, (int, float)) and 0.0 < _v < 0.15 and _accepted(_m):
             return float(_v), f"{_m.get('basis')} (owner-set; {_m.get('source')})"
     except Exception:                                      # noqa: BLE001
         pass
@@ -177,8 +195,8 @@ def local_min_spread(market: str) -> Optional[float]:
     """The owner's minimum Ke / WACC spread over a local government curve, or None (valuation_constants)."""
     try:
         from src.data import valuation_constants as _vc
-        v = ((((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "") or {})
-             .get("min_spread_over_rf"))
+        _m = (((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "") or {})
+        v = _m.get("min_spread_over_rf") if _accepted(_m) else None
         return float(v) if isinstance(v, (int, float)) and 0.0 < v < 0.10 else None
     except Exception:                                      # noqa: BLE001
         return None

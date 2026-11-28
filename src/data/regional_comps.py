@@ -107,9 +107,17 @@ MARKETS: dict[str, tuple[str, ...]] = {
 
 EXCHANGES = tuple(MARKETS)
 
+#: Exchanges READ under another market's key without being swept into its refresh universe. KOSDAQ (FMP "KOE")
+#: names price on the Korean (KSC) cohort: the same market, currency and risk pricing, rather than on no comps at
+#: all (2026-11-28: every .KQ name fell to the static tables). Pooling KOSDAQ INTO the KSC refresh universe would
+#: change the KSC medians every existing Korean valuation reads, so that is left as an owner decision
+#: (docs/markets/KOREA.md).
+LOOKUP_ALIASES: dict[str, str] = {"KOE": "KSC"}
+
 # FMP exchangeShortName -> storage key.
 _EXCHANGE_TO_MARKET: dict[str, str] = {
-    code: market for market, codes in MARKETS.items() for code in codes
+    **LOOKUP_ALIASES,
+    **{code: market for market, codes in MARKETS.items() for code in codes},
 }
 
 

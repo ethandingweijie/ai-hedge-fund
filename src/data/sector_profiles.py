@@ -6779,7 +6779,9 @@ MARKET_REGISTRY: dict[str, dict] = {
     },
     "KSC": {
         "label":          "Korea",
-        "exchanges":      ("KSC",),
+        # KOE = KOSDAQ in FMP's exchange codes. One Korean market (as US pools NASDAQ/NYSE/AMEX): a KOSDAQ name
+        # resolves to the Korean registry entry, never to the US default.
+        "exchanges":      ("KSC", "KOE"),
         "crp":            _KR_CRP,
         "peer_multiples": None,
         "sector_wacc":    None,
@@ -6811,7 +6813,7 @@ _EXCHANGE_TO_MARKET: dict[str, str] = {
 
 # Ticker suffix -> market, for the paths that only have a symbol.
 _SUFFIX_TO_MARKET: dict[str, str] = {
-    ".HK": "HKSE", ".SI": "SES", ".KS": "KSC",
+    ".HK": "HKSE", ".SI": "SES", ".KS": "KSC", ".KQ": "KSC",
     ".T": "JPX", ".SS": "SHH", ".SZ": "SHZ",
 }
 

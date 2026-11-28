@@ -72,8 +72,11 @@ def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Opti
 
 
 def market_key(ticker: Optional[str]) -> str:
-    """The market a constant is keyed by: HKSE, SES or US (the comps store's keys)."""
+    """The market a constant is keyed by: HKSE, SES, KSC or US (the comps store's keys). A Korean listing keys KSC,
+    which has no owner rows, so it never reads a US constant stated in another currency (each market owns its own)."""
     t = (ticker or "").upper()
+    if t.endswith((".KS", ".KQ")):
+        return "KSC"
     return "HKSE" if t.endswith(".HK") else ("SES" if t.endswith(".SI") else "US")
 
 

@@ -153,6 +153,7 @@ const VENUE_PATTERNS: { test: RegExp; venue: string }[] = [
   { test: /hkex|年報/i, venue: 'HKEX' },
   { test: /edgar|\bsec\b|10-K|20-F/i, venue: 'SEC' },
   { test: /\bsgx\b|catalist/i, venue: 'SGX' },
+  { test: /\bdart\b|사업보고서/i, venue: 'DART' },
   { test: /\basx\b/i, venue: 'ASX' },
   { test: /\btse\b|edinet/i, venue: 'TSE' },
 ];

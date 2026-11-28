@@ -292,7 +292,7 @@ def _consensus_label(ticker: str, dr: dict, run_date: date, today: date,
     if not rec and _pos(legacy.get("consensus")):
         # Rows before the ledger: consensus_pt was fetched during the run.
         return float(legacy["consensus"]), run_date.isoformat(), "fmp_at_run"
-    if (ticker.endswith((".HK", ".SI"))
+    if (ticker.endswith((".HK", ".SI", ".KS", ".KQ"))
             and (today - run_date).days <= _CONSENSUS_FRESH_DAYS):
         found = consensus_fn(ticker) or {}
         if not found.get("suspect") and _pos(found.get("target")):

@@ -1,4 +1,4 @@
-"""Analyst consensus target prices for HK and SG listings.
+"""Analyst consensus target prices for HK, SG and Korean (KOSPI / KOSDAQ) listings.
 
 FMP carries no price-target consensus for HKEX or SGX -- it says so itself
 ("no price-target consensus data for this venue ... by design, not a
@@ -42,9 +42,10 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 _SENTENCE = re.compile(
     r"According to\s+(?P<n>\d+)\s+analysts?[^.]*?"
-    r"average price target of\s+\$?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
-_LOW = re.compile(r"lowest is\s+\$?([\d,]+\.?\d*)", re.I)
-_HIGH = re.compile(r"highest is\s+\$?([\d,]+\.?\d*)", re.I)
+    r"average price target of\s+(?:\$|₩|¥)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
+# Korean pages write the won sign (KRW 455,167 as "₩455,167"), not "$".
+_LOW = re.compile(r"lowest is\s+(?:\$|₩|¥)?([\d,]+\.?\d*)", re.I)
+_HIGH = re.compile(r"highest is\s+(?:\$|₩|¥)?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
 #: The page states the implied move alongside the target. It is the only
 #: internal cross-check available, and it catches a stale or mis-scaled
@@ -86,6 +87,12 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
         return f"hkg/{code}", "HKD"
     if t.endswith(".SI"):
         return f"sgx/{t[:-3]}", "SGD"
+    # Korea: KOSPI lines live under krx/, KOSDAQ under kosdaq/ (verified 2026-11-28: 005930 36 analysts, 247540
+    # 21). Preferred lines (005935) have no page -- the 404 reads as "no consensus", which is right.
+    if t.endswith(".KS"):
+        return f"krx/{t[:-3]}", "KRW"
+    if t.endswith(".KQ"):
+        return f"kosdaq/{t[:-3]}", "KRW"
     return None
 
 
@@ -127,6 +134,9 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         resp = requests.get(url, headers={"User-Agent": _UA}, timeout=25)
         if resp.status_code != 200:
             return None
+        # The site sends no charset; requests then decodes as ISO-8859-1 and the won sign arrives as mojibake.
+        if hasattr(resp, "encoding") and (resp.encoding or "").lower() in ("", "iso-8859-1"):
+            resp.encoding = "utf-8"
         body = resp.text
     except Exception:                                      # noqa: BLE001
         return None

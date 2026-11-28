@@ -887,6 +887,12 @@
     "markets": {
       "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)",
              "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."}
+    },
+    "proposed": {
+      "_doc": "PROPOSED by the builder, NOT read by the engine (capm.risk_free reads `markets` only). The owner accepts a row by moving it into `markets`. Until then the market discounts on live FRED DGS10 like any unlisted market.",
+      "KR": {"value": 0.0378, "basis": "10Y Korea Treasury Bond (KTB)", "source": "ADB AsianBondsOnline Republic of Korea page, close 2026-11-26 (3.775%; 2y 3.655%, BOK base rate 3.25%)", "status": "PROPOSED", "proposed": "2026-11-28",
+             "derivation": "Korean listings report and are quoted in KRW, so the risk-free rate is the KRW government 10y (owner rule 2026-11-25: the rf matches the currency of the cash flows). 3.775% rounded to 3.78%, the SG convention (2.286% -> 2.29%). Against the 4.94% UST 10y (FMP treasury-rates, 2026-11-27) it lowers every Korean Ke by 116bp; the KOSPI rating hurdle (rf + ERP 4.41% + CRP 0.70%) moves from 10.05% to 8.89%.",
+             "min_spread_over_rf": 0.03, "min_spread_note": "PROPOSED: the owner's SG floor (3.0pp) carried over -- the only precedent. With the 0.70% KRW country premium it binds below a levered beta of about 0.52 ((3.0 - 0.70) / 4.41), i.e. only the lowest-beta utilities, telcos and tobacco (KEPCO, KT, KT&G)."}
     }
   },
   "commodity_price_deck": {
