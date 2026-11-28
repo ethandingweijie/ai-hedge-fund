@@ -141,6 +141,18 @@ async def run_analysis_pipeline_task(
         }
         q.put_nowait((event, phase_event, (ev_ticker or ticker).upper()))
 
+    # Item 3 (owner, 2026-11-28): one global cap on analyses running at once, across every worker replica. Over the
+    # cap the run waits its turn and the user sees its place in the queue (services/admission.py).
+    from app.backend.services import admission as _admission
+
+    async def _queued(ahead: int, eta_min: int) -> None:
+        await progress_bus.publish_event(run_id, {
+            "phase": "pipeline_queued", "status": "running",
+            "summary": (f"Queued: {ahead} {'analysis' if ahead == 1 else 'analyses'} ahead of yours "
+                        f"(about {eta_min} min)"),
+            "queue_position": ahead, "eta_minutes": eta_min})
+
+    _slot = await _admission.acquire(run_id, on_wait=_queued)
     try:
         try:
             rid, _result = await analysis_service.run_analysis_pipeline(
@@ -190,6 +202,8 @@ async def run_analysis_pipeline_task(
         loop.create_task(_cleanup())
         return {"run_id": rid, "ticker": ticker, "ok": True}
     finally:
+        if _slot:
+            await _admission.release(run_id)               # item 3: give the global run slot back
         # Release the distributed dedup slot on EVERY exit path (success,
         # pipeline error, unexpected exception) — otherwise an immediate
         # re-run of the same ticker waits out the full 65-min DEDUP_TTL, and
@@ -919,6 +933,19 @@ async def run_assumption_steward_sweep_task(ctx: dict) -> dict:
 
 # ── WorkerSettings — arq entry point ──────────────────────────────────────────
 
+async def _on_job_start(ctx: dict) -> None:
+    """Item 3 (owner, 2026-11-28): scheduled / cron jobs draw on the shared Qwen limiter at BATCH priority -- they
+    keep LLM_BATCH_RESERVE of the bucket free for customers. arq runs this inside the job's own task before creating
+    the job coroutine, so the setting reaches that job (and the threads it spawns) and nothing else."""
+    try:
+        jid = str(ctx.get("job_id") or "")
+        if jid.startswith(("sched:", "cron:")):
+            from src.llm.global_limiter import PRIORITY
+            PRIORITY.set("batch")
+    except Exception:                                       # noqa: BLE001
+        pass
+
+
 async def _on_startup(ctx: dict) -> None:
     # Per-run LLM cost metering (pricing 2026-11-28): pipelines run in this process.
     from src.llm import cost_meter as _cost_meter
@@ -1007,4 +1034,5 @@ class WorkerSettings:
     retry_jobs = False       # failed pipelines are surfaced, not silently retried
     health_check_interval = 60
     on_startup = _on_startup
+    on_job_start = _on_job_start
     on_shutdown = _on_shutdown

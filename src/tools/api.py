@@ -386,9 +386,19 @@ _fmp_last_refill = time.monotonic()
 
 
 def _fmp_acquire() -> None:
-    """Block until an FMP token is available (token-bucket rate limit)."""
+    """Block until an FMP token is available (token-bucket rate limit).
+
+    Item 3 (owner, 2026-11-28): the SHARED Redis bucket first -- the plan's ~750 calls/min is one budget across the
+    web service, every worker and the screener, not one per process; this process-local bucket only when Redis is
+    unavailable."""
     if _FMP_THROTTLE_DISABLED:
         return
+    try:
+        from src.llm import global_limiter as _gl
+        if _gl.try_acquire_fixed("fmp", _FMP_MAX_RPS, _FMP_BURST) is not None:
+            return
+    except Exception:                                       # noqa: BLE001
+        pass
     global _fmp_tokens, _fmp_last_refill
     while True:
         with _fmp_throttle_lock:

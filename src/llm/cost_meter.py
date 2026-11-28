@@ -279,8 +279,23 @@ def bind(fn):
     return _bound
 
 
+def _limiter_feedback(provider: str, model: Optional[str], status: int, usage: Optional[dict] = None) -> None:
+    """Item 3: every Qwen response teaches the shared limiter -- a success charges its tokens to the TPM budget and
+    nudges the learned rate up; a 429 halves it and pauses every process. Never raises."""
+    if provider != "qwen":
+        return
+    try:
+        from src.llm import global_limiter as _gl
+        u = usage or {}
+        tokens = sum(float(u.get(k) or 0) for k in ("input", "output", "cache_read", "cache_write"))
+        _gl.feedback(model or (os.environ.get("RUN_MODEL") or "qwen3.8-flash"), status, tokens)
+    except Exception:                                       # noqa: BLE001
+        pass
+
+
 def record(provider: str, model: Optional[str], usage: Optional[dict]) -> None:
     """Credit one LLM / search call to the current run, else to this process's unattributed bucket."""
+    _limiter_feedback(provider, model, 200, usage)
     try:
         m = _CURRENT.get()
         if m is not None:
@@ -329,6 +344,8 @@ def observe(provider: str, path: str, req_content: Optional[bytes], status: int,
                 record("tavily", "search", {"searches": 1})
             return
         if status >= 400:
+            if status == 429:
+                _limiter_feedback(provider, _request_model(req_content, path), 429)
             return                                             # a rejected call is not billed
         model, usage = (None, None)
         if body:

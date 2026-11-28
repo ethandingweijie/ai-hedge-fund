@@ -98,3 +98,54 @@ def test_no_redis_falls_back(monkeypatch):
     gl.feedback("m", 429)                   # no error
     monkeypatch.setenv("GLOBAL_LLM_LIMITER", "off")
     assert gl.try_acquire("m") is None
+
+
+def test_throttle_uses_the_shared_limiter_and_falls_back(r, monkeypatch):
+    from src.research_ideas.complacency import qwen_throttle as qt
+    client, _ = r
+    qt.acquire()
+    assert _state(client, "qwen3.8-flash")["req"] < 4.0          # drew from the shared bucket
+    calls = []
+    monkeypatch.setattr(qt, "_local_acquire", lambda w=1.0, m=60.0: calls.append(w) or 0.0)
+    monkeypatch.setitem(gl._CLIENT, "c", None)
+    monkeypatch.setitem(gl._CLIENT, "down_until", 1e18)
+    qt.acquire()
+    assert calls == [1.0]                                         # Redis gone -> the old local bucket
+
+
+def test_cost_meter_teaches_the_limiter(r):
+    from src.llm import cost_meter as cm
+    client, _ = r
+    gl.try_acquire("qwen3.8-flash")
+    before = _state(client, "qwen3.8-flash")["tok"]
+    cm.record("qwen", "qwen3.8-flash", {"input": 1000, "output": 500, "cache_read": 2000})
+    assert _state(client, "qwen3.8-flash")["tok"] == pytest.approx(before - 3500)
+    cm.observe("qwen", "/compatible-mode/v1/chat/completions", b'{"model": "qwen3.8-flash"}', 429, b"")
+    assert _state(client, "qwen3.8-flash")["rate"] == 1.0
+    cm.record("anthropic", "claude-sonnet-4-6", {"input": 10})    # other providers never touch it
+    assert client.exists("llm:limiter:claude-sonnet-4-6") == 0
+
+
+def test_scheduled_jobs_run_at_batch_priority():
+    import asyncio
+    from app.backend import worker
+
+    async def go(jid):
+        await worker._on_job_start({"job_id": jid})
+        return gl.PRIORITY.get()
+
+    assert asyncio.run(go("sched:regional_comps_refresh:2026-11-28")) == "batch"
+    assert asyncio.run(go("cron:run_drive_sync_task")) == "batch"
+    assert asyncio.run(go("2c9fa921-5431-432d-8223-3d86bb4f05a2")) == "interactive"
+
+
+def test_fmp_shares_one_fixed_budget(r, monkeypatch):
+    client, server = r
+    monkeypatch.setattr(gl.time, "sleep", lambda s: None)
+    for _ in range(3):
+        assert gl.try_acquire_fixed("fmp", 10.0, 3.0, max_wait_s=0.0) == 0.0
+    st = {k.decode(): float(v) for k, v in client.hgetall("llm:limiter:fmp").items() if k.decode() in ("rate", "req")}
+    assert st["rate"] == 10.0 and st["req"] < 1.0
+    from src.tools import api
+    monkeypatch.setattr(api, "_FMP_THROTTLE_DISABLED", False)
+    api._fmp_acquire()                                            # goes through the shared bucket, no local wait

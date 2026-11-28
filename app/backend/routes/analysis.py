@@ -233,7 +233,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     await rate_limiter.check_limits(
         user=_caller, scope="analysis",
         daily_limit=_caller.daily_pipeline_limit if _caller else None,
-        concurrent_limit=_caller.concurrent_pipeline_limit if _caller else None,
+        concurrent_limit=(await asyncio.to_thread(_billing.concurrent_limit, _caller)) if _caller else None,
         slot_ttl_seconds=2700,  # 45-min rolling window ≈ longest pipeline
     )
 

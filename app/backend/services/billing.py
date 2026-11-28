@@ -80,6 +80,21 @@ EVERY_RUN = (
 #:   new      first-ever ticker, full research            ~$0.10-0.30 on Qwen
 #:   premium  any run on the Anthropic model              ~$0.40-3.00
 CREDIT_COSTS = {"covered": 1, "new": 2, "limited": 1, "premium": 4}
+#: Item 3 (owner, 2026-11-28): analyses one account may run at once, by plan -- the per-user half of fair queueing
+#: (the global cap lives in services/admission.py). Admins: unlimited.
+CONCURRENT_BY_PLAN = {"free": 1, "starter": 2, "professional": 3}
+
+
+def concurrent_limit(user) -> Optional[int]:
+    """The user's concurrent-run cap: the plan's, never above the account's own setting. None = unlimited."""
+    if user is None or _is_admin(user):
+        return None
+    try:
+        plan_cap = CONCURRENT_BY_PLAN.get(plan_for(user), 1)
+    except Exception:                                       # noqa: BLE001
+        plan_cap = 1
+    own = getattr(user, "concurrent_pipeline_limit", None)
+    return min(plan_cap, own) if isinstance(own, int) and own > 0 else plan_cap
 #: D8 (owner, 2026-11-28): a first analysis of a company outside the tuned coverage (src/data/coverage.py) is
 #: "limited" -- valued on general industry defaults, labelled so on the report -- and costs 1 credit, not 2.
 CREDITS_PER_RUN = CREDIT_COSTS["covered"]    # the smallest charge

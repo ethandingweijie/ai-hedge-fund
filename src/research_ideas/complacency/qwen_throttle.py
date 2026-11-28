@@ -169,7 +169,24 @@ _throttle = _QwenThrottle()
 # ─── Public API ───────────────────────────────────────────────────────────
 
 
-def acquire(weight: float = 1.0, max_wait_s: float = 60.0) -> float:
+def acquire(weight: float = 1.0, max_wait_s: float = 60.0, model: Optional[str] = None) -> float:
+    """Item 3 (owner, 2026-11-28): the SHARED Redis limiter (src/llm/global_limiter.py) first -- one learned rate
+    and one TPM budget across every process and replica; this process-local bucket only when it is unavailable."""
+    try:
+        from src.llm import global_limiter as _gl
+        _w = _gl.try_acquire(model or _gl_default_model(), cost=float(weight), max_wait_s=max(max_wait_s, 120.0))
+        if _w is not None:
+            return _w
+    except Exception:                                       # noqa: BLE001
+        pass
+    return _local_acquire(weight, max_wait_s)
+
+
+def _gl_default_model() -> str:
+    return (os.environ.get("RUN_MODEL") or "").strip() or "qwen3.8-flash"
+
+
+def _local_acquire(weight: float = 1.0, max_wait_s: float = 60.0) -> float:
     """Block until token available. Returns wait time in seconds.
 
     Usage:

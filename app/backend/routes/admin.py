@@ -253,6 +253,19 @@ async def admin_diag(request: Request, secret: str = "", health: int = 0, canary
             async for _k in _r.scan_iter(match="arq:in-progress:*", count=200):
                 _in_prog.append(_k)
             out["queue"]["in_progress"] = _in_prog[:10]
+            # Item 3 (owner, 2026-11-28): capacity at a glance -- the global run cap and queue, and the shared limiters.
+            try:
+                from app.backend.services import admission as _adm
+                out["queue"]["admission"] = await _adm.snapshot(_r)
+            except Exception as _ae:                       # noqa: BLE001
+                out["queue"]["admission"] = {"error": str(_ae)[:200]}
+            try:
+                import asyncio
+                from src.llm import global_limiter as _glim
+                out["queue"]["llm_limiter"] = await asyncio.to_thread(_glim.snapshot, "qwen3.8-flash")
+                out["queue"]["fmp_limiter"] = await asyncio.to_thread(_glim.snapshot, "fmp")
+            except Exception as _le:                       # noqa: BLE001
+                out["queue"]["llm_limiter"] = {"error": str(_le)[:200]}
     except Exception:
         out["queue"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 

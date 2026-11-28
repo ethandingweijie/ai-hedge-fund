@@ -185,6 +185,34 @@ def try_acquire(model: str, cost: float = 1.0, max_wait_s: float = 120.0) -> Opt
         return None
 
 
+def try_acquire_fixed(key: str, rate: float, burst: float, cost: float = 1.0,
+                      max_wait_s: float = 120.0) -> Optional[float]:
+    """A fixed-rate shared bucket (no learning, no TPM) -- e.g. FMP's 750 calls/min plan, shared by every process.
+    Batch priority keeps the same reserve. None = unavailable (caller uses its local bucket)."""
+    if not enabled():
+        return None
+    r = _redis()
+    if r is None:
+        return None
+    minfill = cfg()["batch_reserve"] if PRIORITY.get() == "batch" else 0.0
+    h, cd, _ = _keys(key)
+    waited, start = 0.0, time.monotonic()
+    try:
+        r.hset(h, "rate", rate)                              # the configured rate always wins (no learning here)
+        script = r.register_script(_ACQUIRE)
+        while True:
+            w = float(script(keys=[h, cd], args=[time.time(), cost, minfill, rate, max(burst / rate, 0.1), 0, 0]))
+            if w <= 0:
+                return waited
+            if waited + w > max_wait_s:
+                return waited
+            time.sleep(min(w, 2.0))
+            waited = time.monotonic() - start
+    except Exception as exc:                                # noqa: BLE001
+        _mark_down(exc)
+        return None
+
+
 def feedback(model: Optional[str], status: int, tokens: float = 0.0,
              retry_after_s: Optional[float] = None) -> None:
     """Report one finished call: success (adds rate, charges tokens) or 429 (halves rate, pauses everyone)."""
