@@ -35,7 +35,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.backend.database.models import User
-from app.backend.routes.deps import require_user_or_service
+from app.backend.routes.deps import require_user_or_service, operator_gate
 from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import momentum_storage
 from app.backend.services import fundflow_storage
@@ -482,7 +482,7 @@ def _execute_idea_gen_job(job_id: str, mode: str | None = None) -> None:
         job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
 
 
-@router.post("/ideas/idea-of-the-day/generate")
+@router.post("/ideas/idea-of-the-day/generate", dependencies=[Depends(operator_gate)])
 async def trigger_idea_generation(
     mode: str | None = None,
     actor: User | None = Depends(require_user_or_service),
@@ -805,7 +805,7 @@ async def get_sw46_ticker(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/sw46/refresh")
+@router.post("/ideas/sw46/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_sw46(history_years: int = 10, max_workers: int = 6):
     """
     Trigger a fresh cohort run. Synchronous (returns once persisted) —
@@ -898,7 +898,7 @@ async def get_hk50_ticker(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/hk50/refresh")
+@router.post("/ideas/hk50/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_hk50(max_workers: int = 6):
     """
     Trigger a fresh HK50 cohort run. Synchronous (returns once persisted) —
@@ -1055,7 +1055,7 @@ def _execute_hk50_qual_job(job_id: str, top_n: int, force_refresh: bool) -> None
     )
 
 
-@router.post("/ideas/hk50/qual-deep-research")
+@router.post("/ideas/hk50/qual-deep-research", dependencies=[Depends(operator_gate)])
 async def hk50_qual_deep_research(
     top_n: int = 20,
     force_refresh: bool = False,
@@ -1899,7 +1899,7 @@ def _execute_qual_sweep_job(job_id: str, force: bool = False) -> None:
     )
 
 
-@router.post("/ideas/complacency/refresh")
+@router.post("/ideas/complacency/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_complacency(
     max_workers: int = 3,
     actor: User | None = Depends(require_user_or_service),
@@ -2098,7 +2098,7 @@ def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
     job_store.complete_job(job_id, final_payload)
 
 
-@router.post("/ideas/complacency/qual-sweep")
+@router.post("/ideas/complacency/qual-sweep", dependencies=[Depends(operator_gate)])
 async def complacency_qual_sweep(
     force: bool = False,
     actor: User | None = Depends(require_user_or_service),
@@ -2163,7 +2163,7 @@ def _execute_drive_sync_job(job_id: str) -> None:
         job_store.fail_job(job_id, str(exc))
 
 
-@router.post("/ideas/analyst-docs/sync")
+@router.post("/ideas/analyst-docs/sync", dependencies=[Depends(operator_gate)])
 async def analyst_docs_sync(
     actor: User | None = Depends(require_user_or_service),
 ):
@@ -2258,7 +2258,7 @@ def _execute_assumption_steward_job(job_id: str,
         job_store.fail_job(job_id, str(exc))
 
 
-@router.post("/ideas/analyst-docs/steward")
+@router.post("/ideas/analyst-docs/steward", dependencies=[Depends(operator_gate)])
 async def analyst_docs_steward(
     tickers: str | None = None,
     actor: User | None = Depends(require_user_or_service),
@@ -2338,7 +2338,7 @@ async def analyst_docs_watch(ticker: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@router.post("/ideas/analyst-docs/refresh/{ticker}")
+@router.post("/ideas/analyst-docs/refresh/{ticker}", dependencies=[Depends(operator_gate)])
 async def analyst_docs_refresh_company(
     ticker: str,
     force: bool = False,
@@ -2420,7 +2420,7 @@ async def score_complacency_adhoc(
     }
 
 
-@router.post("/ideas/complacency/refresh-sectors")
+@router.post("/ideas/complacency/refresh-sectors", dependencies=[Depends(operator_gate)])
 async def refresh_complacency_sectors(max_workers: int = 8):
     """
     Manually re-pull S&P 500 EV/Sales + FCF Yield and recompute the per-sector
@@ -2539,7 +2539,7 @@ async def get_momentum_ticker(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/momentum/refresh")
+@router.post("/ideas/momentum/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_momentum(as_of: str | None = None, max_workers: int = 6):
     """
     Trigger a fresh momentum cohort run. Synchronous (returns once persisted)
@@ -2650,7 +2650,7 @@ async def get_fundflow_region(region: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/fundflow/refresh")
+@router.post("/ideas/fundflow/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_fundflow(
     as_of: str | None = None,
     max_workers: int = 8,
@@ -2690,7 +2690,7 @@ async def refresh_fundflow(
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/fundflow/weekly-run")
+@router.post("/ideas/fundflow/weekly-run", dependencies=[Depends(operator_gate)])
 async def run_fundflow_weekly(force: bool = True, notify: bool = True):
     """
     Run the WEEKLY fund-flow cycle on demand — the identical code path the
@@ -2736,7 +2736,7 @@ async def run_fundflow_weekly(force: bool = True, notify: bool = True):
 # without persisting/posting, or live to post to Slack) and inspect state.
 
 
-@router.post("/ideas/iv15-alerts/run")
+@router.post("/ideas/iv15-alerts/run", dependencies=[Depends(operator_gate)])
 async def run_iv15_alerts(dry_run: bool = True):
     """Run one IV15 cross sweep across SW46 + HK50.
 
@@ -2866,7 +2866,7 @@ async def get_hundred_q_ticker_history(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/hundred-q/refresh")
+@router.post("/ideas/hundred-q/refresh", dependencies=[Depends(operator_gate)])
 async def refresh_hundred_q(
     actor: User | None = Depends(require_user_or_service),
 ):

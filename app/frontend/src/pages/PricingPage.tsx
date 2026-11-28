@@ -25,11 +25,13 @@ interface Row { category: string; label: string; cell: (p: PlanInfo) => Cell }
 const credits = (p: PlanInfo) =>
   p.credit_period === 'lifetime' ? `${p.credits} (one-time)` : `${p.credits} / month`;
 
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
 const months = (n: number) => (isUnlimited(n) ? 'Unlimited' : n === 1 ? '1 month' : `${n} months`);
 
 const ROWS: Row[] = [
-  { category: 'Analysis', label: 'Full analyses included', cell: credits },
-  { category: 'Analysis', label: 'Extra analyses', cell: p => (p.addon ? `${p.addon.credits} for $${p.addon.price}` : false) },
+  { category: 'Analysis', label: 'Credits included', cell: credits },
+  { category: 'Analysis', label: 'Extra credits (never expire)', cell: p => (p.addon ? `${p.addon.credits} for $${p.addon.price}` : false) },
   { category: 'Analysis', label: 'Interactive estimate overrides', cell: () => true },
   { category: 'Export', label: 'PDF investment report', cell: p => p.pdf_export },
   { category: 'Export', label: 'Excel valuation workbook (live formulas, three-statement model)', cell: p => p.excel_export },
@@ -47,13 +49,13 @@ function Val({ v }: { v: Cell }) {
 
 function highlights(p: PlanInfo): string[] {
   const out = [p.credit_period === 'lifetime'
-    ? `${p.credits} full analysis to try it`
-    : `${p.credits} full analyses a month`];
+    ? `${plural(p.credits, 'credit')} to try it`
+    : `${plural(p.credits, 'credit')} a month`];
   if (p.pdf_export) out.push('PDF investment report');
   if (p.excel_export) out.push('Excel valuation workbook with three-statement model');
   out.push(isUnlimited(p.watchlist_limit) ? 'Unlimited watchlist' : `Watchlist up to ${p.watchlist_limit} tickers`);
-  out.push(`${months(p.history_months)} of run history`);
-  if (p.addon) out.push(`Extra analyses: ${p.addon.credits} for $${p.addon.price}`);
+  out.push(isUnlimited(p.history_months) ? 'Full run history' : `${months(p.history_months)} of run history`);
+  if (p.addon) out.push(`Extra credits: ${p.addon.credits} for $${p.addon.price}`);
   return out;
 }
 
@@ -201,6 +203,14 @@ export function PricingPage() {
               Every plan, every analysis: {plans.every_run.join(' · ')}
             </div>
           )}
+          {plans?.credit_costs && (
+            <div className="mb-6 text-sm text-center text-muted-foreground">
+              {`An analysis of a ticker we already cover uses ${plural(plans.credit_costs.covered, 'credit')}; `
+                + `a first analysis of a new ticker, ${plans.credit_costs.new}; `
+                + `any analysis on the Anthropic model, ${plans.credit_costs.premium}. `
+                + 'A failed run uses none, and re-opening a recent run is free.'}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
             {ordered.map(p => (
@@ -225,12 +235,12 @@ export function PricingPage() {
                 <div className="flex gap-6 text-sm">
                   <div className="text-center">
                     <p className="font-bold text-lg tabular-nums">{u.exempt ? '∞' : `${u.used} / ${u.included}`}</p>
-                    <p className="text-xs text-muted-foreground">{u.period === 'lifetime' ? 'analyses used' : 'analyses this month'}</p>
+                    <p className="text-xs text-muted-foreground">{u.period === 'lifetime' ? 'credits used' : 'credits this month'}</p>
                   </div>
                   {u.addon_left > 0 && (
                     <div className="text-center">
                       <p className="font-bold text-lg tabular-nums">{u.addon_left}</p>
-                      <p className="text-xs text-muted-foreground">extra analyses</p>
+                      <p className="text-xs text-muted-foreground">extra credits</p>
                     </div>
                   )}
                   <div className="text-center">
@@ -241,7 +251,7 @@ export function PricingPage() {
                 {currentPlan.addon && plans?.payments_enabled && current !== 'free' && (
                   <Button variant="outline" size="sm" disabled={busy}
                           onClick={() => go(() => startCheckout(current, 'addon'))}>
-                    {`Add ${currentPlan.addon.credits} analyses · $${currentPlan.addon.price}`}
+                    {`Add ${currentPlan.addon.credits} credits · $${currentPlan.addon.price}`}
                   </Button>
                 )}
               </div>

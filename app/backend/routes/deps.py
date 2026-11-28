@@ -106,6 +106,29 @@ def require_model_accuracy_owner(
                         detail="Model Accuracy is not available to this account.")
 
 
+def operator_gate(
+    authorization: Optional[str] = Header(default=None),
+    x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(get_db),
+) -> None:
+    """Plan gate (pricing 2026-11-28): under BILLING_ENFORCED, owner/scheduler jobs (screen refreshes and sweeps,
+    the legacy committee graph) are for admins and the service secret only. A no-op while billing is in shadow
+    mode, so it changes nothing before launch. Attach with `dependencies=[Depends(operator_gate)]`."""
+    from app.backend.services import billing
+    if not billing.enforced():
+        return
+    secret = os.environ.get("DB_UPLOAD_SECRET", "")
+    service = bool(secret and x_admin_secret
+                   and hmac.compare_digest(secret.encode("utf-8"), x_admin_secret.encode("utf-8")))
+    user = None
+    if not service and authorization and authorization.startswith("Bearer "):
+        user = get_user_from_token(authorization.removeprefix("Bearer ").strip(), db)
+    try:
+        billing.check_operator(user, service=service)
+    except billing.LimitReached as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.detail)
+
+
 def require_user_or_service(
     authorization: Optional[str] = Header(default=None),
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),

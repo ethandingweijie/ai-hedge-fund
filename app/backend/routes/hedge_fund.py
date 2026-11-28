@@ -15,12 +15,15 @@ from app.backend.services.api_key_service import ApiKeyService
 from src.utils.progress import progress
 from src.utils.analysts import get_agents_list
 
+from app.backend.routes.deps import operator_gate
+
 router = APIRouter(prefix="/hedge-fund")
 
 logger = logging.getLogger(__name__)
 
 @router.post(
     path="/run",
+    dependencies=[Depends(operator_gate)],
     responses={
         200: {"description": "Successful response with streaming updates"},
         400: {"model": ErrorResponse, "description": "Invalid request parameters"},
@@ -287,6 +290,7 @@ async def _queue_stream_generator(run_id: str, job):
 
 @router.post(
     path="/backtest",
+    dependencies=[Depends(operator_gate)],
     responses={
         200: {"description": "Successful response with streaming backtest updates"},
         400: {"model": ErrorResponse, "description": "Invalid request parameters"},

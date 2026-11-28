@@ -20,6 +20,7 @@ def store(tmp_path, monkeypatch):
     monkeypatch.setattr(_db, "get_db_path", lambda: str(tmp_path / "t.db"))
     _db.close_all_connections()
     monkeypatch.setitem(b._READY, "v", False)
+    monkeypatch.setattr(b, "_is_covered", lambda t: True)               # covered (1 credit) unless a test says
     _db.ensure_table("CREATE TABLE IF NOT EXISTS web_runs (run_id TEXT PRIMARY KEY, run_at TEXT, ticker TEXT, "
                      "user_id INTEGER, is_checkpoint INTEGER DEFAULT 0)")
     yield _db
@@ -41,70 +42,108 @@ def _complete(db, uid, ticker, at):
 # ── plans: every page claim is a field ──────────────────────────────────────
 
 def test_public_plans_carry_prices_limits_and_the_true_annual_saving():
-    got = {p["id"]: p for p in b.public_plans()["plans"]}
+    pub = b.public_plans()
+    got = {p["id"]: p for p in pub["plans"]}
     assert [*got] == ["free", "starter", "professional"]
-    assert got["starter"]["annual_saving_pct"] == 17           # 290 vs 12 x 29; the page said 20%
-    assert got["free"]["credits"] == 1 and got["free"]["credit_period"] == "lifetime"
+    assert (got["starter"]["price_monthly"], got["starter"]["price_annual"], got["starter"]["credits"]) == (29, 279, 15)
+    assert (got["professional"]["price_monthly"], got["professional"]["price_annual"],
+            got["professional"]["credits"]) == (79, 759, 50)
+    assert got["starter"]["annual_saving_pct"] == 20 and got["professional"]["annual_saving_pct"] == 20
+    assert got["free"]["credits"] == 3 and got["free"]["credit_period"] == "month"
+    assert pub["credit_costs"] == {"covered": 1, "new": 2, "premium": 4}
     for p in got.values():
         assert not {"agent_selection", "batch_tickers", "priority_queue", "api_access"} & set(p)
 
 
+def test_every_add_on_credit_is_priced_above_its_worst_case_cost():
+    worst_cost_per_credit = 3.00 / b.CREDIT_COSTS["premium"]             # an Anthropic full-research run
+    for p in b.PLANS.values():
+        if p["addon"]:
+            assert p["addon"]["price"] / p["addon"]["credits"] > worst_cost_per_credit
+
+
 # ── metering ────────────────────────────────────────────────────────────────
 
-def test_free_user_has_one_lifetime_run_then_is_blocked_when_enforced(store, monkeypatch):
+def test_run_type_prices_by_cost():
+    assert b.run_type("AAPL", "qwen3.8-flash", covered=True) == "covered"
+    assert b.run_type("AAPL", "qwen3.8-flash", covered=False) == "new"
+    assert b.run_type("AAPL", None, covered=False) == "new"
+    assert b.run_type("AAPL", "claude-sonnet-4-6", covered=True) == "premium"
+    boom = lambda t: (_ for _ in ()).throw(RuntimeError("db down"))
+    assert b.run_type("AAPL", "qwen3.8-flash", covered=boom) == "covered"    # a lookup error: the cheaper rate
+
+
+def test_free_user_gets_three_credits_a_month_then_is_blocked_when_enforced(store, monkeypatch):
     monkeypatch.setenv("BILLING_ENFORCED", "true")
     u = _user()
-    b.reserve_run(u, "AAPL", now=NOW)
+    b.reserve_run(u, "AAPL", now=NOW, covered=False)                    # new ticker: 2
     _complete(store, u.id, "AAPL", NOW + timedelta(minutes=8))
     with pytest.raises(b.LimitReached) as e:
-        b.reserve_run(u, "MSFT", now=NOW + timedelta(days=40))
-    assert e.value.detail["code"] == "credits_exhausted"
+        b.reserve_run(u, "MSFT", now=NOW + timedelta(hours=2), covered=False)
+    assert e.value.detail["credits_needed"] == 2 and "needs 2 credits and you have 1 left" in e.value.detail["message"]
+    b.reserve_run(u, "MSFT", now=NOW + timedelta(hours=2))              # covered: 1
+    _complete(store, u.id, "MSFT", NOW + timedelta(hours=2, minutes=5))
+    with pytest.raises(b.LimitReached) as e:
+        b.reserve_run(u, "NVDA", now=NOW + timedelta(hours=3))
+    assert e.value.detail["code"] == "credits_exhausted" and "3 free credits" in e.value.detail["message"]
+    assert b.usage(u, now=datetime(2026, 12, 1, 1, tzinfo=timezone.utc))["left"] == 3   # renews monthly
+
+
+def test_anthropic_runs_cost_four_and_free_cannot_afford_one(store, monkeypatch):
+    monkeypatch.setenv("BILLING_ENFORCED", "true")
+    with pytest.raises(b.LimitReached) as e:
+        b.reserve_run(_user(), "AAPL", now=NOW, model_name="claude-sonnet-4-6")
+    assert e.value.detail["run_type"] == "premium" and "A Qwen run costs less" in e.value.detail["message"]
+    pro = _user(8)
+    b.upsert_account(pro.id, plan="professional", status="active")
+    assert b.reserve_run(pro, "AAPL", now=NOW, model_name="claude-sonnet-4-6")["used"] == 4
 
 
 def test_shadow_mode_records_but_never_blocks(store, monkeypatch):
     monkeypatch.delenv("BILLING_ENFORCED", raising=False)
     u = _user()
-    for i, t in enumerate(("AAPL", "MSFT", "NVDA")):
+    for i, t in enumerate(("AAPL", "MSFT", "NVDA", "TSLA")):
         b.reserve_run(u, t, now=NOW + timedelta(minutes=i))
     got = b.usage(u, now=NOW + timedelta(minutes=5))
-    assert got["used"] == 3 and got["left"] == 0 and got["enforced"] is False
+    assert got["used"] == 4 and got["left"] == 0 and got["enforced"] is False
 
 
 def test_a_failed_run_is_not_charged_after_the_hold(store, monkeypatch):
     monkeypatch.setenv("BILLING_ENFORCED", "true")
     u = _user()
-    b.reserve_run(u, "AAPL", now=NOW)                                   # no completed run follows
-    assert b.usage(u, now=NOW + timedelta(minutes=10))["used"] == 1     # held while it could still finish
+    b.reserve_run(u, "AAPL", now=NOW, covered=False)                    # no completed run follows
+    assert b.usage(u, now=NOW + timedelta(minutes=10))["used"] == 2     # held while it could still finish
     assert b.usage(u, now=NOW + timedelta(minutes=90))["used"] == 0     # released
-    b.reserve_run(u, "MSFT", now=NOW + timedelta(minutes=90))           # so the free run is still there
+    b.reserve_run(u, "MSFT", now=NOW + timedelta(minutes=90), covered=False)
 
 
 def test_the_same_ticker_inside_the_hold_is_one_charge(store):
     u = _user()
-    b.reserve_run(u, "AAPL", now=NOW)
-    b.reserve_run(u, "AAPL", now=NOW + timedelta(minutes=3))
-    assert b.usage(u, now=NOW + timedelta(minutes=4))["used"] == 1
+    b.reserve_run(u, "AAPL", now=NOW, covered=False)
+    b.reserve_run(u, "AAPL", now=NOW + timedelta(minutes=3), covered=False)
+    assert b.usage(u, now=NOW + timedelta(minutes=4))["used"] == 2
 
 
-def test_monthly_allowance_resets_and_addons_are_spent_after_it(store, monkeypatch):
+def test_monthly_allowance_resets_and_a_run_straddles_plan_and_addon_credits(store, monkeypatch):
     monkeypatch.setenv("BILLING_ENFORCED", "true")
     u = _user()
     b.upsert_account(u.id, plan="starter", status="active")
     t0 = datetime(2026, 11, 2, tzinfo=timezone.utc)
-    for i in range(5):
+    for i in range(7):                                                  # 7 new tickers = 14 of 15
         at = t0 + timedelta(hours=i)
-        b.reserve_run(u, f"T{i}", now=at)
+        b.reserve_run(u, f"T{i}", now=at, covered=False)
         _complete(store, u.id, f"T{i}", at + timedelta(minutes=5))
     with pytest.raises(b.LimitReached) as e:
-        b.reserve_run(u, "T5", now=t0 + timedelta(days=1))
-    assert "Add 5 more for $12" in e.value.detail["message"]
-    assert b.grant_addon(u.id, 5, ref="stripe:cs_1") is True
-    assert b.grant_addon(u.id, 5, ref="stripe:cs_1") is False           # a replayed webhook grants once
-    b.reserve_run(u, "T5", now=t0 + timedelta(days=1))
+        b.reserve_run(u, "T7", now=t0 + timedelta(days=1), covered=False)
+    assert "Add 10 credits for $12" in e.value.detail["message"]
+    assert b.grant_addon(u.id, 10, ref="stripe:cs_1") is True
+    assert b.grant_addon(u.id, 10, ref="stripe:cs_1") is False          # a replayed webhook grants once
+    b.reserve_run(u, "T7", now=t0 + timedelta(days=1), covered=False)   # 1 from the plan + 1 add-on
+    _complete(store, u.id, "T7", t0 + timedelta(days=1, minutes=5))
     got = b.usage(u, now=t0 + timedelta(days=1, minutes=1))
-    assert got["plan_left"] == 0 and got["addon_left"] == 4
+    assert got["plan_left"] == 0 and got["addon_left"] == 9
     dec = b.usage(u, now=datetime(2026, 12, 1, 1, tzinfo=timezone.utc))
-    assert dec["used"] == 0 and dec["plan_left"] == 5                   # new calendar month
+    assert dec["used"] == 0 and dec["plan_left"] == 15 and dec["addon_left"] == 9   # packs never expire
 
 
 def test_admins_are_never_metered(store, monkeypatch):
@@ -149,8 +188,8 @@ def test_exports_follow_the_plan(store, monkeypatch):
 def test_watchlist_cap(store, monkeypatch):
     monkeypatch.setenv("BILLING_ENFORCED", "true")
     with pytest.raises(b.LimitReached):
-        b.check_watchlist(_user(), 3)
-    b.check_watchlist(_user(), 2)
+        b.check_watchlist(_user(), 5)
+    b.check_watchlist(_user(), 4)
 
 
 # ── Stripe ──────────────────────────────────────────────────────────────────
@@ -192,9 +231,9 @@ def test_addon_checkout_grants_credits_once(store):
     ev = {"type": "checkout.session.completed",
           "data": {"object": {"id": "cs_2", "mode": "payment", "payment_status": "paid", "client_reference_id": "7",
                               "metadata": {"plan": "starter", "kind": "addon"}}}}
-    assert "granted 5" in sb.handle_event(ev)
+    assert "granted 10" in sb.handle_event(ev)
     assert "already granted" in sb.handle_event(ev)
-    assert b._addon_granted(7) == 5
+    assert b._addon_granted(7) == 10
 
 
 def test_routes_and_public_paths():
@@ -204,3 +243,85 @@ def test_routes_and_public_paths():
     assert {"/billing/plans", "/billing/me", "/billing/checkout", "/billing/portal", "/billing/webhook"} <= paths
     assert auth_gate._is_public("/billing/webhook") and auth_gate._is_public("/billing/plans")
     assert not auth_gate._is_public("/billing/me")
+
+
+# ── plan gates on every path (2026-11-28) ───────────────────────────────────
+
+def _web_run(db, uid, run_id, at):
+    db.execute("INSERT INTO web_runs (run_id, run_at, ticker, user_id, is_checkpoint) VALUES (?, ?, ?, ?, 0)",
+               [run_id, b._iso(at), "AAPL", uid])
+
+
+def test_a_run_older_than_the_plan_window_cannot_be_opened(store, monkeypatch):
+    now = datetime.now(timezone.utc)
+    _web_run(store, 7, "old", now - timedelta(days=70))
+    _web_run(store, 7, "new", now - timedelta(days=3))
+    monkeypatch.delenv("BILLING_ENFORCED", raising=False)
+    b.check_run_history(_user(), "old")                                 # shadow mode: open
+    monkeypatch.setenv("BILLING_ENFORCED", "true")
+    b.check_run_history(_user(), "new")
+    with pytest.raises(b.LimitReached) as e:
+        b.check_run_history(_user(), "old")                             # Free keeps 1 month
+    assert e.value.detail["code"] == "history_window" and e.value.detail["required_plan"] == "starter"
+    b.upsert_account(7, plan="starter", status="active")
+    b.check_run_history(_user(), "old")                                 # Starter keeps 12
+    b.check_run_history(_user(role="admin"), "old")
+
+
+def test_operator_only_jobs(monkeypatch):
+    monkeypatch.delenv("BILLING_ENFORCED", raising=False)
+    b.check_operator(_user())                                           # shadow mode: unchanged
+    monkeypatch.setenv("BILLING_ENFORCED", "true")
+    with pytest.raises(b.LimitReached) as e:
+        b.check_operator(_user())
+    assert e.value.detail["code"] == "operator_only"
+    b.check_operator(_user(role="admin"))
+    b.check_operator(None, service=True)
+
+
+def test_operator_gate_dependency(monkeypatch):
+    from fastapi import HTTPException
+    from app.backend.routes import deps
+    monkeypatch.setenv("DB_UPLOAD_SECRET", "s3cret")
+    monkeypatch.setattr(deps, "get_user_from_token", lambda tok, db: _user(role="admin" if tok == "adm" else "member"))
+    monkeypatch.delenv("BILLING_ENFORCED", raising=False)
+    deps.operator_gate("Bearer mem", None, None)
+    monkeypatch.setenv("BILLING_ENFORCED", "true")
+    with pytest.raises(HTTPException) as e:
+        deps.operator_gate("Bearer mem", None, None)
+    assert e.value.status_code == 403 and e.value.detail["code"] == "operator_only"
+    with pytest.raises(HTTPException):
+        deps.operator_gate(None, None, None)                            # anonymous
+    deps.operator_gate("Bearer adm", None, None)
+    deps.operator_gate(None, "s3cret", None)                            # the scheduler / service secret
+
+
+OPERATOR_ROUTES = {
+    "/research/ideas/idea-of-the-day/generate", "/research/ideas/sw46/refresh", "/research/ideas/hk50/refresh",
+    "/research/ideas/hk50/qual-deep-research", "/research/ideas/complacency/refresh",
+    "/research/ideas/complacency/qual-sweep", "/research/ideas/analyst-docs/sync",
+    "/research/ideas/analyst-docs/steward", "/research/ideas/analyst-docs/refresh/{ticker}",
+    "/research/ideas/complacency/refresh-sectors", "/research/ideas/momentum/refresh",
+    "/research/ideas/fundflow/refresh", "/research/ideas/fundflow/weekly-run", "/research/ideas/iv15-alerts/run",
+    "/research/ideas/hundred-q/refresh", "/hedge-fund/run", "/hedge-fund/backtest",
+    "/flows/{flow_id}/runs/",
+}
+
+
+def test_every_owner_job_route_carries_the_operator_gate():
+    from app.backend.routes import api_router
+    from app.backend.routes.deps import operator_gate
+    gated = {r.path for r in api_router.routes
+             if "POST" in (getattr(r, "methods", None) or set())
+             and any(getattr(d, "call", None) is operator_gate for d in r.dependant.dependencies)}
+    assert OPERATOR_ROUTES <= gated, OPERATOR_ROUTES - gated
+    # what a plan includes stays open: running an analysis, ad-hoc screen scoring, overrides
+    assert not {"/analysis/run", "/research/ideas/complacency/score/{ticker}",
+                "/research/ideas/hundred-q/{ticker}/rescore"} & gated
+
+
+def test_every_single_run_path_checks_the_history_window():
+    import inspect
+    from app.backend.routes import analysis as a
+    for fn in (a.get_run, a.get_run_workbook, a.get_run_report_pdf, a._owned_run_or_404):
+        assert "_run_in_plan_history" in inspect.getsource(fn), fn.__name__

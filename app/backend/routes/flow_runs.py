@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from app.backend.database import get_db
 from app.backend.database.models import User
-from app.backend.routes.deps import require_user
+from app.backend.routes.deps import operator_gate, require_user
 from app.backend.repositories.flow_run_repository import FlowRunRepository
 from app.backend.repositories.flow_repository import FlowRepository
 from app.backend.models.schemas import (
@@ -32,6 +32,7 @@ def _get_owned_flow(flow_id: int, user: User, db: Session):
 
 @router.post(
     "/",
+    dependencies=[Depends(operator_gate)],
     response_model=FlowRunResponse,
     responses={
         404: {"model": ErrorResponse, "description": "Flow not found"},

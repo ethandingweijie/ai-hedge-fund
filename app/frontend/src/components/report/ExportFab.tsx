@@ -8,13 +8,14 @@
  * Monochrome: green/red are reserved for price change.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Download, FileSpreadsheet, FileText, Loader2, X } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, Loader2, Lock, X } from 'lucide-react';
 import { downloadRunExport, type RunExportKind } from '@/lib/api';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { PLAN_NAMES, lockedBy, useBillingMe } from '@/lib/tier';
 
-const ITEMS: { kind: RunExportKind; label: string; icon: typeof FileText }[] = [
-  { kind: 'pdf',  label: 'Report (PDF)',  icon: FileText },
-  { kind: 'xlsx', label: 'Model (XLSX)',  icon: FileSpreadsheet },
+const ITEMS: { kind: RunExportKind; label: string; icon: typeof FileText; feature: 'pdf_export' | 'excel_export' }[] = [
+  { kind: 'pdf',  label: 'Report (PDF)',  icon: FileText,        feature: 'pdf_export' },
+  { kind: 'xlsx', label: 'Model (XLSX)',  icon: FileSpreadsheet, feature: 'excel_export' },
 ];
 
 /** Clearance above the mobile floating nav pill (~64px tall, 6px off the edge). */
@@ -26,7 +27,9 @@ export function ExportFab({ runId, ticker }: { runId: string; ticker?: string })
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<RunExportKind | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const me = useBillingMe();
 
   // Close on outside click and on Escape.
   useEffect(() => {
@@ -49,11 +52,13 @@ export function ExportFab({ runId, ticker }: { runId: string; ticker?: string })
     if (busy) return;
     setBusy(kind);
     setError(null);
+    setPlanError(false);
     try {
       await downloadRunExport(runId, kind, ticker);
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setPlanError(!!(e as { planLimit?: boolean })?.planLimit);
     } finally {
       setBusy(null);
     }
@@ -71,23 +76,28 @@ export function ExportFab({ runId, ticker }: { runId: string; ticker?: string })
           {error && (
             <span className="max-w-[220px] truncate rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground shadow-sm"
                   title={error}>
-              Export failed. Try again.
+              {planError ? error : 'Export failed. Try again.'}
             </span>
           )}
-          {ITEMS.map(({ kind, label, icon: Icon }) => (
+          {ITEMS.map(({ kind, label, icon: Icon, feature }) => {
+            const lock = lockedBy(me, feature);
+            return (
             <button
               key={kind}
               type="button"
               role="menuitem"
               disabled={busy !== null}
-              onClick={() => run(kind)}
+              title={lock ? `Included from the ${PLAN_NAMES[lock]} plan` : undefined}
+              onClick={() => (lock ? window.location.assign('#/pricing') : run(kind))}
               className="flex h-10 items-center gap-2 rounded-full border border-border bg-card pl-3 pr-4 text-sm font-medium text-foreground
                          shadow-[0_8px_24px_rgb(0_0_0/0.12)] transition-colors hover:bg-muted disabled:opacity-60"
             >
-              {busy === kind ? <Loader2 size={16} className="animate-spin" /> : <Icon size={16} />}
+              {busy === kind ? <Loader2 size={16} className="animate-spin" /> : lock ? <Lock size={16} /> : <Icon size={16} />}
               <span>{busy === kind ? 'Preparing…' : label}</span>
+              {lock && <span className="text-xs text-muted-foreground">{PLAN_NAMES[lock]}</span>}
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
       <button

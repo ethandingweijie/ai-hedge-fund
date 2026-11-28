@@ -12,8 +12,9 @@ Storage: two NEW tables (CREATE IF NOT EXISTS; no ALTER on `users`, so no schema
   billing_accounts  one row per user who has ever had a paid plan: plan, status, interval, Stripe ids, period
   usage_ledger      one row per metered event: a run reservation, an add-on credit grant
 
-Metering (`reserve_run`): a pipeline start reserves 1 credit (CREDITS_PER_RUN; credit pricing by run type is a
-config change, not a schema change). A reservation SETTLES lazily: it counts while it is younger than
+Metering (`reserve_run`): a pipeline start reserves credits by run type (CREDIT_COSTS, `run_credits`): 1 for a
+covered ticker (stored research + one freshness search), 2 for a first-ever ticker (full research), 4 for any run on
+the Anthropic model. Price points 2026-11-28 (owner): $29 / $79, 15 / 50 credits a month, ~20% off annual. A reservation SETTLES lazily: it counts while it is younger than
 RESERVATION_HOLD_MIN, and after that only if the user has a completed (non-checkpoint) run of that ticker started
 since -- so a failed or cancelled run is never charged, without hooking every pipeline exit path. A second start of
 the same ticker inside the hold window reuses the first reservation (the dedup path serves it the same run).
@@ -38,23 +39,28 @@ UNLIMITED = -1
 #: STRIPE_PRICE_<PLAN>_ADDON). Every claim the pricing page makes is a field here, and every field is enforced
 #: (or is true of every run) -- nothing on the page is decoration.
 PLANS: dict[str, dict[str, Any]] = {
+    # Price points 2026-11-28 (owner, from the pricing review): $29 / $79 sit at Fiscal.ai and Koyfin; annual is
+    # ~20% off (279 and 759 both round to 20%). Allowances are CREDITS weighted by run cost (CREDIT_COSTS), so Pro's
+    # 50 is 50 covered runs, 25 new tickers or 12 Anthropic runs: the worst case still clears ~50% gross margin,
+    # the Qwen default ~95%. Add-ons price a credit at $1.20 / $1.00, above the worst-case ~$0.75 a credit of an
+    # Anthropic full-research run.
     "free": {
         "name": "Free", "price_monthly": 0, "price_annual": 0,
-        "credits": 1, "credit_period": "lifetime",
-        "watchlist_limit": 3, "history_months": 1,
+        "credits": 3, "credit_period": "month",
+        "watchlist_limit": 5, "history_months": 1,
         "pdf_export": False, "excel_export": False, "addon": None,
     },
     "starter": {
-        "name": "Starter", "price_monthly": 29, "price_annual": 290,
-        "credits": 5, "credit_period": "month",
-        "watchlist_limit": 15, "history_months": 6,
-        "pdf_export": True, "excel_export": False, "addon": {"credits": 5, "price": 12},
+        "name": "Starter", "price_monthly": 29, "price_annual": 279,
+        "credits": 15, "credit_period": "month",
+        "watchlist_limit": 30, "history_months": 12,
+        "pdf_export": True, "excel_export": False, "addon": {"credits": 10, "price": 12},
     },
     "professional": {
-        "name": "Professional", "price_monthly": 79, "price_annual": 790,
-        "credits": 20, "credit_period": "month",
-        "watchlist_limit": UNLIMITED, "history_months": 24,
-        "pdf_export": True, "excel_export": True, "addon": {"credits": 10, "price": 18},
+        "name": "Professional", "price_monthly": 79, "price_annual": 759,
+        "credits": 50, "credit_period": "month",
+        "watchlist_limit": UNLIMITED, "history_months": UNLIMITED,
+        "pdf_export": True, "excel_export": True, "addon": {"credits": 25, "price": 25},
     },
 }
 PLAN_ORDER = ("free", "starter", "professional")
@@ -66,7 +72,12 @@ EVERY_RUN = (
     "US, Hong Kong, Singapore and four more markets, priced on regional peers",
 )
 
-CREDITS_PER_RUN = 1
+#: Credits a run spends, by what it costs to produce (LLM + search, pricing review 2026-11-28):
+#:   covered  stored research + one freshness search      ~$0.03-0.10 on Qwen
+#:   new      first-ever ticker, full research            ~$0.10-0.30 on Qwen
+#:   premium  any run on the Anthropic model              ~$0.40-3.00
+CREDIT_COSTS = {"covered": 1, "new": 2, "premium": 4}
+CREDITS_PER_RUN = CREDIT_COSTS["covered"]    # the smallest charge
 RESERVATION_HOLD_MIN = 60
 #: a completed run is matched to a reservation started up to this long before the run's own run_at.
 _SETTLE_SLACK_MIN = 5
@@ -260,15 +271,40 @@ def usage(user, now: Optional[datetime] = None, completed=None) -> dict:
             "left": UNLIMITED if exempt else plan_left + addon_left, "enforced": enforced(), "exempt": exempt}
 
 
+def _is_covered(ticker: str) -> bool:
+    """A qualifying stored deep-research run exists, so the pipeline takes the fast path (the lookup the research
+    phase makes under RESEARCH_FORCE_REUSE: no age cap)."""
+    from src.memory.run_archive import get_recent_research
+    return get_recent_research(ticker, max_age_days=None) is not None
+
+
+def run_type(ticker: str, model_name: Optional[str] = None, covered=None) -> str:
+    """covered | new | premium. A coverage-lookup error charges the covered rate (in the customer's favour)."""
+    if str(model_name or "").strip() and not str(model_name).strip().lower().startswith("qwen"):
+        return "premium"
+    try:
+        hit = covered(ticker) if callable(covered) else (covered if covered is not None else _is_covered(ticker))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("billing: coverage lookup failed for %s (%s) -- charging the covered rate", ticker, exc)
+        hit = True
+    return "covered" if hit else "new"
+
+
+def run_credits(ticker: str, model_name: Optional[str] = None, covered=None) -> int:
+    return CREDIT_COSTS[run_type(ticker, model_name, covered)]
+
+
 class LimitReached(Exception):
     def __init__(self, detail: dict):
         super().__init__(detail.get("message", "limit reached"))
         self.detail = detail
 
 
-def reserve_run(user, ticker: str, now: Optional[datetime] = None) -> Optional[dict]:
-    """Record a pipeline start. Raises LimitReached when enforced and no credit is left. Returns the usage after
-    the reservation (None for anonymous/admin calls, which are not metered)."""
+def reserve_run(user, ticker: str, now: Optional[datetime] = None, model_name: Optional[str] = None,
+                covered=None) -> Optional[dict]:
+    """Record a pipeline start, charged by run type (`run_credits`). Raises LimitReached when enforced and too few
+    credits are left. Returns the usage after the reservation (None for anonymous/admin calls, not metered).
+    `covered`: a bool or a ticker -> bool callable (tests); None looks up the ticker's stored research."""
     if user is None or _is_admin(user):
         return None
     from src.data import db
@@ -280,14 +316,21 @@ def reserve_run(user, ticker: str, now: Optional[datetime] = None) -> Optional[d
                               [user.id, ticker, _iso(now - timedelta(minutes=RESERVATION_HOLD_MIN))])
         if recent:
             return usage(user, now)                       # the dedup path serves the same run: one charge
+        kind = run_type(ticker, model_name, covered)
+        cost = CREDIT_COSTS[kind]
         u = usage(user, now)
-        if enforced() and u["left"] != UNLIMITED and u["left"] < CREDITS_PER_RUN:
-            raise LimitReached(_limit_detail(u))
-        # Shadow mode (not enforced) records past the allowance as plan usage, so the report shows true demand.
-        source = "addon" if (u["plan_left"] < CREDITS_PER_RUN and u["addon_left"] >= CREDITS_PER_RUN) else "plan"
-        db.execute("INSERT INTO usage_ledger (user_id, created_at, kind, credits, ticker, source, ref) "
-                   "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   [user.id, _iso(now), "run", CREDITS_PER_RUN, ticker, source, f"run:{user.id}:{ticker}:{_iso(now)}"])
+        if enforced() and u["left"] != UNLIMITED and u["left"] < cost:
+            raise LimitReached(_limit_detail(u, cost, kind))
+        # The plan allowance is spent first, then add-on credits; one run can straddle the two. Shadow mode (not
+        # enforced) records past the allowance as plan usage, so the report shows true demand.
+        from_addon = min(u["addon_left"], cost - min(u["plan_left"], cost))
+        from_plan = cost - from_addon
+        for source, n in (("plan", from_plan), ("addon", from_addon)):
+            if n > 0:
+                db.execute("INSERT INTO usage_ledger (user_id, created_at, kind, credits, ticker, source, ref, note) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                           [user.id, _iso(now), "run", n, ticker, source,
+                            f"run:{user.id}:{ticker}:{_iso(now)}:{source}", kind])
         return usage(user, now)
     except LimitReached:
         raise
@@ -300,16 +343,26 @@ def reserve_run(user, ticker: str, now: Optional[datetime] = None) -> Optional[d
         return None
 
 
-def _limit_detail(u: dict) -> dict:
+_RUN_LABEL = {"covered": "This analysis", "new": "A first analysis of this ticker",
+              "premium": "An analysis on the Anthropic model"}
+
+
+def _limit_detail(u: dict, cost: int = CREDITS_PER_RUN, kind: str = "covered") -> dict:
     p = PLANS[u["plan"]]
-    if u["plan"] == "free":
-        msg = "Your free analysis has been used. Upgrade to run more."
-    elif p.get("addon"):
-        msg = (f"You've used all {u['included']} analyses this month. Add {p['addon']['credits']} more for "
-               f"${p['addon']['price']}, or upgrade.")
+    left = u["left"]
+    if left > 0:
+        msg = f"{_RUN_LABEL.get(kind, 'This analysis')} needs {cost} credits and you have {left} left."
+        if kind == "premium":
+            msg += " A Qwen run costs less."
+    elif u["plan"] == "free":
+        msg = f"You've used your {u['included']} free credits this month."
     else:
-        msg = f"You've used all {u['included']} analyses this month."
-    return {"code": "credits_exhausted", "message": msg, "usage": u}
+        msg = f"You've used all {u['included']} credits this month."
+    if p.get("addon"):
+        msg += f" Add {p['addon']['credits']} credits for ${p['addon']['price']}, or upgrade."
+    elif u["plan"] != PLAN_ORDER[-1]:
+        msg += " Upgrade to run more."
+    return {"code": "credits_exhausted", "message": msg, "credits_needed": cost, "run_type": kind, "usage": u}
 
 
 def grant_addon(user_id: int, credits: int, ref: str, note: str = "") -> bool:
@@ -325,7 +378,7 @@ def grant_addon(user_id: int, credits: int, ref: str, note: str = "") -> bool:
 
 # ── feature gates ──────────────────────────────────────────────────────────
 
-FEATURE_LABELS = {"pdf_export": "PDF export", "excel_export": "the Excel valuation workbook"}
+FEATURE_LABELS = {"pdf_export": "PDF export", "excel_export": "The Excel valuation workbook"}
 
 
 def min_plan_for(feature: str) -> Optional[str]:
@@ -385,6 +438,45 @@ def history_cutoff(user) -> Optional[str]:
     return (_now() - timedelta(days=31 * months)).strftime("%Y-%m-%d")
 
 
+def check_run_history(user, run_id: str) -> None:
+    """Raises LimitReached when enforced and the run is older than the plan's history window. Opening, exporting
+    or overriding a run goes through this, not only the history list (a saved link would otherwise outlive it)."""
+    if not enforced() or user is None or _is_admin(user):
+        return
+    from src.data import db
+    try:
+        cut = history_cutoff(user)
+        if not cut:
+            return
+        row = db.query_one("SELECT run_at FROM web_runs WHERE run_id = ?", [run_id]) \
+            or db.query_one("SELECT run_at FROM runs WHERE run_id = ?", [run_id])
+    except Exception as exc:  # noqa: BLE001
+        logger.error("billing: history check failed for run %s (%s) -- blocking (fail closed)", run_id, exc)
+        raise LimitReached({"code": "billing_unavailable", "message": "Your plan could not be checked right now."})
+    run_at = str(_get(row, "run_at", 0) or "") if row else ""
+    if run_at and run_at[:10] < cut:
+        plan = plan_for(user)
+        nxt = next((p for p in PLAN_ORDER[PLAN_ORDER.index(plan) + 1:]), None)
+        months = PLANS[plan]["history_months"]
+        msg = f"The {PLANS[plan]['name']} plan keeps {months} month{'s' if months != 1 else ''} of run history."
+        if nxt:
+            msg += f" {PLANS[nxt]['name']} keeps more."
+        raise LimitReached({"code": "history_window", "required_plan": nxt, "message": msg})
+
+
+#: Owner / scheduler jobs a plan does not include: whole-screen refreshes and sweeps (they spend LLM and data
+#: budget across hundreds of names) and the legacy committee graph (/hedge-fund, flow runs), which runs the
+#: LLMs outside the credit ledger. Users read the screens' results; the scheduler produces them.
+OPERATOR_ONLY_MESSAGE = "This runs on a schedule and is not part of a plan. The latest results are already shown."
+
+
+def check_operator(user, service: bool = False) -> None:
+    """Raises LimitReached when enforced and the caller is neither an admin nor the service secret."""
+    if not enforced() or service or (user is not None and _is_admin(user)):
+        return
+    raise LimitReached({"code": "operator_only", "message": OPERATOR_ONLY_MESSAGE})
+
+
 def public_plans() -> dict:
     """GET /billing/plans: everything the pricing page renders."""
     out = []
@@ -395,7 +487,7 @@ def public_plans() -> dict:
                                   if p["price_monthly"] else 0)
         p["purchasable"] = bool(pid != "free" and price_id(pid, "monthly"))
         out.append(p)
-    return {"plans": out, "every_run": list(EVERY_RUN), "unlimited": UNLIMITED,
+    return {"plans": out, "every_run": list(EVERY_RUN), "unlimited": UNLIMITED, "credit_costs": dict(CREDIT_COSTS),
             "payments_enabled": payments_enabled(), "enforced": enforced()}
 
 

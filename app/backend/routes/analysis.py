@@ -200,7 +200,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     # plan limit fails CLOSED, unlike the capacity guards below.
     from app.backend.services import billing as _billing
     try:
-        await asyncio.to_thread(_billing.reserve_run, _caller, ticker)
+        await asyncio.to_thread(_billing.reserve_run, _caller, ticker, None, model_name)
     except _billing.LimitReached as _lr:
         raise HTTPException(status_code=402, detail=_lr.detail)
 
@@ -762,6 +762,7 @@ async def get_runs(
 
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, request: Request, db: Session = Depends(get_db)):
+    await asyncio.to_thread(_run_in_plan_history, run_id, request, db)
     user_id = _get_user_id(request, db)
     try:
         result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
@@ -791,6 +792,7 @@ async def get_run_workbook(run_id: str, request: Request, ticker: Optional[str] 
         await asyncio.to_thread(_billing.check_feature, _get_user(request, db), "excel_export")
     except _billing.LimitReached as _lr:
         raise HTTPException(status_code=402, detail=_lr.detail)
+    await asyncio.to_thread(_run_in_plan_history, run_id, request, db)
     user_id = _get_user_id(request, db)
     result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
     if result is None:
@@ -827,6 +829,7 @@ async def get_run_report_pdf(run_id: str, request: Request, ticker: Optional[str
         await asyncio.to_thread(_billing.check_feature, _get_user(request, db), "pdf_export")
     except _billing.LimitReached as _lr:
         raise HTTPException(status_code=402, detail=_lr.detail)
+    await asyncio.to_thread(_run_in_plan_history, run_id, request, db)
     user_id = _get_user_id(request, db)
     result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
     if result is None:
@@ -3174,7 +3177,17 @@ class _EstimateAskReq(_BaseModel):
     history: Optional[list[dict]] = None
 
 
+def _run_in_plan_history(run_id: str, request: Request, db: Session) -> None:
+    """Plan history window on a single run (pricing 2026-11-28); a no-op unless BILLING_ENFORCED."""
+    from app.backend.services import billing as _billing
+    try:
+        _billing.check_run_history(_get_user(request, db), run_id)
+    except _billing.LimitReached as _lr:
+        raise HTTPException(status_code=402, detail=_lr.detail)
+
+
 def _owned_run_or_404(run_id: str, request: Request, db: Session, apply_overrides: bool = True) -> tuple[Optional[int], dict]:
+    _run_in_plan_history(run_id, request, db)
     user_id = _get_user_id(request, db)
     result = analysis_service.get_run_result(run_id, user_id=user_id, apply_overrides=apply_overrides)
     if result is None:
