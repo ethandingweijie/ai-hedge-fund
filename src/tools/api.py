@@ -367,19 +367,20 @@ def _make_api_request(
 # caller in the process, including app/backend/services/screener_service.py
 # (which used to call requests.get directly with no throttle at all — see
 # acquire_fmp_token() below). Tunable:
-#   FMP_MAX_RPS            — refill rate (default ~11.5 req/s ≈ 700/min,
+#   FMP_MAX_RPS            — refill rate (default 46 req/s ≈ 2,760/min: owner's FMP Ultimate plan is 3,000/min,
+#                            ~8% headroom; 2026-11-28 -- was 11.5 for a 750/min plan. Historic note:
 #                            the shared budget across screener + live
 #                            pipeline traffic, ~7% headroom under a 750/min
 #                            plan ceiling)
-#   FMP_BURST              — bucket capacity (default 25 — absorbs the
+#   FMP_BURST              — bucket capacity (default 100; was 25 — absorbs the
 #                            screener's up-to-20-in-flight concurrency
 #                            without instantly draining)
 #   FMP_THROTTLE_DISABLED  — set "true" to bypass entirely
 import threading as _fmp_threading
 
 _FMP_THROTTLE_DISABLED = os.environ.get("FMP_THROTTLE_DISABLED", "false").lower() == "true"
-_FMP_MAX_RPS = float(os.environ.get("FMP_MAX_RPS", "11.5"))
-_FMP_BURST = float(os.environ.get("FMP_BURST", "25"))
+_FMP_MAX_RPS = float(os.environ.get("FMP_MAX_RPS", "46"))
+_FMP_BURST = float(os.environ.get("FMP_BURST", "100"))
 _fmp_throttle_lock = _fmp_threading.Lock()
 _fmp_tokens = _FMP_BURST
 _fmp_last_refill = time.monotonic()
