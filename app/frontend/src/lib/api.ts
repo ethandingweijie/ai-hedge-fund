@@ -1269,7 +1269,7 @@ export interface AskTicker {
   run_type:   'covered' | 'new' | 'premium';
   credits:    number;
   can_update: boolean;
-  latest:     { run_id: string; run_at: string; final_action?: string | null; price_target?: number | null } | null;
+  latest:     { run_id: string; run_at: string; final_action?: string | null; price_target?: number | null; own?: boolean } | null;
 }
 export interface AskResult {
   ask_id:       string;

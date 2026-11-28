@@ -206,6 +206,10 @@ def material_update_sentence(mu: Optional[dict], sym: str = "$") -> Optional[str
                 + (f" ({heads})" if heads else "")
                 + " is not yet reflected in our estimates, so the target predates it.")
     s = "This report incorporates material news since our previous report" + (f" ({heads})" if heads else "") + "."
+    ud = mu.get("user_development") or {}
+    if ud.get("headline"):
+        # Owner, 2026-11-28: say when a reader's market question triggered the update (it supersedes the shared report).
+        s = "Updated at a reader's request for a verified development. " + s
     ch = mu.get("estimate_changes")
     if ch:
         bits = []

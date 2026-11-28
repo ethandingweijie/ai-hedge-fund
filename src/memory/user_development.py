@@ -7,8 +7,13 @@ user then updates an affected ticker's analysis, the development rides into the 
   the development's sources, extractors re-run, valuation repriced -- and the new run supersedes the shared one;
 * a new ticker gets full research with the development as a question the research must answer.
 
-Only a development the ask service VERIFIED (dated, at least two independent source domains) can reach here; the
-pipeline never sees what a browser typed. This module is DB-free so src/ never imports the backend.
+Only a development the ask service VERIFIED (dated; two or more independent domains the search tool returned, one of
+them tier-1) can reach here. The pipeline never sees what a browser typed: not the question, only the verified
+headline, date, summary and sources (review 2026-11-28). This module is DB-free so src/ never imports the backend.
+
+A run carrying a development whose 12-month target moves more than REVIEW_MOVE from the prior report's target is
+placed Under Review (HOLD at zero weight) until a regular run confirms it (portfolio_manager._research_view_for);
+USER_DEVELOPMENT_REVIEW_MOVE sets the threshold (default 20%).
 """
 from __future__ import annotations
 
@@ -18,14 +23,35 @@ from typing import Optional
 _MAX_EVENTS = 5
 
 
+def review_move() -> float:
+    import os
+    try:
+        v = float(os.environ.get("USER_DEVELOPMENT_REVIEW_MOVE", "0.20"))
+        return v if v > 0 else 0.20
+    except (TypeError, ValueError):
+        return 0.20
+
+
+def review_needed(delta: Optional[dict], prior_target, new_target) -> Optional[dict]:
+    """{prior, new, move} when a user-raised development moved the target past review_move(); else None."""
+    if not (delta or {}).get("user_development"):
+        return None
+    try:
+        p, n = float(prior_target), float(new_target)
+    except (TypeError, ValueError):
+        return None
+    if p <= 0 or n <= 0:
+        return None
+    move = n / p - 1.0
+    return {"prior": p, "new": n, "move": move} if abs(move) > review_move() else None
+
+
 def source_block(dev: dict) -> str:
     """The development as search-result text: what the amend synthesis reads in place of a fresh search."""
     lines = [f"USER-RAISED DEVELOPMENT (verified against the sources below): {dev.get('headline') or ''}",
              f"Date: {dev.get('date') or 'unknown'}"]
     if dev.get("summary"):
         lines.append(f"Summary: {dev['summary']}")
-    if dev.get("question"):
-        lines.append(f"Question asked: {dev['question']}")
     for s in dev.get("sources") or []:
         if not isinstance(s, dict):
             continue
@@ -48,7 +74,6 @@ def merge(delta: Optional[dict], dev: dict) -> dict:
     prior_verdict = str(d.get("verdict") or "").strip()
     d["verdict"] = f"User-raised development: {ev['headline']}" + (f". {prior_verdict}" if prior_verdict else "")
     d["user_development"] = {"ask_id": dev.get("ask_id"), "headline": ev["headline"], "date": ev["date"],
-                             "question": str(dev.get("question") or "")[:300],
                              "sources": [s for s in (dev.get("sources") or []) if isinstance(s, dict)][:6]}
     return d
 

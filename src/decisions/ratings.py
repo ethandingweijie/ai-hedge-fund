@@ -304,6 +304,7 @@ def build_research_view(
     today: Optional[date] = None, unreconciled: Optional[dict] = None,
     material_unreflected: Optional[dict] = None,
     capm: Optional[dict] = None, carry: Optional[float] = None,
+    user_development: Optional[dict] = None, user_development_review: Optional[dict] = None,
 ) -> Optional[dict]:
     """Everything the report header and the trade layer need, decided once.
 
@@ -382,6 +383,19 @@ def build_research_view(
             f"{abs(sotp_per_share - target_12m) / target_12m:.0%}.")
         if status == "clean":
             status = "holdco_disclosure"
+
+    # Owner, 2026-11-28: a run made at a reader's request to fold in a verified development says so; a target move
+    # past the review threshold holds the rating Under Review until a regular run confirms it.
+    if user_development:
+        notes.insert(0, (f"This analysis was updated at a reader's request to reflect a verified development: "
+                         f"{str(user_development.get('headline') or '')[:160]}"
+                         + (f" ({user_development.get('date')})" if user_development.get("date") else "") + "."))
+    if user_development_review:
+        status = "under_review"
+        under_review = True
+        notes.insert(0, (f"Rating Under Review: a reader-raised development moved the 12-month target "
+                         f"{user_development_review['move']:+.0%} (from {user_development_review['prior']:,.2f} to "
+                         f"{user_development_review['new']:,.2f}); it is held until a regular analysis confirms it."))
 
     # Owner, 2026-11-27: material news the estimates do not yet reflect. The target
     # predates the news, so the rating is not pinned: Under Review, trade HOLD at zero.

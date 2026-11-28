@@ -1319,8 +1319,22 @@ def _research_view_for(ticker: str, state, scenario: dict,
             # market CAPM a bank / holdco run records), and the target's price-path carry for the structural test.
             capm=((dcf.get("wacc_build") or {}).get("firm_capm") or (dcf.get("wacc_build") or {}).get("market_capm")),
             carry=((dcf.get("pt_bridge") or {}).get("carry") or {}).get("factor"),
+            # Owner, 2026-11-28: a reader-raised development (market question) is disclosed, and a target move past
+            # the review threshold is held Under Review until a regular run confirms it.
+            user_development=(delta or {}).get("user_development"),
+            user_development_review=_user_dev_review(state, ticker, delta, pt),
         )
     except Exception:
+        return None
+
+
+def _user_dev_review(state, ticker: str, delta: dict, new_target) -> dict | None:
+    try:
+        from src.memory import user_development as _ud
+        prior = ((state["data"].get("prior_recap") or {}).get(ticker) or {})
+        prior_pt = (prior.get("recap_json") or {}).get("price_target")
+        return _ud.review_needed(delta, prior_pt, new_target)
+    except Exception:                                      # noqa: BLE001
         return None
 
 

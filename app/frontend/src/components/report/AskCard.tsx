@@ -37,8 +37,9 @@ function TickerRow({ row, askId, onOpenReport, onUpdate }: {
       {row.why && <p className="text-xs text-muted-foreground mt-0.5">{row.why}</p>}
       <div className="flex flex-wrap items-center gap-2 mt-1.5">
         {row.latest ? (
-          <button type="button" onClick={() => onOpenReport(row.latest!.run_id)}
-                  className="text-xs text-foreground underline underline-offset-2 hover:text-muted-foreground">
+          // Reports are private to the account that ran them: only the asker's own report is a link.
+          <button type="button" disabled={!row.latest.own} onClick={() => onOpenReport(row.latest!.run_id)}
+                  className={`text-xs text-foreground ${row.latest.own ? 'underline underline-offset-2 hover:text-muted-foreground' : 'cursor-default'}`}>
             Latest analysis {latestDate}
             {row.latest.final_action && (
               <span className={`ml-1 font-semibold ${actionTone(row.latest.final_action, 'text')}`}>{row.latest.final_action}</span>
