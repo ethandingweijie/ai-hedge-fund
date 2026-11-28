@@ -63,4 +63,28 @@ def next_earnings_date(ticker: str, days: int = 21,
     sym = to_fmp_symbol(ticker)
     if not sym:
         return None
-    return _window(today or date.today(), days).get(sym.upper())
+    start = today or date.today()
+    hit = _window(start, days).get(sym.upper())
+    if hit is None and sym.upper().endswith((".SS", ".SZ")):
+        # The window endpoint caps at 4,000 rows and held 5 A-shares in a 3-week window (2026-11-28); the
+        # per-symbol /earnings rows carry each A-share's booked date.
+        hit = _symbol_next(sym.upper(), start, days)
+    return hit
+
+
+def _symbol_next(sym: str, start: date, days: int) -> Optional[str]:
+    api_key = os.environ.get("FMP_API_KEY") or ""
+    if not api_key:
+        return None
+    try:
+        import requests
+        resp = requests.get(f"{_STABLE}/earnings", params={"symbol": sym, "limit": 12, "apikey": api_key},
+                            timeout=_TIMEOUT)
+        if resp.status_code != 200:
+            return None
+        end = (start + timedelta(days=days)).isoformat()
+        dates = sorted(str(r.get("date") or "")[:10] for r in resp.json() or []
+                       if isinstance(r, dict) and r.get("epsActual") is None)
+        return next((d for d in dates if start.isoformat() <= d <= end), None)
+    except Exception:
+        return None

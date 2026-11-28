@@ -7579,7 +7579,8 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     try:
         from src.data.capm import risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
-        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US")[0]
+        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else
+                        "CN" if _t_up.endswith((".SS", ".SZ")) else "US")[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -10022,7 +10023,8 @@ def _compute_method_value(
                                                        + (f" ({len(_pev.get('members_used') or [])} peers with an "
                                                           f"accepted EV)" if _pev else "")),
                                        "members_used": _pev.get("members_used") or [],
-                                       "members_missing": _pev.get("members_missing") or []})
+                                       "members_missing": _pev.get("members_missing") or [],
+                                       "input_source": most_recent.get("_ev_input_source")})
             return ev_ps * _m * sm
         # VNB-margin uplift on P/BV (proxy when EV/share not disclosed)
         vnb = most_recent.get("vnb_margin")
@@ -12585,8 +12587,8 @@ def _consensus_at_run(ticker: str, consensus_pt: Optional[dict]) -> dict:
     """The Street reference as it stood when this run was made."""
     from datetime import datetime as _dt, timezone as _tz
     t = (ticker or "").upper()
-    if t.endswith((".HK", ".SI")):
-        # FMP has no consensus for HKEX/SGX. The S&P figure comes from a page
+    if t.endswith((".HK", ".SI", ".SS", ".SZ")):
+        # FMP has no consensus for HKEX/SGX (nor SSE/SZSE: price-target-consensus is empty, 2026-11-28). The S&P figure comes from a page
         # scrape (target_price.py, 25 s timeout) that does not belong on the
         # live path; the daily outcome job records it on the run's own day.
         return {"status": "deferred", "source": "stockanalysis.com",
@@ -14005,7 +14007,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # marketCap/price is market-observed and cannot carry unit errors.
         # Skipped automatically for HK/SG tickers (no quote fetched above).
         _shares_source = "line_items"
-        if (
+        # A+H issuers (either line): quote marketCap is company-level, so mcap / this line's price is not a share
+        # count (audit 2026-11-28: 600941.SS -36%, 0981.HK +10%). Keep the statements' TOTAL count.
+        from src.markets.china import is_ah_dual_listed as _ah_dual, AH_SHARES_SOURCE as _AH_SRC
+        if _ah_dual(ticker) and shares and shares > 0:
+            _shares_source = _AH_SRC
+        elif (
             _quote_mcap and _spot_price and _spot_price > 0
             and shares and shares > 0
         ):
@@ -14892,6 +14899,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _ev_out.get("ev_per_share"):
                     most_recent["embedded_value_per_share"] = _ev_out["ev_per_share"]
                     most_recent["vnb_margin"] = _ev_out.get("vnb_margin")
+                    from src.markets.china import reused_input_disclosure as _cn_reuse   # A-share <- H line
+                    _ev_src = _cn_reuse(_ev_e, "ev_per_share", _target_ccy, _ii_w6._fx(_target_ccy))
+                    if _ev_src:
+                        most_recent["_ev_input_source"] = _ev_src
+                        ticker_forward_flags.append("Embedded Value input: " + _ev_src["text"])
                     try:
                         from src.data.insurer_pev import cohort_pb as _cohort_pb, cohort_pev as _cohort_pev
                         _ipb_out = _cohort_pb(ticker)
@@ -16870,6 +16882,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _crp = _crp_of(reported_currency)
         except Exception:                                  # noqa: BLE001
             _crp = 0.0
+        # Owner, 2026-11-28 (China A-shares, D-CN-3/4): an SSE/SZSE listing carries the market registry's country
+        # premium (SHH/SHZ 1.5%), here and therefore in the firm CAPM, the market CAPM and the CSI 300 benchmark.
+        # HK-listed CNY reporters keep the currency row (CNY 0%, owner 2026-09-26).
+        try:
+            from src.markets.china import a_share_crp as _cn_crp
+            _cn = _cn_crp(ticker)
+            if _cn is not None:
+                _crp = float(_cn)
+        except Exception:                                  # noqa: BLE001
+            pass
         # The owner's figure is the TOTAL country premium in the rate. The HK
         # sector WACC table embeds 150bps of its own (`crp_embedded`), so the
         # engine adds only the difference -- and when the owner's total is
@@ -16933,7 +16955,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
-                    market=("HK" if _is_hk else "SG" if _is_sg else "US"),
+                    market=("HK" if _is_hk else "SG" if _is_sg else
+                            "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -16957,15 +16980,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
         try:
             from src.data import capm as _capm_mkt
-            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "US"
+            _mkt_code = ("HK" if _is_hk else "SG" if _is_sg else
+                         "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US")
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:
                 _m_rf, _m_src = _capm_mkt.risk_free(_mkt_code)
             _m_crp = float(_wacc_build.get("country_risk_premium_total") or 0.0)
             _wacc_build["market_capm"] = {
-                "rf": round(float(_m_rf), 5), "rf_source": _m_src, "erp": _capm_mkt.ERP, "crp": round(_m_crp, 5),
-                "cost_of_equity": round(float(_m_rf) + _capm_mkt.ERP + _m_crp, 5), "market": _mkt_code,
+                "rf": round(float(_m_rf), 5), "rf_source": _m_src, "erp": _capm_mkt.equity_risk_premium(_mkt_code)[0],
+                "crp": round(_m_crp, 5),
+                "cost_of_equity": round(float(_m_rf) + _capm_mkt.equity_risk_premium(_mkt_code)[0] + _m_crp, 5),
+                "market": _mkt_code,
                 "basis": "market cost of equity = rf + ERP + CRP (beta 1), the firm CAPM's own inputs"}
         except Exception:                                  # noqa: BLE001
             pass
@@ -21484,6 +21510,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _lst_ccy = "HKD" if _is_hk else (locals().get("_target_ccy") or _output_currency)
                 _verdict = _ccy_verdict(_output_currency, _lst_ccy, reported_currency,
                                         _base_sr.get("intrinsic_value"), _spot_price)
+            if not _verdict:                     # D-CN-6: A-share life insurer without an accepted EV input
+                from src.markets.china import ev_withhold_verdict as _cn_ev
+                _verdict = _cn_ev(ticker, profile_name, _base_sr)
             if _verdict:
                 _rating_state = {
                     "state": "unrated", **_verdict,

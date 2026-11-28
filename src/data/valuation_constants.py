@@ -72,8 +72,13 @@ def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Opti
 
 
 def market_key(ticker: Optional[str]) -> str:
-    """The market a constant is keyed by: HKSE, SES or US (the comps store's keys)."""
+    """The market a constant is keyed by: HKSE, SES, SHH, SHZ or US (the comps store's keys). An A-share used to
+    fall to "US" and would have taken a Treasury-based cost of equity on RMB cash flows."""
     t = (ticker or "").upper()
+    if t.endswith(".SS"):
+        return "SHH"
+    if t.endswith(".SZ"):
+        return "SHZ"
     return "HKSE" if t.endswith(".HK") else ("SES" if t.endswith(".SI") else "US")
 
 
@@ -138,6 +143,9 @@ UNRATED_REASONS = {
     "pre_revenue": "Unrated — pre-revenue",
     "no_valuation": "Unrated — no method could value it",
     "insufficient_methods": "Unrated — too little of the method set could be computed",
+    # Owner, 2026-11-28 (China A-shares, D-CN-6): the profile's anchor needs a company input no one has accepted yet
+    # (an A-share life insurer's embedded value); a fallback leg is not published in its place.
+    "input_required": "Unrated — awaiting an accepted company input",
 }
 
 

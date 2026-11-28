@@ -42,9 +42,11 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 _SENTENCE = re.compile(
     r"According to\s+(?P<n>\d+)\s+analysts?[^.]*?"
-    r"average price target of\s+\$?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
-_LOW = re.compile(r"lowest is\s+\$?([\d,]+\.?\d*)", re.I)
-_HIGH = re.compile(r"highest is\s+\$?([\d,]+\.?\d*)", re.I)
+    r"average price target of\s+(?:\$|¥|&yen;)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
+# A-share pages write the yuan as "¥" ("average price target of ¥1,705"); the venue currency line ("Currency is
+# CNY") is what names it, never the sign.
+_LOW = re.compile(r"lowest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
+_HIGH = re.compile(r"highest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
 #: The page states the implied move alongside the target. It is the only
 #: internal cross-check available, and it catches a stale or mis-scaled
@@ -86,6 +88,10 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
         return f"hkg/{code}", "HKD"
     if t.endswith(".SI"):
         return f"sgx/{t[:-3]}", "SGD"
+    if t.endswith(".SS"):                       # A-shares: verified 2026-11-28 (600519 -> 23 analysts, CNY)
+        return f"sha/{t[:-3]}", "CNY"
+    if t.endswith(".SZ"):
+        return f"she/{t[:-3]}", "CNY"
     return None
 
 
@@ -127,7 +133,10 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         resp = requests.get(url, headers={"User-Agent": _UA}, timeout=25)
         if resp.status_code != 200:
             return None
-        body = resp.text
+        # The page is UTF-8 but sends no charset, so requests guesses Latin-1 and the A-share yuan sign arrives
+        # as "Â¥" -- the target sentence then fails to parse.
+        _raw = getattr(resp, "content", None)
+        body = _raw.decode("utf-8", errors="replace") if isinstance(_raw, bytes) else resp.text
     except Exception:                                      # noqa: BLE001
         return None
 

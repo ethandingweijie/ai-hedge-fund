@@ -883,10 +883,27 @@
   },
   "risk_free_by_market": {
     "_doc": "Owner, 2026-11-25 (HK/SG audit): the risk-free rate matches the currency of the cash flows. A market listed here discounts at its own government 10y; any other market takes live FRED DGS10. HK is not listed: the HKD peg keeps it on US rates. Reviewed quarterly.",
-    "reviewed": {"last_reviewed": "2026-11-25", "reviewer": "owner", "cadence": "quarterly"},
+    "reviewed": {"last_reviewed": "2026-11-28", "reviewer": "owner", "cadence": "quarterly"},
     "markets": {
       "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)",
-             "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."}
+             "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."},
+      "CN": {"value": 0.0159, "basis": "10Y China Government Bond (CGB)", "source": "ADB AsianBondsOnline market watch, close 2026-11-26 (1.591%)",
+             "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-28 (China A-shares, D-CN-2): Ke and WACC are at least 3.0pp over the CGB 10y, on the SG precedent -- on 1.59% a 0.6-beta A-share takes Ke 1.59% + 0.6 x 4.41% = 4.2% without a floor. Derivation: docs/markets/CHINA.md.",
+             "accepted": "2026-11-28", "reviewer": "owner"}
+    }
+  },
+  "equity_risk_premium_by_market": {
+    "_doc": "Owner, 2026-11-28 (China A-shares): a market listed here prices equity at its own ERP in the firm CAPM, the market cost of equity and the rating benchmark; any other market takes capm.ERP (Damodaran US implied, 4.41%). The value is the premium NET of the market's country risk premium, which the engine adds separately. Reviewed quarterly.",
+    "reviewed": {"last_reviewed": "2026-11-28", "reviewer": "owner", "cadence": "quarterly"},
+    "markets": {
+      "CN": {"value": 0.0432, "accepted": "2026-11-28", "reviewer": "owner", "applies_to": ["SHH", "SHZ"],
+             "gross_implied_premium": 0.0582, "crp_netted": 0.015,
+             "method": "Market-implied total equity premium = earnings yield of the A-share market minus the CGB 10y: 1 / (median of the SHH sector-level NTM P/E medians) - rf. That premium is measured on A-share prices against the local risk-free rate, so it already contains the country risk A-share investors demand; the registry CRP (1.5%, kept as owner-accepted) is therefore netted out to avoid counting it twice: 5.82% - 1.50% = 4.32%. Total beta-1 premium over the CGB = 4.32% + 1.50% = 5.82% (was 4.41% + 1.50% = 5.91%).",
+             "inputs": {"as_of": "2026-11-28", "source": "production regional_comps (SHH sector rows, cohort all, refresh 2026-11-28T03:05Z)",
+                        "sector_pe_ntm": {"Financial Services": 7.42, "Basic Materials": 9.16, "Energy": 10.90, "Industrials": 11.98, "Consumer Cyclical": 13.49, "Utilities": 15.31, "Consumer Defensive": 18.27, "Healthcare": 23.72, "Technology": 33.26},
+                        "median_pe_ntm": 13.488, "earnings_yield": 0.07414, "rf": 0.0159,
+                        "rf_source": "CGB 10y, ADB AsianBondsOnline close 2026-11-26 (1.591%)"},
+             "sensitivity": "SHZ alone: median NTM P/E 17.12x -> 4.25% gross (2.75% net); SHH+SHZ pooled 15.68x -> 4.79% gross (3.29% net). The owner approved the SHH derivation (~5.8pp gross) for both exchanges. An earnings yield is a real-return proxy set against a nominal CGB, and ignores growth: it is a level check, not a model."}
     }
   },
   "commodity_price_deck": {

@@ -93,8 +93,10 @@ def in_routing_scope(ticker: str | None, industry: str | None) -> bool:
 
 
 def market_of(ticker: str | None) -> str:
-    """US / HK / SG from the ticker suffix."""
+    """US / HK / SG / CN from the ticker suffix (CN has no market table: it never borrows another's)."""
     t = (ticker or "").strip().upper()
+    if t.endswith((".SS", ".SZ")):
+        return "CN"
     if t.endswith(".SI"):
         return "SG"
     if t.endswith(".HK"):

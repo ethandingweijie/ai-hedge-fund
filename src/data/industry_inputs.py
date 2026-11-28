@@ -401,15 +401,42 @@ def canonical_data(e: Optional[dict]) -> Optional[dict]:
     return walk(e["data"])
 
 
+def _h_share_reuse(ticker: str, kind: str, doc: Optional[dict] = None) -> Optional[tuple[str, dict]]:
+    """(H ticker, its accepted entry) when `ticker` is a China A-share whose same-issuer H line has an accepted input
+    of this kind, else None. Owner, 2026-11-28: an A-share may reuse its H-share's accepted COMPANY inputs (one set
+    of accounts); amounts are converted into the caller's currency by the usual FX path, and the caller discloses
+    the source listing. Never a price: inputs are company facts, not the other line's market price."""
+    try:
+        from src.markets.china import h_share_for, is_cn_ticker
+        if not is_cn_ticker(ticker):
+            return None
+        h = h_share_for(ticker)
+        if not h:
+            return None
+        e = entry(h, kind, doc)
+        if not e or review_for(h, kind, e)["status"] != "accepted":
+            return None
+        return h, e
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def accepted_entry(ticker: str, kind: str, doc: Optional[dict] = None) -> Optional[dict]:
     """The stored entry when the owner has accepted exactly its current figures,
     else None. For kinds whose payload is structured (a SOTP's segments and
-    multiple ranges), the caller converts it; the gate is the same."""
+    multiple ranges), the caller converts it; the gate is the same.
+
+    A China A-share with no accepted input of its own falls back to its H line's (the returned copy carries
+    `_reused_from` with the source listing and its review date)."""
     try:
         e = entry(ticker, kind, doc)
-        if not e or review_for(ticker, kind, e)["status"] != "accepted":
-            return None
-        return e
+        if e and review_for(ticker, kind, e)["status"] == "accepted":
+            return e
+        reuse = _h_share_reuse(ticker, kind, doc)
+        if reuse:
+            h, he = reuse
+            return {**he, "_reused_from": {"listing": h, "reviewed_at": review_for(h, kind, he).get("reviewed_at")}}
+        return None
     except Exception:  # noqa: BLE001
         return None
 
@@ -437,8 +464,13 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
     """
     try:
         e = entry(ticker, kind, doc)
+        reused_from = None
         if not e or review_for(ticker, kind, e)["status"] != "accepted":
-            return None
+            reuse = _h_share_reuse(ticker, kind, doc)           # China A-share -> its H line (owner, 2026-11-28)
+            if not reuse:
+                return None
+            reused_from, e = reuse
+            ticker = reused_from                                 # the overlay review below is the H line's
         base = amount_of(e, to_ccy, fx)
         if base is None:
             return None
@@ -446,7 +478,8 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
                "delta_pct": None, "delta_abs": None,
                "basis": e.get("basis") or "actual",
                "period": ((e.get("data") or {}).get("value") or {}).get("period"),
-               "source_url": ((e.get("data") or {}).get("value") or {}).get("source_url")}
+               "source_url": ((e.get("data") or {}).get("value") or {}).get("source_url"),
+               "reused_from": reused_from}
         if kind == "backlog":
             # What the company calls it (funded, total, RPO, ...) and its cited
             # book-to-bill, for the backlog-coverage DCF. Inside the content hash.

@@ -40,7 +40,7 @@ function fmtNum(v: number | null | undefined, dp = 2): string {
 // Symbol per listing currency. US$ only when the portfolio mixes markets,
 // so a pure-US book still reads "$".
 const CCY_SYMBOL: Record<string, string> = {
-  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'CN¥', EUR: '€', GBP: '£', JPY: 'JP¥',
+  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'RMB ', EUR: '€', GBP: '£', JPY: 'JP¥',
   USD_MIXED: 'US$',
 };
 
@@ -376,7 +376,7 @@ export function PortfolioPage() {
                 <input
                   value={ticker} onChange={e => setTicker(e.target.value)}
                   placeholder={t("AAPL · 9988 · D05")}
-                  title={t("US tickers, HK codes (9988 or 9988.HK) and SGX codes (D05 or D05.SI). Enter avg cost in the stock's trading currency.")}
+                  title={t("US tickers, HK codes (9988 or 9988.HK), SGX codes (D05 or D05.SI) and China A-shares (600519.SS or SH600519). Enter avg cost in the stock's trading currency.")}
                   className="w-36 h-11 rounded-lg border border-input bg-background px-3 text-sm uppercase"
                   onKeyDown={e => e.key === 'Enter' && void onAdd()}
                 />

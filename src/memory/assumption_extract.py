@@ -1417,6 +1417,16 @@ def latest_earnings_event(ticker: str) -> Optional[str]:
         candidates.extend((d.get("date") or "")[:10] for d in dates[:4])
     except Exception:
         pass
+    # China A-shares: the publication date of the newest periodic report on cninfo. FMP's A-share statements carry
+    # the period end as their filing date, so they cannot say when results went public.
+    if str(ticker or "").upper().endswith((".SS", ".SZ")):
+        try:
+            from src.tools.cninfo_api import latest_report_date
+            d = latest_report_date(ticker)
+            if d:
+                candidates.append(d)
+        except Exception:
+            pass
     candidates = [c for c in candidates if c]
     return max(candidates) if candidates else None
 

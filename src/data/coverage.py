@@ -41,7 +41,9 @@ def is_tuned(ticker: Optional[str]) -> bool:
     except Exception:                                       # noqa: BLE001
         pass
     from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP, TICKER_SECTOR_LOOKUP
-    return t in TICKER_SECTOR_LOOKUP or t in SGX_TICKER_SECTOR_LOOKUP or t in _overrides()
+    from src.markets.china import CN_TICKER_SECTOR_LOOKUP
+    return (t in TICKER_SECTOR_LOOKUP or t in SGX_TICKER_SECTOR_LOOKUP or t in CN_TICKER_SECTOR_LOOKUP
+            or t in _overrides())
 
 
 def coverage(ticker: Optional[str]) -> dict:

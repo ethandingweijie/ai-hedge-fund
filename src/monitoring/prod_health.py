@@ -204,7 +204,8 @@ def review_checks() -> list[dict]:
     from src.data import valuation_constants as vc
     doc = vc.load()
     items, worst = [], OK
-    for block, label in (("commodity_price_deck", "commodity price deck"), ("risk_free_by_market", "risk-free rates")):
+    for block, label in (("commodity_price_deck", "commodity price deck"), ("risk_free_by_market", "risk-free rates"),
+                         ("equity_risk_premium_by_market", "market equity risk premia")):
         b = doc.get(block) or {}
         last = (b.get("reviewed") or {}).get("last_reviewed")
         at = _parse_ts(last) if last else None

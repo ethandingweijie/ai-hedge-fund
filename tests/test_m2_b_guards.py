@@ -216,7 +216,9 @@ def test_fmt_fmp_labels_currency():
 
 
 def test_currency_symbol_lookup():
-    assert dr._currency_symbol("CNY") == "¥"
+    # 2026-11-28 (China A-shares): renminbi is labelled "RMB", never a bare "¥" (also the yen sign).
+    assert dr._currency_symbol("CNY") == "RMB "
+    assert dr._currency_symbol("JPY") == "¥"
     assert dr._currency_symbol("USD") == "$"
     assert dr._currency_symbol(None) == "$"
     assert dr._currency_symbol("CHF") == "CHF "        # unknown → ISO prefix

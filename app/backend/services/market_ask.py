@@ -43,7 +43,9 @@ TIER1_DOMAINS = frozenset({
     "reuters.com", "bloomberg.com", "wsj.com", "ft.com", "cnbc.com", "apnews.com", "nikkei.com", "barrons.com",
     "marketwatch.com", "nytimes.com", "economist.com", "scmp.com", "straitstimes.com", "businesstimes.com.sg",
     "theedgesingapore.com", "caixinglobal.com", "sec.gov", "hkexnews.hk", "hkex.com.hk", "sgx.com", "federalreserve.gov",
-    "bis.doc.gov", "ustr.gov", "mas.gov.sg", "sfc.hk", "prnewswire.com", "businesswire.com", "globenewswire.com",
+    "bis.doc.gov", "ustr.gov", "mas.gov.sg", "sfc.hk",
+    # China A-shares: the CSRC-designated disclosure site, the two exchanges and the regulator
+    "cninfo.com.cn", "sse.com.cn", "szse.cn", "csrc.gov.cn", "prnewswire.com", "businesswire.com", "globenewswire.com",
 })
 
 
@@ -163,10 +165,10 @@ def _prompt(question: str, today: str, ticker_hint: Optional[str]) -> str:
         '                 "summary": "1-2 sentences of the facts"} or null if the question names no real event,\n'
         ' "corroborated": true only if at least two independent outlets report it,\n'
         ' "sources": [{"title": "...", "url": "https://...", "date": "YYYY-MM-DD", "fact": "what it reports"}],\n'
-        ' "tickers": [{"symbol": "Yahoo symbol, e.g. NVDA, 9988.HK, D05.SI", "name": "company",\n'
+        ' "tickers": [{"symbol": "Yahoo symbol, e.g. NVDA, 9988.HK, D05.SI, 600519.SS", "name": "company",\n'
         '              "why": "one line on how the development affects it"}]}\n'
-        f"List at most {MAX_TICKERS} listed companies most directly affected (US, Hong Kong or Singapore listings "
-        "only). Use only sources you actually found."
+        f"List at most {MAX_TICKERS} listed companies most directly affected (US, Hong Kong, Singapore or China "
+        "A-share listings only). Use only sources you actually found."
     )
 
 
@@ -259,6 +261,9 @@ def _supported_symbol(sym: str) -> Optional[str]:
     s = str(sym or "").strip().upper()
     if not s:
         return None
+    if s.endswith((".SS", ".SZ", ".SH")):       # China A-shares: a stock code, never an index (000001.SS)
+        from src.markets.china import normalize
+        return normalize(s)
     if s.endswith(".HK") or s.endswith(".SI"):
         return canonical_ticker(s) or None
     return s if _US_SYM.match(s) else None
