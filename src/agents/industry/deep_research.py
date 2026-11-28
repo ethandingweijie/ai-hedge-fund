@@ -661,6 +661,18 @@ def _qwen_search_extra_body(model) -> dict:
     return body
 
 
+def _extractor_model(run_model: str | None) -> str:
+    """Synthesis + extractor model for a Qwen-routed run (owner, 2026-11-28, D5): the run's own pinned model
+    (qwen3.8-flash), so every extractor runs on flash. DEEP_RESEARCH_SYNTHESIS_MODEL no longer overrides it -- a local
+    or stale env value silently kept extraction on qwen3.6-plus (64% of one run's cost). EXTRACTOR_MODEL is the
+    explicit rollback lever."""
+    override = os.environ.get("EXTRACTOR_MODEL", "").strip()
+    if override:
+        return override
+    m = str(run_model or "").strip()
+    return m if m.startswith("qwen") else DEFAULT_RESEARCH_MODEL
+
+
 def _qwen_search_api() -> str:
     """Which DashScope search surface Tier 1 uses: "responses" (default; the
     web_search tool, with search count + sources) or "chat" (enable_search)."""
@@ -7087,7 +7099,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             _key              = _hk_key
             _base_url         = _hk_base_url
             _model            = _hk_model or DEFAULT_RESEARCH_MODEL   # OpenAI-compat web search
-            _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or DEFAULT_RESEARCH_MODEL  # Anthropic-compat synthesis
+            _synthesis_model  = _extractor_model(_model)  # Anthropic-compat synthesis + extractors
         else:
             # When user selects a Qwen model for US tickers, use the DashScope
             # key and base URL (same as HK path) instead of the Anthropic key.
@@ -7095,7 +7107,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                 _key              = _hk_key
                 _base_url         = _hk_base_url
                 _model            = _us_model
-                _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or DEFAULT_RESEARCH_MODEL
+                _synthesis_model  = _extractor_model(_model)
             else:
                 _key              = _us_key or anthropic_key
                 _base_url         = None

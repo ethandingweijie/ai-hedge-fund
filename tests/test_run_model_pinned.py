@@ -45,3 +45,17 @@ def test_credit_rating_search_on_flash_turns_thinking_off():
     from src.agents.industry.deep_research import _qwen_search_extra_body
     body = _qwen_search_extra_body("qwen3.8-flash")
     assert body["enable_thinking"] is False and body["search_options"]["search_strategy"] == "pro"
+
+
+def test_extractors_follow_the_run_model_not_the_synthesis_env(monkeypatch):
+    """D5 (owner 2026-11-28): every extractor on qwen3.8-flash. A stale DEEP_RESEARCH_SYNTHESIS_MODEL=qwen3.6-plus
+    (local .env) used to keep extraction on plus; only EXTRACTOR_MODEL overrides now."""
+    from src.agents.industry import deep_research as dr
+    monkeypatch.setenv("DEEP_RESEARCH_SYNTHESIS_MODEL", "qwen3.6-plus")
+    monkeypatch.delenv("EXTRACTOR_MODEL", raising=False)
+    assert dr._extractor_model("qwen3.8-flash") == "qwen3.8-flash"
+    assert dr._extractor_model(None) == dr.DEFAULT_RESEARCH_MODEL == "qwen3.8-flash"
+    monkeypatch.setenv("EXTRACTOR_MODEL", "qwen3.6-plus")
+    assert dr._extractor_model("qwen3.8-flash") == "qwen3.6-plus"
+    src = inspect.getsource(dr)
+    assert 'os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or DEFAULT_RESEARCH_MODEL' not in src

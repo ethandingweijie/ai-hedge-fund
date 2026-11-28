@@ -166,7 +166,7 @@ def _resolve_extractor_client(
     # on user's regional endpoint). If the model needs to change later,
     # edit this constant — this is admin tooling, not a configurable
     # production path.
-    dashscope_model    = "qwen3.6-plus"
+    dashscope_model    = os.environ.get("EXTRACTOR_MODEL", "").strip() or "qwen3.8-flash"   # D5, owner 2026-11-28
     anthropic_key      = os.environ.get("ANTHROPIC_API_KEY")
 
     want_anthropic = provider == "anthropic"
