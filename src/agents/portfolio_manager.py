@@ -1343,6 +1343,12 @@ def _publication(scenario: dict, unreconciled: dict | None) -> dict:
     target range is, and the run's credit is returned. Otherwise a point target."""
     if not unreconciled:
         return {"mode": "point"}
+    try:                                                   # 2026-11-28 bridge: a range only above the publication ratio
+        from src.decisions.ratings import range_publication_ratio
+        if float(unreconciled.get("ratio") or 0) <= range_publication_ratio():
+            return {"mode": "point"}
+    except (TypeError, ValueError):
+        pass
     by = scenario.get("12m_targets_by_scenario") or {}
     lo, hi = by.get("bear"), by.get("bull")
     try:

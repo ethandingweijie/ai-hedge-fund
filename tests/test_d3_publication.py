@@ -27,9 +27,11 @@ def test_same_currency_far_from_price_is_not_a_currency_problem():
 def test_methods_that_disagree_publish_the_bear_to_bull_range():
     from src.agents import portfolio_manager as pm
     sc = {"12m_targets_by_scenario": {"bear": 80.0, "base": 100.0, "bull": 140.0}}
-    disp = {"ratio": 3.4, "hi": 170.0, "hi_leg": "DCF", "lo": 50.0, "lo_leg": "EV/EBITDA"}
+    disp = {"ratio": 4.4, "hi": 220.0, "hi_leg": "DCF", "lo": 50.0, "lo_leg": "EV/EBITDA"}
     p = pm._publication(sc, disp)
-    assert p["mode"] == "range" and (p["low"], p["high"]) == (80.0, 140.0) and "3.4x" in p["reason"]
+    assert p["mode"] == "range" and (p["low"], p["high"]) == (80.0, 140.0) and "4.4x" in p["reason"]
+    # 2026-11-28 bridge: 2.5x-4x keeps the single target (the rating cap at Neutral is unchanged)
+    assert pm._publication(sc, {**disp, "ratio": 3.4}) == {"mode": "point"}
     assert pm._publication(sc, None) == {"mode": "point"}
     assert pm._publication({"12m_targets_by_scenario": {"bear": None, "bull": 140.0}}, disp) == {"mode": "point"}
 
@@ -69,3 +71,18 @@ def test_refund_returns_the_runs_credits(ledger):
     assert b.refund_run(9, "MU", start - timedelta(minutes=1), "range_only") == 1
     assert b.usage(u)["used"] == 0
     assert b.refund_run(9, "MU", start - timedelta(minutes=1), "range_only") == 0      # idempotent
+
+
+def test_moat_roic_excludes_goodwill():
+    """D4 (b), owner 2026-11-28: acquirers' organic returns are measured without acquisition goodwill."""
+    from src.data import capm
+    inc = [{"date": f"{y}-12-31", "operatingIncome": 100.0, "incomeBeforeTax": 100.0, "incomeTaxExpense": 20.0}
+           for y in range(2016, 2026)]
+    bal = [{"date": f"{y}-12-31", "totalDebt": 200.0, "totalStockholdersEquity": 500.0, "cashAndShortTermInvestments": 100.0,
+            "goodwill": 300.0, "intangibleAssets": 100.0} for y in range(2016, 2026)]
+    ex = capm.roic_ex_goodwill(inc, bal)
+    assert len(ex) == 10 and ex[0] == pytest.approx(80.0 / 200.0)        # vs 80 / 600 = 13% with goodwill
+    m = capm.moat_spread(ex, 0.10)
+    assert m["tagged"] and m["spread"] == pytest.approx(0.10)              # capped at 10 points
+    bal_neg = [{**b, "totalStockholdersEquity": -500.0} for b in bal]      # negative invested capital -> skipped
+    assert capm.roic_ex_goodwill(inc, bal_neg) == []

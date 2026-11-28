@@ -204,10 +204,50 @@ def moat_history_enabled() -> bool:
     return os.environ.get("MOAT_HISTORY", "on").strip().lower() not in ("0", "false", "no", "off")
 
 
+def roic_ex_goodwill(income: list, balance: list) -> list[float]:
+    """Annual after-tax ROIC on invested capital EXCLUDING goodwill and acquired intangibles, newest first.
+
+    Owner, 2026-11-28 (D4 b): the terminal RONIC concerns organic reinvestment; goodwill is the price of past
+    acquisitions, not capital the business needs to grow. FMP's returnOnInvestedCapital keeps it in the denominator,
+    so acquirers with high operating returns failed the moat test (KO 10% FMP vs 32% ex-goodwill; PEP 13% vs 70%;
+    PG 15% vs 165%; GOOGL 17% vs 44%). NOPAT = operating income x (1 - effective tax, clamped 0-35%); invested
+    capital = total debt + equity - cash & short-term investments - goodwill - intangibles. Years with non-positive
+    invested capital are skipped (ROIC undefined)."""
+    bs = {str(r.get("date"))[:10]: r for r in balance or [] if isinstance(r, dict)}
+    out = []
+    for i in sorted((r for r in income or [] if isinstance(r, dict)), key=lambda r: str(r.get("date")), reverse=True):
+        b = bs.get(str(i.get("date"))[:10])
+        if not b:
+            continue
+        ebit = i.get("operatingIncome")
+        pre = i.get("incomeBeforeTax") or 0
+        tax = (i.get("incomeTaxExpense") or 0) / pre if pre else 0.21
+        tax = min(max(tax, 0.0), 0.35)
+        ic = ((b.get("totalDebt") or 0) + (b.get("totalStockholdersEquity") or 0)
+              - (b.get("cashAndShortTermInvestments") or 0) - (b.get("goodwill") or 0) - (b.get("intangibleAssets") or 0))
+        if not isinstance(ebit, (int, float)) or ic <= 0:
+            continue
+        v = ebit * (1.0 - tax) / ic
+        if -1.0 < v < 3.0:
+            out.append(float(v))
+    return out
+
+
 def roic_history(ticker: str, api_key: Optional[str] = None, years: int = 10) -> list[float]:
-    """The company's own annual after-tax ROIC (FMP key metrics), newest first; [] when disabled or unavailable."""
+    """The company's own annual after-tax ROIC, newest first; [] when disabled or unavailable.
+    D4 (b): excluding goodwill and acquired intangibles (roic_ex_goodwill) when at least MOAT_MIN_YEARS valid years
+    exist; otherwise FMP's key-metrics ROIC as before."""
     if not moat_history_enabled():
         return []
+    try:
+        from src.tools.api import _STABLE, _fmp_get
+        inc = _fmp_get(f"{_STABLE}/income-statement", {"symbol": ticker, "period": "annual", "limit": years}, api_key, uncap=True) or []
+        bal = _fmp_get(f"{_STABLE}/balance-sheet-statement", {"symbol": ticker, "period": "annual", "limit": years}, api_key, uncap=True) or []
+        ex = roic_ex_goodwill(inc if isinstance(inc, list) else [], bal if isinstance(bal, list) else [])
+        if len(ex) >= MOAT_MIN_YEARS:
+            return ex
+    except Exception:                                      # noqa: BLE001
+        pass
     try:
         from src.tools.api import _STABLE, _fmp_get
         rows = _fmp_get(f"{_STABLE}/key-metrics", {"symbol": ticker, "period": "annual", "limit": years}, api_key, uncap=True) or []

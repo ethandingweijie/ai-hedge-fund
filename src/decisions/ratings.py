@@ -263,6 +263,19 @@ def total_return(price: float, target: Optional[float],
 
 #: Owner, 2026-11-25: weighted valuation legs further apart than this (highest / lowest) cap the rating at Neutral.
 LEG_DISPERSION_CAP = 2.5
+#: Owner, 2026-11-28 (pre-launch sweep, bridge until D4 b/c land): the report publishes a RANGE instead of a single
+#: target only above this ratio. Between LEG_DISPERSION_CAP and this, the single target is shown but the rating stays
+#: capped at Neutral (unchanged). RANGE_PUBLICATION_RATIO overrides.
+RANGE_PUBLICATION_RATIO = 4.0
+
+
+def range_publication_ratio() -> float:
+    import os
+    try:
+        v = float(os.environ.get("RANGE_PUBLICATION_RATIO", RANGE_PUBLICATION_RATIO))
+        return v if v >= LEG_DISPERSION_CAP else LEG_DISPERSION_CAP
+    except (TypeError, ValueError):
+        return RANGE_PUBLICATION_RATIO
 
 
 def unreconciled_legs(dispersion: Optional[dict], ticker: str = "") -> Optional[dict]:

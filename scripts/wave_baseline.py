@@ -132,6 +132,10 @@ def baseline_one(ticker: str, end: str, key: str, sector_from_label: bool = Fals
         "backtest_forward_verdict": fwd.get("verdict"),
         "backtest_note": dr.get("calibration_note"),
         "currency": dr.get("reported_currency"),
+        # Item 5 (owner, 2026-11-28, pre-launch sweep): would the report withhold, publish a range, or label limited?
+        "rating_state": (dr.get("rating_state") or {}).get("state"),
+        "rating_state_code": (dr.get("rating_state") or {}).get("code"),
+        "leg_dispersion": base.get("leg_dispersion"),
         # Owner-recorded structural regime deviation, if any: counted apart in
         # the scorecard, because one decision is not eight misses.
         "regime": (_regime(ticker) or {}).get("key"),
