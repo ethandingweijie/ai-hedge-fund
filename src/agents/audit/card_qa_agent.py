@@ -21,6 +21,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -90,8 +92,8 @@ def should_reuse_card_qa(
         for f in flags
     ):
         return False
-    if prior_audit.get("qa_budget_hit"):
-        return False
+    if prior_audit.get("qa_budget_hit") or prior_audit.get("qa_time_budget_hit"):
+        return False                                   # an audit cut short by cost or time may be incomplete
     return True
 
 
@@ -450,6 +452,13 @@ def _audit_one_card(
 # ── Orchestrator (Phase 10.5 top-level) ────────────────────────────────────
 
 
+def _time_budget_s() -> float:
+    try:
+        return float(os.environ.get("CARD_QA_TIME_BUDGET_S", "15"))
+    except (TypeError, ValueError):
+        return 15.0
+
+
 def run_card_qa_agent(
     state: dict,
     ticker: str,
@@ -458,8 +467,14 @@ def run_card_qa_agent(
     budget_usd: float = DEFAULT_BUDGET_USD,
     sdk_client: Any = None,
     model_name: str | None = None,
+    time_budget_s: float | None = None,
 ) -> dict:
     """Audit one ticker's cards. See module docstring for the full flow.
+
+    D7 (owner, 2026-11-28): QA stays BEFORE delivery (running it after would change card values the user has already
+    seen) but is capped in wall time: once `time_budget_s` (CARD_QA_TIME_BUDGET_S, default 15 s) is spent, the
+    remaining cards are recorded as skipped (no LLM call) and the audit says so (qa_time_budget_hit).
+
 
     Args:
       state:      full pipeline state dict
@@ -472,6 +487,8 @@ def run_card_qa_agent(
     Returns audit dict matching persistence schema. Never raises.
     """
     now = datetime.now(timezone.utc).isoformat()
+    _t0 = time.monotonic()
+    _tb = time_budget_s if time_budget_s is not None else _time_budget_s()
     cost_cap = CostCap(max_usd=budget_usd)
     schema_versions = {n: s.schema_version for n, s in CARD_SCHEMAS.items()}
 
@@ -524,7 +541,21 @@ def run_card_qa_agent(
     auto_remediations: list[dict] = []
     human_review_flags: list[dict] = []
 
+    _time_hit = False
     for card_name, schema in CARD_SCHEMAS.items():
+        if _tb > 0 and time.monotonic() - _t0 >= _tb:
+            _time_hit = True
+            try:
+                _applies_skip = schema.applies_when(state, ticker)
+            except Exception:                              # noqa: BLE001
+                _applies_skip = False
+            if _applies_skip:
+                cards_inspected.append({"card": card_name, "applies_when_passed": True, "missing_mandatory": [],
+                                        "missing_opportunistic": [], "judge_verdict": None,
+                                        "judge_reasoning": None, "judge_evidence_quote": None,
+                                        "remediation_attempted": False, "remediation_success": None,
+                                        "_skipped": "time_budget"})
+            continue
         try:
             applies = schema.applies_when(state, ticker)
         except Exception as exc:
@@ -600,4 +631,6 @@ def run_card_qa_agent(
         "rows_missing_subfields": rows_missing_subfields,
         "qa_cost_estimate_usd": round(cost_cap.accumulated_usd, 4),
         "qa_budget_hit":        qa_budget_hit,
+        "qa_time_budget_hit":   _time_hit,
+        "qa_elapsed_s":         round(time.monotonic() - _t0, 1),
     }
