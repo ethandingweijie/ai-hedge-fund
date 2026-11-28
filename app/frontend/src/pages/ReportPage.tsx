@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { cancelAnalysisRun, getPopularTickers, getRunResult, getStockData, searchCompanies, type CompanySearchResult, type PopularTicker } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
 import { currencySymbol, extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
+import { cnCanonical } from '@/lib/markets/china';
 // v2 imports
 import { Search as V2Search } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
@@ -197,13 +198,15 @@ function SectionCompleteBadge() {
 }
 
 // ── Landing search: market support gating ────────────────────────────────────
-// The pipeline covers US / HK / SG listings only. Suggestions outside those
-// markets are greyed out and unclickable; ETFs listed on the three supported
+// The pipeline covers US / HK / SG / China A-share listings. Suggestions outside
+// those markets are greyed out and unclickable; ETFs listed on the supported
 // markets are greyed out too but carry a blue WIP tag.
-function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
+function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | 'CN' | null {
   const t  = (s.ticker || '').toUpperCase();
   if (t.endsWith('.HK')) return 'HK';
   if (t.endsWith('.SI')) return 'SG';
+  // A-shares: a stock code on SSE/SZSE (B-shares, BSE and index codes stay unsupported -- cnCanonical rejects them)
+  if (/\.(SS|SZ)$/.test(t)) return cnCanonical(t) ? 'CN' : null;
   const ex = (s.exchange || '').toUpperCase();
   if (ex.includes('HKSE') || ex.includes('HKEX') || ex.includes('HONG KONG')) return 'HK';
   if (ex === 'SES' || ex.includes('SGX') || ex.includes('SINGAPORE')) return 'SG';
@@ -226,7 +229,7 @@ function suggestionDisabled(s: CompanySearchResult): boolean {
 // order (name matches). Stable within each band.
 export function rankSuggestions(data: CompanySearchResult[], typed: string): CompanySearchResult[] {
   const q = typed.trim().toUpperCase();
-  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI)$/, '').replace(/^0+(?=\d)/, '');
+  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI|SS|SZ)$/, '').replace(/^0+(?=\d)/, '');
   const qb = base(q);
   const band = (s: CompanySearchResult) => {
     const t = s.ticker.toUpperCase();
@@ -667,6 +670,8 @@ export function ReportPage() {
   // a short form like "3690" or "03690", liveTicker won't match. Compute the
   // canonical key so lookups succeed before liveResult arrives.
   function _hkCanonical(t: string): string {
+    const cn = cnCanonical(t);              // China A-share ("600519" -> "600519.SS"); six digits never match HK
+    if (cn) return cn;
     const m = t.match(/^(\d{1,5})(\.HK)?$/i);
     if (!m) return t;
     return m[1].padStart(5, '0') + '.HK';

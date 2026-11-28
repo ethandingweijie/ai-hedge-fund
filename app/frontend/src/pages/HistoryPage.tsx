@@ -51,8 +51,8 @@ const SECTOR_OPTIONS = [
   'Telco',
 ] as const;
 
-type MarketOption = 'All markets' | 'US' | 'HK' | 'SG';
-const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG'];
+type MarketOption = 'All markets' | 'US' | 'HK' | 'SG' | 'CN';
+const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG', 'CN'];
 
 type ActionOption = 'Any action' | 'Buy' | 'Hold' | 'Sell';
 const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'Buy', 'Hold', 'Sell'];
@@ -62,6 +62,7 @@ function marketOf(ticker: string): MarketOption {
   const t = (ticker || '').toUpperCase();
   if (t.endsWith('.HK')) return 'HK';
   if (t.endsWith('.SI')) return 'SG';
+  if (t.endsWith('.SS') || t.endsWith('.SZ')) return 'CN';
   return 'US';
 }
 
