@@ -54,6 +54,19 @@ def _f(v) -> Optional[float]:
     return x if x == x else None
 
 
+def _unit_fix(name: str, v: float) -> tuple[float, str]:
+    """Item 4 (owner, 2026-11-28; extractor evaluation): convert an UNAMBIGUOUS unit slip before the bounds check.
+    A basis-point field given as a decimal fraction (credit cost 0.00325 = 32.5 bp) is scaled up; a ratio field given
+    as a percentage (cost-to-income 39 = 0.39) is scaled down. Returns (value, note)."""
+    if name.endswith("_bps") or "_bps_" in name:
+        if 0 < abs(v) < 1.0:
+            return v * 10000.0, " (converted from a decimal fraction to bp)"
+    elif 1.5 < abs(v) <= 150.0 and any(k in name for k in ("cost_to_income", "nim", "payout", "cet1", "ratio",
+                                                             "combined", "loss", "expense", "yield", "margin")):
+        return v / 100.0, " (converted from a percentage)"
+    return v, ""
+
+
 def _clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
@@ -114,14 +127,21 @@ def bank_assumptions(opening: dict, bank_metrics: Optional[dict], block: Optiona
     a: dict = {}
 
     def pick(name, needed, *cands, bounds=None, default=None):
+        # Item 4 (owner, 2026-11-28): an out-of-bounds candidate is REJECTED (the next source is tried), never clamped
+        # -- clamping turned DBS's cost-to-income 0.039 into the 0.20 floor and HKD credit cost 0.00325 into ~0 bp.
+        rejected = []
         for val, label in cands:
             v = _f(val)
-            if v is not None:
-                if bounds:
-                    v = _clamp(v, *bounds)
-                a[name] = _src(v, label, needed)
-                return
-        a[name] = _src(default, "default (PROPOSED)" if default is not None else "missing", needed)
+            if v is None:
+                continue
+            v, note = _unit_fix(name, v)
+            if bounds and not (bounds[0] <= v <= bounds[1]):
+                rejected.append(f"{label} {v:g}")
+                continue
+            a[name] = _src(v, label + note, needed)
+            return
+        a[name] = _src(default, ("default (PROPOSED)" if default is not None else "missing")
+                       + (f"; rejected out of range: {', '.join(rejected)}" if rejected else ""), needed)
 
     pick("asset_growth_fy1", "earning assets and loans, year 1", (fam.get("loan_growth_fy1"), "guidance: loan growth FY+1"), (bm.get("loan_growth_yoy"), "bank metrics: loan growth"),
          (est.get("revenue_growth_fy1"), "estimate: total income growth FY+1"), bounds=cfg["asset_growth_bounds"], default=0.04)
@@ -314,12 +334,19 @@ def insurer_assumptions(opening: dict, metrics: Optional[dict], block: Optional[
     a: dict = {}
 
     def pick(name, needed, *cands, bounds=None, default=None):
+        rejected = []
         for val_, label in cands:
             x = _f(val_)
-            if x is not None:
-                a[name] = _src(_clamp(x, *bounds) if bounds else x, label, needed)
-                return
-        a[name] = _src(default, "default (PROPOSED)" if default is not None else "missing", needed)
+            if x is None:
+                continue
+            x, note = _unit_fix(name, x)
+            if bounds and not (bounds[0] <= x <= bounds[1]):
+                rejected.append(f"{label} {x:g}")         # item 4: reject, never clamp
+                continue
+            a[name] = _src(x, label + note, needed)
+            return
+        a[name] = _src(default, ("default (PROPOSED)" if default is not None else "missing")
+                       + (f"; rejected out of range: {', '.join(rejected)}" if rejected else ""), needed)
 
     pick("premium_growth_fy1", "net earned premiums, year 1", (fam.get("premium_growth_fy1"), "guidance: premium growth FY+1"), (m.get("premium_growth"), "insurance metrics: premium growth"),
          (est.get("revenue_growth_fy1"), "estimate: revenue growth FY+1"), bounds=(-0.2, 0.4), default=0.04)

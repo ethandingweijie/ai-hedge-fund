@@ -232,3 +232,20 @@ def test_the_dbs_golden_keeps_the_research_roe_without_family_guidance_and_reads
         assert fpe.get("metric_value") == pytest.approx(th2["eps_fy1"])
     elif fpe:
         assert "TTM" in fpe["metric"]
+
+
+# ── Item 4 (owner, 2026-11-28): extractor evaluation found unit slips that clamping turned into wrong numbers ──
+
+def test_unit_slips_are_converted_and_out_of_range_values_rejected_not_clamped():
+    assert bmod._unit_fix("credit_cost_bps_fy1", 0.00325) == (32.5, " (converted from a decimal fraction to bp)")
+    assert bmod._unit_fix("cost_to_income_fy1", 39.0)[0] == pytest.approx(0.39)
+    assert bmod._unit_fix("nim_fy1", 0.0187) == (0.0187, "")
+    # DBS: guidance cost-to-income 0.039 (a misread) is rejected; the bank-metrics efficiency ratio 0.39 is used
+    blk = {"family_metrics": {"bank": {"cost_to_income_fy1": 0.039, "credit_cost_bps_fy1": 0.00325}}}
+    a = bmod.bank_assumptions(_opening(), {"efficiency_ratio": 0.39}, blk, coe=0.086)
+    assert a["cost_to_income_fy1"]["value"] == pytest.approx(0.39)
+    assert "efficiency" in a["cost_to_income_fy1"]["source"]
+    assert a["credit_cost_bps_fy1"]["value"] == pytest.approx(32.5)
+    # nothing in range -> the default, and the rejected candidates are on the record
+    c = bmod.bank_assumptions(_opening(), {"efficiency_ratio": 2.5}, {"family_metrics": {"bank": {"cost_to_income_fy1": 0.039}}})
+    assert "rejected out of range" in c["cost_to_income_fy1"]["source"]
