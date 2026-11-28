@@ -16,10 +16,13 @@ Accepted credentials
 --------------------
 1. ``Authorization: Bearer <jwt>`` — a user session token from /auth/google or
    /auth/apple. Resolved to a User and attached to ``request.state.user``.
-2. The shared admin secret (``DB_UPLOAD_SECRET``), as ``X-Admin-Secret`` header
-   or ``?secret=`` query param — for service-to-service callers with no user
-   session. Never accepted when the env
-   var is unset, so a missing secret cannot degrade into "anything passes".
+2. The shared admin secret (``DB_UPLOAD_SECRET``), as the ``X-Admin-Secret``
+   header -- for service-to-service callers with no user session. Never
+   accepted when the env var is unset, so a missing secret cannot degrade into
+   "anything passes". The ``?secret=`` query form is OFF (owner, 2026-11-28,
+   trust review: a URL secret lands in access logs, browser history and
+   referrers, and it unlocks every customer's runs); ADMIN_QUERY_SECRET=on
+   re-enables it temporarily for the browser admin dashboard.
 
 Escape hatch
 ------------
@@ -75,12 +78,27 @@ def _is_public(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in PUBLIC_PREFIXES)
 
 
+def query_secret_allowed() -> bool:
+    """ADMIN_QUERY_SECRET=on accepts ?secret= (default off; header only)."""
+    return os.environ.get("ADMIN_QUERY_SECRET", "off").strip().lower() in ("1", "on", "true", "yes")
+
+
+def presented_admin_secret(request: Request, query_value: str = "") -> str:
+    """The admin secret the caller presented: the header, or the query value only when allowed."""
+    header = request.headers.get("X-Admin-Secret") or ""
+    if header:
+        return header
+    if query_secret_allowed():
+        return query_value or request.query_params.get("secret") or ""
+    return ""
+
+
 def _valid_admin_secret(request: Request) -> bool:
     """True if the caller presented the shared service secret."""
     expected = os.environ.get("DB_UPLOAD_SECRET", "")
     if not expected:
         return False        # unset secret must never authenticate anyone
-    presented = request.headers.get("X-Admin-Secret") or request.query_params.get("secret") or ""
+    presented = presented_admin_secret(request)
     return bool(presented) and hmac.compare_digest(presented, expected)
 
 

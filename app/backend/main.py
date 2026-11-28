@@ -13,7 +13,12 @@ from app.backend.services.ollama_service import ollama_service
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge Fund", version="1.9.0")
+# Owner, 2026-11-28 (trust review): the interactive API docs and schema are off unless ENABLE_API_DOCS=on -- a public
+# /docs maps every route for anyone probing the API.
+_API_DOCS = os.environ.get("ENABLE_API_DOCS", "off").strip().lower() in ("1", "on", "true", "yes")
+app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge Fund", version="1.9.0",
+              docs_url="/docs" if _API_DOCS else None, redoc_url="/redoc" if _API_DOCS else None,
+              openapi_url="/openapi.json" if _API_DOCS else None)
 
 # Refuse to boot with a forgeable JWT signing key (see auth_gate.py).
 verify_startup_config()

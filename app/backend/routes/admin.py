@@ -23,7 +23,8 @@ def _secret_ok(request: Request, secret: str) -> bool:
     and the header keeps the secret out of URL access logs either way.
     """
     import hmac
-    presented = secret or request.headers.get("X-Admin-Secret", "")
+    from app.backend.auth_gate import presented_admin_secret
+    presented = presented_admin_secret(request, secret)   # header; ?secret= only with ADMIN_QUERY_SECRET=on
     if not (ADMIN_SECRET and presented):
         return False
     # Compare as UTF-8 bytes: hmac.compare_digest raises TypeError on

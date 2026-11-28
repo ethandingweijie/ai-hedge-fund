@@ -19,7 +19,7 @@ import os
 import sqlite3
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -121,6 +121,7 @@ def _rescore_single_dict(
 
 @router.post("/admin/rescore-power-law")
 async def rescore_power_law(
+    request: Request,
     secret: str = Query("", description="Must match DB_UPLOAD_SECRET env var"),
     tickers: str = Query("", description="Optional comma-separated ticker filter"),
     dry_run: bool = Query(False, description="If true, report what would change without writing"),
@@ -130,7 +131,10 @@ async def rescore_power_law(
 
     Also handles ticker_signals.power_law_json for self-hosted archives.
     """
-    if not UPLOAD_SECRET or secret != UPLOAD_SECRET:
+    from app.backend.auth_gate import presented_admin_secret
+    import hmac
+    _p = presented_admin_secret(request, secret)          # header; ?secret= only with ADMIN_QUERY_SECRET=on
+    if not UPLOAD_SECRET or not _p or not hmac.compare_digest(_p.encode("utf-8"), UPLOAD_SECRET.encode("utf-8")):
         raise HTTPException(status_code=403, detail="Invalid or missing secret")
 
     db_path = _get_db_path()
