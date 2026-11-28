@@ -537,7 +537,7 @@ export function ReportPage() {
   const startRun = (raw: string, askId?: string) => {
     const t = raw.trim().toUpperCase();
     if (!t) return;
-    if (askId) setTicker(t);
+    setTicker(t);                       // the box keeps what was typed; a run always tracks the canonical symbol
     setAsk(null);
     runStartedAt.current = new Date().toISOString();
     requestNotificationPermission();  // iOS requires user gesture for permission prompt
@@ -566,7 +566,7 @@ export function ReportPage() {
     // held its dedup slot for the full 65-minute TTL, and left a partial
     // web_runs row the user saw as a run stuck forever. Fire-and-forget --
     // cancelAnalysisRun never rejects, and the UI must reset either way.
-    const t = (ticker || activeRun?.ticker || '').trim();
+    const t = (ticker || activeRun?.ticker || '').trim().toUpperCase();
     if (t && state === 'running') void cancelAnalysisRun(t);
 
     reset();           // calls resetStream() which clears liveResult in context
@@ -934,6 +934,9 @@ export function ReportPage() {
     // Pulse "Run full analysis" — same path as the form submit button.
     const runFullFromPulse = () => startRun(ticker);
     const isQuestion = looksLikeQuestion(ticker);
+    // One token of letters/digits (AAPL, 9988, D05.SI, brk-b): displayed in capitals. Anything with a space reads as
+    // written, so a company name or a question keeps its own case.
+    const tickerLike = /^[A-Za-z0-9.\-]{1,12}$/.test(ticker.trim());
 
     return (
       // Sized to the FULL visible viewport so the hero video reaches behind
@@ -1014,13 +1017,24 @@ export function ReportPage() {
           {/* Search form */}
           <form onSubmit={handleSubmit} className="px-4 mt-6 flex items-center gap-2">
             <div className="flex-1 relative" ref={searchBarRef}>
-              <V2Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={16} height={16}/>
+              {isQuestion ? (
+                // Question mode: a speech-bubble icon instead of the search glass, so the box says what it will do.
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.4A8 8 0 1 1 21 12z" />
+                  <path d="M9.5 9.5a2.5 2.5 0 1 1 3.3 2.4c-.5.2-.8.6-.8 1.1v.5" /><path d="M12 16.5h.01" />
+                </svg>
+              ) : (
+                <V2Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={16} height={16}/>
+              )}
               <input
                 value={ticker}
                 onChange={(e) => {
                   // A question keeps its case and skips the ticker search; a ticker/company is upper-cased.
+                  // Owner, 2026-11-28: keep exactly what was typed. Upper-casing every keystroke turned a question's
+                  // first words into "WHAT IS THE" before it had enough words to count as a question. Tickers are
+                  // shown in capitals by CSS (tickerLike) and upper-cased where they are used.
                   const typedQ = looksLikeQuestion(e.target.value);
-                  const raw = typedQ ? e.target.value : e.target.value.toUpperCase();
+                  const raw = e.target.value;
                   setTicker(raw);
                   setMatched(null);
                   if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -1077,7 +1091,7 @@ export function ReportPage() {
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
                 onBlur={() => setTimeout(() => setShowSugg(false), 150)}
                 placeholder={tr('Ticker, company, or ask about a market development…')}
-                className={`w-full h-11 pl-9 ${matched ? 'pr-[54%] sm:pr-[46%]' : 'pr-4'} text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors`}
+                className={`w-full h-11 pl-9 ${matched ? 'pr-[54%] sm:pr-[46%]' : 'pr-4'} ${tickerLike ? 'uppercase placeholder:normal-case' : ''} text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors`}
                 maxLength={400}
                 autoFocus
               />
@@ -1154,7 +1168,7 @@ export function ReportPage() {
                      onUpdate={(t, askId) => startRun(t, askId)}
                      onClose={() => setAsk(null)} />
           ) : (
-            <PulseCard ticker={isQuestion ? '' : ticker} suppressed={showSugg} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
+            <PulseCard ticker={isQuestion ? '' : ticker.trim().toUpperCase()} suppressed={showSugg} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
           )}
 
           {/* Popular marquee tape */}
