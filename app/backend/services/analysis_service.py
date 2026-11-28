@@ -1957,6 +1957,10 @@ async def run_analysis_pipeline(
             # Compares against the user-facing model_name — that is what
             # _on_checkpoint stores in web_runs.model_name.
             resume_bundle = _build_resume_bundle(ticker.upper(), model_name, run_id)
+            # Owner, 2026-11-28: a verified market development bound to this run (POST /analysis/ask). The server's
+            # stored copy -- never the request body. {} for an ordinary run.
+            from app.backend.services import market_ask as _market_ask
+            _developments = _market_ask.development_for_run(run_id) or None
             if resume_bundle:
                 print(
                     f"  [resume] checkpoint '{resume_bundle['checkpoint']}' from run "
@@ -1986,6 +1990,7 @@ async def run_analysis_pipeline(
                     enable_post_trade_review=False,
                     on_checkpoint=_on_checkpoint,
                     resume_bundle=resume_bundle,
+                    developments=_developments,
                 )
             result_container["state"] = state
         except Exception as e:

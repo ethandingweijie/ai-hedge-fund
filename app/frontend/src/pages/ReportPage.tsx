@@ -55,6 +55,7 @@ import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 import { PulseCard }           from '@/components/report/PulseCard';
+import { AskCard }             from '@/components/report/AskCard';
 import { LandingGreeting }     from '@/components/report/LandingGreeting';
 import { useI18n } from '@/i18n';
 
@@ -210,6 +211,34 @@ function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
   return null;
 }
 
+// A landing entry is a market question (POST /analysis/ask) rather than a ticker/company search when it ends in
+// '?' or has 4+ words. Mirrors market_ask.looks_like_question on the server.
+export function looksLikeQuestion(text: string): boolean {
+  const t = text.trim();
+  return t.endsWith('?') || t.split(/\s+/).filter(Boolean).length >= 4;
+}
+
+function suggestionDisabled(s: CompanySearchResult): boolean {
+  return suggestionMarket(s) === null || s.type === 'etf';
+}
+
+// Exact symbol match first ("NVDA" for "nvda"; "D05.SI" for "d05"), then symbol-prefix matches, then the server's
+// order (name matches). Stable within each band.
+export function rankSuggestions(data: CompanySearchResult[], typed: string): CompanySearchResult[] {
+  const q = typed.trim().toUpperCase();
+  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI)$/, '').replace(/^0+(?=\d)/, '');
+  const qb = base(q);
+  const band = (s: CompanySearchResult) => {
+    const t = s.ticker.toUpperCase();
+    if (t === q || base(t) === qb) return 0;
+    if (t.startsWith(q)) return 1;
+    return 2;
+  };
+  return data.map((s, i) => ({ s, i, b: band(s) }))
+    .sort((a, b) => a.b - b.b || a.i - b.i)
+    .map(x => x.s);
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function ReportPage() {
   const { t: tr } = useI18n();
@@ -254,6 +283,16 @@ export function ReportPage() {
   const model                         = RUN_MODEL;
   const [suggestions, setSuggestions]     = useState<CompanySearchResult[]>([]);
   const [showSugg, setShowSugg]           = useState(false);
+  const [suggActive, setSuggActive]       = useState(-1);   // keyboard-highlighted row, -1 = none
+  const [ask, setAsk]                     = useState<{ q: string; nonce: number } | null>(null);
+  const [matched, setMatched]             = useState<CompanySearchResult | null>(null);  // company the input resolved to
+  const pickSuggestion = (s: CompanySearchResult) => {
+    setTicker(s.ticker);
+    setMatched(s);
+    setShowSugg(false);
+    setSuggestions([]);
+    setSuggActive(-1);
+  };
   const [v2Popular, setV2Popular]         = useState<PopularTicker[]>([]);
   const [, setSuggLoading]                = useState(false);
   const [, setSearchNoMatch]              = useState(false);
@@ -493,17 +532,32 @@ export function ReportPage() {
   }, [liveMode]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const t = ticker.trim().toUpperCase();
+  // One run start for the form, Pulse and the market-question card. askId folds a verified development into the
+  // run (owner, 2026-11-28); the server re-reads its own copy and the new report supersedes the shared one.
+  const startRun = (raw: string, askId?: string) => {
+    const t = raw.trim().toUpperCase();
     if (!t) return;
+    if (askId) setTicker(t);
+    setAsk(null);
     runStartedAt.current = new Date().toISOString();
     requestNotificationPermission();  // iOS requires user gesture for permission prompt
-    start(t, model);  // resetStream() is called inside startStream; clears liveResult too
+    start(t, model, askId);  // resetStream() is called inside startStream; clears liveResult too
     markRunStarted(t);
     freshHoldRef.current = false;  // user launched their own run — follow it live
     setLiveMode(true);
     setLivePrice(null);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = ticker.trim();
+    if (!raw) return;
+    if (looksLikeQuestion(raw)) {           // a question is answered, never run as a ticker
+      setShowSugg(false);
+      setAsk(a => ({ q: raw, nonce: (a?.nonce ?? 0) + 1 }));
+      return;
+    }
+    startRun(raw);
   };
 
   const handleReset = useCallback(() => {
@@ -878,17 +932,8 @@ export function ReportPage() {
     const { user } = useAuth();
 
     // Pulse "Run full analysis" — same path as the form submit button.
-    const runFullFromPulse = () => {
-      const t = ticker.trim().toUpperCase();
-      if (!t) return;
-      runStartedAt.current = new Date().toISOString();
-      requestNotificationPermission();
-      start(t, model);
-      markRunStarted(t);
-      freshHoldRef.current = false;
-      setLiveMode(true);
-      setLivePrice(null);
-    };
+    const runFullFromPulse = () => startRun(ticker);
+    const isQuestion = looksLikeQuestion(ticker);
 
     return (
       // Sized to the FULL visible viewport so the hero video reaches behind
@@ -973,10 +1018,13 @@ export function ReportPage() {
               <input
                 value={ticker}
                 onChange={(e) => {
-                  const raw = e.target.value.toUpperCase();
+                  // A question keeps its case and skips the ticker search; a ticker/company is upper-cased.
+                  const typedQ = looksLikeQuestion(e.target.value);
+                  const raw = typedQ ? e.target.value : e.target.value.toUpperCase();
                   setTicker(raw);
+                  setMatched(null);
                   if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                  if (raw.trim().length >= 2) {
+                  if (!typedQ && raw.trim().length >= 2) {
                     setSuggLoading(true);
                     const reqId = ++searchReqIdRef.current;
                     searchDebounceRef.current = setTimeout(() => {
@@ -985,11 +1033,16 @@ export function ReportPage() {
                           if (reqId !== searchReqIdRef.current) return;
                           // Exact-match commit: if the user already typed a
                           // full ticker, don't open the dropdown over the
-                          // Pulse card — the recall below is the answer.
+                          // Pulse card — the recall below is the answer. The
+                          // input shows the company it matched instead
+                          // (owner, 2026-11-28: "AMAT ✓ Applied Materials").
                           const typed = raw.trim().toUpperCase();
-                          const exact = data.some(s => s.ticker.toUpperCase() === typed);
-                          setSuggestions(exact ? [] : data);
-                          setShowSugg(!exact && data.length > 0);
+                          const exact = data.find(s => s.ticker.toUpperCase() === typed) ?? null;
+                          const ranked = exact ? [] : rankSuggestions(data, typed);
+                          setMatched(exact);
+                          setSuggestions(ranked);
+                          setSuggActive(-1);
+                          setShowSugg(ranked.length > 0);
                           setSearchNoMatch(data.length === 0 && raw.trim().length >= 2);
                           setSuggLoading(false);
                         })
@@ -1003,20 +1056,52 @@ export function ReportPage() {
                     setSearchNoMatch(false);
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (!showSugg || suggestions.length === 0) return;
+                  const enabled = suggestions.map((s, i) => (suggestionDisabled(s) ? -1 : i)).filter(i => i >= 0);
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (!enabled.length) return;
+                    const pos = enabled.indexOf(suggActive);
+                    const next = e.key === 'ArrowDown'
+                      ? enabled[Math.min(pos + 1, enabled.length - 1)]
+                      : (pos <= 0 ? -1 : enabled[pos - 1]);
+                    setSuggActive(next);
+                  } else if (e.key === 'Enter' && suggActive >= 0) {
+                    e.preventDefault();              // select the row; a second Enter runs the analysis
+                    pickSuggestion(suggestions[suggActive]);
+                  } else if (e.key === 'Escape') {
+                    setShowSugg(false);
+                  }
+                }}
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
                 onBlur={() => setTimeout(() => setShowSugg(false), 150)}
-                placeholder={tr('Search ticker or company…')}
-                className="w-full h-11 pl-9 pr-4 text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
-                maxLength={60}
+                placeholder={tr('Ticker, company, or ask about a market development…')}
+                className={`w-full h-11 pl-9 ${matched ? 'pr-[54%] sm:pr-[46%]' : 'pr-4'} text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors`}
+                maxLength={400}
                 autoFocus
               />
+              {/* Matched-company cue: the typed symbol resolved to this listing (owner, 2026-11-28). */}
+              {matched && matched.ticker.toUpperCase() === ticker.trim().toUpperCase() && (
+                <span
+                  className="absolute right-3 top-1/2 -translate-y-1/2 max-w-[52%] sm:max-w-[44%] flex items-center gap-1 text-xs text-muted-foreground pointer-events-none"
+                  title={`${matched.name}${matched.exchange ? ` · ${matched.exchange}` : ''}`}
+                  aria-live="polite"
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" className="shrink-0 text-foreground">
+                    <path d="M3 8.5l3 3 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="truncate">{matched.name}</span>
+                  {matched.exchange && <span className="hidden sm:inline shrink-0 text-muted-foreground/70">· {matched.exchange}</span>}
+                </span>
+              )}
               {/* Autocomplete dropdown */}
               {showSugg && suggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto z-20">
-                  {suggestions.map(s => {
+                  {suggestions.map((s, i) => {
                     const market   = suggestionMarket(s);
                     const isEtf    = s.type === 'etf';
-                    const disabled = market === null || isEtf;
+                    const disabled = suggestionDisabled(s);
                     return (
                       <button
                         key={s.ticker}
@@ -1024,12 +1109,11 @@ export function ReportPage() {
                         disabled={disabled}
                         onMouseDown={(e) => {
                           e.preventDefault();
-                          setTicker(s.ticker);
-                          setShowSugg(false);
-                          setSuggestions([]);
+                          pickSuggestion(s);
                         }}
+                        onMouseEnter={() => { if (!disabled) setSuggActive(i); }}
                         className={`w-full text-left px-3 py-2 text-[13px] border-b border-border/60 last:border-b-0 flex items-center justify-between gap-3
-                          ${disabled ? 'opacity-45 cursor-not-allowed' : 'hover:bg-muted/60'}`}
+                          ${disabled ? 'opacity-45 cursor-not-allowed' : i === suggActive ? 'bg-muted/60' : 'hover:bg-muted/60'}`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className={`font-semibold tabular-nums flex items-center gap-1.5 ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
@@ -1056,7 +1140,7 @@ export function ReportPage() {
               disabled={!canSubmit}
               className="h-11 px-4 rounded-full bg-primary active:bg-primary/80 text-primary-foreground text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition-colors"
             >
-              {tr('Analyse')}
+              {isQuestion ? tr('Ask') : tr('Analyse')}
             </button>
           </form>
 
@@ -1064,7 +1148,14 @@ export function ReportPage() {
               Fires on debounced ticker input, never auto-runs the pipeline.
               Suppressed while the autocomplete dropdown is open so it never
               renders half-hidden behind it (fetch keeps running). */}
-          <PulseCard ticker={ticker} suppressed={showSugg} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
+          {ask ? (
+            <AskCard question={ask.q} nonce={ask.nonce}
+                     onOpenReport={(id) => navigate(`/report/${id}`)}
+                     onUpdate={(t, askId) => startRun(t, askId)}
+                     onClose={() => setAsk(null)} />
+          ) : (
+            <PulseCard ticker={isQuestion ? '' : ticker} suppressed={showSugg} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
+          )}
 
           {/* Popular marquee tape */}
           {v2Popular.length > 0 && (

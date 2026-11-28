@@ -40,6 +40,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export function startAnalysisRun(
   ticker: string,
   model = 'qwen3.8-flash',
+  askId?: string,   // a verified market-development question to fold into this run (POST /analysis/ask)
 ): Promise<Response> {
   // M2 Track E: the investor committee is decommissioned — the run body
   // carries ticker + model only. Old servers tolerated the extra key;
@@ -47,7 +48,7 @@ export function startAnalysisRun(
   return fetch(`${BASE}/analysis/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ..._authHeaders() },
-    body: JSON.stringify({ ticker, model }),
+    body: JSON.stringify(askId ? { ticker, model, ask_id: askId } : { ticker, model }),
   });
 }
 
@@ -1258,6 +1259,39 @@ export interface CompanySearchResult {
 /** Search companies by name or ticker (FMP + yfinance fallback). */
 export function searchCompanies(q: string, limit = 8): Promise<CompanySearchResult[]> {
   return fetchJson(`${BASE}/analysis/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+}
+
+// ── Market questions (owner, 2026-11-28) ─────────────────────────────────────
+export interface AskTicker {
+  ticker:     string;
+  name:       string;
+  why:        string;
+  run_type:   'covered' | 'new' | 'premium';
+  credits:    number;
+  can_update: boolean;
+  latest:     { run_id: string; run_at: string; final_action?: string | null; price_target?: number | null } | null;
+}
+export interface AskResult {
+  ask_id:       string;
+  question:     string;
+  answer:       string;
+  development:  { headline: string; date: string; summary: string } | null;
+  verified:     boolean;
+  verification: string;
+  sources:      { title: string; url: string; date: string; fact: string }[];
+  tickers:      AskTicker[];
+}
+
+/** Answer a question about a recent market development (one web search; free, capped per day). */
+export async function askMarket(question: string, ticker?: string, signal?: AbortSignal): Promise<AskResult> {
+  const res = await fetch(`${BASE}/analysis/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(ticker ? { question, ticker } : { question }),
+    signal,
+  });
+  if (!res.ok) throw await errorFromResponse(res);
+  return res.json();
 }
 
 /** Resolve a ticker symbol to its company profile (name, sector, industry). */

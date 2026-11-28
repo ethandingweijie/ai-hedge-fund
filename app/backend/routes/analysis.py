@@ -186,11 +186,24 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     _caller = _get_user(request, db)
     user_id = _caller.id if _caller else None
 
+    # ── Market development (owner, 2026-11-28): an ask_id folds a VERIFIED development from POST /analysis/ask into
+    # this run. Checked against the server's stored ask (owner, verified, unused, < 24 h, ticker affected) before
+    # credits; bound to the run id once one exists. Such a run always runs fresh: no cached replay, no joining
+    # someone else's in-flight run.
+    _ask_id = None
+    if body.get("ask_id") is not None:
+        from app.backend.services import market_ask as _ma
+        try:
+            await asyncio.to_thread(_ma.check_bindable, body.get("ask_id"), _caller, ticker)
+        except _ma.AskError as _ae:
+            raise HTTPException(status_code=_ae.status, detail=_ae.detail)
+        _ask_id = body.get("ask_id")
+
     # ── Cache check (fast path, no lock) ─────────────────────────────────────
     # Scoped to (ticker, caller, provider family): another user's run would
     # 404 on get_run_result's ownership check, and the other provider's run is
     # not what the Qwen/Anthropic toggle asked for.
-    cached = await _scoped_cached_run(ticker, 30, user_id, model_name)
+    cached = None if _ask_id else await _scoped_cached_run(ticker, 30, user_id, model_name)
     if cached:
         async def cached_event_generator():
             yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name})}\n\n"
@@ -234,8 +247,10 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         try:
             _q_api_keys = await asyncio.to_thread(ApiKeyService(db).get_api_keys_dict, user_id)
             _queued = await _start_queue_run(
-                ticker, model_name, user_id, _q_api_keys
+                ticker, model_name, user_id, _q_api_keys, ask_id=_ask_id
             )
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.warning("queue mode unavailable (%s) — in-process fallback", exc)
             _queued = None
@@ -254,8 +269,10 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     async with _in_flight_lock:
         # Re-check inside the lock to close the TOCTOU gap (another request may
         # have finished the pipeline between our fast-path check and here).
-        _cached_in_lock = await _scoped_cached_run(ticker, 30, user_id, model_name)
+        _cached_in_lock = None if _ask_id else await _scoped_cached_run(ticker, 30, user_id, model_name)
         if not _cached_in_lock:
+            if _dedup_key in _in_flight and _ask_id:
+                raise HTTPException(status_code=409, detail=_ASK_BUSY.format(t=ticker))
             if _dedup_key in _in_flight:
                 # A pipeline for this ticker is already running —
                 # grab its slot so we can wait for it.
@@ -267,6 +284,14 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 _run_slot = _InFlightSlot(run_id=str(uuid.uuid4()),
                                           user_id=user_id, model_name=model_name)
                 _in_flight[_dedup_key] = _run_slot
+
+    if _run_slot is not None and _ask_id:
+        from app.backend.services import market_ask as _ma
+        if not await asyncio.to_thread(_ma.bind_run, _ask_id, ticker, _run_slot.run_id):
+            async with _in_flight_lock:
+                if _in_flight.get(_dedup_key) is _run_slot:
+                    _in_flight.pop(_dedup_key, None)
+            raise HTTPException(status_code=409, detail="This question has already updated an analysis.")
 
     if _cached_in_lock:
         async def cached_in_lock_generator():
@@ -557,11 +582,16 @@ _FIXED_DONE_COUNT = 16
 _QUEUE_STREAM_DEADLINE = 1800
 
 
+_ASK_BUSY = ("An analysis of {t} is running right now. Once it finishes, ask again to fold this development "
+             "into the new report.")
+
+
 async def _start_queue_run(
     ticker: str,
     model_name: str,
     user_id: Optional[int],
     api_keys: dict,
+    ask_id: Optional[str] = None,
 ):
     """Claim the distributed dedup slot and enqueue the pipeline.
 
@@ -588,12 +618,20 @@ async def _start_queue_run(
         if not is_runner:
             if not runner_id:
                 return None  # neither claim nor read worked — fall back
+            if ask_id:
+                raise HTTPException(status_code=409, detail=_ASK_BUSY.format(t=ticker))
             return StreamingResponse(
                 _queue_stream_generator(runner_id, ticker, model_name, waiter=True,
                                         user_id=user_id),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
+
+    if ask_id:
+        from app.backend.services import market_ask as _ma
+        if not await asyncio.to_thread(_ma.bind_run, ask_id, ticker, run_id):
+            await queue_client.release_run(dedup_key)
+            raise HTTPException(status_code=409, detail="This question has already updated an analysis.")
 
     try:
         await queue_client.enqueue_analysis(
@@ -1286,6 +1324,24 @@ async def _pulse_search_and_put(ticker: str, prior: dict | None) -> dict:
     except Exception as exc:
         logger.warning("pulse beat-2 search failed (%s): %s", ticker, exc)
         return {"material": None, "events": [], "verdict": "check unavailable"}
+
+
+@router.post("/ask")
+async def ask_market(body: dict, request: Request, db: Session = Depends(get_db)):
+    """Answer a question about a recent market development (owner, 2026-11-28). One web search; free, capped per
+    plan per day. Returns the answer, its sources, whether the development is VERIFIED, and the affected tickers with
+    their latest shared analysis and the credit cost of updating it. See services/market_ask.py."""
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="request body must be an object")
+    from app.backend.services import market_ask as _ma
+    _caller = _get_user(request, db)
+    _hint = body.get("ticker")
+    if _hint is not None:
+        _hint = canonical_ticker(validate_ticker_input(_hint))
+    try:
+        return await asyncio.to_thread(_ma.ask, _caller, body.get("question"), _hint)
+    except _ma.AskError as _ae:
+        raise HTTPException(status_code=_ae.status, detail=_ae.detail)
 
 
 @router.get("/pulse")

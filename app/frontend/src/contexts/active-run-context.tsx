@@ -79,7 +79,7 @@ interface ActiveRunContextValue {
   streamExpectedPhases: string[];
   liveResult: RunResult | null;
   setLiveResult: (r: RunResult | null) => void;
-  startStream: (ticker: string, model?: string) => void;
+  startStream: (ticker: string, model?: string, askId?: string) => void;
   resetStream: () => void;
   startPolling: (ticker: string) => void;
   // ── Per-ticker API ──────────────────────────────────────────────────────
@@ -881,7 +881,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker]);
 
-  const startStream = useCallback(async (ticker: string, model = 'qwen3.8-flash') => {
+  const startStream = useCallback(async (ticker: string, model = 'qwen3.8-flash', askId?: string) => {
     const T = ticker.toUpperCase();
     // Per-ticker abort: only kill THIS ticker's previous stream (if any).
     // Other tickers' streams continue uninterrupted. Before 2026-04-25 this
@@ -932,7 +932,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      const res = await startAnalysisRun(ticker, model);
+      const res = await startAnalysisRun(ticker, model, askId);
 
       if (!res.ok) {
         // A 402 carries the plan message ("Your free analysis has been used...").

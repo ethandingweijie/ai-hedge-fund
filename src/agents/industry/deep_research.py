@@ -458,8 +458,11 @@ def _material_update_record(status: str, freshness_delta: dict | None, *,
         return None
     evs = [{"date": str(e.get("date") or "")[:10], "headline": str(e.get("headline") or "")[:160]}
            for e in (freshness_delta.get("events") or []) if isinstance(e, dict) and e.get("headline")][:5]
-    return {"status": status, "events": evs, "route": route, "escalated": escalated,
-            "estimate_changes": estimate_changes, "reason": reason}
+    out = {"status": status, "events": evs, "route": route, "escalated": escalated,
+           "estimate_changes": estimate_changes, "reason": reason}
+    if freshness_delta.get("user_development"):
+        out["user_development"] = freshness_delta["user_development"]
+    return out
 
 
 def _hash_research_text(text: str) -> str:
@@ -5737,6 +5740,13 @@ def _research_one_ticker(
                 )
         except Exception as _assump_exc:
             print(f"  [deep_research] R1 assumptions block skipped: {_assump_exc}")
+
+    # Owner, 2026-11-28: a verified development a user asked about -- full research must answer it, prior or not.
+    try:
+        from src.memory import user_development as _ud
+        _base_context += _ud.research_brief(freshness_delta)
+    except Exception as _ud_exc:                           # noqa: BLE001
+        print(f"  [deep_research] user development brief skipped: {_ud_exc}")
 
     # ── M1 recency: prior report recap + freshness delta (live path only) ──
     # Continuity with the last report on this ticker: the analyst is told

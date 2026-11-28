@@ -380,6 +380,7 @@ def run_advanced_pipeline(
     management_guidance: dict[str, dict] | None = None,
     on_checkpoint: "callable | None" = None,
     resume_bundle: dict | None = None,
+    developments: dict[str, dict] | None = None,
 ) -> dict:
     """
     Run the full advanced pipeline (committee-free as of M2 Track D/E).
@@ -388,6 +389,11 @@ def run_advanced_pipeline(
     industry_brief and final_calculation checkpoints so the caller can
     persist partial results early.
     Signature: on_checkpoint(state: AgentState, checkpoint_name: str) -> None
+
+    developments, if provided ({ticker: development}, analysis_service via
+    market_ask.development_for_run), is a VERIFIED market development a user
+    asked about: merged onto that ticker's freshness delta as a material event
+    so research amends (covered) or addresses it (new) -- user_development.py.
 
     resume_bundle, if provided (see analysis_service._build_resume_bundle),
     is a crashed predecessor run's checkpoint payload. Its research/valuation
@@ -659,6 +665,11 @@ def run_advanced_pipeline(
         # front block's 5th leg — phase 3 (deep research) consumes both.
         state["data"]["prior_recap"] = dict(_prior_reports)
         state["data"]["freshness_delta"] = _fresh_deltas or {}
+        if developments:
+            from src.memory import user_development as _ud
+            state["data"]["freshness_delta"] = _ud.merge_all(state["data"]["freshness_delta"], developments)
+            for _t in developments:
+                print(f"  [freshness] {_t}: user-raised development folded in as material news")
 
         regime = state["data"].get("macro_regime", {})
         print(f"  Regime: {regime.get('risk_appetite')} | "

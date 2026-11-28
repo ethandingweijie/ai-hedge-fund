@@ -87,6 +87,15 @@ export async function errorFromResponse(res: Response): Promise<Error> {
       }
     } catch { /* not JSON */ }
   }
+  // Market questions (2026-11-28): 404/409/410/422/429 from /analysis/ask and an ask-carrying run say what happened
+  // in a sentence (string detail, or {message}); FastAPI's own 422 list falls through to the raw form.
+  if ([404, 409, 410, 422, 429, 503].includes(res.status)) {
+    try {
+      const detail = JSON.parse(text)?.detail;
+      const msg = typeof detail === 'string' ? detail : (detail && typeof detail.message === 'string' ? detail.message : undefined);
+      if (msg) return new Error(msg);
+    } catch { /* not JSON */ }
+  }
   return new Error(`HTTP ${res.status}: ${text}`);
 }
 
