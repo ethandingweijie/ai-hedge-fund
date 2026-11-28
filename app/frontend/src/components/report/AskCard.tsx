@@ -131,7 +131,7 @@ export function AskCard({ question, nonce, onOpenReport, onUpdate, onClose }: Pr
               {res.tickers.map(r => (
                 <TickerRow key={r.ticker} row={r} askId={res.ask_id} onOpenReport={onOpenReport} onUpdate={onUpdate} />
               ))}
-              {res.verified && (
+              {res.tickers.some(r => r.can_update) && (
                 <p className="text-xs text-muted-foreground mt-2">
                   An update folds this development into the analysis, and the new report replaces the latest one for everyone.
                 </p>

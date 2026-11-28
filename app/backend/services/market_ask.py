@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -43,6 +44,12 @@ _DDL = """CREATE TABLE IF NOT EXISTS market_asks (
     run_bound_at TEXT
 )"""
 _READY = {"v": False}
+
+
+def updates_enabled() -> bool:
+    """Kill switch for folding a development into the SHARED analysis (owner, 2026-11-28, D1). Answers keep
+    working when off; nothing can update an analysis. MARKET_ASK_UPDATES=on enables it."""
+    return os.environ.get("MARKET_ASK_UPDATES", "off").strip().lower() in ("1", "on", "true", "yes")
 
 
 class AskError(Exception):
@@ -245,7 +252,7 @@ def _ticker_rows(parsed: dict, ticker_hint: Optional[str], verified: bool,
         except Exception:                                   # noqa: BLE001
             kind = "covered" if prior else "new"
         row = {"ticker": sym, "name": str(c.get("name") or "")[:120], "why": str(c.get("why") or "")[:240],
-               "run_type": kind, "credits": billing.CREDIT_COSTS.get(kind, 1), "can_update": verified,
+               "run_type": kind, "credits": billing.CREDIT_COSTS.get(kind, 1), "can_update": verified and updates_enabled(),
                "latest": None}
         if prior:
             rj = prior.get("recap_json") or {}
@@ -333,6 +340,8 @@ def _load(ask_id: str) -> Optional[dict]:
 
 def check_bindable(ask_id, user, ticker: str, now: Optional[datetime] = None) -> dict:
     """The stored ask, if this user may update `ticker` with it; AskError otherwise. Reads only the server's copy."""
+    if not updates_enabled():
+        raise AskError(503, "Updating an analysis from a market question is paused. The answer is still available.")
     if not isinstance(ask_id, str) or not re.fullmatch(r"[0-9a-f-]{36}", ask_id):
         raise AskError(422, "ask_id is invalid")
     a = _load(ask_id)

@@ -20,6 +20,7 @@ def _db(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "get_db_path", lambda: str(tmp_path / "ask.db"))
     db.close_all_connections()
     monkeypatch.setitem(billing._READY, "v", False)
+    monkeypatch.setenv("MARKET_ASK_UPDATES", "on")
     ma._READY["v"] = False
     yield
     db.close_all_connections()
@@ -256,3 +257,12 @@ def test_update_never_joins_someone_elses_in_flight_run(client):
     assert not calls["enqueue"]
     calls["claim"] = True                                           # the ask is still usable afterwards
     assert c.post("/analysis/run", json={"ticker": "AMAT", "ask_id": ask_id}).status_code == 200
+
+
+def test_updates_are_off_unless_switched_on(monkeypatch):
+    monkeypatch.delenv("MARKET_ASK_UPDATES", raising=False)
+    out = _ask()
+    assert out["verified"] and all(not r["can_update"] for r in out["tickers"])
+    with pytest.raises(ma.AskError) as e:
+        ma.check_bindable(out["ask_id"], SimpleNamespace(id=7), "AMAT", now=NOW)
+    assert e.value.status == 503
