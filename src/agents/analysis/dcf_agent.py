@@ -21472,6 +21472,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _verdict = _vc_unr.unrated_verdict(
                 revenue_base=revenue_base, base_iv=_base_sr.get("intrinsic_value"),
                 weight_surviving=_base_sr.get("weight_surviving"))
+            if not _verdict:
+                # D3 (owner, 2026-11-28): a valuation that fails the currency invariant is withheld (src/decisions/
+                # currency_check.py), through this same unrated path.
+                from src.decisions.currency_check import currency_verdict as _ccy_verdict
+                _lst_ccy = "HKD" if _is_hk else (locals().get("_target_ccy") or _output_currency)
+                _verdict = _ccy_verdict(_output_currency, _lst_ccy, reported_currency,
+                                        _base_sr.get("intrinsic_value"), _spot_price)
             if _verdict:
                 _rating_state = {
                     "state": "unrated", **_verdict,

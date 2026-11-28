@@ -922,8 +922,12 @@ export interface ResearchProvenance {
   earnings_since_prior?: string | null;
 }
 
+/** D3 (owner, 2026-11-28): 'range' when the valuation methods disagree -- no single target is headlined. */
+export interface Publication { mode: 'point' | 'range'; low?: number; high?: number; reason?: string }
+
 export interface ResearchView {
   provenance?: ResearchProvenance | null;
+  publication?: Publication | null;
   /** UNRATED is the absence of an opinion, not a fourth one: every figure
    *  below that depends on a target is then null. */
   research_rating: 'OVERWEIGHT' | 'NEUTRAL' | 'UNDERWEIGHT' | 'UNRATED';

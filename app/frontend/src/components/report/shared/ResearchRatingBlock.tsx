@@ -36,6 +36,25 @@ export function TargetPill({ value, ticker, className = '' }: { value: number; t
   );
 }
 
+/** D3 (owner, 2026-11-28): the bear-to-bull 12-month range, shown instead of a single target when methods disagree. */
+export function RangePill({ low, high, ticker, className = '' }: { low: number; high: number; ticker: string; className?: string }) {
+  const { t } = useI18n();
+  const s = currencySymbol(ticker);
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-3 py-1 text-sm font-semibold tabular-nums text-foreground', className)}
+          title={t('Our valuation methods disagree, so a range is shown instead of a single 12-month target')}>
+      <span className="font-medium text-muted-foreground">{t('Range')}</span>
+      {s}{low.toFixed(2)} – {s}{high.toFixed(2)}
+    </span>
+  );
+}
+
+/** The headline figure: a range when methods disagree (D3), else the point target. */
+export function isRangeView(view?: ResearchView | null): boolean {
+  const p = view?.publication;
+  return p?.mode === 'range' && typeof p.low === 'number' && typeof p.high === 'number';
+}
+
 /**
  * Owner, 2026-11-27: one rating vocabulary. The pill says Buy / Hold / Sell;
  * the research word (Overweight / Neutral / Underweight) follows as a
@@ -161,7 +180,9 @@ export function ResearchRatingBlock({ view, ticker, compact = false, delta, prio
     <div className={`flex flex-col gap-3 ${text}`}>
       <div className="flex items-center gap-2 flex-wrap">
         <RatingPill view={view} />
-        {view.target_12m != null && <TargetPill value={view.target_12m} ticker={ticker} />}
+        {isRangeView(view)
+          ? <RangePill low={view.publication!.low!} high={view.publication!.high!} ticker={ticker} />
+          : view.target_12m != null && <TargetPill value={view.target_12m} ticker={ticker} />}
         {view.benchmark && <span className="text-content-medium">{t('vs {b}', { b: view.benchmark.name })}</span>}
       </div>
       {/* Owner, 2026-11-27: the rating word explained in one visible line. */}
@@ -169,6 +190,12 @@ export function ResearchRatingBlock({ view, ticker, compact = false, delta, prio
 
       {/* Owner, 2026-11-27: what this report did with material news since the prior one, in plain words. */}
       <MaterialNewsLine view={view} delta={delta} priorRunAt={priorRunAt} compact={compact} />
+
+      {isRangeView(view) && view.publication?.reason && (
+        <p className={`${compact ? 'text-xs' : 'text-[12.5px]'} text-foreground -mt-1`}>
+          {t('No single target: {r}. This analysis does not use a credit.', { r: view.publication.reason })}
+        </p>
+      )}
 
       {/* D2 (owner, 2026-11-28): research age and the span the news check covered, always visible. */}
       <ProvenanceLine p={view.provenance} compact={compact} />

@@ -2008,9 +2008,14 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
           if isinstance(target, (int, float)) and isinstance(price, (int, float)) and price else None)
     weight = decision.get("position_size_pct")
     tsr = rv.get("tsr_12m")
+    _pub = rv.get("publication") or {}
+    _range = (_pub.get("mode") == "range" and isinstance(_pub.get("low"), (int, float))
+              and isinstance(_pub.get("high"), (int, float)))
     cells = [
-        ("12m target", _money(target), f"{_pct_s(up)} vs price" if up is not None else ""),
-        ("Fair value (IV)", _money(iv), "blended intrinsic value"),
+        # D3 (owner, 2026-11-28): methods disagree -> the bear-to-bull range is published, no single target or IV.
+        (("12m target range", f"{_money(_pub['low'])} – {_money(_pub['high'])}", "methods disagree")
+         if _range else ("12m target", _money(target), f"{_pct_s(up)} vs price" if up is not None else "")),
+        ("Fair value (IV)", "—" if _range else _money(iv), "not a single figure" if _range else "blended intrinsic value"),
         ("Price", _money(price), _strip(str(rv.get("price_as_of") or ""))),
         ("Weight", f"{float(weight):.1%}" if isinstance(weight, (int, float)) else "—",
          "12-month horizon"),
@@ -2027,6 +2032,8 @@ def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: floa
         ("LEFTPADDING", (0, 0), (-1, -1), 5), ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
     out += [kt, Spacer(1, 4)]
+    if _range and _pub.get("reason"):
+        out.append(Paragraph(_strip(f"No single target: {_pub['reason']}."), styles["RptSource"]))
     if rv.get("callout"):
         out.append(Paragraph(_strip(rv["callout"]), styles["RptSource"]))
     # Owner, 2026-09-27: the computed reconciliation when momentum signals run against the rating.
@@ -3299,7 +3306,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
     _ib_src_raw = result.get("industry_brief", "") or ""
     _used_deep  = (not _ib_src_raw or _ib_src_raw.startswith(_BRIEF_ERROR_PREFIX))
     _ib_source  = (
-        "Anthropic Web Search (live) + Financial Modeling Prep"
+        "Live web search + Financial Modeling Prep"
         if _used_deep else
         "AI Hedge Fund Phase 3 Industry Specialist · Financial Modeling Prep · "
         "Sector KPI framework (internal)"
@@ -3601,7 +3608,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
             self.setFont("Helvetica", 5.5)
             self.drawString(
                 margin, fy,
-                "Sources: Financial Modeling Prep · Anthropic Web Search · Internal Sector KPI Framework",
+                "Sources: Financial Modeling Prep · live web search · Internal Sector KPI Framework",
             )
 
             self.restoreState()

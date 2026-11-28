@@ -1326,9 +1326,31 @@ def _research_view_for(ticker: str, state, scenario: dict,
         )
         if _view is not None:
             _view["provenance"] = _research_provenance(state, delta)
+            _view["publication"] = _publication(scenario, _unreconciled_for(ticker, dcf))
         return _view
     except Exception:
         return None
+
+
+def _publication(scenario: dict, unreconciled: dict | None) -> dict:
+    """D3 (owner, 2026-11-28): how the valuation is published. When the weighted methods disagree by more than the
+    dispersion cap (and the owner has not reviewed it), no single figure is headlined -- the bear-to-bull 12-month
+    target range is, and the run's credit is returned. Otherwise a point target."""
+    if not unreconciled:
+        return {"mode": "point"}
+    by = scenario.get("12m_targets_by_scenario") or {}
+    lo, hi = by.get("bear"), by.get("bull")
+    try:
+        lo, hi = float(lo), float(hi)
+    except (TypeError, ValueError):
+        return {"mode": "point"}
+    if not (lo > 0 and hi > 0):
+        return {"mode": "point"}
+    lo, hi = min(lo, hi), max(lo, hi)
+    return {"mode": "range", "low": round(lo, 4), "high": round(hi, 4),
+            "reason": (f"our valuation methods disagree ({unreconciled.get('hi_leg')} is "
+                       f"{float(unreconciled.get('ratio') or 0):.1f}x {unreconciled.get('lo_leg')}), so we publish a "
+                       f"range rather than a single target")}
 
 
 def _research_provenance(state, delta: dict | None) -> dict:

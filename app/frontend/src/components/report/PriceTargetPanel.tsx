@@ -91,6 +91,23 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
     );
   }
 
+  // D3 (owner, 2026-11-28): methods disagree -> the range is the headline, not a single target.
+  const pub = decision?.research_view?.publication;
+  if (pub?.mode === 'range' && typeof pub.low === 'number' && typeof pub.high === 'number') {
+    return (
+      <Card className="p-5">
+        <div className="text-center">
+          <div className="text-[15px] font-semibold text-foreground">12-month target range</div>
+          <div className="text-[28px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
+            {sym}{pub.low.toFixed(2)} – {sym}{pub.high.toFixed(2)}
+          </div>
+          {current != null && <div className="mt-2 text-xs text-muted-foreground">vs current {sym}{current.toFixed(2)}</div>}
+          {pub.reason && <p className="mt-3 text-xs text-muted-foreground leading-relaxed">No single target: {pub.reason}.</p>}
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-5">
       {target != null && (

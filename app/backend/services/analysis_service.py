@@ -2120,6 +2120,19 @@ async def run_analysis_pipeline(
                             archive_run_id=archive_run_id, user_id=user_id)
     _post_timed("12_save_web_run", _t0, _t0_at, persist=False)
 
+    # D3 (owner, 2026-11-28): a run that publishes no single valuation (withheld, unrated, or range-only because the
+    # methods disagree) does not use the user's credit. Best-effort: a refund failure never fails the run.
+    try:
+        from app.backend.services import billing as _billing
+        _ns = _billing.not_sellable_reason(result, t)
+        if _ns and user_id is not None:
+            _since = datetime.now(timezone.utc) - timedelta(minutes=75)   # this run only (runs finish < 45 min)
+            _n = await asyncio.to_thread(_billing.refund_run, user_id, t, _since, _ns)
+            if _n:
+                logger.info("[billing] %s: credit returned to user %s (%s)", t, user_id, _ns)
+    except Exception as _rf_err:                            # noqa: BLE001
+        logger.warning("[billing] %s: credit return failed: %s", t, _rf_err)
+
     # ── M1: recap of the just-finished report ─────────────────────────────
     # Feeds the recency loop — the NEXT run on this ticker loads this recap
     # (pipeline phases 2.8/2.9) so reports become a continuous thread instead

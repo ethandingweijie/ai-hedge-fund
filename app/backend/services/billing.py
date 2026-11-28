@@ -297,6 +297,40 @@ def run_credits(ticker: str, model_name: Optional[str] = None, covered=None) -> 
     return CREDIT_COSTS[run_type(ticker, model_name, covered)]
 
 
+def not_sellable_reason(result: dict, ticker: str) -> Optional[str]:
+    """D3 (owner, 2026-11-28): why a finished run publishes no single valuation, so its credit is returned; None when
+    it does. Withheld / unrated (incl. a failed currency check) or a range-only publication (methods disagree)."""
+    try:
+        t = ticker.upper()
+        data = result.get("data") or {}
+        rs = (((data.get("dcf_range") or {}).get(t) or {}).get("rating_state") or {})
+        if rs.get("state") == "unrated":
+            return f"unrated:{rs.get('code') or 'withheld'}"
+        dec = (result.get("decisions") or {}).get(t) or {}
+        rv = dec.get("research_view") or {}
+        if rv.get("research_rating") == "UNRATED":
+            return "unrated"
+        if (rv.get("publication") or {}).get("mode") == "range":
+            return "range_only"
+    except Exception:                                       # noqa: BLE001
+        return None
+    return None
+
+
+def refund_run(user_id: Optional[int], ticker: str, since: datetime, reason: str) -> int:
+    """Return the credits this user's run of `ticker` reserved at or after `since` (a reservation can straddle plan
+    and add-on rows). The rows stay in the ledger as kind='run_refunded' with the reason, so usage stops counting them
+    and the audit trail keeps them. Returns the rows changed."""
+    if user_id is None:
+        return 0
+    from src.data import db
+    ensure_tables()
+    lo = _iso(since - timedelta(minutes=_SETTLE_SLACK_MIN))
+    return db.execute("UPDATE usage_ledger SET kind = 'run_refunded', note = COALESCE(note, '') || ? "
+                      "WHERE user_id = ? AND ticker = ? AND kind = 'run' AND created_at >= ?",
+                      [f" refunded:{reason}", user_id, ticker.upper(), lo]) or 0
+
+
 class LimitReached(Exception):
     def __init__(self, detail: dict):
         super().__init__(detail.get("message", "limit reached"))
