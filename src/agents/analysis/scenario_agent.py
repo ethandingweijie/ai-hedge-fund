@@ -15,6 +15,8 @@ Why probabilities here instead of inside individual investors:
 - Forcing probabilities to sum to 1.0 prevents the LLM from hedging with three "high" scenarios
 """
 
+import os
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from src.data.models import ScenarioOutput, ScenarioCase
@@ -33,6 +35,59 @@ def _case_fv(case) -> float:
     if isinstance(case, dict):
         return float(case.get("fair_value", 0.0) or 0.0)
     return 0.0
+
+
+def _prob_sample_count() -> int:
+    try:
+        n = int(os.environ.get("SCENARIO_PROB_SAMPLES", "3"))
+        return max(1, min(n, 5))
+    except (TypeError, ValueError):
+        return 3
+
+
+def _set_prob(case, p: float) -> None:
+    if isinstance(case, dict):
+        case["probability"] = p
+    else:
+        setattr(case, "probability", p)
+
+
+def _sampled_scenarios(sample_fn, n: int):
+    """(result, record): the first usable sample with each scenario's probability replaced by the median across the
+    usable samples, renormalised to 1; record = {"n", "samples": [[bear, base, bull], ...], "median": [...]}, or
+    None when fewer than two samples were usable (the single call stands, as before)."""
+    if n <= 1:
+        return sample_fn(), None
+    from concurrent.futures import ThreadPoolExecutor
+    from src.utils import run_config
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        futs = [run_config.submit(ex, sample_fn) for _ in range(n)]
+        outs = []
+        for f in futs:
+            try:
+                outs.append(f.result())
+            except Exception:                                # noqa: BLE001
+                pass
+    usable = [o for o in outs if o is not None and _case_fv(o.base) > 0]
+    if not usable:
+        return (outs[0] if outs else sample_fn()), None
+    first = usable[0]
+    if len(usable) < 2:
+        return first, None
+    trip = [[_case_prob(o.bear, 0.25), _case_prob(o.base, 0.5), _case_prob(o.bull, 0.25)] for o in usable]
+    import statistics
+    med = [statistics.median(col) for col in zip(*trip)]
+    tot = sum(med)
+    if tot <= 0:
+        return first, None
+    med = [m / tot for m in med]
+    _set_prob(first.bear, round(med[0], 4))
+    _set_prob(first.base, round(med[1], 4))
+    _set_prob(first.bull, round(med[2], 4))
+    ev = _case_fv(first.bear) * med[0] + _case_fv(first.base) * med[1] + _case_fv(first.bull) * med[2]
+    first.expected_value = round(ev, 2)
+    return first, {"n": len(usable), "samples": [[round(x, 4) for x in t] for t in trip],
+                   "median": [round(x, 4) for x in med]}
 
 
 def _case_prob(case, default: float) -> float:
@@ -210,23 +265,32 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             "disruption": disruption_section[:1500] if disruption_section else "Not available.",
         })
 
-        result: ScenarioOutput = call_llm(
-            prompt=prompt,
-            pydantic_model=ScenarioOutput,
-            agent_name=agent_id,
-            state=state,
-            max_tokens=2000,
-            default_factory=lambda: ScenarioOutput(
-                bull={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.25},
-                base={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.5},
-                bear={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.25},
-                expected_value=0.0,
-                current_price=current_price_val or 0.0,
-                upside_pct=0.0,
-            ),
-        )
+        def _one_sample() -> ScenarioOutput:
+            return call_llm(
+                prompt=prompt,
+                pydantic_model=ScenarioOutput,
+                agent_name=agent_id,
+                state=state,
+                max_tokens=2000,
+                default_factory=lambda: ScenarioOutput(
+                    bull={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.25},
+                    base={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.5},
+                    bear={"assumptions": "N/A", "fair_value": 0.0, "probability": 0.25},
+                    expected_value=0.0,
+                    current_price=current_price_val or 0.0,
+                    upside_pct=0.0,
+                ),
+            )
+
+        # D6 (owner, 2026-11-28): the bull/base/bear weights behind the 12-month target came from ONE unsampled
+        # call, so two users an hour apart could get different targets. SCENARIO_PROB_SAMPLES (default 3) calls run in
+        # parallel; each scenario's weight is the MEDIAN across samples (renormalised), the first sample keeps its
+        # fair values and assumptions. Samples that fell back to the default are ignored.
+        result, _prob_samples = _sampled_scenarios(_one_sample, _prob_sample_count())
 
         scenario_dict = result.model_dump()
+        if _prob_samples:
+            scenario_dict["probability_samples"] = _prob_samples
 
         # R3 audit trail — which variant drivers the scenarios should have
         # been stressed around (empty when nothing divergent is flagged).
