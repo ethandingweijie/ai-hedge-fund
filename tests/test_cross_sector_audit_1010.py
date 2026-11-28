@@ -270,7 +270,9 @@ def test_f_hardware_services_sotp_splits_operating_earnings_and_adds_net_cash(mo
 def test_f_shareholder_yield_and_ntm_pfcf(monkeypatch):
     row = {"normalized_free_cash_flow": 100e9, "free_cash_flow": 110e9, "_net_share_shrink": 0.03}
     v, tr = _leg("Shareholder Yield", row, {}, None, monkeypatch, shares=15e9, wacc=0.085)
-    assert v == pytest.approx((100e9 / 15e9) / (0.085 - 0.03))
+    # D4 (d), owner 2026-11-28: grows at the terminal growth rate (tgr 0.025), not the 3% buyback shrink.
+    assert v == pytest.approx((100e9 / 15e9) / (0.085 - 0.025))
+    assert tr["growth"] == 0.025 and tr["net_share_shrink"] == 0.03
     fc = {"revenue": {"base": 440e9}}
     v2, tr2 = _leg("P/FCF (NTM)", row, {"fcf_yield": 0.05}, fc, monkeypatch, shares=15e9, revenue_base=400e9)
     assert v2 == pytest.approx((110e9 * 1.1 / 15e9) / 0.05)
