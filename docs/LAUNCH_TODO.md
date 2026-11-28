@@ -10,6 +10,8 @@ Owner decisions and inputs still needed before charging customers (status 2026-1
       in Singapore (Financial Advisers Act), Hong Kong and the US
 - [ ] Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_{STARTER,PROFESSIONAL}_{MONTHLY,ADDON}`,
       `APP_BASE_URL`, webhook endpoint → then a test-mode payment → then `BILLING_ENFORCED=true` (billing goes last)
+- [ ] **EDINET API key** (Japan filings; registration retried later -- CAPTCHA/sign-up popup needs the owner) → Railway
+      `EDINET_API_KEY` on ai-hedge-fund + worker. Until then Japan uses TDnet + FMP. (`DART_API_KEY` is set.)
 - [ ] D4 decisions still open: (b) moat ROIC without goodwill, (c) growth-fade base rates
 - [ ] China A-shares (docs/markets/CHINA.md): licensing questions for the lawyer -- questions only, no conclusions:
   - Does publishing ratings / 12-month targets on SSE/SZSE companies to subscribers OUTSIDE mainland China need any

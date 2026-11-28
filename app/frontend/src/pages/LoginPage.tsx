@@ -341,7 +341,7 @@ export function LoginPage() {
           <div className="mt-8 flex items-center gap-3">
             <Divider className="flex-1" />
             <span className="text-xs text-muted-foreground/70 uppercase tracking-[0.1em]">
-              {t("US · HK · SGX")}
+              {t("US · CN · HK · SG · JP · KR")}
             </span>
             <Divider className="flex-1" />
           </div>

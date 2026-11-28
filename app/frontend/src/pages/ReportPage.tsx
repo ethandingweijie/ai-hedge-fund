@@ -1231,7 +1231,7 @@ export function ReportPage() {
           {/* Footer hint */}
           <div className="px-6 pb-6 text-center">
             <p className="text-xs text-muted-foreground/70 leading-relaxed">
-              {tr('Results stream in over 4-6 minutes · US · HK · SGX universe')}
+              {tr('Results stream in over 4-6 minutes · US · CN · HK · SG · JP · KR')}
             </p>
           </div>
         </div>

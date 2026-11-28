@@ -54,7 +54,7 @@ export const ZH: Record<string, string> = {
   // ── Landing ───────────────────────────────────────────────────────────
   'Analyse': '分析',
   'Popular': '热门',
-  'Results stream in over 4-6 minutes · US · HK · SGX universe': '结果将在 4–6 分钟内陆续生成 · 覆盖美股 · 港股 · 新加坡股市',
+  'Results stream in over 4-6 minutes · US · CN · HK · SG · JP · KR': '结果将在 4–6 分钟内陆续生成 · 覆盖美股 · A股 · 港股 · 新加坡 · 日本 · 韩国',
   'Search ticker or company': '搜索股票代码或公司',
   'Search ticker or company...': '搜索股票代码或公司…',
   'Search ticker or company…': '搜索股票代码或公司…',
