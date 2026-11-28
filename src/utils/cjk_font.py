@@ -1,18 +1,23 @@
-"""CJK text in the ReportLab PDF.
+"""CJK text in ReportLab PDFs -- one helper for Korean (Hangul), Japanese (kana) and Chinese (Han) text.
 
-Helvetica (a PDF base-14 font) has no Chinese glyphs: "贵州茅台" renders as black boxes. ReportLab has no per-glyph
-font fallback, so runs of CJK characters are wrapped in <font name="..."> inside Paragraph markup.
+ReportLab's standard fonts (Helvetica & co.) carry WinAnsi glyphs only, so a Korean company name, a Japanese
+filing title or a Chinese quote renders as blank boxes. This module finds a font that can draw each script and
+wraps every CJK run of a Paragraph's text in ``<font name="...">`` so the Latin text keeps its house font.
 
-Font resolution, first hit wins:
-  1. CJK_FONT_PATH (env) -- a TrueType .ttf/.ttc, EMBEDDED (subset) in the PDF.
-  2. A TrueType CJK font already on the host, embedded the same way:
-     Linux: fonts-wqy-microhei / fonts-wqy-zenhei; Windows: Microsoft YaHei, SimHei, SimSun.
-     (Noto Sans CJK .ttc files are CFF-outline OpenType, which ReportLab cannot embed, so they are not listed.)
-  3. ReportLab's built-in Adobe CID font STSong-Light -- ships with ReportLab, needs no file, NOT embedded: Acrobat
-     and pdf.js render it with their own Simplified Chinese font.
+Font choice, per script, first hit wins:
 
-The production image has no CJK font today, so it takes (3) until `fonts-wqy-microhei` is added to the Dockerfile
-(owner decision, docs/markets/CHINA.md). Never raises: on any failure the text is returned unwrapped.
+1. ``CJK_FONT_PATH_<KR|JP|CN>`` -- an owner-supplied TrueType file (``.ttf``, or ``.ttc`` with ``#<index>``).
+2. A TrueType font already on the host: Nanum Gothic / IPA Gothic / WenQuanYi Zen Hei on Debian (packages
+   ``fonts-nanum``, ``fonts-ipafont-gothic``, ``fonts-wqy-zenhei``), Malgun Gothic / MS Gothic / SimSun on Windows.
+   These are EMBEDDED (subset) in the PDF, so any viewer draws them.
+3. ReportLab's built-in Adobe CID fonts (HYGothic-Medium, HeiseiKakuGo-W5, STSong-Light). Always available, but NOT
+   embedded: Chrome / Edge / macOS Preview substitute a system font; Acrobat may ask for its Asian font pack.
+
+The production image (python:3.11-slim) ships no CJK fonts, so production uses tier 3 until a font package or file
+is added (owner decision, docs/markets/KOREA.md). Note: OpenType/CFF fonts (Noto Sans CJK .otf/.ttc) cannot be
+read by ReportLab's TTFont; use a glyf-outline TrueType font.
+
+Shared by the Korea, Japan and China market work -- keep it market-neutral.
 """
 from __future__ import annotations
 
@@ -21,86 +26,127 @@ import re
 import threading
 from typing import Optional
 
-FONT_NAME = "CJKBody"
-_CID_FALLBACK = "STSong-Light"
+__all__ = ["script_of", "has_cjk", "font_for_script", "font_for_text", "cjk_markup"]
 
-_CANDIDATES = (
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-    r"C:\Windows\Fonts\msyh.ttc",
-    r"C:\Windows\Fonts\simhei.ttf",
-    r"C:\Windows\Fonts\simsun.ttc",
-)
+#: Hangul syllables / jamo / compatibility jamo
+_HANGUL = r"\u1100-\u11ff\u3130-\u318f\uac00-\ud7af"
+#: Hiragana, Katakana (+ phonetic extensions, half-width katakana)
+_KANA = r"\u3040-\u30ff\u31f0-\u31ff\uff66-\uff9f"
+#: CJK unified ideographs (+ ext A, compatibility), CJK symbols & punctuation, full-width forms
+_HAN = r"\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3000-\u303f\uff01-\uff60\uffe0-\uffee"
+_ANY = re.compile(f"[{_HANGUL}{_KANA}{_HAN}]")
+#: A run: CJK characters plus the spaces / digits between them, so "삼성전자 2025 사업보고서" is one font switch.
+_RUN = re.compile(f"[{_HANGUL}{_KANA}{_HAN}](?:[{_HANGUL}{_KANA}{_HAN}0-9 .,()%·\\-]*[{_HANGUL}{_KANA}{_HAN}])?")
+_RE_HANGUL, _RE_KANA = re.compile(f"[{_HANGUL}]"), re.compile(f"[{_KANA}]")
 
-#: CJK Unified Ideographs (+ Ext A), CJK symbols & punctuation, full-width forms, Hiragana/Katakana, Hangul.
-_CJK_RUN = re.compile(r"[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uff00-\uffef]+")
-
+_ENV = {"hangul": "CJK_FONT_PATH_KR", "kana": "CJK_FONT_PATH_JP", "han": "CJK_FONT_PATH_CN"}
+_TTF_CANDIDATES = {
+    "hangul": ["/usr/share/fonts/truetype/nanum/NanumGothic.ttf", "/usr/share/fonts/nanum/NanumGothic.ttf",
+               "C:/Windows/Fonts/malgun.ttf", "/Library/Fonts/AppleGothic.ttf"],
+    "kana": ["/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf", "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+             "C:/Windows/Fonts/msgothic.ttc#0"],
+    "han": ["/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc#0", "C:/Windows/Fonts/simsun.ttc#0"],
+}
+_CID = {"hangul": "HYGothic-Medium", "kana": "HeiseiKakuGo-W5", "han": "STSong-Light"}
 _LOCK = threading.Lock()
-_STATE: dict = {"name": None, "source": None}
+_RESOLVED: dict[str, Optional[str]] = {}
 
 
-def has_cjk(text) -> bool:
-    return bool(text) and bool(_CJK_RUN.search(str(text)))
+def has_cjk(text: Optional[str]) -> bool:
+    return bool(text) and _ANY.search(text) is not None
 
+
+def script_of(text: str) -> Optional[str]:
+    """'hangul' | 'kana' | 'han' | None. Kana outranks Han (Japanese mixes kanji), Hangul outranks both."""
+    if not has_cjk(text):
+        return None
+    if _RE_HANGUL.search(text):
+        return "hangul"
+    if _RE_KANA.search(text):
+        return "kana"
+    return "han"
+
+
+def _try_ttf(name: str, spec: str) -> bool:
+    path, _, idx = spec.partition("#")
+    if not os.path.isfile(path):
+        return False
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        kw = {"subfontIndex": int(idx)} if idx else {}
+        pdfmetrics.registerFont(TTFont(name, path, **kw))
+        return True
+    except Exception:                                      # noqa: BLE001  (CFF outlines, damaged file)
+        return False
+
+
+def font_for_script(script: str) -> Optional[str]:
+    """A registered ReportLab font name that draws ``script``, or None (unknown script / ReportLab missing)."""
+    if script not in _CID:
+        return None
+    with _LOCK:
+        if script in _RESOLVED:
+            return _RESOLVED[script]
+        name = None
+        specs = ([os.environ[_ENV[script]]] if os.environ.get(_ENV[script]) else []) + _TTF_CANDIDATES[script]
+        for spec in specs:
+            cand = f"CJK-{script}-TTF"
+            if _try_ttf(cand, spec):
+                name = cand
+                break
+        if name is None:
+            try:
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+                pdfmetrics.registerFont(UnicodeCIDFont(_CID[script]))
+                name = _CID[script]
+            except Exception:                              # noqa: BLE001
+                name = None
+        _RESOLVED[script] = name
+        return name
+
+
+def font_for_text(text: Optional[str], default: str = "Helvetica") -> str:
+    """The font to draw a whole string with on a canvas (headers / footers): ``default`` unless it holds CJK."""
+    s = script_of(text or "")
+    return (font_for_script(s) if s else None) or default
+
+
+def cjk_markup(text):
+    """Paragraph markup with every CJK run wrapped in ``<font name=...>``; non-strings and CJK-free text unchanged.
+    A run never contains '<' or '&', so existing markup and entities are untouched."""
+    if not isinstance(text, str) or not has_cjk(text):
+        return text
+
+    def _wrap(m: "re.Match") -> str:
+        run = m.group(0)
+        f = font_for_script(script_of(run) or "")
+        return f'<font name="{f}">{run}</font>' if f else run
+
+    return _RUN.sub(_wrap, text)
+
+
+# ── China-branch names (merge 2026-11-28): thin aliases over the shared per-script helper ──────────────────────
 
 def font_name() -> Optional[str]:
-    """Register the CJK font once; its ReportLab name, or None when nothing could be registered."""
-    with _LOCK:
-        if _STATE["name"] is not None:
-            return _STATE["name"] or None
-        try:
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-        except Exception:                                  # noqa: BLE001
-            _STATE["name"] = ""
-            return None
-        paths = [os.environ.get("CJK_FONT_PATH") or ""] + list(_CANDIDATES)
-        for p in paths:
-            if not p or not os.path.isfile(p):
-                continue
-            try:
-                kw = {"subfontIndex": 0} if p.lower().endswith(".ttc") else {}
-                pdfmetrics.registerFont(TTFont(FONT_NAME, p, **kw))
-                _STATE.update(name=FONT_NAME, source=p)
-                return FONT_NAME
-            except Exception:                              # noqa: BLE001
-                continue
-        try:
-            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-            pdfmetrics.registerFont(UnicodeCIDFont(_CID_FALLBACK))
-            _STATE.update(name=_CID_FALLBACK, source="reportlab CID (not embedded)")
-            return _CID_FALLBACK
-        except Exception:                                  # noqa: BLE001
-            _STATE["name"] = ""
-            return None
+    """The font that draws Chinese (Han) text -- the China branch's single-font entry point."""
+    return font_for_script("han")
 
 
 def font_source() -> Optional[str]:
-    font_name()
-    return _STATE.get("source")
+    n = font_name()
+    return None if n is None else ("ttf" if n.endswith("-TTF") else "cid")
 
 
-def wrap_cjk(markup) -> str:
-    """Paragraph markup with every CJK run in <font name=CJK>. Text without CJK is returned unchanged."""
-    s = "" if markup is None else str(markup)
-    if not has_cjk(s):
-        return s
-    name = font_name()
-    if not name:
-        return s
-    return _CJK_RUN.sub(lambda m: f'<font name="{name}">{m.group(0)}</font>', s)
+def wrap_cjk(markup):
+    return cjk_markup(markup)
 
 
 def cjk_paragraph(base_cls):
-    """A Paragraph subclass that wraps CJK runs before parsing. Plain-string table cells are not Paragraphs and
-    are left alone (no markup can leak into them)."""
-
-    class CJKParagraph(base_cls):                          # type: ignore[misc, valid-type]
+    """A Paragraph subclass that wraps CJK runs before ReportLab parses the markup."""
+    class _CJKParagraph(base_cls):
         def __init__(self, text, *args, **kwargs):
-            if isinstance(text, str) and has_cjk(text):
-                text = wrap_cjk(text)
-            super().__init__(text, *args, **kwargs)
-
-    CJKParagraph.__name__ = "Paragraph"
-    return CJKParagraph
+            super().__init__(cjk_markup(text), *args, **kwargs)
+    _CJKParagraph.__name__ = base_cls.__name__
+    return _CJKParagraph

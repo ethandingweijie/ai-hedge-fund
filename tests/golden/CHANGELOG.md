@@ -2034,3 +2034,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: D4(d) owner 2026-11-28: Shareholder Yield leg grows at the terminal growth rate, not the buyback shrink rate (FCF yield + buyback growth counted the distribution twice)
 
+## 2026-11-28T11:17:46+00:00
+
+- regenerated at HEAD: `57696aac`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Japan owner decisions 2026-11-28: valuation_constants gains the accepted JP risk-free row and the JPY country premium; no golden ticker is Japanese, so only param_version moves
+

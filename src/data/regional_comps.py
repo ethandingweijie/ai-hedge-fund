@@ -402,6 +402,9 @@ CROSS_MARKET_BASKETS: dict[str, dict] = {
     "Money Center Bank (SG)": {"markets": ("SES",),
                                "symbols": ("D05.SI", "O39.SI", "U11.SI", "1155.KL", "1023.KL", "BBCA.JK",
                                            "KBANK.BK", "BBL.BK")},
+    # Owner, 2026-11-28: the three Japanese megabanks are each other's peer set (FMP labels Mizuho "Banks - Regional",
+    # so the label cohort split them).
+    "Money Center Bank (JP)": {"markets": ("JPX",), "symbols": ("8306.T", "8316.T", "8411.T")},
     # Owner, 2026-11-27: HSBC's HKSE label peers were the Chinese state banks; a global universal-bank set instead.
     "Money Center Bank (EU)": {"markets": ("HKSE",),
                                "symbols": ("2888.HK", "BNP.PA", "BARC.L", "C", "D05.SI")},

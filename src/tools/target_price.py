@@ -1,4 +1,4 @@
-"""Analyst consensus target prices for HK and SG listings.
+"""Analyst consensus target prices for HK, SG and Tokyo listings.
 
 FMP carries no price-target consensus for HKEX or SGX -- it says so itself
 ("no price-target consensus data for this venue ... by design, not a
@@ -11,6 +11,7 @@ S&P Global Market Intelligence, and covers both venues:
 
     HK   https://stockanalysis.com/quote/hkg/0700/forecast/
     SG   https://stockanalysis.com/quote/sgx/D05/forecast/
+    JP   https://stockanalysis.com/quote/tyo/7203/forecast/   (FMP has none for JPX either, verified 2026-11-28)
 
 The figure is stated in a sentence rather than a data attribute -- "According
 to 16 analysts polled by S&P Global, DBS Group Holdings stock has a consensus
@@ -43,8 +44,8 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 _SENTENCE = re.compile(
     r"According to\s+(?P<n>\d+)\s+analysts?[^.]*?"
     r"average price target of\s+(?:\$|¥|&yen;)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
-# A-share pages write the yuan as "¥" ("average price target of ¥1,705"); the venue currency line ("Currency is
-# CNY") is what names it, never the sign.
+# A-share and Tokyo pages write "¥" ("average price target of ¥1,705" / "¥3,835"); the venue currency line ("Currency
+# is CNY" / "JPY") is what names it, never the sign. HK/SG pages write a bare "$" whatever the currency.
 _LOW = re.compile(r"lowest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
 _HIGH = re.compile(r"highest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
@@ -92,6 +93,10 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
         return f"sha/{t[:-3]}", "CNY"
     if t.endswith(".SZ"):
         return f"she/{t[:-3]}", "CNY"
+    # Tokyo (2026-11-28): https://stockanalysis.com/quote/tyo/7203/forecast/ -- "Currency is JPY", targets as "¥3,835".
+    from src.markets.japan import is_jp_ticker, local_code
+    if is_jp_ticker(t):
+        return f"tyo/{local_code(t)}", "JPY"
     return None
 
 

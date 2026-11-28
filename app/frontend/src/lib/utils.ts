@@ -68,8 +68,8 @@ export function formatKeyboardShortcut(key: string): string {
  */
 /** Symbol for an ISO currency code (a statement's reporting currency), else ''. */
 const _CCY_SYMBOL: Record<string, string> = {
-  // CNY: "RMB", never a bare "¥" -- that is also the yen sign (China A-share support, 2026-11-28).
-  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: 'RMB ', RMB: 'RMB ', JPY: '¥', EUR: '€', GBP: '£', KRW: '₩', TWD: 'NT$', INR: '₹', AUD: 'A$',
+  // CNY: "RMB", JPY: "JP¥" -- never a bare "¥", which both currencies use (China / Japan support, 2026-11-28).
+  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: 'RMB ', RMB: 'RMB ', JPY: 'JP¥', EUR: '€', GBP: '£', KRW: '₩', TWD: 'NT$', INR: '₹', AUD: 'A$',
 };
 export function currencyCodeSymbol(code?: string | null): string {
   if (!code) return '';
@@ -84,6 +84,8 @@ export function currencySymbol(ticker: string): string {
   if (upper.endsWith('.SI')) return 'S$';
   // China A-shares quote in renminbi
   if (upper.endsWith('.SS') || upper.endsWith('.SZ')) return 'RMB ';
+  // JP: Tokyo listing (7203.T, 130A.T). 'JP¥', never a bare '¥' (the renminbi uses the same sign).
+  if (/^[1-9][0-9A-Z][0-9][0-9A-Z]\.T$/.test(upper)) return 'JP¥';
   // HK: purely numeric
   const cleanHK = upper.replace(/\.HK$/, '');
   if (/^\d{1,5}$/.test(cleanHK)) return 'HK$';

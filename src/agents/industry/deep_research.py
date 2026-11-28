@@ -5640,6 +5640,13 @@ def _research_one_ticker(
             f"  CIK: {_edgar.get('cik', '')} | EDGAR page: {_viewer_url}\n"
             f"  No 20-F or 10-K has been filed yet. Use FMP data with FMP attribution.\n\n"
         )
+    # ── Tokyo listings: Japanese-language sources, March fiscal years, TDnet primary source ──
+    try:
+        from src.markets.japan import research_context as _jp_research_context
+        from src.markets.japan_filings import filing_context as _jp_filing_context
+        _base_context += _jp_research_context(ticker, company_name) + _jp_filing_context(_edgar)
+    except Exception:                                      # noqa: BLE001
+        pass
 
     # ── Inject FMP pre-loaded data ────────────────────────────────────────────
     _fmp_block = ""
@@ -7329,6 +7336,19 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     state["data"]["bank_metrics_all"]       = bank_metrics_all
     state["data"]["reit_metrics_all"]       = reit_metrics_all
     state["data"]["pipeline_assets_all"]    = pipeline_assets_all
+
+    # ── Tokyo listings: a bare "¥3,384" in the narrative is yen -> "JP¥3,384" (¥ is also the renminbi sign) ──
+    try:
+        from src.markets.japan import is_jp_ticker as _is_jp, normalize_yen as _jp_yen
+        for t, res in deep_research_map.items():
+            if _is_jp(t) and isinstance(res, dict):
+                for _k in ("deep_research", "deep_research_annotated"):
+                    if isinstance(res.get(_k), str):
+                        res[_k] = _jp_yen(res[_k])
+                if isinstance(res.get("deep_research_sections"), dict):
+                    res["deep_research_sections"] = {k: _jp_yen(v) for k, v in res["deep_research_sections"].items()}
+    except Exception:                                      # noqa: BLE001
+        pass
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}

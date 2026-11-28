@@ -24,6 +24,13 @@ RUN poetry config virtualenvs.create false \
     && poetry config installer.parallel false \
     && poetry install --no-interaction --no-ansi
 
+# CJK fonts for the PDF report (src/utils/cjk_font.py, shared by the Japan / Korea / China markets). TrueType (glyf)
+# packages only: ReportLab cannot read the OpenType/CFF Noto CJK fonts. Its own layer AFTER the dependency install,
+# so adding it does not invalidate the cached poetry layer (railway dep-drift incident).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-ipafont-gothic fonts-nanum fonts-wqy-zenhei \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy rest of the source code
 COPY . /app/
 

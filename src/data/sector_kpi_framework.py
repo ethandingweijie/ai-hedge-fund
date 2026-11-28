@@ -4734,6 +4734,7 @@ if "Money Center Bank" in SECTOR_KPI_FRAMEWORK:
     import copy as _copy
     _sg_bank = _copy.deepcopy(SECTOR_KPI_FRAMEWORK["Money Center Bank"])
     SECTOR_KPI_FRAMEWORK["Money Center Bank (SG)"] = _sg_bank
+    SECTOR_KPI_FRAMEWORK["Money Center Bank (JP)"] = _copy.deepcopy(SECTOR_KPI_FRAMEWORK["Money Center Bank"])
     del _sg_bank
 
 # ── SGX sub-profile KPI specs ───────────────────────────────────────────

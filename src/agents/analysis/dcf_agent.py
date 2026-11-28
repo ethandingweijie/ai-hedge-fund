@@ -103,6 +103,7 @@ from src.agents.industry.sector_prompts import (
 )
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
 from src.tools.sg.ticker import is_sg_ticker as _is_sg_ticker
+from src.markets.japan import is_jp_ticker as _is_jp_ticker, STATUTORY_TAX as _JP_STATUTORY_TAX
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
 
@@ -4511,7 +4512,7 @@ def _accepted_inputs_used(ticker: str) -> list[dict]:
 
 #: Statutory corporate tax by market of domicile, the fallback when the filings give no usable effective rate
 #: (HK/SG workbook audit, 2026-11-25: SIA's normalised earnings were taxed at the US 21%, not Singapore's 17%).
-_STATUTORY_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25}
+_STATUTORY_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25, "JP": _JP_STATUTORY_TAX}
 
 
 def _company_tax_rate(series: list, ticker: str, reported_currency: Optional[str] = None) -> tuple[float, str]:
@@ -4526,7 +4527,7 @@ def _company_tax_rate(series: list, ticker: str, reported_currency: Optional[str
         return statistics.median(rates), f"filed effective rate, {len(rates)}-year median"
     t = str(ticker or "").upper()
     mkt = ("CN" if str(reported_currency or "").upper() == "CNY" else
-           "HK" if t.endswith(".HK") else "SG" if t.endswith(".SI") else "US")
+           "HK" if t.endswith(".HK") else "SG" if t.endswith(".SI") else "JP" if _is_jp_ticker(t) else "US")
     return _STATUTORY_TAX[mkt], f"{mkt} statutory rate"
 
 
@@ -7273,6 +7274,13 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     "Money Center Bank (SG)": {"target_roe": 0.145, "coe": 0.088, "p_tbv": 1.9, "pe": 12.3, "fade_years": 7,   # DBS 2.1x, OCBC 1.3x, UOB 1.2x book; SES rung 12.3x (owner Wave 6)
                               "target_cet1": 0.140, "rwa_to_assets": 0.55, "terminal_spread": 0.010,
                               "ggm_g": 0.031},
+    # Japanese megabanks -- MUFG, SMFG, Mizuho (owner, 2026-11-28; docs/markets/JAPAN.md). Measured on the
+    # 2026-11-27 close against 30 Sep 2026 book (FMP): P/TBV MUFG 1.73x / SMFG 1.58x / Mizuho 1.80x -> 1.7x; CoE 8.8%
+    # implied by MUFG's P/B 1.58 = (ROE 12.4% - g 2.7%) / (CoE - g); trailing P/E 13.0 / 14.1 / 12.9 -> 13.0x;
+    # TTM ROE 12.4 / 10.4 / 12.9% -> 12%. ggm_g = the JGB 10y the GGM caps g at. target_cet1, rwa_to_assets,
+    # terminal_spread and fade_years are carried from the US row, not re-derived.
+    "Money Center Bank (JP)": {"target_roe": 0.12, "coe": 0.088, "p_tbv": 1.7, "pe": 13.0, "fade_years": 5,
+                               "target_cet1": 0.12, "rwa_to_assets": 0.55, "terminal_spread": 0.010, "ggm_g": 0.027},
     # Default fallback
     # Owner Wave 6 (2026-09-27): card issuers and consumer lenders on the bank block. P/TBV and P/E
     # from the US Financial - Credit Services cohort (1.27x / 10.9x); RoTE 18% is the AXP 33% /
@@ -7310,7 +7318,7 @@ def _bank_profile_calibration(profile_name: str) -> dict:
 #: Note that a separate and unrelated ``_BANK_PROFILES`` exists in
 #: ``src/pipeline.py``. They are not the same set and are not kept in step.
 _BANK_PROFILES: frozenset[str] = frozenset({
-    "Money Center Bank", "Regional Bank", "Mortgage/GSE",
+    "Money Center Bank", "Money Center Bank (JP)", "Regional Bank", "Mortgage/GSE",
     "Investment Bank", "Insurance", "FinTech", "Asset Manager",
     "Bank / Lending Institution",   # FMP routing label
 })
@@ -7580,7 +7588,7 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
         from src.data.capm import risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
         _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else
-                        "CN" if _t_up.endswith((".SS", ".SZ")) else "US")[0]
+                        "CN" if _t_up.endswith((".SS", ".SZ")) else "JP" if _is_jp_ticker(_t_up) else "US")[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -7661,7 +7669,7 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
 # to the ISO code plus a space ("SEK 12.30"), which is unambiguous.
 _CCY_SYMBOLS: dict[str, str] = {
     "USD": "$",   "SGD": "S$",  "HKD": "HK$", "CNY": "RMB", "CNH": "RMB",
-    "EUR": "€",   "GBP": "£",   "JPY": "¥",   "AUD": "A$",  "CAD": "C$",
+    "EUR": "€",   "GBP": "£",   "JPY": "JP¥", "AUD": "A$",  "CAD": "C$",
     "INR": "₹",   "KRW": "₩",   "TWD": "NT$", "CHF": "CHF ", "MYR": "RM",
 }
 
@@ -12587,8 +12595,8 @@ def _consensus_at_run(ticker: str, consensus_pt: Optional[dict]) -> dict:
     """The Street reference as it stood when this run was made."""
     from datetime import datetime as _dt, timezone as _tz
     t = (ticker or "").upper()
-    if t.endswith((".HK", ".SI", ".SS", ".SZ")):
-        # FMP has no consensus for HKEX/SGX (nor SSE/SZSE: price-target-consensus is empty, 2026-11-28). The S&P figure comes from a page
+    if t.endswith((".HK", ".SI", ".SS", ".SZ", ".T")):
+        # FMP has no consensus for HKEX/SGX/JPX (nor SSE/SZSE: price-target-consensus is empty, 2026-11-28). The S&P figure comes from a page
         # scrape (target_price.py, 25 s timeout) that does not belong on the
         # live path; the daily outcome job records it on the run's own day.
         return {"status": "deferred", "source": "stockanalysis.com",
@@ -13188,6 +13196,26 @@ def _close_on_or_before(prices, day: datetime) -> Optional[tuple[float, str]]:
     return (best[1], best[0]) if best else None
 
 
+def _backtest_ccy_symbol(ticker: str, api_key: Optional[str] = None) -> str:
+    """The symbol of the currency the T-1 price is quoted in (the listing currency): the backtest note printed
+    "$2775.12 vs price $2616.00" for Toyota's yen (2026-11-28). No network call (golden replays record every FMP
+    call): the listing-currency cache when this run already resolved it, else the venue default and the known
+    USD-quoted SGX lines. "$" for an unsuffixed (US) ticker and whenever nothing resolves."""
+    t = str(ticker or "").strip().upper()
+    if "." not in t:
+        return "$"
+    try:
+        from src.tools import api as _api
+        code = _api._LISTING_CCY_CACHE.get(t)
+        if not code:
+            code = "USD" if t in _api._KNOWN_USD_QUOTED else next(
+                (c for suf, c in _api._VENUE_CCY.items() if t.endswith(suf)), "USD")
+    except Exception:                                      # noqa: BLE001
+        return "$"
+    code = str(code or "USD").upper()
+    return _CCY_SYMBOLS.get(code, f"{code} ")
+
+
 def _run_backward_gate(
     ticker: str,
     series: list[dict],
@@ -13460,7 +13488,8 @@ def _run_backward_gate(
                        else (f"12m later model and market were level "
                              f"({_m:.0%} vs {_k:.0%})" if isinstance(_m, (int, float))
                              and isinstance(_k, (int, float)) else "12m outcome scored"))
-            _gap = (f"T-1 {method_label} IV ${iv_t1:.2f} vs price ${actual_price:.2f}{_when} "
+            _cs = _backtest_ccy_symbol(ticker, api_key)
+            _gap = (f"T-1 {method_label} IV {_cs}{iv_t1:.2f} vs price {_cs}{actual_price:.2f}{_when} "
                     f"= {error_pct:.0%} gap")
             if _verdict == "MARKET_CLOSER":
                 record["status"] = "fired"
@@ -13472,8 +13501,9 @@ def _run_backward_gate(
         record["status_basis"] = "t1_tolerance"
         if error_pct > _CALIBRATION_TOLERANCE:
             record["status"] = "fired"
-            note = (f"Calibration Error: T-1 {method_label} IV ${iv_t1:.2f} vs actual "
-                    f"${actual_price:.2f}{_when} = {error_pct:.0%} error (>{_CALIBRATION_TOLERANCE:.0%} tolerance)")
+            _cs = _backtest_ccy_symbol(ticker, api_key)
+            note = (f"Calibration Error: T-1 {method_label} IV {_cs}{iv_t1:.2f} vs actual "
+                    f"{_cs}{actual_price:.2f}{_when} = {error_pct:.0%} error (>{_CALIBRATION_TOLERANCE:.0%} tolerance)")
             return True, note, record
 
         record["status"] = "passed"
@@ -15717,6 +15747,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # over-indexing on a single LLM parse of qualitative text.
         dcf_cal = dcf_calibration_all.get(ticker, {})
         _guid_est = guidance_estimates_all.get(ticker) or {}
+        # Tokyo: an issuer's start-year FY label (MUFG "FY2026" = year to March 2027) moves to the end-year convention.
+        from src.markets.japan import relabel_fiscal_years as _jp_relabel
+        _guid_est = _jp_relabel(_guid_est, ticker, most_recent.get("period"))
         # Owner, 2026-10-03 (interactive agent): the user's latest saved estimates for this name are
         # carried into the run -- their numbers replace the research's in the guidance block, their
         # engine inputs reach the forecast, their WACC / terminal growth replace the engine's below.
@@ -16956,7 +16989,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
                     market=("HK" if _is_hk else "SG" if _is_sg else
-                            "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US"),
+                            "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
+                            "JP" if _is_jp_ticker(ticker) else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -16981,7 +17015,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         try:
             from src.data import capm as _capm_mkt
             _mkt_code = ("HK" if _is_hk else "SG" if _is_sg else
-                         "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else "US")
+                         "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
+                         "JP" if _is_jp_ticker(ticker) else "US")
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:

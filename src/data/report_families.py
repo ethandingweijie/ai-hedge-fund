@@ -46,7 +46,7 @@ _R = {
 
 REPORT_FAMILIES: dict[str, dict] = {
     "Banks": {
-        "profiles": ["Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Regional Bank",
+        "profiles": ["Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Money Center Bank (JP)", "Regional Bank",
                      "Super-Regional Bank", "EM Bank", "Bank / Lending Institution",
                      "Investment Bank", "Mortgage/GSE", "Card Issuer & Consumer Lender"],
         "rows": ["total_income", "ni", "equity", "bvps", "dps", "roe"],

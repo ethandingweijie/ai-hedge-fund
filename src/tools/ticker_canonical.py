@@ -43,6 +43,10 @@ Examples
 '600519'
 >>> canonical_ticker("SZ000858")
 '000858.SZ'
+>>> canonical_ticker("TYO:7203")
+'7203.T'
+>>> canonical_ticker("130a.jp")
+'130A.T'
 >>> canonical_ticker("aapl")
 'AAPL'
 >>> canonical_ticker("")
@@ -66,8 +70,12 @@ def canonical_ticker(ticker: str | None) -> str:
     # backend does not otherwise need at import time.
     from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
     from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
+    from src.markets.japan import is_jp_ticker, to_canonical as _jp_canonical
     from src.markets.china import normalize as _cn_normalize
 
+    # Tokyo first: it needs an explicit venue (7203.T, TYO:7203, 7203.JP), so it can never shadow a bare HK number.
+    if is_jp_ticker(t):
+        return _jp_canonical(t)
     # China A-shares: six digits WITH a venue (600519.SS / .SH / SH600519). A bare six-digit code is left as typed
     # (owner, 2026-11-28: Korea uses six digits too); HK codes are 1-5 digits, so six never reach the HK rule.
     _cn = _cn_normalize(t)

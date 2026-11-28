@@ -408,12 +408,12 @@ def test_pdf_price_currency_symbol_is_rmb():
 
 
 def test_cjk_cid_fallback_when_no_ttf_on_host(monkeypatch):
-    """Production (Linux image without a CJK font) takes ReportLab's built-in STSong-Light."""
+    """Production without a CJK TrueType font takes ReportLab's built-in STSong-Light for Chinese (shared helper)."""
     from src.utils import cjk_font
-    saved = dict(cjk_font._STATE)
-    monkeypatch.setattr(cjk_font, "_CANDIDATES", ())
-    monkeypatch.delenv("CJK_FONT_PATH", raising=False)
-    cjk_font._STATE.update(name=None, source=None)
+    monkeypatch.setitem(cjk_font._TTF_CANDIDATES, "han", [])
+    monkeypatch.delenv(cjk_font._ENV["han"], raising=False)
+    saved = dict(cjk_font._RESOLVED)
+    cjk_font._RESOLVED.pop("han", None)
     try:
         assert cjk_font.font_name() == "STSong-Light"
         from reportlab.lib.styles import getSampleStyleSheet
@@ -423,11 +423,8 @@ def test_cjk_cid_fallback_when_no_ttf_on_host(monkeypatch):
         SimpleDocTemplate(buf).build([pdf_report.Paragraph("中国平安 Ping An", getSampleStyleSheet()["Normal"])])
         assert b"STSong-Light" in buf.getvalue()
     finally:
-        cjk_font._STATE.clear()
-        cjk_font._STATE.update(saved)
-
-
-# ── China ERP (owner, 2026-11-28) ───────────────────────────────────────────
+        cjk_font._RESOLVED.clear()
+        cjk_font._RESOLVED.update(saved)
 
 def test_china_erp_is_the_implied_premium_net_of_crp():
     from src.data import capm, valuation_constants as vc

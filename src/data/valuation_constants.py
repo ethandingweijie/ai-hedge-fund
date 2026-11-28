@@ -72,13 +72,16 @@ def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Opti
 
 
 def market_key(ticker: Optional[str]) -> str:
-    """The market a constant is keyed by: HKSE, SES, SHH, SHZ or US (the comps store's keys). An A-share used to
-    fall to "US" and would have taken a Treasury-based cost of equity on RMB cash flows."""
+    """The market a constant is keyed by: HKSE, SES, SHH, SHZ, JPX, KSC or US (the comps store's keys). A listing on
+    a market with no authored row never borrows another market's (an A-share used to fall to "US" and take a
+    Treasury-based cost of equity on RMB cash flows; a Tokyo listing declines rather than read a US row)."""
     t = (ticker or "").upper()
     if t.endswith(".SS"):
         return "SHH"
     if t.endswith(".SZ"):
         return "SHZ"
+    if t.endswith(".T"):
+        return "JPX"
     return "HKSE" if t.endswith(".HK") else ("SES" if t.endswith(".SI") else "US")
 
 

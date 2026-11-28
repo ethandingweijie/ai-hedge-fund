@@ -26,7 +26,7 @@ import { plainKey } from '@/lib/glossary';
 
 const CCY_SYM: Record<string, string> = {
   USD: '$', HKD: 'HK$', CNY: 'RMB', RMB: 'RMB', SGD: 'S$',
-  EUR: '€', GBP: '£', JPY: '¥',
+  EUR: '€', GBP: '£', JPY: 'JP¥',
 };
 
 const LABEL_CLS =

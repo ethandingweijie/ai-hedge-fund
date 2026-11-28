@@ -165,10 +165,10 @@ def _prompt(question: str, today: str, ticker_hint: Optional[str]) -> str:
         '                 "summary": "1-2 sentences of the facts"} or null if the question names no real event,\n'
         ' "corroborated": true only if at least two independent outlets report it,\n'
         ' "sources": [{"title": "...", "url": "https://...", "date": "YYYY-MM-DD", "fact": "what it reports"}],\n'
-        ' "tickers": [{"symbol": "Yahoo symbol, e.g. NVDA, 9988.HK, D05.SI, 600519.SS", "name": "company",\n'
+        ' "tickers": [{"symbol": "Yahoo symbol, e.g. NVDA, 9988.HK, D05.SI, 600519.SS, 7203.T, 005930.KS", "name": "company",\n'
         '              "why": "one line on how the development affects it"}]}\n'
-        f"List at most {MAX_TICKERS} listed companies most directly affected (US, Hong Kong, Singapore or China "
-        "A-share listings only). Use only sources you actually found."
+        f"List at most {MAX_TICKERS} listed companies most directly affected (US, Hong Kong, Singapore, China A-share, "
+        "Tokyo or Korea listings only). Use only sources you actually found."
     )
 
 
@@ -265,6 +265,9 @@ def _supported_symbol(sym: str) -> Optional[str]:
         from src.markets.china import normalize
         return normalize(s)
     if s.endswith(".HK") or s.endswith(".SI"):
+        return canonical_ticker(s) or None
+    from src.markets.japan import is_jp_ticker
+    if is_jp_ticker(s):                      # 7203.T, TYO:7203, 7203.JP -> 7203.T
         return canonical_ticker(s) or None
     return s if _US_SYM.match(s) else None
 

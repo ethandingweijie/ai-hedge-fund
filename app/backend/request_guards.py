@@ -28,7 +28,9 @@ from fastapi import HTTPException
 # Base symbol 1-10 ASCII alphanumerics, optional single suffix of 1-5
 # (".B", "-B", ".HK", ".SI"). Explicit ASCII classes: \w would admit
 # full-width and other Unicode letters.
-TICKER_RE = re.compile(r"[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,5})?")
+# An optional Tokyo venue prefix admits the "TYO:7203" / "TSE:7203" form (canonical_ticker -> 7203.T); no other
+# prefix is accepted, so "ABC:XYZ" still fails the shape check.
+TICKER_RE = re.compile(r"(?:(?:[Tt][Yy][Oo]|[Tt][Ss][Ee]|[Jj][Pp][Xx]|[Jj][Pp]):)?[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,5})?")
 TICKER_MAX_LEN = 16
 
 # Model ids are things like "claude-sonnet-4-6", "qwen3.8-flash".
@@ -52,7 +54,7 @@ def validate_ticker_input(value: Any, field: str = "ticker") -> str:
         raise HTTPException(
             status_code=422,
             detail=(f"invalid {field}: expected 1-10 letters/digits with an "
-                    f"optional .XX or -X suffix (e.g. AAPL, BRK.B, 0700.HK, D05.SI)"),
+                    f"optional .XX or -X suffix (e.g. AAPL, BRK.B, 0700.HK, D05.SI, 7203.T)"),
         )
     return value.strip()
 
