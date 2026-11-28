@@ -1,7 +1,7 @@
 """Japan (Tokyo Stock Exchange, .T) support, 2026-11-28 -- every rule added for the market, pinned.
 
 Tickers and canonical forms; FMP symbol; request guard; listing currency and the JP¥ label; the JPY risk-free row
-(PROPOSED, so not applied unless RF_APPLY_PROPOSED=JP); statutory tax fallback; the market keys (JPX constants,
+(owner-accepted 2026-11-28); statutory tax fallback; the market keys (JPX constants,
 TOPIX benchmark, industry-map market); stockanalysis.com consensus for Tokyo; market-question tickers; TDnet /
 EDINET / ADR filings resolver; the CJK PDF font helper; the fiscal-year disclosure; the proposed profile pins.
 No test touches the network.
@@ -111,19 +111,22 @@ def test_bare_yen_in_a_tokyo_narrative_becomes_jp_yen():
     assert "JP¥" in jp.research_context("7203.T")
 
 
-def test_pdf_paragraphs_on_a_tokyo_report_print_jp_yen(monkeypatch):
-    from src.utils import pdf_fonts as pf
+def test_pdf_paragraphs_on_a_tokyo_report_print_jp_yen():
     from src.utils import pdf_report as pr
-    monkeypatch.setenv("PDF_CJK_SYSTEM_FONTS", "off")
-    pf._RESOLVED.clear()
     pr._set_price_currency("JPY")
     try:
         p = pr.Paragraph("Target ¥3,835", pr.ParagraphStyle("x"))
         assert "JP¥3,835" in p.text
     finally:
         pr._set_price_currency("USD")
-        pf._RESOLVED.clear()
     assert "¥3,835" in pr.Paragraph("Target ¥3,835", pr.ParagraphStyle("x")).text      # other reports untouched
+
+
+def test_bare_yen_is_rewritten_in_the_stored_tokyo_narrative():
+    import inspect
+    from src.agents.industry import deep_research as dr
+    src = inspect.getsource(dr)
+    assert "normalize_yen as _jp_yen" in src and 'res["deep_research_sections"] = {k: _jp_yen(v)' in src
 
 
 def test_frontend_tables_label_jpy_as_jp_yen():
@@ -136,39 +139,52 @@ def test_frontend_tables_label_jpy_as_jp_yen():
 
 # ── risk-free rate, tax, market keys ────────────────────────────────────────
 
-def test_jgb_row_is_proposed_and_derived():
+def test_jgb_row_is_accepted_and_derived():
     from src.data import valuation_constants as vc
     row = vc.load()["risk_free_by_market"]["markets"]["JP"]
-    assert row["status"] == "PROPOSED"
-    assert 0.0 < row["value"] < 0.06 and "JGB" in row["basis"] and "Ministry of Finance" in row["source"]
+    assert row.get("status") is None and "owner, 2026-11-28" in row["accepted"]
+    assert row["value"] == pytest.approx(0.027) and "JGB" in row["basis"] and "Ministry of Finance" in row["source"]
     assert row["min_spread_over_rf"] == 0.03 and row.get("derivation")
 
 
-def test_a_proposed_rf_is_not_applied_by_default(monkeypatch):
+def test_japan_discounts_on_the_jgb_curve(monkeypatch):
     from src.data import capm
     monkeypatch.setenv("CAPM_LIVE_RF", "off")
     monkeypatch.delenv("RF_APPLY_PROPOSED", raising=False)
     rf, src = capm.risk_free("JP")
-    assert rf == capm.RF_FALLBACK and "owner-set" not in src          # stays on the US curve until accepted
-    sg, sg_src = capm.risk_free("SG")
-    assert sg == pytest.approx(0.0229) and "owner-set" in sg_src      # accepted rows unaffected
-    monkeypatch.setenv("RF_APPLY_PROPOSED", "JP")
-    rf2, src2 = capm.risk_free("JP")
-    assert rf2 == pytest.approx(0.027) and "PROPOSED" in src2 and "owner-set pending" in src2
+    assert rf == pytest.approx(0.027) and "owner-set" in src and "JGB" in src
+    assert capm.risk_free("SG")[0] == pytest.approx(0.0229)
+    assert capm.risk_free("US")[0] == capm.RF_FALLBACK
 
 
-def test_firm_capm_on_the_jgb_curve_floors_at_the_proposed_spread(monkeypatch):
+def test_a_proposed_rf_row_is_skipped_unless_applied(monkeypatch):
+    from src.data import capm
+    from src.data import valuation_constants as vc
+    doc = {"risk_free_by_market": {"markets": {"XX": {"status": "PROPOSED", "value": 0.02, "basis": "b", "source": "s"}}}}
+    monkeypatch.setattr(vc, "load", lambda: doc)
+    monkeypatch.setenv("CAPM_LIVE_RF", "off")
+    monkeypatch.delenv("RF_APPLY_PROPOSED", raising=False)
+    assert capm.risk_free("XX")[0] == capm.RF_FALLBACK
+    monkeypatch.setenv("RF_APPLY_PROPOSED", "XX")
+    rf, src = capm.risk_free("XX")
+    assert rf == pytest.approx(0.02) and "owner-set pending" in src
+
+
+def test_firm_capm_on_the_jgb_curve_floors_at_the_spread(monkeypatch):
     from src.data import capm
     monkeypatch.setenv("CAPM_LIVE_RF", "off")
-    monkeypatch.setenv("RF_APPLY_PROPOSED", "JP")
     w = capm.firm_wacc(profile="Telecom Carrier", net_debt=0.0, market_cap=1e12, cost_of_debt=None,
-                       market="JP", own_beta=0.1)
+                       market="JP", own_beta=0.1, crp=0.006)
     assert w["rf"] == pytest.approx(0.027) and w["tax_rate"] == pytest.approx(0.2974)
-    assert w["cost_of_equity"] >= 0.027 + 0.03 - 1e-9
-    monkeypatch.delenv("RF_APPLY_PROPOSED")
-    w2 = capm.firm_wacc(profile="Telecom Carrier", net_debt=0.0, market_cap=1e12, cost_of_debt=None,
-                        market="JP", own_beta=0.1)
-    assert w2["min_spread_over_rf"] is None and not w2["ke_floored"]   # no floor on the US curve
+    assert w["min_spread_over_rf"] == 0.03 and w["cost_of_equity"] >= 0.027 + 0.03 - 1e-9
+    assert w["crp"] == pytest.approx(0.006)
+
+
+def test_jpy_country_premium_is_the_registry_figure():
+    from src.data import valuation_constants as vc
+    from src.data.sector_profiles import market_crp
+    assert vc.country_risk_premium("JPY") == pytest.approx(market_crp("JPX")) == pytest.approx(0.006)
+    assert vc.country_risk_premium("HKD") == 0.0 and vc.country_risk_premium("USD") == 0.0
 
 
 def test_statutory_tax_fallback_is_japans():
@@ -187,9 +203,9 @@ def test_constants_key_japan_as_jpx_and_never_borrow_us():
 
 def test_benchmark_is_topix_on_the_runs_own_capm():
     from src.decisions.ratings import resolve_benchmark
-    b = resolve_benchmark("7203.T", "Industrials", capm={"rf": 0.027, "erp": 0.0441, "crp": 0.0})
+    b = resolve_benchmark("7203.T", "Industrials", capm={"rf": 0.027, "erp": 0.0441, "crp": 0.006})
     assert b["code"] == "TOPIX" and b["market"] == "JPX"
-    assert b["expected_return"] == pytest.approx(0.0711, abs=1e-4)
+    assert b["expected_return"] == pytest.approx(0.0771, abs=1e-4)      # JGB 2.70% + ERP 4.41% + CRP 0.60%
 
 
 def test_industry_map_market_and_comps_market():
@@ -360,38 +376,36 @@ def test_tokyo_reports_disclose_the_fiscal_year_naming():
 
 # ── PDF: CJK glyphs ─────────────────────────────────────────────────────────
 
-def test_cjk_markup_wraps_only_cjk_runs(monkeypatch):
-    from src.utils import pdf_fonts as pf
-    monkeypatch.setenv("PDF_CJK_SYSTEM_FONTS", "off")
-    pf._RESOLVED.clear()
-    try:
-        out = pf.cjk_markup("Toyota (トヨタ自動車) &amp; <b>年報</b>", hint="ja")
-        assert '<font name="HeiseiKakuGo-W5">トヨタ自動車</font>' in out
-        assert '<font name="HeiseiKakuGo-W5">年報</font>' in out              # Han-only run takes the hint
-        assert "&amp;" in out and "<b>" in out
-        assert pf.cjk_markup("plain text") == "plain text" and pf.cjk_markup(None) is None
-        assert pf.script_of("삼성전자") == "ko" and pf.script_of("年報") == "zh" and pf.script_of("トヨタ") == "ja"
-        assert not pf.is_embedded("HeiseiKakuGo-W5")
-    finally:
-        pf._RESOLVED.clear()
+def test_pdf_report_uses_the_shared_cjk_font_module():
+    from src.utils import cjk_font as cf
+    from src.utils import pdf_report as pr
+    assert pr._cjk_markup is cf.cjk_markup                 # one helper for Japan, Korea and China
+    out = cf.cjk_markup("Toyota (トヨタ自動車) &amp; <b>年報</b>")
+    assert out.count("<font name=") == 2 and "&amp;" in out and "<b>" in out
+    assert cf.cjk_markup("plain text") == "plain text" and cf.cjk_markup(None) is None
+    assert cf.script_of("トヨタ") == "kana" and cf.script_of("年報") == "han"
 
 
-def test_a_pdf_with_japanese_text_builds_and_carries_a_cjk_font(tmp_path, monkeypatch):
+def test_a_pdf_with_japanese_text_builds_and_carries_a_cjk_font(tmp_path):
+    import re
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import SimpleDocTemplate
-    from src.utils import pdf_fonts as pf
+    from src.utils import cjk_font as cf
     from src.utils import pdf_report as pr
-    monkeypatch.setenv("PDF_CJK_SYSTEM_FONTS", "off")
-    pf._RESOLVED.clear()
-    try:
-        path = tmp_path / "jp.pdf"
-        SimpleDocTemplate(str(path)).build([pr.Paragraph("トヨタ自動車 2027年3月期 決算短信 (Toyota)",
-                                                         getSampleStyleSheet()["Normal"])])
-        body = path.read_bytes()
-        assert b"HeiseiKakuGo-W5" in body and len(body) > 500
-    finally:
-        pf._RESOLVED.clear()
+    path = tmp_path / "jp.pdf"
+    SimpleDocTemplate(str(path)).build([pr.Paragraph("トヨタ自動車 2027年3月期 決算短信 (Toyota)",
+                                                     getSampleStyleSheet()["Normal"])])
+    body = path.read_bytes()
+    fonts = set(re.findall(rb"/BaseFont\s*/([A-Za-z0-9+\-_]+)", body))
+    assert cf.font_for_script("kana") and any(b"Helvetica" not in f for f in fonts), fonts
 
+
+def test_production_images_install_truetype_cjk_fonts():
+    root = Path(__file__).resolve().parents[1] / "docker"
+    for f in ("Dockerfile.web", "Dockerfile.worker"):
+        d = (root / f).read_text(encoding="utf-8")
+        assert "fonts-ipafont-gothic" in d and "fonts-nanum" in d and "fonts-wqy-zenhei" in d
+        assert d.index("poetry install") < d.index("fonts-ipafont-gothic")      # dependency layer cache kept
 
 # ── portfolio ───────────────────────────────────────────────────────────────
 
@@ -412,25 +426,78 @@ def test_lease_basis_for_tokyo_us_gaap_filers():
     assert basis("7203.T", "JPY") == "IFRS"           # Toyota IFRS; J-GAAP names carry no lease liability
 
 
-# ── coverage, billing, proposed pins ────────────────────────────────────────
+# ── coverage, billing, accepted pins ────────────────────────────────────────
 
-def test_tokyo_names_are_limited_coverage_until_pinned():
+def test_pinned_tokyo_names_are_tuned_and_softbank_group_is_not():
     from app.backend.services.billing import run_type
     from src.data.coverage import is_tuned
-    assert not is_tuned("7203.T") and not is_tuned("TYO:6861")
-    assert run_type("7203.T", None, covered=False) == "limited"
+    assert is_tuned("7203.T") and is_tuned("TYO:6861") and is_tuned("8306.T")
+    assert not is_tuned("9984.T")                          # owner: unchanged until its holdco inputs exist
+    assert run_type("7203.T", None, covered=False) == "new"
+    assert run_type("9984.T", None, covered=False) == "limited"
     assert run_type("7203.T", None, covered=True) == "covered"
 
 
-def test_proposed_pins_are_inactive_and_name_real_profiles():
-    from src.data.industry_profile_map import ticker_overrides
+def test_accepted_pins_are_live_and_name_real_profiles():
+    from src.data.industry_profile_map import _load, profile_for_ticker, ticker_overrides
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
     doc = json.loads((Path(jp.__file__).parent / "japan_profile_pins.json").read_text(encoding="utf-8"))
-    assert doc["status"] == "PROPOSED" and len(doc["pins"]) >= 30
+    assert doc["status"] == "ACCEPTED" and len(doc["pins"]) == 35
     live = ticker_overrides()
+    scope = set(_load().get("routing_scope_tickers") or [])
     for t, row in doc["pins"].items():
         assert jp.is_jp_ticker(t) and jp.to_canonical(t) == t
         sector, profile = row["proposed"]
         assert profile in P.get(sector, {}), (t, sector, profile)
-        assert t not in live                               # nothing applied without the owner
-    assert doc["bank_calibration_proposal"]["status"] == "PROPOSED"
+        if t == "9984.T":
+            assert t not in live and t not in scope
+        else:
+            assert live[t] == (sector, profile) and t in scope
+    assert profile_for_ticker("8035.T", "Semiconductors") == ("Semiconductor", "Equipment / EDA")
+    assert profile_for_ticker("6861.T", "Hardware, Equipment & Parts") == ("Industrials", "Capital Goods")
+    assert profile_for_ticker("4502.T", "Drug Manufacturers - Specialty & Generic") == ("Biopharma", "Large Cap Pharma")
+    for bank in ("8306.T", "8316.T", "8411.T"):
+        assert live[bank] == ("Financials", "Money Center Bank (JP)")
+
+
+def test_megabank_calibration_is_japans_own_row():
+    from src.agents.analysis import dcf_agent as d
+    from src.data import capm
+    from src.data.regional_comps import CROSS_MARKET_BASKETS
+    jp_row = d._BANK_PROFILE_CALIBRATION["Money Center Bank (JP)"]
+    assert (jp_row["p_tbv"], jp_row["coe"], jp_row["pe"], jp_row["target_roe"]) == (1.7, 0.088, 13.0, 0.12)
+    us = d._BANK_PROFILE_CALIBRATION["Money Center Bank"]
+    assert (us["p_tbv"], us["coe"], us["pe"]) == (2.2, 0.093, 14.2)        # US row untouched
+    assert d._bank_profile_calibration("Money Center Bank (JP)") is jp_row
+    assert "Money Center Bank (JP)" in capm.FINANCIAL_PROFILES               # banks keep their own CoE model
+    assert CROSS_MARKET_BASKETS["Money Center Bank (JP)"]["symbols"] == ("8306.T", "8316.T", "8411.T")
+
+
+def test_mufg_start_year_label_moves_to_the_end_year_convention():
+    blk = {"fiscal_year_1": "FY2026", "fiscal_year_2": "FY2027", "estimates": {}}
+    out = jp.relabel_fiscal_years(blk, "8306.T", "2026-03-31")
+    assert out["fiscal_year_1"] == "FY2027" and out["fiscal_year_2"] == "FY2028" and out["fiscal_year_relabelled"]
+    assert jp.relabel_fiscal_years({"fiscal_year_1": "FY2027"}, "7203.T", "2026-03-31") == {"fiscal_year_1": "FY2027"}
+    assert jp.relabel_fiscal_years(blk, "JPM", "2025-12-31") is blk          # other markets untouched
+    assert jp.relabel_fiscal_years({}, "8306.T", "2026-03-31") == {}
+
+
+def test_backtest_note_names_the_listing_currency(monkeypatch):
+    import src.tools.api as api
+    from src.agents.analysis import dcf_agent as d
+    monkeypatch.setattr(api, "_fmp_get", lambda *a, **k: pytest.fail("no network call from the backtest note"))
+    monkeypatch.setattr(api, "_LISTING_CCY_CACHE", {})
+    assert d._backtest_ccy_symbol("7203.T") == "JP¥"
+    assert d._backtest_ccy_symbol("D05.SI") == "S$"
+    assert d._backtest_ccy_symbol("AAPL") == "$"
+    assert d._backtest_ccy_symbol("J36.SI") == "$"            # USD-quoted SGX line
+
+
+def test_lti_netting_reaches_tokyo_non_financials_once():
+    from src.agents.analysis import dcf_agent as d
+    row = {"long_term_investments": 16.1e12}
+    nd, basis, flag = d._apply_lti_netting(28.97e12, {"components": {}}, row, "Industrials", "7203.T", "Automotive (OEM)")
+    assert nd == pytest.approx(12.87e12) and flag and basis["long_term_investments_netted"] == pytest.approx(16.1e12)
+    # never twice, never for a bank
+    assert d._apply_lti_netting(nd, basis, row, "Industrials", "7203.T", "Automotive (OEM)")[0] == nd
+    assert d._apply_lti_netting(1e12, {"components": {}}, row, "Financials", "8306.T", "Money Center Bank (JP)")[0] == 1e12

@@ -191,7 +191,7 @@ _BENCHMARKS: dict[tuple[str, bool], tuple[str, str]] = {
     ("HKSE", False): ("HSI", "Hang Seng Index"),
     ("SES", False): ("STI", "Straits Times Index"),
     ("US", False): ("SPX", "S&P 500"),
-    # Japan, PROPOSED 2026-11-28 (docs/markets/JAPAN.md): TOPIX, the cap-weighted all-Prime index the Japanese
+    # Japan, owner 2026-11-28 (docs/markets/JAPAN.md): TOPIX, the cap-weighted all-Prime index the Japanese
     # buy side benchmarks against (the price-weighted Nikkei 225 is 40%+ in a handful of names). The NAME only: the
     # hurdle itself is rf + ERP + CRP from the run's CAPM build, as for every market.
     ("JPX", False): ("TOPIX", "TOPIX (Tokyo Stock Price Index)"),

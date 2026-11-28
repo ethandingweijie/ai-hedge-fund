@@ -54,7 +54,7 @@ INDUSTRY_BETA_U: dict[str, float] = {
 
 #: Balance-sheet financials keep their own cost-of-equity models (not a WACC).
 FINANCIAL_PROFILES = frozenset({
-    "Mortgage/GSE", "Bank / Lending Institution", "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)",
+    "Mortgage/GSE", "Bank / Lending Institution", "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Money Center Bank (JP)",
     "Regional Bank", "Super-Regional Bank", "EM Bank", "Investment Bank", "Insurance (P&C)", "Insurance",
     "Holding Company", "Asian Holding Company (Look-Through)", "Card Issuer & Consumer Lender", "Brokerage",
 })

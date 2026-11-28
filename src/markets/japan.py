@@ -134,6 +134,33 @@ def fy_disclosure(period_end) -> Optional[str]:
             f"{fy_label(d)}); some Japanese issuers call this year FY{d.year - 1}.")
 
 
+_FY_LABEL = re.compile(r"^\s*FY\s?(\d{4})", re.I)
+
+
+def relabel_fiscal_years(block, ticker: str, last_fy_end) -> dict:
+    """The guidance block with an issuer's START-year label moved to the engine's END-year convention.
+
+    FY+1 is the first year not yet reported, so on a Tokyo listing a `fiscal_year_1` label at or before the last
+    reported year end can only be the issuer's own start-year name: MUFG's "FY2026" for the year to March 2027
+    (live run 2026-11-28, last reported 2026-03-31). It moves forward by the gap; `fiscal_year_2` follows and the
+    change is recorded in `fiscal_year_relabelled`. Any other block, ticker or label is returned unchanged."""
+    if not (isinstance(block, dict) and block and is_jp_ticker(ticker)):
+        return block
+    d = _as_date(last_fy_end)
+    m1 = _FY_LABEL.match(str(block.get("fiscal_year_1") or ""))
+    if not d or not m1 or int(m1.group(1)) > d.year:
+        return block
+    shift = d.year + 1 - int(m1.group(1))
+    out = dict(block)
+    out["fiscal_year_1"] = f"FY{int(m1.group(1)) + shift}"
+    m2 = _FY_LABEL.match(str(block.get("fiscal_year_2") or ""))
+    if m2:
+        out["fiscal_year_2"] = f"FY{int(m2.group(1)) + shift}"
+    out["fiscal_year_relabelled"] = (f"{block.get('fiscal_year_1')} -> {out['fiscal_year_1']}: the issuer names a year "
+                                     f"by its start; reports name it by its end (last reported {d.isoformat()})")
+    return out
+
+
 # ── Research ───────────────────────────────────────────────────────────────
 
 #: Japanese-language primary sources, in the order a Tokyo desk reads them.

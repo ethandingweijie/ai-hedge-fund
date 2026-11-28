@@ -95,9 +95,10 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-from src.utils.pdf_fonts import cjk_markup as _cjk_markup
+from src.utils.cjk_font import cjk_markup as _cjk_markup
 
-#: Script hint for Han-only runs ("ja" on a Tokyo report, "ko" on Seoul, None -> Chinese); set per report.
+#: The report's market script ("ja" on a Tokyo report, "ko" on Seoul, None otherwise); set per report. Used to
+#: rewrite a bare yen sign on Tokyo reports; the CJK font itself is chosen per run by src/utils/cjk_font.
 _CJK_HINT: "str | None" = None
 
 
@@ -109,7 +110,7 @@ class Paragraph(_RLParagraph):
         if _CJK_HINT == "ja":                 # a Tokyo report: a bare "¥3,384" in the narrative is yen -> "JP¥3,384"
             from src.markets.japan import normalize_yen
             text = normalize_yen(text)
-        super().__init__(_cjk_markup(text, _CJK_HINT), *args, **kwargs)
+        super().__init__(_cjk_markup(text), *args, **kwargs)
 
 # ── Company name lookup (FMP /stable/profile, cached) ──────────────────────────
 # _fetch_company_name is now provided by src.utils.company_name (shared with

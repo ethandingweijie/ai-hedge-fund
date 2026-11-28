@@ -314,7 +314,7 @@ BALANCE_SHEET_FINANCIAL_PROFILES: frozenset[str] = frozenset({
     # Residual Income, P/TBV, P/E (norm), Excess Capital), so the strip is a
     # no-op for them TODAY; they are listed so that adding an EV leg to a bank
     # profile later cannot silently reintroduce the defect.
-    "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)",
+    "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)", "Money Center Bank (JP)",
     "Regional Bank", "Super-Regional Bank",
     "EM Bank", 
     "Bank / Lending Institution",
@@ -1675,6 +1675,20 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             ],
             "excluded": ["DCF", "P/BV", "ROE vs CoE", "P/TBV"],
             "rationale": "Singapore money-center bank (DBS/OCBC/UOB). GGM-anchored: target P/B = (ROE-g)/(CoE-g) on Rf 2.5% + ERP 6.3%. CoE 8.6-9.1%, g 3.0-3.3%, CET1 target 14%. P/TBV excluded — GGM P/B supersedes it and SG banks carry minimal goodwill.",
+        },
+        # Japanese megabanks -- MUFG (8306.T), SMFG (8316.T), Mizuho (8411.T); owner 2026-11-28. Same method set as
+        # the US row (goodwill from overseas acquisitions makes P/TBV meaningful); the calibration differs
+        # (dcf_agent._BANK_PROFILE_CALIBRATION["Money Center Bank (JP)"]: P/TBV 1.7x, CoE 8.8%, P/E 13.0x).
+        "Money Center Bank (JP)": {
+            "methods": [
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "Japanese megabank (MUFG/SMFG/Mizuho). Measured 2026-11-27: P/TBV 1.58-1.80x, market-implied CoE 8.8% on the JGB curve, P/E ~13x, ROE 10-13%.",
         },
         "Regional Bank": {
             "methods": [
@@ -4228,6 +4242,7 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "Financials":           ["JPM", "BAC", "WFC", "C", "USB", "PNC"],
     "Money Center Bank":    ["JPM", "BAC", "C", "WFC", "HSBC"],
     "Money Center Bank (SG)": ["D05.SI", "O39.SI", "U11.SI"],
+    "Money Center Bank (JP)": ["8306.T", "8316.T", "8411.T"],
     "Regional Bank":        ["USB", "PNC", "TFC", "RF", "KEY", "CFG"],
     "Insurance":            ["PGR", "TRV", "ALL", "CB", "AIG", "MET"],
     "Investment Bank":      ["GS", "MS", "LAZ", "EVR"],

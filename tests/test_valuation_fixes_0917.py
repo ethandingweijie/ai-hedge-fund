@@ -426,7 +426,7 @@ def test_the_owners_brokerage_remedy_names_legs_the_profile_does_not_declare():
     # 2026-09-27), so the owner's phrase names one bank-only mechanism twice.
     _banks = [
         "Bank / Lending Institution", "EM Bank",
-        "Investment Bank", "Money Center Bank", "Money Center Bank (EU)",
+        "Investment Bank", "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (JP)",
         "Money Center Bank (SG)", "Regional Bank",
         "Super-Regional Bank",
     ]

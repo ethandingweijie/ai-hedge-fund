@@ -769,13 +769,14 @@
       "MXN": 0.018,
       "ZAR": 0.025,
       "KRW": 0.007,
+      "JPY": 0.006,
       "IDR": 0.02,
       "TRY": 0.04,
       "RUB": 0.08
     },
     "reviewed": {
       "last_reviewed": "2026-09-26",
-      "reviewer": "owner, 2026-09-26: CNY 0, HKD 0 -- no risk premium for China or Hong Kong"
+      "reviewer": "owner, 2026-09-26: CNY 0, HKD 0 -- no risk premium for China or Hong Kong; owner, 2026-11-28: JPY 0.6% (the JPX MARKET_REGISTRY figure, sovereign A+)"
     }
   },
   "regime_flags": {
@@ -887,9 +888,9 @@
     "markets": {
       "SG": {"value": 0.0229, "basis": "10Y Singapore Government Securities", "source": "ADB AsianBondsOnline market watch, close 2026-11-18 (2.286%)",
              "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-25: Ke and WACC are at least 3.0pp over the SGS 10y. A US ERP on the SGS rate took low-beta Singtel to Ke 4.16% / WACC 3.9%; a Singapore ERP (Damodaran) is the same 4.3%, so only a floor moves it."},
-      "JP": {"status": "PROPOSED", "proposed": "agent, 2026-11-28 (Japan market support; docs/markets/JAPAN.md)", "value": 0.0270, "basis": "10Y Japanese Government Bond (JGB) constant-maturity yield", "source": "Ministry of Finance Japan, JGB interest rate (jgbcme.csv), close 2026-11-26 (2.704%); November 2026 mean of 17 closes 2.81%, range 2.70%-2.93%",
-             "min_spread_over_rf": 0.03, "min_spread_note": "PROPOSED 2026-11-28: mirror SG's 3.0pp floor. On JGB 2.70% + ERP 4.41% x beta + CRP 0.60% it binds only below beta ~0.55 (NTT, Japanese utilities); without it a 0.4-beta name would discount at Ke ~5.1%.",
-             "derivation": "Cash flows are in JPY, so the risk-free rate is the JPY government 10y (the rule behind the SG row). Without this row a Tokyo listing discounts at the US 10y (DGS10, ~4.9% fallback) -- about 2.2pp too high for JPY cash flows. Until the owner accepts it the engine keeps DGS10; RF_APPLY_PROPOSED=JP applies it for local measurement."}
+      "JP": {"accepted": "owner, 2026-11-28 (Japan market support; docs/markets/JAPAN.md)", "value": 0.0270, "basis": "10Y Japanese Government Bond (JGB) constant-maturity yield", "source": "Ministry of Finance Japan, JGB interest rate (jgbcme.csv), close 2026-11-26 (2.704%); November 2026 mean of 17 closes 2.81%, range 2.70%-2.93%",
+             "min_spread_over_rf": 0.03, "min_spread_note": "Owner, 2026-11-28: SG's 3.0pp floor, accepted for Japan. On JGB 2.70% + ERP 4.41% x beta + CRP 0.60% it binds only below beta ~0.55 (NTT, Japanese utilities); without it a 0.4-beta name would discount at Ke ~5.1%.",
+             "derivation": "Cash flows are in JPY, so the risk-free rate is the JPY government 10y (the rule behind the SG row). Without this row a Tokyo listing discounts at the US 10y (DGS10, ~4.9% fallback) -- about 2.2pp too high for JPY cash flows. Accepted by the owner 2026-11-28."}
     }
   },
   "commodity_price_deck": {

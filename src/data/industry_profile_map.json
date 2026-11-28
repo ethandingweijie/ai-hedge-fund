@@ -35,9 +35,10 @@
     "v22: Wave 8 real estate (owner decisions 2026-09-27, all seven; decision 1 amended to keep every name, decision 3 both). Twelve labels enter routing_scope: the eight REIT labels -> RealEstate / REIT (REIT - Mortgage stays out: a levered spread business for a Financials wave); Real Estate - Development -> Homebuilder / Land Developer (US) and Property Developer (HK / China) by the HK market map; Real Estate - Diversified -> REIT (US) and Landlord / Investment Property (HK); Real Estate - Services -> Real Estate Services (US, HK) with the SG agency row kept; Residential Construction -> Homebuilder / Land Developer. The SG market map already routes S-REITs and developers and now applies (labels in scope). REIT sub-type comes from the label and dcf_agent._REIT_SUBTYPE_PINS, not the keyword classifier.",
     "v23: Wave 9 industrials, materials, metals, transport (owner, 2026-09-27). Thirty-two labels enter routing_scope (the 29 rows of the Stage 1 table cover 32 FMP labels). Conglomerates -> Blended Industrial OpCo in the US and Asian Holding Company (Look-Through) on HK and SG; Industrial Materials -> Diversified Miners; Specialty Business Services -> Industrial Route & Uniform Services with RELX / TRI (Information Services) and Copart / RB Global (Marketplace) pinned; Marine Shipping -> Container & Bulk Shipping; Integrated Freight & Trucking -> Trucking & Parcel Logistics; metals split into Base Metals, Precious Metals and Diversified Miners.",
     "v24: Wave 10 (owner, 2026-09-27, decisions 1-3 and 5-7). Seventeen labels whose rows sat outside routing_scope enter it. Travel & Dining split: Restaurants, Casinos & Integrated Resorts, Lodging (Asset-Light) with an HK row to Hotel Owner-Operator (HK), and Travel Services -> Online Travel (cruise lines pinned). Auto - Manufacturers -> Automotive (OEM); Auto - Parts -> Auto Parts & Suppliers; Leisure -> Leisure Products & Brands; the two pharma labels -> Specialty & Generic Pharma; HK Regulated Gas -> City Gas Distribution (HK / China). The dead Other Industrial Metals & Mining row is deleted.",
-    "v25: HK/SG audit (owner, 2026-11-25). S68.SI's comps_exchange_overrides entry to the US Financial - Data & Stock Exchanges label is removed: that label is mostly ratings and data firms (SPGI, MCO, MSCI, TRU, FDS, MORN). SGX now prices on the owner's cross-market exchanges basket (regional_comps.CROSS_MARKET_BASKETS 'Market Infrastructure (SG)')."
+    "v25: HK/SG audit (owner, 2026-11-25). S68.SI's comps_exchange_overrides entry to the US Financial - Data & Stock Exchanges label is removed: that label is mostly ratings and data firms (SPGI, MCO, MSCI, TRU, FDS, MORN). SGX now prices on the owner's cross-market exchanges basket (regional_comps.CROSS_MARKET_BASKETS 'Market Infrastructure (SG)').",
+    "v26: Japan (owner, 2026-11-28). 34 Tokyo ticker overrides from src/markets/japan_profile_pins.json (SoftBank Group excluded until its holdco inputs exist); the megabanks route to the new Money Center Bank (JP) calibration. Each pinned ticker joins routing_scope_tickers so the pin applies with FEATURE_INDUSTRY_ROUTING off, and the names become tuned coverage."
   ],
-  "version": 25,
+  "version": 26,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -684,6 +685,142 @@
     "S59.SI": [
       "Industrials",
       "Aviation & Marine (SG)"
+    ],
+    "7203.T": [
+      "Industrials",
+      "Automotive (OEM)"
+    ],
+    "7267.T": [
+      "Industrials",
+      "Automotive (OEM)"
+    ],
+    "6758.T": [
+      "Tech",
+      "Consumer Electronics / Hardware Ecosystem"
+    ],
+    "6861.T": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "6273.T": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "6954.T": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "6367.T": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "7011.T": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "6501.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8035.T": [
+      "Semiconductor",
+      "Equipment / EDA"
+    ],
+    "6857.T": [
+      "Semiconductor",
+      "Equipment / EDA"
+    ],
+    "6981.T": [
+      "Tech",
+      "Electronic Materials & Industrial Diversified"
+    ],
+    "4063.T": [
+      "Tech",
+      "Electronic Materials & Industrial Diversified"
+    ],
+    "8058.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8001.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8031.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8053.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8002.T": [
+      "Industrials",
+      "Blended Industrial OpCo"
+    ],
+    "8306.T": [
+      "Financials",
+      "Money Center Bank (JP)"
+    ],
+    "8316.T": [
+      "Financials",
+      "Money Center Bank (JP)"
+    ],
+    "8411.T": [
+      "Financials",
+      "Money Center Bank (JP)"
+    ],
+    "8766.T": [
+      "Financials",
+      "Insurance (P&C)"
+    ],
+    "9432.T": [
+      "Telco",
+      "Telecom Carrier"
+    ],
+    "9433.T": [
+      "Telco",
+      "Telecom Carrier"
+    ],
+    "9434.T": [
+      "Telco",
+      "Telecom Carrier"
+    ],
+    "9983.T": [
+      "Consumer",
+      "Traditional Retail"
+    ],
+    "6098.T": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "7974.T": [
+      "Tech",
+      "Media & Streaming"
+    ],
+    "4519.T": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "4568.T": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "4502.T": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "6902.T": [
+      "Consumer",
+      "Auto Parts & Suppliers"
+    ],
+    "2914.T": [
+      "Consumer",
+      "Tobacco"
+    ],
+    "4661.T": [
+      "Consumer",
+      "Leisure Products & Brands"
     ]
   },
   "markets": {
@@ -1055,6 +1192,40 @@
     "Waste Management"
   ],
   "routing_scope_tickers": [
+    "2914.T",
+    "4063.T",
+    "4502.T",
+    "4519.T",
+    "4568.T",
+    "4661.T",
+    "6098.T",
+    "6273.T",
+    "6367.T",
+    "6501.T",
+    "6758.T",
+    "6857.T",
+    "6861.T",
+    "6902.T",
+    "6954.T",
+    "6981.T",
+    "7011.T",
+    "7203.T",
+    "7267.T",
+    "7974.T",
+    "8001.T",
+    "8002.T",
+    "8031.T",
+    "8035.T",
+    "8053.T",
+    "8058.T",
+    "8306.T",
+    "8316.T",
+    "8411.T",
+    "8766.T",
+    "9432.T",
+    "9433.T",
+    "9434.T",
+    "9983.T",
     "RXS.SI",
     "S59.SI"
   ],

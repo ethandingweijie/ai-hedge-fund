@@ -587,6 +587,7 @@ _SECTOR_PROFILE_PROMPTS: dict[tuple[str, str], str] = {
     ("Financials", "Money Center Bank"):        _BANK_KPI_PROMPT,
     ("Financials", "Money Center Bank (EU)"):   _BANK_KPI_PROMPT,
     ("Financials", "Money Center Bank (SG)"):   _BANK_KPI_PROMPT,
+    ("Financials", "Money Center Bank (JP)"):   _BANK_KPI_PROMPT,
     ("Financials", "Regional Bank"):            _BANK_KPI_PROMPT,
     ("Financials", "Super-Regional Bank"):      _BANK_KPI_PROMPT,
     ("Financials", "EM Bank"):                  _BANK_KPI_PROMPT,
