@@ -114,3 +114,17 @@ def test_health_report_reads_the_latest_canary(monkeypatch):
     monkeypatch.setattr(db, "query_one", lambda sql, p=None: {"generated_at": fresh, "report_json": rep})
     got = cn.latest_checks()
     assert got == [{"id": "canary_golden", "status": "ok", "summary": "s"}]
+
+
+def test_replay_clears_operator_feature_flags(monkeypatch):
+    """2026-11-28: prod's FEATURE_RESOURCE_HOLDCO_* flags moved BN4.SI / U96.SI off the pinned baseline and the
+    canary called a deliberate setting drift. A replay runs every FEATURE_* flag at its code default, and the
+    caller's environment comes back intact afterwards."""
+    import os
+    from src.memory import golden_capture as gc
+    monkeypatch.setenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", "true")
+    monkeypatch.setenv("FEATURE_RESOURCE_HOLDCO_TICKERS", "BN4.SI,U96.SI")
+    with gc.pinned_env():
+        assert not [k for k in os.environ if k.startswith(gc.FLAG_ENV_PREFIX) and k not in gc.PINNED_ENV]
+    assert os.environ["FEATURE_RESOURCE_HOLDCO_MAP_V2"] == "true"
+    assert os.environ["FEATURE_RESOURCE_HOLDCO_TICKERS"] == "BN4.SI,U96.SI"

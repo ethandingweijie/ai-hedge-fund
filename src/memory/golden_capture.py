@@ -678,6 +678,10 @@ PINNED_ENV = {
 }
 
 
+#: Operator feature flags: every env var with this prefix is cleared in a replay (see pinned_env.__enter__).
+FLAG_ENV_PREFIX = "FEATURE_"
+
+
 class pinned_env:
     """Pin :data:`PINNED_ENV` and make the process strictly offline.
 
@@ -696,6 +700,12 @@ class pinned_env:
         self._undo: list[tuple[str, Any]] = []
 
     def __enter__(self) -> "pinned_env":
+        # 2026-11-28: operator feature flags (FEATURE_*, set per deployment) are CLEARED. The pinned baseline is the
+        # engine with every flag at its code default; prod's FEATURE_RESOURCE_HOLDCO_MAP_V2 + _TICKERS rerouted
+        # BN4.SI / U96.SI to SOTP / NAV and the nightly canary reported a deliberate setting as unexplained drift.
+        # A flag the baseline should run with belongs in PINNED_ENV, where it is the same on every machine.
+        for k in [k for k in os.environ if k.startswith(FLAG_ENV_PREFIX) and k not in PINNED_ENV]:
+            self._set(k, None)
         for k, v in PINNED_ENV.items():
             self._set(k, v)
         for k in SECRET_ENV_VARS:
