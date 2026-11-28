@@ -68,7 +68,7 @@ export function formatKeyboardShortcut(key: string): string {
  */
 /** Symbol for an ISO currency code (a statement's reporting currency), else ''. */
 const _CCY_SYMBOL: Record<string, string> = {
-  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: '¥', RMB: '¥', JPY: '¥', EUR: '€', GBP: '£', KRW: '₩', TWD: 'NT$', INR: '₹', AUD: 'A$',
+  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: '¥', RMB: '¥', JPY: 'JP¥', EUR: '€', GBP: '£', KRW: '₩', TWD: 'NT$', INR: '₹', AUD: 'A$',
 };
 export function currencyCodeSymbol(code?: string | null): string {
   if (!code) return '';
@@ -81,6 +81,8 @@ export function currencySymbol(ticker: string): string {
   const upper = ticker.trim().toUpperCase();
   // SG: ends with .SI
   if (upper.endsWith('.SI')) return 'S$';
+  // JP: Tokyo listing (7203.T, 130A.T). 'JP¥', never a bare '¥' (the renminbi uses the same sign).
+  if (/^[1-9][0-9A-Z][0-9][0-9A-Z]\.T$/.test(upper)) return 'JP¥';
   // HK: purely numeric
   const cleanHK = upper.replace(/\.HK$/, '');
   if (/^\d{1,5}$/.test(cleanHK)) return 'HK$';

@@ -90,11 +90,26 @@ from reportlab.platypus import (
     NextPageTemplate,
     PageBreak,
     PageTemplate,
-    Paragraph,
+    Paragraph as _RLParagraph,
     Spacer,
     Table,
     TableStyle,
 )
+from src.utils.pdf_fonts import cjk_markup as _cjk_markup
+
+#: Script hint for Han-only runs ("ja" on a Tokyo report, "ko" on Seoul, None -> Chinese); set per report.
+_CJK_HINT: "str | None" = None
+
+
+class Paragraph(_RLParagraph):
+    """Paragraph whose CJK runs (Japanese / Chinese / Korean names and terms) are drawn in a CJK font -- Helvetica
+    has no such glyphs and drew them as black boxes. Everything else is ReportLab's Paragraph unchanged."""
+
+    def __init__(self, text, *args, **kwargs):
+        if _CJK_HINT == "ja":                 # a Tokyo report: a bare "¥3,384" in the narrative is yen -> "JP¥3,384"
+            from src.markets.japan import normalize_yen
+            text = normalize_yen(text)
+        super().__init__(_cjk_markup(text, _CJK_HINT), *args, **kwargs)
 
 # ── Company name lookup (FMP /stable/profile, cached) ──────────────────────────
 # _fetch_company_name is now provided by src.utils.company_name (shared with
@@ -144,7 +159,7 @@ C_PALE  = colors.HexColor("#f5f5f5")
 # the valuation's currency; every per-share amount renders through _cs().
 # Statement amounts (key financials) carry their own currency label instead.
 _CCY_SYMBOLS = {"USD": "$", "HKD": "HK$", "SGD": "S$", "CNY": "RMB ", "CNH": "RMB ",
-                "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "\u00a5", "KRW": "KRW ",
+                "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "JP\u00a5", "KRW": "KRW ",
                 "TWD": "NT$", "AUD": "A$", "CAD": "C$", "INR": "INR "}
 _PX_SYM = "$"
 
@@ -154,9 +169,10 @@ def _cs() -> str:
 
 
 def _set_price_currency(ccy) -> None:
-    global _PX_SYM
+    global _PX_SYM, _CJK_HINT
     code = str(ccy or "USD").upper()
     _PX_SYM = _CCY_SYMBOLS.get(code, f"{code} ")
+    _CJK_HINT = {"JPY": "ja", "KRW": "ko"}.get(code)
 
 # ── Helper: bold text for table header cells (light-gray background) ───────────
 # All data table headers now use C_PALE background with dark bold text.

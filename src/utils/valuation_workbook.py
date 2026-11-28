@@ -3922,7 +3922,7 @@ class _Book:
             for i, it in enumerate(items, 1):
                 sh.label(r, 1, f"{i}. {it}", indent=1); r += 1
             r += 1
-        sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£"}.get(str(self.ccy).upper(), str(self.ccy).upper() + " ")
+        sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£", "JPY": "JP¥"}.get(str(self.ccy).upper(), str(self.ccy).upper() + " ")
         lines = family_checklist(fam, self.dr, None, (self.data.get("sector_kpis") or {}), sym)
         sh.section(r, "Checklist from this run's valuation record", 6); r += 1
         if not lines:

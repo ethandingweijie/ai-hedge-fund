@@ -25,6 +25,10 @@ US_GAAP_NON_USD_REPORTERS = frozenset({
     "NIO", "09866.HK", "9866.HK", "XPEV", "09868.HK", "9868.HK", "BEKE", "02423.HK", "2423.HK",
     "TME", "01698.HK", "1698.HK", "WB", "09898.HK", "9898.HK", "VIPS", "HTHT", "01179.HK", "1179.HK",
     "BZ", "02076.HK", "2076.HK", "TAL", "EDU", "09901.HK", "9901.HK", "QFIN", "03660.HK", "3660.HK",
+    # Tokyo listings filing under US GAAP in Japan (their 決算短信 title reads 〔米国基準〕; japan_filings.classify_title
+    # reads it live): Nomura, ORIX, Canon, FUJIFILM, Komatsu. J-GAAP filers carry no operating-lease liability until
+    # the new lease standard (periods from April 2027), so they are unaffected either way.
+    "8604.T", "8591.T", "7751.T", "4901.T", "6301.T",
 })
 
 #: USD reporters that file under IFRS (or an IFRS-identical framework: SFRS(I), HKFRS). US-listed ADRs

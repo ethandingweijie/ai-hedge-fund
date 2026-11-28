@@ -197,13 +197,15 @@ function SectionCompleteBadge() {
 }
 
 // ── Landing search: market support gating ────────────────────────────────────
-// The pipeline covers US / HK / SG listings only. Suggestions outside those
-// markets are greyed out and unclickable; ETFs listed on the three supported
+// The pipeline covers US / HK / SG / Tokyo listings. Suggestions outside those
+// markets are greyed out and unclickable; ETFs listed on the supported
 // markets are greyed out too but carry a blue WIP tag.
-function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
+export function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | 'JP' | null {
   const t  = (s.ticker || '').toUpperCase();
   if (t.endsWith('.HK')) return 'HK';
   if (t.endsWith('.SI')) return 'SG';
+  // Tokyo: the 4-character TSE code (7203, 130A) + .T -- the only Japanese form FMP and the pipeline accept.
+  if (/^[1-9][0-9A-Z][0-9][0-9A-Z]\.T$/.test(t)) return 'JP';
   const ex = (s.exchange || '').toUpperCase();
   if (ex.includes('HKSE') || ex.includes('HKEX') || ex.includes('HONG KONG')) return 'HK';
   if (ex === 'SES' || ex.includes('SGX') || ex.includes('SINGAPORE')) return 'SG';
@@ -226,7 +228,7 @@ function suggestionDisabled(s: CompanySearchResult): boolean {
 // order (name matches). Stable within each band.
 export function rankSuggestions(data: CompanySearchResult[], typed: string): CompanySearchResult[] {
   const q = typed.trim().toUpperCase();
-  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI)$/, '').replace(/^0+(?=\d)/, '');
+  const base = (t: string) => t.toUpperCase().replace(/\.(HK|SI|T)$/, '').replace(/^0+(?=\d)/, '');
   const qb = base(q);
   const band = (s: CompanySearchResult) => {
     const t = s.ticker.toUpperCase();

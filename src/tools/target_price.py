@@ -1,4 +1,4 @@
-"""Analyst consensus target prices for HK and SG listings.
+"""Analyst consensus target prices for HK, SG and Tokyo listings.
 
 FMP carries no price-target consensus for HKEX or SGX -- it says so itself
 ("no price-target consensus data for this venue ... by design, not a
@@ -11,6 +11,7 @@ S&P Global Market Intelligence, and covers both venues:
 
     HK   https://stockanalysis.com/quote/hkg/0700/forecast/
     SG   https://stockanalysis.com/quote/sgx/D05/forecast/
+    JP   https://stockanalysis.com/quote/tyo/7203/forecast/   (FMP has none for JPX either, verified 2026-11-28)
 
 The figure is stated in a sentence rather than a data attribute -- "According
 to 16 analysts polled by S&P Global, DBS Group Holdings stock has a consensus
@@ -42,9 +43,10 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 _SENTENCE = re.compile(
     r"According to\s+(?P<n>\d+)\s+analysts?[^.]*?"
-    r"average price target of\s+\$?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
-_LOW = re.compile(r"lowest is\s+\$?([\d,]+\.?\d*)", re.I)
-_HIGH = re.compile(r"highest is\s+\$?([\d,]+\.?\d*)", re.I)
+    r"average price target of\s+(?:\$|¥)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
+# Tokyo pages write the yen sign ("¥3,835"), HK/SG pages a bare "$" whatever the currency.
+_LOW = re.compile(r"lowest is\s+(?:\$|¥)?([\d,]+\.?\d*)", re.I)
+_HIGH = re.compile(r"highest is\s+(?:\$|¥)?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
 #: The page states the implied move alongside the target. It is the only
 #: internal cross-check available, and it catches a stale or mis-scaled
@@ -86,6 +88,10 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
         return f"hkg/{code}", "HKD"
     if t.endswith(".SI"):
         return f"sgx/{t[:-3]}", "SGD"
+    # Tokyo (2026-11-28): https://stockanalysis.com/quote/tyo/7203/forecast/ -- "Currency is JPY", targets as "¥3,835".
+    from src.markets.japan import is_jp_ticker, local_code
+    if is_jp_ticker(t):
+        return f"tyo/{local_code(t)}", "JPY"
     return None
 
 

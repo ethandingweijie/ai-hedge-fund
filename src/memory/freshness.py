@@ -238,6 +238,11 @@ def _search_fresh_snippets(
         f"{_who} earnings results or announcement, product launch or release "
         f"since {since}, then guidance M&A regulatory news"
     )
+    try:                                   # Tokyo: Japanese-language sources (TDnet 決算短信) lead the English press
+        from src.markets.japan import search_hint as _jp_hint
+        query += _jp_hint(ticker)
+    except Exception:                                   # noqa: BLE001
+        pass
     try:
         from src.research_ideas.complacency.web_research import qwen_web_search
         text = qwen_web_search(

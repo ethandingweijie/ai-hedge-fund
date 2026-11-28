@@ -37,6 +37,10 @@ Examples
 '80700.HK'
 >>> canonical_ticker("d05")
 'D05.SI'
+>>> canonical_ticker("TYO:7203")
+'7203.T'
+>>> canonical_ticker("130a.jp")
+'130A.T'
 >>> canonical_ticker("aapl")
 'AAPL'
 >>> canonical_ticker("")
@@ -60,7 +64,11 @@ def canonical_ticker(ticker: str | None) -> str:
     # backend does not otherwise need at import time.
     from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
     from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
+    from src.markets.japan import is_jp_ticker, to_canonical as _jp_canonical
 
+    # Tokyo first: it needs an explicit venue (7203.T, TYO:7203, 7203.JP), so it can never shadow a bare HK number.
+    if is_jp_ticker(t):
+        return _jp_canonical(t)
     # HK first — HK codes are purely numeric and unambiguous, while the SG
     # registry matches short alphanumeric codes.
     if is_hk_ticker(t):

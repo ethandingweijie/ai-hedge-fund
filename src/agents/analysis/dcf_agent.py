@@ -103,6 +103,7 @@ from src.agents.industry.sector_prompts import (
 )
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
 from src.tools.sg.ticker import is_sg_ticker as _is_sg_ticker
+from src.markets.japan import is_jp_ticker as _is_jp_ticker, STATUTORY_TAX as _JP_STATUTORY_TAX
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
 
@@ -4511,7 +4512,7 @@ def _accepted_inputs_used(ticker: str) -> list[dict]:
 
 #: Statutory corporate tax by market of domicile, the fallback when the filings give no usable effective rate
 #: (HK/SG workbook audit, 2026-11-25: SIA's normalised earnings were taxed at the US 21%, not Singapore's 17%).
-_STATUTORY_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25}
+_STATUTORY_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25, "JP": _JP_STATUTORY_TAX}
 
 
 def _company_tax_rate(series: list, ticker: str, reported_currency: Optional[str] = None) -> tuple[float, str]:
@@ -4526,7 +4527,7 @@ def _company_tax_rate(series: list, ticker: str, reported_currency: Optional[str
         return statistics.median(rates), f"filed effective rate, {len(rates)}-year median"
     t = str(ticker or "").upper()
     mkt = ("CN" if str(reported_currency or "").upper() == "CNY" else
-           "HK" if t.endswith(".HK") else "SG" if t.endswith(".SI") else "US")
+           "HK" if t.endswith(".HK") else "SG" if t.endswith(".SI") else "JP" if _is_jp_ticker(t) else "US")
     return _STATUTORY_TAX[mkt], f"{mkt} statutory rate"
 
 
@@ -7579,7 +7580,7 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     try:
         from src.data.capm import risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
-        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "US")[0]
+        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else "JP" if _is_jp_ticker(_t_up) else "US")[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -7660,7 +7661,7 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
 # to the ISO code plus a space ("SEK 12.30"), which is unambiguous.
 _CCY_SYMBOLS: dict[str, str] = {
     "USD": "$",   "SGD": "S$",  "HKD": "HK$", "CNY": "RMB", "CNH": "RMB",
-    "EUR": "€",   "GBP": "£",   "JPY": "¥",   "AUD": "A$",  "CAD": "C$",
+    "EUR": "€",   "GBP": "£",   "JPY": "JP¥", "AUD": "A$",  "CAD": "C$",
     "INR": "₹",   "KRW": "₩",   "TWD": "NT$", "CHF": "CHF ", "MYR": "RM",
 }
 
@@ -12585,8 +12586,8 @@ def _consensus_at_run(ticker: str, consensus_pt: Optional[dict]) -> dict:
     """The Street reference as it stood when this run was made."""
     from datetime import datetime as _dt, timezone as _tz
     t = (ticker or "").upper()
-    if t.endswith((".HK", ".SI")):
-        # FMP has no consensus for HKEX/SGX. The S&P figure comes from a page
+    if t.endswith((".HK", ".SI", ".T")):
+        # FMP has no consensus for HKEX/SGX/JPX. The S&P figure comes from a page
         # scrape (target_price.py, 25 s timeout) that does not belong on the
         # live path; the daily outcome job records it on the run's own day.
         return {"status": "deferred", "source": "stockanalysis.com",
@@ -16933,7 +16934,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
-                    market=("HK" if _is_hk else "SG" if _is_sg else "US"),
+                    market=("HK" if _is_hk else "SG" if _is_sg else "JP" if _is_jp_ticker(ticker) else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -16957,7 +16958,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
         try:
             from src.data import capm as _capm_mkt
-            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "US"
+            _mkt_code = "HK" if _is_hk else "SG" if _is_sg else "JP" if _is_jp_ticker(ticker) else "US"
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:

@@ -63,7 +63,7 @@ const SLOW_LOAD_MS = 8_000;
 const PRICE_TICK_MS = 15_000;
 
 const CCY_SYMBOL: Record<string, string> = {
-  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'CN¥',
+  USD: '$', HKD: 'HK$', SGD: 'S$', CNY: 'CN¥', JPY: 'JP¥',
 };
 const MARKET_CCY: Record<Market, string> = { US: 'USD', HK: 'HKD', SG: 'SGD' };
 

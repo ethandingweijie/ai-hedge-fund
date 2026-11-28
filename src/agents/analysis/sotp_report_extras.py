@@ -27,7 +27,7 @@ from src.agents.analysis.sotp_multiple_basis import normalize_key
 
 _CCY_SYMBOLS = {
     "USD": "$", "HKD": "HK$", "CNY": "RMB", "RMB": "RMB",
-    "SGD": "S$", "EUR": "€", "GBP": "£", "JPY": "¥",
+    "SGD": "S$", "EUR": "€", "GBP": "£", "JPY": "JP¥",
 }
 
 # Relative tolerance for snapshot diffs — sub-0.5% drift is rounding noise

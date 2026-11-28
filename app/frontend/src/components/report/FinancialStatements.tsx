@@ -99,7 +99,7 @@ function shortPeriod(p: string): string {
  *  whereas lib/utils' currencySymbol resolves a TICKER suffix. Map the code
  *  directly and fall back to the ticker only when no code was reported. */
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: '¥', RMB: '¥', JPY: '¥',
+  USD: '$', SGD: 'S$', HKD: 'HK$', CNY: '¥', RMB: '¥', JPY: 'JP¥',
   KRW: '₩', EUR: '€', GBP: '£', GBp: '£', AUD: 'A$', TWD: 'NT$', INR: '₹',
 };
 

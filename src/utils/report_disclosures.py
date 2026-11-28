@@ -35,7 +35,7 @@ STANDING_LIMITATIONS = [
     "The report does not consider any reader's objectives, financial situation or needs.",
 ]
 
-_SYM = {"USD": "US$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£", "JPY": "¥",
+_SYM = {"USD": "US$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€", "GBP": "£", "JPY": "JP¥",
         "AUD": "A$", "INR": "₹"}
 
 
@@ -220,6 +220,12 @@ def data_limitations(data: dict, ticker: str) -> list[str]:
     for r in data.get("research_degraded_reasons") or []:
         if isinstance(r, dict) and r.get("text"):
             out.append(r["text"])
+    try:                                   # Tokyo listings: most close their year in March, and names differ by issuer
+        from src.markets.japan import FY_NAMING_NOTE, is_jp_ticker
+        if is_jp_ticker(ticker):
+            out.append(FY_NAMING_NOTE)
+    except Exception:                                      # noqa: BLE001 -- a disclosure never sinks a run
+        pass
     if data.get("research_degraded") and not data.get("research_degraded_reasons"):
         out.append("Live research ran below the minimum number of confirmed web searches.")
     tier = str(data.get("research_tier") or "").lower()

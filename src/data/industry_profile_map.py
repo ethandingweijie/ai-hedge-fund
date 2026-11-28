@@ -93,12 +93,15 @@ def in_routing_scope(ticker: str | None, industry: str | None) -> bool:
 
 
 def market_of(ticker: str | None) -> str:
-    """US / HK / SG from the ticker suffix."""
+    """US / HK / SG / JP from the ticker suffix. JP has no `markets.JP` table yet, so a Tokyo name routes on the
+    global industry rows until the owner authors one (proposals: src/markets/japan_profile_pins.json)."""
     t = (ticker or "").strip().upper()
     if t.endswith(".SI"):
         return "SG"
     if t.endswith(".HK"):
         return "HK"
+    if t.endswith(".T"):
+        return "JP"
     return "US"
 
 

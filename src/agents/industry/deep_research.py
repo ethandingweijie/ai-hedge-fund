@@ -5615,6 +5615,13 @@ def _research_one_ticker(
             f"  CIK: {_edgar.get('cik', '')} | EDGAR page: {_viewer_url}\n"
             f"  No 20-F or 10-K has been filed yet. Use FMP data with FMP attribution.\n\n"
         )
+    # ── Tokyo listings: Japanese-language sources, March fiscal years, TDnet primary source ──
+    try:
+        from src.markets.japan import research_context as _jp_research_context
+        from src.markets.japan_filings import filing_context as _jp_filing_context
+        _base_context += _jp_research_context(ticker, company_name) + _jp_filing_context(_edgar)
+    except Exception:                                      # noqa: BLE001
+        pass
 
     # ── Inject FMP pre-loaded data ────────────────────────────────────────────
     _fmp_block = ""

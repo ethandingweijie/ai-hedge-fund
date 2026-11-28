@@ -143,7 +143,7 @@ PROFILE_INDUSTRY: dict[str, str] = {
     "Memory / DRAM-NAND": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
 }
 
-_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17}
+_TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "JP": 0.2974}   # JP: src/markets/japan.STATUTORY_TAX (MOF effective rate)
 
 
 def live_rf_enabled() -> bool:
@@ -151,14 +151,28 @@ def live_rf_enabled() -> bool:
     return os.environ.get("CAPM_LIVE_RF", "on").strip().lower() not in ("0", "false", "no", "off")
 
 
+def proposed_rf_applied(market: str) -> bool:
+    """RF_APPLY_PROPOSED=JP[,KR,...] applies a PROPOSED risk_free_by_market row before the owner accepts it (local
+    measurement only; production leaves it unset, so a proposal never moves a published number)."""
+    want = {m.strip().upper() for m in os.environ.get("RF_APPLY_PROPOSED", "").split(",") if m.strip()}
+    return bool(market) and market.upper() in want
+
+
 def risk_free(market: str = "US") -> tuple[float, str]:
     """The risk-free rate in the currency of the cash flows: an owner-set government 10y for a market listed in
-    valuation_constants.risk_free_by_market (SG: SGS 10y, owner 2026-11-25), else live FRED DGS10."""
+    valuation_constants.risk_free_by_market (SG: SGS 10y, owner 2026-11-25), else live FRED DGS10.
+    A row with status PROPOSED is skipped (the market stays on DGS10) unless proposed_rf_applied(market)."""
     try:
         from src.data import valuation_constants as _vc
         _m = (((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "US") or {})
         _v = _m.get("value")
+        _proposed = str(_m.get("status") or "").upper() == "PROPOSED"
+        if _proposed and not proposed_rf_applied(market or "US"):
+            _v = None
         if isinstance(_v, (int, float)) and 0.0 < _v < 0.15:
+            if _proposed:
+                return float(_v), (f"{_m.get('basis')} (PROPOSED local curve applied by RF_APPLY_PROPOSED, "
+                                   f"owner-set pending; {_m.get('source')})")
             return float(_v), f"{_m.get('basis')} (owner-set; {_m.get('source')})"
     except Exception:                                      # noqa: BLE001
         pass

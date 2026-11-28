@@ -6,6 +6,9 @@ Resolves annual filing references for all tickers:
   • HK-listed tickers → HKEXnews titleSearchServlet (Annual Report / 年報)
   • SG-listed tickers → skipped; there is no SGXNet client, and querying
     SEC EDGAR for an SGX company can only ever miss
+  • Tokyo tickers (.T) → src/markets/japan_filings.resolve_filing_ref: the ADR's
+    20-F on EDGAR when its accounting basis matches, else the latest TDnet
+    決算短信 (kessan tanshin), else nothing (FMP attribution)
 
 For US tickers, looks up the most recent SEC annual filing using the free SEC
 EDGAR submissions API.  No API key required; respects SEC rate-limit guideline.
@@ -77,6 +80,25 @@ def run_edgar_hkex_resolver(state: AgentState) -> AgentState:
                     agent_id, ticker,
                     "HKEXnews: no Annual Report found — AKShare attribution will be used"
                 )
+            continue
+
+        # ── Tokyo listings: ADR 20-F (same basis) or TDnet 決算短信 ─────────
+        # The status text names TSE and avoids "SEC"/"EDGAR"/"20-F": refinePhaseLabel() matches those first and would
+        # label a Tokyo run "SEC filings resolved".
+        from src.markets.japan import is_jp_ticker
+        if is_jp_ticker(ticker):
+            progress.update_status(agent_id, ticker, "Resolving TSE filings (ADR annual report / TDnet 決算短信)...")
+            try:
+                from src.markets.japan_filings import resolve_filing_ref
+                ref = resolve_filing_ref(ticker)
+            except Exception:                              # noqa: BLE001
+                ref = {}
+            edgar_refs[ticker] = ref
+            progress.update_status(
+                agent_id, ticker,
+                (f"TSE OK: {'ADR annual report' if ref.get('adr') else 'TDnet 決算短信'} | "
+                 f"filed={ref.get('filing_date')}"
+                 if ref else "TSE: no ADR annual report or recent TDnet 決算短信 — FMP attribution will be used"))
             continue
 
         # ── SG-listed stocks: no filings registry wired ───────────────────

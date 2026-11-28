@@ -57,6 +57,12 @@ def to_fmp_symbol(ticker: str) -> str:
             return _sg_fmp(t)
     except Exception:
         pass
+    try:
+        from src.markets.japan import is_jp_ticker, to_fmp_code as _jp_fmp
+        if is_jp_ticker(t):
+            return _jp_fmp(t)
+    except Exception:
+        pass
     # US class shares: FMP writes them with a hyphen (BRK-B, BF-B), and the
     # dotted form silently returns nothing rather than erroring.
     #
