@@ -425,7 +425,7 @@ class _PriceSparkline(Flowable):
             c.setDash()
             c.setFont("Helvetica", 5.5)
             c.setFillColor(colors.HexColor("#1a7a4a"))
-            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT {_cs()}{pt:.0f}")
+            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT {_cs()}{pt:,.0f}")
 
         # Price line
         c.setStrokeColor(colors.HexColor("#0a2342"))
@@ -440,7 +440,7 @@ class _PriceSparkline(Flowable):
         c.setFont("Helvetica", 5.5)
         c.setFillColor(colors.HexColor("#555555"))
         for frac, val in [(0.0, mn), (0.5, (mn + mx) / 2), (1.0, mx)]:
-            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"{_cs()}{val:.0f}")
+            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"{_cs()}{val:,.0f}")
 
         # Current price dot + label
         last_p = prices[-1]
@@ -449,7 +449,7 @@ class _PriceSparkline(Flowable):
         c.circle(xl, yl, 2.5, fill=1, stroke=0)
         c.setFont("Helvetica-Bold", 6)
         lbl_y = yl + 5 if yl + 14 < PAD_B + ch else yl - 11
-        c.drawCentredString(xl, lbl_y, f"{_cs()}{last_p:.0f}")
+        c.drawCentredString(xl, lbl_y, f"{_cs()}{last_p:,.0f}")
 
         # Date labels
         c.setFont("Helvetica", 5.5)
@@ -1547,7 +1547,7 @@ def _section_2f(
 
     def _fmtiv(v):
         try:
-            return f"{_cs()}{float(v):.0f}" if v else "—"
+            return f"{_cs()}{float(v):,.0f}" if v else "—"
         except Exception:
             return "—"
 
