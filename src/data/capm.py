@@ -173,6 +173,20 @@ def risk_free(market: str = "US") -> tuple[float, str]:
     return RF_FALLBACK, "Damodaran US T-bond rate 2026-11-01 (fallback)"
 
 
+def equity_risk_premium(market: str = "US") -> tuple[float, str]:
+    """(ERP, source): an owner-set market ERP from valuation_constants.equity_risk_premium_by_market (CN: A-share
+    implied, net of the CRP, owner 2026-11-28), else the global ERP."""
+    try:
+        from src.data import valuation_constants as _vc
+        _m = (((_vc.load().get("equity_risk_premium_by_market") or {}).get("markets") or {}).get(market or "") or {})
+        _v = _m.get("value")
+        if isinstance(_v, (int, float)) and 0.0 < _v < 0.15:
+            return float(_v), f"owner-set {market} ERP ({_m.get('accepted')}; net of CRP)"
+    except Exception:                                      # noqa: BLE001
+        pass
+    return ERP, "Damodaran implied ERP 2026-11-01"
+
+
 def local_min_spread(market: str) -> Optional[float]:
     """The owner's minimum Ke / WACC spread over a local government curve, or None (valuation_constants)."""
     try:
@@ -256,7 +270,8 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
     if isinstance(own_beta, (int, float)) and OWN_BETA_BAND[0] <= own_beta <= OWN_BETA_BAND[1]:
         beta_own_adj = 0.67 * float(own_beta) + 0.33
     beta_l = 0.5 * (beta_l_industry + beta_own_adj) if beta_own_adj is not None else beta_l_industry
-    ke = rf + beta_l * ERP + float(crp or 0.0)
+    erp, erp_source = equity_risk_premium(market)
+    ke = rf + beta_l * erp + float(crp or 0.0)
     # Owner, 2026-11-25: on a local government curve far below the US one (SGS 2.29%), a low-beta name's Ke and
     # WACC fall to levels no local desk would use (Singtel Ke 4.16%, WACC 3.9%: 0.42 x a US ERP on the SGS rate).
     # Floor both at the market's minimum spread over its own rf (valuation_constants.risk_free_by_market).
@@ -281,7 +296,8 @@ def firm_wacc(*, profile: Optional[str], net_debt: Optional[float], market_cap: 
     return {"wacc": round(wacc, 5), "industry": industry, "beta_unlevered": beta_u, "beta_levered": round(beta_l, 4),
             "beta_industry_relevered": round(beta_l_industry, 4), "beta_own_raw": own_beta,
             "beta_own_adjusted": (round(beta_own_adj, 4) if beta_own_adj is not None else None),
-            "de_ratio": round(de, 4), "dv_ratio": round(dv, 4), "rf": round(rf, 5), "rf_source": rf_source, "erp": ERP,
+            "de_ratio": round(de, 4), "dv_ratio": round(dv, 4), "rf": round(rf, 5), "rf_source": rf_source, "erp": erp,
+            "erp_source": erp_source,
             "crp": round(float(crp or 0.0), 5), "cost_of_equity": round(ke, 5), "cost_of_debt": round(kd, 5),
             "tax_rate": t, "contracted_discount": float(contracted_discount or 0.0), "floored": floored,
             "cost_of_debt_rebased": kd_rebased is not None,

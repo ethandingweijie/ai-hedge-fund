@@ -25,7 +25,29 @@ MIN_MEMBERS = 2
 def cohort_of(ticker: str) -> Optional[str]:
     from src.tools.ticker_canonical import canonical_ticker
     t = canonical_ticker(ticker)
+    try:                                                   # China A-share: its H line's cohort (owner, 2026-11-28)
+        from src.markets.china import h_share_for
+        t = h_share_for(t) or t
+    except Exception:                                      # noqa: BLE001
+        pass
     return next((name for name, members in COHORTS.items() if t in members), None)
+
+
+def members_for(ticker: str, name: str) -> tuple[str, ...]:
+    """The cohort's lines in the SUBJECT's market: an A-share subject is measured against its peers' A-share lines
+    (A prices, A-market multiples; each market owns its multiples), an H/other subject against COHORTS as defined.
+    The subject's own company (either line) is never a member."""
+    from src.tools.ticker_canonical import canonical_ticker
+    t = canonical_ticker(ticker)
+    try:
+        from src.markets.china import a_share_for, h_share_for, is_cn_ticker
+    except Exception:                                      # noqa: BLE001
+        return tuple(m for m in COHORTS[name] if m != t)
+    if is_cn_ticker(t):
+        own_h = h_share_for(t)
+        return tuple(a for a in (a_share_for(m) for m in COHORTS[name] if m != own_h) if a and a != t)
+    own_a = a_share_for(t)
+    return tuple(m for m in COHORTS[name] if m != t and m != own_a)
 
 
 def _quote(symbol: str) -> Optional[float]:
@@ -58,9 +80,7 @@ def cohort_pev(ticker: str, *, quote: Callable[[str], Optional[float]] = _quote,
         from src.tools.api import get_listing_currency as listing_ccy
     subject = canonical_ticker(ticker)
     used, missing = [], []
-    for m in COHORTS[name]:
-        if m == subject:
-            continue
+    for m in members_for(subject, name):
         try:
             ccy = listing_ccy(m)
             px, ev = quote(m), ev_ps(m, ccy)
@@ -101,9 +121,7 @@ def cohort_pb(ticker: str, *, pb: Callable[[str], Optional[float]] = _pb) -> Opt
         return None
     subject = canonical_ticker(ticker)
     used, missing = [], []
-    for m in COHORTS[name]:
-        if m == subject:
-            continue
+    for m in members_for(subject, name):
         try:
             v = pb(m)
         except Exception:                                  # noqa: BLE001
@@ -131,9 +149,7 @@ def cohort_pe(ticker: str, *, pe: Callable[[str], Optional[float]] = _pe) -> Opt
         return None
     subject = canonical_ticker(ticker)
     used, missing = [], []
-    for m in COHORTS[name]:
-        if m == subject:
-            continue
+    for m in members_for(subject, name):
         try:
             v = pe(m)
         except Exception:                                  # noqa: BLE001

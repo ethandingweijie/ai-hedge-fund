@@ -10023,7 +10023,8 @@ def _compute_method_value(
                                                        + (f" ({len(_pev.get('members_used') or [])} peers with an "
                                                           f"accepted EV)" if _pev else "")),
                                        "members_used": _pev.get("members_used") or [],
-                                       "members_missing": _pev.get("members_missing") or []})
+                                       "members_missing": _pev.get("members_missing") or [],
+                                       "input_source": most_recent.get("_ev_input_source")})
             return ev_ps * _m * sm
         # VNB-margin uplift on P/BV (proxy when EV/share not disclosed)
         vnb = most_recent.get("vnb_margin")
@@ -14006,7 +14007,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # marketCap/price is market-observed and cannot carry unit errors.
         # Skipped automatically for HK/SG tickers (no quote fetched above).
         _shares_source = "line_items"
-        if (
+        # A+H issuers (either line): quote marketCap is company-level, so mcap / this line's price is not a share
+        # count (audit 2026-11-28: 600941.SS -36%, 0981.HK +10%). Keep the statements' TOTAL count.
+        from src.markets.china import is_ah_dual_listed as _ah_dual, AH_SHARES_SOURCE as _AH_SRC
+        if _ah_dual(ticker) and shares and shares > 0:
+            _shares_source = _AH_SRC
+        elif (
             _quote_mcap and _spot_price and _spot_price > 0
             and shares and shares > 0
         ):
@@ -14893,6 +14899,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _ev_out.get("ev_per_share"):
                     most_recent["embedded_value_per_share"] = _ev_out["ev_per_share"]
                     most_recent["vnb_margin"] = _ev_out.get("vnb_margin")
+                    from src.markets.china import reused_input_disclosure as _cn_reuse   # A-share <- H line
+                    _ev_src = _cn_reuse(_ev_e, "ev_per_share", _target_ccy, _ii_w6._fx(_target_ccy))
+                    if _ev_src:
+                        most_recent["_ev_input_source"] = _ev_src
+                        ticker_forward_flags.append("Embedded Value input: " + _ev_src["text"])
                     try:
                         from src.data.insurer_pev import cohort_pb as _cohort_pb, cohort_pev as _cohort_pev
                         _ipb_out = _cohort_pb(ticker)
@@ -16977,8 +16988,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _m_rf, _m_src = _capm_mkt.risk_free(_mkt_code)
             _m_crp = float(_wacc_build.get("country_risk_premium_total") or 0.0)
             _wacc_build["market_capm"] = {
-                "rf": round(float(_m_rf), 5), "rf_source": _m_src, "erp": _capm_mkt.ERP, "crp": round(_m_crp, 5),
-                "cost_of_equity": round(float(_m_rf) + _capm_mkt.ERP + _m_crp, 5), "market": _mkt_code,
+                "rf": round(float(_m_rf), 5), "rf_source": _m_src, "erp": _capm_mkt.equity_risk_premium(_mkt_code)[0],
+                "crp": round(_m_crp, 5),
+                "cost_of_equity": round(float(_m_rf) + _capm_mkt.equity_risk_premium(_mkt_code)[0] + _m_crp, 5),
+                "market": _mkt_code,
                 "basis": "market cost of equity = rf + ERP + CRP (beta 1), the firm CAPM's own inputs"}
         except Exception:                                  # noqa: BLE001
             pass

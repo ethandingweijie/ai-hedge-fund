@@ -892,6 +892,20 @@
              "accepted": "2026-11-28", "reviewer": "owner"}
     }
   },
+  "equity_risk_premium_by_market": {
+    "_doc": "Owner, 2026-11-28 (China A-shares): a market listed here prices equity at its own ERP in the firm CAPM, the market cost of equity and the rating benchmark; any other market takes capm.ERP (Damodaran US implied, 4.41%). The value is the premium NET of the market's country risk premium, which the engine adds separately. Reviewed quarterly.",
+    "reviewed": {"last_reviewed": "2026-11-28", "reviewer": "owner", "cadence": "quarterly"},
+    "markets": {
+      "CN": {"value": 0.0432, "accepted": "2026-11-28", "reviewer": "owner", "applies_to": ["SHH", "SHZ"],
+             "gross_implied_premium": 0.0582, "crp_netted": 0.015,
+             "method": "Market-implied total equity premium = earnings yield of the A-share market minus the CGB 10y: 1 / (median of the SHH sector-level NTM P/E medians) - rf. That premium is measured on A-share prices against the local risk-free rate, so it already contains the country risk A-share investors demand; the registry CRP (1.5%, kept as owner-accepted) is therefore netted out to avoid counting it twice: 5.82% - 1.50% = 4.32%. Total beta-1 premium over the CGB = 4.32% + 1.50% = 5.82% (was 4.41% + 1.50% = 5.91%).",
+             "inputs": {"as_of": "2026-11-28", "source": "production regional_comps (SHH sector rows, cohort all, refresh 2026-11-28T03:05Z)",
+                        "sector_pe_ntm": {"Financial Services": 7.42, "Basic Materials": 9.16, "Energy": 10.90, "Industrials": 11.98, "Consumer Cyclical": 13.49, "Utilities": 15.31, "Consumer Defensive": 18.27, "Healthcare": 23.72, "Technology": 33.26},
+                        "median_pe_ntm": 13.488, "earnings_yield": 0.07414, "rf": 0.0159,
+                        "rf_source": "CGB 10y, ADB AsianBondsOnline close 2026-11-26 (1.591%)"},
+             "sensitivity": "SHZ alone: median NTM P/E 17.12x -> 4.25% gross (2.75% net); SHH+SHZ pooled 15.68x -> 4.79% gross (3.29% net). The owner approved the SHH derivation (~5.8pp gross) for both exchanges. An earnings yield is a real-return proxy set against a nominal CGB, and ignores growth: it is a level check, not a model."}
+    }
+  },
   "commodity_price_deck": {
     "_doc": "Owner, 2026-11-27 (I2, option 3A): depleting-asset DCFs price on a futures strip for years 1-3, then a straight line to the owner's long-run price by year 5, against the trailing 12-month average already inside base revenue (base_price). Costs are per unit, so price moves fall to FCF; a year below cash cost is shut in. Applies only when this block AND the ticker's mix are ACCEPTED (dcf_agent.commodity_price_index). Reviewed quarterly; refresh with scripts/commodity_deck.py from CME (WTI, Henry Hub) and ICE Report Center (Brent, Newcastle) settlement downloads.",
     "status": "ACCEPTED",

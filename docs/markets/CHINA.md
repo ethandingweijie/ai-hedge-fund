@@ -5,7 +5,7 @@ Branch `worktree-agent-ae2d7ab84c6748057`, 2026-11-28. Base: `main` @ 62feab5d. 
 
 **Owner decisions accepted 2026-11-28 and applied (section "Accepted decisions"):** bare six-digit codes stay
 ambiguous; CGB 10y 1.59% + 3.0pp floor; the 46 sector pins; registry CRP 1.5% for SHH/SHZ in WACC and benchmark;
-Ping An routed to the life-insurer profile and withheld until an embedded-value input is accepted; CJK fonts in the
+Ping An routed to the life-insurer profile and withheld until an embedded-value input is accepted (round 2: the H-share input is reused, so it is valued again); China ERP 4.32% net of CRP (round 2); CJK fonts in the
 production images.
 
 China-specific logic lives in **`src/markets/china.py`** (tickers, A/H pairs, names, accepted pins and constants,
@@ -26,7 +26,7 @@ disclosure calendar, research context), **`src/tools/cninfo_api.py`** (primary f
 | 8 | Reports | PDF: every `Paragraph` wraps CJK runs in an embedded TTF (Windows: Microsoft YaHei; production: `fonts-wqy-microhei`, now installed in `docker/Dockerfile.web` and `.worker` together with `fonts-noto-cjk`) or ReportLab's built-in CID `STSong-Light`; helper module is `src/utils/cjk_font.py` (the merge's standard name); the title shows `Kweichow Moutai Co., Ltd. 贵州茅台 (600519.SS)`. Excel: openpyxl is Unicode; workbook labels use ISO codes and `RMB`. |
 | 9 | Billing / coverage | `run_type`: covered / new / limited all resolve for `.SS/.SZ`. The 46 pinned large caps are **tuned** (first run "new", 2 credits); any other A-share is **limited** (1 credit). A withheld (unrated) run returns its credit through the existing `not_sellable_reason`. |
 | 10 | Regulatory | Licensing questions added to `docs/LAUNCH_TODO.md` (questions only). |
-| 11 | Tests | `tests/test_china_ashares.py` (67 tests). Full suite before the decisions: 7240 passed, 80 skipped, 4 xfailed; after: **7244 passed, 80 skipped, 4 xfailed** (15m04s, `set -o pipefail`; one source-window test in test_unrated_state caught the first cut, fixed by moving the EV check into `china.ev_withhold_verdict`). One existing test updated (CNY symbol). Frontend `tsc --noEmit` clean. |
+| 11 | Tests | `tests/test_china_ashares.py` (106 tests). Full suite before the decisions: 7240 passed, 80 skipped, 4 xfailed; after round 1: 7244 passed; after round 2 + the A+H share fix: **7283 passed, 80 skipped, 4 xfailed** (11m19s) (15m04s, `set -o pipefail`; one source-window test in test_unrated_state caught the first cut, fixed by moving the EV check into `china.ev_withhold_verdict`). One existing test updated (CNY symbol). Frontend `tsc --noEmit` clean. |
 
 Out of scope (said explicitly): the **screener** (US/HK/SG only — no A-share universe, cache job or VGPM cadence);
 **crisis replay / what-if** home benchmark (A-share holdings fall to the US sector anchor; FMP has the SSE Composite
@@ -144,12 +144,113 @@ once an EV input is accepted for `601318.SS`. The same rule covers China Life, C
 `docker/Dockerfile.worker` now install `fonts-wqy-microhei` (TrueType: what ReportLab can embed) and
 `fonts-noto-cjk` (CFF OpenType, as requested; ReportLab cannot embed it, so `cjk_font` uses WenQuanYi).
 
+## Accepted decisions, round 2 (owner, 2026-11-28)
+
+**D-CN-10 — China ERP** (`valuation_constants.equity_risk_premium_by_market.markets.CN`, read by
+`capm.equity_risk_premium("CN")`; on the quarterly review clock in `prod_health`):
+
+- Inputs (prod `regional_comps`, SHH sector rows, refresh 2026-11-28T03:05Z): NTM P/E Financials 7.42, Materials
+  9.16, Energy 10.90, Industrials 11.98, Consumer Cyclical 13.49, Utilities 15.31, Consumer Defensive 18.27,
+  Healthcare 23.72, Technology 33.26 → median **13.488x** → earnings yield **7.414%** − CGB 1.59% = **5.82pp gross**.
+- **Double counting: yes, the 5.82pp embeds country risk.** It is measured on A-share prices against the local
+  risk-free rate, so it is the whole premium A-share investors demand, country risk included. With the 1.5% CRP kept
+  (as accepted), the ERP is netted: **4.32% = 5.82% − 1.50%**. Beta-1 total premium over the CGB = 5.82% (was 4.41% +
+  1.50% = 5.91%), so the change is small by construction: the market-implied total replaces the US-ERP-plus-CRP total.
+- Applied in the firm CAPM (`firm_wacc` → `erp`, `erp_source`), the market cost of equity (`market_capm`) and the
+  CSI 300 benchmark (run inputs, and the no-CAPM fallback). Benchmark **7.50% → 7.41%**.
+- Sensitivity (recorded with the constant): SHZ alone 17.12x → 4.25pp gross (2.75% net); SHH+SHZ pooled 15.68x →
+  4.79pp gross (3.29% net). An earnings yield is a real-return proxy against a nominal CGB and ignores growth: a
+  level check, not a model.
+
+**D-CN-11 — A-shares reuse their H-share's accepted company inputs.** `industry_inputs.accepted_entry` /
+`accepted_detail` fall back, for a China A-share with no accepted input of its own, to its same-issuer H line's
+accepted input (`_reused_from` / `reused_from`). Amounts convert into the A-share's listing currency (RMB) through the
+usual FX path at the run's rate. The Embedded Value leg discloses source listing, original value and currency, FX rate,
+converted value, period and acceptance date (`multiple_parts.input_source` and a forward flag, e.g. "ev_per_share
+reused from the same issuer's 02318.HK accepted input: 86.58 CNY (1H2026), x FX CNY->CNY 1.0 = 86.58 CNY; accepted
+...; A company fact on the shared share base -- not the H-share price"). The EV inputs are per share on the issuer's
+TOTAL share count (A + H), so they apply unchanged to either line. The P/EV multiple for an A-share subject is the
+median over its peers' **A-share** lines (A prices, A-share EV per share; `insurer_pev.members_for`), the subject's own
+company excluded, so no line is priced off the other's market price and each market keeps its own multiples.
+
+**Measured (engine-only, temp archive; the H-line EV acceptances were MIRRORED locally from prod — 02318 / 02628 /
+02601 / 01336 `embedded_value`, reviewer "local-simulation"; 01339.HK has no EV entry):**
+
+| Ticker | Before (round 1) | After: bear / base / bull IV | 12m PT | Spot | Legs (weight) |
+|---|---|---|---|---|---|
+| 601318.SS Ping An | withheld | 45.51 / **60.34** / 75.26 | **58.43** | 55.01 | EV 41% (86.58 × P/EV 0.57: China Life A 0.69, CPIC A 0.49, NCI A 0.57), P/BV 53%, DDM 6% |
+| 601628.SS China Life | withheld (no own input) | 19.36 / **25.71** / 32.08 | **32.28** | 35.90 | EV 35% (51.93 × cohort), P/BV 45%, P/E (norm) 15%, DDM 5% |
+| 601601.SS CPIC | withheld (no own input) | 28.90 / **38.36** / 47.87 | **35.37** | 32.42 | EV 35% (66.21 × cohort), P/BV 45%, P/E (ops) 15%, DDM 5% |
+| 601336.SS New China Life | withheld (no own input) | 38.28 / **50.60** / 63.04 | **52.17** | 52.91 | EV 35% (92.27 × cohort), P/BV 45%, P/E (norm) 15%, DDM 5% |
+| 600519.SS Moutai | 1,684 base / PT 1,572 / WACC 5.16% | 1,264 / **1,694** / 2,144 | **1,575** | 1,472.36 | WACC **5.12%** (Ke 1.59 + 0.47 × 4.32 + 1.50) |
+| 300750.SZ CATL | 291 / PT 263 / WACC 7.14% | 261 / **291** / 331 | **263** | 215.89 | WACC **7.06%** (no DCF leg in its blend) |
+
+"Before" for the three non-Ping-An insurers is the round-1 rule applied to them (pinned `Insurance`, no A-line input,
+so withheld); only Ping An's withholding was observed in a run. China Life's A line trades at an 82% premium to its H,
+which is why its value sits below spot. In production the reuse lifts the withholding only where the H-line input is
+actually accepted in Postgres.
+
+## A+H share count fix (lead's input-data audit, 2026-11-28)
+
+**Defect.** For an A+H issuer FMP's quote `marketCap` is company-level, so the DCF's share cross-check
+(`_shares_implied = _quote_mcap / _spot_price`) divided a company value by ONE line's price. On an A line trading at a
+premium that understated the count and inflated every per-share value by the premium (600941.SS: 13.94bn implied vs
+21.75bn, +56%); HK lines came out off too, in both directions (the HK quote's marketCap appears to be the A-priced
+company value restated in HKD: 01398.HK implied 467.9bn vs 356.4bn).
+
+**Fix.** `china.is_ah_dual_listed` (either line, any HK code form) → the cross-check is skipped and the statements'
+TOTAL diluted count is kept; the run records `shares_source = "ah_total_shares"`. The per-share value then applies to
+each line in its own currency. Single listings are untouched (Moutai identical before/after). Four pairs added to the
+map from the audit, FMP names verified on both lines: CNOOC 600938.SS/00883.HK, Postal Savings 601658.SS/01658.HK,
+Hua Hong 688347.SS/01347.HK, BeOne 688235.SS/06160.HK (also ONC in the US).
+
+**Engine before → after** (temp archive, prod comps; same code except the rule):
+
+| Ticker | Shares before → after (source) | Spot | Base IV before → after | 12m PT before → after |
+|---|---|---|---|---|
+| 600519.SS Moutai | 1.250bn → 1.250bn (quote_current_diluted, unchanged) | 1,472.36 | 1,693.52 → 1,693.52 | 1,574.81 → 1,574.81 |
+| 600941.SS China Mobile A | 13.942bn → 21.752bn | 105.49 | **270.12 → 183.93** | 188.17 → 144.99 |
+| 00941.HK China Mobile H | 20.927bn → 21.752bn | 77.75 | 104.49 → 101.39 | 89.35 → 86.83 |
+| 601318.SS Ping An A | 16.389bn → 18.108bn | 55.01 | 60.34 → 60.34 | 58.43 → 58.43 |
+| 02318.HK Ping An H | 18.108bn → 18.108bn | 51.65 | 63.90 → 63.90 | 57.27 → 57.27 |
+| 601939.SS CCB A | 214.960bn → 256.107bn | 12.41 | 12.93 → 12.72 | 13.39 → 13.31 |
+| 00939.HK CCB H | 261.600bn → 250.011bn | 10.13 | 15.23 → 15.29 | 13.29 → 13.33 |
+
+Ping An's value does not move: its legs (EV per share, P/BV on book per share, DDM) are per-share inputs that do not
+divide by the count. CCB's H statements carry 250.0bn against 256.1bn on the A statements (FMP's two filings differ;
+the A figure matches the audit's total).
+
+**Every HK line whose count changes** (FMP 2026-11-28: before = the engine's quote rule, mcap/price, times the
+filing's diluted/basic ratio inside the 25% band; after = latest annual diluted count). These are existing production
+HK names; per-share values move by the inverse:
+
+| HK line | before | after | change | | HK line | before | after | change |
+|---|---|---|---|---|---|---|---|---|
+| 02333.HK Great Wall | 14.136bn | 8.511bn | −39.8% | | 01658.HK PSBC | 106.939bn | 119.732bn | +12.0% |
+| 01800.HK CCCC | 26.497bn | 16.180bn | −38.9% | | 01988.HK Minsheng | 43.782bn | 48.513bn | +10.8% |
+| 02628.HK China Life | 45.843bn | 28.271bn | −38.3% | | 00981.HK SMIC | 10.118bn | 11.148bn | +10.2% |
+| 00386.HK Sinopec | 167.061bn | 121.187bn | −27.5% | | 06160.HK BeOne | 1.370bn | 1.475bn | +7.7% |
+| 00857.HK PetroChina | 244.806bn | 182.909bn | −25.3% | | 01288.HK ABC | 349.977bn | 373.129bn | +6.6% |
+| 01398.HK ICBC | 467.856bn | 356.407bn | −23.8% | | 03750.HK CATL | 4.225bn | 4.473bn | +5.9% |
+| 00390.HK CREC | 35.318bn | 26.995bn | −23.6% | | 00941.HK China Mobile | 20.781bn | 21.752bn | +4.7% |
+| 01186.HK CRCC | 20.349bn | 15.562bn | −23.5% | | 03968.HK CMB | 25.220bn | 26.348bn | +4.5% |
+| 03988.HK BOC | 424.532bn | 328.407bn | −22.6% | | 01276.HK Hengrui | 6.637bn | 6.535bn | −1.5% |
+| 01336.HK NCI | 4.011bn | 3.120bn | −22.2% | | 01211.HK BYD | 9.117bn | 9.026bn | −1.0% |
+| 00728.HK China Telecom | 114.604bn | 91.507bn | −20.2% | | 01088.HK Shenhua | 19.929bn | 19.869bn | −0.3% |
+| 01766.HK CRRC | 35.541bn | 28.699bn | −19.3% | | 02899.HK Zijin | 26.591bn | 26.557bn | −0.1% |
+| 01339.HK PICC | 53.117bn | 44.224bn | −16.7% | | 00998.HK CITIC Bank | 55.645bn | 55.653bn | 0.0% |
+| 01347.HK Hua Hong | 1.928bn | 1.729bn | −10.3% | | 02318.HK, 02601.HK, 06030.HK, 00300.HK, 00883.HK | | | 0.0% |
+| 03328.HK BoCom | 88.364bn | 82.028bn | −7.2% | | | | | |
+| 00939.HK CCB | 261.600bn | 250.011bn | −4.4% | | | | | |
+
+The large negative rows were dividing by a count 20-40% too high, so their per-share values in production are
+understated by the same proportion (China Life H, PetroChina H, Sinopec H, ICBC H, BOC H ...). The A lines move the
+other way (600941.SS +56%, 688235.SS +41%, 688981.SS +39%, 600938.SS +37.5%, 601319.SS +24.6%, 601186.SS +22.6% ...).
+The "before" counts here are an FMP replay of the engine's rule; the engine run above matched it for every line it
+ran except 00941.HK (20.927bn in the engine vs 20.781bn replayed: the engine also applies the filing's dilution).
+
 ## Still open
 
-- **China ERP** — implied ~5.8pp vs the global 4.41% (`capm.ERP` is one constant; a per-market ERP is a code change).
-- **A/H company-level inputs** — should an A-share reuse its H line's accepted company facts (EV etc.)?
-  `dual_listings.company_key` does this for HK/ADR pairs; A/H is not wired (Ping An stays withheld until then or
-  until an A-line input is accepted).
 - **D-CN-7 one A-share market or two.** SHH and SHZ are separate comps markets; baijiu peers split (Moutai/Fenjiu in
   SHH, Wuliangye/Luzhou Laojiao in SHZ). Pooling them into one A-share cohort is the owner's call (the one-market
   rule as written keeps them apart).
@@ -182,7 +283,7 @@ the same company differ between lines by roughly the premium.
 ## Shared files touched (for the Korea / Japan merges)
 
 Python — `src/tools/ticker_canonical.py` (CN branch first in `canonical_ticker`; suffix/prefix forms only), `src/data/capm.py` (`_TAX["CN"]`),
-`src/data/valuation_constants.py` (`market_key` SHH/SHZ), `src/data/valuation_constants.json`
+`src/data/valuation_constants.py` (`market_key` SHH/SHZ), `src/data/capm.py` (`equity_risk_premium(market)` used in `firm_wacc`), `src/decisions/ratings.py` (A-share fallback rf/ERP), `src/data/industry_inputs.py` (H-line reuse), `src/data/insurer_pev.py` (`cohort_of` via the H line, `members_for` on A lines), `dcf_agent` share cross-check skipped for A+H lines (`ah_total_shares`), `src/monitoring/prod_health.py` (ERP on the review clock), `src/data/valuation_constants.json`
 (`risk_free_by_market.markets.CN` accepted, `reviewed` 2026-11-28), `UNRATED_REASONS["input_required"]`, `src/data/industry_profile_map.py` (`market_of` CN), `src/data/coverage.py`
 (`CN_TICKER_SECTOR_LOOKUP`), `src/data/sector_profiles.py` (`get_wacc_profile_for_ticker` CN lookup),
 `src/agents/analysis/dcf_agent.py` (3 market-code sites → `CN`; A-share CRP = registry; EV withhold in the unrated

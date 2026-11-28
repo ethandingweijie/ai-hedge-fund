@@ -235,6 +235,9 @@ def resolve_benchmark(ticker: str, sector: str = "", capm: Optional[dict] = None
         src = "the valuation's CAPM inputs"
     else:
         rf, erp, crp = RISK_FREE_RATE, EQUITY_RISK_PREMIUM, market_crp(market)
+        if market in ("SHH", "SHZ"):                       # owner, 2026-11-28: the A-share ERP and CGB rf
+            from src.data.capm import equity_risk_premium, risk_free
+            rf, erp = risk_free("CN")[0], equity_risk_premium("CN")[0]
         src = "fallback constants (no CAPM build on the run)"
     expected = rf + erp + crp
     return {

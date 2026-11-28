@@ -36,8 +36,8 @@ from typing import Optional
 __all__ = [
     "normalize", "bare_code_candidate", "is_cn_ticker", "to_canonical", "to_fmp_code", "exchange_code", "board", "price_limit",
     "LISTING_CURRENCY", "CURRENCY_LABEL", "CAPM_MARKET", "STATUTORY_TAX", "TOP_A_SHARES", "h_share_for",
-    "a_share_for", "ah_premium", "search_local", "CN_PROFILE_PINS", "CN_TICKER_SECTOR_LOOKUP",
-    "ACCEPTED_CONSTANTS", "a_share_crp", "ev_input_withhold_reason", "ev_withhold_verdict", "statutory_deadlines", "next_statutory_deadline", "research_context", "company_name_zh",
+    "a_share_for", "ah_premium", "is_ah_dual_listed", "AH_SHARES_SOURCE", "search_local", "CN_PROFILE_PINS", "CN_TICKER_SECTOR_LOOKUP",
+    "ACCEPTED_CONSTANTS", "a_share_crp", "ev_input_withhold_reason", "ev_withhold_verdict", "reused_input_disclosure", "statutory_deadlines", "next_statutory_deadline", "research_context", "company_name_zh",
 ]
 
 # ── tickers ─────────────────────────────────────────────────────────────────
@@ -205,6 +205,11 @@ TOP_A_SHARES: dict[str, dict] = {
     "601390.SS": {"name": "China Railway Group", "zh": "中国中铁", "h": "00390.HK", "ownership": "central_soe"},
     "601186.SS": {"name": "China Railway Construction", "zh": "中国铁建", "h": "01186.HK", "ownership": "central_soe"},
     "601668.SS": {"name": "China State Construction", "zh": "中国建筑", "h": None, "ownership": "central_soe"},
+    # Added 2026-11-28 from the input-data audit (A+H share-count mismatches); FMP names verified on both lines.
+    "600938.SS": {"name": "CNOOC", "zh": "中国海油", "h": "00883.HK", "ownership": "central_soe"},
+    "601658.SS": {"name": "Postal Savings Bank of China", "zh": "邮储银行", "h": "01658.HK", "ownership": "central_soe"},
+    "688347.SS": {"name": "Hua Hong Semiconductor", "zh": "华虹公司", "h": "01347.HK", "ownership": None},
+    "688235.SS": {"name": "BeOne Medicines", "zh": "百济神州", "h": "06160.HK", "ownership": None},  # also ONC (US)
 }
 
 
@@ -227,6 +232,25 @@ def a_share_for(hk_ticker: str) -> Optional[str]:
     except Exception:                                       # noqa: BLE001
         h = (hk_ticker or "").strip().upper()
     return next((a for a, v in TOP_A_SHARES.items() if v.get("h") == h), None)
+
+
+def is_ah_dual_listed(ticker: str) -> bool:
+    """True for EITHER line of an A+H issuer in TOP_A_SHARES (the A-share, or its HK line in any HK code form)."""
+    if h_share_for(ticker):
+        return True
+    t = (ticker or "").strip().upper()
+    try:
+        from src.tools.hk.ticker import is_hk_ticker
+        return is_hk_ticker(t) and a_share_for(t) is not None
+    except Exception:                                       # noqa: BLE001
+        return False
+
+
+#: Owner/lead audit 2026-11-28: for an A+H issuer FMP's quote marketCap is COMPANY-level (A shares x A price + H
+#: shares x H price), so marketCap / one line's price is not that line's share count -- it is too small when the line
+#: trades at a premium (600941.SS: 13.94bn implied vs 21.75bn total, per-share values +56%) and too large at a
+#: discount. Both lines therefore keep the company's TOTAL share count from the statements.
+AH_SHARES_SOURCE = "ah_total_shares"
 
 
 def ah_premium(a_price_cny: float, h_price_hkd: float, cny_per_hkd: float) -> Optional[float]:
@@ -370,6 +394,33 @@ def ev_withhold_verdict(ticker: str, profile: Optional[str], base_result: Option
         return None
     from src.data.valuation_constants import UNRATED_REASONS
     return {"code": "input_required", "label": UNRATED_REASONS["input_required"], "reason": why}
+
+
+def reused_input_disclosure(entry: dict, field: str, target_ccy: str, fx) -> Optional[dict]:
+    """The disclosure a leg carries when its company input was REUSED from the H line (owner, 2026-11-28):
+    {source_listing, original_value, original_currency, fx_rate, target_currency, converted_value, period,
+    reviewed_at, text}. None when the entry is the listing's own. `fx` maps a currency to target units."""
+    src = (entry or {}).get("_reused_from")
+    if not src:
+        return None
+    node = ((entry.get("data") or {}).get(field) or {})
+    val, ccy = node.get("value"), str(node.get("currency") or "").upper() or None
+    rate = None
+    try:
+        rate = fx(ccy) if ccy else None
+    except Exception:                                       # noqa: BLE001
+        rate = None
+    conv = (float(val) * float(rate)) if isinstance(val, (int, float)) and rate else None
+    out = {"source_listing": src.get("listing"), "original_value": val, "original_currency": ccy,
+           "fx_rate": rate, "target_currency": target_ccy, "converted_value": conv,
+           "period": node.get("period") or (entry.get("data") or {}).get("fiscal_year"),
+           "reviewed_at": src.get("reviewed_at")}
+    out["text"] = (f"{field} reused from the same issuer's {src.get('listing')} accepted input: {val} {ccy}"
+                   f" ({out['period']}), x FX {ccy}->{target_ccy} {rate if rate is not None else 'n/a'}"
+                   + (f" = {conv:,.2f} {target_ccy}" if conv is not None else "")
+                   + f"; accepted {str(src.get('reviewed_at') or 'n/a')[:10]}. A company fact on the shared share "
+                   "base -- not the H-share price.")
+    return out
 
 
 ACCEPTED_CONSTANTS: dict = {

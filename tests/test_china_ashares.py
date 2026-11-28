@@ -425,3 +425,155 @@ def test_cjk_cid_fallback_when_no_ttf_on_host(monkeypatch):
     finally:
         cjk_font._STATE.clear()
         cjk_font._STATE.update(saved)
+
+
+# ── China ERP (owner, 2026-11-28) ───────────────────────────────────────────
+
+def test_china_erp_is_the_implied_premium_net_of_crp():
+    from src.data import capm, valuation_constants as vc
+    cn = vc.load()["equity_risk_premium_by_market"]["markets"]["CN"]
+    assert cn["reviewer"] == "owner" and cn["accepted"] == "2026-11-28"
+    inp = cn["inputs"]
+    import statistics
+    med = statistics.median(inp["sector_pe_ntm"].values())
+    assert med == pytest.approx(inp["median_pe_ntm"], abs=0.01)
+    gross = 1.0 / med - inp["rf"]
+    assert gross == pytest.approx(cn["gross_implied_premium"], abs=5e-4)
+    assert cn["value"] == pytest.approx(cn["gross_implied_premium"] - cn["crp_netted"], abs=1e-9)   # no double count
+    from src.data.sector_profiles import market_crp
+    assert cn["crp_netted"] == market_crp("SHH") == market_crp("SHZ")
+    assert capm.equity_risk_premium("CN")[0] == pytest.approx(0.0432)
+    assert capm.equity_risk_premium("US")[0] == capm.ERP == capm.equity_risk_premium("SG")[0]
+
+
+def test_china_erp_in_firm_capm_and_benchmark():
+    from src.data import capm
+    from src.decisions.ratings import resolve_benchmark
+    w = capm.firm_wacc(profile="Food & Beverage", net_debt=0.0, market_cap=1e12, cost_of_debt=None, market="CN",
+                       own_beta=1.5, crp=0.015)
+    assert w["erp"] == pytest.approx(0.0432) and "CN ERP" in w["erp_source"]
+    assert w["cost_of_equity"] == pytest.approx(0.0159 + w["beta_levered"] * 0.0432 + 0.015, abs=1e-5)
+    us = capm.firm_wacc(profile="Food & Beverage", net_debt=0.0, market_cap=1e12, cost_of_debt=None, market="US",
+                        own_beta=1.5)
+    assert us["erp"] == capm.ERP
+    # Fallback benchmark (no CAPM on the run) uses the CGB rf, China ERP and registry CRP: 1.59 + 4.32 + 1.50.
+    assert resolve_benchmark("600519.SS", "Consumer")["expected_return"] == pytest.approx(0.0741)
+    # With the run's CAPM inputs the benchmark follows them.
+    b = resolve_benchmark("300750.SZ", "Industrials", capm={"rf": 0.0159, "erp": 0.0432, "crp": 0.015})
+    assert b["expected_return"] == pytest.approx(0.0741)
+
+
+# ── H-share company inputs reused by the A line (owner, 2026-11-28) ─────────
+
+@pytest.fixture
+def input_store(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    from src.data import db as _db
+    from src.data import industry_inputs as ii
+    monkeypatch.setattr(_db, "get_db_path", lambda: str(tmp_path / "t.db"))
+    _db.close_all_connections()
+    monkeypatch.setattr(ii, "_reviews_ready_key", None)
+    yield ii
+    _db.close_all_connections()
+
+
+def _ev_doc(ccy="CNY", evps=86.58):
+    return {"version": 1, "tickers": {"02318.HK": {"embedded_value": {
+        "data": {"ev_per_share": {"value": evps, "currency": ccy, "scale": "units", "period": "1H2026",
+                                  "source_url": "https://www.pingan.cn/x", "quote": "EV per share RMB 86.58"},
+                 "ev_total": {"value": 1567800.0, "currency": ccy, "scale": "mn", "period": "1H2026"},
+                 "fiscal_year": "1H2026", "basis": "Traditional EV"},
+        "checks": [], "ok": True}}}}
+
+
+def test_a_share_reuses_the_h_share_accepted_input_with_disclosure(input_store):
+    ii = input_store
+    doc = _ev_doc()
+    assert ii.accepted_entry("601318.SS", "embedded_value", doc) is None          # H pending -> nothing to reuse
+    ii.set_review("02318.HK", "embedded_value", "accepted", "owner", doc=doc)
+    e = ii.accepted_entry("601318.SS", "embedded_value", doc)
+    assert e["_reused_from"]["listing"] == "02318.HK"
+    assert ii.accepted_entry("02318.HK", "embedded_value", doc).get("_reused_from") is None
+    cny = lambda c: {"CNY": 1.0, "HKD": 0.8485}.get(c)                             # noqa: E731
+    d = china.reused_input_disclosure(e, "ev_per_share", "CNY", cny)
+    assert d["source_listing"] == "02318.HK" and d["original_value"] == 86.58 and d["original_currency"] == "CNY"
+    assert d["fx_rate"] == 1.0 and d["converted_value"] == pytest.approx(86.58) and d["period"] == "1H2026"
+    assert "not the H-share price" in d["text"]
+    det = ii.accepted_detail("601318.SS", "embedded_value", "CNY", doc=doc, fx=cny)
+    assert det is None or det.get("reused_from") == "02318.HK"
+
+
+def test_an_hkd_input_is_converted_at_the_run_fx(input_store):
+    ii = input_store
+    doc = _ev_doc(ccy="HKD", evps=100.0)
+    ii.set_review("02318.HK", "embedded_value", "accepted", "owner", doc=doc)
+    e = ii.accepted_entry("601318.SS", "embedded_value", doc)
+    from src.agents.industry import gemini_params as gp
+    cny = lambda c: {"CNY": 1.0, "HKD": 0.8485}.get(c)                             # noqa: E731
+    assert gp.embedded_value_to_engine(ii.canonical_data(e), cny)["ev_per_share"] == pytest.approx(84.85)
+    d = china.reused_input_disclosure(e, "ev_per_share", "CNY", cny)
+    assert d["original_currency"] == "HKD" and d["fx_rate"] == 0.8485 and d["converted_value"] == pytest.approx(84.85)
+
+
+def test_no_reuse_outside_a_shares_or_without_an_h_line(input_store):
+    ii = input_store
+    doc = _ev_doc()
+    ii.set_review("02318.HK", "embedded_value", "accepted", "owner", doc=doc)
+    assert ii.accepted_entry("600519.SS", "embedded_value", doc) is None   # no H line
+    assert ii.accepted_entry("601318", "embedded_value", doc) is None      # bare code is not an A-share
+
+
+def test_a_share_insurer_cohort_is_measured_on_a_share_lines():
+    from src.data import insurer_pev as ip
+    assert ip.cohort_of("601318.SS") == "china_domestic"
+    assert ip.members_for("601318.SS", "china_domestic") == ("601628.SS", "601601.SS", "601319.SS", "601336.SS")
+    assert "601628.SS" not in ip.members_for("601628.SS", "china_domestic")      # subject excluded
+    assert "601318.SS" in ip.members_for("601628.SS", "china_domestic")          # Ping An A is China Life A's peer
+    assert ip.members_for("02318.HK", "china_domestic") == ("02628.HK", "02601.HK", "01339.HK", "01336.HK")
+    out = ip.cohort_pev("601318.SS", quote=lambda s: {"601628.SS": 35.9, "601601.SS": 32.42, "601336.SS": 52.91}.get(s),
+                        ev_ps=lambda s, c: {"601628.SS": 51.93, "601601.SS": 66.21, "601336.SS": 92.27}.get(s),
+                        listing_ccy=lambda s: "CNY")
+    assert [m["symbol"] for m in out["members_used"]] == ["601628.SS", "601601.SS", "601336.SS"]
+    assert out["value"] == pytest.approx(statistics_median([35.9 / 51.93, 32.42 / 66.21, 52.91 / 92.27]), abs=1e-4)
+
+
+def statistics_median(xs):
+    import statistics
+    return statistics.median(xs)
+
+
+# ── A+H share count (lead's input-data audit, 2026-11-28) ───────────────────
+
+@pytest.mark.parametrize("line", [
+    "600941.SS", "00941.HK", "0941.HK", "600938.SS", "00883.HK", "688981.SS", "00981.HK", "601939.SS", "00939.HK",
+    "601288.SS", "01288.HK", "601318.SS", "02318.HK", "601658.SS", "01658.HK", "688347.SS", "01347.HK",
+    "688235.SS", "06160.HK", "601319.SS", "01339.HK",
+])
+def test_both_lines_of_an_ah_issuer_are_dual_listed(line):
+    assert china.is_ah_dual_listed(line)
+
+
+@pytest.mark.parametrize("line", ["600519.SS", "000858.SZ", "00700.HK", "09988.HK", "AAPL", "600519"])
+def test_single_listings_are_not_ah(line):
+    assert not china.is_ah_dual_listed(line)
+
+
+@pytest.mark.parametrize("mcap_over_price,total,bias", [
+    # audit figures: company-level marketCap / the A price understates the count when A trades at a premium
+    (13_942_208_433, 21_751_931_000, 0.56),     # 600941.SS China Mobile
+    (34_566_182_777, 47_529_954_000, 0.37),     # 600938.SS CNOOC
+    (5_761_147_859, 8_009_003_000, 0.39),       # 688981.SS SMIC
+    (214_960_191_410, 256_107_000_000, 0.19),   # 601939.SS CCB
+    (319_244_000_000, 373_129_487_000, 0.17),   # 601288.SS ABC
+])
+def test_quote_implied_count_is_biased_for_ah_issuers(mcap_over_price, total, bias):
+    assert total / mcap_over_price - 1.0 == pytest.approx(bias, abs=0.01)
+
+
+def test_dcf_keeps_the_total_count_for_ah_lines():
+    import inspect
+    from src.agents.analysis import dcf_agent
+    src = inspect.getsource(dcf_agent.run_dcf_agent)
+    i, j = src.index("_ah_dual(ticker)"), src.index("_shares_implied = _quote_mcap / _spot_price")
+    assert i < j                                         # the A+H rule runs before the quote cross-check
+    assert china.AH_SHARES_SOURCE == "ah_total_shares"
