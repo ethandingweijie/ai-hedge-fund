@@ -10331,15 +10331,20 @@ def _compute_method_value(
         return equity / shares
 
     if method_name == "Shareholder Yield":
+        # Owner, 2026-11-28 (D4 d): growth is the scenario's TERMINAL growth rate, not the buyback shrink rate. Counting
+        # all FCF as the yield AND the per-share growth that the same FCF buys back counted the distribution twice.
+        # Net share shrink stays on the trace for the record. (Only the Consumer Technology Ecosystem profile -- AAPL --
+        # weights this leg.)
         fcf = most_recent.get("normalized_free_cash_flow") or most_recent.get("free_cash_flow")
-        g = float(most_recent.get("_net_share_shrink") or 0.0) * {"bear": 0.75, "base": 1.0, "bull": 1.25}.get(scenario, 1.0)
+        g = float(tgr)
         ke = float(wacc)
         if not (fcf and fcf > 0 and shares > 0) or ke - g < 0.02:
             return None
-        _leg_trace(kind="yield", metric="Normalised FCF (OCF less capex) / (cost of equity - net share shrink)",
+        _leg_trace(kind="yield", metric="Normalised FCF (OCF less capex) / (cost of equity - terminal growth)",
                    metric_value=float(fcf), shares=float(shares), per_share_metric=float(fcf) / shares,
-                   cost_of_equity=ke, net_share_shrink=g, target_yield=ke - g,
-                   multiple_parts={"peer_fcf_yield": ke - g, "peer_source": "cost of equity - net share shrink (WACC as cost of equity, net-cash balance sheet)"})
+                   cost_of_equity=ke, growth=g, net_share_shrink=float(most_recent.get("_net_share_shrink") or 0.0),
+                   target_yield=ke - g,
+                   multiple_parts={"peer_fcf_yield": ke - g, "peer_source": "cost of equity - terminal growth (WACC as cost of equity, net-cash balance sheet)"})
         return (float(fcf) / shares) / (ke - g)
 
     if method_name == "P/FCF (NTM)":
