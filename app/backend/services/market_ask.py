@@ -264,7 +264,7 @@ def _supported_symbol(sym: str) -> Optional[str]:
     if s.endswith((".SS", ".SZ", ".SH")):       # China A-shares: a stock code, never an index (000001.SS)
         from src.markets.china import normalize
         return normalize(s)
-    if s.endswith(".HK") or s.endswith(".SI"):
+    if s.endswith(".HK") or s.endswith(".SI") or s.endswith(".KS") or s.endswith(".KQ"):
         return canonical_ticker(s) or None
     from src.markets.japan import is_jp_ticker
     if is_jp_ticker(s):                      # 7203.T, TYO:7203, 7203.JP -> 7203.T

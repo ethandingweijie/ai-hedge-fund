@@ -925,6 +925,7 @@ _BACKLOG_VISIBILITY_PROFILES: frozenset[str] = frozenset({
 #: profiles mid-cycle legs and routes them to P/B-ROE at peak.
 _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Memory / DRAM-NAND",
+    "Memory-led Tech Conglomerate (SOTP)",                    # Korea decision 7 (owner, 2026-11-28)
     "Mining (Major)",
     # Wave 9 (owner, 2026-09-27): the peak-rate multiple is prohibited on these (the shipping clamp, the
     # feedstock and metal cycles, containerboard); the fade and the peak trigger apply.
@@ -1026,6 +1027,7 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Base Metals", "Precious Metals", "Diversified Miners",                                # Wave 9
     "Auto Parts & Suppliers", "Casinos & Integrated Resorts", "Cruise Lines",              # Wave 10
     "Memory / DRAM-NAND",
+    "Memory-led Tech Conglomerate (SOTP)",
     "Digital Asset Mining",
     # Wave 2: a policy-cycle hardware maker. Every cyclical gets the fade
     # (tests/test_growth_convergence.py) -- a one-year consensus jump on an
@@ -7585,10 +7587,10 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
     # Phillip's 3.3% against a 2.29% SGS 10y -- a bank growing faster than the risk-free rate forever. The published
     # broker targets the method was calibrated to used the uncapped rates; the cap is the house view.
     try:
-        from src.data.capm import risk_free as _rf_mkt
+        from src.data.capm import market_code as _mkt_of, risk_free as _rf_mkt
         _t_up = str(ticker or "").upper()
-        _rf_g = _rf_mkt("SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else
-                        "CN" if _t_up.endswith((".SS", ".SZ")) else "JP" if _is_jp_ticker(_t_up) else "US")[0]
+        _rf_g = _rf_mkt(_mkt_of(_t_up, "SG" if _t_up.endswith(".SI") else "HK" if _t_up.endswith(".HK") else
+                        "CN" if _t_up.endswith((".SS", ".SZ")) else "JP" if _is_jp_ticker(_t_up) else "US"))[0]
         if g is not None and _rf_g and g > _rf_g:
             a = {**a, "g": _rf_g, "g_capped_from": g,
                  "provenance": list(a.get("provenance") or []) + [f"g {g:.1%} capped at the risk-free rate {_rf_g:.2%}"]}
@@ -14037,6 +14039,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # marketCap/price is market-observed and cannot carry unit errors.
         # Skipped automatically for HK/SG tickers (no quote fetched above).
         _shares_source = "line_items"
+        _kr_pref_note = None
         # A+H issuers (either line): quote marketCap is company-level, so mcap / this line's price is not a share
         # count (audit 2026-11-28: 600941.SS -36%, 0981.HK +10%). Keep the statements' TOTAL count.
         from src.markets.china import is_ah_dual_listed as _ah_dual, AH_SHARES_SOURCE as _AH_SRC
@@ -14047,6 +14050,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             and shares and shares > 0
         ):
             _shares_implied = _quote_mcap / _spot_price
+            # Korea: a PREFERRED line's FMP marketCap is the issuer's, on the COMMON price (src/markets/korea.py);
+            # the count is the issuer's economic shares, so the preferred line is valued per share like the common.
+            try:
+                from src.markets import korea as _kr
+                _px_issuer = _kr.issuer_price_for_shares(ticker, _spot_price, api_key)
+                if _px_issuer:
+                    _shares_implied = _quote_mcap / _px_issuer
+                    _kr_pref_note = _kr.preferred_note(ticker, _spot_price, _px_issuer)
+            except Exception:                              # noqa: BLE001
+                pass
             _shares_div = abs(_shares_implied - shares) / shares
             if _shares_div > 0.25 and _shares_implied > 0:
                 _log.warning(
@@ -14102,6 +14115,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 else:
                     shares = _shares_implied
                     _shares_source = "quote_current_basic"
+
+        # Korea (lead's data audit, 2026-11-28): an issuer with LISTED preferred shares is valued on common + preferred
+        # outstanding, never on the common-only count FMP's marketCap / price can imply (Hyundai 203.3m vs 262.8m).
+        try:
+            from src.markets import korea as _kr_sh
+            _kr_sc = _kr_sh.issuer_share_count(ticker, api_key)
+            if _kr_sc and _kr_sc.get("total"):
+                _kr_sc_note = _kr_sh.share_count_note(_kr_sc, shares, _shares_source)
+                shares = float(_kr_sc["total"])
+                _shares_source = "common_plus_preferred"
+                _kr_pref_note = (_kr_pref_note + " " if _kr_pref_note else "") + _kr_sc_note
+        except Exception:                                  # noqa: BLE001
+            pass
 
         # Owner-set as-converted share count (valuation_constants.bridge_adjustments, ACCEPTED only):
         # the count when convertible share classes sit outside the feed's figure.
@@ -14272,6 +14298,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
         ticker_forward_flags: list[str] = []
+        if _kr_pref_note:
+            ticker_forward_flags.append(_kr_pref_note)
         if _bs_flag:
             ticker_forward_flags.append(_bs_flag)
         if most_recent.get("_shares_override_flag"):
@@ -16988,9 +17016,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     profile=profile_name, net_debt=net_debt, market_cap=_market_cap,
                     cost_of_debt=_wacc_build.get("rd_live"),
                     crp=float(_wacc_build.get("country_risk_premium_total") or 0.0),
-                    market=("HK" if _is_hk else "SG" if _is_sg else
-                            "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
-                            "JP" if _is_jp_ticker(ticker) else "US"),
+                    market=_capmm.market_code(ticker, "HK" if _is_hk else "SG" if _is_sg else
+                                              "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
+                                              "JP" if _is_jp_ticker(ticker) else "US"),
                     contracted_discount=float(_wacc_build.get("contracted_revenue_discount") or 0.0))
                 if _firm_capm:
                     _firm_capm["table_rate_replaced"] = round(float(wacc), 6)
@@ -17014,9 +17042,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # benchmark, and the carry fallback for a name with neither a firm CAPM nor a GGM cost of equity.
         try:
             from src.data import capm as _capm_mkt
-            _mkt_code = ("HK" if _is_hk else "SG" if _is_sg else
-                         "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
-                         "JP" if _is_jp_ticker(ticker) else "US")
+            _mkt_code = _capm_mkt.market_code(ticker, "HK" if _is_hk else "SG" if _is_sg else
+                                              "CN" if str(ticker).upper().endswith((".SS", ".SZ")) else
+                                              "JP" if _is_jp_ticker(ticker) else "US")
             if _firm_capm:
                 _m_rf, _m_src = float(_firm_capm["rf"]), str(_firm_capm.get("rf_source") or "")
             else:
@@ -17626,6 +17654,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"Margin peak: operating margin {_mp9['latest']:.1%} is above its {_mp9['years']}-year median "
                         f"{_mp9['median']:.1%} + {_MARGIN_PEAK_SIGMA} sigma ({_mp9['threshold']:.1%}); "
                         + ", ".join(f"{s['from']} -> {s['to']}" for s in _mp_swaps) + " (GATE_MARGIN_PEAK)")
+        if _pe_norm_swaps:
+            # The P/E-normalisation disclosure belongs to its swaps (pre-Wave 9 placement). Wave 9 left it
+            # under the margin-peak `if`, where it overwrote the cycle/margin-peak flags and raised on a None
+            # deviation (any margin-peak-gate profile without five years of earnings: 247540.KQ, 2026-11-28).
             _legs_txt = ", ".join(
                 f"{s['from']}→{s['to']} w={s['weight']:.2f}"
                 + (" (anchor)" if s["anchor"] else "")
@@ -17647,7 +17679,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if isinstance(m, dict)
                 and m.get("proxy") in _PE_NORM_SWAP_LEGS
                 and not m.get("implementable", True))
-            _pe_norm_flag = (
+            _pe_norm_flag = (_pe_norm_flag + " " if _pe_norm_flag else "") + (
                 f"P/E normalization: trailing net income deviates "
                 f"{_pe_norm_dev:+.0%} from its 5-year norm "
                 f"(|dev| > {_PE_NORM_SWAP_DEVIATION:.0%}) → {_legs_txt}"
@@ -21548,6 +21580,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if not _verdict:                     # D-CN-6: A-share life insurer without an accepted EV input
                 from src.markets.china import ev_withhold_verdict as _cn_ev
                 _verdict = _cn_ev(ticker, profile_name, _base_sr)
+            if not _verdict:
+                # Owner, 2026-11-28 (Korea decision 5): a Korean valuation never prices on the static default
+                # multiples (src/markets/korea.static_multiples_verdict).
+                from src.markets.korea import holdco_pending_verdict as _kr_holdco_verdict
+                from src.markets.korea import static_multiples_verdict as _kr_static_verdict
+                _verdict = _kr_holdco_verdict(ticker) or _kr_static_verdict(ticker, _base_sr)
             if _verdict:
                 _rating_state = {
                     "state": "unrated", **_verdict,

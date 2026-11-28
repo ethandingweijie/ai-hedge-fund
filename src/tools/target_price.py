@@ -1,4 +1,4 @@
-"""Analyst consensus target prices for HK, SG and Tokyo listings.
+"""Analyst consensus target prices for HK, SG, China A-share, Tokyo and Korean (KOSPI / KOSDAQ) listings.
 
 FMP carries no price-target consensus for HKEX or SGX -- it says so itself
 ("no price-target consensus data for this venue ... by design, not a
@@ -43,11 +43,12 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 
 _SENTENCE = re.compile(
     r"According to\s+(?P<n>\d+)\s+analysts?[^.]*?"
-    r"average price target of\s+(?:\$|¥|&yen;)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
+    r"average price target of\s+(?:\$|¥|&yen;|₩)?(?P<target>[\d,]+\.?\d*)", re.I | re.S)
 # A-share and Tokyo pages write "¥" ("average price target of ¥1,705" / "¥3,835"); the venue currency line ("Currency
-# is CNY" / "JPY") is what names it, never the sign. HK/SG pages write a bare "$" whatever the currency.
-_LOW = re.compile(r"lowest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
-_HIGH = re.compile(r"highest is\s+(?:\$|¥|&yen;)?([\d,]+\.?\d*)", re.I)
+# is CNY" / "JPY") is what names it, never the sign. HK/SG pages write a bare "$" whatever the currency. Korean pages
+# write the won sign (KRW 455,167 as "₩455,167").
+_LOW = re.compile(r"lowest is\s+(?:\$|¥|&yen;|₩)?([\d,]+\.?\d*)", re.I)
+_HIGH = re.compile(r"highest is\s+(?:\$|¥|&yen;|₩)?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
 #: The page states the implied move alongside the target. It is the only
 #: internal cross-check available, and it catches a stale or mis-scaled
@@ -97,6 +98,12 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
     from src.markets.japan import is_jp_ticker, local_code
     if is_jp_ticker(t):
         return f"tyo/{local_code(t)}", "JPY"
+    # Korea: KOSPI lines live under krx/, KOSDAQ under kosdaq/ (verified 2026-11-28: 005930 36 analysts, 247540
+    # 21). Preferred lines (005935) have no page -- the 404 reads as "no consensus", which is right.
+    if t.endswith(".KS"):
+        return f"krx/{t[:-3]}", "KRW"
+    if t.endswith(".KQ"):
+        return f"kosdaq/{t[:-3]}", "KRW"
     return None
 
 
@@ -138,8 +145,8 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         resp = requests.get(url, headers={"User-Agent": _UA}, timeout=25)
         if resp.status_code != 200:
             return None
-        # The page is UTF-8 but sends no charset, so requests guesses Latin-1 and the A-share yuan sign arrives
-        # as "Â¥" -- the target sentence then fails to parse.
+        # The page is UTF-8 but sends no charset, so requests guesses Latin-1 and the yuan / won signs arrive as
+        # mojibake ("Â¥") -- the target sentence then fails to parse.
         _raw = getattr(resp, "content", None)
         body = _raw.decode("utf-8", errors="replace") if isinstance(_raw, bytes) else resp.text
     except Exception:                                      # noqa: BLE001

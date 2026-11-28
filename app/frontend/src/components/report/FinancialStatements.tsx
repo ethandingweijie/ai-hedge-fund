@@ -100,7 +100,7 @@ function shortPeriod(p: string): string {
  *  directly and fall back to the ticker only when no code was reported. */
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$', SGD: 'S$', HKD: 'HK$', CNY: 'RMB ', RMB: 'RMB ', JPY: 'JP¥', KRW: '₩',
-  KRW: '₩', EUR: '€', GBP: '£', GBp: '£', AUD: 'A$', TWD: 'NT$', INR: '₹',
+  EUR: '€', GBP: '£', GBp: '£', AUD: 'A$', TWD: 'NT$', INR: '₹',
 };
 
 function resolveSymbol(currency: string | undefined, ticker: string): string {

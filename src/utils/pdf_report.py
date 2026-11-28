@@ -163,6 +163,9 @@ _CCY_SYMBOLS = {"USD": "$", "HKD": "HK$", "SGD": "S$", "CNY": "RMB ", "CNH": "RM
                 "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "JP\u00a5", "KRW": "KRW ",
                 "TWD": "NT$", "AUD": "A$", "CAD": "C$", "INR": "INR "}
 _PX_SYM = "$"
+#: Currencies with no minor unit in practice: a KRW 1,110,000 share price is not printed as "1110000.00".
+_ZERO_DP_CCY = frozenset({"KRW", "JPY", "IDR", "VND"})
+_PX_DP: "int | None" = None
 
 
 def _cs() -> str:
@@ -170,9 +173,10 @@ def _cs() -> str:
 
 
 def _set_price_currency(ccy) -> None:
-    global _PX_SYM, _CJK_HINT
+    global _PX_SYM, _PX_DP, _CJK_HINT
     code = str(ccy or "USD").upper()
     _PX_SYM = _CCY_SYMBOLS.get(code, f"{code} ")
+    _PX_DP = 0 if code in _ZERO_DP_CCY else None
     _CJK_HINT = {"JPY": "ja", "KRW": "ko"}.get(code)
 
 # ── Helper: bold text for table header cells (light-gray background) ───────────
@@ -428,7 +432,7 @@ class _PriceSparkline(Flowable):
             c.setDash()
             c.setFont("Helvetica", 5.5)
             c.setFillColor(colors.HexColor("#1a7a4a"))
-            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT {_cs()}{pt:.0f}")
+            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT {_cs()}{pt:,.0f}")
 
         # Price line
         c.setStrokeColor(colors.HexColor("#0a2342"))
@@ -443,7 +447,7 @@ class _PriceSparkline(Flowable):
         c.setFont("Helvetica", 5.5)
         c.setFillColor(colors.HexColor("#555555"))
         for frac, val in [(0.0, mn), (0.5, (mn + mx) / 2), (1.0, mx)]:
-            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"{_cs()}{val:.0f}")
+            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"{_cs()}{val:,.0f}")
 
         # Current price dot + label
         last_p = prices[-1]
@@ -452,7 +456,7 @@ class _PriceSparkline(Flowable):
         c.circle(xl, yl, 2.5, fill=1, stroke=0)
         c.setFont("Helvetica-Bold", 6)
         lbl_y = yl + 5 if yl + 14 < PAD_B + ch else yl - 11
-        c.drawCentredString(xl, lbl_y, f"{_cs()}{last_p:.0f}")
+        c.drawCentredString(xl, lbl_y, f"{_cs()}{last_p:,.0f}")
 
         # Date labels
         c.setFont("Helvetica", 5.5)
@@ -1550,7 +1554,7 @@ def _section_2f(
 
     def _fmtiv(v):
         try:
-            return f"{_cs()}{float(v):.0f}" if v else "—"
+            return f"{_cs()}{float(v):,.0f}" if v else "—"
         except Exception:
             return "—"
 
@@ -1642,9 +1646,9 @@ def _section_2f(
         method_rows.append([
             Paragraph("Current price", styles["RptBody"]),
             Paragraph("—", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
+            Paragraph(_money(current_price), styles["RptValue"]),
             Paragraph("—", styles["RptValue"]),
         ])
         method_rows.append([
@@ -1906,7 +1910,7 @@ def _section_2f(
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
-                    Paragraph(f"<b>{_cs()}{base_iv:.2f}</b>", styles["RptLabel"]),
+                    Paragraph(f"<b>{_money(base_iv)}</b>", styles["RptLabel"]),
                 ])
 
         pw = [page_w * 0.10, page_w * 0.15, page_w * 0.10, page_w * 0.13,
@@ -1954,6 +1958,7 @@ def _company_label(ticker: str, raw_financials: dict) -> str:
 
 def _money(v, dp: int = 2) -> str:
     try:
+        dp = dp if _PX_DP is None else _PX_DP
         return f"{_cs()}{float(v):,.{dp}f}"
     except (TypeError, ValueError):
         return "—"

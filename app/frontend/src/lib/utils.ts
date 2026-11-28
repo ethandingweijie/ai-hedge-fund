@@ -86,6 +86,8 @@ export function currencySymbol(ticker: string): string {
   if (upper.endsWith('.SS') || upper.endsWith('.SZ')) return 'RMB ';
   // JP: Tokyo listing (7203.T, 130A.T). 'JP¥', never a bare '¥' (the renminbi uses the same sign).
   if (/^[1-9][0-9A-Z][0-9][0-9A-Z]\.T$/.test(upper)) return 'JP¥';
+  // Korea: KOSPI .KS / KOSDAQ .KQ (KRW, no minor unit)
+  if (upper.endsWith('.KS') || upper.endsWith('.KQ')) return '₩';
   // HK: purely numeric
   const cleanHK = upper.replace(/\.HK$/, '');
   if (/^\d{1,5}$/.test(cleanHK)) return 'HK$';

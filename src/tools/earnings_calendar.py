@@ -56,6 +56,36 @@ def _window(start: date, days: int) -> dict[str, str]:
     return by_symbol
 
 
+#: FMP's bulk calendar returns at most ~4,000 events per call. A window that comes back at that size is TRUNCATED,
+#: and the names cut are not random -- on 2026-11-28 the 2026-10-15 +30d window held 3,986 rows and dropped Samsung
+#: Electronics (29 Oct) and SK hynix (27 Oct). A symbol missing from a truncated window is asked for directly.
+_TRUNCATED_AT = 3900
+_SYMBOL_CACHE: dict[tuple[str, str], list[str]] = {}
+
+
+def _symbol_dates(sym: str, today: date) -> list[str]:
+    """Every scheduled/reported date FMP holds for one symbol (/stable/earnings), cached per UTC day."""
+    key = (sym, today.isoformat())
+    with _LOCK:
+        if key in _SYMBOL_CACHE:
+            return _SYMBOL_CACHE[key]
+    api_key = os.environ.get("FMP_API_KEY") or ""
+    if not api_key:
+        return []
+    try:
+        import requests
+        resp = requests.get(f"{_STABLE}/earnings", params={"symbol": sym, "limit": 12, "apikey": api_key},
+                            timeout=_TIMEOUT)
+        if resp.status_code != 200:
+            return []
+        dates = sorted({str(ev.get("date") or "")[:10] for ev in (resp.json() or []) if ev.get("date")})
+    except Exception:
+        return []
+    with _LOCK:
+        _SYMBOL_CACHE[key] = dates
+    return dates
+
+
 def next_earnings_date(ticker: str, days: int = 21,
                        today: Optional[date] = None) -> Optional[str]:
     """ISO date of the next results inside `days`, or None."""
@@ -64,27 +94,13 @@ def next_earnings_date(ticker: str, days: int = 21,
     if not sym:
         return None
     start = today or date.today()
-    hit = _window(start, days).get(sym.upper())
-    if hit is None and sym.upper().endswith((".SS", ".SZ")):
-        # The window endpoint caps at 4,000 rows and held 5 A-shares in a 3-week window (2026-11-28); the
-        # per-symbol /earnings rows carry each A-share's booked date.
-        hit = _symbol_next(sym.upper(), start, days)
-    return hit
-
-
-def _symbol_next(sym: str, start: date, days: int) -> Optional[str]:
-    api_key = os.environ.get("FMP_API_KEY") or ""
-    if not api_key:
+    window = _window(start, days)
+    hit = window.get(sym.upper())
+    if hit:
+        return hit
+    # The window endpoint caps at ~4,000 rows: a truncated window drops names (Samsung, SK hynix), and even an
+    # untruncated 3-week window held only 5 A-shares (2026-11-28). The per-symbol /earnings rows carry each date.
+    if len(window) < _TRUNCATED_AT and not sym.upper().endswith((".SS", ".SZ")):
         return None
-    try:
-        import requests
-        resp = requests.get(f"{_STABLE}/earnings", params={"symbol": sym, "limit": 12, "apikey": api_key},
-                            timeout=_TIMEOUT)
-        if resp.status_code != 200:
-            return None
-        end = (start + timedelta(days=days)).isoformat()
-        dates = sorted(str(r.get("date") or "")[:10] for r in resp.json() or []
-                       if isinstance(r, dict) and r.get("epsActual") is None)
-        return next((d for d in dates if start.isoformat() <= d <= end), None)
-    except Exception:
-        return None
+    end = (start + timedelta(days=days)).isoformat()
+    return next((d for d in _symbol_dates(sym.upper(), start) if start.isoformat() <= d <= end), None)

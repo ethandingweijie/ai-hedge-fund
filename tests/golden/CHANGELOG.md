@@ -2041,4 +2041,19 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tickers: 14
 - tolerance: ±5% on numeric leaves
 - reason: Japan owner decisions 2026-11-28: valuation_constants gains the accepted JP risk-free row and the JPY country premium; no golden ticker is Japanese, so only param_version moves
+## 2026-11-28T11:33:08+00:00
+
+- regenerated at HEAD: `4a105a48`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Korea owner decisions 2026-11-28: risk_free_by_market KR (KTB 3.78%) and KRW CRP 0.50% change the constants hash only; no golden name is Korean, every value unchanged
+
+## 2026-11-28T12:21:12+00:00
+
+- regenerated at HEAD: `d7602607`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: merge CN/JP/KR markets (constants + profile map v27)
 

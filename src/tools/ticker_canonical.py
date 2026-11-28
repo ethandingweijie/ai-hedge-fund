@@ -47,6 +47,8 @@ Examples
 '7203.T'
 >>> canonical_ticker("130a.jp")
 '130A.T'
+>>> canonical_ticker("KRX:005930")
+'005930.KS'
 >>> canonical_ticker("aapl")
 'AAPL'
 >>> canonical_ticker("")
@@ -87,6 +89,12 @@ def canonical_ticker(ticker: str | None) -> str:
         return _hk_canonical(t)
     if is_sg_ticker(t):
         return _sg_canonical(t)
+    # Korea (KOSPI .KS / KOSDAQ .KQ): only with an explicit marker -- a .KS/.KQ suffix or a KRX:/KS:/KQ:/KOSPI:/
+    # KOSDAQ: prefix. A bare 6-digit code is never claimed here (it may be a China A-share).
+    from src.markets.korea import to_canonical as _kr_canonical
+    kr = _kr_canonical(t)
+    if kr:
+        return kr
     return t
 
 

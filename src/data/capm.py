@@ -140,10 +140,28 @@ PROFILE_INDUSTRY: dict[str, str] = {
     # Services and semiconductors
     "Ad / Consulting": "Advertising", "IT Services": "Computer Services",
     "Analog / Mixed-signal IDM": "Semiconductor", "Fabless": "Semiconductor", "IDM / Foundry": "Semiconductor",
-    "Memory / DRAM-NAND": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
+    "Memory / DRAM-NAND": "Semiconductor", "Memory-led Tech Conglomerate (SOTP)": "Semiconductor", "Equipment / EDA": "Semiconductor Equip",
 }
 
 _TAX = {"US": 0.21, "HK": 0.165, "SG": 0.17, "CN": 0.25, "JP": 0.2974}   # CN: PRC EIT statutory (src/markets/china.py); JP: src/markets/japan.STATUTORY_TAX (MOF effective rate)
+
+
+def market_code(ticker: Optional[str], base: str = "US") -> str:
+    """The rf / CAPM market of a ticker: ``base`` (the caller's HK / SG / US) unless the ticker belongs to a market
+    with its own module (Korea -> 'KR'). KR has no `_TAX` row and no accepted rf, so until the owner accepts
+    risk_free_by_market.proposed.KR it prices exactly as 'US' does -- the code only names the market."""
+    if base == "US":
+        try:
+            from src.markets.korea import capm_market as _kr
+            return _kr(ticker) or base
+        except Exception:                                  # noqa: BLE001
+            return base
+    return base
+
+
+def _accepted(entry: dict) -> bool:
+    """A risk_free_by_market row prices only when it is not marked PROPOSED (proposals live under `proposed`)."""
+    return str((entry or {}).get("status") or "ACCEPTED").upper() != "PROPOSED"
 
 
 def live_rf_enabled() -> bool:
@@ -205,8 +223,8 @@ def local_min_spread(market: str) -> Optional[float]:
     """The owner's minimum Ke / WACC spread over a local government curve, or None (valuation_constants)."""
     try:
         from src.data import valuation_constants as _vc
-        v = ((((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "") or {})
-             .get("min_spread_over_rf"))
+        _m = (((_vc.load().get("risk_free_by_market") or {}).get("markets") or {}).get(market or "") or {})
+        v = _m.get("min_spread_over_rf") if _accepted(_m) else None
         return float(v) if isinstance(v, (int, float)) and 0.0 < v < 0.10 else None
     except Exception:                                      # noqa: BLE001
         return None

@@ -5538,7 +5538,8 @@ def _research_one_ticker(
     _is_cninfo    = _edgar.get("exchange") == "CNINFO"           # China A-share (src/tools/cninfo_api.py)
     _is_hkex      = _edgar.get("exchange") == "HKEX"
     _filing_type  = _edgar.get("filing_type", "Annual Report")
-    _accession    = _edgar.get("accession_number") or ""
+    # A DART receipt number is not an EDGAR accession: keep a Korean ref out of the SEC branches below.
+    _accession    = ("" if _edgar.get("exchange") == "DART" else _edgar.get("accession_number") or "")
     _filing_date  = _edgar.get("filing_date", "")
     _period       = _edgar.get("period_of_report", "")
     _fy           = _edgar.get("fiscal_year", "") or (_period[:4] if _period else "")
@@ -5647,6 +5648,16 @@ def _research_one_ticker(
         _base_context += _jp_research_context(ticker, company_name) + _jp_filing_context(_edgar)
     except Exception:                                      # noqa: BLE001
         pass
+    # Korean listings: Korean-language sources, K-IFRS consolidated basis, KRW units, the DART annual report.
+    try:
+        from src.markets.korea import research_context as _kr_research_context
+        _base_context += _kr_research_context(ticker, _edgar)
+    except Exception:                                      # noqa: BLE001
+        pass
+    if _edgar.get("exchange") == "DART" and _filing_url:
+        _fin_cite_as = f"({_co_name} {_filing_type} FY{_fy}, DART)"
+        _fin_cite_label = (f"[PRIMARY SOURCE: {_co_name} {_filing_type} FY{_fy} (DART, filed: {_filing_date}) "
+                           f"— {_filing_url}]")
 
     # ── Inject FMP pre-loaded data ────────────────────────────────────────────
     _fmp_block = ""

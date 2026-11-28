@@ -198,7 +198,7 @@ function SectionCompleteBadge() {
 }
 
 // ── Landing search: market support gating ────────────────────────────────────
-// The pipeline covers US / HK / SG / China A-share / Tokyo listings. Suggestions
+// The pipeline covers US / HK / SG / China A-share / Tokyo / Korea listings. Suggestions
 // outside those markets are greyed out and unclickable; ETFs listed on the
 // supported markets are greyed out too but carry a blue WIP tag.
 export function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | 'CN' | 'JP' | 'KR' | null {
@@ -209,6 +209,8 @@ export function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | '
   if (/\.(SS|SZ)$/.test(t)) return cnCanonical(t) ? 'CN' : null;
   // Tokyo: the 4-character TSE code (7203, 130A) + .T -- the only Japanese form FMP and the pipeline accept.
   if (/^[1-9][0-9A-Z][0-9][0-9A-Z]\.T$/.test(t)) return 'JP';
+  // Korea: KOSPI (.KS) and KOSDAQ (.KQ). Yahoo labels the venues "KSE" / "KOSDAQ"; FMP "KSC" / "KOE".
+  if (t.endsWith('.KS') || t.endsWith('.KQ')) return 'KR';
   const ex = (s.exchange || '').toUpperCase();
   if (ex.includes('HKSE') || ex.includes('HKEX') || ex.includes('HONG KONG')) return 'HK';
   if (ex === 'SES' || ex.includes('SGX') || ex.includes('SINGAPORE')) return 'SG';

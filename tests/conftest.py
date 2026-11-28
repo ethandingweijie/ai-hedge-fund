@@ -30,6 +30,7 @@ _SENSITIVE_ENV_KEYS = (
     "SMTP_USER",
     "SMTP_PASS",
     "DATABASE_URL",  # tests must use tmp sqlite, never the production Postgres
+    "DART_API_KEY",  # Korea DART OpenAPI (src/markets/korea_dart.py)
 )
 
 

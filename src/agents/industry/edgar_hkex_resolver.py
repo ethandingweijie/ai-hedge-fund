@@ -42,6 +42,8 @@ from src.tools.hkex_api import get_hkex_filing_refs
 from src.tools.sg.ticker import is_sg_ticker
 from src.markets.china import is_cn_ticker
 from src.tools.cninfo_api import get_cninfo_filing_refs
+from src.markets.korea import is_korea_ticker
+from src.markets.korea_dart import api_key as dart_api_key, get_dart_filing_refs
 from src.utils.progress import progress
 
 
@@ -130,6 +132,20 @@ def run_edgar_hkex_resolver(state: AgentState) -> AgentState:
                 (f"cninfo OK: {ref['filing_type']} | filed={ref['filing_date']} | FY={ref['fiscal_year']} | "
                  f"url={ref['filing_url']}") if ref and ref.get("filing_url") else
                 "cninfo: no Annual Report found — FMP attribution will be used")
+            continue
+        # ── Korean listings (.KS / .KQ): DART, the FSS disclosure system ───
+        # Needs the owner's DART_API_KEY; without it this is the SG-style skip, with a status that names DART so
+        # the UI does not read "SEC filings resolved" (refinePhaseLabel derives the venue from this text).
+        if is_korea_ticker(ticker):
+            progress.update_status(agent_id, ticker, "Resolving DART Business Report (사업보고서)...")
+            ref = get_dart_filing_refs(ticker)
+            edgar_refs[ticker] = ref or {}
+            progress.update_status(
+                agent_id, ticker,
+                (f"DART OK: {ref['filing_type']} | filed={ref['filing_date']} | FY={ref['fiscal_year']} | "
+                 f"url={ref['filing_url']}") if ref else
+                ("DART: no API key configured -- FMP attribution will be used" if not dart_api_key() else
+                 "DART: no Business Report found -- FMP attribution will be used"))
             continue
 
         if is_sg_ticker(ticker):

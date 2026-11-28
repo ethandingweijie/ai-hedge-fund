@@ -3892,6 +3892,26 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "excluded — cyclical earnings make a perpetuity nonsensical."
             ),
         },
+        # Owner, 2026-11-28 (Korea decision 7): Samsung Electronics is a segment SOTP -- memory (DS) beside foundry,
+        # handsets / networks (MX/NW), consumer electronics (VD/DA), display (SDC) and Harman -- not a pure memory
+        # maker. The SOTP leg reads the review-gated `sotp` input (cited segments, owner-accepted); until one is
+        # accepted its weight falls to the through-cycle memory legs, i.e. the Memory / DRAM-NAND treatment.
+        "Memory-led Tech Conglomerate (SOTP)": {
+            "methods": [
+                {"name": "SOTP (analyst)", "weight": 0.50, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",     "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",      "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EPV", "LBO Floor", "DDM"],
+            "leg_fallback": {"SOTP (analyst)": ["P/E (norm)", "EV/EBITDA"]},
+            "rationale": (
+                "A memory-led conglomerate (Samsung Electronics, 005930.KS) is valued segment by segment: each "
+                "business on its own peer multiple (memory and foundry on Korean / regional semiconductor medians, "
+                "handsets and consumer electronics on hardware medians, display on panel makers), plus net cash. "
+                "The group P/E (norm) anchors because memory still sets the swing in group earnings; the cycle rules "
+                "of Memory / DRAM-NAND apply."
+            ),
+        },
         "Equipment / EDA": {
             # Wave 7 (owner, 2026-09-27): Forward P/E anchor. ASML landed on its own Forward
             # P/E cross-check at Stage 0 while the trailing anchor put it at -27%.
@@ -6800,7 +6820,9 @@ MARKET_REGISTRY: dict[str, dict] = {
     },
     "KSC": {
         "label":          "Korea",
-        "exchanges":      ("KSC",),
+        # KOE = KOSDAQ in FMP's exchange codes. One Korean market (as US pools NASDAQ/NYSE/AMEX): a KOSDAQ name
+        # resolves to the Korean registry entry, never to the US default.
+        "exchanges":      ("KSC", "KOE"),
         "crp":            _KR_CRP,
         "peer_multiples": None,
         "sector_wacc":    None,
@@ -6832,7 +6854,7 @@ _EXCHANGE_TO_MARKET: dict[str, str] = {
 
 # Ticker suffix -> market, for the paths that only have a symbol.
 _SUFFIX_TO_MARKET: dict[str, str] = {
-    ".HK": "HKSE", ".SI": "SES", ".KS": "KSC",
+    ".HK": "HKSE", ".SI": "SES", ".KS": "KSC", ".KQ": "KSC",
     ".T": "JPX", ".SS": "SHH", ".SZ": "SHZ",
 }
 
