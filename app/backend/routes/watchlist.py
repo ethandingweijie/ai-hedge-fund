@@ -45,6 +45,13 @@ async def get_watchlist(user_id: Optional[int] = Depends(_optional_user_id)):
 @router.post("")
 async def add_to_watchlist(body: AddTickerRequest,
                            user_id: Optional[int] = Depends(_optional_user_id)):
+    # Plan watchlist size (pricing 2026-11-28), enforced only under BILLING_ENFORCED.
+    from app.backend.services import billing as _billing
+    if user_id is not None and _billing.enforced():
+        try:
+            _billing.check_watchlist_for(user_id, body.ticker)
+        except _billing.LimitReached as _lr:
+            raise HTTPException(status_code=402, detail=_lr.detail)
     try:
         return watchlist_service.add_ticker(body.ticker, user_id=user_id)
     except Exception as exc:

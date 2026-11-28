@@ -18,6 +18,7 @@
  * should use `getTickerState(ticker)` to read per-ticker state directly.
  */
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { errorFromResponse } from '@/lib/tier';
 import { startAnalysisRun, getRunResult } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
 import { parseBackendIso } from '@/lib/utils';
@@ -934,8 +935,8 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       const res = await startAnalysisRun(ticker, model);
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        // A 402 carries the plan message ("Your free analysis has been used...").
+        throw await errorFromResponse(res);
       }
 
       const reader = res.body?.getReader();

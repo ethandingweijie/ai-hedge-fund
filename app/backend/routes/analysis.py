@@ -195,6 +195,15 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    # ── Plan credits (pricing 2026-11-28) — after the cache fast path, so a
+    # cached replay is free. Shadow-recorded until BILLING_ENFORCED; then a
+    # plan limit fails CLOSED, unlike the capacity guards below.
+    from app.backend.services import billing as _billing
+    try:
+        await asyncio.to_thread(_billing.reserve_run, _caller, ticker)
+    except _billing.LimitReached as _lr:
+        raise HTTPException(status_code=402, detail=_lr.detail)
+
     # ── Per-user rate limits (Phase 3c) — checked after the cache fast path
     # so cached replays don't consume quota. Counts only real pipeline
     # starts; fails open (allows) while Redis is absent.
@@ -723,6 +732,11 @@ async def get_runs(
     db: Session = Depends(get_db),
 ):
     user_id = _get_user_id(request, db)
+    # Plan history window (pricing 2026-11-28): enforced only under BILLING_ENFORCED.
+    from app.backend.services import billing as _billing
+    _cut = await asyncio.to_thread(_billing.history_cutoff, _get_user(request, db))
+    if _cut and (not date_from or date_from < _cut):
+        date_from = _cut
     try:
         import functools
         return await asyncio.to_thread(
@@ -772,6 +786,11 @@ async def get_run_workbook(run_id: str, request: Request, ticker: Optional[str] 
     """
     from fastapi.responses import Response
     from app.backend.services import workbook_export_service as wx
+    from app.backend.services import billing as _billing
+    try:
+        await asyncio.to_thread(_billing.check_feature, _get_user(request, db), "excel_export")
+    except _billing.LimitReached as _lr:
+        raise HTTPException(status_code=402, detail=_lr.detail)
     user_id = _get_user_id(request, db)
     result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
     if result is None:
@@ -803,6 +822,11 @@ async def get_run_report_pdf(run_id: str, request: Request, ticker: Optional[str
     """
     from fastapi.responses import Response
     from app.backend.services import workbook_export_service as wx
+    from app.backend.services import billing as _billing
+    try:
+        await asyncio.to_thread(_billing.check_feature, _get_user(request, db), "pdf_export")
+    except _billing.LimitReached as _lr:
+        raise HTTPException(status_code=402, detail=_lr.detail)
     user_id = _get_user_id(request, db)
     result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
     if result is None:

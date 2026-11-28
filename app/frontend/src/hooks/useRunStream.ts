@@ -1,5 +1,6 @@
 // ── SSE hook for streaming a pipeline run ──────────────────────────────────
 import { useState, useCallback, useRef } from 'react';
+import { errorFromResponse } from '@/lib/tier';
 import { startAnalysisRun } from '@/lib/api';
 import type { ProgressEvent } from '@/lib/reportTypes';
 
@@ -54,8 +55,8 @@ export function useRunStream(): UseRunStreamResult {
       const res = await startAnalysisRun(ticker, model);
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text}`);
+        // A 402 carries the plan message ("Your free analysis has been used...").
+        throw await errorFromResponse(res);
       }
 
       const reader = res.body?.getReader();

@@ -57,6 +57,8 @@ PUBLIC_PATHS: frozenset[str] = frozenset({
     "/openapi.json",
     "/auth/google",         # pre-auth by definition: exchanges an id_token
     "/auth/apple",
+    "/billing/plans",       # the pricing page renders before sign-in
+    "/billing/webhook",     # Stripe; authenticated by its HMAC signature (stripe_billing.verify), not a JWT
 })
 
 # Prefix matches. /admin/* is exempt because each of those routes performs its

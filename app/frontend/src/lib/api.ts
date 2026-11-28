@@ -13,6 +13,7 @@ import type {
   WatchlistItem,
 } from './reportTypes';
 import { API_BASE_URL } from '@/config';
+import { errorFromResponse } from '@/lib/tier';
 import { getStoredToken } from '@/contexts/auth-context';
 
 const BASE = API_BASE_URL;
@@ -27,8 +28,8 @@ function _authHeaders(): HeadersInit {
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    // A 402 is a plan limit: surface the server's message, not the raw body.
+    throw await errorFromResponse(res);
   }
   return res.json() as Promise<T>;
 }
@@ -71,8 +72,7 @@ export async function downloadRunExport(runId: string, kind: RunExportKind, tick
     headers: _authHeaders(),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    throw await errorFromResponse(res);
   }
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') || '';

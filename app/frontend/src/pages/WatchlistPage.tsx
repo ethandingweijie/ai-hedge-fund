@@ -8,7 +8,6 @@ import {
 import { getWatchlist, addToWatchlist, removeFromWatchlist, searchCompanies, getScreenerPrices } from '@/lib/api';
 import type { WatchlistItem } from '@/lib/reportTypes';
 import type { CompanySearchResult } from '@/lib/api';
-import { getProfile } from '@/lib/tier';
 import { AgentOrbIcon } from '@/components/report/AgentOrbIcon';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { SwipeableCard } from '@/components/mobile/SwipeableCard';
@@ -167,12 +166,7 @@ export function WatchlistPage() {
     const ticker = selectedTicker ?? addInput.trim().toUpperCase().split(/[\s–-]/)[0];
     if (!ticker) return;
 
-    // Tier limit check
-    const { watchlistLimit } = getProfile();
-    if (items.length >= watchlistLimit) {
-      setAddError(`Your plan allows up to ${watchlistLimit} watchlist tickers. Upgrade to add more.`);
-      return;
-    }
+    // The plan's watchlist cap is enforced by the server (a 402 carries the message).
 
     setAdding(true);
     setAddError(null);

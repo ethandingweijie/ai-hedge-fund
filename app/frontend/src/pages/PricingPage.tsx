@@ -1,350 +1,289 @@
-import { useState, useEffect } from 'react';
-import { Check, X, Zap } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Check, X } from 'lucide-react';
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { getStoredToken } from '@/contexts/auth-context';
 import {
+  type PlanInfo,
   type Tier,
-  type TierProfile,
-  TIER_PROFILES,
-  TIER_ORDER,
-  getActiveTier,
-  setActiveTier,
+  fmtLimit,
+  isUnlimited,
+  openBillingPortal,
+  startCheckout,
+  useBilling,
 } from '@/lib/tier';
 
-// ── Feature comparison rows ───────────────────────────────────────────────────
+// Pricing 2026-11-28: every row is a field the server enforces (app/backend/services/billing.py)
+// or something every plan gets today. The investor-agent, agent-selection, batch, priority-queue
+// and API rows are gone: none of them exists.
 
-interface FeatureRow {
-  label: string;
-  category: string;
-  free: string | boolean;
-  starter: string | boolean;
-  professional: string | boolean;
-}
+type Cell = string | boolean;
+interface Row { category: string; label: string; cell: (p: PlanInfo) => Cell }
 
-const FEATURES: FeatureRow[] = [
-  // Analysis
-  // M2 Track E: "Investor agent personas", "Debate round" and "Agent
-  // selection" rows removed — the committee is decommissioned; every plan
-  // now runs the same committee-free decision path.
-  { category: 'Analysis', label: 'Full pipeline runs / month', free: '1 (lifetime)', starter: '5', professional: '20' },
-  { category: 'Analysis', label: 'DCF + scenario analysis', free: true, starter: true, professional: true },
-  { category: 'Analysis', label: 'Deep research (web search)', free: false, starter: true, professional: true },
-  { category: 'Analysis', label: 'Multi-ticker batch (tickers/run)', free: '1', starter: '1', professional: '3' },
-  { category: 'Analysis', label: 'Add-on runs', free: false, starter: '5 for $12', professional: '10 for $18' },
-  // Screener
-  { category: 'Screener', label: 'Screener results', free: 'Top 5', starter: 'Unlimited', professional: 'Unlimited' },
-  { category: 'Screener', label: 'Fast VGPM scoring', free: true, starter: true, professional: true },
-  { category: 'Screener', label: 'Sector / exchange filters', free: true, starter: true, professional: true },
-  // Watchlist
-  { category: 'Watchlist', label: 'Tracked tickers', free: '3', starter: '15', professional: 'Unlimited' },
-  { category: 'Watchlist', label: 'Auto-refresh VGPM on analysis', free: false, starter: true, professional: true },
-  { category: 'Watchlist', label: 'Pipeline VGPM upgrade', free: false, starter: true, professional: true },
-  // History
-  { category: 'History', label: 'Run history', free: false, starter: '6 months', professional: '24 months' },
-  { category: 'History', label: 'Re-open past reports', free: false, starter: true, professional: true },
-  // Export
-  { category: 'Export', label: 'PDF report export', free: false, starter: true, professional: true },
-  { category: 'Export', label: 'Read-only API access', free: false, starter: false, professional: false },
+const credits = (p: PlanInfo) =>
+  p.credit_period === 'lifetime' ? `${p.credits} (one-time)` : `${p.credits} / month`;
+
+const months = (n: number) => (isUnlimited(n) ? 'Unlimited' : n === 1 ? '1 month' : `${n} months`);
+
+const ROWS: Row[] = [
+  { category: 'Analysis', label: 'Full analyses included', cell: credits },
+  { category: 'Analysis', label: 'Extra analyses', cell: p => (p.addon ? `${p.addon.credits} for $${p.addon.price}` : false) },
+  { category: 'Analysis', label: 'Interactive estimate overrides', cell: () => true },
+  { category: 'Export', label: 'PDF investment report', cell: p => p.pdf_export },
+  { category: 'Export', label: 'Excel valuation workbook (live formulas, three-statement model)', cell: p => p.excel_export },
+  { category: 'Research', label: 'Screener and idea screens', cell: () => true },
+  { category: 'Research', label: 'Watchlist', cell: p => (isUnlimited(p.watchlist_limit) ? 'Unlimited' : `${p.watchlist_limit} tickers`) },
+  { category: 'Research', label: 'Run history', cell: p => months(p.history_months) },
+  { category: 'Portfolio', label: 'Holdings dashboard, crisis replay, what-if scenarios', cell: () => true },
 ];
 
-// ── Value cell ────────────────────────────────────────────────────────────────
-
-function Val({ v }: { v: string | boolean }) {
-  if (v === true)  return <Check size={16} className="text-content-high mx-auto" />;
-  if (v === false) return <X    size={16} className="text-muted-foreground/40 mx-auto" />;
+function Val({ v }: { v: Cell }) {
+  if (v === true) return <Check size={16} className="text-content-high mx-auto" aria-label="Included" />;
+  if (v === false) return <X size={16} className="text-muted-foreground/40 mx-auto" aria-label="Not included" />;
   return <span className="text-sm text-center block">{v}</span>;
 }
 
-// ── Tier card ─────────────────────────────────────────────────────────────────
+function highlights(p: PlanInfo): string[] {
+  const out = [p.credit_period === 'lifetime'
+    ? `${p.credits} full analysis to try it`
+    : `${p.credits} full analyses a month`];
+  if (p.pdf_export) out.push('PDF investment report');
+  if (p.excel_export) out.push('Excel valuation workbook with three-statement model');
+  out.push(isUnlimited(p.watchlist_limit) ? 'Unlimited watchlist' : `Watchlist up to ${p.watchlist_limit} tickers`);
+  out.push(`${months(p.history_months)} of run history`);
+  if (p.addon) out.push(`Extra analyses: ${p.addon.credits} for $${p.addon.price}`);
+  return out;
+}
 
-function TierCard({
-  profile,
-  active,
-  billing,
-  onSelect,
-}: {
-  profile: TierProfile;
-  active: boolean;
-  billing: 'monthly' | 'annual';
-  onSelect: () => void;
+function TierCard({ plan, current, billing, signedIn, paymentsEnabled, hasBillingAccount, busy, onChoose, onManage }: {
+  plan: PlanInfo; current: boolean; billing: 'monthly' | 'annual'; signedIn: boolean;
+  paymentsEnabled: boolean; hasBillingAccount: boolean; busy: boolean;
+  onChoose: () => void; onManage: () => void;
 }) {
-  const price = billing === 'annual' ? profile.priceAnnual : profile.priceMonthly;
-  const perMonth = billing === 'annual' && profile.priceAnnual
-    ? Math.round(profile.priceAnnual / 12)
-    : profile.priceMonthly;
+  const free = plan.id === 'free';
+  const perMonth = billing === 'annual' && !free ? Math.round(plan.price_annual / 12) : plan.price_monthly;
+  const featured = plan.id === 'professional';
 
-  const isHighlighted = profile.id === 'professional';
-
-  const highlights: string[] = [];
-  if (profile.id === 'free') {
-    highlights.push('1 lifetime full analysis run');
-    highlights.push('Top 10 screener results');
-    highlights.push('Watchlist up to 3 tickers');
-    highlights.push('Fast VGPM on screener');
-  } else if (profile.id === 'starter') {
-    highlights.push('5 full pipeline runs / month');
-    highlights.push('Deep value agents: Graham · Buffett · Munger · Pabrai · Fisher · Burry · Damodaran');
-    highlights.push('Deep research with web search');
-    highlights.push('PDF export');
-    highlights.push('Watchlist up to 15 tickers');
-    highlights.push('6-month history');
+  let cta: React.ReactNode;
+  if (current) {
+    cta = hasBillingAccount && !free
+      ? <Button variant="outline" className="w-full" onClick={onManage} disabled={busy}>Manage billing</Button>
+      : <Button variant="outline" disabled className="w-full">Current plan</Button>;
+  } else if (free) {
+    cta = <Button variant="outline" disabled className="w-full">{signedIn ? 'Included' : 'Sign in to start'}</Button>;
+  } else if (!signedIn) {
+    cta = <Button variant="outline" disabled className="w-full">Sign in to choose</Button>;
+  } else if (!paymentsEnabled || !plan.purchasable) {
+    cta = <Button variant="outline" disabled className="w-full">Available soon</Button>;
   } else {
-    highlights.push('20 full pipeline runs / month');
-    highlights.push('Agent selection (pick your analysts)');
-    highlights.push('Multi-ticker batch — 3 per run');
-    highlights.push('Watchlist unlimited');
-    highlights.push('24-month history');
-    highlights.push('Priority processing queue');
+    cta = (
+      <Button className={`w-full ${featured ? 'bg-foreground text-background hover:bg-foreground/90' : ''}`}
+              onClick={onChoose} disabled={busy}>
+        {`Choose ${plan.name}`}
+      </Button>
+    );
   }
 
   return (
-    <Card
-      className={[
-        'relative flex flex-col p-6 transition-shadow',
-        isHighlighted ? 'border-blue-500 shadow-blue-500/10 shadow-lg ring-1 ring-blue-500' : '',
-        active ? 'bg-primary/5' : '',
-      ].join(' ')}
-    >
-      {isHighlighted && (
+    <Card className={['relative flex flex-col p-6', featured ? 'border-foreground ring-1 ring-foreground' : '',
+                      current ? 'bg-surface-2' : ''].join(' ')}>
+      {featured && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="bg-blue-500 text-white text-xs font-bold px-3 py-0.5 rounded-full">
-            MOST POPULAR
-          </span>
+          <span className="bg-foreground text-background text-xs font-bold px-3 py-0.5 rounded-full">FULL MODEL</span>
         </div>
       )}
-
-      {active && (
+      {current && (
         <div className="absolute top-3 right-3">
-          <span className="bg-surface-2 text-content-high text-xs font-bold px-2 py-0.5 rounded-full">
-            CURRENT PLAN
-          </span>
+          <span className="bg-surface-2 text-content-high text-xs font-bold px-2 py-0.5 rounded-full">CURRENT PLAN</span>
         </div>
       )}
-
       <div className="mb-4">
-        <h3 className="text-lg font-bold">{profile.name}</h3>
-        {price === null ? (
-          <div className="mt-2">
-            <span className="text-3xl font-bold">$0</span>
-            <span className="text-muted-foreground text-sm ml-1">/ forever</span>
-          </div>
-        ) : (
-          <div className="mt-2">
-            <span className="text-3xl font-bold">${perMonth}</span>
-            <span className="text-muted-foreground text-sm ml-1">/ mo</span>
-            {billing === 'annual' && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Billed ${price}/year · save {Math.round((1 - price / (profile.priceMonthly! * 12)) * 100)}%
-              </p>
-            )}
-          </div>
-        )}
+        <h3 className="text-lg font-bold">{plan.name}</h3>
+        <div className="mt-2">
+          <span className="text-3xl font-bold tabular-nums">${perMonth}</span>
+          <span className="text-muted-foreground text-sm ml-1">{free ? '/ forever' : '/ mo'}</span>
+          {billing === 'annual' && !free && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Billed ${plan.price_annual}/year · save {plan.annual_saving_pct}%
+            </p>
+          )}
+        </div>
       </div>
-
       <ul className="space-y-2.5 mb-6 flex-1">
-        {highlights.map(h => (
+        {highlights(plan).map(h => (
           <li key={h} className="flex items-start gap-2 text-sm">
             <Check size={14} className="text-content-high mt-0.5 flex-shrink-0" />
             <span>{h}</span>
           </li>
         ))}
       </ul>
-
-      {active ? (
-        <Button variant="outline" disabled className="w-full">Active plan</Button>
-      ) : profile.id === 'free' ? (
-        <Button variant="outline" className="w-full" onClick={onSelect}>
-          Use Free
-        </Button>
-      ) : (
-        <Button
-          className={`w-full ${isHighlighted ? 'bg-blue-500 hover:bg-blue-600 text-white' : ''}`}
-          onClick={onSelect}
-        >
-          <Zap size={14} className="mr-1.5" />
-          {`Activate ${profile.name}`}
-        </Button>
-      )}
-
-      {profile.addOnRuns && !active && (
-        <p className="text-xs text-muted-foreground text-center mt-2">
-          Add-on: {profile.addOnRuns.count} runs for ${profile.addOnRuns.price}
-        </p>
-      )}
+      {cta}
     </Card>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export function PricingPage() {
+  const { plans, me, error, refresh } = useBilling();
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
-  const [activeTier, setActive] = useState<Tier>(getActiveTier());
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const signedIn = !!getStoredToken();
 
-  // Sync if changed in another tab
+  // Back from Stripe Checkout. The plan is written by the webhook, not by this redirect.
   useEffect(() => {
-    const handler = (e: Event) => setActive((e as CustomEvent<Tier>).detail);
-    window.addEventListener('tierchange', handler);
-    return () => window.removeEventListener('tierchange', handler);
-  }, []);
+    const c = params.get('checkout');
+    if (!c) return;
+    setNotice(c === 'success'
+      ? 'Payment received. Your plan updates as soon as Stripe confirms it, usually within a few seconds.'
+      : 'Checkout cancelled. Nothing was charged.');
+    params.delete('checkout');
+    setParams(params, { replace: true });
+    if (c === 'success') {
+      const t1 = setTimeout(refresh, 3000);
+      const t2 = setTimeout(refresh, 10000);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSelect = (tier: Tier) => {
-    setActiveTier(tier);
-    setActive(tier);
+  const go = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setNotice(null);
+    try { await fn(); } catch (e) { setNotice((e as Error).message); setBusy(false); }
   };
 
-  // Group features by category
-  const categories = Array.from(new Set(FEATURES.map(f => f.category)));
+  const ordered = plans?.plans ?? [];
+  const current: Tier = me?.plan ?? 'free';
+  const currentPlan = ordered.find(p => p.id === current);
+  const maxSaving = Math.max(0, ...ordered.map(p => p.annual_saving_pct));
+  const categories = Array.from(new Set(ROWS.map(r => r.category)));
+  const u = me?.usage;
 
   return (
     <div className="min-h-screen bg-background">
       <ResearchNav />
       <div className="p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
-
-          {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold mb-2">Choose Your Plan</h1>
-            <p className="text-muted-foreground text-sm">
-              Institutional-quality AI research at every level.
-            </p>
-
-            {/* Billing toggle */}
+            <h1 className="text-3xl font-bold mb-2">Plans</h1>
+            <p className="text-muted-foreground text-sm">Analyst-style valuations of any listed company, on demand.</p>
             <div className="flex items-center justify-center gap-3 mt-5">
-              <button
-                className={`text-sm font-medium transition-colors ${billing === 'monthly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                onClick={() => setBilling('monthly')}
-              >
-                Monthly
+              <button className={`text-sm font-medium ${billing === 'monthly' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      onClick={() => setBilling('monthly')}>Monthly</button>
+              <button className={`relative w-10 h-5 rounded-full transition-colors ${billing === 'annual' ? 'bg-foreground' : 'bg-muted'}`}
+                      onClick={() => setBilling(b => (b === 'monthly' ? 'annual' : 'monthly'))}
+                      aria-label="Toggle billing period">
+                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-background shadow transition-transform ${billing === 'annual' ? 'translate-x-5' : ''}`} />
               </button>
-              <button
-                className={`relative w-10 h-5 rounded-full transition-colors ${billing === 'annual' ? 'bg-blue-500' : 'bg-muted'}`}
-                onClick={() => setBilling(b => b === 'monthly' ? 'annual' : 'monthly')}
-                aria-label="Toggle billing period"
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${billing === 'annual' ? 'translate-x-5' : ''}`} />
-              </button>
-              <button
-                className={`text-sm font-medium transition-colors ${billing === 'annual' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                onClick={() => setBilling('annual')}
-              >
+              <button className={`text-sm font-medium ${billing === 'annual' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      onClick={() => setBilling('annual')}>
                 Annual
-                <span className="ml-1.5 text-xs bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
-                  SAVE 20%
-                </span>
+                {maxSaving > 0 && (
+                  <span className="ml-1.5 text-xs bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
+                    SAVE UP TO {maxSaving}%
+                  </span>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Tier cards */}
+          {notice && (
+            <div className="mb-6 p-3 rounded-lg border border-border text-sm text-center" role="status">{notice}</div>
+          )}
+          {error && !plans && (
+            <div className="mb-6 p-3 rounded-lg border border-border text-sm text-center">Plans could not be loaded: {error}</div>
+          )}
+
+          {plans && plans.every_run.length > 0 && (
+            <div className="mb-6 text-sm text-center text-muted-foreground">
+              Every plan, every analysis: {plans.every_run.join(' · ')}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
-            {TIER_ORDER.map(tierId => (
-              <TierCard
-                key={tierId}
-                profile={TIER_PROFILES[tierId]}
-                active={activeTier === tierId}
-                billing={billing}
-                onSelect={() => handleSelect(tierId)}
-              />
+            {ordered.map(p => (
+              <TierCard key={p.id} plan={p} current={signedIn && current === p.id} billing={billing}
+                        signedIn={signedIn} paymentsEnabled={!!plans?.payments_enabled}
+                        hasBillingAccount={!!me?.has_billing_account} busy={busy}
+                        onChoose={() => go(() => startCheckout(p.id, billing))}
+                        onManage={() => go(openBillingPortal)} />
             ))}
           </div>
 
-          {/* Active tier summary */}
-          <div className="mb-8 p-4 rounded-lg border border-border bg-muted/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-0.5">
-                  Active profile
-                </p>
-                <p className="font-bold text-sm">
-                  {TIER_PROFILES[activeTier].name} plan
-                  {TIER_PROFILES[activeTier].priceMonthly != null && (
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      ${TIER_PROFILES[activeTier].priceMonthly}/month
-                    </span>
+          {u && currentPlan && (
+            <div className="mb-8 p-4 rounded-lg border border-border">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-0.5">Your usage</p>
+                  <p className="font-bold text-sm">
+                    {currentPlan.name} plan
+                    {me?.period_end && <span className="ml-2 font-normal text-muted-foreground">renews {me.period_end.slice(0, 10)}</span>}
+                  </p>
+                </div>
+                <div className="flex gap-6 text-sm">
+                  <div className="text-center">
+                    <p className="font-bold text-lg tabular-nums">{u.exempt ? '∞' : `${u.used} / ${u.included}`}</p>
+                    <p className="text-xs text-muted-foreground">{u.period === 'lifetime' ? 'analyses used' : 'analyses this month'}</p>
+                  </div>
+                  {u.addon_left > 0 && (
+                    <div className="text-center">
+                      <p className="font-bold text-lg tabular-nums">{u.addon_left}</p>
+                      <p className="text-xs text-muted-foreground">extra analyses</p>
+                    </div>
                   )}
-                </p>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div className="text-center">
-                  <p className="font-bold text-lg">
-                    {TIER_PROFILES[activeTier].runsPerMonth === Infinity
-                      ? '∞'
-                      : TIER_PROFILES[activeTier].runsPerMonth}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {TIER_PROFILES[activeTier].lifetimeCapOnly ? 'lifetime run' : 'runs / mo'}
-                  </p>
+                  <div className="text-center">
+                    <p className="font-bold text-lg tabular-nums">{fmtLimit(currentPlan.watchlist_limit)}</p>
+                    <p className="text-xs text-muted-foreground">watchlist</p>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <p className="font-bold text-lg">
-                    {TIER_PROFILES[activeTier].watchlistLimit === Infinity
-                      ? '∞'
-                      : TIER_PROFILES[activeTier].watchlistLimit}
-                  </p>
-                  <p className="text-xs text-muted-foreground">watchlist</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-lg">
-                    {TIER_PROFILES[activeTier].screenerLimit === Infinity
-                      ? '∞'
-                      : TIER_PROFILES[activeTier].screenerLimit}
-                  </p>
-                  <p className="text-xs text-muted-foreground">screener</p>
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-lg">
-                    {TIER_PROFILES[activeTier].historyMonths === 0
-                      ? '—'
-                      : `${TIER_PROFILES[activeTier].historyMonths}mo`}
-                  </p>
-                  <p className="text-xs text-muted-foreground">history</p>
-                </div>
+                {currentPlan.addon && plans?.payments_enabled && current !== 'free' && (
+                  <Button variant="outline" size="sm" disabled={busy}
+                          onClick={() => go(() => startCheckout(current, 'addon'))}>
+                    {`Add ${currentPlan.addon.credits} analyses · $${currentPlan.addon.price}`}
+                  </Button>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Feature comparison table */}
-          <div className="rounded-lg border border-border overflow-hidden">
+          <div className="rounded-lg border border-border overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/50">
                   <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-1/2">Feature</th>
-                  {TIER_ORDER.map(t => (
-                    <th key={t} className={`px-4 py-3 font-semibold text-center ${activeTier === t ? 'text-brand' : ''}`}>
-                      {TIER_PROFILES[t].name}
-                      {activeTier === t && <span className="ml-1 text-xs">✓</span>}
-                    </th>
+                  {ordered.map(p => (
+                    <th key={p.id} className="px-4 py-3 font-semibold text-center">{p.name}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {categories.map(cat => (
-                  <>
-                    <tr key={`cat-${cat}`} className="bg-muted/20">
-                      <td colSpan={4} className="px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                        {cat}
-                      </td>
+                  <Fragment key={cat}>
+                    <tr className="bg-muted/20">
+                      <td colSpan={ordered.length + 1} className="px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground">{cat}</td>
                     </tr>
-                    {FEATURES.filter(f => f.category === cat).map(f => (
-                      <tr key={f.label} className="border-t border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-2.5 text-muted-foreground">{f.label}</td>
-                        <td className="px-4 py-2.5 text-center"><Val v={f.free} /></td>
-                        <td className="px-4 py-2.5 text-center"><Val v={f.starter} /></td>
-                        <td className="px-4 py-2.5 text-center"><Val v={f.professional} /></td>
+                    {ROWS.filter(r => r.category === cat).map(r => (
+                      <tr key={r.label} className="border-t border-border/50">
+                        <td className="px-4 py-2.5 text-muted-foreground">{r.label}</td>
+                        {ordered.map(p => (
+                          <td key={p.id} className="px-4 py-2.5 text-center"><Val v={r.cell(p)} /></td>
+                        ))}
                       </tr>
                     ))}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
 
           <p className="text-center text-xs text-muted-foreground mt-6">
-            Plans activate immediately in this session. No payment integration connected — for internal use only.
+            {plans?.payments_enabled
+              ? 'Payments are processed by Stripe. Cancel or change plan any time from Manage billing.'
+              : 'Paid plans open soon.'}
+            {' '}Research and valuations are for information only and are not investment advice.
           </p>
-
         </div>
       </div>
     </div>
